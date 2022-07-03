@@ -1,6 +1,7 @@
 //! Graphics rendering.
 
 mod buffer;
+mod camera;
 mod core;
 mod pipeline;
 mod shader;
@@ -66,6 +67,11 @@ impl RenderingSystem {
     }
 
     /// Creates and presents a rendering of the current data in the pipelines.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - If the surface texture to render to can not be obtained.
+    /// - If recording a render pass fails.
     pub fn render(&mut self) -> Result<()> {
         let surface_texture = self.core_system.surface().get_current_texture()?;
         let view = Self::create_surface_texture_view(&surface_texture);

@@ -22,12 +22,14 @@ pub trait BufferableIndex: Pod {
     fn index_format() -> wgpu::IndexFormat;
 }
 
+/// A buffer containing vertices.
 pub struct VertexBuffer {
     layout: wgpu::VertexBufferLayout<'static>,
     buffer: wgpu::Buffer,
     n_vertices: u32,
 }
 
+/// A buffer containing vertex indices.
 pub struct IndexBuffer {
     format: wgpu::IndexFormat,
     buffer: wgpu::Buffer,
@@ -48,6 +50,10 @@ impl BufferableIndex for u32 {
 
 impl VertexBuffer {
     /// Creates a vertex buffer from the given slice of vertices.
+    ///
+    /// # Errors
+    /// Returns an error if the length of `vertices` can not be
+    /// converted to `u32`.
     pub fn new<T: BufferableVertex>(
         core_system: &CoreRenderingSystem,
         vertices: &[T],
@@ -78,6 +84,10 @@ impl VertexBuffer {
 
 impl IndexBuffer {
     /// Creates an index buffer from the given slice of indices.
+    ///
+    /// # Errors
+    /// Returns an error if the length of `vertices` can not be
+    /// converted to `u32`.
     pub fn new<T: BufferableIndex>(
         core_system: &CoreRenderingSystem,
         indices: &[T],

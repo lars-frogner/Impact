@@ -203,6 +203,10 @@ impl RenderingPipeline {
     }
 
     /// Records the render passes for this pipeline to the given command encoder.
+    ///
+    /// # Errors
+    /// Returns an error if a bind group index or a vertex buffer slot can not
+    /// be converted to `u32`.
     pub fn record_render_passes(
         &self,
         view: &wgpu::TextureView,

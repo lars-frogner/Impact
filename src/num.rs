@@ -3,6 +3,7 @@
 use nalgebra as na;
 use num_traits as nt;
 
+/// Gathers traits useful for working with generic floating point types.
 pub trait Float:
     nt::Float + nt::FloatConst + nt::FromPrimitive + na::RealField + na::Scalar
 {
@@ -10,10 +11,3 @@ pub trait Float:
 
 impl Float for f32 {}
 impl Float for f64 {}
-
-#[macro_export]
-macro_rules! float_from {
-    ($type_param:ident, $value:expr) => {
-        $type_param::from_f64($value).unwrap()
-    };
-}

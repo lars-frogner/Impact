@@ -38,6 +38,9 @@ where
     T: PartialOrd + std::fmt::Debug,
 {
     /// Creates a new set of inclusive bounds.
+    ///
+    /// # Panics
+    /// If the given upper bound is smaller than the lower bound.
     pub fn new(lower: T, upper: T) -> Self {
         assert!(
             upper >= lower,
@@ -71,6 +74,9 @@ where
     T: PartialOrd + std::fmt::Debug,
 {
     /// Creates a new set of upper exclusive bounds.
+    ///
+    /// # Panics
+    /// If the given upper bound is not larger than the lower bound.
     pub fn new(lower: T, upper: T) -> Self {
         assert!(
             upper > lower,
@@ -96,5 +102,62 @@ where
 
     fn contain(&self, value: T) -> bool {
         value >= self.lower() && value < self.upper()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn constructing_valid_inclusive_bounds_succeeds() {
+        InclusiveBounds::new(42.0, 42.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn constructing_invalid_inclusive_bounds() {
+        InclusiveBounds::new(42.0, 41.9999);
+    }
+
+    #[test]
+    fn inclusive_bounds_contain_inside_values() {
+        let bounds = InclusiveBounds::new(42.0, 43.0);
+        assert!(bounds.contain(42.5));
+        assert!(bounds.contain(42.0));
+        assert!(bounds.contain(43.0));
+    }
+
+    #[test]
+    fn inclusive_bounds_dont_contain_outside_values() {
+        let bounds = InclusiveBounds::new(42.0, 43.0);
+        assert!(!bounds.contain(41.9999));
+        assert!(!bounds.contain(43.0001));
+    }
+
+    #[test]
+    fn constructing_valid_upper_exclusive_bounds_succeeds() {
+        UpperExclusiveBounds::new(42.0, 42.0001);
+    }
+
+    #[test]
+    #[should_panic]
+    fn constructing_invalid_upper_exclusive_bounds() {
+        UpperExclusiveBounds::new(42.0, 42.0);
+    }
+
+    #[test]
+    fn upper_exclusive_bounds_contain_inside_values() {
+        let bounds = UpperExclusiveBounds::new(42.0, 43.0);
+        assert!(bounds.contain(42.5));
+        assert!(bounds.contain(42.0));
+    }
+
+    #[test]
+    fn upper_exclusive_bounds_dont_contain_outside_values() {
+        let bounds = UpperExclusiveBounds::new(42.0, 43.0);
+        assert!(!bounds.contain(43.5));
+        assert!(!bounds.contain(41.5));
+        assert!(!bounds.contain(43.0));
     }
 }

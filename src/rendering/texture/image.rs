@@ -22,6 +22,12 @@ pub struct ImageTexture {
 
 impl ImageTexture {
     /// Creates a texture for the image file at the given path.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The image file can not be read or decoded.
+    /// - The image bytes can not be interpreted.
+    /// - The image width or height is zero.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_path<P: AsRef<Path>>(
         core_system: &CoreRenderingSystem,
@@ -34,6 +40,11 @@ impl ImageTexture {
 
     /// Creates a texture for the image file represented by the given
     /// raw byte buffer.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The image bytes can not be interpreted.
+    /// - The image width or height is zero.
     pub fn from_bytes(
         core_system: &CoreRenderingSystem,
         byte_buffer: &[u8],
@@ -44,13 +55,16 @@ impl ImageTexture {
     }
 
     /// Creates a texture for the given loaded image.
+    ///
+    /// # Errors
+    /// Returns an error if the image width or height is zero.
     pub fn from_image(
         core_system: &CoreRenderingSystem,
         image: &DynamicImage,
         label: &str,
     ) -> Result<Self> {
         let (width, height) = image.dimensions();
-        Self::from_rgba_bytes(
+        Ok(Self::from_rgba_bytes(
             core_system,
             &image.to_rgba8(),
             (
@@ -58,7 +72,7 @@ impl ImageTexture {
                 NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?,
             ),
             label,
-        )
+        ))
     }
 
     /// Creates a texture for the image represented by the given
@@ -68,7 +82,7 @@ impl ImageTexture {
         rgba_buffer: &[u8],
         (width, height): (NonZeroU32, NonZeroU32),
         label: &str,
-    ) -> Result<Self> {
+    ) -> Self {
         let texture_size = wgpu::Extent3d {
             width: u32::from(width),
             height: u32::from(height),
@@ -82,12 +96,12 @@ impl ImageTexture {
 
         let sampler = Self::create_sampler(core_system.device());
 
-        Ok(Self {
+        Self {
             _texture: texture,
             view,
             sampler,
             bind_group_label: format!("{} bind group", label),
-        })
+        }
     }
 
     /// Returns a view into the image texture.

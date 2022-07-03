@@ -60,7 +60,7 @@ async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
         &core_system,
         include_str!("texture_shader.wgsl"),
         "Test shader",
-    )?;
+    );
 
     let vertex_buffer = Rc::new(VertexBuffer::new(
         &core_system,

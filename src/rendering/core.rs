@@ -21,6 +21,12 @@ pub struct CoreRenderingSystem {
 impl CoreRenderingSystem {
     /// Initializes the core system for rendering to
     /// the given window.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The width or height of the window is zero.
+    /// - A compatible graphics device can not be found.
+    /// - Connecting to the graphics device fails.
     pub async fn new(window: &Window) -> Result<Self> {
         let window_size = window.inner_size();
         Self::new_from_raw_window_handle(
@@ -46,7 +52,7 @@ impl CoreRenderingSystem {
         let surface = unsafe { wgpu_instance.create_surface(window) };
         let adapter = Self::create_adapter(&wgpu_instance, &surface).await?;
         let (device, queue) = Self::connect_to_device(&adapter).await?;
-        let surface_config = Self::create_surface_config(&surface, &adapter, window_size)?;
+        let surface_config = Self::create_surface_config(&surface, &adapter, window_size);
 
         Ok(Self {
             device,
@@ -90,6 +96,9 @@ impl CoreRenderingSystem {
     }
 
     /// Creates a handle to a graphics device.
+    ///
+    /// # Errors
+    /// Returns an error if a compatible graphics device can not be found.
     async fn create_adapter(
         wgpu_instance: &wgpu::Instance,
         surface: &wgpu::Surface,
@@ -105,6 +114,9 @@ impl CoreRenderingSystem {
     }
 
     /// Opens a connection to a graphics device.
+    ///
+    /// # Errors
+    /// Returns an error if the connection request fails.
     async fn connect_to_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue)> {
         Ok(adapter
             .request_device(
@@ -129,15 +141,15 @@ impl CoreRenderingSystem {
         surface: &wgpu::Surface,
         adapter: &wgpu::Adapter,
         (width, height): (NonZeroU32, NonZeroU32),
-    ) -> Result<wgpu::SurfaceConfiguration> {
-        Ok(wgpu::SurfaceConfiguration {
+    ) -> wgpu::SurfaceConfiguration {
+        wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface
                 .get_preferred_format(adapter)
-                .ok_or_else(|| anyhow!("Surface and adaptor not compatible"))?,
+                .expect("Surface and adaptor not compatible"), // If this fails there is a bug
             width: u32::from(width),
             height: u32::from(height),
             present_mode: wgpu::PresentMode::Fifo,
-        })
+        }
     }
 }
