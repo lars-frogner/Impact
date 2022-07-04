@@ -171,7 +171,7 @@ impl<F: Float> CameraConfiguration3<F> {
         up_direction: &UnitVector3<F>,
     ) -> Isometry3<F> {
         let target = position + look_direction.into_inner();
-        Isometry3::look_at_lh(position, &target, up_direction)
+        Isometry3::look_at_rh(position, &target, up_direction)
     }
 }
 
@@ -278,18 +278,6 @@ impl<F: Float> Camera3<F> for PerspectiveCamera3<F> {
         self.perspective_transform.as_projective()
     }
 }
-
-// `cgmath`'s matrix uses OpenGL clip space, so we
-// must convert to wgpu clip space
-/// Matrix for converting from OpenGL's clip space (with z between
-/// -1.0 and 1.0) to  wgpu's clip space (with z between 0.0 and 1.0).
-// #[rustfmt::skip]
-// const OPENGL_TO_WGPU_CLIP_SPACE: Matrix4<f32> = Matrix4::new(
-//     1.0, 0.0, 0.0, 0.0,
-//     0.0, 1.0, 0.0, 0.0,
-//     0.0, 0.0, 0.5, 0.0,
-//     0.0, 0.0, 0.5, 1.0,
-// );
 
 #[cfg(test)]
 mod tests {
@@ -404,7 +392,7 @@ mod tests {
         let no_rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 0.0);
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis(),)
+            CameraConfiguration3::new(Point3::origin(), -Vector3::z_axis(), Vector3::y_axis(),)
                 .view_transform(),
             &Isometry3::from_parts(no_translation, no_rotation)
         );
@@ -412,7 +400,7 @@ mod tests {
         assert_abs_diff_eq!(
             CameraConfiguration3::new(
                 Point3::new(1.0, 2.0, 3.0),
-                Vector3::z_axis(),
+                -Vector3::z_axis(),
                 Vector3::y_axis(),
             )
             .view_transform(),
@@ -420,7 +408,7 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(Point3::origin(), -Vector3::z_axis(), Vector3::y_axis(),)
+            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis(),)
                 .view_transform(),
             &Isometry3::from_parts(
                 no_translation,
@@ -429,7 +417,7 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(Point3::origin(), -Vector3::z_axis(), -Vector3::y_axis(),)
+            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), -Vector3::y_axis(),)
                 .view_transform(),
             &Isometry3::from_parts(
                 no_translation,
@@ -440,7 +428,7 @@ mod tests {
         assert_abs_diff_eq!(
             CameraConfiguration3::new(
                 Point3::new(1.0, 2.0, 3.0),
-                -Vector3::z_axis(),
+                Vector3::z_axis(),
                 Vector3::y_axis(),
             )
             .view_transform(),
