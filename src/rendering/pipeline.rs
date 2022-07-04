@@ -1,6 +1,9 @@
 //! Rendering pipelines.
 
-use super::{CoreRenderingSystem, ImageTexture, IndexBuffer, Shader, VertexBuffer};
+use super::{
+    buffer::UniformBuffer, camera::CameraUniform, CoreRenderingSystem, ImageTexture, IndexBuffer,
+    Shader, VertexBuffer,
+};
 use anyhow::Result;
 use std::{collections::HashMap, rc::Rc};
 
@@ -13,7 +16,9 @@ pub struct RenderingPipelineBuilder<'a> {
     bind_groups: Vec<wgpu::BindGroup>,
     vertex_buffers: Vec<Rc<VertexBuffer>>,
     index_buffer: Option<Rc<IndexBuffer>>,
+    uniform_buffers: Vec<Rc<UniformBuffer>>,
     n_vertices: u32,
+    n_cameras: u32,
     label: String,
 }
 
@@ -39,12 +44,32 @@ impl<'a> RenderingPipelineBuilder<'a> {
             bind_groups: Vec::new(),
             vertex_buffers: Vec::new(),
             index_buffer: None,
+            uniform_buffers: Vec::new(),
             n_vertices: 0,
+            n_cameras: 0,
             label,
         }
     }
 
+    /// Adds the given camera uniform to the pipeline.
+    ///
+    /// It can be accessed from the shader through a
+    /// bind group.
+    pub fn add_camera_uniform(mut self, camera_uniform: CameraUniform) -> Self {
+        let label = format!("Camera {}", self.n_cameras);
+        self.n_cameras += 1;
+        let uniform_buffer = Rc::new(UniformBuffer::new(
+            self.core_system,
+            &[camera_uniform],
+            &label,
+        ));
+        self.add_uniform_buffer(uniform_buffer)
+    }
+
     /// Adds the given image texture to the pipeline.
+    ///
+    /// It can be accessed from the shader through a
+    /// bind group.
     pub fn add_image_texture(mut self, texture: &ImageTexture) -> Self {
         // Check if an appropriate layout already exists
         let layout_idx = *self
@@ -84,6 +109,19 @@ impl<'a> RenderingPipelineBuilder<'a> {
         self
     }
 
+    /// Adds the given buffer of uniforms to the pipeline.
+    ///
+    /// It can be accessed from the shader through a
+    /// bind group.
+    pub fn add_uniform_buffer(mut self, uniform_buffer: Rc<UniformBuffer>) -> Self {
+        let (bind_group, bind_group_layout) =
+            uniform_buffer.create_bind_group_and_layout(self.core_system.device());
+        self.bind_group_layouts.push(bind_group_layout);
+        self.bind_groups.push(bind_group);
+        self.uniform_buffers.push(uniform_buffer);
+        self
+    }
+
     /// Creates the `RenderingPipeline`.
     pub fn build(self) -> RenderingPipeline {
         let RenderingPipelineBuilder {
@@ -94,7 +132,9 @@ impl<'a> RenderingPipelineBuilder<'a> {
             bind_groups,
             vertex_buffers,
             index_buffer,
+            uniform_buffers: _,
             n_vertices,
+            n_cameras: _,
             label,
         } = self;
 

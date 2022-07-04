@@ -12,6 +12,7 @@ use winit::event::WindowEvent;
 
 pub use self::core::CoreRenderingSystem;
 pub use buffer::{BufferableIndex, BufferableVertex, IndexBuffer, VertexBuffer};
+pub use camera::CameraUniform;
 pub use pipeline::{RenderingPipeline, RenderingPipelineBuilder};
 pub use shader::Shader;
 pub use texture::ImageTexture;

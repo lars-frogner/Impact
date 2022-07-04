@@ -78,6 +78,13 @@ impl CoreRenderingSystem {
         &self.surface_config
     }
 
+    /// Returns the ratio of width to height of the rendering surface.
+    pub fn surface_aspect_ratio(&self) -> f32 {
+        let width = self.surface_config().width;
+        let height = self.surface_config().height;
+        width as f32 / height as f32
+    }
+
     pub fn resize_surface(&mut self, (new_width, new_height): (u32, u32)) {
         if new_width > 0 && new_height > 0 {
             self.surface_config.width = new_width;

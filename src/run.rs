@@ -1,13 +1,17 @@
 //! Running an event loop.
 
 use super::{
-    geometry::{Vertex, VertexWithTexture},
+    geometry::{
+        CameraConfiguration3, Degrees, PerspectiveCamera3, UpperExclusiveBounds, Vertex,
+        VertexWithTexture,
+    },
     rendering::{
-        CoreRenderingSystem, ImageTexture, IndexBuffer, RenderingPipelineBuilder, RenderingSystem,
-        Shader, VertexBuffer,
+        CameraUniform, CoreRenderingSystem, ImageTexture, IndexBuffer, RenderingPipelineBuilder,
+        RenderingSystem, Shader, VertexBuffer,
     },
 };
 use anyhow::Result;
+use nalgebra::{Point3, Vector3};
 use std::rc::Rc;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -58,13 +62,15 @@ async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
 
     let shader = Shader::from_source(
         &core_system,
-        include_str!("texture_shader.wgsl"),
+        // include_str!("texture_shader.wgsl"),
+        include_str!("shader.wgsl"),
         "Test shader",
     );
 
     let vertex_buffer = Rc::new(VertexBuffer::new(
         &core_system,
-        VERTICES_WITH_TEXTURE,
+        // VERTICES_WITH_TEXTURE,
+        VERTICES,
         "Test vertex buffer",
     )?);
     let index_buffer = Rc::new(IndexBuffer::new(
@@ -73,8 +79,21 @@ async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
         "Test index buffer",
     )?);
 
+    let camera = PerspectiveCamera3::new(
+        CameraConfiguration3::new_looking_at(
+            Point3::new(0.0, 0.0, 2.0),
+            Point3::origin(),
+            Vector3::y_axis(),
+        ),
+        core_system.surface_aspect_ratio(),
+        Degrees(45.0),
+        UpperExclusiveBounds::new(0.1, 100.0),
+    );
+    let camera_uniform = CameraUniform::from_camera(&camera);
+
     let pipeline = RenderingPipelineBuilder::new(&core_system, &shader, "Test".to_string())
-        .add_image_texture(&tree_texture)
+        .add_camera_uniform(camera_uniform)
+        // .add_image_texture(&tree_texture)
         .add_vertex_buffer(vertex_buffer)
         .with_index_buffer(index_buffer)
         .build();
@@ -200,24 +219,24 @@ fn run_event_loop(event_loop: EventLoop<()>, window: Window, mut renderer: Rende
 const VERTICES: &[Vertex] = &[
     Vertex {
         position: [-0.0868241, 0.49240386, 0.0],
-        color: [0.5, 0.0, 0.5],
+        color: [1.0, 0.0, 0.0],
     },
     Vertex {
         position: [-0.49513406, 0.06958647, 0.0],
-        color: [0.5, 0.0, 0.5],
+        color: [0.0, 1.0, 0.0],
     },
     Vertex {
         position: [-0.21918549, -0.44939706, 0.0],
-        color: [0.5, 0.0, 0.5],
+        color: [0.0, 0.0, 1.0],
     },
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        color: [0.5, 0.0, 0.5],
-    },
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        color: [0.5, 0.0, 0.5],
-    },
+    // Vertex {
+    //     position: [0.35966998, -0.3473291, 0.0],
+    //     color: [0.0, 1.0, 1.0],
+    // },
+    // Vertex {
+    //     position: [0.44147372, 0.2347359, 0.0],
+    //     color: [1.0, 1.0, 0.0],
+    // },
 ];
 
 const VERTICES_WITH_TEXTURE: &[VertexWithTexture] = &[
@@ -243,4 +262,5 @@ const VERTICES_WITH_TEXTURE: &[VertexWithTexture] = &[
     },
 ];
 
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+const INDICES: &[u16] = &[0, 1, 2];
+// const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
