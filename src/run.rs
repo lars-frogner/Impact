@@ -1,14 +1,13 @@
 //! Running an event loop.
 
+use crate::{
+    geometry::{ColorVertex, Mesh, TextureVertex, WorldData},
+    rendering::{Assets, RenderPassSpecification},
+};
+
 use super::{
-    geometry::{
-        CameraConfiguration3, Degrees, PerspectiveCamera3, UpperExclusiveBounds, Vertex,
-        VertexWithTexture,
-    },
-    rendering::{
-        CameraUniform, CoreRenderingSystem, ImageTexture, IndexBuffer, RenderingPipelineBuilder,
-        RenderingSystem, Shader, VertexBuffer,
-    },
+    geometry::{CameraConfiguration, Degrees, PerspectiveCamera, UpperExclusiveBounds},
+    rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
 use nalgebra::{Point3, Vector3};
@@ -38,8 +37,6 @@ pub async fn run() -> Result<()> {
     let window = init_window(&event_loop)?;
     let renderer = init_renderer(&window).await?;
     run_event_loop(event_loop, window, renderer);
-
-    unreachable!()
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -53,52 +50,47 @@ pub async fn run_wasm() {
 async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
     let core_system = CoreRenderingSystem::new(window).await?;
 
-    // let tree_texture = ImageTexture::from_path(&core_system, "happy-tree.png", "Tree texture")?;
-    let tree_texture = ImageTexture::from_bytes(
-        &core_system,
-        include_bytes!("../happy-tree.png"),
-        "Tree texture",
-    )?;
+    let mut assets = Assets::new();
 
-    let shader = Shader::from_source(
-        &core_system,
-        // include_str!("texture_shader.wgsl"),
-        include_str!("shader.wgsl"),
-        "Test shader",
-    );
+    // assets.shaders.insert(
+    //     "Test shader".to_string(),
+    //     Shader::from_source(
+    //         &core_system,
+    //         // include_str!("texture_shader.wgsl"),
+    //         include_str!("shader.wgsl"),
+    //         "Test shader",
+    //     ),
+    // );
 
-    let vertex_buffer = Rc::new(VertexBuffer::new(
-        &core_system,
-        // VERTICES_WITH_TEXTURE,
-        VERTICES,
-        "Test vertex buffer",
-    )?);
-    let index_buffer = Rc::new(IndexBuffer::new(
-        &core_system,
-        INDICES,
-        "Test index buffer",
-    )?);
+    // // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", "Tree texture")?;
+    // assets.image_textures.insert(
+    //     "Tree texture".to_string(),
+    //     ImageTexture::from_bytes(
+    //         &core_system,
+    //         include_bytes!("../assets/happy-tree.png"),
+    //         "Tree texture",
+    //     )?,
+    // );
 
-    let camera = PerspectiveCamera3::new(
-        CameraConfiguration3::new_looking_at(
-            Point3::new(0.0, 0.0, 2.0),
-            Point3::origin(),
-            Vector3::y_axis(),
-        ),
-        core_system.surface_aspect_ratio(),
-        Degrees(45.0),
-        UpperExclusiveBounds::new(0.1, 100.0),
-    );
-    let camera_uniform = CameraUniform::from_camera(&camera);
+    let mut world = WorldData::new();
 
-    let pipeline = RenderingPipelineBuilder::new(&core_system, &shader, "Test".to_string())
-        .add_camera_uniform(camera_uniform)
-        // .add_image_texture(&tree_texture)
-        .add_vertex_buffer(vertex_buffer)
-        .with_index_buffer(index_buffer)
-        .build();
+    // world.color_meshes["Test mesh"] = Mesh::new(VERTICES.to_vec(), INDICES.to_vec());
 
-    Ok(RenderingSystem::new(core_system, vec![pipeline]).await)
+    // world.perspective_cameras["Camera"] = PerspectiveCamera::new(
+    //     CameraConfiguration::new_looking_at(
+    //         Point3::new(0.0, 0.0, 2.0),
+    //         Point3::origin(),
+    //         Vector3::y_axis(),
+    //     ),
+    //     core_system.surface_aspect_ratio(),
+    //     Degrees(45.0),
+    //     UpperExclusiveBounds::new(0.1, 100.0),
+    // );
+
+    let render_pass =
+        RenderPassSpecification::new("Test".to_string()).with_clear_color(Some(wgpu::Color::GREEN));
+
+    RenderingSystem::new(core_system, assets, vec![render_pass], &world).await
 }
 
 fn init_logging() -> Result<()> {
@@ -157,7 +149,7 @@ fn add_window_canvas_to_parent_element(window: &Window) -> Result<()> {
         .ok_or_else(|| anyhow!("Could not get window object"))
 }
 
-fn run_event_loop(event_loop: EventLoop<()>, window: Window, mut renderer: RenderingSystem) {
+fn run_event_loop(event_loop: EventLoop<()>, window: Window, mut renderer: RenderingSystem) -> ! {
     event_loop.run(move |event, _, control_flow| match event {
         // Handle window events
         Event::WindowEvent {
@@ -216,51 +208,51 @@ fn run_event_loop(event_loop: EventLoop<()>, window: Window, mut renderer: Rende
     });
 }
 
-const VERTICES: &[Vertex] = &[
-    Vertex {
+const VERTICES: &[ColorVertex] = &[
+    ColorVertex {
         position: [-0.0868241, 0.49240386, 0.0],
         color: [1.0, 0.0, 0.0],
     },
-    Vertex {
+    ColorVertex {
         position: [-0.49513406, 0.06958647, 0.0],
         color: [0.0, 1.0, 0.0],
     },
-    Vertex {
+    ColorVertex {
         position: [-0.21918549, -0.44939706, 0.0],
         color: [0.0, 0.0, 1.0],
     },
-    // Vertex {
-    //     position: [0.35966998, -0.3473291, 0.0],
-    //     color: [0.0, 1.0, 1.0],
-    // },
-    // Vertex {
-    //     position: [0.44147372, 0.2347359, 0.0],
-    //     color: [1.0, 1.0, 0.0],
-    // },
+    ColorVertex {
+        position: [0.35966998, -0.3473291, 0.0],
+        color: [0.0, 1.0, 1.0],
+    },
+    ColorVertex {
+        position: [0.44147372, 0.2347359, 0.0],
+        color: [1.0, 1.0, 0.0],
+    },
 ];
 
-const VERTICES_WITH_TEXTURE: &[VertexWithTexture] = &[
-    VertexWithTexture {
+const VERTICES_WITH_TEXTURE: &[TextureVertex] = &[
+    TextureVertex {
         position: [-0.0868241, 0.49240386, 0.0],
         texture_coords: [0.4131759, 1.0 - 0.99240386],
     },
-    VertexWithTexture {
+    TextureVertex {
         position: [-0.49513406, 0.06958647, 0.0],
         texture_coords: [0.0048659444, 1.0 - 0.56958647],
     },
-    VertexWithTexture {
+    TextureVertex {
         position: [-0.21918549, -0.44939706, 0.0],
         texture_coords: [0.28081453, 1.0 - 0.05060294],
     },
-    VertexWithTexture {
+    TextureVertex {
         position: [0.35966998, -0.3473291, 0.0],
         texture_coords: [0.85967, 1.0 - 0.1526709],
     },
-    VertexWithTexture {
+    TextureVertex {
         position: [0.44147372, 0.2347359, 0.0],
         texture_coords: [0.9414737, 1.0 - 0.7347359],
     },
 ];
 
-const INDICES: &[u16] = &[0, 1, 2];
-// const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+// const INDICES: &[u16] = &[0, 1, 2];
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];

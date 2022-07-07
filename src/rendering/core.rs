@@ -41,6 +41,47 @@ impl CoreRenderingSystem {
         .await
     }
 
+    /// Returns the underlying `wgpu` device.
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    /// Returns the underlying `wgpu` queue.
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    /// Returns the underlying `wgpu` surface.
+    pub fn surface(&self) -> &wgpu::Surface {
+        &self.surface
+    }
+
+    /// Returns the underlying `wgpu` surface configuration.
+    pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
+        &self.surface_config
+    }
+
+    /// Returns the ratio of width to height of the rendering surface.
+    pub fn surface_aspect_ratio(&self) -> f32 {
+        let width = self.surface_config().width;
+        let height = self.surface_config().height;
+        width as f32 / height as f32
+    }
+
+    /// Resizes the rendering surface to the given widht and height.
+    pub fn resize_surface(&mut self, (new_width, new_height): (u32, u32)) {
+        if new_width > 0 && new_height > 0 {
+            self.surface_config.width = new_width;
+            self.surface_config.height = new_height;
+            self.initialize_surface();
+        }
+    }
+
+    /// Initializes the rendering surface for presentation.
+    pub fn initialize_surface(&mut self) {
+        self.surface.configure(&self.device, &self.surface_config);
+    }
+
     async fn new_from_raw_window_handle<W>(
         window: &W,
         window_size: (NonZeroU32, NonZeroU32),
@@ -60,41 +101,6 @@ impl CoreRenderingSystem {
             surface,
             surface_config,
         })
-    }
-
-    pub fn device(&self) -> &wgpu::Device {
-        &self.device
-    }
-
-    pub fn queue(&self) -> &wgpu::Queue {
-        &self.queue
-    }
-
-    pub fn surface(&self) -> &wgpu::Surface {
-        &self.surface
-    }
-
-    pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
-        &self.surface_config
-    }
-
-    /// Returns the ratio of width to height of the rendering surface.
-    pub fn surface_aspect_ratio(&self) -> f32 {
-        let width = self.surface_config().width;
-        let height = self.surface_config().height;
-        width as f32 / height as f32
-    }
-
-    pub fn resize_surface(&mut self, (new_width, new_height): (u32, u32)) {
-        if new_width > 0 && new_height > 0 {
-            self.surface_config.width = new_width;
-            self.surface_config.height = new_height;
-            self.initialize_surface();
-        }
-    }
-
-    pub fn initialize_surface(&mut self) {
-        self.surface.configure(&self.device, &self.surface_config);
     }
 
     fn create_wgpu_instance() -> wgpu::Instance {

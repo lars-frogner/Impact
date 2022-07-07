@@ -1,42 +1,70 @@
 //! Camera types.
 
 use crate::{
-    geometry::{Angle, Bounds, Radians, UpperExclusiveBounds},
+    geometry::{Angle, Bounds, EntityChangeTracker, Radians, UpperExclusiveBounds},
     num::Float,
 };
 use approx::assert_abs_diff_ne;
 use nalgebra::{
     Isometry3, Perspective3, Point3, Projective3, Rotation3, Translation3, UnitVector3, Vector3,
 };
+use std::fmt::Debug;
 
 /// Position and orientation of a 3D camera.
 #[derive(Clone, Debug)]
-pub struct CameraConfiguration3<F: Float> {
+pub struct CameraConfiguration<F: Float> {
     position: Point3<F>,
     look_direction: UnitVector3<F>,
     up_direction: UnitVector3<F>,
     view_transform: Isometry3<F>,
+    /// Tracker for whether the view transform has changed.
+    view_transform_change_tracker: EntityChangeTracker,
 }
 
 /// 3D camera using a perspective transformation.
 #[derive(Clone, Debug)]
-pub struct PerspectiveCamera3<F: Float> {
-    configuration: CameraConfiguration3<F>,
+pub struct PerspectiveCamera<F: Float> {
+    configuration: CameraConfiguration<F>,
     perspective_transform: Perspective3<F>,
+    /// Tracker for whether the projection transform has changed.
+    projection_transform_change_tracker: EntityChangeTracker,
 }
 
-pub trait Camera3<F: Float> {
+/// Represents a 3D camera.
+pub trait Camera<F: Float> {
     /// Returns the spatial configuration of the camera.
-    fn config(&self) -> &CameraConfiguration3<F>;
+    fn config(&self) -> &CameraConfiguration<F>;
 
+    /// Returns the spatial configuration of the camera for
+    /// modification.
+    fn config_mut(&mut self) -> &mut CameraConfiguration<F>;
+
+    /// Returns the projection transform used by the camera.
     fn projection_transform(&self) -> &Projective3<F>;
 
-    fn create_view_projection_transform(&self) -> Projective3<F> {
+    /// Computes the combined transform obtained by performing
+    /// the view transformation followed by the projection
+    /// transformation.
+    fn compute_view_projection_transform(&self) -> Projective3<F> {
         self.projection_transform() * self.config().view_transform()
     }
+
+    /// Whether the projection transform has changed since the
+    /// last reset of change tracing.
+    fn projection_transform_changed(&self) -> bool;
+
+    /// Whether the view projection transform has changed since
+    /// the last reset of change tracing.
+    fn view_projection_transform_changed(&self) -> bool;
+
+    /// Forgets any recorded changes to the projection transform.
+    fn reset_projection_change_tracking(&mut self);
+
+    /// Forgets any recorded changes to the view projection transform.
+    fn reset_view_projection_change_tracking(&mut self);
 }
 
-impl<F: Float> CameraConfiguration3<F> {
+impl<F: Float> CameraConfiguration<F> {
     /// Creates a new orientation for a camera located at the
     /// given position, looking at the given direction with
     /// the given up direction.
@@ -55,6 +83,7 @@ impl<F: Float> CameraConfiguration3<F> {
             look_direction,
             up_direction,
             view_transform,
+            view_transform_change_tracker: EntityChangeTracker::new(),
         }
     }
 
@@ -93,6 +122,12 @@ impl<F: Float> CameraConfiguration3<F> {
     /// the camera is in the origin and looking along the positive z-axis).
     pub fn view_transform(&self) -> &Isometry3<F> {
         &self.view_transform
+    }
+
+    /// Whether the view transform has changed since the last reset of
+    /// change tracing.
+    fn view_transform_changed(&self) -> bool {
+        self.view_transform_change_tracker.changed()
     }
 
     /// Moves the camera to the given position.
@@ -157,12 +192,18 @@ impl<F: Float> CameraConfiguration3<F> {
         self.update_view_transform();
     }
 
+    /// Forgets any recorded changes to the view transform.
+    pub fn reset_view_change_tracking(&mut self) {
+        self.view_transform_change_tracker.reset();
+    }
+
     fn update_view_transform(&mut self) {
         self.view_transform = Self::create_view_transform(
             self.position(),
             self.look_direction(),
             self.up_direction(),
         );
+        self.view_transform_change_tracker.notify_change();
     }
 
     fn create_view_transform(
@@ -175,13 +216,13 @@ impl<F: Float> CameraConfiguration3<F> {
     }
 }
 
-impl<F: Float> Default for CameraConfiguration3<F> {
+impl<F: Float> Default for CameraConfiguration<F> {
     fn default() -> Self {
         Self::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis())
     }
 }
 
-impl<F: Float> PerspectiveCamera3<F> {
+impl<F: Float> PerspectiveCamera<F> {
     /// Creates a new perspective camera.
     ///
     /// # Note
@@ -190,7 +231,7 @@ impl<F: Float> PerspectiveCamera3<F> {
     /// # Panics
     /// If `aspect_ratio` or `vertical_field_of_view` is zero.
     pub fn new<A: Angle<F>>(
-        configuration: CameraConfiguration3<F>,
+        configuration: CameraConfiguration<F>,
         aspect_ratio: F,
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<F>,
@@ -209,6 +250,7 @@ impl<F: Float> PerspectiveCamera3<F> {
         Self {
             configuration,
             perspective_transform,
+            projection_transform_change_tracker: EntityChangeTracker::new(),
         }
     }
 
@@ -237,6 +279,7 @@ impl<F: Float> PerspectiveCamera3<F> {
     pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
         assert_abs_diff_ne!(aspect_ratio, F::zero());
         self.perspective_transform.set_aspect(aspect_ratio);
+        self.projection_transform_change_tracker.notify_change();
     }
 
     /// Sets the vertical field of view angle.
@@ -247,12 +290,14 @@ impl<F: Float> PerspectiveCamera3<F> {
         let fov = fov.as_radians();
         assert_abs_diff_ne!(fov, Radians::zero());
         self.perspective_transform.set_fovy(fov.radians());
+        self.projection_transform_change_tracker.notify_change();
     }
 
     pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
         let (near_distance, far_distance) = near_and_far_distance.bounds();
         self.perspective_transform
             .set_znear_and_zfar(near_distance, far_distance);
+        self.projection_transform_change_tracker.notify_change();
     }
 
     fn create_perspective_transform(
@@ -269,13 +314,36 @@ impl<F: Float> PerspectiveCamera3<F> {
     }
 }
 
-impl<F: Float> Camera3<F> for PerspectiveCamera3<F> {
-    fn config(&self) -> &CameraConfiguration3<F> {
+impl<F: Float> Camera<F> for PerspectiveCamera<F> {
+    fn config(&self) -> &CameraConfiguration<F> {
         &self.configuration
+    }
+
+    fn config_mut(&mut self) -> &mut CameraConfiguration<F> {
+        &mut self.configuration
     }
 
     fn projection_transform(&self) -> &Projective3<F> {
         self.perspective_transform.as_projective()
+    }
+
+    fn projection_transform_changed(&self) -> bool {
+        self.projection_transform_change_tracker.changed()
+    }
+
+    fn view_projection_transform_changed(&self) -> bool {
+        self.projection_transform_change_tracker
+            .merged(self.configuration.view_transform_change_tracker)
+            .changed()
+    }
+
+    fn reset_projection_change_tracking(&mut self) {
+        self.projection_transform_change_tracker.reset();
+    }
+
+    fn reset_view_projection_change_tracking(&mut self) {
+        self.reset_projection_change_tracking();
+        self.configuration.reset_view_change_tracking();
     }
 }
 
@@ -290,13 +358,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn constructing_camera_config_with_same_look_and_up_direction() {
-        CameraConfiguration3::<f64>::new(Point3::origin(), Vector3::z_axis(), Vector3::z_axis());
+        CameraConfiguration::<f64>::new(Point3::origin(), Vector3::z_axis(), Vector3::z_axis());
     }
 
     #[test]
     #[should_panic]
     fn constructing_camera_config_with_target_position_towards_up_direction() {
-        CameraConfiguration3::<f64>::new_looking_at(
+        CameraConfiguration::<f64>::new_looking_at(
             Point3::origin(),
             Point3::new(0.0, 0.0, 1.0),
             Vector3::z_axis(),
@@ -306,49 +374,53 @@ mod tests {
     #[test]
     fn moving_camera_to_position_works() {
         let mut config =
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
         let position = Point3::new(1.0, 2.0, 3.0);
         config.move_to(position);
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
     fn pointing_camera_towards_direction_works() {
         let mut config =
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
         let direction = UnitVector3::new_normalize(Vector3::new(1.0, 2.0, 3.0));
         config.point_to(direction);
         assert_abs_diff_eq!(config.position(), &Point3::origin());
         assert_abs_diff_eq!(config.look_direction(), &direction);
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
     fn pointing_camera_at_position_works() {
         let mut config =
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
         config.point_at(Point3::new(2.0, 0.0, 0.0));
         assert_abs_diff_eq!(config.position(), &Point3::origin());
         assert_abs_diff_eq!(config.look_direction(), &Vector3::x_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
     fn moving_camera_to_position_and_pointing_at_position_works() {
         let mut config =
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
         let camera_position = Point3::new(1.0, 2.0, 0.0);
         config.move_to_and_point_at(camera_position, Point3::new(5.0, 2.0, 0.0));
         assert_abs_diff_eq!(config.position(), &camera_position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::x_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
     fn translating_camera_works() {
-        let mut config = CameraConfiguration3::new(
+        let mut config = CameraConfiguration::new(
             Point3::new(0.5, 1.5, 2.5),
             Vector3::z_axis(),
             Vector3::y_axis(),
@@ -357,12 +429,13 @@ mod tests {
         assert_abs_diff_eq!(config.position(), &Point3::new(1.5, 3.5, 5.5));
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
     fn rotating_camera_orientation_works() {
         let position = Point3::new(0.5, 1.5, 2.5);
-        let mut config = CameraConfiguration3::new(position, Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new(position, Vector3::z_axis(), Vector3::y_axis());
         config.rotate_orientation(&Rotation3::from_axis_angle(&Vector3::y_axis(), PI));
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &-Vector3::z_axis());
@@ -371,12 +444,13 @@ mod tests {
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &-Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
     fn transforming_camera_works() {
         let mut config =
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
         config.transform(&Isometry3::from_parts(
             Translation3::new(0.5, 1.5, 2.5),
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI),
@@ -384,6 +458,7 @@ mod tests {
         assert_abs_diff_eq!(config.position(), &Point3::new(0.5, 1.5, 2.5));
         assert_abs_diff_eq!(config.look_direction(), &-Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
+        assert!(config.view_transform_changed());
     }
 
     #[test]
@@ -392,13 +467,13 @@ mod tests {
         let no_rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 0.0);
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(Point3::origin(), -Vector3::z_axis(), Vector3::y_axis(),)
+            CameraConfiguration::new(Point3::origin(), -Vector3::z_axis(), Vector3::y_axis(),)
                 .view_transform(),
             &Isometry3::from_parts(no_translation, no_rotation)
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(
+            CameraConfiguration::new(
                 Point3::new(1.0, 2.0, 3.0),
                 -Vector3::z_axis(),
                 Vector3::y_axis(),
@@ -408,7 +483,7 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis(),)
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis(),)
                 .view_transform(),
             &Isometry3::from_parts(
                 no_translation,
@@ -417,7 +492,7 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(Point3::origin(), Vector3::z_axis(), -Vector3::y_axis(),)
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), -Vector3::y_axis(),)
                 .view_transform(),
             &Isometry3::from_parts(
                 no_translation,
@@ -426,7 +501,7 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration3::new(
+            CameraConfiguration::new(
                 Point3::new(1.0, 2.0, 3.0),
                 Vector3::z_axis(),
                 Vector3::y_axis(),
@@ -440,10 +515,32 @@ mod tests {
     }
 
     #[test]
+    fn resetting_view_change_tracking_works() {
+        let mut config =
+            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        assert!(
+            !config.view_transform_changed(),
+            "View transform change reported after construction"
+        );
+
+        config.move_to(Point3::new(1.0, 2.0, 3.0));
+        assert!(
+            config.view_transform_changed(),
+            "No view transform change reported after making change"
+        );
+
+        config.reset_view_change_tracking();
+        assert!(
+            !config.view_transform_changed(),
+            "View transform change reported after reset"
+        );
+    }
+
+    #[test]
     #[should_panic]
     fn constructing_perspective_camera_with_zero_aspect_ratio() {
-        PerspectiveCamera3::new(
-            CameraConfiguration3::default(),
+        PerspectiveCamera::new(
+            CameraConfiguration::default(),
             0.0,
             Degrees(45.0),
             UpperExclusiveBounds::new(0.1, 100.0),
@@ -453,8 +550,8 @@ mod tests {
     #[test]
     #[should_panic]
     fn constructing_perspective_camera_with_zero_vertical_fov() {
-        PerspectiveCamera3::new(
-            CameraConfiguration3::default(),
+        PerspectiveCamera::new(
+            CameraConfiguration::default(),
             1.0,
             Degrees(0.0),
             UpperExclusiveBounds::new(0.1, 100.0),
@@ -463,8 +560,8 @@ mod tests {
 
     #[test]
     fn setting_perspective_camera_aspect_ratio_works() {
-        let mut camera = PerspectiveCamera3::new(
-            CameraConfiguration3::default(),
+        let mut camera = PerspectiveCamera::new(
+            CameraConfiguration::default(),
             1.0,
             Degrees(45.0),
             UpperExclusiveBounds::new(0.1, 100.0),
@@ -472,12 +569,14 @@ mod tests {
         assert_abs_diff_eq!(camera.aspect_ratio(), 1.0);
         camera.set_aspect_ratio(0.5);
         assert_abs_diff_eq!(camera.aspect_ratio(), 0.5);
+        assert!(camera.projection_transform_changed());
+        assert!(camera.view_projection_transform_changed());
     }
 
     #[test]
     fn setting_perspective_camera_vertical_field_of_view_works() {
-        let mut camera = PerspectiveCamera3::<f64>::new(
-            CameraConfiguration3::default(),
+        let mut camera = PerspectiveCamera::new(
+            CameraConfiguration::default(),
             1.0,
             Degrees(45.0),
             UpperExclusiveBounds::new(0.1, 100.0),
@@ -485,12 +584,14 @@ mod tests {
         assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(45.0));
         camera.set_vertical_field_of_view(Degrees(90.0));
         assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(90.0));
+        assert!(camera.projection_transform_changed());
+        assert!(camera.view_projection_transform_changed());
     }
 
     #[test]
     fn setting_perspective_camera_near_and_far_distance_works() {
-        let mut camera = PerspectiveCamera3::new(
-            CameraConfiguration3::default(),
+        let mut camera = PerspectiveCamera::new(
+            CameraConfiguration::default(),
             1.0,
             Degrees(45.0),
             UpperExclusiveBounds::new(0.1, 100.0),
@@ -500,5 +601,72 @@ mod tests {
         camera.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
         assert_abs_diff_eq!(camera.near_distance(), 42.0);
         assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-7);
+        assert!(camera.projection_transform_changed());
+        assert!(camera.view_projection_transform_changed());
+    }
+
+    #[test]
+    fn view_projection_change_reported_when_changing_view() {
+        let mut camera = PerspectiveCamera::new(
+            CameraConfiguration::default(),
+            1.0,
+            Degrees(45.0),
+            UpperExclusiveBounds::new(0.1, 100.0),
+        );
+        camera.config_mut().move_to(Point3::new(1.0, 2.0, 3.0));
+        assert!(!camera.projection_transform_changed());
+        assert!(camera.view_projection_transform_changed());
+    }
+
+    #[test]
+    fn resetting_projection_change_tracking_works() {
+        let mut camera = PerspectiveCamera::new(
+            CameraConfiguration::default(),
+            1.0,
+            Degrees(45.0),
+            UpperExclusiveBounds::new(0.1, 100.0),
+        );
+        assert!(
+            !camera.projection_transform_changed(),
+            "Projection transform change reported after construction"
+        );
+
+        camera.set_aspect_ratio(0.5);
+        assert!(
+            camera.projection_transform_changed(),
+            "No projection transform change reported after making change"
+        );
+
+        camera.reset_projection_change_tracking();
+        assert!(
+            !camera.projection_transform_changed(),
+            "Projection transform change reported after reset"
+        );
+    }
+
+    #[test]
+    fn resetting_view_projection_change_tracking_works() {
+        let mut camera = PerspectiveCamera::<f64>::new(
+            CameraConfiguration::default(),
+            1.0,
+            Degrees(45.0),
+            UpperExclusiveBounds::new(0.1, 100.0),
+        );
+        assert!(
+            !camera.view_projection_transform_changed(),
+            "View projection transform change reported after construction"
+        );
+
+        camera.set_aspect_ratio(0.5);
+        assert!(
+            camera.view_projection_transform_changed(),
+            "No view projection transform change reported after making change"
+        );
+
+        camera.reset_view_projection_change_tracking();
+        assert!(
+            !camera.view_projection_transform_changed(),
+            "View projection transform change reported after reset"
+        );
     }
 }

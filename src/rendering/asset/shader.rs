@@ -1,6 +1,6 @@
 //! Graphics shaders.
 
-use super::CoreRenderingSystem;
+use crate::rendering::CoreRenderingSystem;
 use std::borrow::Cow;
 
 cfg_if::cfg_if! {
@@ -11,6 +11,7 @@ cfg_if::cfg_if! {
 }
 
 /// A graphics shader program.
+#[derive(Debug)]
 pub struct Shader {
     module: wgpu::ShaderModule,
 }
@@ -28,11 +29,7 @@ impl Shader {
         let shader_path = shader_path.as_ref();
         let label = shader_path.to_string_lossy();
         let source = fs::read_to_string(shader_path)?;
-        Ok(Self::from_source(
-            core_system,
-            source.as_str(),
-            label.as_ref(),
-        ))
+        Ok(Self::from_source(core_system, &source, label.as_ref()))
     }
 
     /// Creates a new shader from the given source code.

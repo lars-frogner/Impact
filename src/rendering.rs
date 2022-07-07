@@ -1,35 +1,52 @@
 //! Graphics rendering.
 
+mod asset;
 mod buffer;
 mod camera;
 mod core;
-mod pipeline;
-mod shader;
-mod texture;
+mod mesh;
+mod render_pass;
+mod world;
 
+use crate::geometry::WorldData;
 use anyhow::Result;
 use winit::event::WindowEvent;
 
 pub use self::core::CoreRenderingSystem;
-pub use buffer::{BufferableIndex, BufferableVertex, IndexBuffer, VertexBuffer};
-pub use camera::CameraUniform;
-pub use pipeline::{RenderingPipeline, RenderingPipelineBuilder};
-pub use shader::Shader;
-pub use texture::ImageTexture;
+pub use asset::{Assets, ImageTexture, Shader};
+pub use render_pass::{RenderPassRecorder, RenderPassSpecification};
+pub use world::RenderData;
 
+/// Container for all data and logic required for rendering.
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
-    pipelines: Vec<RenderingPipeline>,
+    assets: Assets,
+    render_data: RenderData,
+    render_pass_recorders: Vec<RenderPassRecorder>,
 }
 
 impl RenderingSystem {
     /// Creates a new rendering system consisting of the given
     /// core system and rendering pipelines.
-    pub async fn new(core_system: CoreRenderingSystem, pipelines: Vec<RenderingPipeline>) -> Self {
-        Self {
+    pub async fn new(
+        core_system: CoreRenderingSystem,
+        assets: Assets,
+        specifications: Vec<RenderPassSpecification>,
+        world_data: &WorldData,
+    ) -> Result<Self> {
+        let render_data = RenderData::from_world_data(&core_system, world_data);
+
+        let render_pass_recorders: Result<Vec<_>> = specifications
+            .into_iter()
+            .map(|template| RenderPassRecorder::new(&core_system, &assets, &render_data, template))
+            .collect();
+
+        Ok(Self {
             core_system,
-            pipelines,
-        }
+            assets,
+            render_data,
+            render_pass_recorders: render_pass_recorders?,
+        })
     }
 
     /// Sets a new size for the rendering surface.
@@ -49,20 +66,20 @@ impl RenderingSystem {
     /// A `bool` specifying whether the event should be handled further.
     pub fn handle_input_event(&mut self, window_event: &WindowEvent) -> bool {
         match window_event {
-            WindowEvent::CursorMoved { position, .. } => {
-                let surface_config = self.core_system.surface_config();
-                let r = (position.x as f64) / (surface_config.width as f64);
-                let g = (position.y as f64) / (surface_config.height as f64);
-                for pipeline in &mut self.pipelines {
-                    pipeline.set_clear_color(wgpu::Color {
-                        r,
-                        g,
-                        b: 0.0,
-                        a: 1.0,
-                    });
-                }
-                false
-            }
+            // WindowEvent::CursorMoved { position, .. } => {
+            //     let surface_config = self.core_system.surface_config();
+            //     let r = (f64::from(position.x)) / (f64::from(surface_config.width));
+            //     let g = (f64::from(position.y)) / (f64::from(surface_config.height));
+            //     for pipeline in &mut self.pipelines {
+            //         pipeline.set_clear_color(wgpu::Color {
+            //             r,
+            //             g,
+            //             b: 0.0,
+            //             a: 1.0,
+            //         });
+            //     }
+            //     false
+            // }
             _ => true,
         }
     }
@@ -79,8 +96,13 @@ impl RenderingSystem {
 
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
-        for pipeline in &mut self.pipelines {
-            pipeline.record_render_passes(&view, &mut command_encoder)?;
+        for render_pass_recorder in &mut self.render_pass_recorders {
+            render_pass_recorder.record_render_pass(
+                &self.assets,
+                &self.render_data,
+                &view,
+                &mut command_encoder,
+            )?;
         }
 
         self.core_system

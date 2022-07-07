@@ -1,4 +1,4 @@
-//! Representations of angles.
+//! Different units for angles.
 
 use crate::num::Float;
 use approx::{AbsDiffEq, RelativeEq};

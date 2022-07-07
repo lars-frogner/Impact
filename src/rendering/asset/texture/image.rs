@@ -1,6 +1,6 @@
 //! Textures representing 2D images.
 
-use super::super::CoreRenderingSystem;
+use crate::rendering::CoreRenderingSystem;
 use anyhow::{anyhow, Result};
 use image::{self, DynamicImage, GenericImageView};
 use std::num::NonZeroU32;
@@ -13,11 +13,13 @@ cfg_if::cfg_if! {
 }
 
 /// A texture representing a 2D image.
+#[derive(Debug)]
 pub struct ImageTexture {
     _texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
-    bind_group_label: String,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
 impl ImageTexture {
@@ -83,25 +85,49 @@ impl ImageTexture {
         (width, height): (NonZeroU32, NonZeroU32),
         label: &str,
     ) -> Self {
+        let device = core_system.device();
+
         let texture_size = wgpu::Extent3d {
             width: u32::from(width),
             height: u32::from(height),
             depth_or_array_layers: 1,
         };
 
-        let texture = Self::create_empty_rgba8_texture(core_system.device(), texture_size, label);
+        let texture = Self::create_empty_rgba8_texture(device, texture_size, label);
         Self::write_data_to_texture(core_system.queue(), &texture, rgba_buffer, texture_size);
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let sampler = Self::create_sampler(core_system.device());
+        let sampler = Self::create_sampler(device);
+
+        let bind_group_layout = Self::create_bind_group_layout(device);
+        let bind_group = Self::create_bind_group(
+            device,
+            &bind_group_layout,
+            &view,
+            &sampler,
+            &format!("{} bind group", label),
+        );
 
         Self {
             _texture: texture,
             view,
             sampler,
-            bind_group_label: format!("{} bind group", label),
+            bind_group_layout,
+            bind_group,
         }
+    }
+
+    /// Returns the layout of the bind group to which the
+    /// texture view and sampler are bound.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
+    }
+
+    /// Returns the bind group to which the texture view and
+    /// sampler are bound.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 
     /// Returns a view into the image texture.
@@ -114,7 +140,7 @@ impl ImageTexture {
         &self.sampler
     }
 
-    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -140,29 +166,27 @@ impl ImageTexture {
         })
     }
 
-    pub fn create_bind_group(
+    fn create_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
-        texture: &ImageTexture,
+        texture_view: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
+        label: &str,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(texture.view()),
+                    resource: wgpu::BindingResource::TextureView(texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(texture.sampler()),
+                    resource: wgpu::BindingResource::Sampler(sampler),
                 },
             ],
-            label: Some(texture.bind_group_label()),
+            label: Some(label),
         })
-    }
-
-    fn bind_group_label(&self) -> &str {
-        self.bind_group_label.as_str()
     }
 
     /// Creates a new `wgpu::Texture` configured to hold 2D image data
