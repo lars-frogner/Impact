@@ -232,7 +232,7 @@ impl RawMeshInstanceTransformMatrix {
     /// Creates a new raw transform matrix representing the transform
     /// of the given mesh instance.
     pub fn from_mesh_instance(instance: &MeshInstance) -> Self {
-        Self::from_matrix(instance.transform().matrix())
+        Self::from_matrix(instance.transform_matrix())
     }
 
     /// Creates a new raw transform matrix from the given `Matrix4`.

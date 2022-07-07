@@ -2,7 +2,7 @@
 
 use crate::geometry::{CollectionChange, CollectionChangeTracker};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Transform3;
+use nalgebra::Matrix4;
 use std::fmt::Debug;
 
 /// A 3D mesh represented by vertices and indices.
@@ -26,6 +26,15 @@ pub struct MeshInstanceGroup {
     instance_change_tracker: CollectionChangeTracker,
 }
 
+/// An instance of a mesh with a certain transformation
+/// applied to it.
+///
+/// Used to represent multiple versions of the same basic mesh.
+#[derive(Clone, Debug)]
+pub struct MeshInstance {
+    transform_matrix: Matrix4<f32>,
+}
+
 /// Vertices that have an associated color.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -40,15 +49,6 @@ pub struct ColorVertex {
 pub struct TextureVertex {
     pub position: [f32; 3],
     pub texture_coords: [f32; 2],
-}
-
-/// An instance of a mesh with a certain transformation
-/// applied to it.
-///
-/// Used to represent multiple versions of the same basic mesh.
-#[derive(Clone, Debug)]
-pub struct MeshInstance {
-    transform: Transform3<f32>,
 }
 
 impl<V> Mesh<V> {
@@ -130,10 +130,20 @@ impl MeshInstanceGroup {
 }
 
 impl MeshInstance {
-    /// Returns the transform describing the configuration of this
-    /// mesh instance in relation to the default configuration of
+    /// Creates a new mesh instance with no transform.
+    pub fn new() -> Self {
+        Self::with_transform(Matrix4::identity())
+    }
+
+    /// Creates a new mesh instance with the given transform.
+    pub fn with_transform(transform_matrix: Matrix4<f32>) -> Self {
+        Self { transform_matrix }
+    }
+
+    /// Returns the transform matrix describing the configuration of
+    /// this mesh instance in relation to the default configuration of
     /// the mesh.
-    pub fn transform(&self) -> &Transform3<f32> {
-        &self.transform
+    pub fn transform_matrix(&self) -> &Matrix4<f32> {
+        &self.transform_matrix
     }
 }
