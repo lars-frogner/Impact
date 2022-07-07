@@ -29,3 +29,9 @@ impl WorldData {
         }
     }
 }
+
+impl Default for WorldData {
+    fn default() -> Self {
+        Self::new()
+    }
+}

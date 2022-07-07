@@ -50,6 +50,12 @@ impl EntityChangeTracker {
     }
 }
 
+impl Default for EntityChangeTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CollectionChangeTracker {
     /// Creates a new tracker.
     pub fn new() -> Self {
@@ -100,6 +106,12 @@ impl CollectionChangeTracker {
     /// Resets the changes registered by the tracker.
     pub fn reset(&mut self) {
         self.change = CollectionChange::None;
+    }
+}
+
+impl Default for CollectionChangeTracker {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

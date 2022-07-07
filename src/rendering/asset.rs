@@ -28,3 +28,9 @@ impl Assets {
         }
     }
 }
+
+impl Default for Assets {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -147,3 +147,9 @@ impl MeshInstance {
         &self.transform_matrix
     }
 }
+
+impl Default for MeshInstance {
+    fn default() -> Self {
+        Self::new()
+    }
+}
