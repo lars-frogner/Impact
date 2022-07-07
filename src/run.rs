@@ -1,7 +1,7 @@
 //! Running an event loop.
 
 use crate::{
-    geometry::{ColorVertex, Mesh, TextureVertex, WorldData},
+    geometry::{ColorVertex, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex, WorldData},
     rendering::{Assets, RenderPassSpecification},
 };
 
@@ -10,7 +10,7 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, Translation3, Vector3};
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -78,6 +78,19 @@ async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
         Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
     );
 
+    world.mesh_instance_groups.insert(
+        "Test mesh instance".to_string(),
+        MeshInstanceGroup::new(
+            vec![
+                Translation3::<f32>::new(-0.5, 0.0, 0.0).into(),
+                Translation3::<f32>::new(0.5, 0.0, -1.0).into(),
+            ]
+            .into_iter()
+            .map(MeshInstance::with_transform)
+            .collect(),
+        ),
+    );
+
     world.perspective_cameras.insert(
         "Camera".to_string(),
         PerspectiveCamera::new(
@@ -97,6 +110,7 @@ async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
         .with_shader(Some("Test shader".to_string()))
         .add_image_texture("Tree texture".to_string())
         .with_mesh(Some("Test mesh".to_string()))
+        .with_mesh_instances(Some("Test mesh instance".to_string()))
         .with_camera(Some("Camera".to_string()));
 
     RenderingSystem::new(core_system, assets, vec![render_pass], &world).await
