@@ -11,7 +11,6 @@ use super::{
 };
 use anyhow::Result;
 use nalgebra::{Point3, Vector3};
-use std::rc::Rc;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -52,43 +51,53 @@ async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
 
     let mut assets = Assets::new();
 
-    // assets.shaders.insert(
-    //     "Test shader".to_string(),
-    //     Shader::from_source(
-    //         &core_system,
-    //         // include_str!("texture_shader.wgsl"),
-    //         include_str!("shader.wgsl"),
-    //         "Test shader",
-    //     ),
-    // );
+    assets.shaders.insert(
+        "Test shader".to_string(),
+        Shader::from_source(
+            &core_system,
+            include_str!("texture_shader.wgsl"),
+            // include_str!("shader.wgsl"),
+            "Test shader",
+        ),
+    );
 
-    // // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", "Tree texture")?;
-    // assets.image_textures.insert(
-    //     "Tree texture".to_string(),
-    //     ImageTexture::from_bytes(
-    //         &core_system,
-    //         include_bytes!("../assets/happy-tree.png"),
-    //         "Tree texture",
-    //     )?,
-    // );
+    // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", "Tree texture")?;
+    assets.image_textures.insert(
+        "Tree texture".to_string(),
+        ImageTexture::from_bytes(
+            &core_system,
+            include_bytes!("../assets/happy-tree.png"),
+            "Tree texture",
+        )?,
+    );
 
     let mut world = WorldData::new();
 
-    // world.color_meshes["Test mesh"] = Mesh::new(VERTICES.to_vec(), INDICES.to_vec());
+    world.texture_meshes.insert(
+        "Test mesh".to_string(),
+        Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
+    );
 
-    // world.perspective_cameras["Camera"] = PerspectiveCamera::new(
-    //     CameraConfiguration::new_looking_at(
-    //         Point3::new(0.0, 0.0, 2.0),
-    //         Point3::origin(),
-    //         Vector3::y_axis(),
-    //     ),
-    //     core_system.surface_aspect_ratio(),
-    //     Degrees(45.0),
-    //     UpperExclusiveBounds::new(0.1, 100.0),
-    // );
+    world.perspective_cameras.insert(
+        "Camera".to_string(),
+        PerspectiveCamera::new(
+            CameraConfiguration::new_looking_at(
+                Point3::new(0.0, 0.0, 2.0),
+                Point3::origin(),
+                Vector3::y_axis(),
+            ),
+            core_system.surface_aspect_ratio(),
+            Degrees(45.0),
+            UpperExclusiveBounds::new(0.1, 100.0),
+        ),
+    );
 
-    let render_pass =
-        RenderPassSpecification::new("Test".to_string()).with_clear_color(Some(wgpu::Color::GREEN));
+    let render_pass = RenderPassSpecification::new("Test".to_string())
+        .with_clear_color(Some(wgpu::Color::BLACK))
+        .with_shader(Some("Test shader".to_string()))
+        .add_image_texture("Tree texture".to_string())
+        .with_mesh(Some("Test mesh".to_string()))
+        .with_camera(Some("Camera".to_string()));
 
     RenderingSystem::new(core_system, assets, vec![render_pass], &world).await
 }
