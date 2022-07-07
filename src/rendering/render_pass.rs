@@ -98,6 +98,12 @@ impl RenderPassSpecification {
         self
     }
 
+    /// Obtains the layouts of all bind groups involved in the render
+    /// pass.
+    ///
+    /// The order of the bind groups is:
+    /// 1. Camera.
+    /// 2. Image textures in same order as in the `image_textures` vector.
     fn get_bind_group_layouts<'a>(
         &self,
         assets: &'a Assets,
@@ -129,6 +135,11 @@ impl RenderPassSpecification {
         Ok(layouts)
     }
 
+    /// Obtains all bind groups involved in the render pass.
+    ///
+    /// The order of the bind groups is:
+    /// 1. Camera.
+    /// 2. Image textures in same order as in the `image_textures` vector.
     fn get_bind_groups<'a>(
         &self,
         assets: &'a Assets,
@@ -160,6 +171,11 @@ impl RenderPassSpecification {
         Ok(layouts)
     }
 
+    /// Obtains the layout of all vertex buffers involved in the render pass.
+    ///
+    /// The order of the layouts is:
+    /// 1. Mesh vertex buffer.
+    /// 2. Mesh instance buffer.
     fn get_vertex_buffer_layouts<'a>(
         &self,
         render_data: &'a RenderData,
