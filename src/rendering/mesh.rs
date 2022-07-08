@@ -43,19 +43,21 @@ struct RawMeshInstanceTransformMatrix {
 impl MeshRenderDataManager {
     /// Creates a new manager with render data initialized
     /// from the given mesh.
-    pub fn for_mesh<V>(core_system: &CoreRenderingSystem, mesh: &Mesh<V>, label: String) -> Self
-    where
-        V: BufferableVertex,
-    {
+    pub fn for_mesh(
+        core_system: &CoreRenderingSystem,
+        mesh: &Mesh<impl BufferableVertex>,
+        label: String,
+    ) -> Self {
         Self::new(core_system, mesh.vertices(), mesh.indices(), label)
     }
 
     /// Ensures that the render data is in sync with the corresponding
     /// data in the given mesh.
-    pub fn sync_with_mesh<V>(&mut self, core_system: &CoreRenderingSystem, mesh: &mut Mesh<V>)
-    where
-        V: BufferableVertex,
-    {
+    pub fn sync_with_mesh(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        mesh: &mut Mesh<impl BufferableVertex>,
+    ) {
         self.vertex_buffer_change = mesh.vertex_change();
         self.index_buffer_change = mesh.index_change();
 
@@ -93,15 +95,12 @@ impl MeshRenderDataManager {
 
     /// Creates a new manager with render data initialized
     /// from the given slices of vertices and indices.
-    fn new<V>(
+    fn new(
         core_system: &CoreRenderingSystem,
-        vertices: &[V],
+        vertices: &[impl BufferableVertex],
         indices: &[u16],
         label: String,
-    ) -> Self
-    where
-        V: BufferableVertex,
-    {
+    ) -> Self {
         let vertex_buffer = VertexBuffer::new(core_system, vertices, &label);
         let index_buffer = IndexBuffer::new(core_system, indices, &label);
         Self {
@@ -113,16 +112,14 @@ impl MeshRenderDataManager {
         }
     }
 
-    fn sync_render_data<V>(
+    fn sync_render_data(
         &mut self,
         core_system: &CoreRenderingSystem,
-        vertices: &[V],
+        vertices: &[impl BufferableVertex],
         indices: &[u16],
         vertex_change: CollectionChange,
         index_change: CollectionChange,
-    ) where
-        V: BufferableVertex,
-    {
+    ) {
         match vertex_change {
             CollectionChange::None => {}
             CollectionChange::Contents => {

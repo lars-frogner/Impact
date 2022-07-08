@@ -347,38 +347,44 @@ impl UniformBuffer {
     }
 }
 
-fn create_initialized_vertex_buffer<V: Pod>(
+fn create_initialized_vertex_buffer(
     device: &wgpu::Device,
-    vertices: &[V],
+    vertices: &[impl Pod],
     label: &str,
 ) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-        label: Some(label),
-    })
+    create_initialized_buffer(device, vertices, wgpu::BufferUsages::VERTEX, label)
 }
 
-fn create_initialized_index_buffer<IDX: Pod>(
+fn create_initialized_index_buffer(
     device: &wgpu::Device,
-    indices: &[IDX],
+    indices: &[impl Pod],
     label: &str,
 ) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        contents: bytemuck::cast_slice(indices),
-        usage: wgpu::BufferUsages::INDEX,
-        label: Some(label),
-    })
+    create_initialized_buffer(device, indices, wgpu::BufferUsages::INDEX, label)
 }
 
-fn create_initialized_uniform_buffer<U: Pod>(
+fn create_initialized_uniform_buffer(
     device: &wgpu::Device,
-    uniforms: &[U],
+    uniforms: &[impl Pod],
+    label: &str,
+) -> wgpu::Buffer {
+    create_initialized_buffer(
+        device,
+        uniforms,
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        label,
+    )
+}
+
+fn create_initialized_buffer(
+    device: &wgpu::Device,
+    data: &[impl Pod],
+    usage: wgpu::BufferUsages,
     label: &str,
 ) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        contents: bytemuck::cast_slice(uniforms),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        contents: bytemuck::cast_slice(data),
+        usage,
         label: Some(label),
     })
 }

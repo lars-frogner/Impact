@@ -82,13 +82,10 @@ impl CoreRenderingSystem {
         self.surface.configure(&self.device, &self.surface_config);
     }
 
-    async fn new_from_raw_window_handle<W>(
-        window: &W,
+    async fn new_from_raw_window_handle(
+        window: &impl HasRawWindowHandle,
         window_size: (NonZeroU32, NonZeroU32),
-    ) -> Result<Self>
-    where
-        W: HasRawWindowHandle,
-    {
+    ) -> Result<Self> {
         let wgpu_instance = Self::create_wgpu_instance();
         let surface = unsafe { wgpu_instance.create_surface(window) };
         let adapter = Self::create_adapter(&wgpu_instance, &surface).await?;

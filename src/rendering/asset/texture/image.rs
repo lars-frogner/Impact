@@ -31,9 +31,9 @@ impl ImageTexture {
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_path<P: AsRef<Path>>(
+    pub fn from_path(
         core_system: &CoreRenderingSystem,
-        image_path: P,
+        image_path: impl AsRef<Path>,
         label: &str,
     ) -> Result<Self> {
         let image = ImageReader::open(image_path)?.decode()?;

@@ -27,20 +27,22 @@ pub struct RawViewProjectionTransform {
 impl CameraRenderDataManager {
     /// Creates a new manager with render data initialized
     /// from the view projection transform of the given camera.
-    pub fn for_camera<C>(core_system: &CoreRenderingSystem, camera: &C, label: &str) -> Self
-    where
-        C: Camera<f32>,
-    {
+    pub fn for_camera(
+        core_system: &CoreRenderingSystem,
+        camera: &impl Camera<f32>,
+        label: &str,
+    ) -> Self {
         let view_projection_transform = camera.compute_view_projection_transform();
         Self::new(core_system, &view_projection_transform, label)
     }
 
     /// Ensures that the render data is in sync with the view
     /// projection transform of the given camera.
-    pub fn sync_with_camera<C>(&mut self, core_system: &CoreRenderingSystem, camera: &mut C)
-    where
-        C: Camera<f32>,
-    {
+    pub fn sync_with_camera(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        camera: &mut impl Camera<f32>,
+    ) {
         self.view_projection_transform_changed = camera.view_projection_transform_changed();
         if self.view_projection_transform_changed {
             let view_projection_transform = camera.compute_view_projection_transform();

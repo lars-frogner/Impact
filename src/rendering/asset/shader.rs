@@ -22,9 +22,9 @@ impl Shader {
     /// # Errors
     /// Returns an error if the shader file can not be found or read.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_path<P: AsRef<Path>>(
+    pub fn from_path(
         core_system: &CoreRenderingSystem,
-        shader_path: P,
+        shader_path: impl AsRef<Path>,
     ) -> Result<Self> {
         let shader_path = shader_path.as_ref();
         let label = shader_path.to_string_lossy();
