@@ -15,7 +15,6 @@ use winit::{
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use anyhow::anyhow;
-        use wasm_bindgen::prelude::*;
 
         const WEB_WINDOW_WIDTH: u32 = 450;
         const WEB_WINDOW_HEIGHT: u32 = 400;

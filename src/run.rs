@@ -1,7 +1,7 @@
 //! Running an event loop.
 
 use crate::{
-    control::SemiDirectionalMotionController,
+    control::{NoMotionController, SemiDirectionalMotionController},
     geometry::{
         ColorVertex, GeometricalData, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex,
     },
@@ -17,6 +17,9 @@ use super::{
 };
 use anyhow::Result;
 use nalgebra::{point, Point3, Rotation3, Translation3, Vector3};
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 pub async fn run() -> Result<()> {
     init_logging()?;
@@ -131,7 +134,7 @@ async fn init_world(window: &Window) -> Result<World> {
     let renderer =
         RenderingSystem::new(core_system, assets, vec![render_pass], &geometrical_data).await?;
 
-    let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
+    let controller = NoMotionController; // SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
     Ok(World::new(geometrical_data, renderer, controller))
 }
