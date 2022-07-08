@@ -25,7 +25,7 @@ pub async fn run() -> Result<()> {
     let world = init_world(&window).await?;
     let input_handler = InputHandler::default();
 
-    window.run_event_loop(input_handler, world);
+    window.run_event_loop(world, input_handler);
 }
 
 #[cfg(target_arch = "wasm32")]

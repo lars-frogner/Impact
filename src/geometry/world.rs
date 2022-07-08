@@ -31,6 +31,7 @@ impl GeometricalData {
         }
     }
 
+    /// Applies the given transform to all cameras.
     pub fn transform_cameras(&mut self, transform: &Isometry3<f32>) {
         self.perspective_cameras
             .values_mut()

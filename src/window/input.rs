@@ -11,22 +11,28 @@ use winit::{
     event_loop::ControlFlow,
 };
 
+/// Handler for any user input events.
 #[derive(Clone, Debug, Default)]
 pub struct InputHandler {
     key_handler: KeyInputHandler,
 }
 
+/// Whether or not an event has been handled by
+/// the input handler.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum HandlingResult {
     Handled,
     Unhandled,
 }
 
+/// A map associating specific keyboard key inputs
+/// with the actions they should perform.
 #[derive(Clone, Debug)]
-pub struct KeyActionMap(HashMap<VirtualKeyCode, BinaryInputAction>);
+pub struct KeyActionMap(HashMap<VirtualKeyCode, KeyboardInputAction>);
 
+/// Actions that can be performed with a keyboard.
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
-pub enum BinaryInputAction {
+pub enum KeyboardInputAction {
     MoveForwards,
     MoveBackwards,
     MoveRight,
@@ -36,24 +42,33 @@ pub enum BinaryInputAction {
     Exit,
 }
 
+/// Handler for keyboard input events.
 #[derive(Clone, Debug, Default)]
 struct KeyInputHandler {
     key_map: KeyActionMap,
 }
 
+/// Macro for easing creation of keyboard action maps.
 macro_rules! def_key_action_map {
     ($($action:ident => $key:ident),*) => {
-        [$((VirtualKeyCode::$key, BinaryInputAction::$action),)*].into_iter().collect::<HashMap<_, _>>()
+        [$((VirtualKeyCode::$key, KeyboardInputAction::$action),)*].into_iter().collect::<HashMap<_, _>>()
     };
 }
 
 impl InputHandler {
+    /// Creates a new input handler that will use the given
+    /// keyboard action map.
     pub fn new(key_map: KeyActionMap) -> Self {
         Self {
             key_handler: KeyInputHandler::new(key_map),
         }
     }
 
+    /// Takes a window event and possibly performs an action
+    /// on the world.
+    ///
+    /// The returned `HandlingResult` signals whether the event
+    /// should be handled by some other system instead.
     pub fn handle_event(
         &self,
         world: &mut World,
@@ -61,6 +76,7 @@ impl InputHandler {
         event: &WindowEvent,
     ) -> HandlingResult {
         match event {
+            // Handle keyboard input events
             WindowEvent::KeyboardInput { input, .. } => {
                 self.key_handler.handle_event(world, control_flow, input)
             }
@@ -87,15 +103,17 @@ impl KeyInputHandler {
                 ..
             } => match self.key_map.action_for_key(*key) {
                 Some(action) => match action {
-                    BinaryInputAction::Exit => {
+                    KeyboardInputAction::Exit => {
                         *control_flow = ControlFlow::Exit;
                         HandlingResult::Handled
                     }
+                    // Check if the input is for the motion controller,
+                    // and if so, performed the required motion update
                     action => match MotionDirection::try_from_input_action(action) {
                         Some(direction) => {
                             world.update_motion_controller(
-                                direction,
                                 MotionState::from_key_state(*state),
+                                direction,
                             );
                             HandlingResult::Handled
                         }
@@ -110,11 +128,11 @@ impl KeyInputHandler {
 }
 
 impl KeyActionMap {
-    pub fn new(map: HashMap<VirtualKeyCode, BinaryInputAction>) -> Self {
+    pub fn new(map: HashMap<VirtualKeyCode, KeyboardInputAction>) -> Self {
         Self(map)
     }
 
-    fn action_for_key(&self, key: VirtualKeyCode) -> Option<BinaryInputAction> {
+    fn action_for_key(&self, key: VirtualKeyCode) -> Option<KeyboardInputAction> {
         self.0.get(&key).cloned()
     }
 }
@@ -143,14 +161,14 @@ impl MotionState {
 }
 
 impl MotionDirection {
-    fn try_from_input_action(action: BinaryInputAction) -> Option<Self> {
+    fn try_from_input_action(action: KeyboardInputAction) -> Option<Self> {
         match action {
-            BinaryInputAction::MoveForwards => Some(Self::Forwards),
-            BinaryInputAction::MoveBackwards => Some(Self::Backwards),
-            BinaryInputAction::MoveRight => Some(Self::Right),
-            BinaryInputAction::MoveLeft => Some(Self::Left),
-            BinaryInputAction::MoveUp => Some(Self::Up),
-            BinaryInputAction::MoveDown => Some(Self::Down),
+            KeyboardInputAction::MoveForwards => Some(Self::Forwards),
+            KeyboardInputAction::MoveBackwards => Some(Self::Backwards),
+            KeyboardInputAction::MoveRight => Some(Self::Right),
+            KeyboardInputAction::MoveLeft => Some(Self::Left),
+            KeyboardInputAction::MoveUp => Some(Self::Up),
+            KeyboardInputAction::MoveDown => Some(Self::Down),
             _ => None,
         }
     }

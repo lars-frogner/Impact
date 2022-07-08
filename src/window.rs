@@ -1,3 +1,5 @@
+//! Window management.
+
 mod input;
 
 pub use input::{HandlingResult, InputHandler};
@@ -22,6 +24,7 @@ cfg_if::cfg_if! {
     }
 }
 
+/// Wrapper for a window with an associated event loop.
 pub struct Window {
     window: WinitWindow,
     event_loop: EventLoop<()>,
@@ -31,19 +34,26 @@ impl Window {
     pub fn new() -> Result<Self> {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new().build(&event_loop)?;
+
         #[cfg(target_arch = "wasm32")]
         {
+            // For wasm we need to set the window size manually
+            // and add the window to the DOM
             set_window_size(&window);
             add_window_canvas_to_parent_element(&window)?;
         }
+
         Ok(Self { event_loop, window })
     }
 
+    /// Returns the underlying `winit` window.
     pub fn window(&self) -> &WinitWindow {
         &self.window
     }
 
-    pub fn run_event_loop(self, input_handler: InputHandler, mut world: World) -> ! {
+    /// Launches the event loop driving the simulation
+    /// and rendering.
+    pub fn run_event_loop(self, mut world: World, input_handler: InputHandler) -> ! {
         let Self { window, event_loop } = self;
 
         event_loop.run(move |event, _, control_flow| match event {
