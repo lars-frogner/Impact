@@ -8,7 +8,7 @@ mod mesh;
 mod render_pass;
 mod world;
 
-use crate::geometry::WorldData;
+use crate::geometry::GeometricalData;
 use anyhow::Result;
 use winit::event::WindowEvent;
 
@@ -32,9 +32,9 @@ impl RenderingSystem {
         core_system: CoreRenderingSystem,
         assets: Assets,
         specifications: Vec<RenderPassSpecification>,
-        world_data: &WorldData,
+        geometrical_data: &GeometricalData,
     ) -> Result<Self> {
-        let render_data = RenderData::from_world_data(&core_system, world_data);
+        let render_data = RenderData::from_geometrical_data(&core_system, geometrical_data);
 
         let render_pass_recorders: Result<Vec<_>> = specifications
             .into_iter()

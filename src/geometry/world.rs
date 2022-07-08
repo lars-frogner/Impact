@@ -1,25 +1,27 @@
 //! Container for geometrical data.
 
-use super::{ColorVertex, Mesh, MeshInstanceGroup, PerspectiveCamera, TextureVertex};
+use nalgebra::Isometry3;
+
+use super::{Camera, ColorVertex, Mesh, MeshInstanceGroup, PerspectiveCamera, TextureVertex};
 use std::collections::HashMap;
 
-pub type WorldIdent = String;
-pub type WorldObjMap<T> = HashMap<WorldIdent, T>;
+pub type GeomIdent = String;
+pub type GeometryMap<T> = HashMap<GeomIdent, T>;
 
 /// Container for all geometrical data in the world.
-pub struct WorldData {
+pub struct GeometricalData {
     /// Meshes with vertices that hold color values.
-    pub color_meshes: WorldObjMap<Mesh<ColorVertex>>,
+    pub color_meshes: GeometryMap<Mesh<ColorVertex>>,
     /// Meshes with vertices that hold texture coordinates.
-    pub texture_meshes: WorldObjMap<Mesh<TextureVertex>>,
+    pub texture_meshes: GeometryMap<Mesh<TextureVertex>>,
     /// Groups of instances of the same mesh.
-    pub mesh_instance_groups: WorldObjMap<MeshInstanceGroup<f32>>,
+    pub mesh_instance_groups: GeometryMap<MeshInstanceGroup<f32>>,
     /// Cameras using perspective transformations.
-    pub perspective_cameras: WorldObjMap<PerspectiveCamera<f32>>,
+    pub perspective_cameras: GeometryMap<PerspectiveCamera<f32>>,
 }
 
-impl WorldData {
-    /// Creates a new empty world data container.
+impl GeometricalData {
+    /// Creates a new empty geometrical data container.
     pub fn new() -> Self {
         Self {
             color_meshes: HashMap::new(),
@@ -28,9 +30,15 @@ impl WorldData {
             perspective_cameras: HashMap::new(),
         }
     }
+
+    pub fn transform_cameras(&mut self, transform: &Isometry3<f32>) {
+        self.perspective_cameras
+            .values_mut()
+            .for_each(|camera| camera.config_mut().transform(transform));
+    }
 }
 
-impl Default for WorldData {
+impl Default for GeometricalData {
     fn default() -> Self {
         Self::new()
     }

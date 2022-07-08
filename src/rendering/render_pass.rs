@@ -1,6 +1,6 @@
 //! Rendering pipelines.
 
-use crate::geometry::WorldIdent;
+use crate::geometry::GeomIdent;
 
 use super::{
     asset::{AssetIdent, Assets},
@@ -16,9 +16,9 @@ use anyhow::Result;
 pub struct RenderPassSpecification {
     shader: Option<AssetIdent>,
     image_textures: Vec<AssetIdent>,
-    camera: Option<WorldIdent>,
-    mesh: Option<WorldIdent>,
-    mesh_instances: Option<WorldIdent>,
+    camera: Option<GeomIdent>,
+    mesh: Option<GeomIdent>,
+    mesh_instances: Option<GeomIdent>,
     clear_color: Option<wgpu::Color>,
     label: String,
 }
@@ -66,7 +66,7 @@ impl RenderPassSpecification {
     }
 
     /// Uses the given camera for the render pass.
-    pub fn with_camera(mut self, camera: Option<WorldIdent>) -> Self {
+    pub fn with_camera(mut self, camera: Option<GeomIdent>) -> Self {
         self.camera = camera;
         self
     }
@@ -75,7 +75,7 @@ impl RenderPassSpecification {
     ///
     /// Without a mesh the render pass will only involve
     /// a clear or load operation on the rendering surface.
-    pub fn with_mesh(mut self, mesh: Option<WorldIdent>) -> Self {
+    pub fn with_mesh(mut self, mesh: Option<GeomIdent>) -> Self {
         self.mesh = mesh;
         self
     }
@@ -84,7 +84,7 @@ impl RenderPassSpecification {
     /// rendering in the render pass.
     ///
     /// Without a mesh this will do nothing.
-    pub fn with_mesh_instances(mut self, mesh_instances: Option<WorldIdent>) -> Self {
+    pub fn with_mesh_instances(mut self, mesh_instances: Option<GeomIdent>) -> Self {
         self.mesh_instances = mesh_instances;
         self
     }
@@ -229,7 +229,7 @@ impl RenderPassSpecification {
 
     fn get_mesh_buffers<'a>(
         render_data: &'a RenderData,
-        mesh: &WorldIdent,
+        mesh: &GeomIdent,
     ) -> Result<(&'a VertexBuffer, &'a IndexBuffer)> {
         render_data
             .get_mesh_data(mesh)
@@ -239,7 +239,7 @@ impl RenderPassSpecification {
 
     fn get_mesh_instance_buffer<'a>(
         render_data: &'a RenderData,
-        mesh_instances: &WorldIdent,
+        mesh_instances: &GeomIdent,
     ) -> Result<&'a InstanceBuffer> {
         render_data
             .get_mesh_instance_data(mesh_instances)
