@@ -1,8 +1,14 @@
 //! Running an event loop.
 
 use crate::{
-    geometry::{ColorVertex, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex, WorldData},
+    control::SemiDirectionalMotionController,
+    geometry::{
+        ColorVertex, GeometricalData, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex,
+    },
     rendering::{Assets, RenderPassSpecification},
+    window::InputHandler,
+    window::Window,
+    world::World,
 };
 
 use super::{
@@ -10,32 +16,16 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
-use nalgebra::{Point3, Translation3, Vector3};
-use winit::{
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
-};
-
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use anyhow::anyhow;
-        use wasm_bindgen::prelude::*;
-
-        const WEB_WINDOW_WIDTH: u32 = 450;
-        const WEB_WINDOW_HEIGHT: u32 = 400;
-        // HTML object that will be the parent of the canvas we render to
-        const WEB_WINDOW_CONTAINER_ID: &str = "impact-container";
-    }
-}
+use nalgebra::{point, Point3, Rotation3, Translation3, Vector3};
 
 pub async fn run() -> Result<()> {
     init_logging()?;
 
-    let event_loop = EventLoop::new();
-    let window = init_window(&event_loop)?;
-    let renderer = init_renderer(&window).await?;
-    run_event_loop(event_loop, window, renderer);
+    let window = Window::new()?;
+    let world = init_world(&window).await?;
+    let input_handler = InputHandler::default();
+
+    window.run_event_loop(input_handler, world);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -44,76 +34,6 @@ pub async fn run_wasm() {
     if let Err(err) = run().await {
         log::error!("{}", err)
     }
-}
-
-async fn init_renderer(window: &Window) -> Result<RenderingSystem> {
-    let core_system = CoreRenderingSystem::new(window).await?;
-
-    let mut assets = Assets::new();
-
-    assets.shaders.insert(
-        "Test shader".to_string(),
-        Shader::from_source(
-            &core_system,
-            include_str!("texture_shader.wgsl"),
-            // include_str!("shader.wgsl"),
-            "Test shader",
-        ),
-    );
-
-    // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", "Tree texture")?;
-    assets.image_textures.insert(
-        "Tree texture".to_string(),
-        ImageTexture::from_bytes(
-            &core_system,
-            include_bytes!("../assets/happy-tree.png"),
-            "Tree texture",
-        )?,
-    );
-
-    let mut world = WorldData::new();
-
-    world.texture_meshes.insert(
-        "Test mesh".to_string(),
-        Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
-    );
-
-    world.mesh_instance_groups.insert(
-        "Test mesh instance".to_string(),
-        MeshInstanceGroup::new(
-            vec![
-                Translation3::<f32>::new(-0.5, 0.0, 0.0).into(),
-                Translation3::<f32>::new(0.5, 0.0, -1.0).into(),
-            ]
-            .into_iter()
-            .map(MeshInstance::with_transform)
-            .collect(),
-        ),
-    );
-
-    world.perspective_cameras.insert(
-        "Camera".to_string(),
-        PerspectiveCamera::new(
-            CameraConfiguration::new_looking_at(
-                Point3::new(0.0, 0.0, 2.0),
-                Point3::origin(),
-                Vector3::y_axis(),
-            ),
-            core_system.surface_aspect_ratio(),
-            Degrees(45.0),
-            UpperExclusiveBounds::new(0.1, 100.0),
-        ),
-    );
-
-    let render_pass = RenderPassSpecification::new("Test".to_string())
-        .with_clear_color(Some(wgpu::Color::BLACK))
-        .with_shader(Some("Test shader".to_string()))
-        .add_image_texture("Tree texture".to_string())
-        .with_mesh(Some("Test mesh".to_string()))
-        .with_mesh_instances(Some("Test mesh instance".to_string()))
-        .with_camera(Some("Camera".to_string()));
-
-    RenderingSystem::new(core_system, assets, vec![render_pass], &world).await
 }
 
 fn init_logging() -> Result<()> {
@@ -141,94 +61,79 @@ fn init_logging_native() -> Result<()> {
     Ok(())
 }
 
-fn init_window(event_loop: &EventLoop<()>) -> Result<Window> {
-    let window = WindowBuilder::new().build(event_loop)?;
-    #[cfg(target_arch = "wasm32")]
-    {
-        set_window_size(&window);
-        add_window_canvas_to_parent_element(&window)?;
-    }
-    Ok(window)
-}
+async fn init_world(window: &Window) -> Result<World> {
+    let core_system = CoreRenderingSystem::new(window).await?;
 
-#[cfg(target_arch = "wasm32")]
-fn set_window_size(window: &Window) {
-    // Size of rendering window must be specified here rather than through CSS
-    use winit::dpi::PhysicalSize;
-    window.set_inner_size(PhysicalSize::new(WEB_WINDOW_WIDTH, WEB_WINDOW_HEIGHT));
-}
+    let mut assets = Assets::new();
 
-#[cfg(target_arch = "wasm32")]
-fn add_window_canvas_to_parent_element(window: &Window) -> Result<()> {
-    use winit::platform::web::WindowExtWebSys;
-    web_sys::window()
-        .and_then(|win| win.document())
-        .and_then(|doc| {
-            let canvas = web_sys::Element::from(window.canvas());
-            let container = doc.get_element_by_id(WEB_WINDOW_CONTAINER_ID)?;
-            container.append_child(&canvas).ok()?;
-            Some(())
-        })
-        .ok_or_else(|| anyhow!("Could not get window object"))
-}
+    assets.shaders.insert(
+        "Test shader".to_string(),
+        Shader::from_source(
+            &core_system,
+            include_str!("texture_shader.wgsl"),
+            // include_str!("shader.wgsl"),
+            "Test shader",
+        ),
+    );
 
-fn run_event_loop(event_loop: EventLoop<()>, window: Window, mut renderer: RenderingSystem) -> ! {
-    event_loop.run(move |event, _, control_flow| match event {
-        // Handle window events
-        Event::WindowEvent {
-            event: ref window_event,
-            window_id,
-        } if window_id == window.id() => {
-            // Send event to rendering system
-            if renderer.handle_input_event(window_event) {
-                // If allowed by the rendering system we handle certain events here
-                match window_event {
-                    // Exit if user requests close or presses Escape
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => *control_flow = ControlFlow::Exit,
-                    // Resize rendering surface when window is resized..
-                    WindowEvent::Resized(new_size) => {
-                        renderer.resize_surface((new_size.width, new_size.height));
-                    }
-                    // ..or when screen DPI changes
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        renderer.resize_surface((new_inner_size.width, new_inner_size.height));
-                    }
-                    _ => {}
-                }
-            }
-        }
-        // Render when window requests redraw
-        Event::RedrawRequested(window_id) if window_id == window.id() => {
-            match renderer.render() {
-                Ok(_) => {}
-                Err(err) => match err.downcast_ref() {
-                    // Recreate swap chain if lost
-                    Some(wgpu::SurfaceError::Lost) => renderer.initialize_surface(),
-                    // Quit if GPU is out of memory
-                    Some(wgpu::SurfaceError::OutOfMemory) => {
-                        *control_flow = ControlFlow::Exit;
-                    }
-                    // Other errors should be resolved by the next frame, so we just log the error and continue
-                    _ => log::error!("{:?}", err),
-                },
-            }
-        }
-        // When all queued input events have been handled we can do other work
-        Event::MainEventsCleared => {
-            // Next redraw must be triggered manually
-            window.request_redraw();
-        }
-        _ => {}
-    });
+    // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", "Tree texture")?;
+    assets.image_textures.insert(
+        "Tree texture".to_string(),
+        ImageTexture::from_bytes(
+            &core_system,
+            include_bytes!("../assets/happy-tree.png"),
+            "Tree texture",
+        )?,
+    );
+
+    let mut geometrical_data = GeometricalData::new();
+
+    geometrical_data.texture_meshes.insert(
+        "Test mesh".to_string(),
+        Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
+    );
+
+    geometrical_data.mesh_instance_groups.insert(
+        "Test mesh instance".to_string(),
+        MeshInstanceGroup::new(
+            vec![
+                Translation3::<f32>::new(-0.5, 0.0, 0.0).into(),
+                Translation3::<f32>::new(0.5, 0.0, -1.0).into(),
+            ]
+            .into_iter()
+            .map(MeshInstance::with_transform)
+            .collect(),
+        ),
+    );
+
+    geometrical_data.perspective_cameras.insert(
+        "Camera".to_string(),
+        PerspectiveCamera::new(
+            CameraConfiguration::new_looking_at(
+                point![0.0, 0.0, 2.0],
+                Point3::origin(),
+                Vector3::y_axis(),
+            ),
+            core_system.surface_aspect_ratio(),
+            Degrees(45.0),
+            UpperExclusiveBounds::new(0.1, 100.0),
+        ),
+    );
+
+    let render_pass = RenderPassSpecification::new("Test".to_string())
+        .with_clear_color(Some(wgpu::Color::BLACK))
+        .with_shader(Some("Test shader".to_string()))
+        .add_image_texture("Tree texture".to_string())
+        .with_mesh(Some("Test mesh".to_string()))
+        .with_mesh_instances(Some("Test mesh instance".to_string()))
+        .with_camera(Some("Camera".to_string()));
+
+    let renderer =
+        RenderingSystem::new(core_system, assets, vec![render_pass], &geometrical_data).await?;
+
+    let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
+
+    Ok(World::new(geometrical_data, renderer, controller))
 }
 
 const VERTICES: &[ColorVertex] = &[

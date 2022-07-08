@@ -1,8 +1,10 @@
 //! Graphics and physics engine.
 
-#![allow(dead_code)]
-
-mod geometry;
+pub mod control;
+pub mod geometry;
 mod num;
-mod rendering;
+pub mod physics;
+pub mod rendering;
 pub mod run;
+pub mod window;
+pub mod world;

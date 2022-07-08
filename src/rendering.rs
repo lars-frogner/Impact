@@ -10,7 +10,6 @@ mod world;
 
 use crate::geometry::GeometricalData;
 use anyhow::Result;
-use winit::event::WindowEvent;
 
 pub use self::core::CoreRenderingSystem;
 pub use asset::{Assets, ImageTexture, Shader};
@@ -49,41 +48,6 @@ impl RenderingSystem {
         })
     }
 
-    /// Sets a new size for the rendering surface.
-    pub fn resize_surface(&mut self, new_size: (u32, u32)) {
-        self.core_system.resize_surface(new_size)
-    }
-
-    /// Initializes the surface for presentation using the
-    /// current surface configuration.
-    pub fn initialize_surface(&mut self) {
-        self.core_system.initialize_surface()
-    }
-
-    /// Updates any relevant state based on the given window event.
-    ///
-    /// # Returns
-    /// A `bool` specifying whether the event should be handled further.
-    pub fn handle_input_event(&mut self, window_event: &WindowEvent) -> bool {
-        match window_event {
-            // WindowEvent::CursorMoved { position, .. } => {
-            //     let surface_config = self.core_system.surface_config();
-            //     let r = (f64::from(position.x)) / (f64::from(surface_config.width));
-            //     let g = (f64::from(position.y)) / (f64::from(surface_config.height));
-            //     for pipeline in &mut self.pipelines {
-            //         pipeline.set_clear_color(wgpu::Color {
-            //             r,
-            //             g,
-            //             b: 0.0,
-            //             a: 1.0,
-            //         });
-            //     }
-            //     false
-            // }
-            _ => true,
-        }
-    }
-
     /// Creates and presents a rendering of the current data in the pipelines.
     ///
     /// # Errors
@@ -111,6 +75,30 @@ impl RenderingSystem {
         surface_texture.present();
 
         Ok(())
+    }
+
+    /// Performs any required updates for keeping the render data in
+    /// sync with the geometrical data.
+    ///
+    /// # Notes
+    /// - Render data entries for which the associated geometrical data no
+    /// longer exists will be removed.
+    /// - Mutable access to the geometrical data is required in order to reset
+    /// all change trackers.
+    pub fn sync_with_geometry(&mut self, geometrical_data: &mut GeometricalData) {
+        self.render_data
+            .sync_with_geometry(&self.core_system, geometrical_data);
+    }
+
+    /// Sets a new size for the rendering surface.
+    pub fn resize_surface(&mut self, new_size: (u32, u32)) {
+        self.core_system.resize_surface(new_size)
+    }
+
+    /// Initializes the surface for presentation using the
+    /// current surface configuration.
+    pub fn initialize_surface(&mut self) {
+        self.core_system.initialize_surface()
     }
 
     fn create_surface_texture_view(surface_texture: &wgpu::SurfaceTexture) -> wgpu::TextureView {
