@@ -13,7 +13,7 @@ pub struct WorldData {
     /// Meshes with vertices that hold texture coordinates.
     pub texture_meshes: WorldObjMap<Mesh<TextureVertex>>,
     /// Groups of instances of the same mesh.
-    pub mesh_instance_groups: WorldObjMap<MeshInstanceGroup>,
+    pub mesh_instance_groups: WorldObjMap<MeshInstanceGroup<f32>>,
     /// Cameras using perspective transformations.
     pub perspective_cameras: WorldObjMap<PerspectiveCamera<f32>>,
 }

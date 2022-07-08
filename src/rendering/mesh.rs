@@ -155,7 +155,7 @@ impl MeshInstanceRenderDataManager {
     /// from the given mesh instance group.
     pub fn for_mesh_instance_group(
         core_system: &CoreRenderingSystem,
-        mesh_instance_group: &MeshInstanceGroup,
+        mesh_instance_group: &MeshInstanceGroup<f32>,
         label: String,
     ) -> Self {
         Self::new(core_system, mesh_instance_group.instances(), label)
@@ -166,7 +166,7 @@ impl MeshInstanceRenderDataManager {
     pub fn sync_with_mesh_instance_group(
         &mut self,
         core_system: &CoreRenderingSystem,
-        mesh_instance_group: &mut MeshInstanceGroup,
+        mesh_instance_group: &mut MeshInstanceGroup<f32>,
     ) {
         self.instance_buffer_change = mesh_instance_group.instance_change();
         self.sync_render_data(
@@ -190,7 +190,11 @@ impl MeshInstanceRenderDataManager {
 
     /// Creates a new manager with render data initialized
     /// from the given slice of mesh instances.
-    fn new(core_system: &CoreRenderingSystem, instances: &[MeshInstance], label: String) -> Self {
+    fn new(
+        core_system: &CoreRenderingSystem,
+        instances: &[MeshInstance<f32>],
+        label: String,
+    ) -> Self {
         let transforms = Self::create_raw_transforms(instances);
         let instance_buffer = InstanceBuffer::new(core_system, &transforms, &label);
         Self {
@@ -203,7 +207,7 @@ impl MeshInstanceRenderDataManager {
     fn sync_render_data(
         &mut self,
         core_system: &CoreRenderingSystem,
-        instances: &[MeshInstance],
+        instances: &[MeshInstance<f32>],
         instance_change: CollectionChange,
     ) {
         match instance_change {
@@ -220,7 +224,9 @@ impl MeshInstanceRenderDataManager {
         }
     }
 
-    fn create_raw_transforms(instances: &[MeshInstance]) -> Vec<RawMeshInstanceTransformMatrix> {
+    fn create_raw_transforms(
+        instances: &[MeshInstance<f32>],
+    ) -> Vec<RawMeshInstanceTransformMatrix> {
         instances
             .iter()
             .map(RawMeshInstanceTransformMatrix::from_mesh_instance)
@@ -231,7 +237,7 @@ impl MeshInstanceRenderDataManager {
 impl RawMeshInstanceTransformMatrix {
     /// Creates a new raw transform matrix representing the transform
     /// of the given mesh instance.
-    pub fn from_mesh_instance(instance: &MeshInstance) -> Self {
+    pub fn from_mesh_instance(instance: &MeshInstance<f32>) -> Self {
         Self::from_matrix(instance.transform_matrix())
     }
 

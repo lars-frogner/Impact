@@ -1,6 +1,9 @@
 //! Mesh data and representation.
 
-use crate::geometry::{CollectionChange, CollectionChangeTracker};
+use crate::{
+    geometry::{CollectionChange, CollectionChangeTracker},
+    num::Float,
+};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Matrix4;
 use std::fmt::Debug;
@@ -21,8 +24,8 @@ pub struct Mesh<V> {
 
 /// A group of instances of the same mesh.
 #[derive(Clone, Debug)]
-pub struct MeshInstanceGroup {
-    instances: Vec<MeshInstance>,
+pub struct MeshInstanceGroup<F> {
+    instances: Vec<MeshInstance<F>>,
     instance_change_tracker: CollectionChangeTracker,
 }
 
@@ -31,8 +34,8 @@ pub struct MeshInstanceGroup {
 ///
 /// Used to represent multiple versions of the same basic mesh.
 #[derive(Clone, Debug)]
-pub struct MeshInstance {
-    transform_matrix: Matrix4<f32>,
+pub struct MeshInstance<F> {
+    transform_matrix: Matrix4<F>,
 }
 
 /// Vertices that have an associated color.
@@ -102,10 +105,10 @@ impl<V> Mesh<V> {
     }
 }
 
-impl MeshInstanceGroup {
+impl<F> MeshInstanceGroup<F> {
     /// Creates a new group of mesh instances from the given
     /// vector of instances.
-    pub fn new(instances: Vec<MeshInstance>) -> Self {
+    pub fn new(instances: Vec<MeshInstance<F>>) -> Self {
         Self {
             instances,
             instance_change_tracker: CollectionChangeTracker::new(),
@@ -113,7 +116,7 @@ impl MeshInstanceGroup {
     }
 
     /// Returns the instances making up the mesh instance group.
-    pub fn instances(&self) -> &[MeshInstance] {
+    pub fn instances(&self) -> &[MeshInstance<F>] {
         &self.instances
     }
 
@@ -129,26 +132,26 @@ impl MeshInstanceGroup {
     }
 }
 
-impl MeshInstance {
+impl<F: Float> MeshInstance<F> {
     /// Creates a new mesh instance with no transform.
     pub fn new() -> Self {
         Self::with_transform(Matrix4::identity())
     }
 
     /// Creates a new mesh instance with the given transform.
-    pub fn with_transform(transform_matrix: Matrix4<f32>) -> Self {
+    pub fn with_transform(transform_matrix: Matrix4<F>) -> Self {
         Self { transform_matrix }
     }
 
     /// Returns the transform matrix describing the configuration of
     /// this mesh instance in relation to the default configuration of
     /// the mesh.
-    pub fn transform_matrix(&self) -> &Matrix4<f32> {
+    pub fn transform_matrix(&self) -> &Matrix4<F> {
         &self.transform_matrix
     }
 }
 
-impl Default for MeshInstance {
+impl<F: Float> Default for MeshInstance<F> {
     fn default() -> Self {
         Self::new()
     }

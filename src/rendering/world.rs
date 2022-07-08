@@ -119,7 +119,7 @@ impl RenderData {
 
     fn create_mesh_instance_group_render_data(
         core_system: &CoreRenderingSystem,
-        mesh_instance_groups: &WorldObjMap<MeshInstanceGroup>,
+        mesh_instance_groups: &WorldObjMap<MeshInstanceGroup<f32>>,
     ) -> WorldObjMap<MeshInstanceRenderDataManager> {
         mesh_instance_groups
             .iter()
@@ -170,7 +170,7 @@ impl RenderData {
     fn sync_mesh_instance_group_data_with_world(
         core_system: &CoreRenderingSystem,
         mesh_instance_group_render_data: &mut WorldObjMap<MeshInstanceRenderDataManager>,
-        mesh_instance_groups: &mut WorldObjMap<MeshInstanceGroup>,
+        mesh_instance_groups: &mut WorldObjMap<MeshInstanceGroup<f32>>,
     ) {
         Self::remove_unmatched_render_data(mesh_instance_group_render_data, mesh_instance_groups);
         mesh_instance_group_render_data
