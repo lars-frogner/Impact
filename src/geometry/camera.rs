@@ -352,7 +352,7 @@ mod tests {
     use super::*;
     use crate::geometry::Degrees;
     use approx::assert_abs_diff_eq;
-    use nalgebra::{UnitQuaternion, Vector3};
+    use nalgebra::{point, vector, UnitQuaternion, Vector3};
     use std::f64::consts::PI;
 
     #[test]
@@ -366,7 +366,7 @@ mod tests {
     fn constructing_camera_config_with_target_position_towards_up_direction() {
         CameraConfiguration::<f64>::new_looking_at(
             Point3::origin(),
-            Point3::new(0.0, 0.0, 1.0),
+            point![0.0, 0.0, 1.0],
             Vector3::z_axis(),
         );
     }
@@ -375,7 +375,7 @@ mod tests {
     fn moving_camera_to_position_works() {
         let mut config =
             CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
-        let position = Point3::new(1.0, 2.0, 3.0);
+        let position = point![1.0, 2.0, 3.0];
         config.move_to(position);
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
@@ -387,7 +387,7 @@ mod tests {
     fn pointing_camera_towards_direction_works() {
         let mut config =
             CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
-        let direction = UnitVector3::new_normalize(Vector3::new(1.0, 2.0, 3.0));
+        let direction = UnitVector3::new_normalize(vector![1.0, 2.0, 3.0]);
         config.point_to(direction);
         assert_abs_diff_eq!(config.position(), &Point3::origin());
         assert_abs_diff_eq!(config.look_direction(), &direction);
@@ -399,7 +399,7 @@ mod tests {
     fn pointing_camera_at_position_works() {
         let mut config =
             CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
-        config.point_at(Point3::new(2.0, 0.0, 0.0));
+        config.point_at(point![2.0, 0.0, 0.0]);
         assert_abs_diff_eq!(config.position(), &Point3::origin());
         assert_abs_diff_eq!(config.look_direction(), &Vector3::x_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
@@ -410,8 +410,8 @@ mod tests {
     fn moving_camera_to_position_and_pointing_at_position_works() {
         let mut config =
             CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
-        let camera_position = Point3::new(1.0, 2.0, 0.0);
-        config.move_to_and_point_at(camera_position, Point3::new(5.0, 2.0, 0.0));
+        let camera_position = point![1.0, 2.0, 0.0];
+        config.move_to_and_point_at(camera_position, point![5.0, 2.0, 0.0]);
         assert_abs_diff_eq!(config.position(), &camera_position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::x_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
@@ -420,13 +420,10 @@ mod tests {
 
     #[test]
     fn translating_camera_works() {
-        let mut config = CameraConfiguration::new(
-            Point3::new(0.5, 1.5, 2.5),
-            Vector3::z_axis(),
-            Vector3::y_axis(),
-        );
+        let mut config =
+            CameraConfiguration::new(point![0.5, 1.5, 2.5], Vector3::z_axis(), Vector3::y_axis());
         config.translate(&Translation3::new(1.0, 2.0, 3.0));
-        assert_abs_diff_eq!(config.position(), &Point3::new(1.5, 3.5, 5.5));
+        assert_abs_diff_eq!(config.position(), &point![1.5, 3.5, 5.5]);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
         assert!(config.view_transform_changed());
@@ -434,7 +431,7 @@ mod tests {
 
     #[test]
     fn rotating_camera_orientation_works() {
-        let position = Point3::new(0.5, 1.5, 2.5);
+        let position = point![0.5, 1.5, 2.5];
         let mut config = CameraConfiguration::new(position, Vector3::z_axis(), Vector3::y_axis());
         config.rotate_orientation(&Rotation3::from_axis_angle(&Vector3::y_axis(), PI));
         assert_abs_diff_eq!(config.position(), &position);
@@ -455,7 +452,7 @@ mod tests {
             Translation3::new(0.5, 1.5, 2.5),
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI),
         ));
-        assert_abs_diff_eq!(config.position(), &Point3::new(0.5, 1.5, 2.5));
+        assert_abs_diff_eq!(config.position(), &point![0.5, 1.5, 2.5]);
         assert_abs_diff_eq!(config.look_direction(), &-Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
         assert!(config.view_transform_changed());
@@ -473,12 +470,8 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(
-                Point3::new(1.0, 2.0, 3.0),
-                -Vector3::z_axis(),
-                Vector3::y_axis(),
-            )
-            .view_transform(),
+            CameraConfiguration::new(point![1.0, 2.0, 3.0], -Vector3::z_axis(), Vector3::y_axis(),)
+                .view_transform(),
             &Isometry3::from_parts(Translation3::new(-1.0, -2.0, -3.0), no_rotation)
         );
 
@@ -501,12 +494,8 @@ mod tests {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(
-                Point3::new(1.0, 2.0, 3.0),
-                Vector3::z_axis(),
-                Vector3::y_axis(),
-            )
-            .view_transform(),
+            CameraConfiguration::new(point![1.0, 2.0, 3.0], Vector3::z_axis(), Vector3::y_axis(),)
+                .view_transform(),
             &Isometry3::from_parts(
                 Translation3::new(1.0, -2.0, 3.0),
                 UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
@@ -523,7 +512,7 @@ mod tests {
             "View transform change reported after construction"
         );
 
-        config.move_to(Point3::new(1.0, 2.0, 3.0));
+        config.move_to(point![1.0, 2.0, 3.0]);
         assert!(
             config.view_transform_changed(),
             "No view transform change reported after making change"
@@ -613,7 +602,7 @@ mod tests {
             Degrees(45.0),
             UpperExclusiveBounds::new(0.1, 100.0),
         );
-        camera.config_mut().move_to(Point3::new(1.0, 2.0, 3.0));
+        camera.config_mut().move_to(point![1.0, 2.0, 3.0]);
         assert!(!camera.projection_transform_changed());
         assert!(camera.view_projection_transform_changed());
     }
