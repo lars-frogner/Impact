@@ -2,7 +2,7 @@
 
 use super::MotionController;
 use crate::num::Float;
-use approx::abs_diff_eq;
+use approx::{abs_diff_eq, assert_abs_diff_ne, AbsDiffEq};
 use nalgebra::{vector, Rotation3, Translation3, Vector3};
 use std::time::Instant;
 
@@ -52,8 +52,8 @@ struct SemiDirectionalMotionState {
 }
 
 /// Possible types of motion.
-#[derive(Clone, Debug)]
-enum Motion<F> {
+#[derive(Clone, Debug, PartialEq)]
+enum Motion<F: Float> {
     Stationary,
     ConstantVelocity(Vector3<F>),
 }
@@ -93,28 +93,50 @@ impl<F: Float> SemiDirectionalMotionController<F> {
         {
             Motion::Stationary
         } else {
+            // For scaling the magnitude to `self.movement_spped`
+            let mut n_nonzero_components = F::zero();
+
             let velocity_x = if self.state.right == self.state.left {
                 F::zero()
-            } else if self.state.right.is_moving() {
-                self.movement_speed
             } else {
-                -self.movement_speed
+                n_nonzero_components += F::one();
+                if self.state.right.is_moving() {
+                    self.movement_speed
+                } else {
+                    -self.movement_speed
+                }
             };
+
             let velocity_y = if self.state.up == self.state.down {
                 F::zero()
-            } else if self.state.up.is_moving() {
-                self.movement_speed
             } else {
-                -self.movement_speed
+                n_nonzero_components += F::one();
+                if self.state.up.is_moving() {
+                    self.movement_speed
+                } else {
+                    -self.movement_speed
+                }
             };
+
             let velocity_z = if self.state.forwards == self.state.backwards {
                 F::zero()
-            } else if self.state.forwards.is_moving() {
-                self.movement_speed
             } else {
-                -self.movement_speed
+                n_nonzero_components += F::one();
+                if self.state.forwards.is_moving() {
+                    self.movement_speed
+                } else {
+                    -self.movement_speed
+                }
             };
-            Motion::ConstantVelocity(self.orientation * vector![velocity_x, velocity_y, velocity_z])
+
+            // We should have motion in this branch
+            assert_abs_diff_ne!(n_nonzero_components, F::zero());
+
+            let magnitude_scale = F::one() / num_traits::Float::sqrt(n_nonzero_components);
+
+            Motion::ConstantVelocity(
+                self.orientation * vector![velocity_x, velocity_y, velocity_z] * magnitude_scale,
+            )
         }
     }
 }
@@ -210,5 +232,161 @@ impl SemiDirectionalMotionState {
 impl Default for SemiDirectionalMotionState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<F: Float> AbsDiffEq for Motion<F>
+where
+    F: Copy + AbsDiffEq,
+    F::Epsilon: Copy,
+{
+    type Epsilon = F::Epsilon;
+
+    fn default_epsilon() -> F::Epsilon {
+        F::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: F::Epsilon) -> bool {
+        match (self, other) {
+            (Self::Stationary, Self::Stationary) => true,
+            (Self::ConstantVelocity(velocity_self), Self::ConstantVelocity(velocity_other)) => {
+                velocity_self.abs_diff_eq(velocity_other, epsilon)
+            }
+            _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+    use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI, SQRT_2};
+    use MotionDirection::*;
+    use MotionState::*;
+
+    #[test]
+    fn updating_semi_directional_motion_works() {
+        let speed = 1.3;
+        let mut controller = SemiDirectionalMotionController::new(Rotation3::identity(), speed);
+        assert_eq!(
+            controller.compute_motion(),
+            Motion::Stationary,
+            "Not stationary directly after initalization"
+        );
+
+        controller.update_motion(Moving, Forwards);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, 0.0, speed]),
+        );
+
+        controller.update_motion(Moving, Backwards);
+        assert_eq!(
+            controller.compute_motion(),
+            Motion::Stationary,
+            "Motion does not cancel"
+        );
+
+        controller.update_motion(Moving, Left);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![-speed, 0.0, 0.0])
+        );
+
+        controller.stop();
+        assert_eq!(
+            controller.compute_motion(),
+            Motion::Stationary,
+            "Stopping command not working"
+        );
+
+        // Motion along multiple axes should be combined
+        controller.update_motion(Moving, Up);
+        controller.update_motion(Moving, Backwards);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, speed, -speed] / SQRT_2), // Magnitude should be `speed`
+            epsilon = 1e-9
+        );
+
+        controller.update_motion(Still, Up);
+        controller.update_motion(Still, Backwards);
+        assert_eq!(
+            controller.compute_motion(),
+            Motion::Stationary,
+            "Undoing updates does not stop motion"
+        );
+    }
+
+    #[test]
+    fn orientation_of_semi_directional_motion_works() {
+        let speed = 2.2;
+        let mut controller = SemiDirectionalMotionController::new(
+            Rotation3::from_axis_angle(&Vector3::y_axis(), PI),
+            speed,
+        );
+        assert_eq!(
+            controller.compute_motion(),
+            Motion::Stationary,
+            "Not stationary directly after initalization"
+        );
+
+        controller.update_motion(Moving, Forwards);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, 0.0, -speed]), // Should move backwards due to rotation
+            epsilon = 1e-9
+        );
+
+        controller.rotate_orientation(&Rotation3::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2));
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, speed, 0.0]), // The additional rotation points us upwards
+            epsilon = 1e-9
+        );
+
+        controller.set_orientation(Rotation3::identity());
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, 0.0, speed]),
+            epsilon = 1e-9
+        );
+
+        controller.set_orientation(Rotation3::from_axis_angle(&Vector3::y_axis(), -FRAC_PI_4));
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![-speed, 0.0, speed] / SQRT_2), // Magnitude should be `speed`
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn setting_semi_directional_motion_speed_works() {
+        let speed = 4.2;
+        let mut controller = SemiDirectionalMotionController::new(Rotation3::identity(), speed);
+
+        controller.update_motion(Moving, Down);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, -speed, 0.0]),
+        );
+
+        let speed = 8.1;
+        controller.set_movement_speed(speed);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, -speed, 0.0]),
+        );
+
+        let speed = -0.1;
+        controller.set_movement_speed(speed);
+        assert_abs_diff_eq!(
+            controller.compute_motion(),
+            Motion::ConstantVelocity(vector![0.0, -speed, 0.0]),
+        );
+
+        controller.set_movement_speed(0.0);
+        assert_eq!(controller.compute_motion(), Motion::Stationary,);
     }
 }
