@@ -5,6 +5,7 @@ mod motion;
 pub use motion::{
     MotionDirection, MotionState, NoMotionController, SemiDirectionalMotionController,
 };
+
 use nalgebra::{Rotation3, Translation3};
 
 pub trait MotionController<F> {

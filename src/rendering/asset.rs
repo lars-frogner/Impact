@@ -3,10 +3,10 @@
 mod shader;
 mod texture;
 
-use std::collections::HashMap;
-
 pub use shader::Shader;
 pub use texture::ImageTexture;
+
+use std::collections::HashMap;
 
 pub type AssetIdent = String;
 pub type AssetMap<T> = HashMap<AssetIdent, T>;

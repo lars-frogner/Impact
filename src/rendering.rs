@@ -8,13 +8,13 @@ mod mesh;
 mod render_pass;
 mod world;
 
-use crate::geometry::GeometricalData;
-use anyhow::Result;
-
 pub use self::core::CoreRenderingSystem;
 pub use asset::{Assets, ImageTexture, Shader};
 pub use render_pass::{RenderPassRecorder, RenderPassSpecification};
 pub use world::RenderData;
+
+use crate::geometry::GeometricalData;
+use anyhow::Result;
 
 /// Container for all data and logic required for rendering.
 pub struct RenderingSystem {

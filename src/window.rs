@@ -1,5 +1,7 @@
 mod input;
 
+pub use input::{HandlingResult, InputHandler};
+
 use crate::world::World;
 use anyhow::Result;
 use winit::{
@@ -7,8 +9,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window as WinitWindow, WindowBuilder},
 };
-
-pub use input::{HandlingResult, InputHandler};
 
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
