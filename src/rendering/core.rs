@@ -1,9 +1,9 @@
 //! Core rendering system.
 
+use crate::window::Window;
 use anyhow::{anyhow, Result};
 use raw_window_handle::HasRawWindowHandle;
 use std::num::NonZeroU32;
-use winit::window::Window;
 
 /// Represents the graphics device and the basic
 /// rendering entities whose configuration should not
@@ -28,9 +28,9 @@ impl CoreRenderingSystem {
     /// - A compatible graphics device can not be found.
     /// - Connecting to the graphics device fails.
     pub async fn new(window: &Window) -> Result<Self> {
-        let window_size = window.inner_size();
+        let window_size = window.window().inner_size();
         Self::new_from_raw_window_handle(
-            window,
+            window.window(),
             (
                 NonZeroU32::new(window_size.width)
                     .ok_or_else(|| anyhow!("Window width is zero"))?,
