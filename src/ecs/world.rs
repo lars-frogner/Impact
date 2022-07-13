@@ -83,10 +83,10 @@ impl World {
     /// # use impact::ecs::{
     /// #    archetype::ArchetypeCompByteView,
     /// #    component::Component,
+    /// #    world::World,
     /// # };
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
-    /// # use World;
     /// #
     /// # #[repr(C)]
     /// # #[derive(Clone, Copy, Zeroable, Pod)]
@@ -97,6 +97,8 @@ impl World {
     /// #
     /// let mut world = World::new();
     /// let entity = world.create_entity_with_components((&Distance(0.0), &Speed(10.0)))?;
+    /// #
+    /// # Ok::<(), Error>(())
     /// ```
     pub fn create_entity_with_components<'a>(
         &mut self,
