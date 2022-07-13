@@ -16,6 +16,7 @@ num-traits = "0.2.15"
 env_logger = "0.9"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 log = "0.4"
+paste = "1.0.7"
 pollster = "0.2"
 raw-window-handle = "0.4.3"
 simba = "0.7.1"
