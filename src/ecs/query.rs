@@ -6,14 +6,77 @@ use super::{
     world::World,
 };
 use anyhow::Result;
+use paste::paste;
+use std::iter::Zip;
 use std::{
     hash::Hash,
     marker::PhantomData,
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
+/// A query for a specific set of component types. Any
+/// [`Entity`](super::world::Entity) in the [`World`] that has
+/// components of all types specified in the query is considered
+/// a match. The `ComponentQuery` can then provide an iterator
+/// over each matching `Entity`'s relevant component data (see
+/// [`ComponentQuery::iter_mut`]).
+///
+/// To create a query, we need to construct a type implementing
+/// the [`IntoComponentQuery`] trait, and call the static method
+/// [`query`](IntoComponentQuery::query) on that type. The trait
+/// is implemented for any tuple containing [`Component`] types
+/// wrapped in one the [`StorageAccess`] types; [`Read`] and [`Write`].
+///
+/// # Examples
+/// ```
+/// # use impact::ecs::{
+/// #    component::Component,
+/// #    query::{Read, Write, IntoComponentQuery},
+/// #    world::World
+/// # };
+/// # use bytemuck::{Zeroable, Pod};
+/// # use anyhow::Error;
+/// #
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod)]
+/// # struct Distance(f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod)]
+/// # struct Speed(f32);
+/// #
+/// let mut world = World::new();
+/// let entity = world.create_entity_with_components((&Distance(0.0), &Speed(10.0)))?;
+///
+/// let mut query = <(Write<Distance>, Read<Speed>)>::query(&mut world)?;
+/// for (distance, speed) in query.iter_mut() {
+///     distance.0 += speed.0 * 0.1;
+/// }
+/// #
+/// # Ok::<(), Error>(())
+/// ```
+///
+/// # Concurrency
+///
+/// When a `ComponentQuery` is constructed, it acquires the
+/// [`RwLock`] protecting each component storage covered by
+/// the query, either for exclusive access (if the [`Write`]
+/// marker type was used with the component) or shared access
+/// (if the [`Read`] marker type was used). The locks are held
+/// until the `ComponentQuery` is dropped.
+#[derive(Debug)]
+pub struct ComponentQuery<C, G> {
+    guards: Vec<G>,
+    _query_type: PhantomData<C>,
+}
+
 /// Represents types that can be used to create a
 /// [`ComponentQuery`].
+///
+/// # Lifetimes
+/// - `'w` is the lifetime of the [`World`] owning all the
+/// component data we are trying to access.
+/// - `'g` is the lifetime of the [`AccessGuard`]s created
+/// to hold the [`RwLock`]s on the [`ComponentStorage`]s.
 pub trait IntoComponentQuery<'w, 'g, C> {
     /// The type of [`AccessGuardGroup`] that will provide
     /// access to the data requested by the query.
@@ -64,38 +127,57 @@ pub struct Read<C>(PhantomData<C>);
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 pub struct Write<C>(PhantomData<C>);
 
-#[derive(Debug)]
-pub struct ComponentQuery<C, G> {
-    guards: Vec<G>,
-    _query_type: PhantomData<C>,
-}
-
+/// Represents a type used to mark the kind of access to a
+/// storage that is required. It is implemented by the [`Read`]
+/// and [`Write`] types.
 pub trait StorageAccess<'w, 'g, C> {
+    /// The type of [`AccessGuard`] that will manage access
+    /// to the storage.
     type Guard: AccessGuard<'w, 'g, C>;
 
+    /// Creates an [`AccessGuard`] that will manage access
+    /// to the given [`ComponentStorage`].
     fn access(storage: &'w RwLock<ComponentStorage>) -> Self::Guard;
 }
 
+/// Represents a set of [`AccessGuard`]s that together can
+/// provide simulaneous access to multiple component storages.
 pub trait AccessGuardGroup<'w, 'g, C> {
     type OutputItem;
     type OutputIter: Iterator<Item = Self::OutputItem>;
 
+    /// Provides an iterator over all the components in the
+    /// set of storages.
     fn iter_mut(guards: &'g mut Self) -> Self::OutputIter;
 }
 
+/// Represents a guard that manages access to a single
+/// component storage.
 pub trait AccessGuard<'w, 'g, C> {
     type OutputItem;
     type OutputIter: Iterator<Item = Self::OutputItem>;
 
+    /// Provides an iterator over the components in the
+    /// storage.
     fn iter_mut(&'g mut self) -> Self::OutputIter;
 }
 
+/// A guard that holds a [`RwLockReadGuard`] with a
+/// reference to a component storage, and thus can
+/// provide read-only access to the storage. The lock
+/// is released when the guard is dropped, which happens
+/// when the [`ComponentQuery`] owning the guard is dropped.
 #[derive(Debug)]
 pub struct ReadGuard<'w, C> {
     guard: RwLockReadGuard<'w, ComponentStorage>,
     _component_type: PhantomData<C>,
 }
 
+/// A guard that holds a [`RwLockWriteGuard`] with a
+/// reference to a component storage, and thus can
+/// provide write access to the storage. The lock
+/// is released when the guard is dropped, which happens
+/// when the [`ComponentQuery`] owning the guard is dropped.
 #[derive(Debug)]
 pub struct WriteGuard<'w, C> {
     guard: RwLockWriteGuard<'w, ComponentStorage>,
@@ -113,44 +195,23 @@ where
         }
     }
 
+    /// Provides an iterator over the components requested
+    /// by the query. Each item of the iterator is a tuple
+    /// with references to values of the component types
+    /// specified in the type used to construct the query,
+    /// with the component types occurring in the same order.
+    /// The references are either shared or exclusive depending
+    /// on whether the [`Read`] or [`Write`] marker type was
+    /// used around the component type.
+    ///
+    /// Since the iterator is created by [`zip`](Iterator::zip)-ing
+    /// together each individual iterator over components of a given
+    /// type, the output item is a nested tuple, e.g.
+    /// `((comp_1, comp_2), comp_3)`.
     pub fn iter_mut(
         &'g mut self,
     ) -> impl Iterator<Item = <G as AccessGuardGroup<'w, 'g, C>>::OutputItem> {
         self.guards.iter_mut().flat_map(AccessGuardGroup::iter_mut)
-    }
-}
-
-impl<'w, 'g, C1, C2, S1, S2> IntoComponentQuery<'w, 'g, (C1, C2)> for (S1, S2)
-where
-    S1: StorageAccess<'w, 'g, C1>,
-    S2: StorageAccess<'w, 'g, C2>,
-    C1: Component,
-    C2: Component,
-{
-    type Guards = (S1::Guard, S2::Guard);
-
-    fn determine_archetype() -> Result<Archetype> {
-        Archetype::new_from_component_id_arr([C1::component_id(), C2::component_id()])
-    }
-
-    fn access_archetype_table(table: &'w ArchetypeTable) -> Self::Guards {
-        (
-            table.access_component_storage::<'w, 'g, C1, S1>(),
-            table.access_component_storage::<'w, 'g, C2, S2>(),
-        )
-    }
-}
-
-impl<'w, 'g, C1, C2, G1, G2> AccessGuardGroup<'w, 'g, (C1, C2)> for (G1, G2)
-where
-    G1: AccessGuard<'w, 'g, C1>,
-    G2: AccessGuard<'w, 'g, C2>,
-{
-    type OutputItem = (G1::OutputItem, G2::OutputItem);
-    type OutputIter = std::iter::Zip<G1::OutputIter, G2::OutputIter>;
-
-    fn iter_mut((guard_1, guard_2): &'g mut Self) -> Self::OutputIter {
-        guard_1.iter_mut().zip(guard_2.iter_mut())
     }
 }
 
@@ -161,6 +222,7 @@ where
     type Guard = ReadGuard<'w, C>;
 
     fn access(storage: &'w RwLock<ComponentStorage>) -> Self::Guard {
+        // Acquire the lock on the storage for read access
         Self::Guard::new(storage.read().unwrap())
     }
 }
@@ -172,6 +234,7 @@ where
     type Guard = WriteGuard<'w, C>;
 
     fn access(storage: &'w RwLock<ComponentStorage>) -> Self::Guard {
+        // Acquire the lock on the storage for write access
         Self::Guard::new(storage.write().unwrap())
     }
 }
@@ -188,6 +251,8 @@ where
     }
 }
 
+// A `ReadGuard` will provide an immutable slice iterator
+// over the components in the storage it protects
 impl<'w, 'g, C> AccessGuard<'w, 'g, C> for ReadGuard<'w, C>
 where
     C: 'w + Component,
@@ -212,6 +277,8 @@ where
     }
 }
 
+// A `WriteGuard` will provide a mutable slice iterator
+// over the components in the storage it protects
 impl<'w, 'g, C> AccessGuard<'w, 'g, C> for WriteGuard<'w, C>
 where
     C: 'w + Component,
@@ -224,100 +291,136 @@ where
     }
 }
 
-// impl<'a, C> ArchetypeQueryBuilder<'a> for C
-// where
-//     C: Component,
-// {
-//     type OutputItem = &'a C;
-//     type OutputIter = std::slice::Iter<'a, C>;
+/// Macro for generating implementations of [`IntoComponentQuery`] for
+/// relevant groups of types. The implementations need a type parameter
+/// for each [`Component`] type (e.g. `Position`) as well as for the
+/// wrapping [`StorageAccess`] type (e.g. `Read<Position>`).
+macro_rules! impl_IntoComponentQuery {
+    // For a single access-wrapped component type
+    (component = $c:ident, access = $a:ident) => {
+        impl<'w, 'g, $c, $a> IntoComponentQuery<'w, 'g, $c> for $a
+        where
+            $a: StorageAccess<'w, 'g, $c>,
+            $c: Component,
+        {
+            type Guards = $a::Guard;
 
-//     fn determine_archetype() -> Archetype {
-//         Archetype::new_from_component_id_arr([C::component_id()])
-//     }
+            fn determine_archetype() -> Result<Archetype> {
+                Archetype::new_from_component_id_arr([$c::component_id()])
+            }
 
-//     fn get_component_from_table(table: &'a ArchetypeTable) -> Self::OutputIter {
-//         table.get_component().iter()
-//     }
-// }
+            fn access_archetype_table(table: &'w ArchetypeTable) -> Self::Guards {
+                table.access_component_storage::<'w, 'g, $c, $a>()
+            }
+        }
+    };
+    // For a tuple of access-wrapped component types
+    (component_tuple = ($($c:ident),*), access_tuple = ($($a:ident),*)) => {
+        impl<'w, 'g, $($c),*, $($a),*> IntoComponentQuery<'w, 'g, ($($c),*)> for ($($a),*)
+        where
+            $($a: StorageAccess<'w, 'g, $c>,)*
+            $($c: Component,)*
+        {
+            type Guards = ($($a::Guard),*);
 
-// impl<'a, C> StorageAccess<'a, C> for Write<C>
-// where
-//     C: 'a + Component,
-// {
-//     type OutputItem = &'a mut C;
-//     type OutputIter = std::slice::IterMut<'a, C>;
+            fn determine_archetype() -> Result<Archetype> {
+                Archetype::new_from_component_id_arr([$($c::component_id()),*])
+            }
 
-//     fn access(storage: &'a ComponentStorage) -> Self::OutputIter {
-//         storage.slice().iter()
-//     }
-// }
+            fn access_archetype_table(table: &'w ArchetypeTable) -> Self::Guards {
+                ($(table.access_component_storage::<'w, 'g, $c, $a>()),*)
+            }
+        }
+    };
+}
 
-// impl<'a, C1, C2, C3, S1, S2, S3> ArchetypeQueryBuilder<'a, (C1, C2, C3)> for (S1, S2, S3)
-// where
-//     S1: StorageAccess<'a, C1>,
-//     S2: StorageAccess<'a, C2>,
-//     S3: StorageAccess<'a, C3>,
-//     C1: Component,
-//     C2: Component,
-//     C3: Component,
-// {
-//     type OutputItem = ((&'a C1, &'a C2), &'a C3);
-//     type OutputIter = std::iter::Zip<
-//         std::iter::Zip<std::slice::Iter<'a, C1>, std::slice::Iter<'a, C2>>,
-//         std::slice::Iter<'a, C3>,
-//     >;
+/// Macro for generating implementations of [`AccessGuardGroup`] for
+/// the groups of [`AccessGuard`]s specified in the `Guards` associated
+/// type in the [`impl_IntoComponentQuery`] macro.
+macro_rules! impl_AccessGuardGroup {
+    (component = $c:ident, guard = $g:ident) => {
+        impl<'w, 'g, $c, $g> AccessGuardGroup<'w, 'g, $c> for $g
+        where
+            $g: AccessGuard<'w, 'g, $c>,
+        {
+            type OutputItem = $g::OutputItem;
+            type OutputIter = $g::OutputIter;
 
-//     fn determine_archetype() -> Archetype {
-//         Archetype::new_from_component_id_arr([
-//             C1::component_id(),
-//             C2::component_id(),
-//             C3::component_id(),
-//         ])
-//     }
+            fn iter_mut(guard: &'g mut Self) -> Self::OutputIter {
+                guard.iter_mut()
+            }
+        }
+    };
+    (
+        component_tuple = ($c1:ident, $($c:ident),*),
+        guard_tuple = ($g1:ident, $($g:ident),*),
+        output_item = $output_item:tt,
+        output_iter = $($output_iter:tt)*
+    ) => {
+        impl<'w, 'g, $c1, $($c),*, $g1, $($g),*> AccessGuardGroup<'w, 'g, ($c1, $($c),*)> for ($g1, $($g),*)
+        where
+            $g1: AccessGuard<'w, 'g, $c1>,
+            $($g: AccessGuard<'w, 'g, $c>,)*
+        {
+            type OutputItem = $output_item;
+            type OutputIter = $($output_iter)*;
 
-//     fn get_component_from_table(table: &'a ArchetypeTable) -> Self::OutputIter {
-//         table
-//             .get_component::<C1>()
-//             .iter()
-//             .zip(table.get_component::<C2>())
-//             .zip(table.get_component::<C3>())
-//     }
-// }
+            #[allow(non_snake_case)]
+            fn iter_mut((paste! { [<guard_ $g1>] }, $(paste! { [<guard_ $g>] }),*): &'g mut Self) -> Self::OutputIter {
+                paste! { [<guard_ $g1>] }.iter_mut()$(.zip(paste! { [<guard_ $g>] }.iter_mut()))*
+            }
+        }
+    };
+}
 
-// impl<'a, C> ArchetypeQuery<'a> for C
-// where
-//     C: Component,
-// {
-//     type Output = &'a [C];
+// Enable queries like `<Read<Velocity>>::query()`
+impl_AccessGuardGroup!(component = C, guard = G);
+impl_IntoComponentQuery!(component = C, access = A);
 
-//     fn get_components(table: &'a ArchetypeTable) -> Self::Output {
-//         table.get_component()
-//     }
-// }
+// Enable queries like `<(Read<Velocity>, Write<Position>)>::query()`
+impl_AccessGuardGroup!(
+    component_tuple = (C1, C2),
+    guard_tuple = (G1, G2),
+    output_item = (G1::OutputItem, G2::OutputItem),
+    output_iter = Zip<G1::OutputIter, G2::OutputIter>
+);
+impl_IntoComponentQuery!(component_tuple = (C1, C2), access_tuple = (A1, A2));
 
-// impl<'a, C1, C2> ArchetypeQuery<'a> for (C1, C2)
-// where
-//     C1: Component,
-//     C2: Component,
-// {
-//     type Output = std::iter::Flatten<std::iter::Map<<I as std::iter::IntoIterator>::IntoIter>>; //(&'a [C1], &'a [C2]);
+// Enable queries like `<(Read<Velocity>, Write<Position>, Read<Mass>)>::query()`
+impl_AccessGuardGroup!(
+    component_tuple = (C1, C2, C3),
+    guard_tuple = (G1, G2, G3),
+    // Items from the query iterator are nested tuples..
+    output_item = ((G1::OutputItem, G2::OutputItem), G3::OutputItem),
+    // .. because the iterator is created by zipping
+    output_iter = Zip<Zip<G1::OutputIter, G2::OutputIter>, G3::OutputIter>
+);
+impl_IntoComponentQuery!(component_tuple = (C1, C2, C3), access_tuple = (A1, A2, A3));
 
-//     fn archetype() -> Archetype {
-//         Archetype::new_from_component_id_arr([C1::component_id(), C2::component_id()])
-//     }
+// etc.
+impl_AccessGuardGroup!(
+    component_tuple = (C1, C2, C3, C4),
+    guard_tuple = (G1, G2, G3, G4),
+    output_item = (((G1::OutputItem, G2::OutputItem), G3::OutputItem), G4::OutputItem),
+    output_iter = Zip<Zip<Zip<G1::OutputIter, G2::OutputIter>, G3::OutputIter>, G4::OutputIter>
+);
+impl_IntoComponentQuery!(
+    component_tuple = (C1, C2, C3, C4),
+    access_tuple = (A1, A2, A3, A4)
+);
 
-//     fn get_components<I>(tables: I) -> Self::Output
-//     where
-//         I: IntoIterator<Item = &'a ArchetypeTable>,
-//     {
-//         tables
-//             .into_iter()
-//             .map(|table| {
-//                 table
-//                     .get_component::<C1>()
-//                     .into_iter()
-//                     .zip(table.get_component::<C2>().into_iter())
-//             })
-//             .flatten()
-//     }
-// }
+impl_AccessGuardGroup!(
+    component_tuple = (C1, C2, C3, C4, C5),
+    guard_tuple = (G1, G2, G3, G4, G5),
+    output_item = ((((G1::OutputItem, G2::OutputItem), G3::OutputItem), G4::OutputItem), G5::OutputItem),
+    output_iter = Zip<Zip<Zip<Zip<G1::OutputIter, G2::OutputIter>, G3::OutputIter>, G4::OutputIter>, G5::OutputIter>
+);
+impl_IntoComponentQuery!(
+    component_tuple = (C1, C2, C3, C4, C5),
+    access_tuple = (A1, A2, A3, A4, A5)
+);
+
+#[cfg(test)]
+mod test {
+    use super::*;
+}

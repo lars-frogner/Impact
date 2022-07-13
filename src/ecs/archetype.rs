@@ -100,6 +100,7 @@ pub struct ArchetypeCompBytes {
 /// let pos_mass_bytes: ArchetypeCompByteView = [
 ///     position.component_bytes(), mass.component_bytes()
 /// ].try_into()?;
+/// #
 /// # Ok::<(), Error>(())
 /// ```
 #[derive(Clone, Debug)]
@@ -229,8 +230,8 @@ impl ArchetypeTable {
     ///
     /// # Errors
     /// Returns an error if:
-    /// - The archetype of `entity` differs from the archetype of the table.
-    /// - `entity` is not present in the table.
+    /// - The archetype of the entity differs from the archetype of the table.
+    /// - The entity is not present in the table.
     pub fn remove_entity(&mut self, entity: &Entity) -> Result<ArchetypeCompBytes> {
         if entity.archetype_id() != self.archetype.id {
             bail!("Archetype of entity to remove inconsistent with table archetype");
@@ -426,6 +427,11 @@ macro_rules! impl_archetype_conversion {
 impl_archetype_conversion!(C1);
 impl_archetype_conversion!((C1, C2));
 impl_archetype_conversion!((C1, C2, C3));
+impl_archetype_conversion!((C1, C2, C3, C4));
+impl_archetype_conversion!((C1, C2, C3, C4, C5));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8));
 
 #[cfg(test)]
 mod test {
