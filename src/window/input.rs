@@ -67,7 +67,7 @@ impl InputHandler {
     /// Takes a window event and possibly performs an action
     /// on the world.
     ///
-    /// The returned `HandlingResult` signals whether the event
+    /// The returned [`HandlingResult`] signals whether the event
     /// should be handled by some other system instead.
     pub fn handle_event(
         &self,

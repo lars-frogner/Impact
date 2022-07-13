@@ -238,7 +238,7 @@ impl RawMeshInstanceTransformMatrix {
         Self::from_matrix(instance.transform_matrix())
     }
 
-    /// Creates a new raw transform matrix from the given `Matrix4`.
+    /// Creates a new raw transform matrix from the given [`Matrix4`].
     pub fn from_matrix(transform_matrix: &Matrix4<f32>) -> Self {
         Self::new(*transform_matrix.as_ref())
     }

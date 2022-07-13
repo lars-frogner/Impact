@@ -108,12 +108,12 @@ impl CameraRenderDataManager {
 }
 
 impl RawViewProjectionTransform {
-    /// Creates a new raw transform matrix from the given `Projective3`.
+    /// Creates a new raw transform matrix from the given [`Projective3`].
     fn from_transform(view_projection_transform: &Projective3<f32>) -> Self {
         Self::from_matrix(view_projection_transform.matrix())
     }
 
-    /// Creates a new raw transform matrix from the given `Matrix4`.
+    /// Creates a new raw transform matrix from the given [`Matrix4`].
     fn from_matrix(view_projection_matrix: &Matrix4<f32>) -> Self {
         Self::new(*view_projection_matrix.as_ref())
     }

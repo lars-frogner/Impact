@@ -39,7 +39,7 @@ pub struct VertexBuffer {
 /// A buffer containing model instances.
 ///
 /// Since a vertex buffer is used for storing the instances,
-/// this is just a thin wrapper around `VertexBuffer`.
+/// this is just a thin wrapper around [`VertexBuffer`].
 pub struct InstanceBuffer(VertexBuffer);
 
 /// A buffer containing vertex indices.
@@ -92,7 +92,7 @@ impl VertexBuffer {
         &self.layout
     }
 
-    /// Returns the underlying `wgpu` buffer.
+    /// Returns the underlying [`wgpu::Buffer`].
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
@@ -136,7 +136,7 @@ impl InstanceBuffer {
     /// Creates an instance buffer from the given slice of instances.
     ///
     /// # Panics
-    /// If the length of `instances` can not be converted to `u32`.
+    /// If the length of `instances` can not be converted to [`u32`].
     pub fn new<INS: BufferableInstance>(
         core_system: &CoreRenderingSystem,
         instances: &[INS],
@@ -151,7 +151,7 @@ impl InstanceBuffer {
         self.0.layout()
     }
 
-    /// Returns the underlying `wgpu` buffer.
+    /// Returns the underlying [`wgpu::Buffer`].
     pub fn buffer(&self) -> &wgpu::Buffer {
         self.0.buffer()
     }
@@ -185,7 +185,7 @@ impl IndexBuffer {
     /// Creates an index buffer from the given slice of indices.
     ///
     /// # Panics
-    /// If the length of `indices` can not be converted to `u32`.
+    /// If the length of `indices` can not be converted to [`u32`].
     pub fn new<IDX: BufferableIndex>(
         core_system: &CoreRenderingSystem,
         indices: &[IDX],
@@ -207,7 +207,7 @@ impl IndexBuffer {
         self.format
     }
 
-    /// Returns the underlying `wgpu` buffer.
+    /// Returns the underlying [`wgpu::Buffer`].
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
@@ -267,7 +267,7 @@ impl UniformBuffer {
         }
     }
 
-    /// Returns the underlying `wgpu` buffer.
+    /// Returns the underlying [`wgpu::Buffer`].
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }

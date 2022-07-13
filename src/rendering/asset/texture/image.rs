@@ -189,7 +189,7 @@ impl ImageTexture {
         })
     }
 
-    /// Creates a new `wgpu::Texture` configured to hold 2D image data
+    /// Creates a new [`wgpu::Texture`] configured to hold 2D image data
     /// in RGBA8 format.
     fn create_empty_rgba8_texture(
         device: &wgpu::Device,

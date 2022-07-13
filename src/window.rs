@@ -45,7 +45,7 @@ impl Window {
         Ok(Self { event_loop, window })
     }
 
-    /// Returns the underlying `winit` window.
+    /// Returns the underlying [`winit::Window`].
     pub fn window(&self) -> &WinitWindow {
         &self.window
     }

@@ -41,22 +41,22 @@ impl CoreRenderingSystem {
         .await
     }
 
-    /// Returns the underlying `wgpu` device.
+    /// Returns the underlying [`wgpu::Device`].
     pub fn device(&self) -> &wgpu::Device {
         &self.device
     }
 
-    /// Returns the underlying `wgpu` queue.
+    /// Returns the underlying [`wgpu::Queue`].
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
     }
 
-    /// Returns the underlying `wgpu` surface.
+    /// Returns the underlying [`wgpu::Surface`].
     pub fn surface(&self) -> &wgpu::Surface {
         &self.surface
     }
 
-    /// Returns the underlying `wgpu` surface configuration.
+    /// Returns the underlying [`wgpu::SurfaceConfiguration`].
     pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
         &self.surface_config
     }
@@ -146,7 +146,7 @@ impl CoreRenderingSystem {
     }
 
     /// Creates configuration defining how the surface will
-    /// create its underlying `SurfaceTexture`.
+    /// create its underlying [`wgpu::SurfaceTexture`].
     fn create_surface_config(
         surface: &wgpu::Surface,
         adapter: &wgpu::Adapter,

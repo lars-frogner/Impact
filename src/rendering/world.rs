@@ -46,7 +46,7 @@ impl RenderData {
     }
 
     /// Returns the render data manager for the given mesh identifier
-    /// if the mesh exists, otherwise returns `None`.
+    /// if the mesh exists, otherwise returns [`None`].
     pub fn get_mesh_data(&self, ident: &GeomIdent) -> Option<&MeshRenderDataManager> {
         self.color_mesh_data
             .get(ident)
@@ -54,7 +54,7 @@ impl RenderData {
     }
 
     /// Returns the render data manager for the given mesh instance
-    /// group if the group exists, otherwise returns `None`.
+    /// group if the group exists, otherwise returns [`None`].
     pub fn get_mesh_instance_data(
         &self,
         ident: &GeomIdent,
@@ -63,7 +63,7 @@ impl RenderData {
     }
 
     /// Returns the render data manager for the given camera identifier
-    /// if the camera exists, otherwise returns `None`.
+    /// if the camera exists, otherwise returns [`None`].
     pub fn get_camera_data(&self, ident: &GeomIdent) -> Option<&CameraRenderDataManager> {
         self.perspective_camera_data.get(ident)
     }

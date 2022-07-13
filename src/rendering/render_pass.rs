@@ -8,7 +8,7 @@ use super::{
     world::RenderData,
     CoreRenderingSystem,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 /// Holds the information describing a specific render pass,
 /// including identifiers to the data it involves.
@@ -115,7 +115,7 @@ impl RenderPassSpecification {
             layouts.push(
                 render_data
                     .get_camera_data(camera)
-                    .ok_or_else(|| anyhow::anyhow!("Camera {} missing from render data", camera))?
+                    .ok_or_else(|| anyhow!("Camera {} missing from render data", camera))?
                     .bind_group_layout(),
             );
         } else {
@@ -126,9 +126,7 @@ impl RenderPassSpecification {
                 assets
                     .image_textures
                     .get(image_texture)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Image texture {} missing from assets", image_texture)
-                    })?
+                    .ok_or_else(|| anyhow!("Image texture {} missing from assets", image_texture))?
                     .bind_group_layout(),
             );
         }
@@ -151,7 +149,7 @@ impl RenderPassSpecification {
             layouts.push(
                 render_data
                     .get_camera_data(camera)
-                    .ok_or_else(|| anyhow::anyhow!("Camera {} missing from render data", camera))?
+                    .ok_or_else(|| anyhow!("Camera {} missing from render data", camera))?
                     .bind_group(),
             );
         } else {
@@ -162,9 +160,7 @@ impl RenderPassSpecification {
                 assets
                     .image_textures
                     .get(image_texture)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Image texture {} missing from assets", image_texture)
-                    })?
+                    .ok_or_else(|| anyhow!("Image texture {} missing from assets", image_texture))?
                     .bind_group(),
             );
         }
@@ -185,7 +181,7 @@ impl RenderPassSpecification {
             layouts.push(
                 render_data
                     .get_mesh_data(mesh)
-                    .ok_or_else(|| anyhow::anyhow!("Mesh {} missing from render data", mesh))?
+                    .ok_or_else(|| anyhow!("Mesh {} missing from render data", mesh))?
                     .vertex_buffer()
                     .layout()
                     .clone(),
@@ -196,7 +192,7 @@ impl RenderPassSpecification {
                 render_data
                     .get_mesh_instance_data(mesh_instances)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
+                        anyhow!(
                             "Mesh instance group {} missing from render data",
                             mesh_instances
                         )
@@ -224,7 +220,7 @@ impl RenderPassSpecification {
             .shaders
             .get(shader)
             .map(|shader| shader.module())
-            .ok_or_else(|| anyhow::anyhow!("Shader {} missing from assets", shader))
+            .ok_or_else(|| anyhow!("Shader {} missing from assets", shader))
     }
 
     fn get_mesh_buffers<'a>(
@@ -234,7 +230,7 @@ impl RenderPassSpecification {
         render_data
             .get_mesh_data(mesh)
             .map(|mesh_data| (mesh_data.vertex_buffer(), mesh_data.index_buffer()))
-            .ok_or_else(|| anyhow::anyhow!("Mesh {} missing from render data", mesh))
+            .ok_or_else(|| anyhow!("Mesh {} missing from render data", mesh))
     }
 
     fn get_mesh_instance_buffer<'a>(
@@ -245,7 +241,7 @@ impl RenderPassSpecification {
             .get_mesh_instance_data(mesh_instances)
             .map(|mesh_instance_data| mesh_instance_data.instance_buffer())
             .ok_or_else(|| {
-                anyhow::anyhow!(
+                anyhow!(
                     "Mesh instance group {} missing from render data",
                     mesh_instances
                 )
