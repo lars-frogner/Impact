@@ -166,32 +166,25 @@ impl ArchetypeTable {
     /// (as an [`ArchetypeCompByteView`]), initializes a table for the
     /// corresponding [`Archetype`] and inserts the given data as
     /// the first row.
-    pub fn new_with_entity(entity: Entity, components: ArchetypeCompByteView) -> Self {
-        let ArchetypeCompByteView {
-            archetype,
-            component_bytes,
-        } = components;
-        Self {
-            archetype,
-            // Initialize mapper between entity ID and index in component storages
-            entity_index_mapper: KeyIndexMapper::new_with_key(entity.id()),
-            // For component IDs we don't need a full `KeyIndexMapper`, so we just
-            // unwrap to the underlying `HashMap`
-            component_index_map: KeyIndexMapper::new_with_keys(
-                component_bytes.iter().map(ComponentByteView::component_id),
-            )
-            .into_map(),
-            // Initialize storages with component data for the provided entity
-            component_storages: component_bytes
-                .into_iter()
-                .map(|data| RwLock::new(ComponentStorage::new_with_bytes(data)))
-                .collect(),
+    ///
+    /// # Errors
+    /// Returns an error if the archetype of `entity` and `components`
+    /// differ.
+    pub fn new_with_entity(entity: Entity, components: ArchetypeCompByteView) -> Result<Self> {
+        if entity.archetype_id() != components.id() {
+            bail!("Archetype of entity to add inconsistent with archetype of components");
         }
+        Ok(Self::new_with_entity_id_unchecked(entity.id(), components))
     }
 
     /// Whether no entities remain in the table.
     pub fn is_empty(&self) -> bool {
         self.entity_index_mapper.is_empty()
+    }
+
+    /// Whether the given [`Entity`] is present in the table.
+    pub fn has_entity(&self, entity: &Entity) -> bool {
+        self.has_entity_id(entity.id())
     }
 
     /// Takes an [`Entity`] and references to all its component data
@@ -202,23 +195,13 @@ impl ArchetypeTable {
     /// Returns an error if the archetype of `entity` or `components`
     /// differs from the archetype of the table.
     pub fn add_entity(&mut self, entity: Entity, components: ArchetypeCompByteView) -> Result<()> {
-        let ArchetypeCompByteView {
-            archetype,
-            component_bytes,
-        } = components;
         if entity.archetype_id() != self.archetype.id {
             bail!("Archetype of entity to add inconsistent with table archetype");
         }
-        if archetype != self.archetype {
+        if components.archetype != self.archetype {
             bail!("Archetype of component data inconsistent with table archetype");
         }
-
-        self.entity_index_mapper.push_key(entity.id());
-
-        self.component_storages
-            .iter_mut()
-            .zip(component_bytes.into_iter())
-            .for_each(|(storage, data)| storage.write().unwrap().push_bytes(data));
+        self.add_entity_id_unchecked(entity.id(), components);
         Ok(())
     }
 
@@ -236,27 +219,10 @@ impl ArchetypeTable {
         if entity.archetype_id() != self.archetype.id {
             bail!("Archetype of entity to remove inconsistent with table archetype");
         }
-        if !self.entity_index_mapper.contains_key(entity.id()) {
+        if !self.has_entity(entity) {
             bail!("Entity to remove not present in archetype table");
         }
-
-        // Remove the entity from the map and obtain the index
-        // of the corresponing component data. We do a swap remove
-        // in order to keep the index map consistent when we do a
-        // swap remove of component data.
-        let idx = self.entity_index_mapper.swap_remove_key(entity.id());
-
-        // Perform an equivalent swap remove of the data at the index we found
-        let removed_component_bytes = self
-            .component_storages
-            .iter_mut()
-            .map(|storage| storage.write().unwrap().swap_remove_bytes(idx))
-            .collect();
-
-        Ok(ArchetypeCompBytes {
-            archetype: self.archetype,
-            component_bytes: removed_component_bytes,
-        })
+        Ok(self.remove_entity_id_unchecked(entity.id()))
     }
 
     /// Provides access to a [`ComponentStorage`] (guarded by a [`RwLock`]).
@@ -265,17 +231,97 @@ impl ArchetypeTable {
     /// while the `A` type parameter specifies what kind of access (i.e.
     /// read or write, see [`StorageAccess`]).
     ///
-    /// # Panics
-    /// If `C` is not one of the component types present in the table.
-    pub fn access_component_storage<'w, 'g, C, A>(&'w self) -> A::Guard
+    /// # Errors
+    /// Returns an error if `C` is not one of the component types present
+    /// in the table.
+    pub fn access_component_storage<'w, 'g, C, A>(&'w self) -> Result<A::Guard>
     where
         C: Component,
         A: StorageAccess<'w, 'g, C>,
     {
-        let component_id = C::component_id();
-        let idx = self.component_index_map[&component_id];
-        let storage = &self.component_storages[idx];
-        A::access(storage)
+        Ok(A::access(self.get_component_storage(C::component_id())?))
+    }
+
+    fn new_with_entity_id_unchecked(
+        entity_id: EntityID,
+        ArchetypeCompByteView {
+            archetype,
+            component_bytes,
+        }: ArchetypeCompByteView,
+    ) -> Self {
+        Self {
+            archetype,
+            // Initialize mapper between entity ID and index in component storages
+            entity_index_mapper: KeyIndexMapper::new_with_key(entity_id),
+            // For component IDs we don't need a full `KeyIndexMapper`, so we just
+            // unwrap to the underlying `HashMap`
+            component_index_map: KeyIndexMapper::new_with_keys(
+                component_bytes.iter().map(ComponentByteView::component_id),
+            )
+            .into_map(),
+            // Initialize storages with component data for the provided entity
+            component_storages: component_bytes
+                .into_iter()
+                .map(|bytes| RwLock::new(ComponentStorage::new_with_bytes(bytes)))
+                .collect(),
+        }
+    }
+
+    fn has_entity_id(&self, entity_id: EntityID) -> bool {
+        self.entity_index_mapper.contains_key(entity_id)
+    }
+
+    fn add_entity_id_unchecked(
+        &mut self,
+        entity_id: EntityID,
+        ArchetypeCompByteView {
+            archetype: _,
+            component_bytes,
+        }: ArchetypeCompByteView,
+    ) {
+        self.entity_index_mapper.push_key(entity_id);
+
+        self.component_storages
+            .iter_mut()
+            .zip(component_bytes.into_iter())
+            .for_each(|(storage, data)| storage.write().unwrap().push_bytes(data));
+    }
+
+    fn remove_entity_id_unchecked(&mut self, entity_id: EntityID) -> ArchetypeCompBytes {
+        // Remove the entity from the map and obtain the index
+        // of the corresponing component data. We do a swap remove
+        // in order to keep the index map consistent when we do a
+        // swap remove of component data.
+        let idx = self.entity_index_mapper.swap_remove_key(entity_id);
+
+        // Perform an equivalent swap remove of the data at the index we found
+        let removed_component_bytes = self
+            .component_storages
+            .iter_mut()
+            .map(|storage| storage.write().unwrap().swap_remove_bytes(idx))
+            .collect();
+
+        ArchetypeCompBytes {
+            archetype: self.archetype,
+            component_bytes: removed_component_bytes,
+        }
+    }
+
+    fn get_entity_idx(&self, entity_id: EntityID) -> Result<usize> {
+        self.entity_index_mapper
+            .get(entity_id)
+            .ok_or_else(|| anyhow!("Entity not present in archetype table"))
+    }
+
+    fn get_component_storage(
+        &self,
+        component_id: ComponentID,
+    ) -> Result<&RwLock<ComponentStorage>> {
+        let idx = *self
+            .component_index_map
+            .get(&component_id)
+            .ok_or_else(|| anyhow!("Component not present in archetype table"))?;
+        Ok(&self.component_storages[idx])
     }
 }
 
@@ -646,5 +692,73 @@ mod test {
         let mut view: ArchetypeCompByteView = [].try_into().unwrap();
         view.remove_component_with_id(Position::component_id())
             .unwrap();
+    }
+
+    #[test]
+    fn constructing_table_works() {
+        let table = ArchetypeTable::new_with_entity_id_unchecked(0, (&BYTE).into());
+        assert!(table.has_entity_id(0));
+
+        let table =
+            ArchetypeTable::new_with_entity_id_unchecked(42, (&RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity_id(42));
+
+        let table = ArchetypeTable::new_with_entity_id_unchecked(
+            10,
+            (&BYTE, &RECT, &POS).try_into().unwrap(),
+        );
+        assert!(table.has_entity_id(10));
+    }
+
+    #[test]
+    fn adding_entity_to_table_works() {
+        let mut table = ArchetypeTable::new_with_entity_id_unchecked(0, (&BYTE).into());
+        table.add_entity_id_unchecked(1, (&BYTE).into());
+        assert!(table.has_entity_id(0));
+        assert!(table.has_entity_id(1));
+
+        let mut table =
+            ArchetypeTable::new_with_entity_id_unchecked(3, (&RECT, &POS).try_into().unwrap());
+        table.add_entity_id_unchecked(7, (&RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity_id(3));
+        assert!(table.has_entity_id(7));
+    }
+
+    #[test]
+    #[should_panic]
+    fn adding_existing_entity_to_table_fails() {
+        let mut table = ArchetypeTable::new_with_entity_id_unchecked(0, (&BYTE).into());
+        table.add_entity_id_unchecked(0, (&BYTE).into());
+    }
+
+    #[test]
+    fn removing_entity_from_table_works() {
+        let mut table =
+            ArchetypeTable::new_with_entity_id_unchecked(0, (&RECT, &POS).try_into().unwrap());
+        table.add_entity_id_unchecked(1, (&RECT, &POS).try_into().unwrap());
+
+        table.remove_entity_id_unchecked(0);
+        assert!(!table.has_entity_id(0));
+        assert!(table.has_entity_id(1));
+
+        table.remove_entity_id_unchecked(1);
+        assert!(table.is_empty());
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_missing_entity_from_table_fails() {
+        let mut table =
+            ArchetypeTable::new_with_entity_id_unchecked(0, (&RECT, &POS).try_into().unwrap());
+        table.remove_entity_id_unchecked(1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_entity_from_empty_table_fails() {
+        let mut table =
+            ArchetypeTable::new_with_entity_id_unchecked(0, (&RECT, &POS).try_into().unwrap());
+        table.remove_entity_id_unchecked(0);
+        table.remove_entity_id_unchecked(0);
     }
 }
