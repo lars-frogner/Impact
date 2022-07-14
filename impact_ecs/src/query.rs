@@ -95,7 +95,10 @@ pub trait IntoComponentQuery<'w, 'g, C> {
         let tables = world.find_tables_containing_archetype(archetype.id())?;
         let guards: Vec<_> = tables
             .into_iter()
-            .map(Self::access_archetype_table)
+            .map(|table| {
+                // Since we know the components are present in the table we just unwrap the result
+                Self::access_archetype_table(table).unwrap()
+            })
             .collect();
         Ok(ComponentQuery::new(guards))
     }
@@ -112,7 +115,11 @@ pub trait IntoComponentQuery<'w, 'g, C> {
 
     /// Obtains access to the relevant component data in the
     /// given [`ArchetypeTable`].
-    fn access_archetype_table(table: &'w ArchetypeTable) -> Self::Guards;
+    ///
+    /// # Errors
+    /// Returns an error if the requested component types are
+    /// not present in the table.
+    fn access_archetype_table(table: &'w ArchetypeTable) -> Result<Self::Guards>;
 }
 
 /// Marker type that is wrapped around a [`Component`] type
@@ -137,6 +144,9 @@ pub trait StorageAccess<'w, 'g, C> {
 
     /// Creates an [`AccessGuard`] that will manage access
     /// to the given [`ComponentStorage`].
+    ///
+    /// # Panics
+    /// If the [`RwLock`] is poisoned.
     fn access(storage: &'w RwLock<ComponentStorage>) -> Self::Guard;
 }
 
@@ -148,18 +158,23 @@ pub trait AccessGuardGroup<'w, 'g, C> {
 
     /// Provides an iterator over all the components in the
     /// set of storages.
-    fn iter_mut(guards: &'g mut Self) -> Self::OutputIter;
+    fn iter(guards: &'g mut Self) -> Self::OutputIter;
 }
 
 /// Represents a guard that manages access to a single
 /// component storage.
 pub trait AccessGuard<'w, 'g, C> {
+    type OutputSlice;
     type OutputItem;
     type OutputIter: Iterator<Item = Self::OutputItem>;
 
+    /// Provides an slice with the components in the
+    /// storage.
+    fn slice(&'g mut self) -> Self::OutputSlice;
+
     /// Provides an iterator over the components in the
     /// storage.
-    fn iter_mut(&'g mut self) -> Self::OutputIter;
+    fn iter(&'g mut self) -> Self::OutputIter;
 }
 
 /// A guard that holds a [`RwLockReadGuard`] with a
@@ -211,7 +226,7 @@ where
     pub fn iter_mut(
         &'g mut self,
     ) -> impl Iterator<Item = <G as AccessGuardGroup<'w, 'g, C>>::OutputItem> {
-        self.guards.iter_mut().flat_map(AccessGuardGroup::iter_mut)
+        self.guards.iter_mut().flat_map(AccessGuardGroup::iter)
     }
 }
 
@@ -257,11 +272,16 @@ impl<'w, 'g, C> AccessGuard<'w, 'g, C> for ReadGuard<'w, C>
 where
     C: 'w + Component,
 {
+    type OutputSlice = &'g [C];
     type OutputItem = &'g C;
     type OutputIter = std::slice::Iter<'g, C>;
 
-    fn iter_mut(&'g mut self) -> Self::OutputIter {
-        self.guard.slice().iter()
+    fn slice(&'g mut self) -> Self::OutputSlice {
+        self.guard.slice()
+    }
+
+    fn iter(&'g mut self) -> Self::OutputIter {
+        self.slice().iter()
     }
 }
 
@@ -283,11 +303,16 @@ impl<'w, 'g, C> AccessGuard<'w, 'g, C> for WriteGuard<'w, C>
 where
     C: 'w + Component,
 {
+    type OutputSlice = &'g mut [C];
     type OutputItem = &'g mut C;
     type OutputIter = std::slice::IterMut<'g, C>;
 
-    fn iter_mut(&'g mut self) -> Self::OutputIter {
-        self.guard.slice_mut().iter_mut()
+    fn slice(&'g mut self) -> Self::OutputSlice {
+        self.guard.slice_mut()
+    }
+
+    fn iter(&'g mut self) -> Self::OutputIter {
+        self.slice().iter_mut()
     }
 }
 
@@ -309,7 +334,7 @@ macro_rules! impl_IntoComponentQuery {
                 Archetype::new_from_component_id_arr([$c::component_id()])
             }
 
-            fn access_archetype_table(table: &'w ArchetypeTable) -> Self::Guards {
+            fn access_archetype_table(table: &'w ArchetypeTable) -> Result<Self::Guards> {
                 table.access_component_storage::<'w, 'g, $c, $a>()
             }
         }
@@ -327,8 +352,8 @@ macro_rules! impl_IntoComponentQuery {
                 Archetype::new_from_component_id_arr([$($c::component_id()),*])
             }
 
-            fn access_archetype_table(table: &'w ArchetypeTable) -> Self::Guards {
-                ($(table.access_component_storage::<'w, 'g, $c, $a>()),*)
+            fn access_archetype_table(table: &'w ArchetypeTable) -> Result<Self::Guards> {
+                Ok(($(table.access_component_storage::<'w, 'g, $c, $a>()?),*))
             }
         }
     };
@@ -346,8 +371,8 @@ macro_rules! impl_AccessGuardGroup {
             type OutputItem = $g::OutputItem;
             type OutputIter = $g::OutputIter;
 
-            fn iter_mut(guard: &'g mut Self) -> Self::OutputIter {
-                guard.iter_mut()
+            fn iter(guard: &'g mut Self) -> Self::OutputIter {
+                guard.iter()
             }
         }
     };
@@ -366,8 +391,8 @@ macro_rules! impl_AccessGuardGroup {
             type OutputIter = $($output_iter)*;
 
             #[allow(non_snake_case)]
-            fn iter_mut((paste! { [<guard_ $g1>] }, $(paste! { [<guard_ $g>] }),*): &'g mut Self) -> Self::OutputIter {
-                paste! { [<guard_ $g1>] }.iter_mut()$(.zip(paste! { [<guard_ $g>] }.iter_mut()))*
+            fn iter((paste! { [<guard_ $g1>] }, $(paste! { [<guard_ $g>] }),*): &'g mut Self) -> Self::OutputIter {
+                paste! { [<guard_ $g1>] }.iter()$(.zip(paste! { [<guard_ $g>] }.iter()))*
             }
         }
     };
