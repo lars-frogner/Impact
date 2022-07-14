@@ -77,7 +77,7 @@ pub struct ArchetypeCompBytes {
 ///
 /// # Examples
 /// ```
-/// # use impact::ecs::{component::Component, archetype::ArchetypeCompByteView};
+/// # use impact_ecs::{component::Component, archetype::ArchetypeCompByteView};
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
 /// #

@@ -29,7 +29,7 @@ use std::{
 ///
 /// # Examples
 /// ```
-/// # use impact::ecs::{
+/// # use impact_ecs::{
 /// #    component::Component,
 /// #    query::{Read, Write, IntoComponentQuery},
 /// #    world::World

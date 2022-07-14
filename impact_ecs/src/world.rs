@@ -80,7 +80,7 @@ impl World {
     ///
     /// # Examples
     /// ```
-    /// # use impact::ecs::{
+    /// # use impact_ecs::{
     /// #    archetype::ArchetypeCompByteView,
     /// #    component::Component,
     /// #    world::World,
@@ -157,6 +157,7 @@ impl World {
     ) -> Result<impl Iterator<Item = &ArchetypeTable>> {
         let idx = self.get_table_idx(archetype_id)?;
         Ok(std::iter::once(&self.archetype_tables[idx]))
+        // todo!()
     }
 
     fn get_table_idx(&self, id: ArchetypeID) -> Result<usize> {
