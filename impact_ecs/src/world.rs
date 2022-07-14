@@ -59,10 +59,7 @@ impl World {
     }
 
     /// Creates a new [`Entity`] with a single given component.
-    pub fn create_entity_with_component<C>(&mut self, component: &C) -> Entity
-    where
-        C: Component,
-    {
+    pub fn create_entity_with_component(&mut self, component: &impl Component) -> Entity {
         self.create_entity_with_archetype_data(component.into())
     }
 
@@ -125,10 +122,10 @@ impl World {
     /// Returns an error if:
     /// - The entity does not exist.
     /// - The entity already has a component of the same type.
-    pub fn add_component_for_entity<C: Component>(
+    pub fn add_component_for_entity(
         &mut self,
         entity: &mut Entity,
-        component: &C,
+        component: &impl Component,
     ) -> Result<()> {
         self.add_component_data_for_entity(entity, component.component_bytes())
     }
@@ -195,7 +192,7 @@ impl World {
             None => {
                 self.archetype_index_mapper.push_key(archetype_id);
                 self.archetype_tables
-                    .push(ArchetypeTable::new_with_entity(entity, archetype_data));
+                    .push(ArchetypeTable::new_with_entity(entity, archetype_data).unwrap());
             }
         }
     }
