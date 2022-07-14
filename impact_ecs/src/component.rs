@@ -50,36 +50,40 @@ pub struct ComponentStorage {
     bytes: Vec<u8>,
 }
 
-/// Container owning the bytes associated with a component,
-/// along with the component ID required to safely reconstruct
-/// the component.
+/// Container owning the bytes associated with one or more
+/// components of the same type, along with the component ID
+/// and size required to safely reconstruct the components.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComponentBytes {
     component_id: ComponentID,
+    component_size: usize,
     bytes: Vec<u8>,
 }
 
-/// Reference to the bytes of a component, which also includes
-/// the component ID required to safely reconstruct the component.
+/// Reference to the bytes of one or more components of the same
+/// type, which also includes the component ID and size required
+/// to safely reconstruct the components.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComponentByteView<'a> {
     component_id: ComponentID,
+    component_size: usize,
     bytes: &'a [u8],
 }
 
 impl ComponentStorage {
     /// Initializes a new storage for instances of the component
-    /// type that the given component bytes are associated with, and
-    /// stores the given bytes there.
+    /// type that the given component bytes are associated with,
+    /// and stores the given bytes there.
     pub fn new_with_bytes(
         ComponentByteView {
             component_id,
+            component_size,
             bytes,
         }: ComponentByteView,
     ) -> Self {
         Self {
             component_id,
-            component_size: bytes.len(),
+            component_size,
             bytes: bytes.to_vec(),
         }
     }
@@ -133,6 +137,7 @@ impl ComponentStorage {
         &mut self,
         ComponentByteView {
             component_id,
+            component_size,
             bytes,
         }: ComponentByteView,
     ) {
@@ -192,6 +197,7 @@ impl ComponentStorage {
 
         let removed_component_data = ComponentBytes {
             component_id: self.component_id,
+            component_size: self.component_size,
             bytes: self.bytes
                 [component_to_remove_start..component_to_remove_start + self.component_size]
                 .to_vec(),
@@ -236,15 +242,21 @@ impl<C: Pod> Component for C {
     fn component_bytes(&self) -> ComponentByteView {
         ComponentByteView {
             component_id: Self::component_id(),
+            component_size: mem::size_of::<C>(),
             bytes: bytemuck::bytes_of(self),
         }
     }
 }
 
 impl ComponentBytes {
-    /// Returns the ID of the component these bytes represent.
+    /// Returns the ID of the component type these bytes represent.
     pub fn component_id(&self) -> ComponentID {
         self.component_id
+    }
+
+    /// Returns the size of the component type these bytes represent.
+    pub fn component_size(&self) -> usize {
+        self.component_size
     }
 
     /// Returns a [`ComponentByteView`] referencing the component
@@ -252,16 +264,23 @@ impl ComponentBytes {
     pub fn as_ref(&self) -> ComponentByteView {
         ComponentByteView {
             component_id: self.component_id(),
+            component_size: self.component_size(),
             bytes: &self.bytes,
         }
     }
 }
 
 impl<'a> ComponentByteView<'a> {
-    /// Returns the ID of the component whose bytes this reference
-    /// points to.
+    /// Returns the ID of the type of the components whose bytes
+    /// this reference points to.
     pub fn component_id(&self) -> ComponentID {
         self.component_id
+    }
+
+    /// Returns the size of the type of the components whose bytes
+    /// this reference points to.
+    pub fn component_size(&self) -> usize {
+        self.component_size
     }
 
     /// Creates a [`ComponentBytes`] holding a copy of the referenced
@@ -269,6 +288,7 @@ impl<'a> ComponentByteView<'a> {
     pub fn to_owned(&self) -> ComponentBytes {
         ComponentBytes {
             component_id: self.component_id(),
+            component_size: self.component_size(),
             bytes: self.bytes.to_vec(),
         }
     }
