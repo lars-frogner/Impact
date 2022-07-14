@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail, Result};
 use paste::paste;
 use std::{
     any::TypeId,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
     sync::RwLock,
 };
@@ -20,9 +20,10 @@ use std::{
 /// An archetype refers to a specific set of [`Component`]s
 /// that an entity can have. All entities with the exact
 /// same set of components belong to the same archetype.
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Debug)]
 pub struct Archetype {
     id: ArchetypeID,
+    component_ids: HashSet<ComponentID>,
 }
 
 /// Unique identifier for an [`Archetype`], obtained by hashing
@@ -130,6 +131,18 @@ impl Archetype {
         self.id
     }
 
+    /// Returns the number of component making up the
+    /// archetype.
+    pub fn n_components(&self) -> usize {
+        self.component_ids.len()
+    }
+
+    /// Whether this archetype includes at least all the component
+    /// types included in the given archetype.
+    pub fn contains(&self, other: &Self) -> bool {
+        self.component_ids.is_superset(&other.component_ids)
+    }
+
     fn new_from_sorted_component_id_arr<const N: usize>(
         component_ids: [ComponentID; N],
     ) -> Result<Self> {
@@ -148,9 +161,9 @@ impl Archetype {
     }
 
     fn new_from_sorted_component_ids_unchecked(component_ids: &[ComponentID]) -> Self {
-        Self {
-            id: Self::create_id_from_sorted_component_ids(component_ids),
-        }
+        let id = Self::create_id_from_sorted_component_ids(component_ids);
+        let component_ids = component_ids.iter().cloned().collect();
+        Self { id, component_ids }
     }
 
     /// Obtains an archetype ID by hashing the slice of sorted component IDs.
@@ -158,6 +171,12 @@ impl Archetype {
         let mut hasher = DefaultHasher::new();
         component_ids.hash(&mut hasher);
         hasher.finish()
+    }
+}
+
+impl PartialEq for Archetype {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }
 
@@ -171,10 +190,15 @@ impl ArchetypeTable {
     /// Returns an error if the archetype of `entity` and `components`
     /// differ.
     pub fn new_with_entity(entity: Entity, components: ArchetypeCompByteView) -> Result<Self> {
-        if entity.archetype_id() != components.id() {
+        if entity.archetype_id() != components.archetype_id() {
             bail!("Archetype of entity to add inconsistent with archetype of components");
         }
         Ok(Self::new_with_entity_id_unchecked(entity.id(), components))
+    }
+
+    /// Returns the [`Archetype`] of the table.
+    pub fn archetype(&self) -> &Archetype {
+        &self.archetype
     }
 
     /// Whether no entities remain in the table.
@@ -195,10 +219,10 @@ impl ArchetypeTable {
     /// Returns an error if the archetype of `entity` or `components`
     /// differs from the archetype of the table.
     pub fn add_entity(&mut self, entity: Entity, components: ArchetypeCompByteView) -> Result<()> {
-        if entity.archetype_id() != self.archetype.id {
+        if entity.archetype_id() != self.archetype.id() {
             bail!("Archetype of entity to add inconsistent with table archetype");
         }
-        if components.archetype != self.archetype {
+        if components.archetype_id() != self.archetype.id() {
             bail!("Archetype of component data inconsistent with table archetype");
         }
         self.add_entity_id_unchecked(entity.id(), components);
@@ -302,7 +326,7 @@ impl ArchetypeTable {
             .collect();
 
         ArchetypeCompBytes {
-            archetype: self.archetype,
+            archetype: self.archetype.clone(),
             component_bytes: removed_component_bytes,
         }
     }
@@ -328,15 +352,15 @@ impl ArchetypeTable {
 impl ArchetypeCompBytes {
     /// Returns the unique ID for the archetype corresponding
     /// to the set of components whose bytes are stored here.
-    pub fn id(&self) -> ArchetypeID {
-        self.archetype.id
+    pub fn archetype_id(&self) -> ArchetypeID {
+        self.archetype.id()
     }
 
     /// Returns an [`ArchetypeCompByteView`] referencing the component
     /// bytes.
     pub fn as_ref(&self) -> ArchetypeCompByteView {
         ArchetypeCompByteView {
-            archetype: self.archetype,
+            archetype: self.archetype.clone(),
             component_bytes: self
                 .component_bytes
                 .iter()
@@ -349,8 +373,8 @@ impl ArchetypeCompBytes {
 impl<'a> ArchetypeCompByteView<'a> {
     /// Returns the unique ID for the archetype corresponding
     /// to the set of components whose bytes are referenced here.
-    pub fn id(&self) -> ArchetypeID {
-        self.archetype.id
+    pub fn archetype_id(&self) -> ArchetypeID {
+        self.archetype.id()
     }
 
     /// Includes the given component in the set of components
@@ -505,6 +529,32 @@ mod test {
         center: [2.5, 2.0],
         dimensions: [12.3, 8.9],
     };
+
+    #[test]
+    fn larger_archetypes_contain_smaller_archetypes() {
+        let with_all_components = Archetype::new_from_component_id_arr([
+            Byte::component_id(),
+            Position::component_id(),
+            Rectangle::component_id(),
+        ])
+        .unwrap();
+        let without_byte = Archetype::new_from_component_id_arr([
+            Rectangle::component_id(),
+            Position::component_id(),
+        ])
+        .unwrap();
+        let without_position =
+            Archetype::new_from_component_id_arr([Byte::component_id(), Rectangle::component_id()])
+                .unwrap();
+        let empty = Archetype::new_from_component_id_arr([]).unwrap();
+
+        assert!(with_all_components.contains(&with_all_components));
+        assert!(with_all_components.contains(&without_byte));
+        assert!(!without_byte.contains(&with_all_components));
+        assert!(!without_byte.contains(&without_position));
+        assert!(with_all_components.contains(&empty));
+        assert!(!empty.contains(&with_all_components));
+    }
 
     #[test]
     #[should_panic]

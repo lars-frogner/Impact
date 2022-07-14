@@ -60,7 +60,7 @@ impl World {
 
     /// Creates a new [`Entity`] with a single given component.
     pub fn create_entity_with_component(&mut self, component: &impl Component) -> Entity {
-        self.create_entity_with_archetype_data(component.into())
+        self.create_entity_with_component_bytes(component.into())
     }
 
     /// Creates a new [`Entity`] with the given set of components.
@@ -101,7 +101,7 @@ impl World {
         &mut self,
         components: impl TryInto<ArchetypeCompByteView<'a>, Error = anyhow::Error>,
     ) -> Result<Entity> {
-        Ok(self.create_entity_with_archetype_data(components.try_into()?))
+        Ok(self.create_entity_with_component_bytes(components.try_into()?))
     }
 
     /// Removes the given [`Entity`] and all of its components
@@ -163,21 +163,21 @@ impl World {
             .ok_or_else(|| anyhow!("Archetype not present"))
     }
 
-    fn create_entity_with_archetype_data(
+    fn create_entity_with_component_bytes(
         &mut self,
         archetype_data: ArchetypeCompByteView,
     ) -> Entity {
-        let entity = self.create_entity(archetype_data.id());
-        self.add_entity_with_archetype_data(entity, archetype_data);
+        let entity = self.create_entity(archetype_data.archetype_id());
+        self.add_entity_with_component_bytes(entity, archetype_data);
         entity
     }
 
-    fn add_entity_with_archetype_data(
+    fn add_entity_with_component_bytes(
         &mut self,
         entity: Entity,
         archetype_data: ArchetypeCompByteView,
     ) {
-        let archetype_id = archetype_data.id();
+        let archetype_id = archetype_data.archetype_id();
         // If archetypes are not consistent we have a bug
         assert_eq!(entity.archetype_id, archetype_id);
 
@@ -201,7 +201,7 @@ impl World {
         let idx = self.get_table_idx(entity.archetype_id)?;
         let table = &mut self.archetype_tables[idx];
 
-        let removed_archetype_data = table.remove_entity(entity)?;
+        let removed_component_data = table.remove_entity(entity)?;
 
         // If we removed the last entity in the table, there is no
         // reason the keep the table any more
@@ -209,7 +209,7 @@ impl World {
             self.remove_archetype_table_at_idx(idx);
         }
 
-        Ok(removed_archetype_data)
+        Ok(removed_component_data)
     }
 
     fn remove_archetype_table_at_idx(&mut self, idx: usize) {
@@ -231,10 +231,10 @@ impl World {
         updated_archetype_data.add_component_bytes(component_data)?;
 
         // Set new archetype for the entity
-        entity.archetype_id = updated_archetype_data.id();
+        entity.archetype_id = updated_archetype_data.archetype_id();
 
         // Finally we insert the modified entity into the appropriate table
-        self.add_entity_with_archetype_data(*entity, updated_archetype_data);
+        self.add_entity_with_component_bytes(*entity, updated_archetype_data);
         Ok(())
     }
 
@@ -252,10 +252,10 @@ impl World {
         updated_archetype_data.remove_component_with_id(component_id)?;
 
         // Set new archetype for the entity
-        entity.archetype_id = updated_archetype_data.id();
+        entity.archetype_id = updated_archetype_data.archetype_id();
 
         // Finally we insert the modified entity into the appropriate table
-        self.add_entity_with_archetype_data(*entity, updated_archetype_data);
+        self.add_entity_with_component_bytes(*entity, updated_archetype_data);
         Ok(())
     }
 
