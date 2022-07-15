@@ -447,5 +447,60 @@ impl_IntoComponentQuery!(
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{super::Component, *};
+    use bytemuck::{Pod, Zeroable};
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Byte(u8);
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Position(f32, f32, f32);
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Rectangle {
+        center: [f32; 2],
+        dimensions: [f32; 2],
+    }
+
+    const BYTE: Byte = Byte(42);
+    const POS: Position = Position(-9.8, 12.5, 7.3);
+    const RECT: Rectangle = Rectangle {
+        center: [2.5, 2.0],
+        dimensions: [12.3, 8.9],
+    };
+
+    #[test]
+    fn query_construction_works() {
+        let mut world = World::new();
+
+        <Read<Byte>>::query(&mut world).unwrap();
+        <Write<Byte>>::query(&mut world).unwrap();
+
+        <(Read<Byte>, Read<Position>)>::query(&mut world).unwrap();
+        <(Read<Byte>, Write<Position>)>::query(&mut world).unwrap();
+
+        <(Write<Byte>, Write<Position>, Read<Rectangle>)>::query(&mut world).unwrap();
+        <(Read<Byte>, Read<Position>, Read<Rectangle>)>::query(&mut world).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn query_construction_with_duplicate_component_fails() {
+        let mut world = World::new();
+        <(Read<Byte>, Read<Position>, Write<Byte>)>::query(&mut world).unwrap();
+    }
+
+    #[test]
+    fn iterating_over_query_results_works() {
+        let mut world = World::new();
+        let entity = world.create_entity((&POS, &RECT)).unwrap();
+        let mut query = <(Read<Position>, Write<Rectangle>)>::query(&mut world).unwrap();
+        for (pos, rect) in query.iter_mut() {
+            rect.center[0] = 42.0 * pos.2;
+        }
+        // TODO: Check components
+    }
 }
