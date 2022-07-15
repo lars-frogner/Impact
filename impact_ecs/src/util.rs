@@ -107,6 +107,15 @@ where
         assert!(existing_entry.is_none(), "Tried to add an existing key");
     }
 
+    /// Pushes each of the keys in the given iterator into the map
+    /// in order.
+    ///
+    /// # Panics
+    /// If any of the keys already exists.
+    pub fn push_keys(&mut self, keys: impl IntoIterator<Item = K>) {
+        keys.into_iter().for_each(|key| self.push_key(key));
+    }
+
     /// Removes the given key and assigns the key at the last
     /// index to the index of the removed key (unless the key
     /// to remove was at the last index) before popping the end
@@ -167,7 +176,7 @@ mod test {
         assert_eq!(mapper.idx(3), 0);
         assert_eq!(mapper.key_at_idx(0), 3);
 
-        let mapper = KeyIndexMapper::new_with_keys(vec![4, 2]);
+        let mapper = KeyIndexMapper::new_with_keys([4, 2]);
         assert_eq!(mapper.len(), 2);
         assert_eq!(mapper.idx(4), 0);
         assert_eq!(mapper.idx(2), 1);
@@ -178,12 +187,12 @@ mod test {
     #[test]
     #[should_panic]
     fn key_index_mapper_initializing_with_duplicate_keys_fails() {
-        KeyIndexMapper::new_with_keys(vec![2, 4, 2]);
+        KeyIndexMapper::new_with_keys([2, 4, 2]);
     }
 
     #[test]
     fn key_index_mapper_get_gives_correct_idx() {
-        let mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         assert_eq!(mapper.get(0), None);
         assert_eq!(mapper.get(4), Some(0));
         assert_eq!(mapper.get(2), Some(1));
@@ -193,13 +202,13 @@ mod test {
     #[test]
     #[should_panic]
     fn key_index_mapper_idx_fails_on_invalid_key() {
-        let mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         mapper.idx(0);
     }
 
     #[test]
     fn key_index_mapper_idx_gives_correct_idx() {
-        let mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         assert_eq!(mapper.idx(4), 0);
         assert_eq!(mapper.idx(2), 1);
         assert_eq!(mapper.idx(100), 2);
@@ -208,13 +217,13 @@ mod test {
     #[test]
     #[should_panic]
     fn key_index_mapper_key_at_idx_fails_on_invalid_idx() {
-        let mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         mapper.key_at_idx(3);
     }
 
     #[test]
     fn key_index_mapper_key_at_idx_gives_correct_key() {
-        let mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         assert_eq!(mapper.key_at_idx(0), 4);
         assert_eq!(mapper.key_at_idx(1), 2);
         assert_eq!(mapper.key_at_idx(2), 100);
@@ -245,6 +254,17 @@ mod test {
     }
 
     #[test]
+    fn key_index_mapper_pushing_multiple_keys_works() {
+        let mut mapper = KeyIndexMapper::<i32>::new();
+
+        mapper.push_keys([4, 100]);
+        assert_eq!(mapper.idx(4), 0);
+        assert_eq!(mapper.key_at_idx(0), 4);
+        assert_eq!(mapper.idx(100), 1);
+        assert_eq!(mapper.key_at_idx(1), 100);
+    }
+
+    #[test]
     #[should_panic]
     fn key_index_mapper_swap_remove_idx_on_empty_fails() {
         let mut mapper = KeyIndexMapper::<i32>::new();
@@ -254,13 +274,13 @@ mod test {
     #[test]
     #[should_panic]
     fn key_index_mapper_swap_remove_idx_with_invalid_idx_fails() {
-        let mut mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mut mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         mapper.swap_remove_key_at_idx(3);
     }
 
     #[test]
     fn key_index_mapper_swap_remove_idx_works() {
-        let mut mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mut mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
 
         mapper.swap_remove_key_at_idx(0); // Moves `100` to idx 0 and truncates ([100, 2])
         assert_eq!(mapper.len(), 2);
@@ -288,13 +308,13 @@ mod test {
     #[test]
     #[should_panic]
     fn key_index_mapper_swap_remove_key_with_invalid_key_fails() {
-        let mut mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mut mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
         mapper.swap_remove_key(1);
     }
 
     #[test]
     fn key_index_mapper_swap_remove_key_works() {
-        let mut mapper = KeyIndexMapper::new_with_keys(vec![4, 2, 100]);
+        let mut mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
 
         mapper.swap_remove_key(2); // Moves `100` to idx 1 and truncates ([4, 100])
         assert_eq!(mapper.len(), 2);
