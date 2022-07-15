@@ -15,7 +15,7 @@ use std::{
     any::TypeId,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
-    sync::RwLock,
+    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 /// Representation of an archetype.
@@ -158,6 +158,29 @@ pub struct ArchetypeCompByteView<'a> {
     component_count: usize,
 }
 
+/// An immutable reference into the entry for an
+/// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
+pub struct EntityEntry<'a> {
+    info: EntityEntryInfo<'a>,
+    components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
+}
+
+/// An mutable reference into the entry for an
+/// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
+pub struct EntityMutEntry<'a> {
+    info: EntityEntryInfo<'a>,
+    components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
+}
+
+/// Common information needed by both [`EntityEntry`] and
+/// [`EntityMutEntry`].
+struct EntityEntryInfo<'a> {
+    archetype: &'a Archetype,
+    /// Index of the entity's component in each component storage.
+    storage_idx: usize,
+    component_index_map: &'a HashMap<ComponentID, usize>,
+}
+
 impl Archetype {
     /// Creates a new archetype defined by the component IDs
     /// in the given array. The order of the component IDs
@@ -183,6 +206,12 @@ impl Archetype {
     /// archetype.
     pub fn n_components(&self) -> usize {
         self.component_ids.len()
+    }
+
+    /// Whether this archetype includes the component type
+    /// with the given ID.
+    pub fn contains_component_id(&self, component_id: ComponentID) -> bool {
+        self.component_ids.contains(&component_id)
     }
 
     /// Whether this archetype includes at least all the component
@@ -323,6 +352,80 @@ impl ArchetypeTable {
         })
     }
 
+    /// Returns an [`EntityEntry`] that can be used to read the components
+    /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
+    /// If the entity is not present in the table, [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned `EntityEntry` holds locks to the component storages
+    /// in the table until it is dropped. Before then, attempts to modify
+    /// the component data will be blocked.
+    pub fn get_entity(&self, entity_id: EntityID) -> Option<EntityEntry> {
+        let storage_idx = self.entity_index_mapper.get(entity_id)?;
+        Some(EntityEntry::new(
+            &self.archetype,
+            storage_idx,
+            &self.component_index_map,
+            self.component_storages
+                .iter()
+                .map(|storage| storage.read().unwrap())
+                .collect(),
+        ))
+    }
+
+    /// Returns an [`EntityEntry`] that can be used to read the components
+    /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
+    ///
+    /// # Panics
+    /// If the entity is not present in the table.
+    ///
+    /// # Concurrency
+    /// The returned `EntityEntry` holds locks to the component storages
+    /// in the table until it is dropped. Before then, attempts to modify
+    /// the component data will be blocked.
+    pub fn entity(&self, entity_id: EntityID) -> EntityEntry {
+        self.get_entity(entity_id)
+            .expect("Entity not present in table")
+    }
+
+    /// Returns an [`EntityMutEntry`] that can be used to read and modify
+    /// the components of the [`Entity`](crate::world::Entity) with the
+    /// given [`EntityID`]. If the entity is not present in the table,
+    /// [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned `EntityMutEntry` holds locks to the component storages
+    /// in the table until it is dropped. Before then, attempts to read
+    /// or modify the component data will be blocked.
+    pub fn get_entity_mut(&mut self, entity_id: EntityID) -> Option<EntityMutEntry> {
+        let storage_idx = self.entity_index_mapper.get(entity_id)?;
+        Some(EntityMutEntry::new(
+            &self.archetype,
+            storage_idx,
+            &self.component_index_map,
+            self.component_storages
+                .iter_mut()
+                .map(|storage| storage.write().unwrap())
+                .collect(),
+        ))
+    }
+
+    /// Returns an [`EntityMutEntry`] that can be used to read and modify
+    /// the components of the [`Entity`](crate::world::Entity) with the
+    /// given [`EntityID`].
+    ///
+    /// # Panics
+    /// If the entity is not present in the table.
+    ///
+    /// # Concurrency
+    /// The returned `EntityMutEntry` holds locks to the component storages
+    /// in the table until it is dropped. Before then, attempts to read
+    /// or modify the component data will be blocked.
+    pub fn entity_mut(&mut self, entity_id: EntityID) -> EntityMutEntry {
+        self.get_entity_mut(entity_id)
+            .expect("Entity not present in table")
+    }
+
     /// Provides access to a [`ComponentStorage`] (guarded by a [`RwLock`]).
     ///
     /// The component type to access is given by the `C` type parameter,
@@ -370,12 +473,6 @@ impl ArchetypeTable {
         }
     }
 
-    fn get_entity_idx(&self, entity_id: EntityID) -> Result<usize> {
-        self.entity_index_mapper
-            .get(entity_id)
-            .ok_or_else(|| anyhow!("Entity not present in archetype table"))
-    }
-
     fn get_component_storage(
         &self,
         component_id: ComponentID,
@@ -385,6 +482,110 @@ impl ArchetypeTable {
             .get(&component_id)
             .ok_or_else(|| anyhow!("Component not present in archetype table"))?;
         Ok(&self.component_storages[idx])
+    }
+}
+
+impl<'a> EntityEntry<'a> {
+    fn new(
+        archetype: &'a Archetype,
+        storage_idx: usize,
+        component_index_map: &'a HashMap<ComponentID, usize>,
+        components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
+    ) -> Self {
+        Self {
+            info: EntityEntryInfo {
+                archetype,
+                storage_idx,
+                component_index_map,
+            },
+            components,
+        }
+    }
+
+    /// Returns the number of components the entity has.
+    pub fn n_components(&self) -> usize {
+        self.info.n_components()
+    }
+
+    /// Whether the entity has the component specified by the
+    /// type parameter `C`.
+    pub fn has_component<C: Component>(&self) -> bool {
+        self.info.has_component::<C>()
+    }
+
+    /// Returns a reference to the component specified by the
+    /// type parameter `C`. If the entity does not have this
+    /// component, [`None`] is returned.
+    pub fn get_component<C: Component>(&self) -> Option<&C> {
+        let component_idx = *self.info.component_index_map.get(&C::component_id())?;
+        Some(&self.components[component_idx].slice()[self.info.storage_idx])
+    }
+
+    /// Returns a reference to the component specified by the
+    /// type parameter `C`.
+    ///
+    /// # Panics
+    /// If the entity does not have the specified component.
+    pub fn component<C: Component>(&self) -> &C {
+        self.get_component::<C>()
+            .expect("Requested invalid component")
+    }
+}
+
+impl<'a> EntityMutEntry<'a> {
+    fn new(
+        archetype: &'a Archetype,
+        storage_idx: usize,
+        component_index_map: &'a HashMap<ComponentID, usize>,
+        components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
+    ) -> Self {
+        Self {
+            info: EntityEntryInfo {
+                archetype,
+                storage_idx,
+                component_index_map,
+            },
+            components,
+        }
+    }
+
+    /// Returns the number of components the entity has.
+    pub fn n_components(&self) -> usize {
+        self.info.n_components()
+    }
+
+    /// Whether the entity has the component specified by the
+    /// type parameter `C`.
+    pub fn has_component<C: Component>(&self) -> bool {
+        self.info.has_component::<C>()
+    }
+
+    /// Returns a mutable reference to the component specified
+    /// by the type parameter `C`. If the entity does not have
+    /// this component, [`None`] is returned.
+    pub fn get_component<C: Component>(&mut self) -> Option<&mut C> {
+        let component_idx = *self.info.component_index_map.get(&C::component_id())?;
+        Some(&mut self.components[component_idx].slice_mut()[self.info.storage_idx])
+    }
+
+    /// Returns a mutable reference to the component specified
+    /// by the type parameter `C`.
+    ///
+    /// # Panics
+    /// If the entity does not have the specified component.
+    pub fn component<C: Component>(&mut self) -> &mut C {
+        self.get_component::<C>()
+            .expect("Requested invalid component")
+    }
+}
+
+impl<'a> EntityEntryInfo<'a> {
+    fn n_components(&self) -> usize {
+        self.archetype.n_components()
+    }
+
+    fn has_component<C: Component>(&self) -> bool {
+        self.archetype.contains_component_id(C::component_id())
     }
 }
 
@@ -873,13 +1074,21 @@ mod test {
     fn constructing_table_works() {
         let table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
         assert!(table.has_entity(0));
+        assert_eq!(table.entity(0).component::<Byte>(), &BYTE);
 
         let table = ArchetypeTable::new_with_entities([42], (&RECT, &POS).try_into().unwrap());
         assert!(table.has_entity(42));
+        let entity = table.entity(42);
+        assert_eq!(entity.component::<Position>(), &POS);
+        assert_eq!(entity.component::<Rectangle>(), &RECT);
 
         let table =
             ArchetypeTable::new_with_entities([10], (&BYTE, &RECT, &POS).try_into().unwrap());
         assert!(table.has_entity(10));
+        let entity = table.entity(10);
+        assert_eq!(entity.component::<Byte>(), &BYTE);
+        assert_eq!(entity.component::<Position>(), &POS);
+        assert_eq!(entity.component::<Rectangle>(), &RECT);
     }
 
     #[test]
@@ -887,12 +1096,20 @@ mod test {
         let mut table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
         table.add_entities([1], (&BYTE).into());
         assert!(table.has_entity(0));
+        assert_eq!(table.entity(0).component::<Byte>(), &BYTE);
         assert!(table.has_entity(1));
+        assert_eq!(table.entity(1).component::<Byte>(), &BYTE);
 
         let mut table = ArchetypeTable::new_with_entities([3], (&RECT, &POS).try_into().unwrap());
         table.add_entities([7], (&RECT, &POS).try_into().unwrap());
         assert!(table.has_entity(3));
+        let entity = table.entity(3);
+        assert_eq!(entity.component::<Position>(), &POS);
+        assert_eq!(entity.component::<Rectangle>(), &RECT);
         assert!(table.has_entity(7));
+        let entity = table.entity(7);
+        assert_eq!(entity.component::<Position>(), &POS);
+        assert_eq!(entity.component::<Rectangle>(), &RECT);
     }
 
     #[test]
