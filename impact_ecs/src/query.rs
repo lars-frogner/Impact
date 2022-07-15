@@ -92,7 +92,7 @@ pub trait IntoComponentQuery<'w, 'g, C> {
     /// multiple components of the same type.
     fn query(world: &'w mut World) -> Result<ComponentQuery<C, Self::Guards>> {
         let archetype = Self::determine_archetype()?;
-        let tables = world.find_tables_containing_archetype(archetype.id())?;
+        let tables = world.find_tables_containing_archetype(archetype);
         let guards: Vec<_> = tables
             .into_iter()
             .map(|table| {
