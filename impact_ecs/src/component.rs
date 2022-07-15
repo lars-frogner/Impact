@@ -12,15 +12,18 @@ use std::{any::TypeId, mem};
 ///
 /// Components can only contain "Plain Old Data", meaning
 /// primitive types excluding references. The `Component`
-/// trait is automatically implemented for any type that
-/// implements [`Pod`].
+/// trait can be derived for any type that implements
+/// [`Pod`].
 ///
 /// # Example
 /// ```
-/// // Define a transform component
+/// # use impact_ecs_derive::ComponentDoctest as Component;
 /// # use bytemuck::{Zeroable, Pod};
+/// #
+/// // Define a transform component that implements `Component`
+///
 /// #[repr(C)] // Required for `Pod`
-/// #[derive(Clone, Copy, Zeroable, Pod)]
+/// #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// struct Transform {
 ///     matrix: [[f32; 4]; 4]
 /// }
@@ -34,6 +37,22 @@ pub trait Component: Pod {
     /// Returns the [`ComponentByteView`] containing a reference
     /// to the raw data of the component.
     fn component_bytes(&self) -> ComponentByteView;
+}
+
+/// Represents a collection of instances of the same component
+/// type.
+pub trait ComponentInstances<'a, C: Component> {
+    /// Returns a unique ID representing the component type.
+    fn component_id() -> ComponentID {
+        C::component_id()
+    }
+
+    /// Returns the number of component instances.
+    fn component_count(&self) -> usize;
+
+    /// Returns the [`ComponentByteView`] containing a reference
+    /// to the raw data of the collection of components.
+    fn component_bytes(&self) -> ComponentByteView<'a>;
 }
 
 /// A unique ID identifying a type implementing [`Component`].
@@ -137,7 +156,7 @@ impl ComponentStorage {
         &mut self,
         ComponentByteView {
             component_id,
-            component_size,
+            component_size: _,
             bytes,
         }: ComponentByteView,
     ) {
@@ -237,17 +256,6 @@ impl ComponentStorage {
     }
 }
 
-// Implement `Component` for all types implementing `Pod`
-impl<C: Pod> Component for C {
-    fn component_bytes(&self) -> ComponentByteView {
-        ComponentByteView {
-            component_id: Self::component_id(),
-            component_size: mem::size_of::<C>(),
-            bytes: bytemuck::bytes_of(self),
-        }
-    }
-}
-
 impl ComponentBytes {
     /// Returns the ID of the component type these bytes represent.
     pub fn component_id(&self) -> ComponentID {
@@ -257,6 +265,11 @@ impl ComponentBytes {
     /// Returns the size of the component type these bytes represent.
     pub fn component_size(&self) -> usize {
         self.component_size
+    }
+
+    /// Returns the number of component instances these bytes represent.
+    pub fn component_count(&self) -> usize {
+        self.bytes.len() / self.component_size()
     }
 
     /// Returns a [`ComponentByteView`] referencing the component
@@ -271,6 +284,17 @@ impl ComponentBytes {
 }
 
 impl<'a> ComponentByteView<'a> {
+    /// Creates a new view to the given bytes for a component
+    /// with the given ID and size.
+    pub fn new(component_id: ComponentID, component_size: usize, bytes: &'a [u8]) -> Self {
+        assert_eq!(bytes.len() % component_size, 0);
+        Self {
+            component_id,
+            component_size,
+            bytes,
+        }
+    }
+
     /// Returns the ID of the type of the components whose bytes
     /// this reference points to.
     pub fn component_id(&self) -> ComponentID {
@@ -281,6 +305,11 @@ impl<'a> ComponentByteView<'a> {
     /// this reference points to.
     pub fn component_size(&self) -> usize {
         self.component_size
+    }
+
+    /// Returns the number of component instances this reference points to.
+    pub fn component_count(&self) -> usize {
+        self.bytes.len() / self.component_size()
     }
 
     /// Creates a [`ComponentBytes`] holding a copy of the referenced
@@ -294,17 +323,45 @@ impl<'a> ComponentByteView<'a> {
     }
 }
 
+impl<'a, C: Component> ComponentInstances<'a, C> for &'a [C] {
+    fn component_count(&self) -> usize {
+        self.len()
+    }
+
+    fn component_bytes(&self) -> ComponentByteView<'a> {
+        ComponentByteView {
+            component_id: Self::component_id(),
+            component_size: mem::size_of::<C>(),
+            bytes: bytemuck::cast_slice(self),
+        }
+    }
+}
+
+impl<'a, const N: usize, C: Component> ComponentInstances<'a, C> for &'a [C; N] {
+    fn component_count(&self) -> usize {
+        self.len()
+    }
+
+    fn component_bytes(&self) -> ComponentByteView<'a> {
+        ComponentByteView {
+            component_id: Self::component_id(),
+            component_size: mem::size_of::<C>(),
+            bytes: bytemuck::cast_slice(*self),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{super::Component, *};
     use bytemuck::Zeroable;
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Byte(u8);
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Rectangle {
         center: [f32; 2],
         dimensions: [f32; 2],

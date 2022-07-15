@@ -30,22 +30,22 @@ use std::{
 /// # Examples
 /// ```
 /// # use impact_ecs::{
-/// #    component::Component,
 /// #    query::{Read, Write, IntoComponentQuery},
 /// #    world::World
 /// # };
+/// # use impact_ecs_derive::ComponentDoctest;
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
 /// #
 /// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
 /// # struct Distance(f32);
 /// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
 /// # struct Speed(f32);
 /// #
 /// let mut world = World::new();
-/// let entity = world.create_entity_with_components((&Distance(0.0), &Speed(10.0)))?;
+/// let entity = world.create_entity((&Distance(0.0), &Speed(10.0)))?;
 ///
 /// let mut query = <(Write<Distance>, Read<Speed>)>::query(&mut world)?;
 /// for (distance, speed) in query.iter_mut() {
@@ -89,7 +89,7 @@ pub trait IntoComponentQuery<'w, 'g, C> {
     /// # Errors
     /// Returns an error if the set of requested components
     /// has no valid archetype, which happens if there are
-    /// multiple component of the same type.
+    /// multiple components of the same type.
     fn query(world: &'w mut World) -> Result<ComponentQuery<C, Self::Guards>> {
         let archetype = Self::determine_archetype()?;
         let tables = world.find_tables_containing_archetype(archetype.id())?;

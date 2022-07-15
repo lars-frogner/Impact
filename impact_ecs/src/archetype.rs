@@ -1,10 +1,13 @@
 //! Organization of ECS entities into archetypes.
 
 use super::{
-    component::{Component, ComponentByteView, ComponentBytes, ComponentID, ComponentStorage},
+    component::{
+        Component, ComponentByteView, ComponentBytes, ComponentID, ComponentInstances,
+        ComponentStorage,
+    },
     query::StorageAccess,
     util::KeyIndexMapper,
-    world::{Entity, EntityID},
+    world::EntityID,
 };
 use anyhow::{anyhow, bail, Result};
 use paste::paste;
@@ -67,6 +70,7 @@ pub struct ArchetypeTable {
 pub struct ArchetypeCompBytes {
     archetype: Archetype,
     component_bytes: Vec<ComponentBytes>,
+    component_count: usize,
 }
 
 /// Container holding the [`ComponentByteView`] for a set
@@ -74,19 +78,24 @@ pub struct ArchetypeCompBytes {
 ///
 /// Instances of this type can be constructed conveniently
 /// by converting from a single reference or a tuple of
-/// references to anything that implements [`Component`].
+/// references to anything that implements [`Component`],
+/// as shown in the example below.
 ///
-/// # Examples
+/// # Example 1
 /// ```
-/// # use impact_ecs::{component::Component, archetype::ArchetypeCompByteView};
+/// # use impact_ecs::{
+/// #    component::Component,
+/// #    archetype::ArchetypeCompByteView
+/// # };
+/// # use impact_ecs_derive::ComponentDoctest;
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
 /// #
 /// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
 /// # struct Position(f32, f32);
 /// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
 /// # struct Mass(f32);
 /// #
 /// // Create instances of two components
@@ -95,12 +104,50 @@ pub struct ArchetypeCompBytes {
 ///
 /// // We can convert from a single component..
 /// let mass_bytes: ArchetypeCompByteView = (&mass).into();
+/// assert_eq!(mass_bytes.n_component_types(), 1);
+///
 /// // .. or from a tuple of multiple components..
 /// let pos_mass_bytes: ArchetypeCompByteView = (&position, &mass).try_into()?;
+/// assert_eq!(pos_mass_bytes.n_component_types(), 2);
+///
 /// // .. or from an array if we use views to the raw bytes
 /// let pos_mass_bytes: ArchetypeCompByteView = [
 ///     position.component_bytes(), mass.component_bytes()
 /// ].try_into()?;
+/// assert_eq!(pos_mass_bytes.n_component_types(), 2);
+/// #
+/// # Ok::<(), Error>(())
+/// ```
+///
+/// An `ArchetypeCompByteView` may also be constructed with
+/// multiple instances of each component type, by using slices
+/// of component instances instead of references to single
+/// instances. The following example illustrates this.
+///
+/// # Example 2
+/// ```
+/// # use impact_ecs::{
+/// #    component::Component,
+/// #    archetype::ArchetypeCompByteView
+/// # };
+/// # use impact_ecs_derive::ComponentDoctest;
+/// # use bytemuck::{Zeroable, Pod};
+/// # use anyhow::Error;
+/// #
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+/// # struct Position(f32, f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+/// # struct Mass(f32);
+/// #
+/// // Create multiple instances of each of the two components
+/// let positions = [Position(0.0, 0.0), Position(2.0, 1.0), Position(6.0, 5.0)];
+/// let masses = [Mass(5.0), Mass(2.0), Mass(7.5)];
+///
+/// let pos_mass_bytes: ArchetypeCompByteView = (&positions, &masses).try_into()?;
+/// assert_eq!(pos_mass_bytes.n_component_types(), 2);
+/// assert_eq!(pos_mass_bytes.component_count(), 3);
 /// #
 /// # Ok::<(), Error>(())
 /// ```
@@ -108,6 +155,7 @@ pub struct ArchetypeCompBytes {
 pub struct ArchetypeCompByteView<'a> {
     archetype: Archetype,
     component_bytes: Vec<ComponentByteView<'a>>,
+    component_count: usize,
 }
 
 impl Archetype {
@@ -181,19 +229,23 @@ impl PartialEq for Archetype {
 }
 
 impl ArchetypeTable {
-    /// Takes an [`Entity`] and references to all its component data
-    /// (as an [`ArchetypeCompByteView`]), initializes a table for the
-    /// corresponding [`Archetype`] and inserts the given data as
-    /// the first row.
+    /// Takes an iterable of [`EntityID`]s and references to all the
+    /// associated component data (as an [`ArchetypeCompByteView`]),
+    /// initializes a table for the corresponding [`Archetype`] and
+    /// inserts the given data, one row per entity.
     ///
-    /// # Errors
-    /// Returns an error if the archetype of `entity` and `components`
-    /// differ.
-    pub fn new_with_entity(entity: Entity, components: ArchetypeCompByteView) -> Result<Self> {
-        if entity.archetype_id() != components.archetype_id() {
-            bail!("Archetype of entity to add inconsistent with archetype of components");
-        }
-        Ok(Self::new_with_entity_id_unchecked(entity.id(), components))
+    /// # Panics
+    /// - If the number of entities differs from the number of instances
+    /// of each component type.
+    /// - If any of the entity IDs are equal.
+    pub fn new_with_entities(
+        entity_ids: impl IntoIterator<Item = EntityID>,
+        components: ArchetypeCompByteView,
+    ) -> Self {
+        // Initialize mapper between entity ID and index in component storages
+        let entity_index_mapper = KeyIndexMapper::new_with_keys(entity_ids);
+
+        Self::new_with_entity_index_mapper(entity_index_mapper, components)
     }
 
     /// Returns the [`Archetype`] of the table.
@@ -206,47 +258,69 @@ impl ArchetypeTable {
         self.entity_index_mapper.is_empty()
     }
 
-    /// Whether the given [`Entity`] is present in the table.
-    pub fn has_entity(&self, entity: &Entity) -> bool {
-        self.has_entity_id(entity.id())
+    /// Whether the [`Entity`] with the given [`EntityID`] is present in the table.
+    pub fn has_entity(&self, entity_id: EntityID) -> bool {
+        self.entity_index_mapper.contains_key(entity_id)
     }
 
-    /// Takes an [`Entity`] and references to all its component data
-    /// (as an [`ArchetypeCompByteView`]) and appends the data as a row
-    /// in the table.
+    /// Takes an iterable of [`EntityID`]s and references to all the
+    /// associated component data (as an [`ArchetypeCompByteView`])
+    /// and appends the given data to the table, one row per entity.
     ///
-    /// # Errors
-    /// Returns an error if the archetype of `entity` or `components`
-    /// differs from the archetype of the table.
-    pub fn add_entity(&mut self, entity: Entity, components: ArchetypeCompByteView) -> Result<()> {
-        if entity.archetype_id() != self.archetype.id() {
-            bail!("Archetype of entity to add inconsistent with table archetype");
-        }
-        if components.archetype_id() != self.archetype.id() {
-            bail!("Archetype of component data inconsistent with table archetype");
-        }
-        self.add_entity_id_unchecked(entity.id(), components);
-        Ok(())
+    /// # Panics
+    /// - If the number of entities differs from the number of instances
+    /// of each component type.
+    /// - If any of the given entity IDs are equal to a new or existing
+    /// entity ID.
+    pub fn add_entities(
+        &mut self,
+        entity_ids: impl IntoIterator<Item = EntityID>,
+        components: ArchetypeCompByteView,
+    ) {
+        let original_entity_count = self.entity_index_mapper.len();
+        self.entity_index_mapper.push_keys(entity_ids);
+        let added_entity_count = self.entity_index_mapper.len() - original_entity_count;
+        assert_eq!(
+            added_entity_count, components.component_count,
+            "Number of components per component type differs from number of entities"
+        );
+
+        self.component_storages
+            .iter_mut()
+            .zip(components.component_bytes.into_iter())
+            .for_each(|(storage, data)| storage.write().unwrap().push_bytes(data));
     }
 
-    /// Removes the given entity and all its data from the
-    /// table.
+    /// Removes the entity with the given [`EntityID`] and all its
+    /// data from the table.
     ///
     /// # Returns
     /// The removed component data.
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - The archetype of the entity differs from the archetype of the table.
-    /// - The entity is not present in the table.
-    pub fn remove_entity(&mut self, entity: &Entity) -> Result<ArchetypeCompBytes> {
-        if entity.archetype_id() != self.archetype.id {
-            bail!("Archetype of entity to remove inconsistent with table archetype");
-        }
-        if !self.has_entity(entity) {
+    /// Returns an error if the entity is not present in the table.
+    pub fn remove_entity(&mut self, entity_id: EntityID) -> Result<ArchetypeCompBytes> {
+        if !self.has_entity(entity_id) {
             bail!("Entity to remove not present in archetype table");
         }
-        Ok(self.remove_entity_id_unchecked(entity.id()))
+        // Remove the entity from the map and obtain the index
+        // of the corresponing component data. We do a swap remove
+        // in order to keep the index map consistent when we do a
+        // swap remove of component data.
+        let idx = self.entity_index_mapper.swap_remove_key(entity_id);
+
+        // Perform an equivalent swap remove of the data at the index we found
+        let removed_component_bytes = self
+            .component_storages
+            .iter_mut()
+            .map(|storage| storage.write().unwrap().swap_remove_bytes(idx))
+            .collect();
+
+        Ok(ArchetypeCompBytes {
+            archetype: self.archetype.clone(),
+            component_bytes: removed_component_bytes,
+            component_count: 1,
+        })
     }
 
     /// Provides access to a [`ComponentStorage`] (guarded by a [`RwLock`]).
@@ -266,17 +340,22 @@ impl ArchetypeTable {
         Ok(A::access(self.get_component_storage(C::component_id())?))
     }
 
-    fn new_with_entity_id_unchecked(
-        entity_id: EntityID,
+    fn new_with_entity_index_mapper(
+        entity_index_mapper: KeyIndexMapper<EntityID>,
         ArchetypeCompByteView {
             archetype,
             component_bytes,
+            component_count,
         }: ArchetypeCompByteView,
     ) -> Self {
+        assert_eq!(
+            entity_index_mapper.len(),
+            component_count,
+            "Number of components per component type differs from number of entities"
+        );
         Self {
             archetype,
-            // Initialize mapper between entity ID and index in component storages
-            entity_index_mapper: KeyIndexMapper::new_with_key(entity_id),
+            entity_index_mapper,
             // For component IDs we don't need a full `KeyIndexMapper`, so we just
             // unwrap to the underlying `HashMap`
             component_index_map: KeyIndexMapper::new_with_keys(
@@ -288,46 +367,6 @@ impl ArchetypeTable {
                 .into_iter()
                 .map(|bytes| RwLock::new(ComponentStorage::new_with_bytes(bytes)))
                 .collect(),
-        }
-    }
-
-    fn has_entity_id(&self, entity_id: EntityID) -> bool {
-        self.entity_index_mapper.contains_key(entity_id)
-    }
-
-    fn add_entity_id_unchecked(
-        &mut self,
-        entity_id: EntityID,
-        ArchetypeCompByteView {
-            archetype: _,
-            component_bytes,
-        }: ArchetypeCompByteView,
-    ) {
-        self.entity_index_mapper.push_key(entity_id);
-
-        self.component_storages
-            .iter_mut()
-            .zip(component_bytes.into_iter())
-            .for_each(|(storage, data)| storage.write().unwrap().push_bytes(data));
-    }
-
-    fn remove_entity_id_unchecked(&mut self, entity_id: EntityID) -> ArchetypeCompBytes {
-        // Remove the entity from the map and obtain the index
-        // of the corresponing component data. We do a swap remove
-        // in order to keep the index map consistent when we do a
-        // swap remove of component data.
-        let idx = self.entity_index_mapper.swap_remove_key(entity_id);
-
-        // Perform an equivalent swap remove of the data at the index we found
-        let removed_component_bytes = self
-            .component_storages
-            .iter_mut()
-            .map(|storage| storage.write().unwrap().swap_remove_bytes(idx))
-            .collect();
-
-        ArchetypeCompBytes {
-            archetype: self.archetype.clone(),
-            component_bytes: removed_component_bytes,
         }
     }
 
@@ -356,6 +395,18 @@ impl ArchetypeCompBytes {
         self.archetype.id()
     }
 
+    /// Returns the number of component types present in the bytes
+    /// stored here.
+    pub fn n_component_types(&self) -> usize {
+        self.archetype.n_components()
+    }
+
+    /// Returns the number of instances of each component type
+    /// present in the bytes stored here.
+    pub fn component_count(&self) -> usize {
+        self.archetype.n_components()
+    }
+
     /// Returns an [`ArchetypeCompByteView`] referencing the component
     /// bytes.
     pub fn as_ref(&self) -> ArchetypeCompByteView {
@@ -366,6 +417,7 @@ impl ArchetypeCompBytes {
                 .iter()
                 .map(ComponentBytes::as_ref)
                 .collect(),
+            component_count: self.component_count(),
         }
     }
 }
@@ -377,14 +429,34 @@ impl<'a> ArchetypeCompByteView<'a> {
         self.archetype.id()
     }
 
+    /// Returns the number of component types present in the bytes
+    /// referenced here.
+    pub fn n_component_types(&self) -> usize {
+        self.archetype.n_components()
+    }
+
+    /// Returns the number of instances of each component type
+    /// present in the bytes referenced here.
+    pub fn component_count(&self) -> usize {
+        self.component_count
+    }
+
     /// Includes the given component in the set of components
     /// whose bytes are referenced here. Note that this changes
     /// the corresponding archetype.
     ///
     /// # Errors
-    /// Returns an error if the type of the given component is
-    /// already present.
-    pub fn add_component_bytes(&mut self, component_bytes: ComponentByteView<'a>) -> Result<()> {
+    /// Returns an error if:
+    /// - The type of the given component is already present.
+    /// - The number of component instances differs between
+    /// the new and the existing component types.
+    pub fn add_new_component(&mut self, component_bytes: ComponentByteView<'a>) -> Result<()> {
+        if self.component_bytes.is_empty() {
+            self.component_count = component_bytes.component_count();
+        } else if component_bytes.component_count() != self.component_count() {
+            bail!("Inconsistent number of component instances in added component data");
+        }
+
         // Find where to insert the given component to keep
         // the components sorted by ID
         match self.component_bytes.binary_search_by_key(
@@ -443,6 +515,16 @@ impl<'a, const N: usize> TryFrom<[ComponentByteView<'a>; N]> for ArchetypeCompBy
     type Error = anyhow::Error;
 
     fn try_from(mut component_data: [ComponentByteView<'a>; N]) -> Result<Self> {
+        // Find the number of component instances and check that this is the
+        // same for all the component types
+        let mut component_iter = component_data.iter();
+        let component_count = component_iter
+            .next()
+            .map_or(0, ComponentByteView::component_count);
+        if component_iter.any(|view| view.component_count() != component_count) {
+            bail!("The number of component instances differs between component types");
+        }
+
         // Make sure components are sorted by id
         component_data.sort_by_key(|data| data.component_id());
 
@@ -462,15 +544,17 @@ impl<'a, const N: usize> TryFrom<[ComponentByteView<'a>; N]> for ArchetypeCompBy
         Ok(Self {
             archetype,
             component_bytes: component_data.to_vec(),
+            component_count,
         })
     }
 }
 
 /// Macro for implementing [`From<C>`] or [`TryFrom<C>`] for
 /// [`ArchetypeCompByteView`], where `C` respectively is a single
-/// reference or tuple of references to [`Component`]s.
+/// [`Component`] reference/slice or tuple of references/slices.
 macro_rules! impl_archetype_conversion {
     ($c:ident) => {
+        // For a single instance of a single component type
         impl<'a, $c> From<&'a $c> for ArchetypeCompByteView<'a>
         where
             $c: 'a + Component,
@@ -479,8 +563,27 @@ macro_rules! impl_archetype_conversion {
                 [component.component_bytes()].try_into().unwrap()
             }
         }
+        // For a a slice of instances of a single component type
+        impl<'a, $c> From<&'a [$c]> for ArchetypeCompByteView<'a>
+        where
+            $c: 'a + Component,
+        {
+            fn from(component_slice: &'a [$c]) -> Self {
+                [component_slice.component_bytes()].try_into().unwrap()
+            }
+        }
+        // For a fixed length slice of instances of a single component type
+        impl<'a, const N: usize, $c> From<&'a [$c; N]> for ArchetypeCompByteView<'a>
+        where
+            $c: 'a + Component,
+        {
+            fn from(component_slice: &'a [$c; N]) -> Self {
+                [component_slice.component_bytes()].try_into().unwrap()
+            }
+        }
     };
     (($($c:ident),*)) => {
+        // For single instances of multiple component types
         impl<'a, $($c),*> TryFrom<($(&'a $c),*)> for ArchetypeCompByteView<'a>
         where
         $($c: 'a + Component,)*
@@ -489,6 +592,28 @@ macro_rules! impl_archetype_conversion {
             #[allow(non_snake_case)]
             fn try_from(($(paste! { [<component_ $c>] }),*): ($(&'a $c),*)) -> Result<Self> {
                 [$(paste! { [<component_ $c>] }.component_bytes()),*].try_into()
+            }
+        }
+        // For slices of instances of multiple component types
+        impl<'a, $($c),*> TryFrom<($(&'a [$c]),*)> for ArchetypeCompByteView<'a>
+        where
+        $($c: 'a + Component,)*
+        {
+            type Error = anyhow::Error;
+            #[allow(non_snake_case)]
+            fn try_from(($(paste! { [<component_slice_ $c>] }),*): ($(&'a [$c]),*)) -> Result<Self> {
+                [$(paste! { [<component_slice_ $c>] }.component_bytes()),*].try_into()
+            }
+        }
+        // For fixed size slices of instances of multiple component types
+        impl<'a, const N: usize, $($c),*> TryFrom<($(&'a [$c; N]),*)> for ArchetypeCompByteView<'a>
+        where
+        $($c: 'a + Component,)*
+        {
+            type Error = anyhow::Error;
+            #[allow(non_snake_case)]
+            fn try_from(($(paste! { [<component_slice_ $c>] }),*): ($(&'a [$c; N]),*)) -> Result<Self> {
+                [$(paste! { [<component_slice_ $c>] }.component_bytes()),*].try_into()
             }
         }
     };
@@ -505,19 +630,19 @@ impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8));
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use super::{super::Component, *};
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Byte(u8);
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Position(f32, f32, f32);
 
     #[repr(C)]
-    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Rectangle {
         center: [f32; 2],
         dimensions: [f32; 2],
@@ -668,20 +793,20 @@ mod test {
     #[test]
     fn adding_components_to_archetype_byte_view_works() {
         let mut view: ArchetypeCompByteView = [].try_into().unwrap();
-        view.add_component_bytes(BYTE.component_bytes()).unwrap();
+        view.add_new_component(BYTE.component_bytes()).unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([Byte::component_id()]).unwrap()
         );
 
-        view.add_component_bytes(POS.component_bytes()).unwrap();
+        view.add_new_component(POS.component_bytes()).unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([Byte::component_id(), Position::component_id()])
                 .unwrap()
         );
 
-        view.add_component_bytes(RECT.component_bytes()).unwrap();
+        view.add_new_component(RECT.component_bytes()).unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([
@@ -697,7 +822,7 @@ mod test {
     #[should_panic]
     fn adding_existing_component_to_archetype_byte_view_fails() {
         let mut view: ArchetypeCompByteView = (&BYTE, &POS, &RECT).try_into().unwrap();
-        view.add_component_bytes(POS.component_bytes()).unwrap();
+        view.add_new_component(POS.component_bytes()).unwrap();
     }
 
     #[test]
@@ -746,69 +871,62 @@ mod test {
 
     #[test]
     fn constructing_table_works() {
-        let table = ArchetypeTable::new_with_entity_id_unchecked(0, (&BYTE).into());
-        assert!(table.has_entity_id(0));
+        let table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
+        assert!(table.has_entity(0));
+
+        let table = ArchetypeTable::new_with_entities([42], (&RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity(42));
 
         let table =
-            ArchetypeTable::new_with_entity_id_unchecked(42, (&RECT, &POS).try_into().unwrap());
-        assert!(table.has_entity_id(42));
-
-        let table = ArchetypeTable::new_with_entity_id_unchecked(
-            10,
-            (&BYTE, &RECT, &POS).try_into().unwrap(),
-        );
-        assert!(table.has_entity_id(10));
+            ArchetypeTable::new_with_entities([10], (&BYTE, &RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity(10));
     }
 
     #[test]
     fn adding_entity_to_table_works() {
-        let mut table = ArchetypeTable::new_with_entity_id_unchecked(0, (&BYTE).into());
-        table.add_entity_id_unchecked(1, (&BYTE).into());
-        assert!(table.has_entity_id(0));
-        assert!(table.has_entity_id(1));
+        let mut table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
+        table.add_entities([1], (&BYTE).into());
+        assert!(table.has_entity(0));
+        assert!(table.has_entity(1));
 
-        let mut table =
-            ArchetypeTable::new_with_entity_id_unchecked(3, (&RECT, &POS).try_into().unwrap());
-        table.add_entity_id_unchecked(7, (&RECT, &POS).try_into().unwrap());
-        assert!(table.has_entity_id(3));
-        assert!(table.has_entity_id(7));
+        let mut table = ArchetypeTable::new_with_entities([3], (&RECT, &POS).try_into().unwrap());
+        table.add_entities([7], (&RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity(3));
+        assert!(table.has_entity(7));
     }
 
     #[test]
     #[should_panic]
     fn adding_existing_entity_to_table_fails() {
-        let mut table = ArchetypeTable::new_with_entity_id_unchecked(0, (&BYTE).into());
-        table.add_entity_id_unchecked(0, (&BYTE).into());
+        let mut table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
+        table.add_entities([0], (&BYTE).into());
     }
 
     #[test]
     fn removing_entity_from_table_works() {
-        let mut table =
-            ArchetypeTable::new_with_entity_id_unchecked(0, (&RECT, &POS).try_into().unwrap());
-        table.add_entity_id_unchecked(1, (&RECT, &POS).try_into().unwrap());
+        let mut table = ArchetypeTable::new_with_entities([0], (&RECT, &POS).try_into().unwrap());
+        table.add_entities([1], (&RECT, &POS).try_into().unwrap());
 
-        table.remove_entity_id_unchecked(0);
-        assert!(!table.has_entity_id(0));
-        assert!(table.has_entity_id(1));
+        table.remove_entity(0).unwrap();
+        assert!(!table.has_entity(0));
+        assert!(table.has_entity(1));
 
-        table.remove_entity_id_unchecked(1);
+        table.remove_entity(1).unwrap();
         assert!(table.is_empty());
     }
 
     #[test]
     #[should_panic]
     fn removing_missing_entity_from_table_fails() {
-        let mut table =
-            ArchetypeTable::new_with_entity_id_unchecked(0, (&RECT, &POS).try_into().unwrap());
-        table.remove_entity_id_unchecked(1);
+        let mut table = ArchetypeTable::new_with_entities([0], (&RECT, &POS).try_into().unwrap());
+        table.remove_entity(1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn removing_entity_from_empty_table_fails() {
-        let mut table =
-            ArchetypeTable::new_with_entity_id_unchecked(0, (&RECT, &POS).try_into().unwrap());
-        table.remove_entity_id_unchecked(0);
-        table.remove_entity_id_unchecked(0);
+        let mut table = ArchetypeTable::new_with_entities([0], (&RECT, &POS).try_into().unwrap());
+        table.remove_entity(0).unwrap();
+        table.remove_entity(0).unwrap();
     }
 }

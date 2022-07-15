@@ -58,11 +58,6 @@ impl World {
         }
     }
 
-    /// Creates a new [`Entity`] with a single given component.
-    pub fn create_entity_with_component(&mut self, component: &impl Component) -> Entity {
-        self.create_entity_with_component_bytes(component.into())
-    }
-
     /// Creates a new [`Entity`] with the given set of components.
     /// The given set of components must be provided as a type
     /// that can be converted to an [`ArchetypeCompByteView`].
@@ -70,38 +65,102 @@ impl World {
     /// instances.
     ///
     /// # Errors
-    /// Returns an error if the given set of components do not
-    /// have a valid [`Archetype`](super::archetype::Archetype),
-    /// which happens if there are multiple component of the same
-    /// type.
+    /// Returns an error if:
+    /// - The given set of components does not have a valid
+    /// [`Archetype`](super::archetype::Archetype), which happens
+    /// if there are multiple components of the same type.
+    /// - The more than one instance of each component type is
+    /// provided (use [`World::create_entities`] for that).
     ///
     /// # Examples
     /// ```
     /// # use impact_ecs::{
     /// #    archetype::ArchetypeCompByteView,
-    /// #    component::Component,
     /// #    world::World,
     /// # };
+    /// # use impact_ecs_derive::ComponentDoctest;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
     /// # struct Distance(f32);
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
     /// # struct Speed(f32);
     /// #
     /// let mut world = World::new();
-    /// let entity = world.create_entity_with_components((&Distance(0.0), &Speed(10.0)))?;
+    /// let entity_1 = world.create_entity(&Distance(5.0))?;
+    /// let entity_2 = world.create_entity((&Distance(0.0), &Speed(10.0)))?;
     /// #
     /// # Ok::<(), Error>(())
     /// ```
-    pub fn create_entity_with_components<'a>(
+    pub fn create_entity<'a, E>(
         &mut self,
-        components: impl TryInto<ArchetypeCompByteView<'a>, Error = anyhow::Error>,
-    ) -> Result<Entity> {
-        Ok(self.create_entity_with_component_bytes(components.try_into()?))
+        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+    ) -> Result<Entity>
+    where
+        E: Into<anyhow::Error>,
+    {
+        self.create_entities(components).and_then(|mut entities| {
+            if entities.len() == 1 {
+                Ok(entities.pop().unwrap())
+            } else {
+                Err(anyhow!("Got components for more than one entity"))
+            }
+        })
+    }
+
+    /// Creates multiple new entities with the given set of components.
+    /// The given set of components must be provided as a type
+    /// that can be converted to an [`ArchetypeCompByteView`].
+    /// Typically, this will be a tuple of slices with [`Component`]
+    /// instances.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The given set of components does not have a valid
+    /// [`Archetype`](super::archetype::Archetype), which happens
+    /// if there are multiple components of the same type.
+    /// - If the number of component instances provided for each
+    /// component type is not the same.
+    ///
+    /// # Examples
+    /// ```
+    /// # use impact_ecs::{
+    /// #    archetype::ArchetypeCompByteView,
+    /// #    world::World,
+    /// # };
+    /// # use impact_ecs_derive::ComponentDoctest;
+    /// # use bytemuck::{Zeroable, Pod};
+    /// # use anyhow::Error;
+    /// #
+    /// # #[repr(C)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+    /// # struct Distance(f32);
+    /// # #[repr(C)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+    /// # struct Speed(f32);
+    /// #
+    /// let mut world = World::new();
+    /// let entities = world.create_entities(
+    ///     (
+    ///         &[Distance(0.0),Distance(1.0), Distance(2.0)],
+    ///         &[Speed(2.0), Speed(1.0), Speed(0.0)]
+    ///     )
+    /// )?;
+    /// assert_eq!(entities.len(), 3);
+    /// #
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub fn create_entities<'a, E>(
+        &mut self,
+        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+    ) -> Result<Vec<Entity>>
+    where
+        E: Into<anyhow::Error>,
+    {
+        Ok(self.create_entities_with_component_bytes(components.try_into().map_err(E::into)?))
     }
 
     /// Removes the given [`Entity`] and all of its components
@@ -109,8 +168,8 @@ impl World {
     ///
     /// # Errors
     /// Returns an error if the entity to remove does not exist.
-    pub fn remove_entity(&mut self, entity: Entity) -> Result<()> {
-        self.remove_entity_data(&entity).map(|_| ())
+    pub fn remove_entity(&mut self, entity: &Entity) -> Result<()> {
+        self.remove_entity_data(entity).map(|_| ())
     }
 
     /// Adds the given [`Component`] to the given [`Entity`].
@@ -121,7 +180,7 @@ impl World {
     /// # Errors
     /// Returns an error if:
     /// - The entity does not exist.
-    /// - The entity already has a component of the same type.
+    /// - The entity already has a components of the same type.
     pub fn add_component_for_entity(
         &mut self,
         entity: &mut Entity,
@@ -138,7 +197,7 @@ impl World {
     /// # Errors
     /// Returns an error if:
     /// - The entity does not exist.
-    /// - The entity does not have a component of the specified
+    /// - The entity does not have a components of the specified
     /// component type to remove.
     pub fn remove_component_for_entity<C: Component>(&mut self, entity: &mut Entity) -> Result<()> {
         self.remove_component_id_for_entity(entity, C::component_id())
@@ -163,36 +222,37 @@ impl World {
             .ok_or_else(|| anyhow!("Archetype not present"))
     }
 
-    fn create_entity_with_component_bytes(
+    fn create_entities_with_component_bytes(
         &mut self,
         archetype_data: ArchetypeCompByteView,
-    ) -> Entity {
-        let entity = self.create_entity(archetype_data.archetype_id());
-        self.add_entity_with_component_bytes(entity, archetype_data);
-        entity
+    ) -> Vec<Entity> {
+        let archetype_id = archetype_data.archetype_id();
+        let entities: Vec<_> = (0..archetype_data.component_count())
+            .map(|_| self.create_next_entity(archetype_id))
+            .collect();
+        self.add_entities_to_table(entities.iter().map(Entity::id), archetype_data);
+        entities
     }
 
-    fn add_entity_with_component_bytes(
+    fn add_entities_to_table(
         &mut self,
-        entity: Entity,
+        entity_ids: impl IntoIterator<Item = EntityID>,
         archetype_data: ArchetypeCompByteView,
     ) {
         let archetype_id = archetype_data.archetype_id();
-        // If archetypes are not consistent we have a bug
-        assert_eq!(entity.archetype_id, archetype_id);
-
         match self.archetype_index_mapper.get(archetype_id) {
             // If we already have a table for the archetype, we add
             // the entity to it
-            Some(idx) => self.archetype_tables[idx]
-                .add_entity(entity, archetype_data)
-                .unwrap(),
+            Some(idx) => self.archetype_tables[idx].add_entities(entity_ids, archetype_data),
             // If we don't have the table, initialize it with the entity
             // as the first entry
             None => {
                 self.archetype_index_mapper.push_key(archetype_id);
                 self.archetype_tables
-                    .push(ArchetypeTable::new_with_entity(entity, archetype_data).unwrap());
+                    .push(ArchetypeTable::new_with_entities(
+                        entity_ids,
+                        archetype_data,
+                    ));
             }
         }
     }
@@ -201,7 +261,7 @@ impl World {
         let idx = self.get_table_idx(entity.archetype_id)?;
         let table = &mut self.archetype_tables[idx];
 
-        let removed_component_data = table.remove_entity(entity)?;
+        let removed_component_data = table.remove_entity(entity.id())?;
 
         // If we removed the last entity in the table, there is no
         // reason the keep the table any more
@@ -228,13 +288,13 @@ impl World {
 
         // We then add the component to the entity's data
         let mut updated_archetype_data = existing_archetype_data.as_ref();
-        updated_archetype_data.add_component_bytes(component_data)?;
+        updated_archetype_data.add_new_component(component_data)?;
 
         // Set new archetype for the entity
         entity.archetype_id = updated_archetype_data.archetype_id();
 
         // Finally we insert the modified entity into the appropriate table
-        self.add_entity_with_component_bytes(*entity, updated_archetype_data);
+        self.add_entities_to_table([entity.id()], updated_archetype_data);
         Ok(())
     }
 
@@ -255,11 +315,11 @@ impl World {
         entity.archetype_id = updated_archetype_data.archetype_id();
 
         // Finally we insert the modified entity into the appropriate table
-        self.add_entity_with_component_bytes(*entity, updated_archetype_data);
+        self.add_entities_to_table([entity.id()], updated_archetype_data);
         Ok(())
     }
 
-    fn create_entity(&mut self, archetype_id: ArchetypeID) -> Entity {
+    fn create_next_entity(&mut self, archetype_id: ArchetypeID) -> Entity {
         let id = self.create_entity_id();
         Entity { id, archetype_id }
     }
@@ -280,19 +340,22 @@ impl Default for World {
 #[cfg(test)]
 mod test {
     use super::{
-        super::query::{IntoComponentQuery, Read, Write},
+        super::{
+            query::{IntoComponentQuery, Read, Write},
+            Component,
+        },
         *,
     };
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
     struct Position {
         pos: [f32; 3],
     }
 
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
     struct Temperature {
         temp: f64,
     }
@@ -305,38 +368,44 @@ mod test {
     #[test]
     fn creating_entity_works() {
         let mut world = World::new();
-        let entity = world.create_entity_with_component(&Position {
-            pos: [0.0, 1.0, 2.0],
-        });
+        let entity = world
+            .create_entity(&Position {
+                pos: [0.0, 1.0, 2.0],
+            })
+            .unwrap();
     }
 
     #[test]
     fn removing_entity_works() {
         let mut world = World::new();
-        let entity = world.create_entity_with_component(&Position {
-            pos: [0.0, 1.0, 2.0],
-        });
-        world.remove_entity(entity).unwrap();
+        let entity = world
+            .create_entity(&Position {
+                pos: [0.0, 1.0, 2.0],
+            })
+            .unwrap();
+        world.remove_entity(&entity).unwrap();
     }
 
     #[test]
     fn adding_component_for_entity_works() {
         let mut world = World::new();
-        let mut entity = world.create_entity_with_component(&Position {
-            pos: [0.0, 1.0, 2.0],
-        });
+        let mut entity = world
+            .create_entity(&Position {
+                pos: [0.0, 1.0, 2.0],
+            })
+            .unwrap();
         world
             .add_component_for_entity(&mut entity, &Temperature { temp: -5.0 })
             .unwrap();
-        dbg!(world);
-        dbg!(entity);
+        // dbg!(world);
+        // dbg!(entity);
     }
 
     #[test]
     fn querying_entity_works() {
         let mut world = World::new();
         let entity = world
-            .create_entity_with_components((
+            .create_entity((
                 &Position {
                     pos: [0.0, 1.0, 2.0],
                 },
@@ -348,7 +417,7 @@ mod test {
             temp.temp = 42.0 * pos.pos[2] as f64;
         }
         for (pos, temp) in query.iter_mut() {
-            dbg!(pos, temp);
+            // dbg!(pos, temp);
         }
     }
 }
