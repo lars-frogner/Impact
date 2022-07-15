@@ -404,7 +404,7 @@ impl ArchetypeCompBytes {
     /// Returns the number of instances of each component type
     /// present in the bytes stored here.
     pub fn component_count(&self) -> usize {
-        self.archetype.n_components()
+        self.component_count
     }
 
     /// Returns an [`ArchetypeCompByteView`] referencing the component
