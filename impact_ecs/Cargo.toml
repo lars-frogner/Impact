@@ -7,3 +7,5 @@ edition = "2021"
 anyhow = "1.0"
 bytemuck = { version = "1.4", features = ["derive"] }
 paste = "1.0.7"
+
+impact_ecs_derive = { path = "impact_ecs_derive" }

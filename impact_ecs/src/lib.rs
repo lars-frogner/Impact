@@ -5,3 +5,5 @@ pub mod component;
 pub mod query;
 pub mod util;
 pub mod world;
+
+pub use impact_ecs_derive::Component;
