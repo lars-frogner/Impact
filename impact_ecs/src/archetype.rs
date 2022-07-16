@@ -160,21 +160,21 @@ pub struct ArchetypeCompByteView<'a> {
 
 /// An immutable reference into the entry for an
 /// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
-pub struct EntityEntry<'a> {
-    info: EntityEntryInfo<'a>,
+pub struct TableEntityEntry<'a> {
+    info: TableEntityEntryInfo<'a>,
     components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
 }
 
 /// An mutable reference into the entry for an
 /// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
-pub struct EntityMutEntry<'a> {
-    info: EntityEntryInfo<'a>,
+pub struct TableEntityMutEntry<'a> {
+    info: TableEntityEntryInfo<'a>,
     components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
 }
 
-/// Common information needed by both [`EntityEntry`] and
-/// [`EntityMutEntry`].
-struct EntityEntryInfo<'a> {
+/// Common information needed by both [`TableEntityEntry`] and
+/// [`TableEntityMutEntry`].
+struct TableEntityEntryInfo<'a> {
     archetype: &'a Archetype,
     /// Index of the entity's component in each component storage.
     storage_idx: usize,
@@ -352,17 +352,17 @@ impl ArchetypeTable {
         })
     }
 
-    /// Returns an [`EntityEntry`] that can be used to read the components
+    /// Returns an [`TableEntityEntry`] that can be used to read the components
     /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
     /// If the entity is not present in the table, [`None`] is returned.
     ///
     /// # Concurrency
-    /// The returned `EntityEntry` holds locks to the component storages
+    /// The returned `TableEntityEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to modify
     /// the component data will be blocked.
-    pub fn get_entity(&self, entity_id: EntityID) -> Option<EntityEntry> {
+    pub fn get_entity(&self, entity_id: EntityID) -> Option<TableEntityEntry> {
         let storage_idx = self.entity_index_mapper.get(entity_id)?;
-        Some(EntityEntry::new(
+        Some(TableEntityEntry::new(
             &self.archetype,
             storage_idx,
             &self.component_index_map,
@@ -373,33 +373,33 @@ impl ArchetypeTable {
         ))
     }
 
-    /// Returns an [`EntityEntry`] that can be used to read the components
+    /// Returns an [`TableEntityEntry`] that can be used to read the components
     /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
     ///
     /// # Panics
     /// If the entity is not present in the table.
     ///
     /// # Concurrency
-    /// The returned `EntityEntry` holds locks to the component storages
+    /// The returned `TableEntityEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to modify
     /// the component data will be blocked.
-    pub fn entity(&self, entity_id: EntityID) -> EntityEntry {
+    pub fn entity(&self, entity_id: EntityID) -> TableEntityEntry {
         self.get_entity(entity_id)
             .expect("Entity not present in table")
     }
 
-    /// Returns an [`EntityMutEntry`] that can be used to read and modify
+    /// Returns an [`TableEntityMutEntry`] that can be used to read and modify
     /// the components of the [`Entity`](crate::world::Entity) with the
     /// given [`EntityID`]. If the entity is not present in the table,
     /// [`None`] is returned.
     ///
     /// # Concurrency
-    /// The returned `EntityMutEntry` holds locks to the component storages
+    /// The returned `TableEntityMutEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to read
     /// or modify the component data will be blocked.
-    pub fn get_entity_mut(&mut self, entity_id: EntityID) -> Option<EntityMutEntry> {
+    pub fn get_entity_mut(&mut self, entity_id: EntityID) -> Option<TableEntityMutEntry> {
         let storage_idx = self.entity_index_mapper.get(entity_id)?;
-        Some(EntityMutEntry::new(
+        Some(TableEntityMutEntry::new(
             &self.archetype,
             storage_idx,
             &self.component_index_map,
@@ -410,7 +410,7 @@ impl ArchetypeTable {
         ))
     }
 
-    /// Returns an [`EntityMutEntry`] that can be used to read and modify
+    /// Returns an [`TableEntityMutEntry`] that can be used to read and modify
     /// the components of the [`Entity`](crate::world::Entity) with the
     /// given [`EntityID`].
     ///
@@ -418,10 +418,10 @@ impl ArchetypeTable {
     /// If the entity is not present in the table.
     ///
     /// # Concurrency
-    /// The returned `EntityMutEntry` holds locks to the component storages
+    /// The returned `TableEntityMutEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to read
     /// or modify the component data will be blocked.
-    pub fn entity_mut(&mut self, entity_id: EntityID) -> EntityMutEntry {
+    pub fn entity_mut(&mut self, entity_id: EntityID) -> TableEntityMutEntry {
         self.get_entity_mut(entity_id)
             .expect("Entity not present in table")
     }
@@ -435,10 +435,10 @@ impl ArchetypeTable {
     /// # Errors
     /// Returns an error if `C` is not one of the component types present
     /// in the table.
-    pub fn access_component_storage<'w, 'g, C, A>(&'w self) -> Result<A::Guard>
+    pub fn access_component_storage<'g, 's: 'g, C, A>(&'s self) -> Result<A::Guard>
     where
         C: Component,
-        A: StorageAccess<'w, 'g, C>,
+        A: StorageAccess<'g, C>,
     {
         Ok(A::access(self.get_component_storage(C::component_id())?))
     }
@@ -485,7 +485,7 @@ impl ArchetypeTable {
     }
 }
 
-impl<'a> EntityEntry<'a> {
+impl<'a> TableEntityEntry<'a> {
     fn new(
         archetype: &'a Archetype,
         storage_idx: usize,
@@ -493,7 +493,7 @@ impl<'a> EntityEntry<'a> {
         components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
     ) -> Self {
         Self {
-            info: EntityEntryInfo {
+            info: TableEntityEntryInfo {
                 archetype,
                 storage_idx,
                 component_index_map,
@@ -532,7 +532,7 @@ impl<'a> EntityEntry<'a> {
     }
 }
 
-impl<'a> EntityMutEntry<'a> {
+impl<'a> TableEntityMutEntry<'a> {
     fn new(
         archetype: &'a Archetype,
         storage_idx: usize,
@@ -540,7 +540,7 @@ impl<'a> EntityMutEntry<'a> {
         components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
     ) -> Self {
         Self {
-            info: EntityEntryInfo {
+            info: TableEntityEntryInfo {
                 archetype,
                 storage_idx,
                 component_index_map,
@@ -579,7 +579,7 @@ impl<'a> EntityMutEntry<'a> {
     }
 }
 
-impl<'a> EntityEntryInfo<'a> {
+impl<'a> TableEntityEntryInfo<'a> {
     fn n_components(&self) -> usize {
         self.archetype.n_components()
     }
