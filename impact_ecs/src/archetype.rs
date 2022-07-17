@@ -435,10 +435,10 @@ impl ArchetypeTable {
     /// # Errors
     /// Returns an error if `C` is not one of the component types present
     /// in the table.
-    pub fn access_component_storage<'g, 's: 'g, C, A>(&'s self) -> Result<A::Guard>
+    pub fn access_component_storage<'w, 'g, C, A>(&'w self) -> Result<A::Guard>
     where
         C: Component,
-        A: StorageAccess<'g, C>,
+        A: StorageAccess<'w, 'g, C>,
     {
         Ok(A::access(self.get_component_storage(C::component_id())?))
     }
