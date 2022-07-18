@@ -360,13 +360,7 @@ impl Default for World {
 
 #[cfg(test)]
 mod test {
-    use super::{
-        super::{
-            query::{IntoComponentQuery, Read, Write},
-            Component,
-        },
-        *,
-    };
+    use super::{super::Component, *};
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]

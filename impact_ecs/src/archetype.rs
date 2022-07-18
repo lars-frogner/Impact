@@ -5,7 +5,6 @@ use super::{
         Component, ComponentByteView, ComponentBytes, ComponentID, ComponentInstances,
         ComponentStorage,
     },
-    query::StorageAccess,
     util::KeyIndexMapper,
     world::EntityID,
 };
@@ -424,23 +423,6 @@ impl ArchetypeTable {
     pub fn entity_mut(&mut self, entity_id: EntityID) -> TableEntityMutEntry {
         self.get_entity_mut(entity_id)
             .expect("Entity not present in table")
-    }
-
-    /// Provides access to a [`ComponentStorage`] (guarded by a [`RwLock`]).
-    ///
-    /// The component type to access is given by the `C` type parameter,
-    /// while the `A` type parameter specifies what kind of access (i.e.
-    /// read or write, see [`StorageAccess`]).
-    ///
-    /// # Errors
-    /// Returns an error if `C` is not one of the component types present
-    /// in the table.
-    pub fn access_component_storage<'w, 'g, C, A>(&'w self) -> Result<A::Guard>
-    where
-        C: Component,
-        A: StorageAccess<'w, 'g, C>,
-    {
-        Ok(A::access(self.get_component_storage(C::component_id())?))
     }
 
     /// Returns a reference to the [`ComponentStorage`] for components
