@@ -8,7 +8,10 @@ use super::{
     util::KeyIndexMapper,
 };
 use anyhow::{anyhow, Result};
-use std::hash::Hash;
+use std::{
+    hash::Hash,
+    sync::{RwLock, RwLockReadGuard},
+};
 
 /// Handle to an entity in the world.
 ///
@@ -32,7 +35,7 @@ pub struct World {
     /// A map from [`ArchetypeID`] to the index of the corresponding
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_index_mapper: KeyIndexMapper<ArchetypeID>,
-    archetype_tables: Vec<ArchetypeTable>,
+    archetype_tables: Vec<RwLock<ArchetypeTable>>,
     entity_id_counter: EntityID,
     n_removed_entities: usize,
 }
@@ -219,10 +222,15 @@ impl World {
     pub fn find_tables_containing_archetype(
         &self,
         archetype: Archetype,
-    ) -> impl Iterator<Item = &ArchetypeTable> {
-        self.archetype_tables
-            .iter()
-            .filter(move |table| table.archetype().contains(&archetype))
+    ) -> impl Iterator<Item = RwLockReadGuard<ArchetypeTable>> {
+        self.archetype_tables.iter().filter_map(move |table| {
+            let table = table.read().unwrap();
+            if table.archetype().contains(&archetype) {
+                Some(table)
+            } else {
+                None
+            }
+        })
     }
 
     fn get_table_idx(&self, id: ArchetypeID) -> Result<usize> {
@@ -252,29 +260,33 @@ impl World {
         match self.archetype_index_mapper.get(archetype_id) {
             // If we already have a table for the archetype, we add
             // the entity to it
-            Some(idx) => self.archetype_tables[idx].add_entities(entity_ids, archetype_data),
+            Some(idx) => self.archetype_tables[idx]
+                .write()
+                .unwrap()
+                .add_entities(entity_ids, archetype_data),
             // If we don't have the table, initialize it with the entity
             // as the first entry
             None => {
                 self.archetype_index_mapper.push_key(archetype_id);
                 self.archetype_tables
-                    .push(ArchetypeTable::new_with_entities(
+                    .push(RwLock::new(ArchetypeTable::new_with_entities(
                         entity_ids,
                         archetype_data,
-                    ));
+                    )));
             }
         }
     }
 
     fn remove_entity_data(&mut self, entity: &Entity) -> Result<ArchetypeCompBytes> {
         let idx = self.get_table_idx(entity.archetype_id)?;
-        let table = &mut self.archetype_tables[idx];
+        let mut table = self.archetype_tables[idx].write().unwrap();
 
         let removed_component_data = table.remove_entity(entity.id())?;
 
         // If we removed the last entity in the table, there is no
         // reason the keep the table any more
         if table.is_empty() {
+            drop(table);
             self.remove_archetype_table_at_idx(idx);
         }
 

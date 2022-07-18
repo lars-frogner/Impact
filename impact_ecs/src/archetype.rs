@@ -443,6 +443,37 @@ impl ArchetypeTable {
         Ok(A::access(self.get_component_storage(C::component_id())?))
     }
 
+    /// Returns a reference to the [`ComponentStorage`] for components
+    /// with the given [`ComponentID`]. The storage is guarded by a
+    /// [`RwLock`] that must be acquired before the storage can be
+    /// accessed.
+    ///
+    /// # Errors
+    /// Returns an error if the given ID does not represent one of the
+    /// component types present in the table.
+    pub fn get_component_storage(
+        &self,
+        component_id: ComponentID,
+    ) -> Result<&RwLock<ComponentStorage>> {
+        let idx = *self
+            .component_index_map
+            .get(&component_id)
+            .ok_or_else(|| anyhow!("Component not present in archetype table"))?;
+        Ok(&self.component_storages[idx])
+    }
+
+    /// Returns a reference to the [`ComponentStorage`] for components
+    /// with the given [`ComponentID`]. The storage is guarded by a
+    /// [`RwLock`] that must be acquired before the storage can be
+    /// accessed.
+    ///
+    /// # Panice
+    /// If the given ID does not represent one of the component types
+    /// present in the table.
+    pub fn component_storage(&self, component_id: ComponentID) -> &RwLock<ComponentStorage> {
+        self.get_component_storage(component_id).unwrap()
+    }
+
     fn new_with_entity_index_mapper(
         entity_index_mapper: KeyIndexMapper<EntityID>,
         ArchetypeCompByteView {
@@ -471,17 +502,6 @@ impl ArchetypeTable {
                 .map(|bytes| RwLock::new(ComponentStorage::new_with_bytes(bytes)))
                 .collect(),
         }
-    }
-
-    fn get_component_storage(
-        &self,
-        component_id: ComponentID,
-    ) -> Result<&RwLock<ComponentStorage>> {
-        let idx = *self
-            .component_index_map
-            .get(&component_id)
-            .ok_or_else(|| anyhow!("Component not present in archetype table"))?;
-        Ok(&self.component_storages[idx])
     }
 }
 
