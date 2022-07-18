@@ -86,7 +86,7 @@ pub struct ArchetypeCompBytes {
 /// #    component::Component,
 /// #    archetype::ArchetypeCompByteView
 /// # };
-/// # use impact_ecs_derive::ComponentDoctest;
+/// # use impact_ecs_macros::ComponentDoctest;
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
 /// #
@@ -129,7 +129,7 @@ pub struct ArchetypeCompBytes {
 /// #    component::Component,
 /// #    archetype::ArchetypeCompByteView
 /// # };
-/// # use impact_ecs_derive::ComponentDoctest;
+/// # use impact_ecs_macros::ComponentDoctest;
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
 /// #

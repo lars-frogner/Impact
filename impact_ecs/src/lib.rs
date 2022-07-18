@@ -6,7 +6,7 @@ pub mod util;
 pub mod world;
 
 /// Derive macro generating an impl of the trait Component.
-pub use impact_ecs_derive::Component;
+pub use impact_ecs_macros::Component;
 
 /// Macro for querying for a specific set of component types.
 ///
@@ -32,7 +32,7 @@ pub use impact_ecs_derive::Component;
 /// # use impact_ecs::{
 /// #     world::World
 /// # };
-/// # use impact_ecs_derive::{
+/// # use impact_ecs_macros::{
 /// #     ComponentDoctest as Component,
 /// #     query_doctest as query,
 /// # };
@@ -71,4 +71,4 @@ pub use impact_ecs_derive::Component;
 /// in the provided closure. The locks on the table and component
 /// storages are all released as soon as we move on to the next
 /// table.
-pub use impact_ecs_derive::query;
+pub use impact_ecs_macros::query;

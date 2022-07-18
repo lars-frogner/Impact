@@ -1,5 +1,5 @@
 [package]
-name = "impact_ecs_derive"
+name = "impact_ecs_macros"
 version = "0.1.0"
 edition = "2021"
 

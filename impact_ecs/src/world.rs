@@ -85,7 +85,7 @@ impl World {
     /// #    archetype::ArchetypeCompByteView,
     /// #    world::World,
     /// # };
-    /// # use impact_ecs_derive::ComponentDoctest;
+    /// # use impact_ecs_macros::ComponentDoctest;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #
@@ -138,7 +138,7 @@ impl World {
     /// #    archetype::ArchetypeCompByteView,
     /// #    world::World,
     /// # };
-    /// # use impact_ecs_derive::ComponentDoctest;
+    /// # use impact_ecs_macros::ComponentDoctest;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #

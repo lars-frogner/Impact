@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["impact_ecs", "impact_ecs/impact_ecs_derive"]
+members = ["impact_ecs", "impact_ecs/impact_ecs_macros"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

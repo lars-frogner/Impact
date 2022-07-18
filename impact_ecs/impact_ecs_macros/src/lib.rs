@@ -47,7 +47,7 @@ pub fn derive_component_doctest(input: TokenStream) -> TokenStream {
 /// # use impact_ecs::{
 /// #     world::World
 /// # };
-/// # use impact_ecs_derive::{
+/// # use impact_ecs_macros::{
 /// #     ComponentDoctest as Component,
 /// #     query_doctest as query,
 /// # };

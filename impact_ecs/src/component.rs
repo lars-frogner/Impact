@@ -17,7 +17,7 @@ use std::{any::TypeId, mem};
 ///
 /// # Example
 /// ```
-/// # use impact_ecs_derive::ComponentDoctest as Component;
+/// # use impact_ecs_macros::ComponentDoctest as Component;
 /// # use bytemuck::{Zeroable, Pod};
 /// #
 /// // Define a transform component that implements `Component`
