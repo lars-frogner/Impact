@@ -1,12 +1,12 @@
 //! Macro for querying for specific sets of component types.
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
-    Error, Expr, Ident, Result, Token, Type, TypeReference,
+    Error, Expr, Result, Token, Type, TypeReference,
 };
 
 pub(crate) struct QueryInput {
@@ -24,7 +24,6 @@ struct QueryClosureArg {
     ty: TypeReference,
 }
 
-/// See [`super::query`].
 pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream> {
     let (world, arg_names, arg_type_refs, body) = input.into_components();
     let arg_names_and_type_refs: Vec<_> = arg_names.iter().zip(arg_type_refs.iter()).collect();
@@ -49,6 +48,15 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
         .iter()
         .map(|(name, type_ref)| generate_storage_iter(&table_name, name, type_ref))
         .unzip();
+
+    // `storage_iter_code` contains statements acquiring locks on
+    // each of the involved ComponentStorages. When multiple locks
+    // need to be acquired before continuing, there is a chance of
+    // deadlock if another thread begins acquiring some of the same
+    // locks in the opposite order. We therefore sort the statements
+    // so that locks are always acquired in the same order regardless
+    // of which order the component types were specified in.
+    let storage_iter_code = get_storage_iter_code_sorted_by_arg_type(&arg_types, storage_iter_code);
 
     let (zipped_iter, nested_arg_names) = if arg_names.len() > 1 {
         (
@@ -251,6 +259,22 @@ fn generate_immutable_storage_iter(
         ).read().unwrap();
         let #iter_name = #storage_name.slice::<#arg_type>().iter();
     }
+}
+
+fn get_storage_iter_code_sorted_by_arg_type(
+    arg_types: &[Box<Type>],
+    storage_iter_code: Vec<TokenStream>,
+) -> Vec<TokenStream> {
+    let mut type_names_and_code: Vec<_> = arg_types
+        .iter()
+        .map(|ty| ty.to_token_stream().to_string())
+        .zip(storage_iter_code.into_iter())
+        .collect();
+    type_names_and_code.sort_by_key(|(ty, _)| ty.to_string());
+    type_names_and_code
+        .into_iter()
+        .map(|(_, code)| code)
+        .collect()
 }
 
 fn generate_nested_tuple<T: ToTokens>(pre_tokens: &TokenStream, values: &[T]) -> TokenStream {
