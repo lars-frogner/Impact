@@ -104,8 +104,11 @@ impl World {
     /// # struct Speed(f32);
     /// #
     /// let mut world = World::new();
+    ///
     /// let entity_1 = world.create_entity(&Distance(5.0))?;
     /// let entity_2 = world.create_entity((&Distance(0.0), &Speed(10.0)))?;
+    ///
+    /// assert_eq!(world.entity_count(), 2);
     /// #
     /// # Ok::<(), Error>(())
     /// ```
@@ -164,6 +167,7 @@ impl World {
     ///     )
     /// )?;
     /// assert_eq!(entities.len(), 3);
+    /// assert_eq!(world.entity_count(), 3);
     /// #
     /// # Ok::<(), Error>(())
     /// ```

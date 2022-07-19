@@ -41,18 +41,23 @@ pub use impact_ecs_macros::Component;
 /// # use anyhow::Error;
 /// #
 /// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
 /// # struct Distance(f32);
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Speed(f32);
 /// #
 /// let mut world = World::new();
-/// let entity = world.create_entity((&Distance(0.0), &Speed(10.0)))?;
+/// let entity = world.create_entity((&Distance(1.0), &Speed(10.0)))?;
 ///
 /// query!(world, |distance: &mut Distance, speed: &Speed| {
 ///     distance.0 += speed.0 * 0.1;
 /// });
+///
+/// assert_eq!(
+///     world.entity(&entity).component::<Distance>().access(),
+///     &Distance(2.0)
+/// );
 /// #
 /// # Ok::<(), Error>(())
 /// ```
