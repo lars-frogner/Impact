@@ -201,6 +201,9 @@ impl World {
     /// of the given [`Entity`]. If the entity does not exist, [`None`] is
     /// returned.
     ///
+    /// # Examples
+    /// See [`World::entity`].
+    ///
     /// # Concurrency
     /// The returned `EntityEntry` holds a read lock on the
     /// [`ArchetypeTable`] holding the entity. Until the entry is
@@ -216,6 +219,35 @@ impl World {
     ///
     /// # Panics
     /// If the entity does not exist.
+    ///
+    /// # Examples
+    /// ```
+    /// # use impact_ecs::{
+    /// #    archetype::ArchetypeCompByteView,
+    /// #    world::World,
+    /// # };
+    /// # use impact_ecs_macros::ComponentDoctest;
+    /// # use bytemuck::{Zeroable, Pod};
+    /// # use anyhow::Error;
+    /// #
+    /// # #[repr(C)]
+    /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, ComponentDoctest)]
+    /// # struct Level(u32);
+    /// #
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.create_entity(&Level(1))?;
+    /// let entry = world.entity(&entity);
+    ///
+    /// assert_eq!(entry.n_components(), 1);
+    /// assert_eq!(entry.component::<Level>().access(), &Level(1));
+    ///
+    /// *entry.component_mut::<Level>().access() = Level(11);
+    ///
+    /// assert_eq!(entry.component::<Level>().access(), &Level(11));
+    /// #
+    /// # Ok::<(), Error>(())
+    /// ```
     ///
     /// # Concurrency
     /// The returned `EntityEntry` holds a read lock on the
