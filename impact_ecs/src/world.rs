@@ -3,6 +3,7 @@
 use super::{
     archetype::{
         Archetype, ArchetypeCompByteView, ArchetypeCompBytes, ArchetypeID, ArchetypeTable,
+        ComponentStorageEntry, ComponentStorageEntryMut,
     },
     component::{Component, ComponentByteView, ComponentID},
     util::KeyIndexMapper,
@@ -38,6 +39,12 @@ pub struct World {
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
     entity_id_counter: EntityID,
     n_removed_entities: usize,
+}
+
+/// A reference into the entry for an [`Entity`] in the [`World`].
+pub struct EntityEntry<'a> {
+    entity_id: EntityID,
+    table: RwLockReadGuard<'a, ArchetypeTable>,
 }
 
 impl Entity {
@@ -186,6 +193,34 @@ impl World {
         Ok(())
     }
 
+    /// Returns an [`EntityEntry`] that can be used to access the components
+    /// of the given [`Entity`]. If the entity does not exist, [`None`] is
+    /// returned.
+    ///
+    /// # Concurrency
+    /// The returned `EntityEntry` holds a read lock on the
+    /// [`ArchetypeTable`] holding the entity. Until the entry is
+    /// dropped, attempts to modify the table will be blocked.
+    pub fn get_entity(&self, entity: &Entity) -> Option<EntityEntry> {
+        let table_idx = self.get_table_idx(entity.archetype_id()).ok()?;
+        let table = self.archetype_tables[table_idx].read().unwrap();
+        Some(EntityEntry::new(entity.id(), table))
+    }
+
+    /// Returns an [`EntityEntry`] that can be used to access the
+    /// components of the given [`Entity`].
+    ///
+    /// # Panics
+    /// If the entity does not exist.
+    ///
+    /// # Concurrency
+    /// The returned `EntityEntry` holds a read lock on the
+    /// [`ArchetypeTable`] holding the entity. Until the entry is
+    /// dropped, attempts to modify the table will be blocked.
+    pub fn entity(&self, entity: &Entity) -> EntityEntry {
+        self.get_entity(entity).expect("Entity does not exist")
+    }
+
     /// Adds the given [`Component`] to the given [`Entity`].
     /// This changes the [`Archetype`], if the entity, which
     /// is why the entity must be given as a
@@ -278,7 +313,7 @@ impl World {
     }
 
     fn remove_entity_data(&mut self, entity: &Entity) -> Result<ArchetypeCompBytes> {
-        let idx = self.get_table_idx(entity.archetype_id)?;
+        let idx = self.get_table_idx(entity.archetype_id())?;
         let mut table = self.archetype_tables[idx].write().unwrap();
 
         let removed_component_data = table.remove_entity(entity.id())?;
@@ -358,21 +393,76 @@ impl Default for World {
     }
 }
 
+impl<'a> EntityEntry<'a> {
+    fn new(entity_id: EntityID, table: RwLockReadGuard<'a, ArchetypeTable>) -> Self {
+        Self { entity_id, table }
+    }
+
+    /// Returns the number of components the entity has.
+    pub fn n_components(&self) -> usize {
+        self.table.archetype().n_components()
+    }
+
+    /// Whether the entity has the component specified by the
+    /// type parameter `C`.
+    pub fn has_component<C: Component>(&self) -> bool {
+        self.table
+            .archetype()
+            .contains_component_id(C::component_id())
+    }
+
+    /// Returns a reference to the component specified by the
+    /// type parameter `C`. If the entity does not have this
+    /// component, [`None`] is returned.
+    pub fn get_component<C: Component>(&self) -> Option<ComponentStorageEntry<C>> {
+        self.table.get_component_for_entity::<C>(self.entity_id)
+    }
+
+    /// Returns a reference to the component specified by the
+    /// type parameter `C`.
+    ///
+    /// # Panics
+    /// If the entity does not have the specified component.
+    pub fn component<C: Component>(&self) -> ComponentStorageEntry<C> {
+        self.get_component::<C>()
+            .expect("Requested invalid component")
+    }
+
+    /// Returns a mutable reference to the component specified
+    /// by the type parameter `C`. If the entity does not have
+    /// this component, [`None`] is returned.
+    pub fn get_component_mut<C: Component>(&self) -> Option<ComponentStorageEntryMut<C>> {
+        self.table.get_component_for_entity_mut::<C>(self.entity_id)
+    }
+
+    /// Returns a mutable reference to the component specified
+    /// by the type parameter `C`.
+    ///
+    /// # Panics
+    /// If the entity does not have the specified component.
+    pub fn component_mut<C: Component>(&self) -> ComponentStorageEntryMut<C> {
+        self.get_component_mut::<C>()
+            .expect("Requested invalid component")
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::{super::Component, *};
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+    #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Position(f32, f32, f32);
 
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+    #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Temperature(f32);
 
     const POS: Position = Position(2.5, 3.1, 42.0);
+    const POS2: Position = Position(5.2, 1.3, 0.42);
     const TEMP: Temperature = Temperature(-40.0);
+    const TEMP2: Temperature = Temperature(140.0);
 
     #[test]
     fn creating_world_works() {
@@ -384,18 +474,55 @@ mod test {
     fn creating_single_entity_works() {
         let mut world = World::new();
 
-        world.create_entity(&POS).unwrap();
+        let entity_1 = world.create_entity(&POS).unwrap();
         assert_eq!(world.entity_count(), 1);
+        let entry = world.entity(&entity_1);
+        assert_eq!(entry.n_components(), 1);
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        drop(entry);
 
-        world.create_entity((&POS, &TEMP)).unwrap();
+        let entity_2 = world.create_entity((&POS, &TEMP)).unwrap();
         assert_eq!(world.entity_count(), 2);
-
-        // TODO: Check components
+        let entry = world.entity(&entity_2);
+        assert_eq!(entry.n_components(), 2);
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
     }
 
     #[test]
-    fn creating_multiple_entities_works() {
-        todo!()
+    fn creating_two_entities_works() {
+        let mut world = World::new();
+        let entities = world.create_entities(&[TEMP, TEMP2]).unwrap();
+
+        assert_eq!(entities.len(), 2);
+        assert_eq!(world.entity_count(), 2);
+
+        let entry = world.entity(&entities[0]);
+        assert_eq!(entry.n_components(), 1);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+        drop(entry);
+
+        let entry = world.entity(&entities[1]);
+        assert_eq!(entry.n_components(), 1);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP2);
+        drop(entry);
+
+        let entities = world
+            .create_entities((&[POS, POS2], &[TEMP, TEMP2]))
+            .unwrap();
+        assert_eq!(entities.len(), 2);
+        assert_eq!(world.entity_count(), 4);
+
+        let entry = world.entity(&entities[0]);
+        assert_eq!(entry.n_components(), 2);
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+        drop(entry);
+
+        let entry = world.entity(&entities[1]);
+        assert_eq!(entry.n_components(), 2);
+        assert_eq!(entry.component::<Position>().access(), &POS2);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP2);
     }
 
     #[test]
@@ -409,20 +536,101 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
+    fn removing_same_entity_twice_fails() {
+        let mut world = World::new();
+        let entity = world.create_entity(&POS).unwrap();
+        world.remove_entity(&entity).unwrap();
+        world.remove_entity(&entity).unwrap();
+    }
+
+    #[test]
     fn adding_component_for_entity_works() {
         let mut world = World::new();
         let mut entity = world.create_entity(&POS).unwrap();
         world.add_component_for_entity(&mut entity, &TEMP).unwrap();
-        // TODO: Check components
+
+        assert_eq!(
+            entity.archetype_id(),
+            Archetype::new_from_component_id_arr([
+                Position::component_id(),
+                Temperature::component_id()
+            ])
+            .unwrap()
+            .id()
+        );
+
+        let entry = world.entity(&entity);
+        assert_eq!(entry.n_components(), 2);
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+    }
+
+    #[test]
+    #[should_panic]
+    fn adding_existing_component_for_entity_fails() {
+        let mut world = World::new();
+        let mut entity = world.create_entity(&POS).unwrap();
+        world.add_component_for_entity(&mut entity, &POS).unwrap();
     }
 
     #[test]
     fn removing_component_for_entity_works() {
         let mut world = World::new();
         let mut entity = world.create_entity((&POS, &TEMP)).unwrap();
+        assert!(world.entity(&entity).has_component::<Position>());
         world
             .remove_component_for_entity::<Position>(&mut entity)
             .unwrap();
-        // TODO: Check components
+
+        assert_eq!(
+            entity.archetype_id(),
+            Archetype::new_from_component_id_arr([Temperature::component_id()])
+                .unwrap()
+                .id()
+        );
+
+        let entry = world.entity(&entity);
+        assert_eq!(entry.n_components(), 1);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+        assert!(!entry.has_component::<Position>());
+    }
+
+    #[test]
+    fn removing_all_components_for_entity_works() {
+        let mut world = World::new();
+        let mut entity = world.create_entity((&POS, &TEMP)).unwrap();
+        world
+            .remove_component_for_entity::<Position>(&mut entity)
+            .unwrap();
+        world
+            .remove_component_for_entity::<Temperature>(&mut entity)
+            .unwrap();
+        let entry = world.entity(&entity);
+        assert_eq!(entry.n_components(), 0);
+        assert_eq!(
+            entity.archetype_id(),
+            Archetype::new_from_component_id_arr([]).unwrap().id()
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_absent_component_from_entity_fails() {
+        let mut world = World::new();
+        let mut entity = world.create_entity(&POS).unwrap();
+        world
+            .remove_component_for_entity::<Temperature>(&mut entity)
+            .unwrap();
+    }
+
+    #[test]
+    fn modifying_component_for_entity_works() {
+        let mut world = World::new();
+        let entity = world.create_entity((&POS, &TEMP)).unwrap();
+        let entry = world.entity(&entity);
+        *entry.component_mut::<Temperature>().access() = TEMP2;
+        assert_eq!(entry.component::<Position>().access(), &POS);
+        assert_eq!(entry.component::<Temperature>().access(), &TEMP2);
     }
 }
