@@ -5,7 +5,8 @@ pub mod component;
 pub mod util;
 pub mod world;
 
-/// Derive macro generating an impl of the trait Component.
+/// Derive macro generating an impl of the trait
+/// [`Component`](component::Component).
 pub use impact_ecs_macros::Component;
 
 /// Macro for querying for a specific set of component types.
