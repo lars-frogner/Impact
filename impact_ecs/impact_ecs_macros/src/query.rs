@@ -80,14 +80,14 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
             #verification_code
 
             // Define closure to call for each set of components
-            let closure = |#(#closure_args),*| #body;
+            let mut closure = |#(#closure_args),*| #body;
 
             let archetype = #crate_root::archetype::Archetype::new_from_component_id_arr([
                 #(<#arg_types as Component>::component_id()),*
             ])
             .unwrap(); // This `unwrap` will never panic since we have verified the components
 
-            let tables = #world.find_tables_containing_archetype(archetype);
+            let tables = (#world).find_tables_containing_archetype(archetype);
             for #table_name in tables {
                 // Code for acquiring read/write locks and creating iterator
                 // over each component type
