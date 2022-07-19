@@ -14,6 +14,7 @@ use std::{
     any::TypeId,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
+    marker::PhantomData,
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
@@ -176,7 +177,7 @@ pub struct TableEntityMutEntry<'a> {
 struct TableEntityEntryInfo<'a> {
     archetype: &'a Archetype,
     /// Index of the entity's component in each component storage.
-    storage_idx: usize,
+    entity_idx: usize,
     component_index_map: &'a HashMap<ComponentID, usize>,
 }
 
@@ -256,6 +257,22 @@ impl PartialEq for Archetype {
     }
 }
 
+/// Immutable reference to the entry for a specific component
+/// instance in a [`ComponentStorage`]
+pub struct ComponentStorageEntry<'a, C> {
+    entity_idx: usize,
+    storage: RwLockReadGuard<'a, ComponentStorage>,
+    _phantom: PhantomData<C>,
+}
+
+/// Mmutable reference to the entry for a specific component
+/// instance in a [`ComponentStorage`]
+pub struct ComponentStorageEntryMut<'a, C> {
+    entity_idx: usize,
+    storage: RwLockWriteGuard<'a, ComponentStorage>,
+    _phantom: PhantomData<C>,
+}
+
 impl ArchetypeTable {
     /// Takes an iterable of [`EntityID`]s and references to all the
     /// associated component data (as an [`ArchetypeCompByteView`]),
@@ -314,7 +331,7 @@ impl ArchetypeTable {
         );
 
         self.component_storages
-            .iter_mut()
+            .iter()
             .zip(components.component_bytes.into_iter())
             .for_each(|(storage, data)| storage.write().unwrap().push_bytes(data));
     }
@@ -340,7 +357,7 @@ impl ArchetypeTable {
         // Perform an equivalent swap remove of the data at the index we found
         let removed_component_bytes = self
             .component_storages
-            .iter_mut()
+            .iter()
             .map(|storage| storage.write().unwrap().swap_remove_bytes(idx))
             .collect();
 
@@ -351,7 +368,54 @@ impl ArchetypeTable {
         })
     }
 
-    /// Returns an [`TableEntityEntry`] that can be used to read the components
+    /// Returns a reference to the component of the type specified
+    /// by the `C` type parameter belonging to the entity with the
+    /// given [`EntityID`]. If the entity is not present in the table
+    /// or if it does not have the specified component, [`None`] is
+    /// returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageEntry`]
+    /// that holds a read lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
+    pub fn get_component_for_entity<C: Component>(
+        &self,
+        entity_id: EntityID,
+    ) -> Option<ComponentStorageEntry<C>> {
+        let component_idx = *self.component_index_map.get(&C::component_id())?;
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
+        dbg!(self.archetype().id(), entity_id, component_idx, entity_idx);
+        Some(ComponentStorageEntry::new(
+            self.component_storages[component_idx].read().unwrap(),
+            entity_idx,
+        ))
+    }
+
+    /// Returns a mutable reference to the component of the type
+    /// specified by the `C` type parameter belonging to the entity
+    /// with the given [`EntityID`]. If the entity is not present in
+    /// the table or if it does not have the specified component,
+    /// [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageEntryMut`]
+    /// that holds a write lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
+    pub fn get_component_for_entity_mut<C: Component>(
+        &self,
+        entity_id: EntityID,
+    ) -> Option<ComponentStorageEntryMut<C>> {
+        let component_idx = *self.component_index_map.get(&C::component_id())?;
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
+        Some(ComponentStorageEntryMut::new(
+            self.component_storages[component_idx].write().unwrap(),
+            entity_idx,
+        ))
+    }
+
+    /// Returns a [`TableEntityEntry`] that can be used to read the components
     /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
     /// If the entity is not present in the table, [`None`] is returned.
     ///
@@ -360,10 +424,10 @@ impl ArchetypeTable {
     /// in the table until it is dropped. Before then, attempts to modify
     /// the component data will be blocked.
     pub fn get_entity(&self, entity_id: EntityID) -> Option<TableEntityEntry> {
-        let storage_idx = self.entity_index_mapper.get(entity_id)?;
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(TableEntityEntry::new(
             &self.archetype,
-            storage_idx,
+            entity_idx,
             &self.component_index_map,
             self.component_storages
                 .iter()
@@ -372,7 +436,7 @@ impl ArchetypeTable {
         ))
     }
 
-    /// Returns an [`TableEntityEntry`] that can be used to read the components
+    /// Returns a [`TableEntityEntry`] that can be used to read the components
     /// of the [`Entity`](crate::world::Entity) with the given [`EntityID`].
     ///
     /// # Panics
@@ -387,7 +451,7 @@ impl ArchetypeTable {
             .expect("Entity not present in table")
     }
 
-    /// Returns an [`TableEntityMutEntry`] that can be used to read and modify
+    /// Returns a [`TableEntityMutEntry`] that can be used to read and modify
     /// the components of the [`Entity`](crate::world::Entity) with the
     /// given [`EntityID`]. If the entity is not present in the table,
     /// [`None`] is returned.
@@ -396,20 +460,20 @@ impl ArchetypeTable {
     /// The returned `TableEntityMutEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to read
     /// or modify the component data will be blocked.
-    pub fn get_entity_mut(&mut self, entity_id: EntityID) -> Option<TableEntityMutEntry> {
-        let storage_idx = self.entity_index_mapper.get(entity_id)?;
+    pub fn get_entity_mut(&self, entity_id: EntityID) -> Option<TableEntityMutEntry> {
+        let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(TableEntityMutEntry::new(
             &self.archetype,
-            storage_idx,
+            entity_idx,
             &self.component_index_map,
             self.component_storages
-                .iter_mut()
+                .iter()
                 .map(|storage| storage.write().unwrap())
                 .collect(),
         ))
     }
 
-    /// Returns an [`TableEntityMutEntry`] that can be used to read and modify
+    /// Returns a [`TableEntityMutEntry`] that can be used to read and modify
     /// the components of the [`Entity`](crate::world::Entity) with the
     /// given [`EntityID`].
     ///
@@ -420,7 +484,7 @@ impl ArchetypeTable {
     /// The returned `TableEntityMutEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to read
     /// or modify the component data will be blocked.
-    pub fn entity_mut(&mut self, entity_id: EntityID) -> TableEntityMutEntry {
+    pub fn entity_mut(&self, entity_id: EntityID) -> TableEntityMutEntry {
         self.get_entity_mut(entity_id)
             .expect("Entity not present in table")
     }
@@ -490,14 +554,14 @@ impl ArchetypeTable {
 impl<'a> TableEntityEntry<'a> {
     fn new(
         archetype: &'a Archetype,
-        storage_idx: usize,
+        entity_idx: usize,
         component_index_map: &'a HashMap<ComponentID, usize>,
         components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
     ) -> Self {
         Self {
             info: TableEntityEntryInfo {
                 archetype,
-                storage_idx,
+                entity_idx,
                 component_index_map,
             },
             components,
@@ -520,7 +584,7 @@ impl<'a> TableEntityEntry<'a> {
     /// component, [`None`] is returned.
     pub fn get_component<C: Component>(&self) -> Option<&C> {
         let component_idx = *self.info.component_index_map.get(&C::component_id())?;
-        Some(&self.components[component_idx].slice()[self.info.storage_idx])
+        Some(&self.components[component_idx].slice()[self.info.entity_idx])
     }
 
     /// Returns a reference to the component specified by the
@@ -537,14 +601,14 @@ impl<'a> TableEntityEntry<'a> {
 impl<'a> TableEntityMutEntry<'a> {
     fn new(
         archetype: &'a Archetype,
-        storage_idx: usize,
+        entity_idx: usize,
         component_index_map: &'a HashMap<ComponentID, usize>,
         components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
     ) -> Self {
         Self {
             info: TableEntityEntryInfo {
                 archetype,
-                storage_idx,
+                entity_idx,
                 component_index_map,
             },
             components,
@@ -567,7 +631,7 @@ impl<'a> TableEntityMutEntry<'a> {
     /// this component, [`None`] is returned.
     pub fn get_component<C: Component>(&mut self) -> Option<&mut C> {
         let component_idx = *self.info.component_index_map.get(&C::component_id())?;
-        Some(&mut self.components[component_idx].slice_mut()[self.info.storage_idx])
+        Some(&mut self.components[component_idx].slice_mut()[self.info.entity_idx])
     }
 
     /// Returns a mutable reference to the component specified
@@ -588,6 +652,44 @@ impl<'a> TableEntityEntryInfo<'a> {
 
     fn has_component<C: Component>(&self) -> bool {
         self.archetype.contains_component_id(C::component_id())
+    }
+}
+
+impl<'a, C> ComponentStorageEntry<'a, C>
+where
+    C: Component,
+{
+    fn new(storage: RwLockReadGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
+        assert!(entity_idx < storage.n_components());
+        Self {
+            entity_idx,
+            storage,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns an immutable reference to the component instance.
+    pub fn access(&self) -> &C {
+        &self.storage.slice::<C>()[self.entity_idx]
+    }
+}
+
+impl<'a, C> ComponentStorageEntryMut<'a, C>
+where
+    C: Component,
+{
+    fn new(storage: RwLockWriteGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
+        assert!(entity_idx < storage.n_components());
+        Self {
+            entity_idx,
+            storage,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns a mutable reference to the component instance.
+    pub fn access(&mut self) -> &mut C {
+        &mut self.storage.slice_mut::<C>()[self.entity_idx]
     }
 }
 
