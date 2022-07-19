@@ -670,3 +670,215 @@ mod test {
         assert_eq!(entry.component::<Temperature>().access(), &TEMP2);
     }
 }
+
+#[cfg(test)]
+mod query_test {
+    use super::{
+        super::{query, Component},
+        *,
+    };
+    use bytemuck::{Pod, Zeroable};
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Byte(u8);
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Position(f32, f32, f32);
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Rectangle {
+        center: [f32; 2],
+        dimensions: [f32; 2],
+    }
+
+    const BYTE: Byte = Byte(7);
+    const BYTE2: Byte = Byte(55);
+    const POS: Position = Position(1.5, -7.7, 0.1);
+    const POS2: Position = Position(0.0, 1e-5, 0.001);
+    const RECT: Rectangle = Rectangle {
+        center: [2.5, 2.0],
+        dimensions: [12.3, 8.9],
+    };
+
+    /// These query invocations should all compile successfully.
+    #[allow(dead_code)]
+    fn test_valid_query_inputs() {
+        #![allow(clippy::unnecessary_mut_passed)]
+
+        let mut world = World::new();
+
+        query!(world, |_byte: &Byte| {});
+
+        query!(&world, |_byte: &mut Byte| {});
+
+        query!(world, |_pos: &mut Position, _byte: &Byte| {});
+
+        query!(&mut world, |_byte: &mut Byte, _pos: &mut Position| {});
+
+        query!(world, |_byte: &Byte,
+                       _rect: &mut Rectangle,
+                       _pos: &Position| {});
+
+        query!(world, |_byte: &mut Byte,
+                       _pos: &mut Position,
+                       _rect: &mut Rectangle| {});
+    }
+
+    #[test]
+    fn single_entity_single_comp_read_works() {
+        let mut world = World::new();
+        world.create_entity(&BYTE).unwrap();
+
+        let mut count = 0;
+        query!(world, |byte: &Byte| {
+            assert_eq!(byte, &BYTE);
+            count += 1;
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn single_entity_two_of_two_matching_comp_read_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &POS)).unwrap();
+
+        let mut count = 0;
+        query!(world, |byte: &Byte, pos: &Position| {
+            assert_eq!(byte, &BYTE);
+            assert_eq!(pos, &POS);
+            count += 1;
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn single_entity_one_of_two_matching_comp_read_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &POS)).unwrap();
+
+        let mut count = 0;
+        query!(world, |pos: &Position| {
+            assert_eq!(pos, &POS);
+            count += 1;
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn single_entity_single_comp_write_works() {
+        let mut world = World::new();
+        world.create_entity(&BYTE).unwrap();
+
+        query!(world, |byte: &mut Byte| {
+            assert_eq!(byte, &BYTE);
+            *byte = BYTE2;
+        });
+        query!(world, |byte: &Byte| {
+            assert_eq!(byte, &BYTE2);
+        });
+    }
+
+    #[test]
+    fn single_entity_two_of_two_matching_comp_write_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &POS)).unwrap();
+
+        query!(world, |pos: &mut Position, byte: &mut Byte| {
+            assert_eq!(pos, &POS);
+            assert_eq!(byte, &BYTE);
+            *pos = POS2;
+            *byte = BYTE2;
+        });
+        query!(world, |byte: &Byte, pos: &Position| {
+            assert_eq!(pos, &POS2);
+            assert_eq!(byte, &BYTE2);
+        });
+    }
+
+    #[test]
+    fn single_entity_two_of_two_matching_comp_mixed_write_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &POS)).unwrap();
+
+        query!(world, |pos: &mut Position, byte: &Byte| {
+            assert_eq!(pos, &POS);
+            assert_eq!(byte, &BYTE);
+            pos.1 = byte.0 as f32;
+        });
+        query!(world, |byte: &Byte, pos: &Position| {
+            assert_eq!(pos.1, byte.0 as f32);
+        });
+    }
+
+    #[test]
+    fn two_equal_entities_single_comp_read_works() {
+        let mut world = World::new();
+        world.create_entities(&[BYTE, BYTE]).unwrap();
+
+        let mut count = 0;
+        query!(world, |byte: &Byte| {
+            assert_eq!(byte, &BYTE);
+            count += 1;
+        });
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn one_of_two_matching_single_comp_entities_works() {
+        let mut world = World::new();
+        world.create_entity(&BYTE).unwrap();
+        world.create_entity(&POS).unwrap();
+
+        let mut count = 0;
+        query!(world, |pos: &Position| {
+            assert_eq!(pos, &POS);
+            count += 1;
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn ono_of_two_matching_two_comp_entities_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &BYTE)).unwrap();
+
+        let mut count = 0;
+        query!(world, |rect: &Rectangle, byte: &Byte| {
+            assert_eq!(rect, &RECT);
+            assert_eq!(byte, &BYTE);
+            count += 1;
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn two_of_two_partially_matching_two_comp_entities_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &BYTE)).unwrap();
+
+        let mut count = 0;
+        query!(world, |byte: &Byte| {
+            assert_eq!(byte, &BYTE);
+            count += 1;
+        });
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn zero_of_two_matching_two_comp_entities_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &BYTE)).unwrap();
+
+        let mut count = 0;
+        query!(world, |_pos: &Position, _rect: &Rectangle| {
+            count += 1;
+        });
+        assert_eq!(count, 0);
+    }
+}
