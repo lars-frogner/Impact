@@ -113,11 +113,8 @@ impl ComponentStorage {
     }
 
     /// Returns the number of stored components.
-    ///
-    /// # Panics
-    /// If `C` is not the component type the storage was initialized with.
-    pub fn n_components<C: Component>(&self) -> usize {
-        self.slice::<C>().len()
+    pub fn n_components(&self) -> usize {
+        self.size() / self.component_size
     }
 
     /// Returns a slice of all stored components.
