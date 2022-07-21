@@ -6,5 +6,6 @@ mod num;
 pub mod physics;
 pub mod rendering;
 pub mod run;
+pub mod thread;
 pub mod window;
 pub mod world;
