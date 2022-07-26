@@ -37,33 +37,23 @@ struct Worker {
 }
 
 impl<M> ThreadPool<M> {
-    pub fn new<S, A>(n_workers: NonZeroUsize, state: Arc<S>, action: A) -> Self
+    pub fn new<A>(n_workers: NonZeroUsize, action: &'static A) -> Self
     where
-        M: Clone + Send + 'static,
-        S: Send + Sync + 'static,
-        A: Fn(&ThreadCommunicator<M>, &S, M) + Copy + Send + 'static,
+        M: Send + 'static,
+        A: Fn(&ThreadCommunicator<M>, M) + Sync,
+        ThreadCommunicator<M>: Clone,
     {
         let communicator = ThreadCommunicator::new(n_workers);
 
         let workers = (0..n_workers.get())
             .into_iter()
-            .map(|_| Worker::spawn(communicator.clone(), Arc::clone(&state), action))
+            .map(|_| Worker::spawn(communicator.clone(), action))
             .collect();
 
         Self {
             communicator,
             workers,
         }
-    }
-
-    pub fn new_stateless<A>(n_workers: NonZeroUsize, action: A) -> Self
-    where
-        M: Clone + Send + 'static,
-        A: Fn(&ThreadCommunicator<M>, M) + Copy + Send + 'static,
-    {
-        Self::new(n_workers, Arc::new(()), move |comm, _, message| {
-            action(comm, message)
-        })
     }
 
     pub fn n_workers(&self) -> usize {
@@ -76,10 +66,18 @@ impl<M> ThreadPool<M> {
     }
 
     pub fn execute_with_workers(&self, messages: impl Iterator<Item = M>) {
-        for message in messages {
+        for (idx, message) in messages.enumerate() {
+            // If at least one execution message is sent, ensure
+            // that the `all_workers_idle` flag is set to `false`
+            // immediately so that a potential call to
+            // `wait_for_all_workers_idle` before any workers have
+            // actually had time to register as busy does not return
+            // immediately.
+            if idx == 0 {
+                self.communicator.set_all_workers_idle(false);
+            }
             self.communicator.send_execute_message(message);
         }
-        self.communicator.set_all_workers_idle(false);
     }
 
     pub fn wait_for_all_workers_idle(&self) {
@@ -156,6 +154,7 @@ impl<M> ThreadCommunicator<M> {
         *self.all_workers_idle_condvar.0.lock().unwrap() = all_idle;
     }
 
+    #[allow(dead_code)]
     fn n_idle_workers(&self) -> usize {
         self.n_idle_workers.load(Ordering::Acquire)
     }
@@ -169,11 +168,10 @@ impl<M> ThreadCommunicator<M> {
 }
 
 impl Worker {
-    fn spawn<M, S, A>(communicator: ThreadCommunicator<M>, state: Arc<S>, action: A) -> Self
+    fn spawn<M, A>(communicator: ThreadCommunicator<M>, action: &'static A) -> Self
     where
         M: Send + 'static,
-        S: Send + Sync + 'static,
-        A: Fn(&ThreadCommunicator<M>, &S, M) + Send + 'static,
+        A: Fn(&ThreadCommunicator<M>, M) + Sync,
     {
         let handle = thread::spawn(move || loop {
             let message = communicator.receive_message();
@@ -181,7 +179,7 @@ impl Worker {
             match message {
                 Message::Execute(message) => {
                     communicator.register_busy_worker();
-                    action(&communicator, state.as_ref(), message);
+                    action(&communicator, message);
                     communicator.register_idle_worker();
                 }
                 Message::Terminate => {
@@ -254,8 +252,7 @@ mod test {
     #[test]
     fn creating_thread_pool_works() {
         let n_workers = 2;
-        let pool =
-            ThreadPool::<()>::new_stateless(NonZeroUsize::new(n_workers).unwrap(), |_, _| {});
+        let pool = ThreadPool::<()>::new(NonZeroUsize::new(n_workers).unwrap(), &|_, _| {});
         assert_eq!(pool.n_workers(), n_workers);
     }
 
@@ -263,12 +260,14 @@ mod test {
     fn executing_thread_pool_works() {
         let n_workers = 2;
         let count = Arc::new(Mutex::new(0));
-        let pool = ThreadPool::new(
-            NonZeroUsize::new(n_workers).unwrap(),
-            Arc::clone(&count),
-            |_, count, incr| *count.lock().unwrap() += incr,
-        );
-        pool.execute(iter::repeat(3).take(n_workers));
+        let pool = ThreadPool::new(NonZeroUsize::new(n_workers).unwrap(), &|_,
+                                                                            (count, incr): (
+            Arc<Mutex<_>>,
+            _,
+        )| {
+            *count.lock().unwrap() += incr
+        });
+        pool.execute(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers));
         drop(pool);
         assert_eq!(*count.lock().unwrap(), n_workers * 3);
     }
