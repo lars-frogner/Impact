@@ -14,11 +14,13 @@ anyhow = "1.0"
 approx = "0.5.1"
 bytemuck = { version = "1.4", features = ["derive"] }
 cfg-if = "1"
-nalgebra = "0.31.0"
-num-traits = "0.2.15"
+const-fnv1a-hash = "1.0.1"
 env_logger = "0.9"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 log = "0.4"
+nalgebra = "0.31.0"
+num-traits = "0.2.15"
+petgraph = { version = "0.6.2", default-features = false, features = ["graphmap"] }
 pollster = "0.2"
 raw-window-handle = "0.4.3"
 simba = "0.7.1"

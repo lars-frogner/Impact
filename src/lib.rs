@@ -1,6 +1,7 @@
 //! Graphics and physics engine.
 
 pub mod control;
+pub mod dispatch;
 pub mod geometry;
 mod num;
 pub mod physics;
