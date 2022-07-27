@@ -15,6 +15,9 @@ use std::{
     },
 };
 
+#[cfg(test)]
+use crate::thread::WorkerID;
+
 pub type JobID = u64;
 
 pub trait Job<S>: Sync + Send {
@@ -23,6 +26,11 @@ pub trait Job<S>: Sync + Send {
     fn depends_on(&self) -> &[JobID];
 
     fn run(&self, world_state: &S) -> Result<()>;
+
+    #[cfg(test)]
+    fn run_with_worker(&self, _worker_id: WorkerID, world_state: &S) -> Result<()> {
+        self.run(world_state)
+    }
 }
 
 type DispatcherThreadPool<S> = ThreadPool<JobMessage<S>>;
@@ -40,6 +48,7 @@ pub struct Dispatcher<S> {
 struct JobDependencyGraph<S> {
     graph: DiGraphMap<JobID, ()>,
     space: DfsSpace<JobID, HashSet<JobID>>,
+    independent_jobs: HashSet<JobID>,
     _phantom: PhantomData<S>,
 }
 
@@ -89,6 +98,10 @@ where
         }
     }
 
+    pub fn world_state(&self) -> &S {
+        self.world_state.as_ref()
+    }
+
     pub fn has_job(&self, job_id: JobID) -> bool {
         self.jobs.contains_key(&job_id)
     }
@@ -98,6 +111,13 @@ where
             .as_ref()
             .expect("Called `execute` before completing job registration")
             .execute();
+    }
+
+    pub fn execute_on_main_thread(&self) {
+        self.executor
+            .as_ref()
+            .expect("Called `execute` before completing job registration")
+            .execute_on_main_thread();
     }
 
     pub fn register_job(&mut self, job: impl Job<S> + 'static) -> Result<()> {
@@ -136,9 +156,11 @@ impl<S> JobDependencyGraph<S> {
     fn new() -> Self {
         let graph = DiGraphMap::new();
         let space = DfsSpace::new(&graph);
+        let independent_jobs = HashSet::new();
         Self {
             graph,
             space,
+            independent_jobs,
             _phantom: PhantomData,
         }
     }
@@ -147,7 +169,13 @@ impl<S> JobDependencyGraph<S> {
         let job_id = job.id();
         self.graph.add_node(job_id);
 
-        for &dependence_job_id in job.depends_on() {
+        let dependence_job_ids = job.depends_on();
+
+        if dependence_job_ids.is_empty() {
+            self.independent_jobs.insert(job_id);
+        }
+
+        for &dependence_job_id in dependence_job_ids {
             // Add edge directed from dependence to dependent.
             // A node for the dependence job is added if it
             // doesn't exist.
@@ -164,11 +192,30 @@ impl<S> JobDependencyGraph<S> {
         Ok(())
     }
 
-    /// Get job IDs sorted to topological order, meaning an order
-    /// where each job comes after all its dependencies.
-    fn obtain_topologically_ordered_job_ids(&mut self) -> Result<Vec<JobID>> {
-        algo::toposort(&self.graph, Some(&mut self.space))
-            .map_err(|_| anyhow!("Found circular job dependencies"))
+    fn obtain_ordered_job_ids(&mut self) -> Result<Vec<JobID>> {
+        let n_jobs = self.graph.node_count();
+        let mut sorted_ids = Vec::with_capacity(n_jobs);
+
+        // Make sure all jobs without dependencies come first
+        sorted_ids.extend(self.independent_jobs.iter());
+
+        if n_jobs > self.independent_jobs.len() {
+            // Get job IDs sorted to topological order, meaning an order
+            // where each job comes after all its dependencies
+            let topologically_sorted_ids = algo::toposort(&self.graph, Some(&mut self.space))
+                .map_err(|_| anyhow!("Found circular job dependencies"))?;
+
+            // Add all jobs with dependencies in topological order
+            sorted_ids.extend(
+                topologically_sorted_ids
+                    .into_iter()
+                    .filter(|job_id| !self.independent_jobs.contains(job_id)),
+            );
+        }
+
+        assert_eq!(sorted_ids.len(), n_jobs);
+
+        Ok(sorted_ids)
     }
 
     fn find_dependent_job_ids(&self, job_id: JobID) -> impl Iterator<Item = JobID> + '_ {
@@ -217,6 +264,13 @@ where
         self.state.job_ordering()
     }
 
+    fn execute_on_main_thread(&self) {
+        for job_idx in 0..self.thread_pool.n_workers() {
+            let job = self.job_ordering().job(job_idx);
+            job.run(self.state.world_state()).expect("Job failed");
+        }
+    }
+
     fn execute(&self) {
         self.thread_pool.execute_with_workers(
             (0..self.job_ordering().n_dependencyless_jobs())
@@ -231,7 +285,17 @@ where
         (state, job_idx): JobMessage<S>,
     ) {
         let job = state.job_ordering().job(job_idx);
-        job.run(state.world_state()).expect("Job failed");
+
+        {
+            cfg_if::cfg_if! {
+                if #[cfg(test)] {
+                    job.run_with_worker(communicator.worker_id(), state.world_state())
+                } else {
+                    job.run(state.world_state())
+                }
+            }
+        }
+        .expect("Job failed");
 
         let ready_dependent_job_indices: Vec<_> = job
             .indices_of_dependent_jobs()
@@ -244,9 +308,11 @@ where
             })
             .collect();
 
-        for &ready_dependent_job_idx in &ready_dependent_job_indices[1..] {
-            communicator
-                .send_execute_message(Self::create_message(&state, ready_dependent_job_idx));
+        if ready_dependent_job_indices.len() > 1 {
+            for &ready_dependent_job_idx in &ready_dependent_job_indices[1..] {
+                communicator
+                    .send_execute_message(Self::create_message(&state, ready_dependent_job_idx));
+            }
         }
         if let Some(&ready_dependent_job_idx) = ready_dependent_job_indices.first() {
             Self::execute_job(communicator, (state, ready_dependent_job_idx))
@@ -312,7 +378,7 @@ impl<S> JobOrdering<S> {
         job_pool: &JobPool<S>,
         dependency_graph: &mut JobDependencyGraph<S>,
     ) -> Result<Vec<OrderedJob<S>>> {
-        let ordered_job_ids = dependency_graph.obtain_topologically_ordered_job_ids()?;
+        let ordered_job_ids = dependency_graph.obtain_ordered_job_ids()?;
 
         // Create map from job ID to index in `ordered_job_ids`
         let indices_of_job_ids: HashMap<_, _> = ordered_job_ids
@@ -389,12 +455,52 @@ impl<S> OrderedJob<S> {
     fn run(&self, world_state: &S) -> Result<()> {
         self.job.run(world_state)
     }
+
+    #[cfg(test)]
+    fn run_with_worker(&self, _worker_id: WorkerID, world_state: &S) -> Result<()> {
+        self.job.run_with_worker(_worker_id, world_state)
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::iter;
+    use std::{iter, sync::Mutex, thread, time::Duration};
+
+    struct JobRecorder {
+        recorded_jobs: Mutex<Vec<(WorkerID, JobID)>>,
+    }
+
+    impl JobRecorder {
+        fn new() -> Self {
+            Self {
+                recorded_jobs: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn get_recorded_worker_ids(&self) -> Vec<WorkerID> {
+            self.recorded_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|&(worker_id, _)| worker_id)
+                .collect()
+        }
+
+        fn get_recorded_job_ids(&self) -> Vec<JobID> {
+            self.recorded_jobs
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|&(_, job_id)| job_id)
+                .collect()
+        }
+
+        fn record_job(&self, worker_id: WorkerID, job_id: JobID) {
+            self.recorded_jobs.lock().unwrap().push((worker_id, job_id));
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
 
     macro_rules! create_job_type {
         (name = $job:ident, deps = [$($deps:ty),*]) => {
@@ -404,9 +510,7 @@ mod test {
                 const ID: JobID = super::hash_job_name_to_id(stringify!($job));
             }
 
-            impl<S> Job<S> for $job
-            where
-                S: Sync + Send + 'static,
+            impl Job<JobRecorder> for $job
             {
                 fn id(&self) -> JobID {
                     Self::ID
@@ -416,8 +520,12 @@ mod test {
                     &[$(<$deps>::ID),*]
                 }
 
-                fn run(&self, _world_state: &S) -> Result<()> {
-                    Ok(())
+                fn run(&self, _job_recorder: &JobRecorder) -> Result<()> {
+                    unreachable!()
+                }
+
+                fn run_with_worker(&self, worker_id: WorkerID, job_recorder: &JobRecorder) -> Result<()> {
+                    Ok(job_recorder.record_job(worker_id, self.id()))
                 }
             }
         };
@@ -426,21 +534,27 @@ mod test {
     create_job_type!(name = Job1, deps = []);
     create_job_type!(name = Job2, deps = []);
     create_job_type!(name = DepJob1, deps = [Job1]);
+    create_job_type!(name = DepJob2, deps = [Job2]);
     create_job_type!(name = DepDepJob1, deps = [DepJob1]);
     create_job_type!(name = DepJob1Job2, deps = [Job1, Job2]);
     create_job_type!(name = DepDepJob1Job2, deps = [DepJob1, Job2]);
     create_job_type!(name = CircularJob1, deps = [CircularJob2]);
     create_job_type!(name = CircularJob2, deps = [CircularJob1]);
 
-    struct NoState;
+    type TestDispatcher = Dispatcher<JobRecorder>;
+    type TestJobDependencyGraph = JobDependencyGraph<JobRecorder>;
+    type TestOrderedJob = OrderedJob<JobRecorder>;
 
-    fn create_trivial_dispatcher() -> Dispatcher<NoState> {
-        Dispatcher::new(NonZeroUsize::new(1).unwrap(), Arc::new(NoState))
+    fn create_dispatcher(n_workers: usize) -> TestDispatcher {
+        Dispatcher::new(
+            NonZeroUsize::new(n_workers).unwrap(),
+            Arc::new(JobRecorder::new()),
+        )
     }
 
     #[test]
     fn registering_jobs_in_dependency_order_works() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(Job1).unwrap();
         assert!(dispatcher.has_job(Job1::ID));
 
@@ -464,7 +578,7 @@ mod test {
 
     #[test]
     fn registering_jobs_out_of_dependency_order_works() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(DepDepJob1Job2).unwrap();
         assert!(dispatcher.has_job(DepDepJob1Job2::ID));
 
@@ -488,14 +602,14 @@ mod test {
 
     #[test]
     fn registering_no_jobs_works() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.complete_job_registration().unwrap();
     }
 
     #[test]
     #[should_panic]
     fn registering_same_job_twice_fails() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(Job1).unwrap();
         dispatcher.register_job(Job2).unwrap();
         dispatcher.register_job(Job1).unwrap();
@@ -504,7 +618,7 @@ mod test {
     #[test]
     #[should_panic]
     fn completing_with_missing_dependency_fails() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(DepJob1).unwrap();
         dispatcher.complete_job_registration().unwrap();
     }
@@ -512,7 +626,7 @@ mod test {
     #[test]
     #[should_panic]
     fn creating_circular_job_dependencies_fails() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(CircularJob1).unwrap();
         dispatcher.register_job(CircularJob2).unwrap();
         dispatcher.complete_job_registration().unwrap();
@@ -521,19 +635,63 @@ mod test {
     #[test]
     #[should_panic]
     fn executing_before_completing_job_reg_fails() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(Job1).unwrap();
         dispatcher.execute();
     }
 
     #[test]
     fn executing_jobs_works() {
-        todo!()
+        let mut dispatcher = create_dispatcher(2);
+        dispatcher.register_job(DepDepJob1Job2).unwrap();
+        dispatcher.register_job(Job2).unwrap();
+        dispatcher.register_job(DepJob1).unwrap();
+        dispatcher.register_job(Job1).unwrap();
+        dispatcher.register_job(DepJob1Job2).unwrap();
+        dispatcher.complete_job_registration().unwrap();
+
+        dispatcher.execute();
+        let recorded_worker_ids = dispatcher.world_state().get_recorded_worker_ids();
+        let recorded_job_ids = dispatcher.world_state().get_recorded_job_ids();
+
+        match recorded_job_ids[..] {
+            [Job1::ID, Job2::ID, DepJob1::ID, DepJob1Job2::ID, DepDepJob1Job2::ID] => {}
+            [Job2::ID, Job1::ID, DepJob1::ID, DepJob1Job2::ID, DepDepJob1Job2::ID] => {}
+            [Job1::ID, Job2::ID, DepJob1Job2::ID, DepJob1::ID, DepDepJob1Job2::ID] => {}
+            [Job2::ID, Job1::ID, DepJob1Job2::ID, DepJob1::ID, DepDepJob1Job2::ID] => {}
+            [Job1::ID, Job2::ID, DepJob1::ID, DepDepJob1Job2::ID, DepJob1Job2::ID] => {}
+            [Job2::ID, Job1::ID, DepJob1::ID, DepDepJob1Job2::ID, DepJob1Job2::ID] => {}
+            _ => panic!("Incorrect job order"),
+        }
+
+        let sorted_worker_ids: Vec<_> = [
+            Job1::ID,
+            Job2::ID,
+            DepJob1::ID,
+            DepJob1Job2::ID,
+            DepDepJob1Job2::ID,
+        ]
+        .iter()
+        .map(|job_id| {
+            recorded_worker_ids[recorded_job_ids.iter().position(|id| id == job_id).unwrap()]
+        })
+        .collect();
+
+        // First, Job1 and Job2 should be executed independently.
+        // Then DepJob1 and DepJob1Job2 should be executed
+        // independently by the thread that executed Job1 and Job2,
+        // respectively. DepDepJob1Job2 should execute last and
+        // on the thread that executed DepJob1.
+        match sorted_worker_ids[..] {
+            [0, 1, 0, 1, 0] => {}
+            [1, 0, 1, 0, 1] => {}
+            _ => panic!("Incorrect worker contribution"),
+        }
     }
 
     #[test]
     fn ordered_jobs_are_created_correctly() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(DepDepJob1).unwrap();
         dispatcher.register_job(Job1).unwrap();
         dispatcher.register_job(DepJob1).unwrap();
@@ -559,7 +717,7 @@ mod test {
 
     #[test]
     fn finding_n_dependencyless_jobs_works() {
-        let mut dispatcher = create_trivial_dispatcher();
+        let mut dispatcher = create_dispatcher(1);
         dispatcher.register_job(DepDepJob1).unwrap();
         dispatcher.register_job(Job1).unwrap();
         dispatcher.register_job(DepJob1).unwrap();
@@ -580,26 +738,29 @@ mod test {
 
     #[test]
     fn jobs_are_ordered_correctly() {
-        let mut dependency_graph = JobDependencyGraph::<NoState>::new();
+        let mut dependency_graph = TestJobDependencyGraph::new();
         dependency_graph.add_job(&DepDepJob1Job2).unwrap();
         dependency_graph.add_job(&Job1).unwrap();
         dependency_graph.add_job(&DepJob1).unwrap();
+        dependency_graph.add_job(&DepJob1Job2).unwrap();
         dependency_graph.add_job(&Job2).unwrap();
-        let ordered_job_ids = dependency_graph
-            .obtain_topologically_ordered_job_ids()
-            .unwrap();
-        assert!([Job1::ID, Job2::ID].contains(&ordered_job_ids[0]));
-        assert!(
-            [Job1::ID, Job2::ID].contains(&ordered_job_ids[1])
-                && ordered_job_ids[1] != ordered_job_ids[0]
-        );
-        assert_eq!(ordered_job_ids[2], DepJob1::ID);
-        assert_eq!(ordered_job_ids[3], DepDepJob1Job2::ID);
+
+        let ordered_job_ids = dependency_graph.obtain_ordered_job_ids().unwrap();
+
+        match ordered_job_ids[..] {
+            [Job1::ID, Job2::ID, DepJob1::ID, DepDepJob1Job2::ID, DepJob1Job2::ID] => {}
+            [Job2::ID, Job1::ID, DepJob1::ID, DepDepJob1Job2::ID, DepJob1Job2::ID] => {}
+            [Job1::ID, Job2::ID, DepJob1::ID, DepJob1Job2::ID, DepDepJob1Job2::ID] => {}
+            [Job2::ID, Job1::ID, DepJob1::ID, DepJob1Job2::ID, DepDepJob1Job2::ID] => {}
+            [Job1::ID, Job2::ID, DepJob1Job2::ID, DepJob1::ID, DepDepJob1Job2::ID] => {}
+            [Job2::ID, Job1::ID, DepJob1Job2::ID, DepJob1::ID, DepDepJob1Job2::ID] => {}
+            _ => panic!("Incorrect job order"),
+        }
     }
 
     #[test]
     fn finding_dependent_job_ids_works() {
-        let mut dependency_graph = JobDependencyGraph::<NoState>::new();
+        let mut dependency_graph = TestJobDependencyGraph::new();
         dependency_graph.add_job(&DepJob1).unwrap();
         dependency_graph.add_job(&DepDepJob1Job2).unwrap();
         dependency_graph.add_job(&Job1).unwrap();
@@ -620,7 +781,7 @@ mod test {
 
     #[test]
     fn completing_dependencies_of_ordered_job_works() {
-        let ordered_job = OrderedJob::<NoState>::new(Arc::new(DepJob1Job2), iter::empty());
+        let ordered_job = TestOrderedJob::new(Arc::new(DepJob1Job2), iter::empty());
         assert_eq!(ordered_job.n_dependencies(), 2);
         assert_eq!(ordered_job.complete_dependency(), JobReady::No);
         assert_eq!(ordered_job.complete_dependency(), JobReady::Yes);
@@ -632,7 +793,7 @@ mod test {
     #[test]
     #[should_panic]
     fn completing_too_many_dependencies_of_ordered_job_fails() {
-        let ordered_job = OrderedJob::<NoState>::new(Arc::new(Job1), iter::empty());
+        let ordered_job = TestOrderedJob::new(Arc::new(Job1), iter::empty());
         ordered_job.complete_dependency();
     }
 }
