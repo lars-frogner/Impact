@@ -33,12 +33,12 @@ pub trait Job<S>: Sync + Send + std::fmt::Debug {
     }
 }
 
-type DispatcherThreadPool<S> = ThreadPool<JobMessage<S>>;
+type JobSchedulerThreadPool<S> = ThreadPool<JobMessage<S>>;
 type JobPool<S> = HashMap<JobID, Arc<dyn Job<S>>>;
 type JobMessage<S> = (Arc<JobExecutionState<S>>, usize);
 
 #[derive(Debug)]
-pub struct Dispatcher<S> {
+pub struct JobScheduler<S> {
     n_workers: NonZeroUsize,
     jobs: JobPool<S>,
     dependency_graph: JobDependencyGraph<S>,
@@ -57,7 +57,7 @@ struct JobDependencyGraph<S> {
 #[derive(Debug)]
 struct JobExecutor<S> {
     state: Arc<JobExecutionState<S>>,
-    thread_pool: DispatcherThreadPool<S>,
+    thread_pool: JobSchedulerThreadPool<S>,
 }
 
 #[derive(Debug)]
@@ -90,7 +90,7 @@ pub const fn hash_job_name_to_id(name: &str) -> JobID {
     const_fnv1a_hash::fnv1a_hash_str_64(name)
 }
 
-impl<S> Dispatcher<S>
+impl<S> JobScheduler<S>
 where
     S: Sync + Send + 'static,
 {
@@ -548,12 +548,12 @@ mod test {
     create_job_type!(name = CircularJob1, deps = [CircularJob2]);
     create_job_type!(name = CircularJob2, deps = [CircularJob1]);
 
-    type TestDispatcher = Dispatcher<JobRecorder>;
+    type TestJobScheduler = JobScheduler<JobRecorder>;
     type TestJobDependencyGraph = JobDependencyGraph<JobRecorder>;
     type TestOrderedJob = OrderedJob<JobRecorder>;
 
-    fn create_dispatcher(n_workers: usize) -> TestDispatcher {
-        Dispatcher::new(
+    fn create_scheduler(n_workers: usize) -> TestJobScheduler {
+        JobScheduler::new(
             NonZeroUsize::new(n_workers).unwrap(),
             Arc::new(JobRecorder::new()),
         )
@@ -561,105 +561,105 @@ mod test {
 
     #[test]
     fn registering_jobs_in_dependency_order_works() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(Job1).unwrap();
-        assert!(dispatcher.has_job(Job1::ID));
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(Job1).unwrap();
+        assert!(scheduler.has_job(Job1::ID));
 
-        dispatcher.register_job(Job2).unwrap();
-        assert!(dispatcher.has_job(Job1::ID));
-        assert!(dispatcher.has_job(Job2::ID));
+        scheduler.register_job(Job2).unwrap();
+        assert!(scheduler.has_job(Job1::ID));
+        assert!(scheduler.has_job(Job2::ID));
 
-        dispatcher.register_job(DepJob1).unwrap();
-        assert!(dispatcher.has_job(Job1::ID));
-        assert!(dispatcher.has_job(Job1::ID));
-        assert!(dispatcher.has_job(DepJob1::ID));
+        scheduler.register_job(DepJob1).unwrap();
+        assert!(scheduler.has_job(Job1::ID));
+        assert!(scheduler.has_job(Job1::ID));
+        assert!(scheduler.has_job(DepJob1::ID));
 
-        dispatcher.register_job(DepDepJob1Job2).unwrap();
-        assert!(dispatcher.has_job(Job1::ID));
-        assert!(dispatcher.has_job(Job1::ID));
-        assert!(dispatcher.has_job(DepJob1::ID));
-        assert!(dispatcher.has_job(DepDepJob1Job2::ID));
+        scheduler.register_job(DepDepJob1Job2).unwrap();
+        assert!(scheduler.has_job(Job1::ID));
+        assert!(scheduler.has_job(Job1::ID));
+        assert!(scheduler.has_job(DepJob1::ID));
+        assert!(scheduler.has_job(DepDepJob1Job2::ID));
 
-        dispatcher.complete_job_registration().unwrap();
+        scheduler.complete_job_registration().unwrap();
     }
 
     #[test]
     fn registering_jobs_out_of_dependency_order_works() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(DepDepJob1Job2).unwrap();
-        assert!(dispatcher.has_job(DepDepJob1Job2::ID));
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(DepDepJob1Job2).unwrap();
+        assert!(scheduler.has_job(DepDepJob1Job2::ID));
 
-        dispatcher.register_job(Job2).unwrap();
-        assert!(dispatcher.has_job(DepDepJob1Job2::ID));
-        assert!(dispatcher.has_job(Job2::ID));
+        scheduler.register_job(Job2).unwrap();
+        assert!(scheduler.has_job(DepDepJob1Job2::ID));
+        assert!(scheduler.has_job(Job2::ID));
 
-        dispatcher.register_job(DepJob1).unwrap();
-        assert!(dispatcher.has_job(DepDepJob1Job2::ID));
-        assert!(dispatcher.has_job(Job2::ID));
-        assert!(dispatcher.has_job(DepJob1::ID));
+        scheduler.register_job(DepJob1).unwrap();
+        assert!(scheduler.has_job(DepDepJob1Job2::ID));
+        assert!(scheduler.has_job(Job2::ID));
+        assert!(scheduler.has_job(DepJob1::ID));
 
-        dispatcher.register_job(Job1).unwrap();
-        assert!(dispatcher.has_job(DepDepJob1Job2::ID));
-        assert!(dispatcher.has_job(Job2::ID));
-        assert!(dispatcher.has_job(DepJob1::ID));
-        assert!(dispatcher.has_job(Job1::ID));
+        scheduler.register_job(Job1).unwrap();
+        assert!(scheduler.has_job(DepDepJob1Job2::ID));
+        assert!(scheduler.has_job(Job2::ID));
+        assert!(scheduler.has_job(DepJob1::ID));
+        assert!(scheduler.has_job(Job1::ID));
 
-        dispatcher.complete_job_registration().unwrap();
+        scheduler.complete_job_registration().unwrap();
     }
 
     #[test]
     fn registering_no_jobs_works() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.complete_job_registration().unwrap();
+        let mut scheduler = create_scheduler(1);
+        scheduler.complete_job_registration().unwrap();
     }
 
     #[test]
     #[should_panic]
     fn registering_same_job_twice_fails() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(Job1).unwrap();
-        dispatcher.register_job(Job2).unwrap();
-        dispatcher.register_job(Job1).unwrap();
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(Job1).unwrap();
+        scheduler.register_job(Job2).unwrap();
+        scheduler.register_job(Job1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn completing_with_missing_dependency_fails() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(DepJob1).unwrap();
-        dispatcher.complete_job_registration().unwrap();
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(DepJob1).unwrap();
+        scheduler.complete_job_registration().unwrap();
     }
 
     #[test]
     #[should_panic]
     fn creating_circular_job_dependencies_fails() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(CircularJob1).unwrap();
-        dispatcher.register_job(CircularJob2).unwrap();
-        dispatcher.complete_job_registration().unwrap();
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(CircularJob1).unwrap();
+        scheduler.register_job(CircularJob2).unwrap();
+        scheduler.complete_job_registration().unwrap();
     }
 
     #[test]
     #[should_panic]
     fn executing_before_completing_job_reg_fails() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(Job1).unwrap();
-        dispatcher.execute();
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(Job1).unwrap();
+        scheduler.execute();
     }
 
     #[test]
     fn executing_jobs_works() {
-        let mut dispatcher = create_dispatcher(2);
-        dispatcher.register_job(DepDepJob1Job2).unwrap();
-        dispatcher.register_job(Job2).unwrap();
-        dispatcher.register_job(DepJob1).unwrap();
-        dispatcher.register_job(Job1).unwrap();
-        dispatcher.register_job(DepJob1Job2).unwrap();
-        dispatcher.complete_job_registration().unwrap();
+        let mut scheduler = create_scheduler(2);
+        scheduler.register_job(DepDepJob1Job2).unwrap();
+        scheduler.register_job(Job2).unwrap();
+        scheduler.register_job(DepJob1).unwrap();
+        scheduler.register_job(Job1).unwrap();
+        scheduler.register_job(DepJob1Job2).unwrap();
+        scheduler.complete_job_registration().unwrap();
 
-        dispatcher.execute();
-        let recorded_worker_ids = dispatcher.world_state().get_recorded_worker_ids();
-        let recorded_job_ids = dispatcher.world_state().get_recorded_job_ids();
+        scheduler.execute();
+        let recorded_worker_ids = scheduler.world_state().get_recorded_worker_ids();
+        let recorded_job_ids = scheduler.world_state().get_recorded_job_ids();
 
         match recorded_job_ids[..] {
             [Job1::ID, Job2::ID, DepJob1::ID, DepJob1Job2::ID, DepDepJob1Job2::ID] => {}
@@ -698,13 +698,13 @@ mod test {
 
     #[test]
     fn ordered_jobs_are_created_correctly() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(DepDepJob1).unwrap();
-        dispatcher.register_job(Job1).unwrap();
-        dispatcher.register_job(DepJob1).unwrap();
-        dispatcher.complete_job_registration().unwrap();
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(DepDepJob1).unwrap();
+        scheduler.register_job(Job1).unwrap();
+        scheduler.register_job(DepJob1).unwrap();
+        scheduler.complete_job_registration().unwrap();
 
-        let job_ordering = dispatcher.executor().job_ordering();
+        let job_ordering = scheduler.executor().job_ordering();
         {
             let job_1 = job_ordering.job(0);
             assert_eq!(job_1.n_dependencies(), 0);
@@ -724,21 +724,21 @@ mod test {
 
     #[test]
     fn finding_n_dependencyless_jobs_works() {
-        let mut dispatcher = create_dispatcher(1);
-        dispatcher.register_job(DepDepJob1).unwrap();
-        dispatcher.register_job(Job1).unwrap();
-        dispatcher.register_job(DepJob1).unwrap();
-        dispatcher.complete_job_registration().unwrap();
+        let mut scheduler = create_scheduler(1);
+        scheduler.register_job(DepDepJob1).unwrap();
+        scheduler.register_job(Job1).unwrap();
+        scheduler.register_job(DepJob1).unwrap();
+        scheduler.complete_job_registration().unwrap();
         assert_eq!(
-            dispatcher.executor().job_ordering().n_dependencyless_jobs(),
+            scheduler.executor().job_ordering().n_dependencyless_jobs(),
             1
         );
 
-        dispatcher.register_job(Job2).unwrap();
-        dispatcher.register_job(DepDepJob1Job2).unwrap();
-        dispatcher.complete_job_registration().unwrap();
+        scheduler.register_job(Job2).unwrap();
+        scheduler.register_job(DepDepJob1Job2).unwrap();
+        scheduler.complete_job_registration().unwrap();
         assert_eq!(
-            dispatcher.executor().job_ordering().n_dependencyless_jobs(),
+            scheduler.executor().job_ordering().n_dependencyless_jobs(),
             2
         );
     }
