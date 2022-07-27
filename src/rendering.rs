@@ -17,6 +17,7 @@ use crate::geometry::GeometricalData;
 use anyhow::Result;
 
 /// Container for all data and logic required for rendering.
+#[derive(Debug)]
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
     assets: Assets,

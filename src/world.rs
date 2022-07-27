@@ -8,6 +8,7 @@ use crate::{
 
 /// Container for all data required for simulating and
 /// rendering the world.
+#[derive(Debug)]
 pub struct World {
     geometrical_data: GeometricalData,
     renderer: RenderingSystem,

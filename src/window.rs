@@ -24,6 +24,7 @@ cfg_if::cfg_if! {
 }
 
 /// Wrapper for a window with an associated event loop.
+#[derive(Debug)]
 pub struct Window {
     window: WinitWindow,
     event_loop: EventLoop<()>,

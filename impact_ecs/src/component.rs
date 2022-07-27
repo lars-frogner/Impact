@@ -36,7 +36,7 @@ pub trait Component: Pod {
 
     /// Returns the [`ComponentByteView`] containing a reference
     /// to the raw data of the component.
-    fn component_bytes(&self) -> ComponentByteView;
+    fn component_bytes(&self) -> ComponentByteView<'_>;
 }
 
 /// Represents a collection of instances of the same component
@@ -98,7 +98,7 @@ impl ComponentStorage {
             component_id,
             component_size,
             bytes,
-        }: ComponentByteView,
+        }: ComponentByteView<'_>,
     ) -> Self {
         Self {
             component_id,
@@ -155,7 +155,7 @@ impl ComponentStorage {
             component_id,
             component_size: _,
             bytes,
-        }: ComponentByteView,
+        }: ComponentByteView<'_>,
     ) {
         self.validate_component_id(component_id);
         self.bytes.extend_from_slice(bytes);
@@ -271,7 +271,7 @@ impl ComponentBytes {
 
     /// Returns a [`ComponentByteView`] referencing the component
     /// bytes.
-    pub fn as_ref(&self) -> ComponentByteView {
+    pub fn as_ref(&self) -> ComponentByteView<'_> {
         ComponentByteView {
             component_id: self.component_id(),
             component_size: self.component_size(),

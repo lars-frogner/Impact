@@ -126,6 +126,7 @@ impl<F: Float> CameraConfiguration<F> {
 
     /// Whether the view transform has changed since the last reset of
     /// change tracing.
+    #[allow(dead_code)]
     fn view_transform_changed(&self) -> bool {
         self.view_transform_change_tracker.changed()
     }

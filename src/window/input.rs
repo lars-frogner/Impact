@@ -73,7 +73,7 @@ impl InputHandler {
         &self,
         world: &mut World,
         control_flow: &mut ControlFlow,
-        event: &WindowEvent,
+        event: &WindowEvent<'_>,
     ) -> HandlingResult {
         match event {
             // Handle keyboard input events

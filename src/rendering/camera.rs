@@ -9,6 +9,7 @@ use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, Projective3};
 
 /// Owner and manager of render data for cameras.
+#[derive(Debug)]
 pub struct CameraRenderDataManager {
     transform_buffer: UniformBuffer,
     transform_bind_group_layout: wgpu::BindGroupLayout,

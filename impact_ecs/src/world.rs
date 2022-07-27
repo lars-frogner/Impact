@@ -42,6 +42,7 @@ pub struct World {
 }
 
 /// A reference into the entry for an [`Entity`] in the [`World`].
+#[derive(Debug)]
 pub struct EntityEntry<'a> {
     entity_id: EntityID,
     table: RwLockReadGuard<'a, ArchetypeTable>,
@@ -208,7 +209,7 @@ impl World {
     /// The returned `EntityEntry` holds a read lock on the
     /// [`ArchetypeTable`] holding the entity. Until the entry is
     /// dropped, attempts to modify the table will be blocked.
-    pub fn get_entity(&self, entity: &Entity) -> Option<EntityEntry> {
+    pub fn get_entity(&self, entity: &Entity) -> Option<EntityEntry<'_>> {
         let table_idx = self.get_table_idx(entity.archetype_id()).ok()?;
         let table = self.archetype_tables[table_idx].read().unwrap();
         Some(EntityEntry::new(entity.id(), table))
@@ -253,7 +254,7 @@ impl World {
     /// The returned `EntityEntry` holds a read lock on the
     /// [`ArchetypeTable`] holding the entity. Until the entry is
     /// dropped, attempts to modify the table will be blocked.
-    pub fn entity(&self, entity: &Entity) -> EntityEntry {
+    pub fn entity(&self, entity: &Entity) -> EntityEntry<'_> {
         self.get_entity(entity).expect("Entity does not exist")
     }
 
@@ -293,7 +294,7 @@ impl World {
     pub fn find_tables_containing_archetype(
         &self,
         archetype: Archetype,
-    ) -> impl Iterator<Item = RwLockReadGuard<ArchetypeTable>> {
+    ) -> impl Iterator<Item = RwLockReadGuard<'_, ArchetypeTable>> {
         self.archetype_tables.iter().filter_map(move |table| {
             let table = table.read().unwrap();
             if table.archetype().contains(&archetype) {
@@ -312,7 +313,7 @@ impl World {
 
     fn create_entities_with_component_bytes(
         &mut self,
-        archetype_data: ArchetypeCompByteView,
+        archetype_data: ArchetypeCompByteView<'_>,
     ) -> Vec<Entity> {
         let archetype_id = archetype_data.archetype_id();
         let entities: Vec<_> = (0..archetype_data.component_count())
@@ -325,7 +326,7 @@ impl World {
     fn add_entities_to_table(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
-        archetype_data: ArchetypeCompByteView,
+        archetype_data: ArchetypeCompByteView<'_>,
     ) {
         let archetype_id = archetype_data.archetype_id();
         match self.archetype_index_mapper.get(archetype_id) {
@@ -372,7 +373,7 @@ impl World {
     fn add_component_data_for_entity(
         &mut self,
         entity: &mut Entity,
-        component_data: ComponentByteView,
+        component_data: ComponentByteView<'_>,
     ) -> Result<()> {
         // Since the archetype of the entity changes when adding a
         // component, we need to first remove it from the old table
@@ -450,7 +451,7 @@ impl<'a> EntityEntry<'a> {
     /// Returns a reference to the component specified by the
     /// type parameter `C`. If the entity does not have this
     /// component, [`None`] is returned.
-    pub fn get_component<C: Component>(&self) -> Option<ComponentStorageEntry<C>> {
+    pub fn get_component<C: Component>(&self) -> Option<ComponentStorageEntry<'_, C>> {
         self.table.get_component_for_entity::<C>(self.entity_id)
     }
 
@@ -459,7 +460,7 @@ impl<'a> EntityEntry<'a> {
     ///
     /// # Panics
     /// If the entity does not have the specified component.
-    pub fn component<C: Component>(&self) -> ComponentStorageEntry<C> {
+    pub fn component<C: Component>(&self) -> ComponentStorageEntry<'_, C> {
         self.get_component::<C>()
             .expect("Requested invalid component")
     }
@@ -467,7 +468,7 @@ impl<'a> EntityEntry<'a> {
     /// Returns a mutable reference to the component specified
     /// by the type parameter `C`. If the entity does not have
     /// this component, [`None`] is returned.
-    pub fn get_component_mut<C: Component>(&self) -> Option<ComponentStorageEntryMut<C>> {
+    pub fn get_component_mut<C: Component>(&self) -> Option<ComponentStorageEntryMut<'_, C>> {
         self.table.get_component_for_entity_mut::<C>(self.entity_id)
     }
 
@@ -476,7 +477,7 @@ impl<'a> EntityEntry<'a> {
     ///
     /// # Panics
     /// If the entity does not have the specified component.
-    pub fn component_mut<C: Component>(&self) -> ComponentStorageEntryMut<C> {
+    pub fn component_mut<C: Component>(&self) -> ComponentStorageEntryMut<'_, C> {
         self.get_component_mut::<C>()
             .expect("Requested invalid component")
     }
@@ -806,10 +807,10 @@ mod query_test {
         query!(world, |pos: &mut Position, byte: &Byte| {
             assert_eq!(pos, &POS);
             assert_eq!(byte, &BYTE);
-            pos.1 = byte.0 as f32;
+            pos.1 = f32::from(byte.0);
         });
         query!(world, |byte: &Byte, pos: &Position| {
-            assert_eq!(pos.1, byte.0 as f32);
+            assert_eq!(pos.1, f32::from(byte.0));
         });
     }
 

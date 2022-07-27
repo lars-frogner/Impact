@@ -1,5 +1,9 @@
 //! Implementation of an [Entity Component System](https://en.wikipedia.org/wiki/Entity_component_system) engine.
 
+#![warn(missing_debug_implementations)]
+#![warn(rust_2018_idioms)]
+#![warn(clippy::cast_lossless)]
+
 pub mod archetype;
 pub mod component;
 pub mod util;

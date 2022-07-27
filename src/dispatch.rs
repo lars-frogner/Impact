@@ -20,7 +20,7 @@ use crate::thread::WorkerID;
 
 pub type JobID = u64;
 
-pub trait Job<S>: Sync + Send {
+pub trait Job<S>: Sync + Send + std::fmt::Debug {
     fn id(&self) -> JobID;
 
     fn depends_on(&self) -> &[JobID];
@@ -37,6 +37,7 @@ type DispatcherThreadPool<S> = ThreadPool<JobMessage<S>>;
 type JobPool<S> = HashMap<JobID, Arc<dyn Job<S>>>;
 type JobMessage<S> = (Arc<JobExecutionState<S>>, usize);
 
+#[derive(Debug)]
 pub struct Dispatcher<S> {
     n_workers: NonZeroUsize,
     jobs: JobPool<S>,
@@ -45,6 +46,7 @@ pub struct Dispatcher<S> {
     world_state: Arc<S>,
 }
 
+#[derive(Debug)]
 struct JobDependencyGraph<S> {
     graph: DiGraphMap<JobID, ()>,
     space: DfsSpace<JobID, HashSet<JobID>>,
@@ -52,21 +54,25 @@ struct JobDependencyGraph<S> {
     _phantom: PhantomData<S>,
 }
 
+#[derive(Debug)]
 struct JobExecutor<S> {
     state: Arc<JobExecutionState<S>>,
     thread_pool: DispatcherThreadPool<S>,
 }
 
+#[derive(Debug)]
 struct JobExecutionState<S> {
     job_ordering: JobOrdering<S>,
     world_state: Arc<S>,
 }
 
+#[derive(Debug)]
 struct JobOrdering<S> {
     jobs: Vec<OrderedJob<S>>,
     n_dependencyless_jobs: usize,
 }
 
+#[derive(Debug)]
 struct OrderedJob<S> {
     job: Arc<dyn Job<S>>,
     n_dependencies: usize,
@@ -504,6 +510,7 @@ mod test {
 
     macro_rules! create_job_type {
         (name = $job:ident, deps = [$($deps:ty),*]) => {
+            #[derive(Debug)]
             struct $job;
 
             impl $job {

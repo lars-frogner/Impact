@@ -30,6 +30,7 @@ pub trait BufferableUniform: Pod {
 }
 
 /// A buffer containing vertices.
+#[derive(Debug)]
 pub struct VertexBuffer {
     layout: wgpu::VertexBufferLayout<'static>,
     buffer: wgpu::Buffer,
@@ -40,9 +41,11 @@ pub struct VertexBuffer {
 ///
 /// Since a vertex buffer is used for storing the instances,
 /// this is just a thin wrapper around [`VertexBuffer`].
+#[derive(Debug)]
 pub struct InstanceBuffer(VertexBuffer);
 
 /// A buffer containing vertex indices.
+#[derive(Debug)]
 pub struct IndexBuffer {
     format: wgpu::IndexFormat,
     buffer: wgpu::Buffer,
@@ -50,6 +53,7 @@ pub struct IndexBuffer {
 }
 
 /// A buffer containing uniforms.
+#[derive(Debug)]
 pub struct UniformBuffer {
     bind_group_layout_descriptor: wgpu::BindGroupLayoutDescriptor<'static>,
     bind_group_label: String,

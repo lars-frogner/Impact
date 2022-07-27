@@ -9,6 +9,7 @@ pub type GeomIdent = String;
 pub type GeometryMap<T> = HashMap<GeomIdent, T>;
 
 /// Container for all geometrical data in the world.
+#[derive(Debug)]
 pub struct GeometricalData {
     /// Meshes with vertices that hold color values.
     pub color_meshes: GeometryMap<Mesh<ColorVertex>>,

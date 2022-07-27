@@ -10,6 +10,7 @@ use crate::rendering::{
 
 /// Collection for all render data for which there is associated
 /// geometrical data.
+#[derive(Debug)]
 pub struct RenderData {
     color_mesh_data: GeometryMap<MeshRenderDataManager>,
     texture_mesh_data: GeometryMap<MeshRenderDataManager>,

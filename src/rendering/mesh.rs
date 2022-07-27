@@ -14,6 +14,7 @@ use nalgebra::Matrix4;
 use std::mem;
 
 /// Owner and manager of render data for meshes.
+#[derive(Debug)]
 pub struct MeshRenderDataManager {
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
@@ -23,6 +24,7 @@ pub struct MeshRenderDataManager {
 }
 
 /// Owner and manager of render data for mesh instances.
+#[derive(Debug)]
 pub struct MeshInstanceRenderDataManager {
     instance_buffer: InstanceBuffer,
     label: String,

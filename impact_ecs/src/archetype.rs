@@ -160,6 +160,7 @@ pub struct ArchetypeCompByteView<'a> {
 
 /// An immutable reference into the entry for an
 /// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
+#[derive(Debug)]
 pub struct TableEntityEntry<'a> {
     info: TableEntityEntryInfo<'a>,
     components: Vec<RwLockReadGuard<'a, ComponentStorage>>,
@@ -167,6 +168,7 @@ pub struct TableEntityEntry<'a> {
 
 /// An mutable reference into the entry for an
 /// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
+#[derive(Debug)]
 pub struct TableEntityMutEntry<'a> {
     info: TableEntityEntryInfo<'a>,
     components: Vec<RwLockWriteGuard<'a, ComponentStorage>>,
@@ -174,6 +176,7 @@ pub struct TableEntityMutEntry<'a> {
 
 /// Common information needed by both [`TableEntityEntry`] and
 /// [`TableEntityMutEntry`].
+#[derive(Debug)]
 struct TableEntityEntryInfo<'a> {
     archetype: &'a Archetype,
     /// Index of the entity's component in each component storage.
@@ -259,6 +262,7 @@ impl PartialEq for Archetype {
 
 /// Immutable reference to the entry for a specific component
 /// instance in a [`ComponentStorage`]
+#[derive(Debug)]
 pub struct ComponentStorageEntry<'a, C> {
     entity_idx: usize,
     storage: RwLockReadGuard<'a, ComponentStorage>,
@@ -267,6 +271,7 @@ pub struct ComponentStorageEntry<'a, C> {
 
 /// Mmutable reference to the entry for a specific component
 /// instance in a [`ComponentStorage`]
+#[derive(Debug)]
 pub struct ComponentStorageEntryMut<'a, C> {
     entity_idx: usize,
     storage: RwLockWriteGuard<'a, ComponentStorage>,
@@ -285,7 +290,7 @@ impl ArchetypeTable {
     /// - If any of the entity IDs are equal.
     pub fn new_with_entities(
         entity_ids: impl IntoIterator<Item = EntityID>,
-        components: ArchetypeCompByteView,
+        components: ArchetypeCompByteView<'_>,
     ) -> Self {
         // Initialize mapper between entity ID and index in component storages
         let entity_index_mapper = KeyIndexMapper::new_with_keys(entity_ids);
@@ -320,7 +325,7 @@ impl ArchetypeTable {
     pub fn add_entities(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
-        components: ArchetypeCompByteView,
+        components: ArchetypeCompByteView<'_>,
     ) {
         let original_entity_count = self.entity_index_mapper.len();
         self.entity_index_mapper.push_keys(entity_ids);
@@ -382,7 +387,7 @@ impl ArchetypeTable {
     pub fn get_component_for_entity<C: Component>(
         &self,
         entity_id: EntityID,
-    ) -> Option<ComponentStorageEntry<C>> {
+    ) -> Option<ComponentStorageEntry<'_, C>> {
         let component_idx = *self.component_index_map.get(&C::component_id())?;
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
         dbg!(self.archetype().id(), entity_id, component_idx, entity_idx);
@@ -406,7 +411,7 @@ impl ArchetypeTable {
     pub fn get_component_for_entity_mut<C: Component>(
         &self,
         entity_id: EntityID,
-    ) -> Option<ComponentStorageEntryMut<C>> {
+    ) -> Option<ComponentStorageEntryMut<'_, C>> {
         let component_idx = *self.component_index_map.get(&C::component_id())?;
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(ComponentStorageEntryMut::new(
@@ -423,7 +428,7 @@ impl ArchetypeTable {
     /// The returned `TableEntityEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to modify
     /// the component data will be blocked.
-    pub fn get_entity(&self, entity_id: EntityID) -> Option<TableEntityEntry> {
+    pub fn get_entity(&self, entity_id: EntityID) -> Option<TableEntityEntry<'_>> {
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(TableEntityEntry::new(
             &self.archetype,
@@ -446,7 +451,7 @@ impl ArchetypeTable {
     /// The returned `TableEntityEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to modify
     /// the component data will be blocked.
-    pub fn entity(&self, entity_id: EntityID) -> TableEntityEntry {
+    pub fn entity(&self, entity_id: EntityID) -> TableEntityEntry<'_> {
         self.get_entity(entity_id)
             .expect("Entity not present in table")
     }
@@ -460,7 +465,7 @@ impl ArchetypeTable {
     /// The returned `TableEntityMutEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to read
     /// or modify the component data will be blocked.
-    pub fn get_entity_mut(&self, entity_id: EntityID) -> Option<TableEntityMutEntry> {
+    pub fn get_entity_mut(&self, entity_id: EntityID) -> Option<TableEntityMutEntry<'_>> {
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
         Some(TableEntityMutEntry::new(
             &self.archetype,
@@ -484,7 +489,7 @@ impl ArchetypeTable {
     /// The returned `TableEntityMutEntry` holds locks to the component storages
     /// in the table until it is dropped. Before then, attempts to read
     /// or modify the component data will be blocked.
-    pub fn entity_mut(&self, entity_id: EntityID) -> TableEntityMutEntry {
+    pub fn entity_mut(&self, entity_id: EntityID) -> TableEntityMutEntry<'_> {
         self.get_entity_mut(entity_id)
             .expect("Entity not present in table")
     }
@@ -526,7 +531,7 @@ impl ArchetypeTable {
             archetype,
             component_bytes,
             component_count,
-        }: ArchetypeCompByteView,
+        }: ArchetypeCompByteView<'_>,
     ) -> Self {
         assert_eq!(
             entity_index_mapper.len(),
@@ -714,7 +719,7 @@ impl ArchetypeCompBytes {
 
     /// Returns an [`ArchetypeCompByteView`] referencing the component
     /// bytes.
-    pub fn as_ref(&self) -> ArchetypeCompByteView {
+    pub fn as_ref(&self) -> ArchetypeCompByteView<'_> {
         ArchetypeCompByteView {
             archetype: self.archetype.clone(),
             component_bytes: self
@@ -989,7 +994,7 @@ mod test {
     #[test]
     #[should_panic]
     fn conversion_of_two_comp_array_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView = [BYTE.component_bytes(), BYTE.component_bytes()]
+        let _: ArchetypeCompByteView<'_> = [BYTE.component_bytes(), BYTE.component_bytes()]
             .try_into()
             .unwrap();
     }
@@ -997,7 +1002,7 @@ mod test {
     #[test]
     #[should_panic]
     fn conversion_of_three_comp_array_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView = [
+        let _: ArchetypeCompByteView<'_> = [
             BYTE.component_bytes(),
             POS.component_bytes(),
             BYTE.component_bytes(),
@@ -1008,19 +1013,19 @@ mod test {
 
     #[test]
     fn valid_conversion_of_comp_arrays_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView = [].try_into().unwrap();
+        let view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([]).unwrap()
         );
 
-        let view: ArchetypeCompByteView = [BYTE.component_bytes()].try_into().unwrap();
+        let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes()].try_into().unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([Byte::component_id()]).unwrap()
         );
 
-        let view: ArchetypeCompByteView = [BYTE.component_bytes(), POS.component_bytes()]
+        let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes(), POS.component_bytes()]
             .try_into()
             .unwrap();
         assert_eq!(
@@ -1029,7 +1034,7 @@ mod test {
                 .unwrap()
         );
 
-        let view: ArchetypeCompByteView = [
+        let view: ArchetypeCompByteView<'_> = [
             BYTE.component_bytes(),
             POS.component_bytes(),
             RECT.component_bytes(),
@@ -1049,9 +1054,9 @@ mod test {
 
     #[test]
     fn order_of_comps_for_byte_view_does_not_matter() {
-        let view_1: ArchetypeCompByteView = (&BYTE, &POS, &RECT).try_into().unwrap();
-        let view_2: ArchetypeCompByteView = (&POS, &BYTE, &RECT).try_into().unwrap();
-        let view_3: ArchetypeCompByteView = (&RECT, &BYTE, &POS).try_into().unwrap();
+        let view_1: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        let view_2: ArchetypeCompByteView<'_> = (&POS, &BYTE, &RECT).try_into().unwrap();
+        let view_3: ArchetypeCompByteView<'_> = (&RECT, &BYTE, &POS).try_into().unwrap();
         assert_eq!(view_2.archetype, view_1.archetype);
         assert_eq!(view_3.archetype, view_1.archetype);
     }
@@ -1059,31 +1064,31 @@ mod test {
     #[test]
     #[should_panic]
     fn conversion_of_two_comp_tuple_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView = (&POS, &POS).try_into().unwrap();
+        let _: ArchetypeCompByteView<'_> = (&POS, &POS).try_into().unwrap();
     }
 
     #[test]
     #[should_panic]
     fn conversion_of_three_comp_tuple_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView = (&POS, &BYTE, &POS).try_into().unwrap();
+        let _: ArchetypeCompByteView<'_> = (&POS, &BYTE, &POS).try_into().unwrap();
     }
 
     #[test]
     fn valid_conversion_of_comp_tuples_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView = (&BYTE).into();
+        let view: ArchetypeCompByteView<'_> = (&BYTE).into();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([Byte::component_id()]).unwrap()
         );
 
-        let view: ArchetypeCompByteView = (&BYTE, &POS).try_into().unwrap();
+        let view: ArchetypeCompByteView<'_> = (&BYTE, &POS).try_into().unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([Byte::component_id(), Position::component_id()])
                 .unwrap()
         );
 
-        let view: ArchetypeCompByteView = (&BYTE, &POS, &RECT).try_into().unwrap();
+        let view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         assert_eq!(
             view.archetype,
             Archetype::new_from_component_id_arr([
@@ -1097,7 +1102,7 @@ mod test {
 
     #[test]
     fn adding_components_to_archetype_byte_view_works() {
-        let mut view: ArchetypeCompByteView = [].try_into().unwrap();
+        let mut view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
         view.add_new_component(BYTE.component_bytes()).unwrap();
         assert_eq!(
             view.archetype,
@@ -1126,13 +1131,13 @@ mod test {
     #[test]
     #[should_panic]
     fn adding_existing_component_to_archetype_byte_view_fails() {
-        let mut view: ArchetypeCompByteView = (&BYTE, &POS, &RECT).try_into().unwrap();
+        let mut view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         view.add_new_component(POS.component_bytes()).unwrap();
     }
 
     #[test]
     fn removing_components_from_archetype_byte_view_works() {
-        let mut view: ArchetypeCompByteView = (&BYTE, &POS, &RECT).try_into().unwrap();
+        let mut view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         view.remove_component_with_id(Byte::component_id()).unwrap();
         assert_eq!(
             view.archetype,
@@ -1161,7 +1166,7 @@ mod test {
     #[test]
     #[should_panic]
     fn removing_missing_component_from_archetype_byte_view_fails() {
-        let mut view: ArchetypeCompByteView = (&BYTE, &RECT).try_into().unwrap();
+        let mut view: ArchetypeCompByteView<'_> = (&BYTE, &RECT).try_into().unwrap();
         view.remove_component_with_id(Position::component_id())
             .unwrap();
     }
@@ -1169,7 +1174,7 @@ mod test {
     #[test]
     #[should_panic]
     fn removing_component_from_empty_archetype_byte_view_fails() {
-        let mut view: ArchetypeCompByteView = [].try_into().unwrap();
+        let mut view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
         view.remove_component_with_id(Position::component_id())
             .unwrap();
     }

@@ -8,6 +8,7 @@ use std::num::NonZeroU32;
 /// Represents the graphics device and the basic
 /// rendering entities whose configuration should not
 /// change after initialization.
+#[derive(Debug)]
 pub struct CoreRenderingSystem {
     /// Connection to graphics device.
     device: wgpu::Device,

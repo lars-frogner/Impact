@@ -24,6 +24,7 @@ pub struct RenderPassSpecification {
 }
 
 /// Recorder for a specific render pass.
+#[derive(Debug)]
 pub struct RenderPassRecorder {
     specification: RenderPassSpecification,
     pipeline: Option<wgpu::RenderPipeline>,
@@ -381,7 +382,7 @@ impl RenderPassRecorder {
         device: &wgpu::Device,
         layout: &wgpu::PipelineLayout,
         shader_module: &wgpu::ShaderModule,
-        vertex_buffer_layouts: &[wgpu::VertexBufferLayout],
+        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
         texture_format: wgpu::TextureFormat,
         label: &str,
     ) -> wgpu::RenderPipeline {

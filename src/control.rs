@@ -10,7 +10,7 @@ use nalgebra::{Rotation3, Translation3};
 
 /// Represents controllers that are used for controlling
 /// the movement of entities.
-pub trait MotionController<F> {
+pub trait MotionController<F>: std::fmt::Debug {
     fn next_translation(&mut self) -> Option<Translation3<F>>;
 
     /// Specifies whether the controlled entity should be moving in
