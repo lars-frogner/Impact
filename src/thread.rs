@@ -22,8 +22,11 @@ pub enum Message<M> {
     Terminate,
 }
 
-#[derive(Clone, Debug)]
+pub type WorkerID = usize;
+
+#[derive(Debug)]
 pub struct ThreadCommunicator<M> {
+    worker_id: Option<WorkerID>,
     n_workers: usize,
     n_idle_workers: Arc<AtomicUsize>,
     all_workers_idle_condvar: Arc<(Mutex<bool>, Condvar)>,
@@ -41,13 +44,12 @@ impl<M> ThreadPool<M> {
     where
         M: Send + 'static,
         A: Fn(&ThreadCommunicator<M>, M) + Sync,
-        ThreadCommunicator<M>: Clone,
     {
         let communicator = ThreadCommunicator::new(n_workers);
 
         let workers = (0..n_workers.get())
             .into_iter()
-            .map(|_| Worker::spawn(communicator.clone(), action))
+            .map(|worker_id| Worker::spawn(communicator.copy_for_worker(worker_id), action))
             .collect();
 
         Self {
@@ -108,6 +110,7 @@ impl<M> ThreadCommunicator<M> {
         let all_workers_idle_condvar = Arc::new((Mutex::new(true), Condvar::new()));
 
         Self {
+            worker_id: None,
             n_workers,
             n_idle_workers,
             all_workers_idle_condvar,
@@ -116,12 +119,27 @@ impl<M> ThreadCommunicator<M> {
         }
     }
 
+    pub fn worker_id(&self) -> WorkerID {
+        self.worker_id.unwrap()
+    }
+
     pub fn n_workers(&self) -> usize {
         self.n_workers
     }
 
     pub fn send_execute_message(&self, message: M) {
         self.send_message(Message::Execute(message));
+    }
+
+    fn copy_for_worker(&self, worker_id: WorkerID) -> Self {
+        Self {
+            worker_id: Some(worker_id),
+            n_workers: self.n_workers,
+            n_idle_workers: self.n_idle_workers.clone(),
+            all_workers_idle_condvar: self.all_workers_idle_condvar.clone(),
+            sender: self.sender.clone(),
+            receiver: self.receiver.clone(),
+        }
     }
 
     fn send_message(&self, message: Message<M>) {
