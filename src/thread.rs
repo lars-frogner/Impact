@@ -17,6 +17,34 @@ use std::{
 /// sending messages to a shared recieving queue.
 ///
 /// # Examples
+/// ```no_run
+/// # use impact::thread::ThreadPool;
+/// # use std::{iter, num::NonZeroUsize, sync::{Arc, Mutex}};
+/// #
+/// let n_workers = 2;
+/// let pool = ThreadPool::new(
+///     // At least one worker is required
+///     NonZeroUsize::new(n_workers).unwrap(),
+///     // Define task that increments a shared count
+///     &|_comm, (count, incr): (Arc<Mutex<usize>>, usize)| {
+///         *count.lock().unwrap() += incr
+///     }
+/// );
+///
+/// // Create shared mutex with initial count
+/// let count = Arc::new(Mutex::new(0));
+/// // Amount to increment count
+/// let incr = 3;
+///
+/// // Create one message for each worker, each containing
+/// // a reference to the shared count and the increment
+/// let messages = iter::repeat_with(|| (Arc::clone(&count), incr)).take(n_workers);
+///
+/// // Execute the task once with each message and wait until done
+/// pool.execute_and_wait(messages);
+///
+/// assert_eq!(*count.lock().unwrap(), n_workers * incr);
+/// ```
 ///
 /// # Type parameters
 /// `M` is the type of message content sent to threads
