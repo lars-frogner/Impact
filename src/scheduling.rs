@@ -657,6 +657,8 @@ mod test {
     use super::*;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
+    const EXEC_ALL: ExecutionTag = execution_label_to_tag("all");
+
     struct TaskRecorder {
         recorded_tasks: Mutex<Vec<(WorkerID, TaskID)>>,
     }
@@ -696,12 +698,14 @@ mod test {
     }
 
     macro_rules! create_task_type {
-        (name = $task:ident, deps = [$($deps:ty),*]) => {
+        (name = $task:ident, deps = [$($dep:ty),*]) => {
             #[derive(Debug)]
             struct $task;
 
             impl $task {
-                const ID: TaskID = super::task_name_to_id(stringify!($task));
+                const ID: TaskID = task_name_to_id(stringify!($task));
+                #[allow(dead_code)]
+                const EXEC_TAG: ExecutionTag = execution_label_to_tag(stringify!($task));
             }
 
             impl Task<TaskRecorder> for $task
@@ -711,11 +715,11 @@ mod test {
                 }
 
                 fn depends_on(&self) -> &[TaskID] {
-                    &[$(<$deps>::ID),*]
+                    &[$(<$dep>::ID),*]
                 }
 
-                fn should_execute(&self, _execution_tags: &ExecutionTags) -> bool {
-                    true
+                fn should_execute(&self, execution_tags: &ExecutionTags) -> bool {
+                    [EXEC_ALL, Self::EXEC_TAG].iter().any(|tag| execution_tags.contains(tag))
                 }
 
                 fn execute(&self, _task_recorder: &TaskRecorder) -> Result<()> {
@@ -861,7 +865,7 @@ mod test {
         scheduler.register_task(DepTask1Task2).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        scheduler.execute_and_wait(ExecutionTags::new());
+        scheduler.execute_and_wait(ExecutionTags::from([EXEC_ALL]));
         let recorded_worker_ids = scheduler.world_state().get_recorded_worker_ids();
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 
@@ -900,6 +904,31 @@ mod test {
             [0, 1, 0, 1, 0] => {}
             [1, 0, 1, 0, 1] => {}
             _ => panic!("Incorrect worker contribution"),
+        }
+    }
+
+    #[test]
+    fn filtering_execution_with_tags_works() {
+        let mut scheduler = create_scheduler(2);
+        scheduler.register_task(DepDepTask1Task2).unwrap();
+        scheduler.register_task(Task2).unwrap();
+        scheduler.register_task(DepTask1).unwrap();
+        scheduler.register_task(Task1).unwrap();
+        scheduler.register_task(DepTask1Task2).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        scheduler.execute_and_wait(ExecutionTags::from([
+            Task2::EXEC_TAG,
+            DepTask1::EXEC_TAG,
+            DepDepTask1Task2::EXEC_TAG,
+        ]));
+        let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
+
+        for task_id in [Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] {
+            assert!(recorded_task_ids.contains(&task_id));
+        }
+        for task_id in [Task1::ID, DepTask1Task2::ID] {
+            assert!(!recorded_task_ids.contains(&task_id));
         }
     }
 
