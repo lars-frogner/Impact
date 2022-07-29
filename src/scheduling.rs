@@ -27,15 +27,17 @@ pub trait Task<S>: Sync + Send + std::fmt::Debug {
 
     fn execute(&self, world_state: &S) -> Result<()>;
 
+    fn should_execute(&self, execution_tags: &ExecutionTags) -> bool;
+
     #[cfg(test)]
     fn execute_with_worker(&self, _worker_id: WorkerID, world_state: &S) -> Result<()> {
         self.execute(world_state)
     }
 }
 
-type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
-type TaskPool<S> = HashMap<TaskID, Arc<dyn Task<S>>>;
-type TaskMessage<S> = (Arc<TaskExecutionState<S>>, usize);
+pub type ExecutionTag = u64;
+
+pub type ExecutionTags = HashSet<ExecutionTag>;
 
 #[derive(Debug)]
 pub struct TaskScheduler<S> {
@@ -45,6 +47,14 @@ pub struct TaskScheduler<S> {
     executor: Option<TaskExecutor<S>>,
     world_state: Arc<S>,
 }
+
+type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
+type TaskPool<S> = HashMap<TaskID, Arc<dyn Task<S>>>;
+type TaskMessage<S> = (
+    Arc<TaskExecutionState<S>>,
+    Arc<HashSet<ExecutionTag>>,
+    usize,
+);
 
 #[derive(Debug)]
 struct TaskDependencyGraph<S> {
@@ -86,7 +96,11 @@ enum TaskReady {
     No,
 }
 
-pub const fn hash_task_name_to_id(name: &str) -> TaskID {
+pub const fn task_name_to_id(name: &str) -> TaskID {
+    const_fnv1a_hash::fnv1a_hash_str_64(name)
+}
+
+pub const fn execution_label_to_tag(name: &str) -> ExecutionTag {
     const_fnv1a_hash::fnv1a_hash_str_64(name)
 }
 
@@ -112,18 +126,18 @@ where
         self.tasks.contains_key(&task_id)
     }
 
-    pub fn execute(&self) {
+    pub fn execute(&self, execution_tags: ExecutionTags) {
         self.executor
             .as_ref()
             .expect("Called `execute` before completing task registration")
-            .execute();
+            .execute(execution_tags);
     }
 
-    pub fn execute_on_main_thread(&self) {
+    pub fn execute_on_main_thread(&self, execution_tags: &ExecutionTags) {
         self.executor
             .as_ref()
             .expect("Called `execute` before completing task registration")
-            .execute_on_main_thread();
+            .execute_on_main_thread(execution_tags);
     }
 
     pub fn register_task(&mut self, task: impl Task<S> + 'static) -> Result<()> {
@@ -255,40 +269,46 @@ where
         self.state.task_ordering()
     }
 
-    fn execute_on_main_thread(&self) {
+    fn execute_on_main_thread(&self, execution_tags: &ExecutionTags) {
         for task_idx in 0..self.thread_pool.n_workers() {
-            let task = self.task_ordering().task(task_idx);
-            task.execute(self.state.world_state()).expect("Task failed");
+            let task = self.task_ordering().task(task_idx).task();
+            if task.should_execute(execution_tags) {
+                task.execute(self.state.world_state()).expect("Task failed");
+            }
         }
     }
 
-    fn execute(&self) {
-        self.thread_pool.execute_with_workers(
+    fn execute(&self, execution_tags: ExecutionTags) {
+        let execution_tags = Arc::new(execution_tags);
+        self.thread_pool.execute(
             (0..self.task_ordering().n_dependencyless_tasks())
-                .map(|task_idx| Self::create_message(&self.state, task_idx)),
+                .map(|task_idx| Self::create_message(&self.state, &execution_tags, task_idx)),
         );
-        self.thread_pool.wait_for_all_workers_idle();
+        self.thread_pool.wait_until_done();
         self.task_ordering().reset();
     }
 
     fn execute_task(
         communicator: &ThreadCommunicator<TaskMessage<S>>,
-        (state, task_idx): TaskMessage<S>,
+        (state, execution_tags, task_idx): TaskMessage<S>,
     ) {
-        let task = state.task_ordering().task(task_idx);
+        let ordered_task = state.task_ordering().task(task_idx);
+        let task = ordered_task.task();
 
-        {
-            cfg_if::cfg_if! {
-                if #[cfg(test)] {
-                    task.execute_with_worker(communicator.worker_id(), state.world_state())
-                } else {
-                    task.execute(state.world_state())
+        if task.should_execute(execution_tags.as_ref()) {
+            {
+                cfg_if::cfg_if! {
+                    if #[cfg(test)] {
+                        task.execute_with_worker(communicator.worker_id(), state.world_state())
+                    } else {
+                        task.execute(state.world_state())
+                    }
                 }
             }
+            .expect("Task failed");
         }
-        .expect("Task failed");
 
-        let ready_dependent_task_indices: Vec<_> = task
+        let ready_dependent_task_indices: Vec<_> = ordered_task
             .indices_of_dependent_tasks()
             .iter()
             .cloned()
@@ -301,17 +321,27 @@ where
 
         if ready_dependent_task_indices.len() > 1 {
             for &ready_dependent_task_idx in &ready_dependent_task_indices[1..] {
-                communicator
-                    .send_execute_message(Self::create_message(&state, ready_dependent_task_idx));
+                communicator.send_execute_instruction(Self::create_message(
+                    &state,
+                    &execution_tags,
+                    ready_dependent_task_idx,
+                ));
             }
         }
         if let Some(&ready_dependent_task_idx) = ready_dependent_task_indices.first() {
-            Self::execute_task(communicator, (state, ready_dependent_task_idx))
+            Self::execute_task(
+                communicator,
+                (state, execution_tags, ready_dependent_task_idx),
+            )
         }
     }
 
-    fn create_message(state: &Arc<TaskExecutionState<S>>, task_idx: usize) -> TaskMessage<S> {
-        (Arc::clone(state), task_idx)
+    fn create_message(
+        state: &Arc<TaskExecutionState<S>>,
+        execution_tags: &Arc<ExecutionTags>,
+        task_idx: usize,
+    ) -> TaskMessage<S> {
+        (Arc::clone(state), Arc::clone(execution_tags), task_idx)
     }
 }
 
@@ -423,6 +453,10 @@ impl<S> OrderedTask<S> {
         }
     }
 
+    fn task(&self) -> &dyn Task<S> {
+        self.task.as_ref()
+    }
+
     fn n_dependencies(&self) -> usize {
         self.n_dependencies
     }
@@ -447,15 +481,6 @@ impl<S> OrderedTask<S> {
         } else {
             TaskReady::No
         }
-    }
-
-    fn execute(&self, world_state: &S) -> Result<()> {
-        self.task.execute(world_state)
-    }
-
-    #[cfg(test)]
-    fn execute_with_worker(&self, _worker_id: WorkerID, world_state: &S) -> Result<()> {
-        self.task.execute_with_worker(_worker_id, world_state)
     }
 }
 
@@ -508,7 +533,7 @@ mod test {
             struct $task;
 
             impl $task {
-                const ID: TaskID = super::hash_task_name_to_id(stringify!($task));
+                const ID: TaskID = super::task_name_to_id(stringify!($task));
             }
 
             impl Task<TaskRecorder> for $task
@@ -519,6 +544,10 @@ mod test {
 
                 fn depends_on(&self) -> &[TaskID] {
                     &[$(<$deps>::ID),*]
+                }
+
+                fn should_execute(&self, _execution_tags: &ExecutionTags) -> bool {
+                    true
                 }
 
                 fn execute(&self, _task_recorder: &TaskRecorder) -> Result<()> {
@@ -638,7 +667,7 @@ mod test {
     fn executing_before_completing_task_reg_fails() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(Task1).unwrap();
-        scheduler.execute();
+        scheduler.execute(ExecutionTags::new());
     }
 
     #[test]
@@ -651,7 +680,7 @@ mod test {
         scheduler.register_task(DepTask1Task2).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        scheduler.execute();
+        scheduler.execute(ExecutionTags::new());
         let recorded_worker_ids = scheduler.world_state().get_recorded_worker_ids();
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 
