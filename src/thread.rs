@@ -10,28 +10,46 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+/// A set of worker threads configured to execute a
+/// specific task on request.
+///
+/// The threads can perform simple communication by
+/// sending messages to a shared recieving queue.
+///
+/// # Examples
+///
+/// # Type parameters
+/// `M` is the type of message content sent to threads
+/// when they should execute a task.
 #[derive(Debug)]
 pub struct ThreadPool<M> {
     communicator: ThreadCommunicator<M>,
     workers: Vec<Worker>,
 }
 
+/// An instruction that can be sent to threads in a [`ThreadPool`]
+/// to make them begin executing their task with a given
+/// messsage of type `M` (which can be any piece of data), or to
+/// terminate so that they can be joined.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Message<M> {
+pub enum WorkerInstruction<M> {
     Execute(M),
     Terminate,
 }
 
+/// The type if ID used for workers in a [`ThreadPool`].
 pub type WorkerID = usize;
 
+/// A shared structure  for handling communication between
+/// the threads in a [`ThreadPool`].
 #[derive(Debug)]
 pub struct ThreadCommunicator<M> {
     worker_id: Option<WorkerID>,
     n_workers: usize,
     n_idle_workers: Arc<AtomicUsize>,
     all_workers_idle_condvar: Arc<(Mutex<bool>, Condvar)>,
-    sender: Sender<Message<M>>,
-    receiver: Arc<Mutex<Receiver<Message<M>>>>,
+    sender: Sender<WorkerInstruction<M>>,
+    receiver: Arc<Mutex<Receiver<WorkerInstruction<M>>>>,
 }
 
 #[derive(Debug)]
@@ -40,16 +58,30 @@ struct Worker {
 }
 
 impl<M> ThreadPool<M> {
-    pub fn new<A>(n_workers: NonZeroUsize, action: &'static A) -> Self
+    /// Creates a new thread pool containing the given number
+    /// of worker threads configured to execute a specified task.
+    /// When a thread recieves a [`WorkerInstruction`] to execute
+    /// the task, the given `execute_task` closure is called.
+    /// The closure is supplied with the message contained in
+    /// the execution instruction as well as a reference to a
+    /// [`ThreadCommunicator`] that can be used to send messages
+    /// to other threads from the closure.
+    pub fn new<T>(n_workers: NonZeroUsize, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        A: Fn(&ThreadCommunicator<M>, M) + Sync,
+        T: Fn(&ThreadCommunicator<M>, M) + Sync,
     {
         let communicator = ThreadCommunicator::new(n_workers);
 
         let workers = (0..n_workers.get())
             .into_iter()
-            .map(|worker_id| Worker::spawn(communicator.copy_for_worker(worker_id), action))
+            .map(|worker_id| {
+                // Create a new instance of the shared communicator
+                // for the spawned worker to use
+                let communicator = communicator.copy_for_worker(worker_id);
+
+                Worker::spawn(communicator, execute_task)
+            })
             .collect();
 
         Self {
@@ -58,16 +90,28 @@ impl<M> ThreadPool<M> {
         }
     }
 
+    /// Returns the number of worker threads in the thread pool
+    /// (this does not include the main thread).
     pub fn n_workers(&self) -> usize {
         self.communicator.n_workers()
     }
 
-    pub fn execute(&self, messages: impl Iterator<Item = M>) {
-        self.execute_with_workers(messages);
-        self.wait_for_all_workers_idle();
+    /// Instructs worker threads in the pool to execute their task.
+    /// The task will be executed with each of the given messages.
+    /// This function does not return until all the task executions
+    /// have been completed. To avoid blocking the main thread, use
+    /// [`execute`](Self::execute) instead.
+    pub fn execute_and_wait(&self, messages: impl Iterator<Item = M>) {
+        self.execute(messages);
+        self.wait_until_done();
     }
 
-    pub fn execute_with_workers(&self, messages: impl Iterator<Item = M>) {
+    /// Instructs worker threads in the pool to execute their task.
+    /// The task will be executed with each of the given messages.
+    /// This function returns as soon as all the execution instructions
+    /// have been sendt. To block until all tasks have been completed,
+    /// call [`wait_until_done`](Self::wait_until_done).
+    pub fn execute(&self, messages: impl Iterator<Item = M>) {
         for (idx, message) in messages.enumerate() {
             // If at least one execution message is sent, ensure
             // that the `all_workers_idle` flag is set to `false`
@@ -78,21 +122,26 @@ impl<M> ThreadPool<M> {
             if idx == 0 {
                 self.communicator.set_all_workers_idle(false);
             }
-            self.communicator.send_execute_message(message);
+            self.communicator.send_execute_instruction(message);
         }
     }
 
-    pub fn wait_for_all_workers_idle(&self) {
+    /// Blocks the calling thread and returns as soon as all pending
+    /// and currently executing task in the pool have been completed.
+    pub fn wait_until_done(&self) {
         self.communicator.wait_for_all_workers_idle();
     }
 }
 
 impl<M> Drop for ThreadPool<M> {
     fn drop(&mut self) {
+        // Send a termination instruction for each of the workers
         for _ in 0..self.workers.len() {
-            self.communicator.send_message(Message::Terminate);
+            self.communicator
+                .send_instruction(WorkerInstruction::Terminate);
         }
 
+        // Join each worker as soon as it has terminated
         for worker in self.workers.drain(..) {
             worker.join();
         }
@@ -103,7 +152,7 @@ impl<M> ThreadCommunicator<M> {
     fn new(n_workers: NonZeroUsize) -> Self {
         let n_workers = n_workers.get();
 
-        let (sender, receiver) = mpsc::channel::<Message<M>>();
+        let (sender, receiver) = mpsc::channel::<WorkerInstruction<M>>();
         let receiver = Arc::new(Mutex::new(receiver));
 
         let n_idle_workers = Arc::new(AtomicUsize::new(n_workers));
@@ -119,18 +168,33 @@ impl<M> ThreadCommunicator<M> {
         }
     }
 
+    /// Returns the ID of the worker owning this instance of
+    /// the [`ThreadPool`]'s communicator.
+    ///
+    /// # Panics
+    /// If called on a [`ThreadCommunicator`] that has not been
+    /// assigned to a worker thread.
     pub fn worker_id(&self) -> WorkerID {
         self.worker_id.unwrap()
     }
 
+    /// Returns the number of worker threads in the thread pool
+    /// (this does not include the main thread).
     pub fn n_workers(&self) -> usize {
         self.n_workers
     }
 
-    pub fn send_execute_message(&self, message: M) {
-        self.send_message(Message::Execute(message));
+    /// Sends an instruction to execute the task with the given
+    /// message to the recieving queue shared between the workers.
+    /// Hence, the first available worker will execute the task once
+    /// with the given message.
+    pub fn send_execute_instruction(&self, message: M) {
+        self.send_instruction(WorkerInstruction::Execute(message));
     }
 
+    /// Creates a new instance of the communicator that can be
+    /// used by the given worker to communicate with the other
+    /// threads in the [`ThreadPool`].
     fn copy_for_worker(&self, worker_id: WorkerID) -> Self {
         Self {
             worker_id: Some(worker_id),
@@ -142,28 +206,42 @@ impl<M> ThreadCommunicator<M> {
         }
     }
 
-    fn send_message(&self, message: Message<M>) {
+    fn send_instruction(&self, message: WorkerInstruction<M>) {
         self.sender.send(message).unwrap();
     }
 
-    fn receive_message(&self) -> Message<M> {
+    fn receive_message(&self) -> WorkerInstruction<M> {
         self.receiver.lock().unwrap().recv().unwrap()
     }
 
+    /// Increments the atomic count of idle workers and
+    /// updates the conditional variable used for tracking
+    /// whether all workers are idle.
     fn register_idle_worker(&self) {
         let previous_count = self.n_idle_workers.fetch_add(1, Ordering::AcqRel);
         assert!(previous_count < self.n_workers());
+
+        // If all workers are now idle, we must update the associated
+        // conditional variable
         if previous_count + 1 == self.n_workers() {
             self.set_all_workers_idle(true);
+            // Threads waiting for complete idleness to change should be notified
             self.all_workers_idle_condvar.1.notify_all();
         }
     }
 
+    /// Decrements the atomic count of idle workers and
+    /// updates the conditional variable used for tracking
+    /// whether all workers are idle.
     fn register_busy_worker(&self) {
         let previous_count = self.n_idle_workers.fetch_sub(1, Ordering::AcqRel);
         assert_ne!(previous_count, 0);
+
+        // If all workers are no longer idle, we must update the associated
+        // conditional variable
         if previous_count == self.n_workers() {
             self.set_all_workers_idle(false);
+            // Threads waiting for complete idleness to change should be notified
             self.all_workers_idle_condvar.1.notify_all();
         }
     }
@@ -177,6 +255,8 @@ impl<M> ThreadCommunicator<M> {
         self.n_idle_workers.load(Ordering::Acquire)
     }
 
+    /// Blocks execution in the calling thread and returns when
+    /// all worker threads are idle.
     fn wait_for_all_workers_idle(&self) {
         let mut all_idle = self.all_workers_idle_condvar.0.lock().unwrap();
         while !*all_idle {
@@ -186,21 +266,23 @@ impl<M> ThreadCommunicator<M> {
 }
 
 impl Worker {
-    fn spawn<M, A>(communicator: ThreadCommunicator<M>, action: &'static A) -> Self
+    /// Spawns a new worker thread for executing the given
+    /// task.
+    fn spawn<M, T>(communicator: ThreadCommunicator<M>, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        A: Fn(&ThreadCommunicator<M>, M) + Sync,
+        T: Fn(&ThreadCommunicator<M>, M) + Sync,
     {
         let handle = thread::spawn(move || loop {
             let message = communicator.receive_message();
 
             match message {
-                Message::Execute(message) => {
+                WorkerInstruction::Execute(message) => {
                     communicator.register_busy_worker();
-                    action(&communicator, message);
+                    execute_task(&communicator, message);
                     communicator.register_idle_worker();
                 }
-                Message::Terminate => {
+                WorkerInstruction::Terminate => {
                     return;
                 }
             }
@@ -229,9 +311,9 @@ mod test {
     fn sending_message_with_communicator_works() {
         let n_workers = 1;
         let communicator = ThreadCommunicator::new(NonZeroUsize::new(n_workers).unwrap());
-        communicator.send_execute_message(42);
+        communicator.send_execute_instruction(42);
         let message = communicator.receive_message();
-        assert_eq!(message, Message::Execute(42));
+        assert_eq!(message, WorkerInstruction::Execute(42));
     }
 
     #[test]
@@ -285,7 +367,7 @@ mod test {
         )| {
             *count.lock().unwrap() += incr
         });
-        pool.execute(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers));
+        pool.execute_and_wait(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers));
         drop(pool);
         assert_eq!(*count.lock().unwrap(), n_workers * 3);
     }
