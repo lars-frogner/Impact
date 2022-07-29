@@ -349,7 +349,7 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
     use crate::geometry::Degrees;
     use approx::assert_abs_diff_eq;
