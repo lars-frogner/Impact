@@ -11,7 +11,7 @@ use nalgebra::{
 use std::fmt::Debug;
 
 /// Position and orientation of a 3D camera.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CameraConfiguration<F: Float> {
     position: Point3<F>,
     look_direction: UnitVector3<F>,
@@ -22,7 +22,7 @@ pub struct CameraConfiguration<F: Float> {
 }
 
 /// 3D camera using a perspective transformation.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PerspectiveCamera<F: Float> {
     configuration: CameraConfiguration<F>,
     perspective_transform: Perspective3<F>,
@@ -58,10 +58,10 @@ pub trait Camera<F: Float> {
     fn view_projection_transform_changed(&self) -> bool;
 
     /// Forgets any recorded changes to the projection transform.
-    fn reset_projection_change_tracking(&mut self);
+    fn reset_projection_change_tracking(&self);
 
     /// Forgets any recorded changes to the view projection transform.
-    fn reset_view_projection_change_tracking(&mut self);
+    fn reset_view_projection_change_tracking(&self);
 }
 
 impl<F: Float> CameraConfiguration<F> {
@@ -83,7 +83,7 @@ impl<F: Float> CameraConfiguration<F> {
             look_direction,
             up_direction,
             view_transform,
-            view_transform_change_tracker: EntityChangeTracker::new(),
+            view_transform_change_tracker: EntityChangeTracker::default(),
         }
     }
 
@@ -194,7 +194,7 @@ impl<F: Float> CameraConfiguration<F> {
     }
 
     /// Forgets any recorded changes to the view transform.
-    pub fn reset_view_change_tracking(&mut self) {
+    pub fn reset_view_change_tracking(&self) {
         self.view_transform_change_tracker.reset();
     }
 
@@ -251,7 +251,7 @@ impl<F: Float> PerspectiveCamera<F> {
         Self {
             configuration,
             perspective_transform,
-            projection_transform_change_tracker: EntityChangeTracker::new(),
+            projection_transform_change_tracker: EntityChangeTracker::default(),
         }
     }
 
@@ -334,15 +334,15 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
 
     fn view_projection_transform_changed(&self) -> bool {
         self.projection_transform_change_tracker
-            .merged(self.configuration.view_transform_change_tracker)
+            .merged(&self.configuration.view_transform_change_tracker)
             .changed()
     }
 
-    fn reset_projection_change_tracking(&mut self) {
+    fn reset_projection_change_tracking(&self) {
         self.projection_transform_change_tracker.reset();
     }
 
-    fn reset_view_projection_change_tracking(&mut self) {
+    fn reset_view_projection_change_tracking(&self) {
         self.reset_projection_change_tracking();
         self.configuration.reset_view_change_tracking();
     }

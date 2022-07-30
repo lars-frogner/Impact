@@ -1,9 +1,11 @@
 //! Tracking of changes to entities and collections.
 
-/// Tracker for whether an entity has changed.
-#[derive(Clone, Copy, Debug)]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Atomic tracker for whether an entity has changed.
+#[derive(Debug)]
 pub struct EntityChangeTracker {
-    changed: bool,
+    changed: AtomicBool,
 }
 
 /// Tracker for how a collection has changed.
@@ -22,37 +24,39 @@ pub enum CollectionChange {
 
 impl EntityChangeTracker {
     /// Creates a new tracker.
-    pub fn new() -> Self {
-        Self { changed: false }
+    pub fn new(changed: bool) -> Self {
+        Self {
+            changed: AtomicBool::new(changed),
+        }
     }
 
     /// Whether the tracker has registered a change.
     pub fn changed(&self) -> bool {
-        self.changed
+        self.changed.load(Ordering::Acquire)
     }
 
     /// Informs the tracker that the entity has changed.
-    pub fn notify_change(&mut self) {
-        self.changed = true;
+    pub fn notify_change(&self) {
+        self.changed.store(true, Ordering::Release);
     }
 
     /// Creates a tracker with the changes in this and the given
     /// tracker merged.
-    pub fn merged(&self, other: Self) -> Self {
+    pub fn merged(&self, other: &Self) -> Self {
         Self {
-            changed: self.changed() || other.changed(),
+            changed: AtomicBool::new(self.changed() || other.changed()),
         }
     }
 
     /// Resets the changes registered by the tracker.
-    pub fn reset(&mut self) {
-        self.changed = false;
+    pub fn reset(&self) {
+        self.changed.store(false, Ordering::Release);
     }
 }
 
 impl Default for EntityChangeTracker {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
@@ -121,7 +125,7 @@ mod test {
 
     #[test]
     fn entity_change_tracker_tracks_changes() {
-        let mut tracker = EntityChangeTracker::new();
+        let tracker = EntityChangeTracker::default();
         assert!(
             !tracker.changed(),
             "Tracker reported change after construction"
@@ -137,17 +141,17 @@ mod test {
 
     #[test]
     fn entity_change_tracker_merging_works() {
-        assert!(!EntityChangeTracker { changed: false }
-            .merged(EntityChangeTracker { changed: false })
+        assert!(!EntityChangeTracker::new(false)
+            .merged(&EntityChangeTracker::new(false))
             .changed());
-        assert!(EntityChangeTracker { changed: true }
-            .merged(EntityChangeTracker { changed: false })
+        assert!(EntityChangeTracker::new(true)
+            .merged(&EntityChangeTracker::new(false))
             .changed());
-        assert!(EntityChangeTracker { changed: false }
-            .merged(EntityChangeTracker { changed: true })
+        assert!(EntityChangeTracker::new(false)
+            .merged(&EntityChangeTracker::new(true))
             .changed());
-        assert!(EntityChangeTracker { changed: true }
-            .merged(EntityChangeTracker { changed: true })
+        assert!(EntityChangeTracker::new(true)
+            .merged(&EntityChangeTracker::new(true))
             .changed());
     }
 
