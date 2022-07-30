@@ -1,5 +1,6 @@
 //! Tracking of changes to entities and collections.
 
+use atomic_enum::atomic_enum;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Atomic tracker for whether an entity has changed.
@@ -8,14 +9,15 @@ pub struct EntityChangeTracker {
     changed: AtomicBool,
 }
 
-/// Tracker for how a collection has changed.
-#[derive(Clone, Copy, Debug)]
+/// Atomic tracker for how a collection has changed.
+#[derive(Debug)]
 pub struct CollectionChangeTracker {
-    change: CollectionChange,
+    change: AtomicCollectionChange,
 }
 
 /// In what way a collection has changed.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[atomic_enum]
+#[derive(PartialEq)]
 pub enum CollectionChange {
     None,
     Contents,
@@ -62,15 +64,15 @@ impl Default for EntityChangeTracker {
 
 impl CollectionChangeTracker {
     /// Creates a new tracker.
-    pub fn new() -> Self {
+    pub fn new(change: CollectionChange) -> Self {
         Self {
-            change: CollectionChange::None,
+            change: AtomicCollectionChange::new(change),
         }
     }
 
     /// What kind of change the tracker has registered.
     pub fn change(&self) -> CollectionChange {
-        self.change
+        self.change.load(Ordering::Acquire)
     }
 
     /// Informs the tracker that the contents of the
@@ -79,23 +81,28 @@ impl CollectionChangeTracker {
     /// If the number of elements has already changed,
     /// we ignore this since it already implies that the
     /// contents have changed.
-    pub fn notify_content_change(&mut self) {
-        if self.change != CollectionChange::Count {
-            self.change = CollectionChange::Contents;
-        }
+    pub fn notify_content_change(&self) {
+        // Update `change` to `Contents` if it is `None`
+        let _ = self.change.compare_exchange(
+            CollectionChange::None,
+            CollectionChange::Contents,
+            Ordering::Acquire,
+            Ordering::Relaxed,
+        );
     }
 
     /// Informs the tracker that the number of elements in the
     /// collection has changed.
-    pub fn notify_count_change(&mut self) {
-        self.change = CollectionChange::Count;
+    pub fn notify_count_change(&self) {
+        self.change
+            .store(CollectionChange::Count, Ordering::Release);
     }
 
     /// Creates a tracker with the changes in this and the given
     /// tracker merged.
-    pub fn merged(&self, other: Self) -> Self {
+    pub fn merged(&self, other: &Self) -> Self {
         Self {
-            change: match (self.change(), other.change()) {
+            change: AtomicCollectionChange::new(match (self.change(), other.change()) {
                 (CollectionChange::Count, _) | (_, CollectionChange::Count) => {
                     CollectionChange::Count
                 }
@@ -103,19 +110,19 @@ impl CollectionChangeTracker {
                     CollectionChange::Contents
                 }
                 _ => CollectionChange::None,
-            },
+            }),
         }
     }
 
     /// Resets the changes registered by the tracker.
-    pub fn reset(&mut self) {
-        self.change = CollectionChange::None;
+    pub fn reset(&self) {
+        self.change.store(CollectionChange::None, Ordering::Release);
     }
 }
 
 impl Default for CollectionChangeTracker {
     fn default() -> Self {
-        Self::new()
+        Self::new(CollectionChange::None)
     }
 }
 
@@ -157,7 +164,7 @@ mod test {
 
     #[test]
     fn collection_change_tracker_tracks_content_changes() {
-        let mut tracker = CollectionChangeTracker::new();
+        let tracker = CollectionChangeTracker::default();
         assert_eq!(
             tracker.change(),
             CollectionChange::None,
@@ -179,7 +186,7 @@ mod test {
 
     #[test]
     fn collection_change_tracker_tracks_count_changes() {
-        let mut tracker = CollectionChangeTracker::new();
+        let tracker = CollectionChangeTracker::default();
         tracker.notify_count_change();
         assert_eq!(
             tracker.change(),
@@ -191,63 +198,39 @@ mod test {
     #[test]
     fn collection_change_tracker_merging_works() {
         assert_eq!(
-            CollectionChangeTracker {
-                change: CollectionChange::None
-            }
-            .merged(CollectionChangeTracker {
-                change: CollectionChange::None
-            })
-            .change(),
+            CollectionChangeTracker::new(CollectionChange::None)
+                .merged(&CollectionChangeTracker::new(CollectionChange::None))
+                .change(),
             CollectionChange::None
         );
         assert_eq!(
-            CollectionChangeTracker {
-                change: CollectionChange::Contents
-            }
-            .merged(CollectionChangeTracker {
-                change: CollectionChange::None
-            })
-            .change(),
+            CollectionChangeTracker::new(CollectionChange::Contents)
+                .merged(&CollectionChangeTracker::new(CollectionChange::None))
+                .change(),
             CollectionChange::Contents
         );
         assert_eq!(
-            CollectionChangeTracker {
-                change: CollectionChange::Contents
-            }
-            .merged(CollectionChangeTracker {
-                change: CollectionChange::Contents
-            })
-            .change(),
+            CollectionChangeTracker::new(CollectionChange::Contents)
+                .merged(&CollectionChangeTracker::new(CollectionChange::Contents))
+                .change(),
             CollectionChange::Contents
         );
         assert_eq!(
-            CollectionChangeTracker {
-                change: CollectionChange::Count
-            }
-            .merged(CollectionChangeTracker {
-                change: CollectionChange::None
-            })
-            .change(),
+            CollectionChangeTracker::new(CollectionChange::Count)
+                .merged(&CollectionChangeTracker::new(CollectionChange::None))
+                .change(),
             CollectionChange::Count
         );
         assert_eq!(
-            CollectionChangeTracker {
-                change: CollectionChange::Count
-            }
-            .merged(CollectionChangeTracker {
-                change: CollectionChange::Contents
-            })
-            .change(),
+            CollectionChangeTracker::new(CollectionChange::Count)
+                .merged(&CollectionChangeTracker::new(CollectionChange::Contents))
+                .change(),
             CollectionChange::Count
         );
         assert_eq!(
-            CollectionChangeTracker {
-                change: CollectionChange::Count
-            }
-            .merged(CollectionChangeTracker {
-                change: CollectionChange::Count
-            })
-            .change(),
+            CollectionChangeTracker::new(CollectionChange::Count)
+                .merged(&CollectionChangeTracker::new(CollectionChange::Count))
+                .change(),
             CollectionChange::Count
         );
     }

@@ -14,7 +14,7 @@ use std::fmt::Debug;
 /// and other properties. Each index refers to a vertex,
 /// and the sequence of indices describes the triangles
 /// making up the mesh faces.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Mesh<V> {
     vertices: Vec<V>,
     indices: Vec<u16>,
@@ -23,7 +23,7 @@ pub struct Mesh<V> {
 }
 
 /// A group of instances of the same mesh.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MeshInstanceGroup<F> {
     instances: Vec<MeshInstance<F>>,
     instance_change_tracker: CollectionChangeTracker,
@@ -61,8 +61,8 @@ impl<V> Mesh<V> {
         Self {
             vertices,
             indices,
-            vertex_change_tracker: CollectionChangeTracker::new(),
-            index_change_tracker: CollectionChangeTracker::new(),
+            vertex_change_tracker: CollectionChangeTracker::default(),
+            index_change_tracker: CollectionChangeTracker::default(),
         }
     }
 
@@ -89,17 +89,17 @@ impl<V> Mesh<V> {
     }
 
     /// Forgets any recorded changes to the vertices.
-    pub fn reset_vertex_change_tracking(&mut self) {
+    pub fn reset_vertex_change_tracking(&self) {
         self.vertex_change_tracker.reset();
     }
 
     /// Forgets any recorded changes to the vertices.
-    pub fn reset_index_change_tracking(&mut self) {
+    pub fn reset_index_change_tracking(&self) {
         self.index_change_tracker.reset();
     }
 
     /// Forgets any recorded changes to the vertices and indices.
-    pub fn reset_vertex_index_change_tracking(&mut self) {
+    pub fn reset_vertex_index_change_tracking(&self) {
         self.reset_vertex_change_tracking();
         self.reset_index_change_tracking();
     }
@@ -111,7 +111,7 @@ impl<F> MeshInstanceGroup<F> {
     pub fn new(instances: Vec<MeshInstance<F>>) -> Self {
         Self {
             instances,
-            instance_change_tracker: CollectionChangeTracker::new(),
+            instance_change_tracker: CollectionChangeTracker::default(),
         }
     }
 
@@ -127,7 +127,7 @@ impl<F> MeshInstanceGroup<F> {
     }
 
     /// Forgets any recorded changes to the instances.
-    pub fn reset_instance_change_tracking(&mut self) {
+    pub fn reset_instance_change_tracking(&self) {
         self.instance_change_tracker.reset();
     }
 }
