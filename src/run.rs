@@ -2,6 +2,7 @@
 
 use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
+    game_loop::{GameLoop, GameLoopConfig},
     geometry::{
         ColorVertex, GeometricalData, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex,
     },
@@ -28,7 +29,11 @@ pub async fn run() -> Result<()> {
     let world = init_world(&window).await?;
     let input_handler = InputHandler::default();
 
-    window.run_event_loop(world, input_handler);
+    window.run_game_loop(GameLoop::new(
+        world,
+        input_handler,
+        GameLoopConfig::default(),
+    ));
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -4,12 +4,10 @@ use std::collections::HashMap;
 
 use crate::{
     control::{MotionDirection, MotionState},
+    window::ControlFlow,
     world::World,
 };
-use winit::{
-    event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::ControlFlow,
-};
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 /// Handler for any user input events.
 #[derive(Clone, Debug, Default)]
@@ -72,7 +70,7 @@ impl InputHandler {
     pub fn handle_event(
         &self,
         world: &mut World,
-        control_flow: &mut ControlFlow,
+        control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
     ) -> HandlingResult {
         match event {
@@ -93,7 +91,7 @@ impl KeyInputHandler {
     fn handle_event(
         &self,
         world: &mut World,
-        control_flow: &mut ControlFlow,
+        control_flow: &mut ControlFlow<'_>,
         key_input_event: &KeyboardInput,
     ) -> HandlingResult {
         match key_input_event {
@@ -104,7 +102,7 @@ impl KeyInputHandler {
             } => match self.key_map.action_for_key(*key) {
                 Some(action) => match action {
                     KeyboardInputAction::Exit => {
-                        *control_flow = ControlFlow::Exit;
+                        control_flow.exit();
                         HandlingResult::Handled
                     }
                     // Check if the input is for the motion controller,

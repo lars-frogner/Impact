@@ -3,12 +3,13 @@
 mod input;
 
 pub use input::{HandlingResult, InputHandler};
+pub use winit::event::WindowEvent;
 
-use crate::world::World;
+use crate::game_loop::GameLoop;
 use anyhow::Result;
 use winit::{
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event::Event,
+    event_loop::{ControlFlow as WinitControlFlow, EventLoop},
     window::{Window as WinitWindow, WindowBuilder},
 };
 
@@ -30,7 +31,12 @@ pub struct Window {
     event_loop: EventLoop<()>,
 }
 
+/// Wrapper for an event loop control flow.
+#[derive(Debug)]
+pub struct ControlFlow<'a>(&'a mut WinitControlFlow);
+
 impl Window {
+    /// Creates a new window with an associated event loop.
     pub fn new() -> Result<Self> {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new().build(&event_loop)?;
@@ -51,60 +57,54 @@ impl Window {
         &self.window
     }
 
-    /// Launches the event loop driving the simulation
-    /// and rendering.
-    pub fn run_event_loop(self, mut world: World, input_handler: InputHandler) -> ! {
+    /// Wraps the given game loop in an event loop that can capture
+    /// window events and runs the loop.
+    pub fn run_game_loop(self, mut game_loop: GameLoop) -> ! {
         let Self { window, event_loop } = self;
-
-        event_loop.run(move |event, _, control_flow| match event {
-            // Handle window events
-            Event::WindowEvent { event, window_id } if window_id == window.id() => {
-                match input_handler.handle_event(&mut world, control_flow, &event) {
-                    HandlingResult::Handled => {}
-                    HandlingResult::Unhandled => {
-                        match event {
-                            // Exit if user requests close
-                            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                            // Resize rendering surface when window is resized..
-                            WindowEvent::Resized(new_size) => {
-                                world
-                                    .renderer_mut()
-                                    .resize_surface((new_size.width, new_size.height));
+        event_loop.run(move |event, _, control_flow| {
+            let mut control_flow = ControlFlow(control_flow);
+            match event {
+                // Handle window events
+                Event::WindowEvent { event, window_id } if window_id == window.id() => {
+                    match game_loop.handle_input_event(&mut control_flow, &event) {
+                        HandlingResult::Handled => {}
+                        HandlingResult::Unhandled => {
+                            match event {
+                                // Exit if user requests close
+                                WindowEvent::CloseRequested => control_flow.exit(),
+                                // Resize rendering surface when window is resized..
+                                WindowEvent::Resized(new_size) => {
+                                    game_loop.resize_rendering_surface((
+                                        new_size.width,
+                                        new_size.height,
+                                    ));
+                                }
+                                // ..or when screen DPI changes
+                                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                                    game_loop.resize_rendering_surface((
+                                        new_inner_size.width,
+                                        new_inner_size.height,
+                                    ));
+                                }
+                                _ => {}
                             }
-                            // ..or when screen DPI changes
-                            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                                world
-                                    .renderer_mut()
-                                    .resize_surface((new_inner_size.width, new_inner_size.height));
-                            }
-                            _ => {}
                         }
                     }
                 }
-            }
-            // Render when window requests redraw
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                match world.renderer_mut().render() {
-                    Ok(_) => {}
-                    Err(err) => match err.downcast_ref() {
-                        // Recreate swap chain if lost
-                        Some(wgpu::SurfaceError::Lost) => world.renderer_mut().initialize_surface(),
-                        // Quit if GPU is out of memory
-                        Some(wgpu::SurfaceError::OutOfMemory) => {
-                            *control_flow = ControlFlow::Exit;
-                        }
-                        // Other errors should be resolved by the next frame, so we just log the error and continue
-                        _ => log::error!("{:?}", err),
-                    },
+                // When all queued input events have been handled we can do other work
+                Event::MainEventsCleared => {
+                    game_loop.perform_iteration(&mut control_flow);
                 }
+                _ => {}
             }
-            // When all queued input events have been handled we can do other work
-            Event::MainEventsCleared => {
-                // Next redraw must be triggered manually
-                window.request_redraw();
-            }
-            _ => {}
         });
+    }
+}
+
+impl<'a> ControlFlow<'a> {
+    /// Terminates the event loop.
+    pub fn exit(&mut self) {
+        *self.0 = WinitControlFlow::Exit;
     }
 }
 

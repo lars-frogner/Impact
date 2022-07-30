@@ -5,6 +5,7 @@
 #![warn(clippy::cast_lossless)]
 
 pub mod control;
+pub mod game_loop;
 pub mod geometry;
 mod num;
 pub mod physics;
