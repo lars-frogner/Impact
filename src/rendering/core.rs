@@ -79,7 +79,7 @@ impl CoreRenderingSystem {
     }
 
     /// Initializes the rendering surface for presentation.
-    pub fn initialize_surface(&mut self) {
+    pub fn initialize_surface(&self) {
         self.surface.configure(&self.device, &self.surface_config);
     }
 

@@ -98,7 +98,7 @@ impl RenderingSystem {
 
     /// Initializes the surface for presentation using the
     /// current surface configuration.
-    pub fn initialize_surface(&mut self) {
+    pub fn initialize_surface(&self) {
         self.core_system.initialize_surface()
     }
 
