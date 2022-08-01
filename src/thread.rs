@@ -26,7 +26,7 @@ use std::{
 ///     // At least one worker is required
 ///     NonZeroUsize::new(n_workers).unwrap(),
 ///     // Define task that increments a shared count
-///     &|_comm, (count, incr): (Arc<Mutex<usize>>, usize)| {
+///     &|_channel, (count, incr): (Arc<Mutex<usize>>, usize)| {
 ///         *count.lock().unwrap() += incr
 ///     }
 /// );
@@ -51,7 +51,7 @@ use std::{
 /// when they should execute a task.
 #[derive(Debug)]
 pub struct ThreadPool<M> {
-    communicator: ThreadCommunicator<M>,
+    communicator: ThreadPoolCommunicator<M>,
     workers: Vec<Worker>,
 }
 
@@ -68,16 +68,29 @@ pub enum WorkerInstruction<M> {
 /// The type if ID used for workers in a [`ThreadPool`].
 pub type WorkerID = usize;
 
-/// A shared structure  for handling communication between
+/// A single channel shared between the main thread and all
+/// worker threads in a [`ThreadPool`], used for sending and
+/// recieving instructions to and from a shared queue.
+#[derive(Debug)]
+pub struct ThreadPoolChannel<M> {
+    owning_worker_id: Option<WorkerID>,
+    sender: Sender<WorkerInstruction<M>>,
+    receiver: Arc<Mutex<Receiver<WorkerInstruction<M>>>>,
+}
+
+/// A shared structure for handling communication between
 /// the threads in a [`ThreadPool`].
 #[derive(Debug)]
-pub struct ThreadCommunicator<M> {
-    worker_id: Option<WorkerID>,
+struct ThreadPoolCommunicator<M> {
+    channel: ThreadPoolChannel<M>,
+    worker_status: WorkerStatus,
+}
+
+#[derive(Clone, Debug)]
+struct WorkerStatus {
     n_workers: usize,
     n_idle_workers: Arc<AtomicUsize>,
     all_workers_idle_condvar: Arc<(Mutex<bool>, Condvar)>,
-    sender: Sender<WorkerInstruction<M>>,
-    receiver: Arc<Mutex<Receiver<WorkerInstruction<M>>>>,
 }
 
 #[derive(Debug)]
@@ -92,14 +105,14 @@ impl<M> ThreadPool<M> {
     /// the task, the given `execute_task` closure is called.
     /// The closure is supplied with the message contained in
     /// the execution instruction as well as a reference to a
-    /// [`ThreadCommunicator`] that can be used to send messages
-    /// to other threads from the closure.
+    /// [`ThreadPoolChannel`] that can be used to send messages
+    /// to other worker threads from the closure.
     pub fn new<T>(n_workers: NonZeroUsize, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        T: Fn(&ThreadCommunicator<M>, M) + Sync,
+        T: Fn(&ThreadPoolChannel<M>, M) + Sync,
     {
-        let communicator = ThreadCommunicator::new(n_workers);
+        let communicator = ThreadPoolCommunicator::new(n_workers);
 
         let workers = (0..n_workers.get())
             .into_iter()
@@ -148,16 +161,18 @@ impl<M> ThreadPool<M> {
             // actually had time to register as busy does not return
             // immediately.
             if idx == 0 {
-                self.communicator.set_all_workers_idle(false);
+                self.communicator.worker_status().set_all_idle(false);
             }
-            self.communicator.send_execute_instruction(message);
+            self.communicator
+                .channel()
+                .send_execute_instruction(message);
         }
     }
 
     /// Blocks the calling thread and returns as soon as all pending
     /// and currently executing task in the pool have been completed.
     pub fn wait_until_done(&self) {
-        self.communicator.wait_for_all_workers_idle();
+        self.communicator.worker_status().wait_for_all_idle();
     }
 }
 
@@ -166,6 +181,7 @@ impl<M> Drop for ThreadPool<M> {
         // Send a termination instruction for each of the workers
         for _ in 0..self.workers.len() {
             self.communicator
+                .channel()
                 .send_instruction(WorkerInstruction::Terminate);
         }
 
@@ -176,40 +192,26 @@ impl<M> Drop for ThreadPool<M> {
     }
 }
 
-impl<M> ThreadCommunicator<M> {
-    fn new(n_workers: NonZeroUsize) -> Self {
-        let n_workers = n_workers.get();
-
+impl<M> ThreadPoolChannel<M> {
+    fn new() -> Self {
         let (sender, receiver) = mpsc::channel::<WorkerInstruction<M>>();
         let receiver = Arc::new(Mutex::new(receiver));
 
-        let n_idle_workers = Arc::new(AtomicUsize::new(n_workers));
-        let all_workers_idle_condvar = Arc::new((Mutex::new(true), Condvar::new()));
-
         Self {
-            worker_id: None,
-            n_workers,
-            n_idle_workers,
-            all_workers_idle_condvar,
+            owning_worker_id: None,
             sender,
             receiver,
         }
     }
 
-    /// Returns the ID of the worker owning this instance of
-    /// the [`ThreadPool`]'s communicator.
+    /// Returns the ID of the worker owning this instance of the
+    /// [`ThreadPool`]'s channel.
     ///
     /// # Panics
-    /// If called on a [`ThreadCommunicator`] that has not been
+    /// If called on a [`ThreadPoolChannel`] that has not been
     /// assigned to a worker thread.
-    pub fn worker_id(&self) -> WorkerID {
-        self.worker_id.unwrap()
-    }
-
-    /// Returns the number of worker threads in the thread pool
-    /// (this does not include the main thread).
-    pub fn n_workers(&self) -> usize {
-        self.n_workers
+    pub fn owning_worker_id(&self) -> WorkerID {
+        self.owning_worker_id.unwrap()
     }
 
     /// Sends an instruction to execute the task with the given
@@ -220,20 +222,6 @@ impl<M> ThreadCommunicator<M> {
         self.send_instruction(WorkerInstruction::Execute(message));
     }
 
-    /// Creates a new instance of the communicator that can be
-    /// used by the given worker to communicate with the other
-    /// threads in the [`ThreadPool`].
-    fn copy_for_worker(&self, worker_id: WorkerID) -> Self {
-        Self {
-            worker_id: Some(worker_id),
-            n_workers: self.n_workers,
-            n_idle_workers: self.n_idle_workers.clone(),
-            all_workers_idle_condvar: self.all_workers_idle_condvar.clone(),
-            sender: self.sender.clone(),
-            receiver: self.receiver.clone(),
-        }
-    }
-
     fn send_instruction(&self, message: WorkerInstruction<M>) {
         self.sender.send(message).unwrap();
     }
@@ -242,17 +230,91 @@ impl<M> ThreadCommunicator<M> {
         self.receiver.lock().unwrap().recv().unwrap()
     }
 
+    /// Creates a new instance of the channel for use by the
+    /// given worker to exchange instructions with the other
+    /// threads in the [`ThreadPool`].
+    fn copy_for_worker(&self, worker_id: WorkerID) -> Self {
+        Self {
+            owning_worker_id: Some(worker_id),
+            sender: self.sender.clone(),
+            receiver: Arc::clone(&self.receiver),
+        }
+    }
+}
+
+impl<M> ThreadPoolCommunicator<M> {
+    fn new(n_workers: NonZeroUsize) -> Self {
+        let channel = ThreadPoolChannel::new();
+        let worker_status = WorkerStatus::new_all_idle(n_workers.get());
+        Self {
+            channel,
+            worker_status,
+        }
+    }
+
+    fn n_workers(&self) -> usize {
+        self.worker_status.n_workers()
+    }
+
+    fn channel(&self) -> &ThreadPoolChannel<M> {
+        &self.channel
+    }
+
+    fn worker_status(&self) -> &WorkerStatus {
+        &self.worker_status
+    }
+
+    /// Creates a new instance of the communicator for use by
+    /// the given worker to communicate with the other threads
+    /// in the [`ThreadPool`].
+    fn copy_for_worker(&self, worker_id: WorkerID) -> Self {
+        Self {
+            channel: self.channel.copy_for_worker(worker_id),
+            worker_status: self.worker_status.clone(),
+        }
+    }
+}
+
+impl WorkerStatus {
+    fn new_all_idle(n_workers: usize) -> Self {
+        Self::new(n_workers, n_workers)
+    }
+
+    fn new(n_workers: usize, n_idle_workers: usize) -> Self {
+        let all_idle = n_idle_workers == n_workers;
+        let n_idle_workers = Arc::new(AtomicUsize::new(n_idle_workers));
+        let all_workers_idle_condvar = Arc::new((Mutex::new(all_idle), Condvar::new()));
+        Self {
+            n_workers,
+            n_idle_workers,
+            all_workers_idle_condvar,
+        }
+    }
+
+    fn n_workers(&self) -> usize {
+        self.n_workers
+    }
+
+    #[cfg(test)]
+    fn n_idle(&self) -> usize {
+        self.n_idle_workers.load(Ordering::Acquire)
+    }
+
+    fn set_all_idle(&self, all_idle: bool) {
+        *self.all_workers_idle_condvar.0.lock().unwrap() = all_idle;
+    }
+
     /// Increments the atomic count of idle workers and
     /// updates the conditional variable used for tracking
     /// whether all workers are idle.
-    fn register_idle_worker(&self) {
+    fn register_idle(&self) {
         let previous_count = self.n_idle_workers.fetch_add(1, Ordering::AcqRel);
         assert!(previous_count < self.n_workers());
 
         // If all workers are now idle, we must update the associated
         // conditional variable
         if previous_count + 1 == self.n_workers() {
-            self.set_all_workers_idle(true);
+            self.set_all_idle(true);
             // Threads waiting for complete idleness to change should be notified
             self.all_workers_idle_condvar.1.notify_all();
         }
@@ -261,31 +323,22 @@ impl<M> ThreadCommunicator<M> {
     /// Decrements the atomic count of idle workers and
     /// updates the conditional variable used for tracking
     /// whether all workers are idle.
-    fn register_busy_worker(&self) {
+    fn register_busy(&self) {
         let previous_count = self.n_idle_workers.fetch_sub(1, Ordering::AcqRel);
         assert_ne!(previous_count, 0);
 
         // If all workers are no longer idle, we must update the associated
         // conditional variable
         if previous_count == self.n_workers() {
-            self.set_all_workers_idle(false);
+            self.set_all_idle(false);
             // Threads waiting for complete idleness to change should be notified
             self.all_workers_idle_condvar.1.notify_all();
         }
     }
 
-    fn set_all_workers_idle(&self, all_idle: bool) {
-        *self.all_workers_idle_condvar.0.lock().unwrap() = all_idle;
-    }
-
-    #[allow(dead_code)]
-    fn n_idle_workers(&self) -> usize {
-        self.n_idle_workers.load(Ordering::Acquire)
-    }
-
     /// Blocks execution in the calling thread and returns when
     /// all worker threads are idle.
-    fn wait_for_all_workers_idle(&self) {
+    fn wait_for_all_idle(&self) {
         let mut all_idle = self.all_workers_idle_condvar.0.lock().unwrap();
         while !*all_idle {
             all_idle = self.all_workers_idle_condvar.1.wait(all_idle).unwrap();
@@ -296,19 +349,19 @@ impl<M> ThreadCommunicator<M> {
 impl Worker {
     /// Spawns a new worker thread for executing the given
     /// task.
-    fn spawn<M, T>(communicator: ThreadCommunicator<M>, execute_task: &'static T) -> Self
+    fn spawn<M, T>(communicator: ThreadPoolCommunicator<M>, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        T: Fn(&ThreadCommunicator<M>, M) + Sync,
+        T: Fn(&ThreadPoolChannel<M>, M) + Sync,
     {
         let handle = thread::spawn(move || loop {
-            let message = communicator.receive_message();
+            let message = communicator.channel().receive_message();
 
             match message {
                 WorkerInstruction::Execute(message) => {
-                    communicator.register_busy_worker();
-                    execute_task(&communicator, message);
-                    communicator.register_idle_worker();
+                    communicator.worker_status().register_busy();
+                    execute_task(communicator.channel(), message);
+                    communicator.worker_status().register_idle();
                 }
                 WorkerInstruction::Terminate => {
                     return;
@@ -331,50 +384,50 @@ mod test {
     #[test]
     fn creating_thread_communicator_works() {
         let n_workers = 2;
-        let communicator = ThreadCommunicator::<()>::new(NonZeroUsize::new(n_workers).unwrap());
-        assert_eq!(communicator.n_workers(), n_workers);
+        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(n_workers).unwrap());
+        assert_eq!(comm.n_workers(), n_workers);
     }
 
     #[test]
     fn sending_message_with_communicator_works() {
         let n_workers = 1;
-        let communicator = ThreadCommunicator::new(NonZeroUsize::new(n_workers).unwrap());
-        communicator.send_execute_instruction(42);
-        let message = communicator.receive_message();
+        let comm = ThreadPoolCommunicator::new(NonZeroUsize::new(n_workers).unwrap());
+        comm.channel().send_execute_instruction(42);
+        let message = comm.channel().receive_message();
         assert_eq!(message, WorkerInstruction::Execute(42));
     }
 
     #[test]
     fn keeping_track_of_idle_workers_works() {
-        let communicator = ThreadCommunicator::<()>::new(NonZeroUsize::new(2).unwrap());
-        assert_eq!(communicator.n_idle_workers(), 2);
-        communicator.register_busy_worker();
-        assert_eq!(communicator.n_idle_workers(), 1);
-        communicator.register_busy_worker();
-        assert_eq!(communicator.n_idle_workers(), 0);
+        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(2).unwrap());
+        assert_eq!(comm.worker_status().n_idle(), 2);
+        comm.worker_status().register_busy();
+        assert_eq!(comm.worker_status().n_idle(), 1);
+        comm.worker_status().register_busy();
+        assert_eq!(comm.worker_status().n_idle(), 0);
 
-        communicator.register_idle_worker();
-        assert_eq!(communicator.n_idle_workers(), 1);
-        communicator.register_idle_worker();
-        assert_eq!(communicator.n_idle_workers(), 2);
+        comm.worker_status().register_idle();
+        assert_eq!(comm.worker_status().n_idle(), 1);
+        comm.worker_status().register_idle();
+        assert_eq!(comm.worker_status().n_idle(), 2);
 
-        communicator.wait_for_all_workers_idle(); // Should return immediately
+        comm.worker_status().wait_for_all_idle(); // Should return immediately
     }
 
     #[test]
     #[should_panic]
     fn registering_idle_worker_when_all_are_idle_fails() {
         let n_workers = 2;
-        let communicator = ThreadCommunicator::<()>::new(NonZeroUsize::new(n_workers).unwrap());
-        communicator.register_idle_worker();
+        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(n_workers).unwrap());
+        comm.worker_status().register_idle();
     }
 
     #[test]
     #[should_panic]
     fn registering_busy_worker_when_all_are_busy_fails() {
-        let communicator = ThreadCommunicator::<()>::new(NonZeroUsize::new(1).unwrap());
-        communicator.register_busy_worker();
-        communicator.register_busy_worker(); // Should panic here
+        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(1).unwrap());
+        comm.worker_status().register_busy();
+        comm.worker_status().register_busy(); // Should panic here
     }
 
     #[test]

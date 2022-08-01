@@ -1,6 +1,6 @@
 //! Task scheduling.
 
-use crate::thread::{ThreadCommunicator, ThreadPool};
+use crate::thread::{ThreadPool, ThreadPoolChannel};
 use anyhow::{anyhow, bail, Result};
 use const_fnv1a_hash;
 use petgraph::{
@@ -438,7 +438,7 @@ where
     /// This is the function called by worker threads in the
     /// [`ThreadPool`] when they recieve an execution instruction.
     fn execute_task_and_schedule_dependencies(
-        communicator: &ThreadCommunicator<TaskMessage<S>>,
+        channel: &ThreadPoolChannel<TaskMessage<S>>,
         (state, execution_tags, task_idx): TaskMessage<S>,
     ) {
         let ordered_task = state.task_ordering().task(task_idx);
@@ -450,7 +450,7 @@ where
             {
                 cfg_if::cfg_if! {
                     if #[cfg(test)] {
-                        task.execute_with_worker(communicator.worker_id(), state.world_state())
+                        task.execute_with_worker(channel.owning_worker_id(), state.world_state())
                     } else {
                         task.execute(state.world_state())
                     }
@@ -479,7 +479,7 @@ where
         // immediately
         if ready_dependent_task_indices.len() > 1 {
             for &ready_dependent_task_idx in &ready_dependent_task_indices[1..] {
-                communicator.send_execute_instruction(Self::create_message(
+                channel.send_execute_instruction(Self::create_message(
                     &state,
                     &execution_tags,
                     ready_dependent_task_idx,
@@ -488,7 +488,7 @@ where
         }
         if let Some(&ready_dependent_task_idx) = ready_dependent_task_indices.first() {
             Self::execute_task_and_schedule_dependencies(
-                communicator,
+                channel,
                 (state, execution_tags, ready_dependent_task_idx),
             )
         }
