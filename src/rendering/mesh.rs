@@ -19,8 +19,6 @@ pub struct MeshRenderDataManager {
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     label: String,
-    vertex_buffer_change: CollectionChange,
-    index_buffer_change: CollectionChange,
 }
 
 /// Owner and manager of render data for mesh instances.
@@ -28,7 +26,6 @@ pub struct MeshRenderDataManager {
 pub struct MeshInstanceRenderDataManager {
     instance_buffer: InstanceBuffer,
     label: String,
-    instance_buffer_change: CollectionChange,
 }
 
 /// Representation of a transform for a mesh instance as a
@@ -58,31 +55,16 @@ impl MeshRenderDataManager {
     pub fn sync_with_mesh(
         &mut self,
         core_system: &CoreRenderingSystem,
-        mesh: &mut Mesh<impl BufferableVertex>,
+        mesh: &Mesh<impl BufferableVertex>,
     ) {
-        self.vertex_buffer_change = mesh.vertex_change();
-        self.index_buffer_change = mesh.index_change();
-
         self.sync_render_data(
             core_system,
             mesh.vertices(),
             mesh.indices(),
-            self.vertex_buffer_change,
-            self.index_buffer_change,
+            mesh.vertex_change(),
+            mesh.index_change(),
         );
         mesh.reset_vertex_index_change_tracking();
-    }
-
-    /// Returns the kind of change that was done to the vertex
-    /// buffer at the latest sync.
-    pub fn vertex_buffer_change(&self) -> CollectionChange {
-        self.vertex_buffer_change
-    }
-
-    /// Returns the kind of change that was done to the index
-    /// buffer at the latest sync.
-    pub fn index_buffer_change(&self) -> CollectionChange {
-        self.index_buffer_change
     }
 
     /// Returns the buffer of vertices.
@@ -109,8 +91,6 @@ impl MeshRenderDataManager {
             vertex_buffer,
             index_buffer,
             label,
-            vertex_buffer_change: CollectionChange::None,
-            index_buffer_change: CollectionChange::None,
         }
     }
 
@@ -165,21 +145,14 @@ impl MeshInstanceRenderDataManager {
     pub fn sync_with_mesh_instance_group(
         &mut self,
         core_system: &CoreRenderingSystem,
-        mesh_instance_group: &mut MeshInstanceGroup<f32>,
+        mesh_instance_group: &MeshInstanceGroup<f32>,
     ) {
-        self.instance_buffer_change = mesh_instance_group.instance_change();
         self.sync_render_data(
             core_system,
             mesh_instance_group.instances(),
-            self.instance_buffer_change,
+            mesh_instance_group.instance_change(),
         );
         mesh_instance_group.reset_instance_change_tracking();
-    }
-
-    /// Returns the kind of change that was done to the instance
-    /// buffer at the latest sync.
-    pub fn instance_buffer_change(&self) -> CollectionChange {
-        self.instance_buffer_change
     }
 
     /// Returns the buffer of instances.
@@ -199,7 +172,6 @@ impl MeshInstanceRenderDataManager {
         Self {
             instance_buffer,
             label,
-            instance_buffer_change: CollectionChange::None,
         }
     }
 

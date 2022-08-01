@@ -14,7 +14,6 @@ pub struct CameraRenderDataManager {
     transform_buffer: UniformBuffer,
     transform_bind_group_layout: wgpu::BindGroupLayout,
     transform_bind_group: wgpu::BindGroup,
-    view_projection_transform_changed: bool,
 }
 
 /// Representation of a view projection transform
@@ -42,20 +41,13 @@ impl CameraRenderDataManager {
     pub fn sync_with_camera(
         &mut self,
         core_system: &CoreRenderingSystem,
-        camera: &mut impl Camera<f32>,
+        camera: &impl Camera<f32>,
     ) {
-        self.view_projection_transform_changed = camera.view_projection_transform_changed();
-        if self.view_projection_transform_changed {
+        if camera.view_projection_transform_changed() {
             let view_projection_transform = camera.compute_view_projection_transform();
             self.sync_render_data(core_system, &view_projection_transform);
             camera.reset_view_projection_change_tracking();
         }
-    }
-
-    /// Whether the view projection transform was updated
-    /// at the latest sync.
-    pub fn view_projection_transform_changed(&self) -> bool {
-        self.view_projection_transform_changed
     }
 
     /// Returns the layout of the bind group to which the
@@ -93,7 +85,6 @@ impl CameraRenderDataManager {
             transform_buffer,
             transform_bind_group_layout,
             transform_bind_group,
-            view_projection_transform_changed: false,
         }
     }
 
