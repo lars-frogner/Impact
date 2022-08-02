@@ -246,6 +246,12 @@ impl ThreadPoolTaskErrors {
         }
     }
 
+    /// Returns the number of executed tasks that failed with
+    /// and error.
+    pub fn n_failed_tasks(&self) -> usize {
+        self.errors.len()
+    }
+
     /// Returns a [`Result`] that is either [`Ok`] if the task with
     /// the given ID succeeded or was never executed, or [`Err`]
     /// containing the resulting [`TaskError`] if it was executed
@@ -488,6 +494,7 @@ impl Worker {
 #[cfg(test)]
 mod test {
     use super::*;
+    use anyhow::anyhow;
     use std::iter;
 
     struct NoMessage;
@@ -555,8 +562,8 @@ mod test {
         let count = Arc::new(Mutex::new(0));
         let pool = ThreadPool::new(NonZeroUsize::new(n_workers).unwrap(), &|_,
                                                                             (count, incr): (
-            Arc<Mutex<_>>,
-            _,
+            Arc<Mutex<usize>>,
+            usize,
         )| {
             *count.lock().unwrap() += incr;
             Ok(())
@@ -565,5 +572,41 @@ mod test {
             .unwrap();
         drop(pool);
         assert_eq!(*count.lock().unwrap(), n_workers * 3);
+    }
+
+    #[test]
+    fn capturing_task_error_works() {
+        let n_workers = 2;
+        let count = Arc::new(Mutex::new(1));
+        let pool = ThreadPool::new(NonZeroUsize::new(n_workers).unwrap(), &|_,
+                                                                            (
+            count,
+            task_id,
+        ): (
+            Arc<Mutex<usize>>,
+            TaskID,
+        )| {
+            let mut count = count.lock().unwrap();
+            // The second of the two tasks will cause underflow here
+            let decremented_count = count
+                .checked_sub(1)
+                .ok_or_else(|| (task_id, anyhow!("Underflow!")))?;
+            *count = decremented_count;
+            Ok(())
+        });
+        let result =
+            pool.execute_and_wait([(Arc::clone(&count), 0), (Arc::clone(&count), 1)].into_iter());
+        assert!(result.is_err());
+
+        let mut errors = result.err().unwrap();
+
+        assert_eq!(errors.n_failed_tasks(), 1);
+
+        match (errors.take_result_of(0), errors.take_result_of(1)) {
+            (Err(err), Ok(_)) | (Ok(_), Err(err)) => assert_eq!(err.to_string(), "Underflow!"),
+            _ => unreachable!(),
+        }
+
+        assert_eq!(errors.n_failed_tasks(), 0);
     }
 }
