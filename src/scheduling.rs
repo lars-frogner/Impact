@@ -1,6 +1,6 @@
 //! Task scheduling.
 
-use crate::thread::{ThreadPool, ThreadPoolChannel};
+use crate::thread::{TaskID, TaskResult, ThreadPool, ThreadPoolChannel, ThreadPoolResult};
 use anyhow::{anyhow, bail, Result};
 use const_fnv1a_hash;
 use petgraph::{
@@ -9,6 +9,7 @@ use petgraph::{
 };
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Debug,
     marker::PhantomData,
     num::NonZeroUsize,
     sync::{
@@ -26,7 +27,7 @@ use crate::thread::WorkerID;
 /// # Type parameters
 /// `S` is the type of an object representing the state
 /// of the world that the task can modify.
-pub trait Task<S>: Sync + Send + std::fmt::Debug {
+pub trait Task<S>: Sync + Send + Debug {
     /// Returns a unique ID identifying this task.
     /// This could be generated from a task name
     /// by calling [`task_name_to_id`].
@@ -66,9 +67,6 @@ pub struct TaskScheduler<S> {
     executor: Option<TaskExecutor<S>>,
     world_state: Arc<S>,
 }
-
-/// Type of ID used for [`Task`]s.
-pub type TaskID = u64;
 
 /// A tag associated with an execution of a [`TaskScheduler`].
 pub type ExecutionTag = u64;
@@ -171,9 +169,14 @@ where
         self.world_state.as_ref()
     }
 
+    /// Whether the given task is registered in the scheduler.
+    pub fn has_task(&self, task: impl Task<S>) -> bool {
+        self.has_task_with_id(task.id())
+    }
+
     /// Whether a task with the given ID is registered in the
     /// scheduler.
-    pub fn has_task(&self, task_id: TaskID) -> bool {
+    pub fn has_task_with_id(&self, task_id: TaskID) -> bool {
         self.tasks.contains_key(&task_id)
     }
 
@@ -246,18 +249,23 @@ where
     /// refrain from executing if a dependency does not execute due to
     /// the execution tags.
     ///
-    /// This function does not return until all tasks have been completed.
-    /// To avoid blocking the calling thread, use [`execute`](Self::execute)
-    /// instead.
+    /// This function does not return until all tasks have been completed
+    /// or have failed with an error. To avoid blocking the calling thread,
+    /// use [`execute`](Self::execute) instead.
+    ///
+    /// # Errors
+    /// A [`ThreadPoolTaskErrors`](crate::thread::ThreadPoolTaskErrors) containing
+    /// the [`TaskError`](crate::thread::TaskError) of each failed task is
+    /// returned if any of the executed tasks failed.
     ///
     /// # Panics
     /// If [`complete_task_registration`](Self::complete_task_registration)
     /// has not been called after the last task was registered.
-    pub fn execute_and_wait(&self, execution_tags: ExecutionTags) {
+    pub fn execute_and_wait(&self, execution_tags: ExecutionTags) -> ThreadPoolResult {
         self.executor
             .as_ref()
             .expect("Called `execute_and_wait` before completing task registration")
-            .execute_and_wait(execution_tags);
+            .execute_and_wait(execution_tags)
     }
 
     /// Executes all tasks that [`should_execute`](Task::should_execute)
@@ -284,16 +292,21 @@ where
 
     /// Blocks the calling thread and returns as soon as all tasks
     /// to be performed by the previous [`execute`](Self::execute)
-    /// call have been completed.
+    /// call have been completed or have failed with an error.
+    ///
+    /// # Errors
+    /// A [`ThreadPoolTaskErrors`](crate::thread::ThreadPoolTaskErrors) containing
+    /// the [`TaskError`](crate::thread::TaskError) of each failed task is
+    /// returned if any of the executed tasks failed.
     ///
     /// # Panics
     /// If [`complete_task_registration`](Self::complete_task_registration)
     /// has not been called after the last task was registered.
-    pub fn wait_until_done(&self) {
+    pub fn wait_until_done(&self) -> ThreadPoolResult {
         self.executor
             .as_ref()
             .expect("Called `wait_until_done` before completing task registration")
-            .wait_until_done();
+            .wait_until_done()
     }
 
     #[allow(dead_code)]
@@ -409,9 +422,9 @@ where
         }
     }
 
-    fn execute_and_wait(&self, execution_tags: ExecutionTags) {
+    fn execute_and_wait(&self, execution_tags: ExecutionTags) -> ThreadPoolResult {
         self.execute(execution_tags);
-        self.wait_until_done();
+        self.wait_until_done()
     }
 
     fn execute(&self, execution_tags: ExecutionTags) {
@@ -431,8 +444,8 @@ where
         );
     }
 
-    fn wait_until_done(&self) {
-        self.thread_pool.wait_until_done();
+    fn wait_until_done(&self) -> ThreadPoolResult {
+        self.thread_pool.wait_until_done()
     }
 
     /// This is the function called by worker threads in the
@@ -440,7 +453,7 @@ where
     fn execute_task_and_schedule_dependencies(
         channel: &ThreadPoolChannel<TaskMessage<S>>,
         (state, execution_tags, task_idx): TaskMessage<S>,
-    ) {
+    ) -> TaskResult {
         let ordered_task = state.task_ordering().task(task_idx);
         let task = ordered_task.task();
 
@@ -456,7 +469,7 @@ where
                     }
                 }
             }
-            .expect("Task failed");
+            .map_err(|error| (task.id(), error))? // Include task ID with error
         }
 
         // Find each of the tasks that depend on this one, and
@@ -491,6 +504,8 @@ where
                 channel,
                 (state, execution_tags, ready_dependent_task_idx),
             )
+        } else {
+            Ok(())
         }
     }
 
@@ -659,6 +674,7 @@ mod test {
 
     const EXEC_ALL: ExecutionTag = execution_label_to_tag("all");
 
+    #[derive(Debug)]
     struct TaskRecorder {
         recorded_tasks: Mutex<Vec<(WorkerID, TaskID)>>,
     }
@@ -758,22 +774,22 @@ mod test {
     fn registering_tasks_in_dependency_order_works() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(Task1).unwrap();
-        assert!(scheduler.has_task(Task1::ID));
+        assert!(scheduler.has_task(Task1));
 
         scheduler.register_task(Task2).unwrap();
-        assert!(scheduler.has_task(Task1::ID));
-        assert!(scheduler.has_task(Task2::ID));
+        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(Task2));
 
         scheduler.register_task(DepTask1).unwrap();
-        assert!(scheduler.has_task(Task1::ID));
-        assert!(scheduler.has_task(Task1::ID));
-        assert!(scheduler.has_task(DepTask1::ID));
+        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(DepTask1));
 
         scheduler.register_task(DepDepTask1Task2).unwrap();
-        assert!(scheduler.has_task(Task1::ID));
-        assert!(scheduler.has_task(Task1::ID));
-        assert!(scheduler.has_task(DepTask1::ID));
-        assert!(scheduler.has_task(DepDepTask1Task2::ID));
+        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(DepTask1));
+        assert!(scheduler.has_task(DepDepTask1Task2));
 
         scheduler.complete_task_registration().unwrap();
     }
@@ -782,22 +798,22 @@ mod test {
     fn registering_tasks_out_of_dependency_order_works() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(DepDepTask1Task2).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2::ID));
+        assert!(scheduler.has_task(DepDepTask1Task2));
 
         scheduler.register_task(Task2).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2::ID));
-        assert!(scheduler.has_task(Task2::ID));
+        assert!(scheduler.has_task(DepDepTask1Task2));
+        assert!(scheduler.has_task(Task2));
 
         scheduler.register_task(DepTask1).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2::ID));
-        assert!(scheduler.has_task(Task2::ID));
-        assert!(scheduler.has_task(DepTask1::ID));
+        assert!(scheduler.has_task(DepDepTask1Task2));
+        assert!(scheduler.has_task(Task2));
+        assert!(scheduler.has_task(DepTask1));
 
         scheduler.register_task(Task1).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2::ID));
-        assert!(scheduler.has_task(Task2::ID));
-        assert!(scheduler.has_task(DepTask1::ID));
-        assert!(scheduler.has_task(Task1::ID));
+        assert!(scheduler.has_task(DepDepTask1Task2));
+        assert!(scheduler.has_task(Task2));
+        assert!(scheduler.has_task(DepTask1));
+        assert!(scheduler.has_task(Task1));
 
         scheduler.complete_task_registration().unwrap();
     }
@@ -865,7 +881,9 @@ mod test {
         scheduler.register_task(DepTask1Task2).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        scheduler.execute_and_wait(ExecutionTags::from([EXEC_ALL]));
+        scheduler
+            .execute_and_wait(ExecutionTags::from([EXEC_ALL]))
+            .unwrap();
         let recorded_worker_ids = scheduler.world_state().get_recorded_worker_ids();
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 
@@ -917,11 +935,13 @@ mod test {
         scheduler.register_task(DepTask1Task2).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        scheduler.execute_and_wait(ExecutionTags::from([
-            Task2::EXEC_TAG,
-            DepTask1::EXEC_TAG,
-            DepDepTask1Task2::EXEC_TAG,
-        ]));
+        scheduler
+            .execute_and_wait(ExecutionTags::from([
+                Task2::EXEC_TAG,
+                DepTask1::EXEC_TAG,
+                DepDepTask1Task2::EXEC_TAG,
+            ]))
+            .unwrap();
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 
         for task_id in [Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] {

@@ -1,9 +1,12 @@
 //! Utilities for multithreading.
 
+use anyhow::Error;
 use std::{
+    collections::HashMap,
     num::NonZeroUsize,
+    ops::DerefMut,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, Receiver, Sender},
         Arc, Condvar, Mutex,
     },
@@ -27,7 +30,8 @@ use std::{
 ///     NonZeroUsize::new(n_workers).unwrap(),
 ///     // Define task that increments a shared count
 ///     &|_channel, (count, incr): (Arc<Mutex<usize>>, usize)| {
-///         *count.lock().unwrap() += incr
+///         *count.lock().unwrap() += incr;
+///         Ok(()) // The closure must return a `Result<(), (TaskID, TaskError)>`
 ///     }
 /// );
 ///
@@ -41,7 +45,7 @@ use std::{
 /// let messages = iter::repeat_with(|| (Arc::clone(&count), incr)).take(n_workers);
 ///
 /// // Execute the task once with each message and wait until done
-/// pool.execute_and_wait(messages);
+/// pool.execute_and_wait(messages).unwrap();
 ///
 /// assert_eq!(*count.lock().unwrap(), n_workers * incr);
 /// ```
@@ -68,6 +72,30 @@ pub enum WorkerInstruction<M> {
 /// The type if ID used for workers in a [`ThreadPool`].
 pub type WorkerID = usize;
 
+/// Type of ID used for identifying tasks that can be performed
+/// by worker threads in a [`ThreadPool`].
+pub type TaskID = u64;
+
+/// [`Result`] returned by executed tasks. The [`Err`]
+/// variant contains the [`TaskID`] together with the
+/// [`TaskError`].
+pub type TaskResult = Result<(), (TaskID, TaskError)>;
+
+/// Type of error produced by failed task executions.
+pub type TaskError = Error;
+
+/// [`Result`] returned by execution of a set of tasks
+/// in a [`ThreadPool`].
+pub type ThreadPoolResult = Result<(), ThreadPoolTaskErrors>;
+
+/// Container for a non-empty set of [`TaskError`]s produced
+/// by execution of a set of tasks in a [`ThreadPool`].
+/// The errors can be looked up by [`TaskID`].
+#[derive(Debug)]
+pub struct ThreadPoolTaskErrors {
+    errors: HashMap<TaskID, TaskError>,
+}
+
 /// A single channel shared between the main thread and all
 /// worker threads in a [`ThreadPool`], used for sending and
 /// recieving instructions to and from a shared queue.
@@ -84,6 +112,7 @@ pub struct ThreadPoolChannel<M> {
 struct ThreadPoolCommunicator<M> {
     channel: ThreadPoolChannel<M>,
     worker_status: WorkerStatus,
+    task_status: TaskStatus,
 }
 
 #[derive(Clone, Debug)]
@@ -91,6 +120,12 @@ struct WorkerStatus {
     n_workers: usize,
     n_idle_workers: Arc<AtomicUsize>,
     all_workers_idle_condvar: Arc<(Mutex<bool>, Condvar)>,
+}
+
+#[derive(Clone, Debug)]
+struct TaskStatus {
+    some_task_failed: Arc<AtomicBool>,
+    errors_of_failed_tasks: Arc<Mutex<HashMap<TaskID, TaskError>>>,
 }
 
 #[derive(Debug)]
@@ -110,7 +145,7 @@ impl<M> ThreadPool<M> {
     pub fn new<T>(n_workers: NonZeroUsize, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        T: Fn(&ThreadPoolChannel<M>, M) + Sync,
+        T: Fn(&ThreadPoolChannel<M>, M) -> TaskResult + Sync,
     {
         let communicator = ThreadPoolCommunicator::new(n_workers);
 
@@ -140,11 +175,16 @@ impl<M> ThreadPool<M> {
     /// Instructs worker threads in the pool to execute their task.
     /// The task will be executed with each of the given messages.
     /// This function does not return until all the task executions
-    /// have been completed. To avoid blocking the main thread, use
-    /// [`execute`](Self::execute) instead.
-    pub fn execute_and_wait(&self, messages: impl Iterator<Item = M>) {
+    /// have been completed or have failed with an error. To avoid
+    /// blocking the main thread, use [`execute`](Self::execute)
+    /// instead.
+    ///
+    /// # Errors
+    /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each
+    /// failed task is returned if any of the executed tasks failed.
+    pub fn execute_and_wait(&self, messages: impl Iterator<Item = M>) -> ThreadPoolResult {
         self.execute(messages);
-        self.wait_until_done();
+        self.wait_until_done()
     }
 
     /// Instructs worker threads in the pool to execute their task.
@@ -170,9 +210,15 @@ impl<M> ThreadPool<M> {
     }
 
     /// Blocks the calling thread and returns as soon as all pending
-    /// and currently executing task in the pool have been completed.
-    pub fn wait_until_done(&self) {
+    /// and currently executing task in the pool have been completed
+    /// or have failed with an error.
+    ///
+    /// # Errors
+    /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each
+    /// failed task is returned if any of the executed tasks failed.
+    pub fn wait_until_done(&self) -> ThreadPoolResult {
         self.communicator.worker_status().wait_for_all_idle();
+        self.communicator.task_status().fetch_result()
     }
 }
 
@@ -188,6 +234,27 @@ impl<M> Drop for ThreadPool<M> {
         // Join each worker as soon as it has terminated
         for worker in self.workers.drain(..) {
             worker.join();
+        }
+    }
+}
+
+impl ThreadPoolTaskErrors {
+    fn new(task_errors: HashMap<TaskID, TaskError>) -> Self {
+        assert!(!task_errors.is_empty());
+        Self {
+            errors: task_errors,
+        }
+    }
+
+    /// Returns a [`Result`] that is either [`Ok`] if the task with
+    /// the given ID succeeded or was never executed, or [`Err`]
+    /// containing the resulting [`TaskError`] if it was executed
+    /// and failed. In the latter case, the record if the error is
+    /// removed from this object.
+    pub fn take_result_of(&mut self, task_id: TaskID) -> Result<(), TaskError> {
+        match self.errors.remove(&task_id) {
+            Some(error) => Err(error),
+            None => Ok(()),
         }
     }
 }
@@ -246,9 +313,11 @@ impl<M> ThreadPoolCommunicator<M> {
     fn new(n_workers: NonZeroUsize) -> Self {
         let channel = ThreadPoolChannel::new();
         let worker_status = WorkerStatus::new_all_idle(n_workers.get());
+        let task_status = TaskStatus::new();
         Self {
             channel,
             worker_status,
+            task_status,
         }
     }
 
@@ -264,6 +333,10 @@ impl<M> ThreadPoolCommunicator<M> {
         &self.worker_status
     }
 
+    fn task_status(&self) -> &TaskStatus {
+        &self.task_status
+    }
+
     /// Creates a new instance of the communicator for use by
     /// the given worker to communicate with the other threads
     /// in the [`ThreadPool`].
@@ -271,6 +344,7 @@ impl<M> ThreadPoolCommunicator<M> {
         Self {
             channel: self.channel.copy_for_worker(worker_id),
             worker_status: self.worker_status.clone(),
+            task_status: self.task_status.clone(),
         }
     }
 }
@@ -346,13 +420,46 @@ impl WorkerStatus {
     }
 }
 
+impl TaskStatus {
+    fn new() -> Self {
+        let some_task_failed = Arc::new(AtomicBool::new(false));
+        let errors_of_failed_tasks = Arc::new(Mutex::new(HashMap::new()));
+        Self {
+            some_task_failed,
+            errors_of_failed_tasks,
+        }
+    }
+
+    fn fetch_result(&self) -> ThreadPoolResult {
+        // Check if a task failed and at the same time reset the
+        // flag to `false`
+        if self.some_task_failed.swap(false, Ordering::Relaxed) {
+            Err(ThreadPoolTaskErrors::new(
+                // Move the `HashMap` of errors out of the mutex and
+                // replace with an empty one
+                std::mem::take(self.errors_of_failed_tasks.lock().unwrap().deref_mut()),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn register_error(&self, task_id: TaskID, error: TaskError) {
+        self.some_task_failed.store(true, Ordering::Relaxed);
+        self.errors_of_failed_tasks
+            .lock()
+            .unwrap()
+            .insert(task_id, error);
+    }
+}
+
 impl Worker {
     /// Spawns a new worker thread for executing the given
     /// task.
     fn spawn<M, T>(communicator: ThreadPoolCommunicator<M>, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        T: Fn(&ThreadPoolChannel<M>, M) + Sync,
+        T: Fn(&ThreadPoolChannel<M>, M) -> TaskResult + Sync,
     {
         let handle = thread::spawn(move || loop {
             let message = communicator.channel().receive_message();
@@ -360,7 +467,9 @@ impl Worker {
             match message {
                 WorkerInstruction::Execute(message) => {
                     communicator.worker_status().register_busy();
-                    execute_task(communicator.channel(), message);
+                    if let Err((task_id, error)) = execute_task(communicator.channel(), message) {
+                        communicator.task_status().register_error(task_id, error);
+                    }
                     communicator.worker_status().register_idle();
                 }
                 WorkerInstruction::Terminate => {
@@ -381,10 +490,12 @@ mod test {
     use super::*;
     use std::iter;
 
+    struct NoMessage;
+
     #[test]
     fn creating_thread_communicator_works() {
         let n_workers = 2;
-        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(n_workers).unwrap());
+        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
         assert_eq!(comm.n_workers(), n_workers);
     }
 
@@ -399,7 +510,7 @@ mod test {
 
     #[test]
     fn keeping_track_of_idle_workers_works() {
-        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(2).unwrap());
+        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(2).unwrap());
         assert_eq!(comm.worker_status().n_idle(), 2);
         comm.worker_status().register_busy();
         assert_eq!(comm.worker_status().n_idle(), 1);
@@ -418,14 +529,14 @@ mod test {
     #[should_panic]
     fn registering_idle_worker_when_all_are_idle_fails() {
         let n_workers = 2;
-        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(n_workers).unwrap());
+        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
         comm.worker_status().register_idle();
     }
 
     #[test]
     #[should_panic]
     fn registering_busy_worker_when_all_are_busy_fails() {
-        let comm = ThreadPoolCommunicator::<()>::new(NonZeroUsize::new(1).unwrap());
+        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(1).unwrap());
         comm.worker_status().register_busy();
         comm.worker_status().register_busy(); // Should panic here
     }
@@ -433,7 +544,8 @@ mod test {
     #[test]
     fn creating_thread_pool_works() {
         let n_workers = 2;
-        let pool = ThreadPool::<()>::new(NonZeroUsize::new(n_workers).unwrap(), &|_, _| {});
+        let pool =
+            ThreadPool::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap(), &|_, _| Ok(()));
         assert_eq!(pool.n_workers(), n_workers);
     }
 
@@ -446,9 +558,11 @@ mod test {
             Arc<Mutex<_>>,
             _,
         )| {
-            *count.lock().unwrap() += incr
+            *count.lock().unwrap() += incr;
+            Ok(())
         });
-        pool.execute_and_wait(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers));
+        pool.execute_and_wait(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers))
+            .unwrap();
         drop(pool);
         assert_eq!(*count.lock().unwrap(), n_workers * 3);
     }
