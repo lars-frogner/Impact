@@ -1,6 +1,11 @@
 //! Task scheduling.
 
-use crate::thread::{TaskID, TaskResult, ThreadPool, ThreadPoolChannel, ThreadPoolResult};
+use crate::{
+    thread::{
+        TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
+    },
+    with_debug_logging,
+};
 use anyhow::{anyhow, bail, Result};
 use const_fnv1a_hash;
 use petgraph::{
@@ -48,7 +53,7 @@ pub trait Task<S>: Sync + Send + Debug {
     /// Executes the task and modifies the given world
     /// state accordingly. This method may fail and return
     /// an error.
-    fn execute(&self, world_state: &S) -> Result<()>;
+    fn execute(&self, world_state: &S) -> Result<(), TaskError>;
 
     /// Whether this task should be included in a
     /// [`TaskScheduler`] execution tagged with the given
@@ -147,6 +152,32 @@ struct OrderedTask<S> {
 enum TaskReady {
     Yes,
     No,
+}
+
+#[macro_export]
+macro_rules! define_execution_tag {
+    (
+        $(#[$attributes:meta])*
+        $([$pub:ident])? $name:ident
+    ) => {
+        #[derive(Copy, Clone, Debug)]
+        $($pub)? struct $name;
+
+        impl $name {
+            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::scheduling::execution_label_to_tag(stringify!($name));
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! define_execution_tag_set {
+    (
+        $([$pub:ident])? $name:ident, [$($tag:ident),*]
+    ) => {
+        lazy_static::lazy_static! {
+            $($pub)? static ref $name: ::std::sync::Arc<$crate::scheduling::ExecutionTags> = ::std::sync::Arc::new($crate::scheduling::ExecutionTags::from([$($tag::EXECUTION_TAG),*]));
+        }
+    };
 }
 
 impl<S> TaskScheduler<S>
@@ -447,6 +478,7 @@ where
         self.thread_pool.execute(
             (0..self.task_ordering().n_dependencyless_tasks())
                 .map(|task_idx| Self::create_message(&self.state, execution_tags, task_idx)),
+            self.task_ordering().n_tasks(),
         );
     }
 
@@ -459,23 +491,44 @@ where
     fn execute_task_and_schedule_dependencies(
         channel: &ThreadPoolChannel<TaskMessage<S>>,
         (state, execution_tags, task_idx): TaskMessage<S>,
-    ) -> TaskResult {
+    ) -> TaskClosureReturnValue {
         let ordered_task = state.task_ordering().task(task_idx);
         let task = ordered_task.task();
+
+        log::debug!(
+            "Worker {} obtained task {}",
+            channel.owning_worker_id(),
+            task.descriptor()
+        );
 
         // Execute the task only if it thinks it should be based on
         // the current execution tags
         if task.should_execute(execution_tags.as_ref()) {
-            {
-                cfg_if::cfg_if! {
-                    if #[cfg(test)] {
-                        task.execute_with_worker(channel.owning_worker_id(), state.world_state())
-                    } else {
-                        task.execute(state.world_state())
+            with_debug_logging!("Worker {} executing task {}",
+                channel.owning_worker_id(),
+                task.descriptor();
+                {
+                    let result = { cfg_if::cfg_if! {
+                        if #[cfg(test)] {
+                            task.execute_with_worker(channel.owning_worker_id(), state.world_state())
+                        } else {
+                            task.execute(state.world_state())
+                        }
+                    }};
+
+                    if let Err(error) = result {
+                        // Return immediately with the task ID and an error
+                        // if the task execution failed
+                        return TaskClosureReturnValue::failure(task.id(), error);
                     }
                 }
-            }
-            .map_err(|error| (task.id(), error))? // Include task ID with error
+            )
+        } else {
+            log::debug!(
+                "Worker {} skipped execution of task {}",
+                channel.owning_worker_id(),
+                task.descriptor()
+            );
         }
 
         // Find each of the tasks that depend on this one, and
@@ -498,11 +551,20 @@ where
         // immediately
         if ready_dependent_task_indices.len() > 1 {
             for &ready_dependent_task_idx in &ready_dependent_task_indices[1..] {
-                channel.send_execute_instruction(Self::create_message(
-                    &state,
-                    &execution_tags,
-                    ready_dependent_task_idx,
-                ));
+                with_debug_logging!(
+                        "Worker {} scheduling execution of task {}",
+                        channel.owning_worker_id(),
+                        state
+                            .task_ordering()
+                            .task(ready_dependent_task_idx)
+                            .task()
+                            .descriptor();
+                    channel.send_execute_instruction(Self::create_message(
+                        &state,
+                        &execution_tags,
+                        ready_dependent_task_idx,
+                    ))
+                );
             }
         }
         if let Some(&ready_dependent_task_idx) = ready_dependent_task_indices.first() {
@@ -510,8 +572,11 @@ where
                 channel,
                 (state, execution_tags, ready_dependent_task_idx),
             )
+            // Increment executed task count returned from dependent
+            // task to account for this task
+            .with_incremented_task_count()
         } else {
-            Ok(())
+            TaskClosureReturnValue::success()
         }
     }
 
@@ -556,6 +621,10 @@ impl<S> TaskOrdering<S> {
         })
     }
 
+    fn n_tasks(&self) -> usize {
+        self.tasks.len()
+    }
+
     fn n_dependencyless_tasks(&self) -> usize {
         self.n_dependencyless_tasks
     }
@@ -583,6 +652,14 @@ impl<S> TaskOrdering<S> {
         dependency_graph: &mut TaskDependencyGraph<S>,
     ) -> Result<Vec<OrderedTask<S>>> {
         let ordered_task_ids = dependency_graph.obtain_ordered_task_ids()?;
+
+        log::debug!(
+            "Ordered tasks: {:?}",
+            ordered_task_ids
+                .iter()
+                .map(|task_id| task_pool[task_id].descriptor())
+                .collect::<Vec<_>>()
+        );
 
         // Create map from task ID to index in `ordered_task_ids`
         let indices_of_task_ids: HashMap<_, _> = ordered_task_ids
@@ -946,7 +1023,7 @@ mod test {
                 Task2::EXEC_TAG,
                 DepTask1::EXEC_TAG,
                 DepDepTask1Task2::EXEC_TAG,
-            ]))
+            ])))
             .unwrap();
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 

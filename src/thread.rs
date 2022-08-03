@@ -1,5 +1,6 @@
 //! Utilities for multithreading.
 
+use crate::with_debug_logging;
 use anyhow::Error;
 use std::{
     collections::HashMap,
@@ -21,17 +22,20 @@ use std::{
 ///
 /// # Examples
 /// ```no_run
-/// # use impact::thread::ThreadPool;
+/// # use impact::thread::{ThreadPool, TaskClosureReturnValue};
 /// # use std::{iter, num::NonZeroUsize, sync::{Arc, Mutex}};
 /// #
 /// let n_workers = 2;
+/// let n_tasks = 2;
+///
 /// let pool = ThreadPool::new(
 ///     // At least one worker is required
 ///     NonZeroUsize::new(n_workers).unwrap(),
-///     // Define task that increments a shared count
+///     // Define task closure that increments a shared count
 ///     &|_channel, (count, incr): (Arc<Mutex<usize>>, usize)| {
 ///         *count.lock().unwrap() += incr;
-///         Ok(()) // The closure must return a `Result<(), (TaskID, TaskError)>`
+///         // The closure must return a `TaskClosureReturnValue`
+///         TaskClosureReturnValue::success()
 ///     }
 /// );
 ///
@@ -40,12 +44,12 @@ use std::{
 /// // Amount to increment count
 /// let incr = 3;
 ///
-/// // Create one message for each worker, each containing
+/// // Create one message for each task execution, each containing
 /// // a reference to the shared count and the increment
-/// let messages = iter::repeat_with(|| (Arc::clone(&count), incr)).take(n_workers);
+/// let messages = iter::repeat_with(|| (Arc::clone(&count), incr)).take(n_tasks);
 ///
-/// // Execute the task once with each message and wait until done
-/// pool.execute_and_wait(messages).unwrap();
+/// // Execute the tasks and wait until all `n_tasks` are completed
+/// pool.execute_and_wait(messages, n_tasks).unwrap();
 ///
 /// assert_eq!(*count.lock().unwrap(), n_workers * incr);
 /// ```
@@ -69,20 +73,33 @@ pub enum WorkerInstruction<M> {
     Terminate,
 }
 
-/// The type if ID used for workers in a [`ThreadPool`].
+/// The type if ID used for worker threads in a [`ThreadPool`].
 pub type WorkerID = usize;
 
 /// Type of ID used for identifying tasks that can be performed
 /// by worker threads in a [`ThreadPool`].
 pub type TaskID = u64;
 
-/// [`Result`] returned by executed tasks. The [`Err`]
-/// variant contains the [`TaskID`] together with the
-/// [`TaskError`].
-pub type TaskResult = Result<(), (TaskID, TaskError)>;
+/// [`Result`] produced by the task closure executed by worker
+/// threads in a [`ThreadPool`]. The [`Err`] variant contains
+/// the [`TaskID`] of the failed task together with the
+/// resulting [`TaskError`].
+pub type TaskClosureResult = Result<(), (TaskID, TaskError)>;
 
-/// Type of error produced by failed task executions.
+/// Type of error produced by failed task executions in a
+/// [`ThreadPool`].
 pub type TaskError = Error;
+
+/// The information returned from the task closure executed
+/// by worker threads in a [`ThreadPool`].
+#[derive(Debug)]
+pub struct TaskClosureReturnValue {
+    /// The total number of tasks executed by the closure call.
+    pub n_executed_tasks: usize,
+    /// The result of the task closure execution, which should be an
+    /// [`Err`] if any of the tasks executed in the closure failed.
+    pub result: TaskClosureResult,
+}
 
 /// [`Result`] returned by execution of a set of tasks
 /// in a [`ThreadPool`].
@@ -110,16 +127,16 @@ pub struct ThreadPoolChannel<M> {
 /// the threads in a [`ThreadPool`].
 #[derive(Debug)]
 struct ThreadPoolCommunicator<M> {
+    n_workers: NonZeroUsize,
     channel: ThreadPoolChannel<M>,
-    worker_status: WorkerStatus,
+    execution_progress: ExecutionProgress,
     task_status: TaskStatus,
 }
 
 #[derive(Clone, Debug)]
-struct WorkerStatus {
-    n_workers: usize,
-    n_idle_workers: Arc<AtomicUsize>,
-    all_workers_idle_condvar: Arc<(Mutex<bool>, Condvar)>,
+struct ExecutionProgress {
+    pending_task_count: Arc<AtomicUsize>,
+    no_pending_tasks_condvar: Arc<(Mutex<bool>, Condvar)>,
 }
 
 #[derive(Clone, Debug)]
@@ -145,7 +162,7 @@ impl<M> ThreadPool<M> {
     pub fn new<T>(n_workers: NonZeroUsize, execute_task: &'static T) -> Self
     where
         M: Send + 'static,
-        T: Fn(&ThreadPoolChannel<M>, M) -> TaskResult + Sync,
+        T: Fn(&ThreadPoolChannel<M>, M) -> TaskClosureReturnValue + Sync,
     {
         let communicator = ThreadPoolCommunicator::new(n_workers);
 
@@ -168,56 +185,62 @@ impl<M> ThreadPool<M> {
 
     /// Returns the number of worker threads in the thread pool
     /// (this does not include the main thread).
-    pub fn n_workers(&self) -> usize {
+    pub fn n_workers(&self) -> NonZeroUsize {
         self.communicator.n_workers()
     }
 
     /// Instructs worker threads in the pool to execute their task.
     /// The task will be executed with each of the given messages.
-    /// This function does not return until all the task executions
-    /// have been completed or have failed with an error. To avoid
-    /// blocking the main thread, use [`execute`](Self::execute)
+    /// The `n_tasks` argument is the total number of task executions
+    /// that will result from this function call (including executions
+    /// initiated from within the task). This function does not return
+    /// until all expected task executions have been performed. To
+    /// avoid blocking the calling thread, use [`execute`](Self::execute)
     /// instead.
     ///
     /// # Errors
     /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each
     /// failed task is returned if any of the executed tasks failed.
-    pub fn execute_and_wait(&self, messages: impl Iterator<Item = M>) -> ThreadPoolResult {
-        self.execute(messages);
+    pub fn execute_and_wait(
+        &self,
+        messages: impl Iterator<Item = M>,
+        n_tasks: usize,
+    ) -> ThreadPoolResult {
+        self.execute(messages, n_tasks);
         self.wait_until_done()
     }
 
     /// Instructs worker threads in the pool to execute their task.
     /// The task will be executed with each of the given messages.
-    /// This function returns as soon as all the execution instructions
-    /// have been sendt. To block until all tasks have been completed,
-    /// call [`wait_until_done`](Self::wait_until_done).
-    pub fn execute(&self, messages: impl Iterator<Item = M>) {
-        for (idx, message) in messages.enumerate() {
-            // If at least one execution message is sent, ensure
-            // that the `all_workers_idle` flag is set to `false`
-            // immediately so that a potential call to
-            // `wait_for_all_workers_idle` before any workers have
-            // actually had time to register as busy does not return
-            // immediately.
-            if idx == 0 {
-                self.communicator.worker_status().set_all_idle(false);
-            }
+    /// The `n_tasks` argument is the total number of task executions
+    /// that will result from this function call (including executions
+    /// initiated from within the task). This function returns as soon
+    /// as all the given execution instructions have been sent. To
+    /// wait until all tasks have been completed and obtain any errors
+    /// produced by the executed tasks, call
+    /// [`wait_until_done`](Self::wait_until_done).
+    pub fn execute(&self, messages: impl Iterator<Item = M>, n_tasks: usize) {
+        self.communicator
+            .execution_progress()
+            .add_to_pending_task_count(n_tasks);
+
+        for message in messages {
             self.communicator
                 .channel()
                 .send_execute_instruction(message);
         }
     }
 
-    /// Blocks the calling thread and returns as soon as all pending
-    /// and currently executing task in the pool have been completed
-    /// or have failed with an error.
+    /// Blocks the calling thread and returns as soon as all expected
+    /// task executions have been performed.
     ///
     /// # Errors
     /// A [`ThreadPoolTaskErrors`] containing the [`TaskError`] of each
     /// failed task is returned if any of the executed tasks failed.
     pub fn wait_until_done(&self) -> ThreadPoolResult {
-        self.communicator.worker_status().wait_for_all_idle();
+        self.communicator
+            .execution_progress()
+            .wait_for_no_pending_tasks();
         self.communicator.task_status().fetch_result()
     }
 }
@@ -238,6 +261,42 @@ impl<M> Drop for ThreadPool<M> {
     }
 }
 
+impl TaskClosureReturnValue {
+    /// Creates the return value corresponding to a successfully
+    /// executed task.
+    pub fn success() -> Self {
+        Self::for_single_task(Ok(()))
+    }
+
+    /// Creates the return value corresponding to a failed
+    /// execution of the given task with the given error.
+    pub fn failure(task_id: TaskID, error: TaskError) -> Self {
+        Self::for_single_task(Err((task_id, error)))
+    }
+
+    /// Increments the number of executed tasks by one in the
+    /// given return value and returns the incremented version.
+    pub fn with_incremented_task_count(self) -> Self {
+        let Self {
+            n_executed_tasks,
+            result,
+        } = self;
+        Self {
+            n_executed_tasks: n_executed_tasks + 1,
+            result,
+        }
+    }
+
+    /// Creates the return value corresponding to a single
+    /// executed task with the given result.
+    fn for_single_task(result: TaskClosureResult) -> Self {
+        Self {
+            n_executed_tasks: 1,
+            result,
+        }
+    }
+}
+
 impl ThreadPoolTaskErrors {
     fn new(task_errors: HashMap<TaskID, TaskError>) -> Self {
         assert!(!task_errors.is_empty());
@@ -246,10 +305,18 @@ impl ThreadPoolTaskErrors {
         }
     }
 
-    /// Returns the number of executed tasks that failed with
-    /// and error.
-    pub fn n_failed_tasks(&self) -> usize {
+    /// Returns the number of errors present from executed tasks
+    /// that failed. Calling [`take_result_of`](Self::take_result_of)
+    /// may reduce this number.
+    pub fn n_errors(&self) -> usize {
         self.errors.len()
+    }
+
+    /// Returns a reference to the [`TaskError`] produced by the
+    /// task with the given ID if the task executed and failed,
+    /// otherwise returns [`None`].
+    pub fn get_error_of(&self, task_id: TaskID) -> Option<&TaskError> {
+        self.errors.get(&task_id)
     }
 
     /// Returns a [`Result`] that is either [`Ok`] if the task with
@@ -299,7 +366,7 @@ impl<M> ThreadPoolChannel<M> {
         self.sender.send(message).unwrap();
     }
 
-    fn receive_message(&self) -> WorkerInstruction<M> {
+    fn wait_for_next_instruction(&self) -> WorkerInstruction<M> {
         self.receiver.lock().unwrap().recv().unwrap()
     }
 
@@ -318,25 +385,26 @@ impl<M> ThreadPoolChannel<M> {
 impl<M> ThreadPoolCommunicator<M> {
     fn new(n_workers: NonZeroUsize) -> Self {
         let channel = ThreadPoolChannel::new();
-        let worker_status = WorkerStatus::new_all_idle(n_workers.get());
+        let execution_progress = ExecutionProgress::new();
         let task_status = TaskStatus::new();
         Self {
+            n_workers,
             channel,
-            worker_status,
+            execution_progress,
             task_status,
         }
     }
 
-    fn n_workers(&self) -> usize {
-        self.worker_status.n_workers()
+    fn n_workers(&self) -> NonZeroUsize {
+        self.n_workers
     }
 
     fn channel(&self) -> &ThreadPoolChannel<M> {
         &self.channel
     }
 
-    fn worker_status(&self) -> &WorkerStatus {
-        &self.worker_status
+    fn execution_progress(&self) -> &ExecutionProgress {
+        &self.execution_progress
     }
 
     fn task_status(&self) -> &TaskStatus {
@@ -348,81 +416,92 @@ impl<M> ThreadPoolCommunicator<M> {
     /// in the [`ThreadPool`].
     fn copy_for_worker(&self, worker_id: WorkerID) -> Self {
         Self {
+            n_workers: self.n_workers,
             channel: self.channel.copy_for_worker(worker_id),
-            worker_status: self.worker_status.clone(),
+            execution_progress: self.execution_progress.clone(),
             task_status: self.task_status.clone(),
         }
     }
 }
 
-impl WorkerStatus {
-    fn new_all_idle(n_workers: usize) -> Self {
-        Self::new(n_workers, n_workers)
-    }
-
-    fn new(n_workers: usize, n_idle_workers: usize) -> Self {
-        let all_idle = n_idle_workers == n_workers;
-        let n_idle_workers = Arc::new(AtomicUsize::new(n_idle_workers));
-        let all_workers_idle_condvar = Arc::new((Mutex::new(all_idle), Condvar::new()));
+impl ExecutionProgress {
+    fn new() -> Self {
+        let pending_task_count = Arc::new(AtomicUsize::new(0));
+        let no_pending_tasks_condvar = Arc::new((Mutex::new(true), Condvar::new()));
         Self {
-            n_workers,
-            n_idle_workers,
-            all_workers_idle_condvar,
+            pending_task_count,
+            no_pending_tasks_condvar,
         }
     }
 
-    fn n_workers(&self) -> usize {
-        self.n_workers
+    /// Increments the atomic count of pending tasks by
+    /// the given number and updates the conditional variable
+    /// used for tracking whether there are pending tasks.
+    fn add_to_pending_task_count(&self, n_tasks: usize) {
+        log::debug!("Adding {} pending tasks", n_tasks);
+
+        if n_tasks == 0 {
+            return;
+        }
+
+        let previous_count = self.pending_task_count.fetch_add(n_tasks, Ordering::AcqRel);
+
+        if previous_count == 0 {
+            log::debug!("There are now pending tasks");
+            self.set_no_pending_tasks(false);
+            self.notify_change_of_no_pending_tasks();
+        }
+    }
+
+    /// Decrements the atomic count of pending tasks by the
+    /// given number and updates the conditional variable used
+    /// for tracking whether there are pending tasks.
+    fn register_executed_tasks(&self, worker_id: WorkerID, n_tasks: usize) {
+        log::debug!(
+            "Worker {} registering {} tasks as executed",
+            worker_id,
+            n_tasks
+        );
+
+        if n_tasks == 0 {
+            return;
+        }
+
+        let previous_count = self.pending_task_count.fetch_sub(n_tasks, Ordering::AcqRel);
+        assert!(
+            previous_count >= n_tasks,
+            "Underflow when registering executed tasks"
+        );
+
+        if previous_count == n_tasks {
+            log::debug!("There are now no pending tasks");
+            self.set_no_pending_tasks(true);
+            self.notify_change_of_no_pending_tasks();
+        }
+    }
+
+    /// Blocks execution in the calling thread and resumes when
+    /// the count of pending tasks is zero.
+    fn wait_for_no_pending_tasks(&self) {
+        with_debug_logging!("Waiting for no pending tasks"; {
+            let mut no_pending_tasks = self.no_pending_tasks_condvar.0.lock().unwrap();
+            while !*no_pending_tasks {
+                no_pending_tasks = self.no_pending_tasks_condvar.1.wait(no_pending_tasks).unwrap();
+            }
+        });
     }
 
     #[cfg(test)]
-    fn n_idle(&self) -> usize {
-        self.n_idle_workers.load(Ordering::Acquire)
+    fn pending_task_count(&self) -> usize {
+        self.pending_task_count.load(Ordering::Acquire)
     }
 
-    fn set_all_idle(&self, all_idle: bool) {
-        *self.all_workers_idle_condvar.0.lock().unwrap() = all_idle;
+    fn set_no_pending_tasks(&self, no_pending_tasks: bool) {
+        *self.no_pending_tasks_condvar.0.lock().unwrap() = no_pending_tasks;
     }
 
-    /// Increments the atomic count of idle workers and
-    /// updates the conditional variable used for tracking
-    /// whether all workers are idle.
-    fn register_idle(&self) {
-        let previous_count = self.n_idle_workers.fetch_add(1, Ordering::AcqRel);
-        assert!(previous_count < self.n_workers());
-
-        // If all workers are now idle, we must update the associated
-        // conditional variable
-        if previous_count + 1 == self.n_workers() {
-            self.set_all_idle(true);
-            // Threads waiting for complete idleness to change should be notified
-            self.all_workers_idle_condvar.1.notify_all();
-        }
-    }
-
-    /// Decrements the atomic count of idle workers and
-    /// updates the conditional variable used for tracking
-    /// whether all workers are idle.
-    fn register_busy(&self) {
-        let previous_count = self.n_idle_workers.fetch_sub(1, Ordering::AcqRel);
-        assert_ne!(previous_count, 0);
-
-        // If all workers are no longer idle, we must update the associated
-        // conditional variable
-        if previous_count == self.n_workers() {
-            self.set_all_idle(false);
-            // Threads waiting for complete idleness to change should be notified
-            self.all_workers_idle_condvar.1.notify_all();
-        }
-    }
-
-    /// Blocks execution in the calling thread and returns when
-    /// all worker threads are idle.
-    fn wait_for_all_idle(&self) {
-        let mut all_idle = self.all_workers_idle_condvar.0.lock().unwrap();
-        while !*all_idle {
-            all_idle = self.all_workers_idle_condvar.1.wait(all_idle).unwrap();
-        }
+    fn notify_change_of_no_pending_tasks(&self) {
+        self.no_pending_tasks_condvar.1.notify_all();
     }
 }
 
@@ -450,7 +529,13 @@ impl TaskStatus {
         }
     }
 
-    fn register_error(&self, task_id: TaskID, error: TaskError) {
+    fn register_error(&self, worker_id: WorkerID, task_id: TaskID, error: TaskError) {
+        log::debug!(
+            "Worker {} registered error on task {}: {}",
+            worker_id,
+            task_id,
+            &error
+        );
         self.some_task_failed.store(true, Ordering::Relaxed);
         self.errors_of_failed_tasks
             .lock()
@@ -461,25 +546,40 @@ impl TaskStatus {
 
 impl Worker {
     /// Spawns a new worker thread for executing the given
-    /// task.
-    fn spawn<M, T>(communicator: ThreadPoolCommunicator<M>, execute_task: &'static T) -> Self
+    /// task closure.
+    fn spawn<M, F>(communicator: ThreadPoolCommunicator<M>, execute_tasks: &'static F) -> Self
     where
         M: Send + 'static,
-        T: Fn(&ThreadPoolChannel<M>, M) -> TaskResult + Sync,
+        F: Fn(&ThreadPoolChannel<M>, M) -> TaskClosureReturnValue + Sync,
     {
-        let handle = thread::spawn(move || loop {
-            let message = communicator.channel().receive_message();
+        let handle = thread::spawn(move || {
+            let worker_id = communicator.channel().owning_worker_id();
+            log::debug!("Worker {} spawned", worker_id);
 
-            match message {
-                WorkerInstruction::Execute(message) => {
-                    communicator.worker_status().register_busy();
-                    if let Err((task_id, error)) = execute_task(communicator.channel(), message) {
-                        communicator.task_status().register_error(task_id, error);
+            loop {
+                let instruction = communicator.channel().wait_for_next_instruction();
+
+                match instruction {
+                    WorkerInstruction::Execute(message) => {
+                        let TaskClosureReturnValue {
+                            n_executed_tasks,
+                            result,
+                        } = execute_tasks(communicator.channel(), message);
+
+                        if let Err((task_id, error)) = result {
+                            communicator
+                                .task_status()
+                                .register_error(worker_id, task_id, error);
+                        }
+
+                        communicator
+                            .execution_progress()
+                            .register_executed_tasks(worker_id, n_executed_tasks);
                     }
-                    communicator.worker_status().register_idle();
-                }
-                WorkerInstruction::Terminate => {
-                    return;
+                    WorkerInstruction::Terminate => {
+                        log::debug!("Worker {} terminating", worker_id);
+                        return;
+                    }
                 }
             }
         });
@@ -503,7 +603,7 @@ mod test {
     fn creating_thread_communicator_works() {
         let n_workers = 2;
         let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
-        assert_eq!(comm.n_workers(), n_workers);
+        assert_eq!(comm.n_workers().get(), n_workers);
     }
 
     #[test]
@@ -511,49 +611,43 @@ mod test {
         let n_workers = 1;
         let comm = ThreadPoolCommunicator::new(NonZeroUsize::new(n_workers).unwrap());
         comm.channel().send_execute_instruction(42);
-        let message = comm.channel().receive_message();
+        let message = comm.channel().wait_for_next_instruction();
         assert_eq!(message, WorkerInstruction::Execute(42));
     }
 
     #[test]
-    fn keeping_track_of_idle_workers_works() {
-        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(2).unwrap());
-        assert_eq!(comm.worker_status().n_idle(), 2);
-        comm.worker_status().register_busy();
-        assert_eq!(comm.worker_status().n_idle(), 1);
-        comm.worker_status().register_busy();
-        assert_eq!(comm.worker_status().n_idle(), 0);
+    fn keeping_track_of_pending_task_count_works() {
+        let n_workers = 1;
+        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
+        assert_eq!(comm.execution_progress().pending_task_count(), 0);
+        comm.execution_progress().add_to_pending_task_count(2);
+        assert_eq!(comm.execution_progress().pending_task_count(), 2);
+        comm.execution_progress().add_to_pending_task_count(1);
+        assert_eq!(comm.execution_progress().pending_task_count(), 3);
 
-        comm.worker_status().register_idle();
-        assert_eq!(comm.worker_status().n_idle(), 1);
-        comm.worker_status().register_idle();
-        assert_eq!(comm.worker_status().n_idle(), 2);
+        comm.execution_progress().register_executed_tasks(0, 2);
+        assert_eq!(comm.execution_progress().pending_task_count(), 1);
+        comm.execution_progress().register_executed_tasks(0, 1);
+        assert_eq!(comm.execution_progress().pending_task_count(), 0);
 
-        comm.worker_status().wait_for_all_idle(); // Should return immediately
+        comm.execution_progress().wait_for_no_pending_tasks(); // Should return immediately
     }
 
     #[test]
     #[should_panic]
-    fn registering_idle_worker_when_all_are_idle_fails() {
+    fn registering_executed_task_when_none_are_pending_fails() {
         let n_workers = 2;
         let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
-        comm.worker_status().register_idle();
-    }
-
-    #[test]
-    #[should_panic]
-    fn registering_busy_worker_when_all_are_busy_fails() {
-        let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(1).unwrap());
-        comm.worker_status().register_busy();
-        comm.worker_status().register_busy(); // Should panic here
+        comm.execution_progress().register_executed_tasks(0, 1);
     }
 
     #[test]
     fn creating_thread_pool_works() {
         let n_workers = 2;
-        let pool =
-            ThreadPool::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap(), &|_, _| Ok(()));
-        assert_eq!(pool.n_workers(), n_workers);
+        let pool = ThreadPool::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap(), &|_, _| {
+            TaskClosureReturnValue::success()
+        });
+        assert_eq!(pool.n_workers().get(), n_workers);
     }
 
     #[test]
@@ -566,10 +660,13 @@ mod test {
             usize,
         )| {
             *count.lock().unwrap() += incr;
-            Ok(())
+            TaskClosureReturnValue::success()
         });
-        pool.execute_and_wait(iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers))
-            .unwrap();
+        pool.execute_and_wait(
+            iter::repeat_with(|| (Arc::clone(&count), 3)).take(n_workers),
+            n_workers,
+        )
+        .unwrap();
         drop(pool);
         assert_eq!(*count.lock().unwrap(), n_workers * 3);
     }
@@ -587,26 +684,31 @@ mod test {
             TaskID,
         )| {
             let mut count = count.lock().unwrap();
-            // The second of the two tasks will cause underflow here
-            let decremented_count = count
-                .checked_sub(1)
-                .ok_or_else(|| (task_id, anyhow!("Underflow!")))?;
-            *count = decremented_count;
-            Ok(())
+
+            // The second of the two tasks will cause underflow
+            match count.checked_sub(1) {
+                Some(decremented_count) => {
+                    *count = decremented_count;
+                    TaskClosureReturnValue::success()
+                }
+                None => TaskClosureReturnValue::failure(task_id, anyhow!("Underflow!")),
+            }
         });
-        let result =
-            pool.execute_and_wait([(Arc::clone(&count), 0), (Arc::clone(&count), 1)].into_iter());
+        let result = pool.execute_and_wait(
+            [(Arc::clone(&count), 0), (Arc::clone(&count), 1)].into_iter(),
+            2,
+        );
         assert!(result.is_err());
 
         let mut errors = result.err().unwrap();
 
-        assert_eq!(errors.n_failed_tasks(), 1);
+        assert_eq!(errors.n_errors(), 1);
 
         match (errors.take_result_of(0), errors.take_result_of(1)) {
             (Err(err), Ok(_)) | (Ok(_), Err(err)) => assert_eq!(err.to_string(), "Underflow!"),
             _ => unreachable!(),
         }
 
-        assert_eq!(errors.n_failed_tasks(), 0);
+        assert_eq!(errors.n_errors(), 0);
     }
 }
