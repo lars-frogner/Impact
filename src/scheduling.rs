@@ -8,6 +8,7 @@ use petgraph::{
     graphmap::DiGraphMap,
 };
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Debug,
     marker::PhantomData,
@@ -32,6 +33,12 @@ pub trait Task<S>: Sync + Send + Debug {
     /// This could be generated from a task name
     /// by calling [`task_name_to_id`].
     fn id(&self) -> TaskID;
+
+    /// Returns a string describing the task.
+    /// This is used for error handling purposes.
+    fn descriptor(&self) -> Cow<'_, str> {
+        Cow::Owned(self.id().to_string())
+    }
 
     /// Returns the ID of every other task that must
     /// have been completed before this task can be
@@ -192,7 +199,7 @@ where
     pub fn register_task(&mut self, task: impl Task<S> + 'static) -> Result<()> {
         let task_id = task.id();
         if self.tasks.contains_key(&task_id) {
-            bail!("Task with ID {} already exists", task_id);
+            bail!("Task {} already exists", task.descriptor());
         }
 
         self.dependency_graph.add_task(&task);
@@ -342,8 +349,9 @@ impl<S> TaskDependencyGraph<S> {
 
             if existing_edge.is_some() {
                 panic!(
-                    "Task with ID {} depends on same task (ID {}) multiple times",
-                    task_id, dependence_task_id
+                    "Task {} depends on same task (ID {}) multiple times",
+                    task.descriptor(),
+                    dependence_task_id
                 );
             }
         }
