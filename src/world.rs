@@ -30,10 +30,14 @@ impl World {
         }
     }
 
+    /// Returns a reference to the [`GeometricalData`], guarded
+    /// by a [`RwLock`].
     pub fn geometrical_data(&self) -> &RwLock<GeometricalData> {
         &self.geometrical_data
     }
 
+    /// Returns a reference to the [`RenderingSystem`], guarded
+    /// by a [`RwLock`].
     pub fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
     }

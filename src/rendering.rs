@@ -63,10 +63,13 @@ impl RenderingSystem {
         })
     }
 
+    /// Returns a reference to the core rendering system.
     pub fn core_system(&self) -> &CoreRenderingSystem {
         &self.core_system
     }
 
+    /// Returns a reference to the [`RenderData`], guarded
+    /// by a [`RwLock`].
     pub fn render_data(&self) -> &RwLock<RenderData> {
         &self.render_data
     }
