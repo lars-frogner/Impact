@@ -268,7 +268,7 @@ where
     /// # Panics
     /// If [`complete_task_registration`](Self::complete_task_registration)
     /// has not been called after the last task was registered.
-    pub fn execute_and_wait(&self, execution_tags: ExecutionTags) -> ThreadPoolResult {
+    pub fn execute_and_wait(&self, execution_tags: &Arc<ExecutionTags>) -> ThreadPoolResult {
         self.executor
             .as_ref()
             .expect("Called `execute_and_wait` before completing task registration")
@@ -290,7 +290,7 @@ where
     /// # Panics
     /// If [`complete_task_registration`](Self::complete_task_registration)
     /// has not been called after the last task was registered.
-    pub fn execute(&self, execution_tags: ExecutionTags) {
+    pub fn execute(&self, execution_tags: &Arc<ExecutionTags>) {
         self.executor
             .as_ref()
             .expect("Called `execute` before completing task registration")
@@ -430,17 +430,15 @@ where
         }
     }
 
-    fn execute_and_wait(&self, execution_tags: ExecutionTags) -> ThreadPoolResult {
+    fn execute_and_wait(&self, execution_tags: &Arc<ExecutionTags>) -> ThreadPoolResult {
         self.execute(execution_tags);
         self.wait_until_done()
     }
 
-    fn execute(&self, execution_tags: ExecutionTags) {
+    fn execute(&self, execution_tags: &Arc<ExecutionTags>) {
         // Make sure that the count of completed dependencies
         // for each task is zeroed
         self.task_ordering().reset();
-
-        let execution_tags = Arc::new(execution_tags);
 
         // Start by scheduling all independent tasks (the ones at
         // the beginning of the ordered list of tasks) for immediate
@@ -448,7 +446,7 @@ where
         // scheduled by the worker threads.
         self.thread_pool.execute(
             (0..self.task_ordering().n_dependencyless_tasks())
-                .map(|task_idx| Self::create_message(&self.state, &execution_tags, task_idx)),
+                .map(|task_idx| Self::create_message(&self.state, execution_tags, task_idx)),
         );
     }
 
@@ -863,7 +861,7 @@ mod test {
     fn executing_before_completing_task_reg_fails() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(Task1).unwrap();
-        scheduler.execute(ExecutionTags::new());
+        scheduler.execute(&Arc::new(ExecutionTags::new()));
     }
 
     #[test]
@@ -890,7 +888,7 @@ mod test {
         scheduler.complete_task_registration().unwrap();
 
         scheduler
-            .execute_and_wait(ExecutionTags::from([EXEC_ALL]))
+            .execute_and_wait(&Arc::new(ExecutionTags::from([EXEC_ALL])))
             .unwrap();
         let recorded_worker_ids = scheduler.world_state().get_recorded_worker_ids();
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
@@ -944,7 +942,7 @@ mod test {
         scheduler.complete_task_registration().unwrap();
 
         scheduler
-            .execute_and_wait(ExecutionTags::from([
+            .execute_and_wait(&Arc::new(ExecutionTags::from([
                 Task2::EXEC_TAG,
                 DepTask1::EXEC_TAG,
                 DepDepTask1Task2::EXEC_TAG,
