@@ -1,10 +1,7 @@
 //! Task scheduling.
 
-use crate::{
-    thread::{
-        TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
-    },
-    with_debug_logging,
+use crate::thread::{
+    TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };
 use anyhow::{anyhow, bail, Result};
 use const_fnv1a_hash;
@@ -154,6 +151,121 @@ enum TaskReady {
     No,
 }
 
+/// Macro for defining a new empty type that implements the
+/// [`Task`] trait.
+///
+/// The macro takes as input the name of the new task type,
+/// the other tasks (also defined with this macro) this task
+/// depends on, the execution tags (defined with the
+/// [`define_execution_tag`] macro) that should trigger this
+/// task, and a closure that takes a reference to some world
+/// object and executes the task on it.
+///
+/// # Examples
+/// ```no_run
+/// # use impact::{define_execution_tag, define_task, scheduling::TaskScheduler};
+/// # use std::{num::NonZeroUsize, sync::Arc};
+/// #
+/// # struct World;
+/// #
+/// # impl World {
+/// #     fn new() -> Self {Self}
+/// #     fn compute_forces(&self) {}
+/// #     fn update_trajectories(&self) {}
+/// # }
+/// #
+/// define_task!(
+///     /// This optional doc comment will be applied to the type.
+///     /// Additional attributes (like `#[derive(..)]`) can also be added.
+///     /// The optional `[pub]` in front of the name makes the type public.
+///     #[derive(PartialEq)]
+///     [pub] UpdateTrajectories,
+///     // Array of tasks this task depends on
+///     depends_on = [ComputeForces],
+///     // Include this task in executions tagged with any of these tags
+///     execute_on = [Physics],
+///     // Closure executing the task, modifying the input object
+///     |world: &World| {
+///         world.update_trajectories();
+///         // The closure must return a `Result<(), TaskError>`
+///         Ok(())
+///     }
+/// );
+///
+/// // Define the task that the above task depends on
+/// define_task!(
+///     ComputeForces,
+///     depends_on = [],
+///     execute_on = [Physics],
+///     |world: &World| {
+///         world.compute_forces();
+///         Ok(())
+///     }
+/// );
+///
+/// // Define the tag that will trigger execution of the tasks
+/// define_execution_tag!(Physics);
+///
+/// let world = Arc::new(World::new());
+/// let n_workers = NonZeroUsize::new(2).unwrap();
+///
+/// let mut scheduler = TaskScheduler::new(n_workers, world);
+///
+/// // Add newly defined tasks to scheduler
+/// scheduler.register_task(ComputeForces).unwrap();
+/// scheduler.register_task(UpdateTrajectories).unwrap();
+/// scheduler.complete_task_registration().unwrap();
+/// ```
+#[macro_export]
+macro_rules! define_task {
+    (
+        $(#[$attributes:meta])*
+        $([$pub:ident])? $name:ident,
+        depends_on = [$($dep:ident),*],
+        execute_on = [$($tag:ident),*],
+        |$world:ident: &$world_ty:ty| $execute:expr
+    ) => {
+        $(#[$attributes])*
+        #[derive(Copy, Clone, Debug)]
+        $($pub)? struct $name;
+
+        impl $name {
+            const NAME: &'static str = stringify!($name);
+            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::scheduling::task_name_to_id(Self::NAME);
+
+            const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
+            const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
+
+            const N_EXECUTION_TAGS: usize = $crate::count_ident_args!($($tag),*);
+            const EXECUTION_TAGS: [$crate::scheduling::ExecutionTag; Self::N_EXECUTION_TAGS] = [$($tag::EXECUTION_TAG),*];
+        }
+
+        impl $crate::scheduling::Task<$world_ty> for $name {
+            fn id(&self) -> $crate::thread::TaskID {
+                Self::TASK_ID
+            }
+
+            fn descriptor(&self) -> ::std::borrow::Cow<'_, str> {
+                ::std::borrow::Cow::Borrowed(Self::NAME)
+            }
+
+            fn depends_on(&self) -> &[$crate::thread::TaskID] {
+                &Self::DEPENDENCY_IDS
+            }
+
+            fn execute(&self, $world: &$world_ty) -> anyhow::Result<()> {
+                $execute
+            }
+
+            fn should_execute(&self, execution_tags: &$crate::scheduling::ExecutionTags) -> bool {
+                Self::EXECUTION_TAGS.iter().any(|tag| execution_tags.contains(tag))
+            }
+        }
+    };
+}
+
+/// Macro for defining a new empty type representing an
+/// [`ExecutionTag`], for use in the [`define_task`] macro.
 #[macro_export]
 macro_rules! define_execution_tag {
     (
@@ -169,6 +281,10 @@ macro_rules! define_execution_tag {
     };
 }
 
+/// Macro that creates a [`lazy_static`] [`Arc<ExecutionTags>`]
+/// variable with the given name containing the given list of
+/// execution tags (defined with the [`define_execution_tag`]
+/// macro).
 #[macro_export]
 macro_rules! define_execution_tag_set {
     (
