@@ -4,6 +4,9 @@
 #![warn(rust_2018_idioms)]
 #![warn(clippy::cast_lossless)]
 
+#[macro_use]
+mod macros;
+
 pub mod control;
 pub mod game_loop;
 pub mod geometry;

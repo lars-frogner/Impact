@@ -1,6 +1,5 @@
 //! Utilities for multithreading.
 
-use crate::with_debug_logging;
 use anyhow::Error;
 use std::{
     collections::HashMap,
