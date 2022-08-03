@@ -455,6 +455,9 @@ impl ExecutionProgress {
     /// Decrements the atomic count of pending tasks by the
     /// given number and updates the conditional variable used
     /// for tracking whether there are pending tasks.
+    ///
+    /// # Panics
+    /// If the count is attempted to be decremented below zero.
     fn register_executed_tasks(&self, worker_id: WorkerID, n_tasks: usize) {
         log::debug!(
             "Worker {} registering {} tasks as executed",
