@@ -5,7 +5,7 @@ use crate::geometry::GeomIdent;
 use super::{
     asset::{AssetIdent, Assets},
     buffer::{IndexBuffer, InstanceBuffer, VertexBuffer},
-    world::RenderData,
+    world::SynchronizedRenderData,
     CoreRenderingSystem,
 };
 use anyhow::{anyhow, Result};
@@ -108,7 +108,7 @@ impl RenderPassSpecification {
     fn get_bind_group_layouts<'a>(
         &self,
         assets: &'a Assets,
-        render_data: &'a RenderData,
+        render_data: &'a SynchronizedRenderData,
     ) -> Result<Vec<&'a wgpu::BindGroupLayout>> {
         let mut layouts;
         if let Some(ref camera) = self.camera {
@@ -142,7 +142,7 @@ impl RenderPassSpecification {
     fn get_bind_groups<'a>(
         &self,
         assets: &'a Assets,
-        render_data: &'a RenderData,
+        render_data: &'a SynchronizedRenderData,
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
         let mut layouts;
         if let Some(ref camera) = self.camera {
@@ -175,7 +175,7 @@ impl RenderPassSpecification {
     /// 2. Mesh instance buffer.
     fn get_vertex_buffer_layouts<'a>(
         &self,
-        render_data: &'a RenderData,
+        render_data: &'a SynchronizedRenderData,
     ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
         let mut layouts = Vec::with_capacity(2);
         if let Some(ref mesh) = self.mesh {
@@ -225,7 +225,7 @@ impl RenderPassSpecification {
     }
 
     fn get_mesh_buffers<'a>(
-        render_data: &'a RenderData,
+        render_data: &'a SynchronizedRenderData,
         mesh: &GeomIdent,
     ) -> Result<(&'a VertexBuffer, &'a IndexBuffer)> {
         render_data
@@ -235,7 +235,7 @@ impl RenderPassSpecification {
     }
 
     fn get_mesh_instance_buffer<'a>(
-        render_data: &'a RenderData,
+        render_data: &'a SynchronizedRenderData,
         mesh_instances: &GeomIdent,
     ) -> Result<&'a InstanceBuffer> {
         render_data
@@ -256,7 +256,7 @@ impl RenderPassRecorder {
     pub fn new(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
-        render_data: &RenderData,
+        render_data: &SynchronizedRenderData,
         specification: RenderPassSpecification,
     ) -> Result<Self> {
         let vertex_buffer_layouts = specification.get_vertex_buffer_layouts(render_data)?;
@@ -305,7 +305,7 @@ impl RenderPassRecorder {
     pub fn record_render_pass(
         &self,
         assets: &Assets,
-        render_data: &RenderData,
+        render_data: &SynchronizedRenderData,
         view: &wgpu::TextureView,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {

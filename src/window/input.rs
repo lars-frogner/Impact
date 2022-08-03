@@ -69,7 +69,7 @@ impl InputHandler {
     /// should be handled by some other system instead.
     pub fn handle_event(
         &self,
-        world: &mut World,
+        world: &World,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
     ) -> HandlingResult {
@@ -90,7 +90,7 @@ impl KeyInputHandler {
 
     fn handle_event(
         &self,
-        world: &mut World,
+        world: &World,
         control_flow: &mut ControlFlow<'_>,
         key_input_event: &KeyboardInput,
     ) -> HandlingResult {

@@ -15,13 +15,14 @@ pub use world::RenderData;
 
 use crate::geometry::GeometricalData;
 use anyhow::Result;
+use std::sync::RwLock;
 
 /// Container for all data and logic required for rendering.
 #[derive(Debug)]
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
     assets: Assets,
-    render_data: RenderData,
+    render_data: RwLock<RenderData>,
     render_pass_recorders: Vec<RenderPassRecorder>,
 }
 
@@ -34,12 +35,25 @@ impl RenderingSystem {
         specifications: Vec<RenderPassSpecification>,
         geometrical_data: &GeometricalData,
     ) -> Result<Self> {
-        let render_data = RenderData::from_geometrical_data(&core_system, geometrical_data);
+        let render_data = RwLock::new(RenderData::from_geometrical_data(
+            &core_system,
+            geometrical_data,
+        ));
 
-        let render_pass_recorders: Result<Vec<_>> = specifications
-            .into_iter()
-            .map(|template| RenderPassRecorder::new(&core_system, &assets, &render_data, template))
-            .collect();
+        let render_pass_recorders: Result<Vec<_>> = {
+            let render_data_guard = render_data.read().unwrap();
+            specifications
+                .into_iter()
+                .map(|template| {
+                    RenderPassRecorder::new(
+                        &core_system,
+                        &assets,
+                        render_data_guard.synchronized(),
+                        template,
+                    )
+                })
+                .collect()
+        }; // <- Lock on `render_data` is released here
 
         Ok(Self {
             core_system,
@@ -49,26 +63,37 @@ impl RenderingSystem {
         })
     }
 
+    pub fn core_system(&self) -> &CoreRenderingSystem {
+        &self.core_system
+    }
+
+    pub fn render_data(&self) -> &RwLock<RenderData> {
+        &self.render_data
+    }
+
     /// Creates and presents a rendering of the current data in the pipelines.
     ///
     /// # Errors
     /// Returns an error if:
     /// - If the surface texture to render to can not be obtained.
     /// - If recording a render pass fails.
-    pub fn render(&mut self) -> Result<()> {
+    pub fn render(&self) -> Result<()> {
         let surface_texture = self.core_system.surface().get_current_texture()?;
         let view = Self::create_surface_texture_view(&surface_texture);
 
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
-        for render_pass_recorder in &mut self.render_pass_recorders {
-            render_pass_recorder.record_render_pass(
-                &self.assets,
-                &self.render_data,
-                &view,
-                &mut command_encoder,
-            )?;
-        }
+        {
+            let render_data_guard = self.render_data.read().unwrap();
+            for render_pass_recorder in &self.render_pass_recorders {
+                render_pass_recorder.record_render_pass(
+                    &self.assets,
+                    render_data_guard.synchronized(),
+                    &view,
+                    &mut command_encoder,
+                )?;
+            }
+        } // <- Lock on `self.render_data` is released here
 
         self.core_system
             .queue()
@@ -78,19 +103,6 @@ impl RenderingSystem {
         Ok(())
     }
 
-    /// Performs any required updates for keeping the render data in
-    /// sync with the geometrical data.
-    ///
-    /// # Notes
-    /// - Render data entries for which the associated geometrical data no
-    /// longer exists will be removed.
-    /// - Mutable access to the geometrical data is required in order to reset
-    /// all change trackers.
-    pub fn sync_with_geometry(&mut self, geometrical_data: &mut GeometricalData) {
-        self.render_data
-            .sync_with_geometry(&self.core_system, geometrical_data);
-    }
-
     /// Sets a new size for the rendering surface.
     pub fn resize_surface(&mut self, new_size: (u32, u32)) {
         self.core_system.resize_surface(new_size)
@@ -98,7 +110,7 @@ impl RenderingSystem {
 
     /// Initializes the surface for presentation using the
     /// current surface configuration.
-    pub fn initialize_surface(&self) {
+    fn initialize_surface(&self) {
         self.core_system.initialize_surface()
     }
 
