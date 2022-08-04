@@ -1,11 +1,16 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
+    define_execution_tag_set,
+    rendering::RenderingTag,
+    thread::ThreadPoolResult,
     window::{ControlFlow, HandlingResult, InputHandler, WindowEvent},
-    world::World,
+    world::{World, WorldTaskScheduler},
 };
+use anyhow::Result;
 use std::{
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroUsize},
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
@@ -13,7 +18,8 @@ use std::{
 /// A loop driving simulation and rendering of a [`World`].
 #[derive(Debug)]
 pub struct GameLoop {
-    world: World,
+    world: Arc<World>,
+    task_scheduler: WorldTaskScheduler,
     input_handler: InputHandler,
     frame_rate_tracker: FrameDurationTracker,
     previous_iter_end_time: Instant,
@@ -22,8 +28,11 @@ pub struct GameLoop {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameLoopConfig {
+    n_worker_threads: NonZeroUsize,
     max_fps: Option<NonZeroU32>,
 }
+
+define_execution_tag_set!(RENDERING_TAGS, [RenderingTag]);
 
 #[derive(Clone, Debug)]
 struct GenericFrameDurationTracker<const N_FRAMES: usize> {
@@ -34,42 +43,67 @@ struct GenericFrameDurationTracker<const N_FRAMES: usize> {
 type FrameDurationTracker = GenericFrameDurationTracker<5>;
 
 impl GameLoop {
-    pub fn new(world: World, input_handler: InputHandler, config: GameLoopConfig) -> Self {
+    pub fn new(world: World, input_handler: InputHandler, config: GameLoopConfig) -> Result<Self> {
+        let (world, task_scheduler) = world.create_task_scheduler(config.n_worker_threads)?;
+
         let frame_rate_tracker = FrameDurationTracker::default();
         let previous_iter_end_time = Instant::now();
-        Self {
+
+        Ok(Self {
             world,
+            task_scheduler,
             input_handler,
             frame_rate_tracker,
             previous_iter_end_time,
             config,
-        }
+        })
     }
 
     pub fn handle_input_event(
-        &mut self,
+        &self,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
     ) -> HandlingResult {
         self.input_handler
-            .handle_event(&mut self.world, control_flow, event)
+            .handle_event(self.world.as_ref(), control_flow, event)
     }
 
     pub fn resize_rendering_surface(&mut self, new_size: (u32, u32)) {
-        self.world.resize_rendering_surface(new_size);
+        self.world
+            .renderer()
+            .write()
+            .unwrap()
+            .resize_surface(new_size);
     }
 
-    pub fn perform_iteration(&mut self, control_flow: &mut ControlFlow<'_>) {
-        self.world.sync_render_data();
+    pub fn perform_iteration(&mut self, control_flow: &mut ControlFlow<'_>) -> ThreadPoolResult {
+        self.world
+            .renderer()
+            .read()
+            .unwrap()
+            .render_data()
+            .write()
+            .unwrap()
+            .declare_desynchronized();
 
-        // <- Do physics here at the same time as rendering
+        let execution_result = self.task_scheduler.execute_and_wait(&RENDERING_TAGS);
 
-        self.world.render(control_flow);
+        if let Err(mut task_errors) = execution_result {
+            self.world
+                .handle_task_errors(&mut task_errors, control_flow);
+
+            // Pass any unhandled errors to caller
+            if task_errors.n_errors() > 0 {
+                return Err(task_errors);
+            }
+        }
 
         let iter_end_time = self.wait_for_target_frame_duration();
         self.frame_rate_tracker
             .add_frame_duration(iter_end_time - self.previous_iter_end_time);
         self.previous_iter_end_time = iter_end_time;
+
+        Ok(())
     }
 
     fn wait_for_target_frame_duration(&self) -> Instant {
@@ -129,6 +163,9 @@ impl GameLoopConfig {
 
 impl Default for GameLoopConfig {
     fn default() -> Self {
-        Self { max_fps: None }
+        Self {
+            n_worker_threads: NonZeroUsize::new(1).unwrap(),
+            max_fps: None,
+        }
     }
 }

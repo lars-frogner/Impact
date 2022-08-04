@@ -1,13 +1,12 @@
 //! Rendering pipelines.
 
-use crate::geometry::GeomIdent;
-
 use super::{
     asset::{AssetIdent, Assets},
     buffer::{IndexBuffer, InstanceBuffer, VertexBuffer},
     world::SynchronizedRenderData,
     CoreRenderingSystem,
 };
+use crate::geometry::GeomIdent;
 use anyhow::{anyhow, Result};
 
 /// Holds the information describing a specific render pass,

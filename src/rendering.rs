@@ -6,15 +6,17 @@ mod camera;
 mod core;
 mod mesh;
 mod render_pass;
+mod tasks;
 mod world;
 
 pub use self::core::CoreRenderingSystem;
 pub use asset::{Assets, ImageTexture, Shader};
 pub use render_pass::{RenderPassRecorder, RenderPassSpecification};
-pub use world::RenderData;
+pub use tasks::{Render, RenderingTag};
+pub use world::{RenderData, SyncRenderData};
 
-use crate::geometry::GeometricalData;
-use anyhow::Result;
+use crate::{geometry::GeometricalData, window::ControlFlow};
+use anyhow::{Error, Result};
 use std::sync::RwLock;
 
 /// Container for all data and logic required for rendering.
@@ -115,6 +117,19 @@ impl RenderingSystem {
     /// current surface configuration.
     fn initialize_surface(&self) {
         self.core_system.initialize_surface()
+    }
+
+    fn handle_render_error(&self, error: Error, control_flow: &mut ControlFlow<'_>) {
+        match error.downcast_ref() {
+            // Recreate swap chain if lost
+            Some(wgpu::SurfaceError::Lost) => self.initialize_surface(),
+            // Quit if GPU is out of memory
+            Some(wgpu::SurfaceError::OutOfMemory) => {
+                control_flow.exit();
+            }
+            // Other errors should be resolved by the next frame, so we just log the error and continue
+            _ => log::error!("{:?}", error),
+        }
     }
 
     fn create_surface_texture_view(surface_texture: &wgpu::SurfaceTexture) -> wgpu::TextureView {

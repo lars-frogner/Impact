@@ -1,5 +1,9 @@
 //! Render data associated with geometrical objects.
 
+mod tasks;
+
+pub use tasks::SyncRenderData;
+
 use crate::{
     geometry::{Camera, GeomIdent, GeometricalData, GeometryMap, Mesh, MeshInstanceGroup},
     rendering::{

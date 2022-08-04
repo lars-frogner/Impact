@@ -29,11 +29,7 @@ pub async fn run() -> Result<()> {
     let world = init_world(&window).await?;
     let input_handler = InputHandler::default();
 
-    window.run_game_loop(GameLoop::new(
-        world,
-        input_handler,
-        GameLoopConfig::default(),
-    ));
+    window.run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap());
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -139,7 +135,7 @@ async fn init_world(window: &Window) -> Result<World> {
     let renderer =
         RenderingSystem::new(core_system, assets, vec![render_pass], &geometrical_data).await?;
 
-    let controller = NoMotionController; // SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
+    let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
     Ok(World::new(geometrical_data, renderer, controller))
 }
