@@ -12,9 +12,9 @@ pub type GeometryMap<T> = HashMap<GeomIdent, T>;
 #[derive(Debug)]
 pub struct GeometricalData {
     /// Meshes with vertices that hold color values.
-    pub color_meshes: GeometryMap<Mesh<ColorVertex>>,
+    pub color_meshes: GeometryMap<Mesh<ColorVertex<f32>>>,
     /// Meshes with vertices that hold texture coordinates.
-    pub texture_meshes: GeometryMap<Mesh<TextureVertex>>,
+    pub texture_meshes: GeometryMap<Mesh<TextureVertex<f32>>>,
     /// Groups of instances of the same mesh.
     pub mesh_instance_groups: GeometryMap<MeshInstanceGroup<f32>>,
     /// Cameras using perspective transformations.

@@ -9,8 +9,6 @@ use crate::{
         CoreRenderingSystem,
     },
 };
-use bytemuck::{Pod, Zeroable};
-use nalgebra::Matrix4;
 use std::mem;
 
 /// Owner and manager of render data for meshes.
@@ -26,17 +24,6 @@ pub struct MeshRenderDataManager {
 pub struct MeshInstanceRenderDataManager {
     instance_buffer: InstanceBuffer,
     label: String,
-}
-
-/// Representation of a transform for a mesh instance as a
-/// nested slice of matrix elements.
-///
-/// Used to draw multiple versions of the same basic mesh
-/// without replicating vertex and index data.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
-struct RawMeshInstanceTransformMatrix {
-    transform_matrix: [[f32; 4]; 4],
 }
 
 impl MeshRenderDataManager {
@@ -167,8 +154,7 @@ impl MeshInstanceRenderDataManager {
         instances: &[MeshInstance<f32>],
         label: String,
     ) -> Self {
-        let transforms = Self::create_raw_transforms(instances);
-        let instance_buffer = InstanceBuffer::new(core_system, &transforms, &label);
+        let instance_buffer = InstanceBuffer::new(core_system, instances, &label);
         Self {
             instance_buffer,
             label,
@@ -184,45 +170,17 @@ impl MeshInstanceRenderDataManager {
         match instance_change {
             CollectionChange::None => {}
             CollectionChange::Contents => {
-                let transforms = Self::create_raw_transforms(instances);
                 self.instance_buffer
-                    .queue_update_of_instances(core_system, 0, &transforms);
+                    .queue_update_of_instances(core_system, 0, instances);
             }
             CollectionChange::Count => {
-                let transforms = Self::create_raw_transforms(instances);
-                self.instance_buffer = InstanceBuffer::new(core_system, &transforms, &self.label);
+                self.instance_buffer = InstanceBuffer::new(core_system, instances, &self.label);
             }
         }
     }
-
-    fn create_raw_transforms(
-        instances: &[MeshInstance<f32>],
-    ) -> Vec<RawMeshInstanceTransformMatrix> {
-        instances
-            .iter()
-            .map(RawMeshInstanceTransformMatrix::from_mesh_instance)
-            .collect()
-    }
 }
 
-impl RawMeshInstanceTransformMatrix {
-    /// Creates a new raw transform matrix representing the transform
-    /// of the given mesh instance.
-    pub fn from_mesh_instance(instance: &MeshInstance<f32>) -> Self {
-        Self::from_matrix(instance.transform_matrix())
-    }
-
-    /// Creates a new raw transform matrix from the given [`Matrix4`].
-    pub fn from_matrix(transform_matrix: &Matrix4<f32>) -> Self {
-        Self::new(*transform_matrix.as_ref())
-    }
-
-    fn new(transform_matrix: [[f32; 4]; 4]) -> Self {
-        Self { transform_matrix }
-    }
-}
-
-impl BufferableVertex for ColorVertex {
+impl BufferableVertex for ColorVertex<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
@@ -230,7 +188,7 @@ impl BufferableVertex for ColorVertex {
     };
 }
 
-impl BufferableVertex for TextureVertex {
+impl BufferableVertex for TextureVertex<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
@@ -238,7 +196,7 @@ impl BufferableVertex for TextureVertex {
     };
 }
 
-impl BufferableVertex for RawMeshInstanceTransformMatrix {
+impl BufferableVertex for MeshInstance<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Instance,
@@ -246,4 +204,4 @@ impl BufferableVertex for RawMeshInstanceTransformMatrix {
     };
 }
 
-impl BufferableInstance for RawMeshInstanceTransformMatrix {}
+impl BufferableInstance for MeshInstance<f32> {}

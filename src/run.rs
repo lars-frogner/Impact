@@ -17,7 +17,7 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
-use nalgebra::{point, Point3, Rotation3, Translation3, Vector3};
+use nalgebra::{point, vector, Point3, Rotation3, Translation3, Vector3};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -140,49 +140,49 @@ async fn init_world(window: &Window) -> Result<World> {
     Ok(World::new(geometrical_data, renderer, controller))
 }
 
-const VERTICES: &[ColorVertex] = &[
+const VERTICES: &[ColorVertex<f32>] = &[
     ColorVertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        color: [1.0, 0.0, 0.0],
+        position: point![-0.0868241, 0.49240386, 0.0],
+        color: vector![1.0, 0.0, 0.0],
     },
     ColorVertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        color: [0.0, 1.0, 0.0],
+        position: point![-0.49513406, 0.06958647, 0.0],
+        color: vector![0.0, 1.0, 0.0],
     },
     ColorVertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        color: [0.0, 0.0, 1.0],
+        position: point![-0.21918549, -0.44939706, 0.0],
+        color: vector![0.0, 0.0, 1.0],
     },
     ColorVertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        color: [0.0, 1.0, 1.0],
+        position: point![0.35966998, -0.3473291, 0.0],
+        color: vector![0.0, 1.0, 1.0],
     },
     ColorVertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        color: [1.0, 1.0, 0.0],
+        position: point![0.44147372, 0.2347359, 0.0],
+        color: vector![1.0, 1.0, 0.0],
     },
 ];
 
-const VERTICES_WITH_TEXTURE: &[TextureVertex] = &[
+const VERTICES_WITH_TEXTURE: &[TextureVertex<f32>] = &[
     TextureVertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        texture_coords: [0.4131759, 1.0 - 0.99240386],
+        position: point![-0.0868241, 0.49240386, 0.0],
+        texture_coords: vector![0.4131759, 1.0 - 0.99240386],
     },
     TextureVertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        texture_coords: [0.0048659444, 1.0 - 0.56958647],
+        position: point![-0.49513406, 0.06958647, 0.0],
+        texture_coords: vector![0.0048659444, 1.0 - 0.56958647],
     },
     TextureVertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        texture_coords: [0.28081453, 1.0 - 0.05060294],
+        position: point![-0.21918549, -0.44939706, 0.0],
+        texture_coords: vector![0.28081453, 1.0 - 0.05060294],
     },
     TextureVertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        texture_coords: [0.85967, 1.0 - 0.1526709],
+        position: point![0.35966998, -0.3473291, 0.0],
+        texture_coords: vector![0.85967, 1.0 - 0.1526709],
     },
     TextureVertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        texture_coords: [0.9414737, 1.0 - 0.7347359],
+        position: point![0.44147372, 0.2347359, 0.0],
+        texture_coords: vector![0.9414737, 1.0 - 0.7347359],
     },
 ];
 

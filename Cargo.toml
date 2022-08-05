@@ -20,7 +20,7 @@ env_logger = "0.9"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 lazy_static = "1.4.0"
 log = "0.4"
-nalgebra = "0.31.0"
+nalgebra = { version = "0.31.0", features = ["bytemuck"] }
 num-traits = "0.2.15"
 petgraph = { version = "0.6.2", default-features = false, features = ["graphmap"] }
 pollster = "0.2"

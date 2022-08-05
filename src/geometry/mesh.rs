@@ -5,7 +5,7 @@ use crate::{
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, Point3, Vector2, Vector3};
 use std::fmt::Debug;
 
 /// A 3D mesh represented by vertices and indices.
@@ -33,25 +33,26 @@ pub struct MeshInstanceGroup<F> {
 /// applied to it.
 ///
 /// Used to represent multiple versions of the same basic mesh.
-#[derive(Clone, Debug)]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug)]
 pub struct MeshInstance<F> {
     transform_matrix: Matrix4<F>,
 }
 
 /// Vertices that have an associated color.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct ColorVertex {
-    pub position: [f32; 3],
-    pub color: [f32; 3],
+#[derive(Copy, Clone, Debug)]
+pub struct ColorVertex<F: Float> {
+    pub position: Point3<F>,
+    pub color: Vector3<F>,
 }
 
 /// Vertices that have a associated texture coordinates.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct TextureVertex {
-    pub position: [f32; 3],
-    pub texture_coords: [f32; 2],
+#[derive(Copy, Clone, Debug)]
+pub struct TextureVertex<F: Float> {
+    pub position: Point3<F>,
+    pub texture_coords: Vector2<F>,
 }
 
 impl<V> Mesh<V> {
@@ -155,4 +156,55 @@ impl<F: Float> Default for MeshInstance<F> {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// Since `MeshInstance` is `#[repr(transparent)]`, it will be
+// `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
+unsafe impl<F> Zeroable for MeshInstance<F> where Matrix4<F>: Zeroable {}
+
+unsafe impl<F> Pod for MeshInstance<F>
+where
+    F: Float,
+    Matrix4<F>: Pod,
+{
+}
+
+// Since `ColorVertex` is `#[repr(C)]`, it will be `Zeroable`
+// and `Pod` as long as its fields, `Point3` and `Vector2`, are so
+// and there is no padding. We know there will be no padding since
+// both fields will have the same alignment (the alignment of `F`).
+unsafe impl<F> Zeroable for ColorVertex<F>
+where
+    F: Float,
+    Point3<F>: Zeroable,
+    Vector3<F>: Zeroable,
+{
+}
+
+unsafe impl<F> Pod for ColorVertex<F>
+where
+    F: Float,
+    Point3<F>: Pod,
+    Vector3<F>: Pod,
+{
+}
+
+// Since `TextureVertex` is `#[repr(C)]`, it will be `Zeroable`
+// and `Pod` as long as its fields, `Point3` and `Vector3`, are so
+// and there is no padding. We know there will be no padding since
+// both fields will have the same alignment (the alignment of `F`).
+unsafe impl<F> Zeroable for TextureVertex<F>
+where
+    F: Float,
+    Point3<F>: Zeroable,
+    Vector2<F>: Zeroable,
+{
+}
+
+unsafe impl<F> Pod for TextureVertex<F>
+where
+    F: Float,
+    Point3<F>: Pod,
+    Vector2<F>: Pod,
+{
 }
