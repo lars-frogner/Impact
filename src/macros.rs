@@ -11,6 +11,7 @@ macro_rules! with_debug_logging {
 
 /// This macro expands to a compile time constant equal
 /// to the number of arguments passed to the macro.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! count_ident_args {
     ($($arg:ident),*) => {
