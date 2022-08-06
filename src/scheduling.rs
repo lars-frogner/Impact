@@ -1118,8 +1118,8 @@ mod test {
         // respectively. DepDepTask1Task2 should execute last and
         // on the thread that executed DepTask1.
         match sorted_worker_ids[..] {
-            [0, 1, 0, 1, 0] => {}
-            [1, 0, 1, 0, 1] => {}
+            [WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0)] => {}
+            [WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1)] => {}
             _ => panic!("Incorrect worker contribution"),
         }
     }

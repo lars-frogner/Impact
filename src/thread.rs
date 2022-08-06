@@ -3,6 +3,7 @@
 use anyhow::Error;
 use std::{
     collections::HashMap,
+    fmt,
     num::NonZeroUsize,
     ops::DerefMut,
     sync::{
@@ -72,8 +73,14 @@ pub enum WorkerInstruction<M> {
     Terminate,
 }
 
-/// The type if ID used for worker threads in a [`ThreadPool`].
-pub type WorkerID = usize;
+/// ID identifying worker threads in a [`ThreadPool`].
+#[cfg(not(test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WorkerID(usize);
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct WorkerID(pub usize);
 
 /// Type of ID used for identifying tasks that can be performed
 /// by worker threads in a [`ThreadPool`].
@@ -170,7 +177,7 @@ impl<M> ThreadPool<M> {
             .map(|worker_id| {
                 // Create a new instance of the shared communicator
                 // for the spawned worker to use
-                let communicator = communicator.copy_for_worker(worker_id);
+                let communicator = communicator.copy_for_worker(WorkerID(worker_id));
 
                 Worker::spawn(communicator, execute_task)
             })
@@ -257,6 +264,12 @@ impl<M> Drop for ThreadPool<M> {
         for worker in self.workers.drain(..) {
             worker.join();
         }
+    }
+}
+
+impl fmt::Display for WorkerID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -627,9 +640,11 @@ mod test {
         comm.execution_progress().add_to_pending_task_count(1);
         assert_eq!(comm.execution_progress().pending_task_count(), 3);
 
-        comm.execution_progress().register_executed_tasks(0, 2);
+        comm.execution_progress()
+            .register_executed_tasks(WorkerID(0), 2);
         assert_eq!(comm.execution_progress().pending_task_count(), 1);
-        comm.execution_progress().register_executed_tasks(0, 1);
+        comm.execution_progress()
+            .register_executed_tasks(WorkerID(0), 1);
         assert_eq!(comm.execution_progress().pending_task_count(), 0);
 
         comm.execution_progress().wait_for_no_pending_tasks(); // Should return immediately
@@ -640,7 +655,8 @@ mod test {
     fn registering_executed_task_when_none_are_pending_fails() {
         let n_workers = 2;
         let comm = ThreadPoolCommunicator::<NoMessage>::new(NonZeroUsize::new(n_workers).unwrap());
-        comm.execution_progress().register_executed_tasks(0, 1);
+        comm.execution_progress()
+            .register_executed_tasks(WorkerID(0), 1);
     }
 
     #[test]
