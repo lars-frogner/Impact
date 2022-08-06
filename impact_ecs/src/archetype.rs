@@ -31,7 +31,8 @@ pub struct Archetype {
 
 /// Unique identifier for an [`Archetype`], obtained by hashing
 /// the sorted list of component IDs defining the archetype.
-pub type ArchetypeID = u64;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ArchetypeID(u64);
 
 /// A table holding the component data belonging to all entities
 /// with a specific archetype.
@@ -250,7 +251,7 @@ impl Archetype {
     fn create_id_from_sorted_component_ids(component_ids: &[ComponentID]) -> ArchetypeID {
         let mut hasher = DefaultHasher::new();
         component_ids.hash(&mut hasher);
-        hasher.finish()
+        ArchetypeID(hasher.finish())
     }
 }
 
@@ -1181,20 +1182,27 @@ mod test {
 
     #[test]
     fn constructing_table_works() {
-        let table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
-        assert!(table.has_entity(0));
-        assert_eq!(table.entity(0).component::<Byte>(), &BYTE);
+        let entity_0 = EntityID(0);
+        let entity_42 = EntityID(42);
+        let entity_10 = EntityID(10);
 
-        let table = ArchetypeTable::new_with_entities([42], (&RECT, &POS).try_into().unwrap());
-        assert!(table.has_entity(42));
-        let entity = table.entity(42);
+        let table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        assert!(table.has_entity(entity_0));
+        assert_eq!(table.entity(entity_0).component::<Byte>(), &BYTE);
+
+        let table =
+            ArchetypeTable::new_with_entities([entity_42], (&RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity(entity_42));
+        let entity = table.entity(entity_42);
         assert_eq!(entity.component::<Position>(), &POS);
         assert_eq!(entity.component::<Rectangle>(), &RECT);
 
-        let table =
-            ArchetypeTable::new_with_entities([10], (&BYTE, &RECT, &POS).try_into().unwrap());
-        assert!(table.has_entity(10));
-        let entity = table.entity(10);
+        let table = ArchetypeTable::new_with_entities(
+            [entity_10],
+            (&BYTE, &RECT, &POS).try_into().unwrap(),
+        );
+        assert!(table.has_entity(entity_10));
+        let entity = table.entity(entity_10);
         assert_eq!(entity.component::<Byte>(), &BYTE);
         assert_eq!(entity.component::<Position>(), &POS);
         assert_eq!(entity.component::<Rectangle>(), &RECT);
@@ -1202,21 +1210,27 @@ mod test {
 
     #[test]
     fn adding_entity_to_table_works() {
-        let mut table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
-        table.add_entities([1], (&BYTE).into());
-        assert!(table.has_entity(0));
-        assert_eq!(table.entity(0).component::<Byte>(), &BYTE);
-        assert!(table.has_entity(1));
-        assert_eq!(table.entity(1).component::<Byte>(), &BYTE);
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+        let entity_3 = EntityID(3);
+        let entity_7 = EntityID(7);
 
-        let mut table = ArchetypeTable::new_with_entities([3], (&RECT, &POS).try_into().unwrap());
-        table.add_entities([7], (&RECT, &POS).try_into().unwrap());
-        assert!(table.has_entity(3));
-        let entity = table.entity(3);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        table.add_entities([entity_1], (&BYTE).into());
+        assert!(table.has_entity(entity_0));
+        assert_eq!(table.entity(entity_0).component::<Byte>(), &BYTE);
+        assert!(table.has_entity(entity_1));
+        assert_eq!(table.entity(entity_1).component::<Byte>(), &BYTE);
+
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_3], (&RECT, &POS).try_into().unwrap());
+        table.add_entities([entity_7], (&RECT, &POS).try_into().unwrap());
+        assert!(table.has_entity(entity_3));
+        let entity = table.entity(entity_3);
         assert_eq!(entity.component::<Position>(), &POS);
         assert_eq!(entity.component::<Rectangle>(), &RECT);
-        assert!(table.has_entity(7));
-        let entity = table.entity(7);
+        assert!(table.has_entity(entity_7));
+        let entity = table.entity(entity_7);
         assert_eq!(entity.component::<Position>(), &POS);
         assert_eq!(entity.component::<Rectangle>(), &RECT);
     }
@@ -1224,35 +1238,43 @@ mod test {
     #[test]
     #[should_panic]
     fn adding_existing_entity_to_table_fails() {
-        let mut table = ArchetypeTable::new_with_entities([0], (&BYTE).into());
-        table.add_entities([0], (&BYTE).into());
+        let entity_0 = EntityID(0);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        table.add_entities([entity_0], (&BYTE).into());
     }
 
     #[test]
     fn removing_entity_from_table_works() {
-        let mut table = ArchetypeTable::new_with_entities([0], (&RECT, &POS).try_into().unwrap());
-        table.add_entities([1], (&RECT, &POS).try_into().unwrap());
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
 
-        table.remove_entity(0).unwrap();
-        assert!(!table.has_entity(0));
-        assert!(table.has_entity(1));
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
+        table.add_entities([entity_1], (&RECT, &POS).try_into().unwrap());
 
-        table.remove_entity(1).unwrap();
+        table.remove_entity(entity_0).unwrap();
+        assert!(!table.has_entity(entity_0));
+        assert!(table.has_entity(entity_1));
+
+        table.remove_entity(entity_1).unwrap();
         assert!(table.is_empty());
     }
 
     #[test]
     #[should_panic]
     fn removing_missing_entity_from_table_fails() {
-        let mut table = ArchetypeTable::new_with_entities([0], (&RECT, &POS).try_into().unwrap());
-        table.remove_entity(1).unwrap();
+        let mut table =
+            ArchetypeTable::new_with_entities([EntityID(0)], (&RECT, &POS).try_into().unwrap());
+        table.remove_entity(EntityID(1)).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn removing_entity_from_empty_table_fails() {
-        let mut table = ArchetypeTable::new_with_entities([0], (&RECT, &POS).try_into().unwrap());
-        table.remove_entity(0).unwrap();
-        table.remove_entity(0).unwrap();
+        let entity_0 = EntityID(0);
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
+        table.remove_entity(entity_0).unwrap();
+        table.remove_entity(entity_0).unwrap();
     }
 }

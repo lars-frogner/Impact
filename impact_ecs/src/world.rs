@@ -27,7 +27,13 @@ pub struct Entity {
 }
 
 /// Unique ID identifying an [`Entity`].
-pub type EntityID = u64;
+#[cfg(not(test))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EntityID(u64);
+
+#[cfg(test)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EntityID(pub u64);
 
 /// Overall manager for [`Entity`]s in the world and
 /// their [`Component`] data.
@@ -37,7 +43,7 @@ pub struct World {
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_index_mapper: KeyIndexMapper<ArchetypeID>,
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
-    entity_id_counter: EntityID,
+    entity_id_counter: u64,
     n_removed_entities: usize,
 }
 
@@ -420,7 +426,7 @@ impl World {
     fn create_entity_id(&mut self) -> EntityID {
         let id = self.entity_id_counter;
         self.entity_id_counter += 1;
-        id
+        EntityID(id)
     }
 }
 
