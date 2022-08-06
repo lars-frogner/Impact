@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use std::{
+    cmp,
     collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
@@ -89,6 +90,18 @@ impl fmt::Display for StringHash {
 impl PartialEq for StringHash {
     fn eq(&self, other: &Self) -> bool {
         self.string_hash == other.string_hash
+    }
+}
+
+impl Ord for StringHash {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.string_hash.cmp(&other.string_hash)
+    }
+}
+
+impl PartialOrd for StringHash {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
