@@ -1,16 +1,17 @@
 //! Task scheduling.
 
-use crate::thread::{
-    TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
+use crate::{
+    hash::StringHash,
+    thread::{
+        TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
+    },
 };
 use anyhow::{anyhow, bail, Result};
-use const_fnv1a_hash;
 use petgraph::{
     algo::{self, DfsSpace},
     graphmap::DiGraphMap,
 };
 use std::{
-    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Debug,
     marker::PhantomData,
@@ -35,12 +36,6 @@ pub trait Task<S>: Sync + Send + Debug {
     /// This could be generated from a task name
     /// by calling [`task_name_to_id`].
     fn id(&self) -> TaskID;
-
-    /// Returns a string describing the task.
-    /// This is used for error handling purposes.
-    fn descriptor(&self) -> Cow<'_, str> {
-        Cow::Owned(self.id().to_string())
-    }
 
     /// Returns the ID of every other task that must
     /// have been completed before this task can be
@@ -78,21 +73,10 @@ pub struct TaskScheduler<S> {
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
-pub type ExecutionTag = u64;
+pub type ExecutionTag = StringHash;
 
 /// A set of unique [`ExecutionTag`]s.
 pub type ExecutionTags = HashSet<ExecutionTag>;
-
-/// Takes the given task name and returns the corresponding task ID.
-pub const fn task_name_to_id(name: &str) -> TaskID {
-    const_fnv1a_hash::fnv1a_hash_str_64(name)
-}
-
-/// Takes the given execution label and returns the corresponding
-/// execution tag.
-pub const fn execution_label_to_tag(name: &str) -> ExecutionTag {
-    const_fnv1a_hash::fnv1a_hash_str_64(name)
-}
 
 type TaskPool<S> = HashMap<TaskID, Arc<dyn Task<S>>>;
 
@@ -230,8 +214,7 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            const NAME: &'static str = stringify!($name);
-            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::scheduling::task_name_to_id(Self::NAME);
+            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::hash::StringHash::of_literal(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
             const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
@@ -243,10 +226,6 @@ macro_rules! define_task {
         impl $crate::scheduling::Task<$world_ty> for $name {
             fn id(&self) -> $crate::thread::TaskID {
                 Self::TASK_ID
-            }
-
-            fn descriptor(&self) -> ::std::borrow::Cow<'_, str> {
-                ::std::borrow::Cow::Borrowed(Self::NAME)
             }
 
             fn depends_on(&self) -> &[$crate::thread::TaskID] {
@@ -276,7 +255,7 @@ macro_rules! define_execution_tag {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::scheduling::execution_label_to_tag(stringify!($name));
+            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::hash::StringHash::of_literal(stringify!($name));
         }
     };
 }
@@ -346,7 +325,7 @@ where
     pub fn register_task(&mut self, task: impl Task<S> + 'static) -> Result<()> {
         let task_id = task.id();
         if self.tasks.contains_key(&task_id) {
-            bail!("Task {} already exists", task.descriptor());
+            bail!("Task {} already exists", task_id);
         }
 
         self.dependency_graph.add_task(&task);
@@ -496,9 +475,8 @@ impl<S> TaskDependencyGraph<S> {
 
             if existing_edge.is_some() {
                 panic!(
-                    "Task {} depends on same task (ID {}) multiple times",
-                    task.descriptor(),
-                    dependence_task_id
+                    "Task {} depends on same task ({}) multiple times",
+                    task_id, dependence_task_id
                 );
             }
         }
@@ -614,7 +592,7 @@ where
         log::debug!(
             "Worker {} obtained task {}",
             channel.owning_worker_id(),
-            task.descriptor()
+            task.id()
         );
 
         // Execute the task only if it thinks it should be based on
@@ -622,7 +600,7 @@ where
         if task.should_execute(execution_tags.as_ref()) {
             with_debug_logging!("Worker {} executing task {}",
                 channel.owning_worker_id(),
-                task.descriptor();
+                task.id();
                 {
                     let result = { cfg_if::cfg_if! {
                         if #[cfg(test)] {
@@ -643,7 +621,7 @@ where
             log::debug!(
                 "Worker {} skipped execution of task {}",
                 channel.owning_worker_id(),
-                task.descriptor()
+                task.id()
             );
         }
 
@@ -674,7 +652,7 @@ where
                             .task_ordering()
                             .task(ready_dependent_task_idx)
                             .task()
-                            .descriptor();
+                            .id();
                     channel.send_execute_instruction(Self::create_message(
                         &state,
                         &execution_tags,
@@ -773,7 +751,7 @@ impl<S> TaskOrdering<S> {
             "Ordered tasks: {:?}",
             ordered_task_ids
                 .iter()
-                .map(|task_id| task_pool[task_id].descriptor())
+                .map(|task_id| task_pool[task_id].id())
                 .collect::<Vec<_>>()
         );
 
@@ -869,9 +847,10 @@ impl<S> OrderedTask<S> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::hash::StringHash;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
-    const EXEC_ALL: ExecutionTag = execution_label_to_tag("all");
+    const EXEC_ALL: ExecutionTag = hash!("all");
 
     #[derive(Debug)]
     struct TaskRecorder {
@@ -918,9 +897,9 @@ mod test {
             struct $task;
 
             impl $task {
-                const ID: TaskID = task_name_to_id(stringify!($task));
+                const ID: TaskID = StringHash::of_literal(stringify!($task));
                 #[allow(dead_code)]
-                const EXEC_TAG: ExecutionTag = execution_label_to_tag(stringify!($task));
+                const EXEC_TAG: ExecutionTag = StringHash::of_literal(stringify!($task));
             }
 
             impl Task<TaskRecorder> for $task
