@@ -6,10 +6,11 @@ mod texture;
 pub use shader::Shader;
 pub use texture::ImageTexture;
 
+use crate::hash::StringHash;
 use std::collections::HashMap;
 
-pub type AssetIdent = String;
-pub type AssetMap<T> = HashMap<AssetIdent, T>;
+pub type AssetID = StringHash;
+pub type AssetMap<T> = HashMap<AssetID, T>;
 
 /// Container for any rendering assets that never change.
 #[derive(Debug)]

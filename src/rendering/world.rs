@@ -5,7 +5,7 @@ mod tasks;
 pub use tasks::SyncRenderData;
 
 use crate::{
-    geometry::{Camera, GeomIdent, GeometricalData, GeometryMap, Mesh, MeshInstanceGroup},
+    geometry::{Camera, GeometricalData, GeometryID, GeometryMap, Mesh, MeshInstanceGroup},
     rendering::{
         buffer::BufferableVertex,
         camera::CameraRenderDataManager,
@@ -131,25 +131,25 @@ impl RenderData {
 impl SynchronizedRenderData {
     /// Returns the render data manager for the given mesh identifier
     /// if the mesh exists, otherwise returns [`None`].
-    pub fn get_mesh_data(&self, ident: &GeomIdent) -> Option<&MeshRenderDataManager> {
+    pub fn get_mesh_data(&self, mesh_id: GeometryID) -> Option<&MeshRenderDataManager> {
         self.color_mesh_data
-            .get(ident)
-            .or_else(|| self.texture_mesh_data.get(ident))
+            .get(&mesh_id)
+            .or_else(|| self.texture_mesh_data.get(&mesh_id))
     }
 
     /// Returns the render data manager for the given mesh instance
     /// group if the group exists, otherwise returns [`None`].
     pub fn get_mesh_instance_data(
         &self,
-        ident: &GeomIdent,
+        mesh_instance_group_id: GeometryID,
     ) -> Option<&MeshInstanceRenderDataManager> {
-        self.mesh_instance_group_data.get(ident)
+        self.mesh_instance_group_data.get(&mesh_instance_group_id)
     }
 
     /// Returns the render data manager for the given camera identifier
     /// if the camera exists, otherwise returns [`None`].
-    pub fn get_camera_data(&self, ident: &GeomIdent) -> Option<&CameraRenderDataManager> {
-        self.perspective_camera_data.get(ident)
+    pub fn get_camera_data(&self, camera_id: GeometryID) -> Option<&CameraRenderDataManager> {
+        self.perspective_camera_data.get(&camera_id)
     }
 
     fn from_geometrical_data(
@@ -183,10 +183,10 @@ impl SynchronizedRenderData {
     ) -> GeometryMap<MeshRenderDataManager> {
         meshes
             .iter()
-            .map(|(label, mesh)| {
+            .map(|(&id, mesh)| {
                 (
-                    label.clone(),
-                    MeshRenderDataManager::for_mesh(core_system, mesh, label.clone()),
+                    id,
+                    MeshRenderDataManager::for_mesh(core_system, mesh, id.to_string()),
                 )
             })
             .collect()
@@ -198,13 +198,13 @@ impl SynchronizedRenderData {
     ) -> GeometryMap<MeshInstanceRenderDataManager> {
         mesh_instance_groups
             .iter()
-            .map(|(label, mesh_instance_group)| {
+            .map(|(&id, mesh_instance_group)| {
                 (
-                    label.clone(),
+                    id,
                     MeshInstanceRenderDataManager::for_mesh_instance_group(
                         core_system,
                         mesh_instance_group,
-                        label.clone(),
+                        id.to_string(),
                     ),
                 )
             })
@@ -217,10 +217,10 @@ impl SynchronizedRenderData {
     ) -> GeometryMap<CameraRenderDataManager> {
         cameras
             .iter()
-            .map(|(label, camera)| {
+            .map(|(&id, camera)| {
                 (
-                    label.clone(),
-                    CameraRenderDataManager::for_camera(core_system, camera, label),
+                    id,
+                    CameraRenderDataManager::for_camera(core_system, camera, &id.to_string()),
                 )
             })
             .collect()

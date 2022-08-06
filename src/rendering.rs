@@ -61,7 +61,8 @@ impl RenderingSystem {
             core_system,
             assets,
             render_data,
-            render_pass_recorders: render_pass_recorders?,
+            render_passes,
+            camera_id,
         })
     }
 

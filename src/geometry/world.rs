@@ -1,12 +1,12 @@
 //! Container for geometrical data.
 
-use nalgebra::Isometry3;
-
 use super::{Camera, ColorVertex, Mesh, MeshInstanceGroup, PerspectiveCamera, TextureVertex};
+use crate::hash::StringHash;
+use nalgebra::Isometry3;
 use std::collections::HashMap;
 
-pub type GeomIdent = String;
-pub type GeometryMap<T> = HashMap<GeomIdent, T>;
+pub type GeometryID = StringHash;
+pub type GeometryMap<T> = HashMap<GeometryID, T>;
 
 /// Container for all geometrical data in the world.
 #[derive(Debug)]
