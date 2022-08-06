@@ -28,11 +28,11 @@ pub struct Entity {
 
 /// Unique ID identifying an [`Entity`].
 #[cfg(not(test))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EntityID(u64);
 
 #[cfg(test)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EntityID(pub u64);
 
 /// Overall manager for [`Entity`]s in the world and

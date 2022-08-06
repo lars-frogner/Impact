@@ -31,7 +31,7 @@ pub struct Archetype {
 
 /// Unique identifier for an [`Archetype`], obtained by hashing
 /// the sorted list of component IDs defining the archetype.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ArchetypeID(u64);
 
 /// A table holding the component data belonging to all entities
