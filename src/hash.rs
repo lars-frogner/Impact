@@ -12,7 +12,7 @@ use std::{
 /// This object remembers the original string and can be
 /// formatted into it by means of the [`Display`](fmt::Display)
 /// trait.
-#[derive(Copy, Clone, Debug, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct StringHash {
     string_hash: u64,
     string: Option<&'static str>,
@@ -87,12 +87,6 @@ impl fmt::Display for StringHash {
     }
 }
 
-impl PartialEq for StringHash {
-    fn eq(&self, other: &Self) -> bool {
-        self.string_hash == other.string_hash
-    }
-}
-
 impl Ord for StringHash {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.string_hash.cmp(&other.string_hash)
@@ -105,6 +99,10 @@ impl PartialOrd for StringHash {
     }
 }
 
+// Disabling this error because the requirement for `Hash`,
+// `k1 == k2 -> hash(k1) == hash(k2)`, is still upheld
+// even though we only hash one of the fields
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for StringHash {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.string_hash.hash(state);
