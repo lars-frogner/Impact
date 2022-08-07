@@ -1,6 +1,9 @@
 //! Container for geometrical data.
 
-use super::{Camera, ColorVertex, Mesh, MeshInstanceContainer, PerspectiveCamera, TextureVertex};
+use super::{
+    Camera, ColorVertex, Mesh, MeshInstance, MeshInstanceContainer, PerspectiveCamera,
+    TextureVertex,
+};
 use crate::hash::StringHash;
 use nalgebra::Isometry3;
 use std::collections::HashMap;
@@ -96,6 +99,19 @@ impl GeometricalData {
         assert!(existing_mesh.is_none());
         self.mesh_instance_containers
             .insert(mesh_id, MeshInstanceContainer::new());
+    }
+
+    /// Includes the given mesh instance in the container of
+    /// instances of the mesh with the given ID.
+    ///
+    /// # Panics
+    /// If no instance container for the mesh with the given ID
+    /// exists.
+    pub fn add_instance_of_mesh(&mut self, mesh_id: GeometryID, instance: MeshInstance<f32>) {
+        self.mesh_instance_containers
+            .get_mut(&mesh_id)
+            .expect("Tried to add instance of missing mesh")
+            .add_instance(instance);
     }
 
     /// Applies the given transform to all cameras.
