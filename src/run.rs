@@ -3,10 +3,8 @@
 use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{
-        ColorVertex, GeometricalData, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex,
-    },
-    rendering::{Assets, RenderPassSpecification},
+    geometry::{ColorVertex, GeometricalData, Mesh, TextureVertex},
+    rendering::{Assets, MaterialLibrary, MaterialSpecification, ModelLibrary, ModelSpecification},
     window::InputHandler,
     window::Window,
     world::World,
@@ -71,7 +69,7 @@ async fn init_world(window: &Window) -> Result<World> {
     let mut assets = Assets::new();
 
     assets.shaders.insert(
-        "Test shader".to_string(),
+        hash!("Test shader"),
         Shader::from_source(
             &core_system,
             include_str!("texture_shader.wgsl"),
@@ -80,9 +78,9 @@ async fn init_world(window: &Window) -> Result<World> {
         ),
     );
 
-    // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", "Tree texture")?;
+    // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
     assets.image_textures.insert(
-        "Tree texture".to_string(),
+        hash!("Tree texture"),
         ImageTexture::from_bytes(
             &core_system,
             include_bytes!("../assets/happy-tree.png"),
@@ -92,26 +90,13 @@ async fn init_world(window: &Window) -> Result<World> {
 
     let mut geometrical_data = GeometricalData::new();
 
-    geometrical_data.texture_meshes.insert(
-        "Test mesh".to_string(),
+    geometrical_data.add_texture_mesh(
+        hash!("Test mesh"),
         Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
     );
 
-    geometrical_data.mesh_instance_groups.insert(
-        "Test mesh instance".to_string(),
-        MeshInstanceGroup::new(
-            vec![
-                Translation3::<f32>::new(-0.5, 0.0, 0.0).into(),
-                Translation3::<f32>::new(0.5, 0.0, -1.0).into(),
-            ]
-            .into_iter()
-            .map(MeshInstance::with_transform)
-            .collect(),
-        ),
-    );
-
-    geometrical_data.perspective_cameras.insert(
-        "Camera".to_string(),
+    geometrical_data.add_perspective_camera(
+        hash!("Camera"),
         PerspectiveCamera::new(
             CameraConfiguration::new_looking_at(
                 point![0.0, 0.0, 2.0],
@@ -124,16 +109,33 @@ async fn init_world(window: &Window) -> Result<World> {
         ),
     );
 
-    let render_pass = RenderPassSpecification::new("Test".to_string())
-        .with_clear_color(Some(wgpu::Color::BLACK))
-        .with_shader(Some("Test shader".to_string()))
-        .add_image_texture("Tree texture".to_string())
-        .with_mesh(Some("Test mesh".to_string()))
-        .with_mesh_instances(Some("Test mesh instance".to_string()))
-        .with_camera(Some("Camera".to_string()));
+    let mut material_library = MaterialLibrary::new();
+    let material_spec = MaterialSpecification {
+        shader_id: hash!("Test shader"),
+        image_texture_ids: vec![hash!("Tree texture")],
+    };
+    material_library.add_material(hash!("Test material"), material_spec);
 
-    let renderer =
-        RenderingSystem::new(core_system, assets, vec![render_pass], &geometrical_data).await?;
+    let mut model_library = ModelLibrary::new(material_library);
+    let model_spec = ModelSpecification {
+        material_id: hash!("Test material"),
+        mesh_id: hash!("Test mesh"),
+    };
+    model_library.add_model(hash!("Test model"), model_spec);
+
+    let camera = hash!("Camera");
+    let models = vec![hash!("Test model")];
+
+    let renderer = RenderingSystem::new(
+        core_system,
+        assets,
+        model_library,
+        &geometrical_data,
+        camera,
+        models,
+        wgpu::Color::GREEN,
+    )
+    .await?;
 
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 

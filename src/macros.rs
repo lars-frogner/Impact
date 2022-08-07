@@ -9,6 +9,15 @@ macro_rules! with_debug_logging {
     }};
 }
 
+macro_rules! hash {
+    ($string:literal) => {
+        $crate::hash::StringHash::of_literal($string)
+    };
+    ($string:expr) => {
+        $crate::hash::StringHash::of_owned($string)
+    };
+}
+
 /// This macro expands to a compile time constant equal
 /// to the number of arguments passed to the macro.
 #[doc(hidden)]
