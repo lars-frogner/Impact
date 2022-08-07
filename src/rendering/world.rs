@@ -5,7 +5,7 @@ mod tasks;
 pub use tasks::SyncRenderData;
 
 use crate::{
-    geometry::{Camera, GeometricalData, GeometryID, GeometryMap, Mesh, MeshInstanceGroup},
+    geometry::{Camera, GeometricalData, GeometryID, GeometryMap, Mesh, MeshInstanceContainer},
     rendering::{
         buffer::BufferableVertex,
         camera::CameraRenderDataManager,
@@ -43,10 +43,10 @@ pub struct RenderData {
 /// is assumed to be in sync with the corresponding [`GeometricalData`].
 #[derive(Debug)]
 pub struct SynchronizedRenderData {
+    perspective_camera_data: RenderDataMap<CameraRenderDataManager>,
     color_mesh_data: RenderDataMap<MeshRenderDataManager>,
     texture_mesh_data: RenderDataMap<MeshRenderDataManager>,
-    mesh_instance_group_data: RenderDataMap<MeshInstanceRenderDataManager>,
-    perspective_camera_data: RenderDataMap<CameraRenderDataManager>,
+    mesh_instance_data: RenderDataMap<MeshInstanceRenderDataManager>,
 }
 
 /// Wrapper for render data that is assumed to be out of sync
@@ -55,10 +55,10 @@ pub struct SynchronizedRenderData {
 /// of the data.
 #[derive(Debug)]
 struct DesynchronizedRenderData {
+    perspective_camera_data: GuardedRenderDataMap<CameraRenderDataManager>,
     color_mesh_data: GuardedRenderDataMap<MeshRenderDataManager>,
     texture_mesh_data: GuardedRenderDataMap<MeshRenderDataManager>,
-    mesh_instance_group_data: GuardedRenderDataMap<MeshInstanceRenderDataManager>,
-    perspective_camera_data: GuardedRenderDataMap<CameraRenderDataManager>,
+    mesh_instance_data: GuardedRenderDataMap<MeshInstanceRenderDataManager>,
 }
 
 type RenderDataMap<T> = Box<GeometryMap<T>>;
@@ -129,6 +129,12 @@ impl RenderData {
 }
 
 impl SynchronizedRenderData {
+    /// Returns the render data manager for the given camera identifier
+    /// if the camera exists, otherwise returns [`None`].
+    pub fn get_camera_data(&self, camera_id: GeometryID) -> Option<&CameraRenderDataManager> {
+        self.perspective_camera_data.get(&camera_id)
+    }
+
     /// Returns the render data manager for the given mesh identifier
     /// if the mesh exists, otherwise returns [`None`].
     pub fn get_mesh_data(&self, mesh_id: GeometryID) -> Option<&MeshRenderDataManager> {
@@ -141,40 +147,49 @@ impl SynchronizedRenderData {
     /// group if the group exists, otherwise returns [`None`].
     pub fn get_mesh_instance_data(
         &self,
-        mesh_instance_group_id: GeometryID,
+        mesh_instance_container_id: GeometryID,
     ) -> Option<&MeshInstanceRenderDataManager> {
-        self.mesh_instance_group_data.get(&mesh_instance_group_id)
-    }
-
-    /// Returns the render data manager for the given camera identifier
-    /// if the camera exists, otherwise returns [`None`].
-    pub fn get_camera_data(&self, camera_id: GeometryID) -> Option<&CameraRenderDataManager> {
-        self.perspective_camera_data.get(&camera_id)
+        self.mesh_instance_data.get(&mesh_instance_container_id)
     }
 
     fn from_geometrical_data(
         core_system: &CoreRenderingSystem,
         geometrical_data: &GeometricalData,
     ) -> Self {
-        let color_mesh_data =
-            Self::create_mesh_render_data(core_system, &geometrical_data.color_meshes);
-        let texture_mesh_data =
-            Self::create_mesh_render_data(core_system, &geometrical_data.texture_meshes);
+        let perspective_camera_data =
+            Self::create_camera_render_data(core_system, geometrical_data.perspective_cameras());
 
-        let mesh_instance_group_data = Self::create_mesh_instance_group_render_data(
+        let color_mesh_data =
+            Self::create_mesh_render_data(core_system, geometrical_data.color_meshes());
+        let texture_mesh_data =
+            Self::create_mesh_render_data(core_system, geometrical_data.texture_meshes());
+
+        let mesh_instance_data = Self::create_mesh_instance_render_data(
             core_system,
-            &geometrical_data.mesh_instance_groups,
+            geometrical_data.mesh_instance_containers(),
         );
 
-        let perspective_camera_data =
-            Self::create_camera_render_data(core_system, &geometrical_data.perspective_cameras);
-
         Self {
+            perspective_camera_data: Box::new(perspective_camera_data),
             color_mesh_data: Box::new(color_mesh_data),
             texture_mesh_data: Box::new(texture_mesh_data),
-            mesh_instance_group_data: Box::new(mesh_instance_group_data),
-            perspective_camera_data: Box::new(perspective_camera_data),
+            mesh_instance_data: Box::new(mesh_instance_data),
         }
+    }
+
+    fn create_camera_render_data(
+        core_system: &CoreRenderingSystem,
+        cameras: &GeometryMap<impl Camera<f32>>,
+    ) -> GeometryMap<CameraRenderDataManager> {
+        cameras
+            .iter()
+            .map(|(&id, camera)| {
+                (
+                    id,
+                    CameraRenderDataManager::for_camera(core_system, camera, &id.to_string()),
+                )
+            })
+            .collect()
     }
 
     fn create_mesh_render_data(
@@ -192,35 +207,20 @@ impl SynchronizedRenderData {
             .collect()
     }
 
-    fn create_mesh_instance_group_render_data(
+    fn create_mesh_instance_render_data(
         core_system: &CoreRenderingSystem,
-        mesh_instance_groups: &GeometryMap<MeshInstanceGroup<f32>>,
+        mesh_instance_containers: &GeometryMap<MeshInstanceContainer<f32>>,
     ) -> GeometryMap<MeshInstanceRenderDataManager> {
-        mesh_instance_groups
+        mesh_instance_containers
             .iter()
-            .map(|(&id, mesh_instance_group)| {
+            .map(|(&id, mesh_instance_container)| {
                 (
                     id,
-                    MeshInstanceRenderDataManager::for_mesh_instance_group(
+                    MeshInstanceRenderDataManager::new(
                         core_system,
-                        mesh_instance_group,
+                        mesh_instance_container,
                         id.to_string(),
                     ),
-                )
-            })
-            .collect()
-    }
-
-    fn create_camera_render_data(
-        core_system: &CoreRenderingSystem,
-        cameras: &GeometryMap<impl Camera<f32>>,
-    ) -> GeometryMap<CameraRenderDataManager> {
-        cameras
-            .iter()
-            .map(|(&id, camera)| {
-                (
-                    id,
-                    CameraRenderDataManager::for_camera(core_system, camera, &id.to_string()),
                 )
             })
             .collect()
@@ -228,45 +228,6 @@ impl SynchronizedRenderData {
 }
 
 impl DesynchronizedRenderData {
-    /// Performs any required updates for keeping the given mesh render data in
-    /// sync with the given geometrical data.
-    ///
-    /// # Note
-    /// Render data entries for which the associated geometrical data no
-    /// longer exists will be removed.
-    fn sync_mesh_data_with_geometry(
-        core_system: &CoreRenderingSystem,
-        mesh_render_data: &mut GeometryMap<MeshRenderDataManager>,
-        meshes: &GeometryMap<Mesh<impl BufferableVertex>>,
-    ) {
-        Self::remove_unmatched_render_data(mesh_render_data, meshes);
-        mesh_render_data.iter_mut().for_each(|(label, mesh_data)| {
-            mesh_data.sync_with_mesh(core_system, meshes.get(label).unwrap())
-        });
-    }
-
-    /// Performs any required updates for keeping the given mesh instance group
-    /// render data in sync with the given geometrical data.
-    ///
-    /// # Note
-    /// Render data entries for which the associated geometrical data no
-    /// longer exists will be removed.
-    fn sync_mesh_instance_group_data_with_geometry(
-        core_system: &CoreRenderingSystem,
-        mesh_instance_group_render_data: &mut GeometryMap<MeshInstanceRenderDataManager>,
-        mesh_instance_groups: &GeometryMap<MeshInstanceGroup<f32>>,
-    ) {
-        Self::remove_unmatched_render_data(mesh_instance_group_render_data, mesh_instance_groups);
-        mesh_instance_group_render_data
-            .iter_mut()
-            .for_each(|(label, mesh_instance_group_data)| {
-                mesh_instance_group_data.sync_with_mesh_instance_group(
-                    core_system,
-                    mesh_instance_groups.get(label).unwrap(),
-                )
-            });
-    }
-
     /// Performs any required updates for keeping the given camera render
     /// data in sync with the given geometrical data.
     ///
@@ -286,33 +247,72 @@ impl DesynchronizedRenderData {
             });
     }
 
+    /// Performs any required updates for keeping the given mesh render data in
+    /// sync with the given geometrical data.
+    ///
+    /// # Note
+    /// Render data entries for which the associated geometrical data no
+    /// longer exists will be removed.
+    fn sync_mesh_data_with_geometry(
+        core_system: &CoreRenderingSystem,
+        mesh_render_data: &mut GeometryMap<MeshRenderDataManager>,
+        meshes: &GeometryMap<Mesh<impl BufferableVertex>>,
+    ) {
+        Self::remove_unmatched_render_data(mesh_render_data, meshes);
+        mesh_render_data.iter_mut().for_each(|(label, mesh_data)| {
+            mesh_data.sync_with_mesh(core_system, meshes.get(label).unwrap())
+        });
+    }
+
+    /// Performs any required updates for keeping the given mesh instance
+    /// render data in sync with the given geometrical data.
+    ///
+    /// # Note
+    /// Render data entries for which the associated geometrical data no
+    /// longer exists will be removed.
+    fn sync_mesh_instance_data_with_geometry(
+        core_system: &CoreRenderingSystem,
+        mesh_instance_render_data: &mut GeometryMap<MeshInstanceRenderDataManager>,
+        mesh_instance_containers: &GeometryMap<MeshInstanceContainer<f32>>,
+    ) {
+        Self::remove_unmatched_render_data(mesh_instance_render_data, mesh_instance_containers);
+        mesh_instance_render_data
+            .iter_mut()
+            .for_each(|(label, mesh_instance_data)| {
+                mesh_instance_data.transfer_mesh_instances_to_render_buffer(
+                    core_system,
+                    mesh_instance_containers.get(label).unwrap(),
+                )
+            });
+    }
+
     fn from_synchronized(render_data: SynchronizedRenderData) -> Self {
         let SynchronizedRenderData {
+            perspective_camera_data,
             color_mesh_data,
             texture_mesh_data,
-            mesh_instance_group_data,
-            perspective_camera_data,
+            mesh_instance_data,
         } = render_data;
         Self {
+            perspective_camera_data: Mutex::new(perspective_camera_data),
             color_mesh_data: Mutex::new(color_mesh_data),
             texture_mesh_data: Mutex::new(texture_mesh_data),
-            mesh_instance_group_data: Mutex::new(mesh_instance_group_data),
-            perspective_camera_data: Mutex::new(perspective_camera_data),
+            mesh_instance_data: Mutex::new(mesh_instance_data),
         }
     }
 
     fn into_synchronized(self) -> SynchronizedRenderData {
         let DesynchronizedRenderData {
+            perspective_camera_data,
             color_mesh_data,
             texture_mesh_data,
-            mesh_instance_group_data,
-            perspective_camera_data,
+            mesh_instance_data,
         } = self;
         SynchronizedRenderData {
+            perspective_camera_data: perspective_camera_data.into_inner().unwrap(),
             color_mesh_data: color_mesh_data.into_inner().unwrap(),
             texture_mesh_data: texture_mesh_data.into_inner().unwrap(),
-            mesh_instance_group_data: mesh_instance_group_data.into_inner().unwrap(),
-            perspective_camera_data: perspective_camera_data.into_inner().unwrap(),
+            mesh_instance_data: mesh_instance_data.into_inner().unwrap(),
         }
     }
 

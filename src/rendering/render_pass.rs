@@ -326,7 +326,7 @@ impl RenderPassRecorder {
             render_pass.draw_indexed(
                 0..index_buffer.n_indices(),
                 0,
-                0..instance_buffer.n_instances(),
+                0..instance_buffer.n_valid_instances(),
             );
         }
 

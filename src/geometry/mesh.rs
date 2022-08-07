@@ -6,7 +6,10 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, Point3, Vector2, Vector3};
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 /// A 3D mesh represented by vertices and indices.
 ///
@@ -22,11 +25,19 @@ pub struct Mesh<V> {
     index_change_tracker: CollectionChangeTracker,
 }
 
-/// A group of instances of the same mesh.
+/// A container for instances of the same mesh.
+///
+/// The container maintains a buffer for instances
+/// that is grown on demand, but never shrunk. Instead,
+/// a counter keeps track of the position of the last valid
+/// instance in the buffer, and the counter is reset to
+/// zero when the container is cleared. This allows the
+/// container to be filled and emptied repeatedly without
+/// unneccesary allocations.
 #[derive(Debug)]
-pub struct MeshInstanceGroup<F> {
-    instances: Vec<MeshInstance<F>>,
-    instance_change_tracker: CollectionChangeTracker,
+pub struct MeshInstanceContainer<F> {
+    instance_buffer: Vec<MeshInstance<F>>,
+    n_valid_instances: AtomicUsize,
 }
 
 /// An instance of a mesh with a certain transformation
@@ -106,30 +117,74 @@ impl<V> Mesh<V> {
     }
 }
 
-impl<F> MeshInstanceGroup<F> {
-    /// Creates a new group of mesh instances from the given
-    /// vector of instances.
-    pub fn new(instances: Vec<MeshInstance<F>>) -> Self {
+impl<F: Float> MeshInstanceContainer<F> {
+    /// Creates a new empty container for mesh instances.
+    pub fn new() -> Self {
         Self {
-            instances,
-            instance_change_tracker: CollectionChangeTracker::default(),
+            instance_buffer: Vec::new(),
+            n_valid_instances: AtomicUsize::new(0),
         }
     }
 
-    /// Returns the instances making up the mesh instance group.
-    pub fn instances(&self) -> &[MeshInstance<F>] {
-        &self.instances
+    /// Returns the current number of valid instances in the container.
+    pub fn n_valid_instances(&self) -> usize {
+        self.n_valid_instances.load(Ordering::Acquire)
     }
 
-    /// Returns the kind of change that has been made to the mesh
-    /// instances since the last reset of change tracing.
-    pub fn instance_change(&self) -> CollectionChange {
-        self.instance_change_tracker.change()
+    /// Returns a slice with all the instances in the container,
+    /// including invalid ones.
+    ///
+    /// # Warning
+    /// Only the elements below
+    /// [`n_valid_instances`](Self::n_valid_instances) are
+    /// considered to have valid values.
+    pub fn instance_buffer(&self) -> &[MeshInstance<F>] {
+        &self.instance_buffer
     }
 
-    /// Forgets any recorded changes to the instances.
-    pub fn reset_instance_change_tracking(&self) {
-        self.instance_change_tracker.reset();
+    /// Returns a slice with the valid instances in the container.
+    pub fn valid_instances(&self) -> &[MeshInstance<F>] {
+        &self.instance_buffer[0..self.n_valid_instances()]
+    }
+
+    /// Inserts the given instance into the container.
+    pub fn add_instance(&mut self, instance: MeshInstance<F>) {
+        let instance_buffer_length = self.instance_buffer.len();
+        let idx = self.n_valid_instances.fetch_add(1, Ordering::SeqCst);
+        assert!(idx <= instance_buffer_length);
+
+        // If the buffer is full, grow it first
+        if idx == instance_buffer_length {
+            self.grow_instance_buffer();
+        }
+
+        self.instance_buffer[idx] = instance;
+    }
+
+    /// Empties the container for instances.
+    ///
+    /// Does not actually drop anything, just resets the count of
+    /// valid instances to zero.
+    pub fn clear(&self) {
+        self.n_valid_instances.store(0, Ordering::Release);
+    }
+
+    fn grow_instance_buffer(&mut self) {
+        let old_buffer_length = self.instance_buffer.len();
+
+        // Add one before doubling to avoid getting stuck at zero
+        let new_buffer_length = (old_buffer_length + 1).checked_mul(2).unwrap();
+
+        let mut new_buffer = vec![MeshInstance::new(); new_buffer_length];
+        new_buffer[0..old_buffer_length].copy_from_slice(&self.instance_buffer);
+
+        self.instance_buffer = new_buffer;
+    }
+}
+
+impl<F: Float> Default for MeshInstanceContainer<F> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

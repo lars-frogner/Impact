@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::{
-        CollectionChange, ColorVertex, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex,
+        CollectionChange, ColorVertex, Mesh, MeshInstance, MeshInstanceContainer, TextureVertex,
     },
     rendering::{
         buffer::{BufferableInstance, BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
@@ -118,65 +118,59 @@ impl MeshRenderDataManager {
 
 impl MeshInstanceRenderDataManager {
     /// Creates a new manager with render data initialized
-    /// from the given mesh instance group.
-    pub fn for_mesh_instance_group(
+    /// from the given mesh instance container.
+    pub fn new(
         core_system: &CoreRenderingSystem,
-        mesh_instance_group: &MeshInstanceGroup<f32>,
+        mesh_instance_container: &MeshInstanceContainer<f32>,
         label: String,
     ) -> Self {
-        Self::new(core_system, mesh_instance_group.instances(), label)
-    }
+        let n_valid_instances = u32::try_from(mesh_instance_container.n_valid_instances()).unwrap();
 
-    /// Ensures that the render data is in sync with the corresponding
-    /// data in the given mesh instance group.
-    pub fn sync_with_mesh_instance_group(
-        &mut self,
-        core_system: &CoreRenderingSystem,
-        mesh_instance_group: &MeshInstanceGroup<f32>,
-    ) {
-        self.sync_render_data(
+        let instance_buffer = InstanceBuffer::new(
             core_system,
-            mesh_instance_group.instances(),
-            mesh_instance_group.instance_change(),
+            mesh_instance_container.instance_buffer(),
+            n_valid_instances,
+            &label,
         );
-        mesh_instance_group.reset_instance_change_tracking();
-    }
 
-    /// Returns the buffer of instances.
-    pub fn instance_buffer(&self) -> &InstanceBuffer {
-        &self.instance_buffer
-    }
-
-    /// Creates a new manager with render data initialized
-    /// from the given slice of mesh instances.
-    fn new(
-        core_system: &CoreRenderingSystem,
-        instances: &[MeshInstance<f32>],
-        label: String,
-    ) -> Self {
-        let instance_buffer = InstanceBuffer::new(core_system, instances, &label);
         Self {
             instance_buffer,
             label,
         }
     }
 
-    fn sync_render_data(
+    /// Writes the valid instances in the given mesh instance
+    /// container into the render instance buffer (reallocating
+    /// the buffer if required). The mesh instance container is
+    /// then cleared.
+    pub fn transfer_mesh_instances_to_render_buffer(
         &mut self,
         core_system: &CoreRenderingSystem,
-        instances: &[MeshInstance<f32>],
-        instance_change: CollectionChange,
+        mesh_instance_container: &MeshInstanceContainer<f32>,
     ) {
-        match instance_change {
-            CollectionChange::None => {}
-            CollectionChange::Contents => {
-                self.instance_buffer
-                    .queue_update_of_instances(core_system, 0, instances);
-            }
-            CollectionChange::Count => {
-                self.instance_buffer = InstanceBuffer::new(core_system, instances, &self.label);
-            }
+        let n_valid_instances = u32::try_from(mesh_instance_container.n_valid_instances()).unwrap();
+
+        if n_valid_instances > self.instance_buffer.max_instances() {
+            // Reallocate buffer since it is too small
+            self.instance_buffer = InstanceBuffer::new(
+                core_system,
+                mesh_instance_container.instance_buffer(),
+                n_valid_instances,
+                &self.label,
+            );
+        } else {
+            // Write valid instances into the beginning of the buffer
+            self.instance_buffer
+                .update_valid_instances(core_system, mesh_instance_container.valid_instances());
         }
+
+        // Clear container so that it is ready for reuse
+        mesh_instance_container.clear();
+    }
+
+    /// Returns the buffer of instances.
+    pub fn instance_buffer(&self) -> &InstanceBuffer {
+        &self.instance_buffer
     }
 }
 

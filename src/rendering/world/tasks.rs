@@ -16,10 +16,10 @@ define_task!(
     /// no longer exists are removed.
     [pub] SyncRenderData,
     depends_on = [
+        SyncPerspectiveCameraData,
         SyncColorMeshData,
         SyncTextureMeshData,
-        SyncMeshInstanceGroupData,
-        SyncPerspectiveCameraData
+        SyncMeshInstanceData
     ],
     execute_on = [RenderingTag],
     |world: &World| {
@@ -34,13 +34,36 @@ define_task!(
 
 impl RenderData {
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+        task_scheduler.register_task(SyncPerspectiveCameraData)?;
         task_scheduler.register_task(SyncColorMeshData)?;
         task_scheduler.register_task(SyncTextureMeshData)?;
-        task_scheduler.register_task(SyncMeshInstanceGroupData)?;
-        task_scheduler.register_task(SyncPerspectiveCameraData)?;
+        task_scheduler.register_task(SyncMeshInstanceData)?;
         task_scheduler.register_task(SyncRenderData)
     }
 }
+
+define_task!(
+    SyncPerspectiveCameraData,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing perspective camera data"; {
+            let renderer = world.renderer().read().unwrap();
+            let render_data = renderer.render_data().read().unwrap();
+            DesynchronizedRenderData::sync_camera_data_with_geometry(
+                renderer.core_system(),
+                render_data
+                    .desynchronized()
+                    .perspective_camera_data
+                    .lock()
+                    .unwrap()
+                    .as_mut(),
+                world.geometrical_data().read().unwrap().perspective_cameras(),
+            );
+            Ok(())
+        })
+    }
+);
 
 define_task!(
     SyncColorMeshData,
@@ -58,7 +81,7 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                &world.geometrical_data().read().unwrap().color_meshes,
+                world.geometrical_data().read().unwrap().color_meshes(),
             );
             Ok(())
         })
@@ -81,7 +104,7 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                &world.geometrical_data().read().unwrap().texture_meshes,
+                world.geometrical_data().read().unwrap().texture_meshes(),
             );
             Ok(())
         })
@@ -89,49 +112,26 @@ define_task!(
 );
 
 define_task!(
-    SyncMeshInstanceGroupData,
+    SyncMeshInstanceData,
     depends_on = [],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing mesh instance group data"; {
+        with_debug_logging!("Synchronizing mesh instance container data"; {
             let renderer = world.renderer().read().unwrap();
             let render_data = renderer.render_data().read().unwrap();
-            DesynchronizedRenderData::sync_mesh_instance_group_data_with_geometry(
+            DesynchronizedRenderData::sync_mesh_instance_data_with_geometry(
                 renderer.core_system(),
                 render_data
                     .desynchronized()
-                    .mesh_instance_group_data
+                    .mesh_instance_data
                     .lock()
                     .unwrap()
                     .as_mut(),
-                &world
+                world
                     .geometrical_data()
                     .read()
                     .unwrap()
-                    .mesh_instance_groups,
-            );
-            Ok(())
-        })
-    }
-);
-
-define_task!(
-    SyncPerspectiveCameraData,
-    depends_on = [],
-    execute_on = [RenderingTag],
-    |world: &World| {
-        with_debug_logging!("Synchronizing perspective camera data"; {
-            let renderer = world.renderer().read().unwrap();
-            let render_data = renderer.render_data().read().unwrap();
-            DesynchronizedRenderData::sync_camera_data_with_geometry(
-                renderer.core_system(),
-                render_data
-                    .desynchronized()
-                    .perspective_camera_data
-                    .lock()
-                    .unwrap()
-                    .as_mut(),
-                &world.geometrical_data().read().unwrap().perspective_cameras,
+                    .mesh_instance_containers(),
             );
             Ok(())
         })

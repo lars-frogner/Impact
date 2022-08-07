@@ -2,7 +2,10 @@
 
 use crate::rendering::CoreRenderingSystem;
 use bytemuck::Pod;
-use std::mem;
+use std::{
+    mem,
+    sync::atomic::{AtomicU32, Ordering},
+};
 use wgpu::util::DeviceExt;
 
 /// Represents vertex types that can be written to a vertex buffer.
@@ -40,9 +43,17 @@ pub struct VertexBuffer {
 /// A buffer containing model instances.
 ///
 /// Since a vertex buffer is used for storing the instances,
-/// this is just a thin wrapper around [`VertexBuffer`].
+/// this buffer wraps a [`VertexBuffer`]. In addition, it
+/// keeps a record of the number of instances, beginning at
+/// the start of the buffer, that are considered to have valid
+/// values. This enables the buffer to be reused with varying
+/// numbers of instances without having to reallocate the buffer
+/// every time.
 #[derive(Debug)]
-pub struct InstanceBuffer(VertexBuffer);
+pub struct InstanceBuffer {
+    vertex_buffer: VertexBuffer,
+    n_valid_instances: AtomicU32,
+}
 
 /// A buffer containing vertex indices.
 #[derive(Debug)]
@@ -138,31 +149,72 @@ impl VertexBuffer {
 
 impl InstanceBuffer {
     /// Creates an instance buffer from the given slice of instances.
+    /// Only the first `n_valid_instances` in the slice are considered
+    /// to actually represent valid values, the rest is just buffer
+    /// filling that gives room for writing a larger number of instances
+    /// than `n_valid_instances` into the buffer at a later point without
+    /// reallocating.
     ///
     /// # Panics
-    /// If the length of `instances` can not be converted to [`u32`].
+    /// - If the length of `instances` can not be converted to [`u32`].
+    /// - If `n_valid_instances` exceeds the length of `instances`.
     pub fn new<INS: BufferableInstance>(
         core_system: &CoreRenderingSystem,
-        instances: &[INS],
+        instance_buffer: &[INS],
+        n_valid_instances: u32,
         label: &str,
     ) -> Self {
-        Self(VertexBuffer::new(core_system, instances, label))
+        assert!(n_valid_instances as usize <= instance_buffer.len());
+        Self {
+            vertex_buffer: VertexBuffer::new(core_system, instance_buffer, label),
+            n_valid_instances: AtomicU32::new(n_valid_instances),
+        }
     }
 
     /// Returns the layout of the vertex buffer used for storing
     /// instances.
     pub fn layout(&self) -> &wgpu::VertexBufferLayout<'static> {
-        self.0.layout()
+        self.vertex_buffer.layout()
     }
 
     /// Returns the underlying [`wgpu::Buffer`].
     pub fn buffer(&self) -> &wgpu::Buffer {
-        self.0.buffer()
+        self.vertex_buffer.buffer()
     }
 
-    /// Returns the number of instances in the buffer.
-    pub fn n_instances(&self) -> u32 {
-        self.0.n_vertices()
+    /// Returns the maximum number of instances the buffer has room
+    /// for.
+    pub fn max_instances(&self) -> u32 {
+        self.vertex_buffer.n_vertices()
+    }
+
+    /// Returns the number of instances, starting from the beginning
+    /// of the buffer, that have valid values.
+    pub fn n_valid_instances(&self) -> u32 {
+        self.n_valid_instances.load(Ordering::Acquire)
+    }
+
+    /// Queues a write of the given slice of instances to the existing
+    /// buffer, starting at the beginning of the buffer. Any existing
+    /// instances in the buffer that are not overwritten are from then
+    /// on considered invalid.
+    ///
+    /// # Panics
+    /// - If the updated instance type has a buffer layout different from
+    ///   the original layout.
+    /// - If the slice of updated instances exceeds the bounds of the
+    ///   original instance buffer.
+    /// - If integer overflow occurs.
+    pub fn update_valid_instances<INS: BufferableInstance>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        updated_instances: &[INS],
+    ) {
+        self.n_valid_instances.store(
+            u32::try_from(updated_instances.len()).unwrap(),
+            Ordering::Release,
+        );
+        self.queue_update_of_instances(core_system, 0, updated_instances);
     }
 
     /// Queues a write of the given slice of instances to the existing
@@ -174,14 +226,17 @@ impl InstanceBuffer {
     /// - If the offset slice of updated instances exceeds the bounds
     ///   of the original instance buffer.
     /// - If integer overflow occurs.
-    pub fn queue_update_of_instances<INS: BufferableInstance>(
+    fn queue_update_of_instances<INS: BufferableInstance>(
         &self,
         core_system: &CoreRenderingSystem,
         first_updated_instance_idx: u32,
         updated_instances: &[INS],
     ) {
-        self.0
-            .queue_update_of_vertices(core_system, first_updated_instance_idx, updated_instances);
+        self.vertex_buffer.queue_update_of_vertices(
+            core_system,
+            first_updated_instance_idx,
+            updated_instances,
+        );
     }
 }
 

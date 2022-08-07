@@ -10,6 +10,6 @@ mod world;
 pub use angle::{Angle, Degrees, Radians};
 pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
 pub use camera::{Camera, CameraConfiguration, PerspectiveCamera};
-pub use mesh::{ColorVertex, Mesh, MeshInstance, MeshInstanceGroup, TextureVertex};
+pub use mesh::{ColorVertex, Mesh, MeshInstance, MeshInstanceContainer, TextureVertex};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 pub use world::{GeometricalData, GeometryID, GeometryMap};
