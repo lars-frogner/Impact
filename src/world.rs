@@ -2,13 +2,15 @@
 
 use crate::{
     control::{MotionController, MotionDirection, MotionState},
-    geometry::GeometricalData,
+    geometry::{CameraRepository, MeshRepository, ModelInstancePool},
     rendering::RenderingSystem,
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
 };
 use anyhow::Result;
+use bytemuck::{Pod, Zeroable};
+use impact_ecs::Component;
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
@@ -18,31 +20,55 @@ use std::{
 /// rendering the world.
 #[derive(Debug)]
 pub struct World {
-    geometrical_data: RwLock<GeometricalData>,
+    camera_repository: RwLock<CameraRepository<f32>>,
+    mesh_repository: RwLock<MeshRepository<f32>>,
+    model_instance_pool: RwLock<ModelInstancePool<f32>>,
     renderer: RwLock<RenderingSystem>,
     motion_controller: Mutex<Box<dyn MotionController<f32>>>,
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct SceneObject {
+    scene_object_id: u64,
+}
+
 impl World {
     /// Creates a new world data container.
     pub fn new(
-        geometrical_data: GeometricalData,
+        camera_repository: CameraRepository<f32>,
+        mesh_repository: MeshRepository<f32>,
+        model_instance_pool: ModelInstancePool<f32>,
         renderer: RenderingSystem,
         controller: impl 'static + MotionController<f32>,
     ) -> Self {
         Self {
-            geometrical_data: RwLock::new(geometrical_data),
+            camera_repository: RwLock::new(camera_repository),
+            mesh_repository: RwLock::new(mesh_repository),
+            model_instance_pool: RwLock::new(model_instance_pool),
             renderer: RwLock::new(renderer),
             motion_controller: Mutex::new(Box::new(controller)),
         }
     }
 
-    /// Returns a reference to the [`GeometricalData`], guarded
+    /// Returns a reference to the [`CameraRepository`], guarded
     /// by a [`RwLock`].
-    pub fn geometrical_data(&self) -> &RwLock<GeometricalData> {
-        &self.geometrical_data
+    pub fn camera_repository(&self) -> &RwLock<CameraRepository<f32>> {
+        &self.camera_repository
+    }
+
+    /// Returns a reference to the [`MeshRepository`], guarded
+    /// by a [`RwLock`].
+    pub fn mesh_repository(&self) -> &RwLock<MeshRepository<f32>> {
+        &self.mesh_repository
+    }
+
+    /// Returns a reference to the [`ModelInstancePool`], guarded
+    /// by a [`RwLock`].
+    pub fn model_instance_pool(&self) -> &RwLock<ModelInstancePool<f32>> {
+        &self.model_instance_pool
     }
 
     /// Returns a reference to the [`RenderingSystem`], guarded
@@ -66,10 +92,10 @@ impl World {
         if let Some(translation) = motion_controller.next_translation() {
             drop(motion_controller); // Don't hold lock longer than neccessary
 
-            self.geometrical_data
-                .write()
-                .unwrap()
-                .transform_cameras(&translation.into());
+            // self.geometrical_data
+            //     .write()
+            //     .unwrap()
+            //     .transform_cameras(&translation.into());
         }
     }
 

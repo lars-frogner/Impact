@@ -8,7 +8,21 @@ use approx::assert_abs_diff_ne;
 use nalgebra::{
     Isometry3, Perspective3, Point3, Projective3, Rotation3, Translation3, UnitVector3, Vector3,
 };
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
+
+stringhash_newtype!(
+    /// Identifier for specific cameras.
+    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    [pub] CameraID
+);
+
+/// Repository where [`Camera`]s are stored under a
+/// unique [`CameraID`].
+#[derive(Debug, Default)]
+pub struct CameraRepository<F: Float> {
+    /// Cameras using perspective transformations.
+    pub perspective_cameras: HashMap<CameraID, PerspectiveCamera<F>>,
+}
 
 /// Position and orientation of a 3D camera.
 #[derive(Debug)]
@@ -62,6 +76,15 @@ pub trait Camera<F: Float> {
 
     /// Forgets any recorded changes to the view projection transform.
     fn reset_view_projection_change_tracking(&self);
+}
+
+impl<F: Float> CameraRepository<F> {
+    /// Creates a new empty camera repository.s
+    pub fn new() -> Self {
+        Self {
+            perspective_cameras: HashMap::new(),
+        }
+    }
 }
 
 impl<F: Float> CameraConfiguration<F> {

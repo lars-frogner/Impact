@@ -7,16 +7,17 @@ use crate::rendering::{
 };
 use nalgebra::Projective3;
 
-/// Owner and manager of render data for cameras.
+/// Owner and manager of a render buffer for a camera
+/// transformation.
 #[derive(Debug)]
-pub struct CameraRenderDataManager {
+pub struct CameraRenderBufferManager {
     transform_buffer: UniformBuffer,
     transform_bind_group_layout: wgpu::BindGroupLayout,
     transform_bind_group: wgpu::BindGroup,
 }
 
-impl CameraRenderDataManager {
-    /// Creates a new manager with render data initialized
+impl CameraRenderBufferManager {
+    /// Creates a new manager with a render buffer initialized
     /// from the view projection transform of the given camera.
     pub fn for_camera(
         core_system: &CoreRenderingSystem,
@@ -27,7 +28,7 @@ impl CameraRenderDataManager {
         Self::new(core_system, view_projection_transform, label)
     }
 
-    /// Ensures that the render data is in sync with the view
+    /// Ensures that the render buffer is in sync with the view
     /// projection transform of the given camera.
     pub fn sync_with_camera(
         &mut self,
@@ -36,7 +37,7 @@ impl CameraRenderDataManager {
     ) {
         if camera.view_projection_transform_changed() {
             let view_projection_transform = camera.compute_view_projection_transform();
-            self.sync_render_data(core_system, view_projection_transform);
+            self.sync_render_buffer(core_system, view_projection_transform);
             camera.reset_view_projection_change_tracking();
         }
     }
@@ -59,7 +60,7 @@ impl CameraRenderDataManager {
         &self.transform_bind_group
     }
 
-    /// Creates a new manager with render data initialized
+    /// Creates a new manager with a render buffer initialized
     /// from the given view projection transform.
     fn new(
         core_system: &CoreRenderingSystem,
@@ -78,7 +79,7 @@ impl CameraRenderDataManager {
         }
     }
 
-    fn sync_render_data(
+    fn sync_render_buffer(
         &mut self,
         core_system: &CoreRenderingSystem,
         view_projection_transform: Projective3<f32>,

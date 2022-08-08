@@ -81,7 +81,7 @@ impl GameLoop {
             .renderer()
             .read()
             .unwrap()
-            .render_data()
+            .render_buffers()
             .write()
             .unwrap()
             .declare_desynchronized();

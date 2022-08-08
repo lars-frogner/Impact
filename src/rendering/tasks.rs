@@ -1,5 +1,5 @@
-use super::{RenderData, RenderingSystem, SyncRenderData};
 use crate::{
+    rendering::{RenderBufferManager, RenderingSystem, SyncRenderBuffers},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
@@ -12,7 +12,7 @@ define_execution_tag!([pub] RenderingTag);
 
 define_task!(
     [pub] Render,
-    depends_on = [SyncRenderData],
+    depends_on = [SyncRenderBuffers],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Rendering"; world.renderer().read().unwrap().render())
@@ -21,7 +21,7 @@ define_task!(
 
 impl RenderingSystem {
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        RenderData::register_tasks(task_scheduler)?;
+        RenderBufferManager::register_tasks(task_scheduler)?;
         task_scheduler.register_task(Render)
     }
 

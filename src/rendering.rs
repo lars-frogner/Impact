@@ -4,18 +4,26 @@ mod asset;
 mod buffer;
 mod camera;
 mod core;
+mod material;
 mod mesh;
+mod model;
 mod render_pass;
+mod sync;
 mod tasks;
-mod world;
 
 pub use self::core::CoreRenderingSystem;
-pub use asset::{Assets, ImageTexture, Shader};
+pub use asset::{Assets, ImageTexture, Shader, ShaderID, TextureID};
+pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
+pub use model::{ModelLibrary, ModelSpecification};
 pub use render_pass::{RenderPassRecorder, RenderPassSpecification};
+pub use sync::{RenderBufferManager, SyncRenderBuffers};
 pub use tasks::{Render, RenderingTag};
-pub use world::{RenderData, SyncRenderData};
 
-use crate::{geometry::GeometricalData, window::ControlFlow};
+use self::render_pass::RenderPassCollection;
+use crate::{
+    geometry::{CameraID, CameraRepository, MeshRepository, ModelID, ModelInstancePool},
+    window::ControlFlow,
+};
 use anyhow::{Error, Result};
 use std::sync::RwLock;
 
@@ -24,8 +32,10 @@ use std::sync::RwLock;
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
     assets: Assets,
-    render_data: RwLock<RenderData>,
-    render_pass_recorders: Vec<RenderPassRecorder>,
+    model_library: ModelLibrary,
+    render_buffers: RwLock<RenderBufferManager>,
+    render_passes: RenderPassCollection,
+    camera_id: CameraID,
 }
 
 impl RenderingSystem {
@@ -34,33 +44,36 @@ impl RenderingSystem {
     pub async fn new(
         core_system: CoreRenderingSystem,
         assets: Assets,
-        specifications: Vec<RenderPassSpecification>,
-        geometrical_data: &GeometricalData,
+        model_library: ModelLibrary,
+        camera_repository: &CameraRepository<f32>,
+        mesh_repository: &MeshRepository<f32>,
+        model_instance_pool: &ModelInstancePool<f32>,
+        camera_id: CameraID,
+        model_ids: Vec<ModelID>,
+        clear_color: wgpu::Color,
     ) -> Result<Self> {
-        let render_data = RwLock::new(RenderData::from_geometrical_data(
+        let render_buffers = RwLock::new(RenderBufferManager::from_geometry(
             &core_system,
-            geometrical_data,
+            camera_repository,
+            mesh_repository,
+            model_instance_pool,
         ));
 
-        let render_pass_recorders: Result<Vec<_>> = {
-            let render_data_guard = render_data.read().unwrap();
-            specifications
-                .into_iter()
-                .map(|template| {
-                    RenderPassRecorder::new(
-                        &core_system,
-                        &assets,
-                        render_data_guard.synchronized(),
-                        template,
-                    )
-                })
-                .collect()
-        }; // <- Lock on `render_data` is released here
+        let render_passes = RenderPassCollection::for_models(
+            &core_system,
+            &assets,
+            &model_library,
+            render_buffers.read().unwrap().synchronized(),
+            camera_id,
+            model_ids,
+            clear_color,
+        )?;
 
         Ok(Self {
             core_system,
             assets,
-            render_data,
+            model_library,
+            render_buffers,
             render_passes,
             camera_id,
         })
@@ -71,10 +84,10 @@ impl RenderingSystem {
         &self.core_system
     }
 
-    /// Returns a reference to the [`RenderData`], guarded
+    /// Returns a reference to the [`RenderBufferManager`], guarded
     /// by a [`RwLock`].
-    pub fn render_data(&self) -> &RwLock<RenderData> {
-        &self.render_data
+    pub fn render_buffers(&self) -> &RwLock<RenderBufferManager> {
+        &self.render_buffers
     }
 
     /// Creates and presents a rendering of the current data in the pipelines.
@@ -90,16 +103,16 @@ impl RenderingSystem {
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
         {
-            let render_data_guard = self.render_data.read().unwrap();
-            for render_pass_recorder in &self.render_pass_recorders {
+            let render_buffers_guard = self.render_buffers.read().unwrap();
+            for render_pass_recorder in self.render_passes.recorders() {
                 render_pass_recorder.record_render_pass(
                     &self.assets,
-                    render_data_guard.synchronized(),
+                    render_buffers_guard.synchronized(),
                     &view,
                     &mut command_encoder,
                 )?;
             }
-        } // <- Lock on `self.render_data` is released here
+        } // <- Lock on `self.render_buffers` is released here
 
         self.core_system
             .queue()

@@ -210,10 +210,9 @@ impl InstanceBuffer {
         core_system: &CoreRenderingSystem,
         updated_instances: &[INS],
     ) {
-        self.n_valid_instances.store(
-            u32::try_from(updated_instances.len()).unwrap(),
-            Ordering::Release,
-        );
+        let n_updated_instances = u32::try_from(updated_instances.len()).unwrap();
+        self.n_valid_instances
+            .store(n_updated_instances, Ordering::Release);
         self.queue_update_of_instances(core_system, 0, updated_instances);
     }
 
@@ -456,6 +455,10 @@ fn queue_write_to_buffer<T: Pod>(
     n_original_elements: u32,
 ) {
     let n_updated_elements = u32::try_from(elements.len()).unwrap();
+    if n_updated_elements == 0 {
+        return;
+    }
+
     assert!(
         first_element_idx.checked_add(n_updated_elements).unwrap() <= n_original_elements,
         "Elements to write do not fit in original buffer"

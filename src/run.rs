@@ -3,8 +3,14 @@
 use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{ColorVertex, GeometricalData, Mesh, TextureVertex},
-    rendering::{Assets, MaterialLibrary, MaterialSpecification, ModelLibrary, ModelSpecification},
+    geometry::{
+        CameraID, CameraRepository, ColorVertex, Mesh, MeshID, MeshRepository, ModelID,
+        ModelInstancePool, TextureVertex,
+    },
+    rendering::{
+        Assets, MaterialID, MaterialLibrary, MaterialSpecification, ModelLibrary,
+        ModelSpecification, ShaderID, TextureID,
+    },
     window::InputHandler,
     window::Window,
     world::World,
@@ -67,9 +73,12 @@ async fn init_world(window: &Window) -> Result<World> {
     let core_system = CoreRenderingSystem::new(window).await?;
 
     let mut assets = Assets::new();
+    let mut mesh_repository = MeshRepository::new();
+    let mut camera_repository = CameraRepository::new();
+    let mut model_instance_pool = ModelInstancePool::new();
 
     assets.shaders.insert(
-        hash!("Test shader"),
+        ShaderID(hash!("Test shader")),
         Shader::from_source(
             &core_system,
             include_str!("texture_shader.wgsl"),
@@ -80,7 +89,7 @@ async fn init_world(window: &Window) -> Result<World> {
 
     // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
     assets.image_textures.insert(
-        hash!("Tree texture"),
+        TextureID(hash!("Tree texture")),
         ImageTexture::from_bytes(
             &core_system,
             include_bytes!("../assets/happy-tree.png"),
@@ -88,15 +97,13 @@ async fn init_world(window: &Window) -> Result<World> {
         )?,
     );
 
-    let mut geometrical_data = GeometricalData::new();
-
-    geometrical_data.add_texture_mesh(
-        hash!("Test mesh"),
+    mesh_repository.texture_meshes.insert(
+        MeshID(hash!("Test mesh")),
         Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
     );
 
-    geometrical_data.add_perspective_camera(
-        hash!("Camera"),
+    camera_repository.perspective_cameras.insert(
+        CameraID(hash!("Camera")),
         PerspectiveCamera::new(
             CameraConfiguration::new_looking_at(
                 point![0.0, 0.0, 2.0],
@@ -111,35 +118,47 @@ async fn init_world(window: &Window) -> Result<World> {
 
     let mut material_library = MaterialLibrary::new();
     let material_spec = MaterialSpecification {
-        shader_id: hash!("Test shader"),
-        image_texture_ids: vec![hash!("Tree texture")],
+        shader_id: ShaderID(hash!("Test shader")),
+        image_texture_ids: vec![TextureID(hash!("Tree texture"))],
     };
-    material_library.add_material(hash!("Test material"), material_spec);
+    material_library.add_material(MaterialID(hash!("Test material")), material_spec);
 
     let mut model_library = ModelLibrary::new(material_library);
     let model_spec = ModelSpecification {
-        material_id: hash!("Test material"),
-        mesh_id: hash!("Test mesh"),
+        material_id: MaterialID(hash!("Test material")),
+        mesh_id: MeshID(hash!("Test mesh")),
     };
-    model_library.add_model(hash!("Test model"), model_spec);
+    model_library.add_model(
+        &mut model_instance_pool,
+        ModelID(hash!("Test model")),
+        model_spec,
+    );
 
-    let camera = hash!("Camera");
-    let models = vec![hash!("Test model")];
+    let camera_id = CameraID(hash!("Camera"));
+    let model_ids = vec![ModelID(hash!("Test model"))];
 
     let renderer = RenderingSystem::new(
         core_system,
         assets,
         model_library,
-        &geometrical_data,
-        camera,
-        models,
+        &camera_repository,
+        &mesh_repository,
+        &model_instance_pool,
+        camera_id,
+        model_ids,
         wgpu::Color::GREEN,
     )
     .await?;
 
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
-    Ok(World::new(geometrical_data, renderer, controller))
+    Ok(World::new(
+        camera_repository,
+        mesh_repository,
+        model_instance_pool,
+        renderer,
+        controller,
+    ))
 }
 
 const VERTICES: &[ColorVertex<f32>] = &[

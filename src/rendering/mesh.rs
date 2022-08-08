@@ -1,33 +1,24 @@
 //! Management of mesh data for rendering.
 
 use crate::{
-    geometry::{
-        CollectionChange, ColorVertex, Mesh, MeshInstance, MeshInstanceContainer, TextureVertex,
-    },
+    geometry::{CollectionChange, ColorVertex, Mesh, TextureVertex},
     rendering::{
-        buffer::{BufferableInstance, BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
+        buffer::{BufferableVertex, IndexBuffer, VertexBuffer},
         CoreRenderingSystem,
     },
 };
 use std::mem;
 
-/// Owner and manager of render data for meshes.
+/// Owner and manager of render buffers for mesh geometry.
 #[derive(Debug)]
-pub struct MeshRenderDataManager {
+pub struct MeshRenderBufferManager {
     vertex_buffer: VertexBuffer,
     index_buffer: IndexBuffer,
     label: String,
 }
 
-/// Owner and manager of render data for mesh instances.
-#[derive(Debug)]
-pub struct MeshInstanceRenderDataManager {
-    instance_buffer: InstanceBuffer,
-    label: String,
-}
-
-impl MeshRenderDataManager {
-    /// Creates a new manager with render data initialized
+impl MeshRenderBufferManager {
+    /// Creates a new manager with render buffers initialized
     /// from the given mesh.
     pub fn for_mesh(
         core_system: &CoreRenderingSystem,
@@ -37,14 +28,13 @@ impl MeshRenderDataManager {
         Self::new(core_system, mesh.vertices(), mesh.indices(), label)
     }
 
-    /// Ensures that the render data is in sync with the corresponding
-    /// data in the given mesh.
+    /// Ensures that the render buffers are in sync with the given mesh.
     pub fn sync_with_mesh(
         &mut self,
         core_system: &CoreRenderingSystem,
         mesh: &Mesh<impl BufferableVertex>,
     ) {
-        self.sync_render_data(
+        self.sync_render_buffers(
             core_system,
             mesh.vertices(),
             mesh.indices(),
@@ -64,7 +54,7 @@ impl MeshRenderDataManager {
         &self.index_buffer
     }
 
-    /// Creates a new manager with render data initialized
+    /// Creates a new manager with a render buffer initialized
     /// from the given slices of vertices and indices.
     fn new(
         core_system: &CoreRenderingSystem,
@@ -81,7 +71,7 @@ impl MeshRenderDataManager {
         }
     }
 
-    fn sync_render_data(
+    fn sync_render_buffers(
         &mut self,
         core_system: &CoreRenderingSystem,
         vertices: &[impl BufferableVertex],
@@ -116,64 +106,6 @@ impl MeshRenderDataManager {
     }
 }
 
-impl MeshInstanceRenderDataManager {
-    /// Creates a new manager with render data initialized
-    /// from the given mesh instance container.
-    pub fn new(
-        core_system: &CoreRenderingSystem,
-        mesh_instance_container: &MeshInstanceContainer<f32>,
-        label: String,
-    ) -> Self {
-        let n_valid_instances = u32::try_from(mesh_instance_container.n_valid_instances()).unwrap();
-
-        let instance_buffer = InstanceBuffer::new(
-            core_system,
-            mesh_instance_container.instance_buffer(),
-            n_valid_instances,
-            &label,
-        );
-
-        Self {
-            instance_buffer,
-            label,
-        }
-    }
-
-    /// Writes the valid instances in the given mesh instance
-    /// container into the render instance buffer (reallocating
-    /// the buffer if required). The mesh instance container is
-    /// then cleared.
-    pub fn transfer_mesh_instances_to_render_buffer(
-        &mut self,
-        core_system: &CoreRenderingSystem,
-        mesh_instance_container: &MeshInstanceContainer<f32>,
-    ) {
-        let n_valid_instances = u32::try_from(mesh_instance_container.n_valid_instances()).unwrap();
-
-        if n_valid_instances > self.instance_buffer.max_instances() {
-            // Reallocate buffer since it is too small
-            self.instance_buffer = InstanceBuffer::new(
-                core_system,
-                mesh_instance_container.instance_buffer(),
-                n_valid_instances,
-                &self.label,
-            );
-        } else {
-            // Write valid instances into the beginning of the buffer
-            self.instance_buffer
-                .update_valid_instances(core_system, mesh_instance_container.valid_instances());
-        }
-
-        // Clear container so that it is ready for reuse
-        mesh_instance_container.clear();
-    }
-
-    /// Returns the buffer of instances.
-    pub fn instance_buffer(&self) -> &InstanceBuffer {
-        &self.instance_buffer
-    }
-}
-
 impl BufferableVertex for ColorVertex<f32> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
@@ -189,13 +121,3 @@ impl BufferableVertex for TextureVertex<f32> {
         attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
     };
 }
-
-impl BufferableVertex for MeshInstance<f32> {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Instance,
-        attributes: &wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4],
-    };
-}
-
-impl BufferableInstance for MeshInstance<f32> {}
