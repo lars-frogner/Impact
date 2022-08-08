@@ -18,6 +18,23 @@ macro_rules! hash {
     };
 }
 
+macro_rules! stringhash_newtype {
+    (
+        $(#[$attributes:meta])*
+        $([$pub:ident])? $name:ident
+    ) => {
+        $(#[$attributes])*
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        $($pub)? struct $name($($pub)? $crate::hash::StringHash);
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+}
+
 /// This macro expands to a compile time constant equal
 /// to the number of arguments passed to the macro.
 #[doc(hidden)]
