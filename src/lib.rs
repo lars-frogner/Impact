@@ -10,7 +10,7 @@ mod macros;
 pub mod control;
 pub mod game_loop;
 pub mod geometry;
-mod hash;
+pub mod hash;
 mod num;
 pub mod physics;
 pub mod rendering;
