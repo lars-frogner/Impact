@@ -132,7 +132,7 @@ impl<F: Float> SemiDirectionalMotionController<F> {
             // We should have motion in this branch
             assert_abs_diff_ne!(n_nonzero_components, F::zero());
 
-            let magnitude_scale = F::one() / num_traits::Float::sqrt(n_nonzero_components);
+            let magnitude_scale = F::one() / F::sqrt(n_nonzero_components);
 
             Motion::ConstantVelocity(
                 self.orientation * vector![velocity_x, velocity_y, velocity_z] * magnitude_scale,
