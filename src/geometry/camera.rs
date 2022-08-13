@@ -54,6 +54,12 @@ pub trait Camera<F: Float> {
     fn config_mut(&mut self) -> &mut CameraConfiguration<F>;
 
     /// Returns the projection transform used by the camera.
+    ///
+    /// When the projection transform is applied to a point
+    /// in world space, the point is transformed into
+    /// normalized device coordinates. In this coordinate space,
+    /// the camera frustum is a cube enclosing all coordinates
+    /// ranging from -1.0 to 1.0 in all three dimensions.
     fn projection_transform(&self) -> &Projective3<F>;
 
     /// Computes the combined transform obtained by performing
