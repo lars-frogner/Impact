@@ -2,6 +2,7 @@
 
 use crate::num::Float;
 use approx::abs_diff_eq;
+use na::Similarity3;
 use nalgebra::{self as na, Point3};
 
 /// A sphere represented by the center point and the radius.
@@ -92,6 +93,15 @@ impl<F: Float> Sphere<F> {
     /// inside.
     pub fn contains_point(&self, point: &Point3<F>) -> bool {
         na::distance_squared(self.center(), point) <= self.radius_squared()
+    }
+
+    /// Computes the sphere resulting from transforming this
+    /// sphere with the given similarity transform.
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+        Self::new(
+            transform.transform_point(self.center()),
+            transform.scaling() * self.radius(),
+        )
     }
 
     fn first_sphere_encloses_second_sphere(
