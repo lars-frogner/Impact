@@ -1,7 +1,7 @@
 //! Management of mesh data for rendering.
 
 use crate::{
-    geometry::{CollectionChange, ColorVertex, Mesh, TextureVertex},
+    geometry::{CollectionChange, ColorVertex, TextureVertex, TriangleMesh},
     rendering::{
         buffer::{BufferableVertex, IndexBuffer, VertexBuffer},
         CoreRenderingSystem,
@@ -22,7 +22,7 @@ impl MeshRenderBufferManager {
     /// from the given mesh.
     pub fn for_mesh(
         core_system: &CoreRenderingSystem,
-        mesh: &Mesh<impl BufferableVertex>,
+        mesh: &TriangleMesh<impl BufferableVertex>,
         label: String,
     ) -> Self {
         Self::new(core_system, mesh.vertices(), mesh.indices(), label)
@@ -32,7 +32,7 @@ impl MeshRenderBufferManager {
     pub fn sync_with_mesh(
         &mut self,
         core_system: &CoreRenderingSystem,
-        mesh: &Mesh<impl BufferableVertex>,
+        mesh: &TriangleMesh<impl BufferableVertex>,
     ) {
         self.sync_render_buffers(
             core_system,

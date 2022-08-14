@@ -25,14 +25,28 @@ pub struct MeshRepository<F: Float> {
     pub texture_meshes: HashMap<MeshID, Mesh<TextureVertex<F>>>,
 }
 
-/// A 3D mesh represented by vertices and indices.
+/// Represents a 3D polygonial mesh.
+pub trait Mesh<F: Float> {
+    /// Computes the smallest sphere that encloses all vertices
+    /// in the mesh.
+    fn compute_bounding_sphere(&self) -> Sphere<F>;
+}
+
+/// Represents a vertex of a polygon in a 3D mesh.
+pub trait Vertex<F: Float> {
+    /// Returns the position of the vertex.
+    fn position(&self) -> &Point3<F>;
+}
+
+/// A 3D mesh of triangles represented by vertices and
+/// indices.
 ///
 /// The vertices are unique and store their position
 /// and other properties. Each index refers to a vertex,
 /// and the sequence of indices describes the triangles
 /// making up the mesh faces.
 #[derive(Debug)]
-pub struct Mesh<V> {
+pub struct TriangleMesh<V> {
     vertices: Vec<V>,
     indices: Vec<u16>,
     vertex_change_tracker: CollectionChangeTracker,
@@ -65,7 +79,7 @@ impl<F: Float> MeshRepository<F> {
     }
 }
 
-impl<V> Mesh<V> {
+impl<V> TriangleMesh<V> {
     /// Creates a new mesh described by the given vertices and
     /// indices.
     pub fn new(vertices: Vec<V>, indices: Vec<u16>) -> Self {
@@ -113,6 +127,28 @@ impl<V> Mesh<V> {
     pub fn reset_vertex_index_change_tracking(&self) {
         self.reset_vertex_change_tracking();
         self.reset_index_change_tracking();
+    }
+}
+
+impl<F, V> Mesh<F> for TriangleMesh<V>
+where
+    F: Float,
+    V: Vertex<F>,
+{
+    fn compute_bounding_sphere(&self) -> Sphere<F> {
+        todo!()
+    }
+}
+
+impl<F: Float> Vertex<F> for ColorVertex<F> {
+    fn position(&self) -> &Point3<F> {
+        &self.position
+    }
+}
+
+impl<F: Float> Vertex<F> for TextureVertex<F> {
+    fn position(&self) -> &Point3<F> {
+        &self.position
     }
 }
 

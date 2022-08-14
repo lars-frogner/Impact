@@ -4,8 +4,8 @@ use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{
-        CameraID, CameraRepository, ColorVertex, Mesh, MeshID, MeshRepository, ModelID,
-        ModelInstancePool, TextureVertex,
+        CameraID, CameraRepository, ColorVertex, MeshID, MeshRepository, ModelID,
+        ModelInstancePool, TextureVertex, TriangleMesh,
     },
     rendering::{
         Assets, MaterialID, MaterialLibrary, MaterialSpecification, ModelLibrary,
@@ -99,7 +99,7 @@ async fn init_world(window: &Window) -> Result<World> {
 
     mesh_repository.texture_meshes.insert(
         MeshID(hash!("Test mesh")),
-        Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
+        TriangleMesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
     );
 
     camera_repository

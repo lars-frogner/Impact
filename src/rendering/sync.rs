@@ -6,8 +6,8 @@ pub use tasks::SyncRenderBuffers;
 
 use crate::{
     geometry::{
-        Camera, CameraID, CameraRepository, Mesh, MeshID, MeshRepository, ModelID,
-        ModelInstanceBuffer, ModelInstancePool,
+        Camera, CameraID, CameraRepository, MeshID, MeshRepository, ModelID, ModelInstanceBuffer,
+        ModelInstancePool, TriangleMesh,
     },
     rendering::{
         buffer::BufferableVertex, camera::CameraRenderBufferManager, mesh::MeshRenderBufferManager,
@@ -205,7 +205,7 @@ impl SynchronizedRenderBuffers {
 
     fn create_mesh_render_buffers(
         core_system: &CoreRenderingSystem,
-        meshes: &HashMap<MeshID, Mesh<impl BufferableVertex>>,
+        meshes: &HashMap<MeshID, TriangleMesh<impl BufferableVertex>>,
     ) -> MeshRenderBufferMap {
         meshes
             .iter()
@@ -267,7 +267,7 @@ impl DesynchronizedRenderBuffers {
     fn sync_mesh_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         mesh_render_buffers: &mut MeshRenderBufferMap,
-        meshes: &HashMap<MeshID, Mesh<impl BufferableVertex>>,
+        meshes: &HashMap<MeshID, TriangleMesh<impl BufferableVertex>>,
     ) {
         Self::remove_unmatched_render_buffers(mesh_render_buffers, meshes);
         mesh_render_buffers

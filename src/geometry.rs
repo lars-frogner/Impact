@@ -16,7 +16,7 @@ pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
 pub use camera::{Camera, CameraConfiguration, CameraID, CameraRepository, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use instance::{ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool};
-pub use mesh::{ColorVertex, Mesh, MeshID, MeshRepository, TextureVertex};
+pub use mesh::{ColorVertex, MeshID, MeshRepository, TextureVertex, TriangleMesh};
 pub use plane::Plane;
 pub use scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, SceneGraph};
 pub use sphere::Sphere;
