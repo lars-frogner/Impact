@@ -81,7 +81,7 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                &world.mesh_repository().read().unwrap().color_meshes,
+                world.mesh_repository().read().unwrap().color_meshes(),
             );
             Ok(())
         })
@@ -104,7 +104,7 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                &world.mesh_repository().read().unwrap().texture_meshes,
+                world.mesh_repository().read().unwrap().texture_meshes(),
             );
             Ok(())
         })

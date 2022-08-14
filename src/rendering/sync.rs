@@ -171,9 +171,9 @@ impl SynchronizedRenderBuffers {
         );
 
         let color_mesh_buffers =
-            Self::create_mesh_render_buffers(core_system, &mesh_repository.color_meshes);
+            Self::create_mesh_render_buffers(core_system, mesh_repository.color_meshes());
         let texture_mesh_buffers =
-            Self::create_mesh_render_buffers(core_system, &mesh_repository.texture_meshes);
+            Self::create_mesh_render_buffers(core_system, mesh_repository.texture_meshes());
 
         let model_instance_buffers = Self::create_model_instance_render_buffers(
             core_system,

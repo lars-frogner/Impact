@@ -97,10 +97,12 @@ async fn init_world(window: &Window) -> Result<World> {
         )?,
     );
 
-    mesh_repository.texture_meshes.insert(
-        MeshID(hash!("Test mesh")),
-        TriangleMesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
-    );
+    mesh_repository
+        .add_texture_mesh(
+            MeshID(hash!("Test mesh")),
+            TriangleMesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
+        )
+        .unwrap();
 
     camera_repository
         .add_perspective_camera(
