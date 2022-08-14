@@ -4,11 +4,15 @@ use crate::{
     geometry::{Angle, Bounds, EntityChangeTracker, Radians, UpperExclusiveBounds},
     num::Float,
 };
+use anyhow::{anyhow, Result};
 use approx::assert_abs_diff_ne;
 use nalgebra::{
     Isometry3, Perspective3, Point3, Projective3, Rotation3, Translation3, UnitVector3, Vector3,
 };
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fmt::Debug,
+};
 
 stringhash_newtype!(
     /// Identifier for specific cameras.
@@ -21,7 +25,7 @@ stringhash_newtype!(
 #[derive(Debug, Default)]
 pub struct CameraRepository<F: Float> {
     /// Cameras using perspective transformations.
-    pub perspective_cameras: HashMap<CameraID, PerspectiveCamera<F>>,
+    perspective_cameras: HashMap<CameraID, PerspectiveCamera<F>>,
 }
 
 /// Position and orientation of a 3D camera.
@@ -85,10 +89,45 @@ pub trait Camera<F: Float> {
 }
 
 impl<F: Float> CameraRepository<F> {
-    /// Creates a new empty camera repository.s
+    /// Creates a new empty camera repository.
     pub fn new() -> Self {
         Self {
             perspective_cameras: HashMap::new(),
+        }
+    }
+
+    /// Returns a trait object representing the [`Camera`] with
+    /// the given ID, or [`None`] if the camera is not present.
+    pub fn get_camera(&self, camera_id: CameraID) -> Option<&dyn Camera<F>> {
+        Some(self.perspective_cameras.get(&camera_id).unwrap())
+    }
+
+    /// Returns a reference to the [`HashMap`] storing all
+    /// [`PerspectiveCamera`]s.
+    pub fn perspective_cameras(&self) -> &HashMap<CameraID, PerspectiveCamera<F>> {
+        &self.perspective_cameras
+    }
+
+    /// Includes the given [`PerspectiveCamera`] in the repository
+    /// under the given ID.
+    ///
+    /// # Errors
+    /// Returns an error if a camera with the given ID already
+    /// exists. The repository will remain unchanged.
+    pub fn add_perspective_camera(
+        &mut self,
+        camera_id: CameraID,
+        camera: PerspectiveCamera<F>,
+    ) -> Result<()> {
+        match self.perspective_cameras.entry(camera_id) {
+            Entry::Vacant(entry) => {
+                entry.insert(camera);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(anyhow!(
+                "Camera {} already present in repository",
+                camera_id
+            )),
         }
     }
 }

@@ -58,7 +58,7 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                &world.camera_repository().read().unwrap().perspective_cameras,
+                world.camera_repository().read().unwrap().perspective_cameras(),
             );
             Ok(())
         })

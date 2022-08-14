@@ -165,8 +165,10 @@ impl SynchronizedRenderBuffers {
         mesh_repository: &MeshRepository<f32>,
         model_instance_pool: &ModelInstancePool<f32>,
     ) -> Self {
-        let perspective_camera_buffers =
-            Self::create_camera_render_buffers(core_system, &camera_repository.perspective_cameras);
+        let perspective_camera_buffers = Self::create_camera_render_buffers(
+            core_system,
+            camera_repository.perspective_cameras(),
+        );
 
         let color_mesh_buffers =
             Self::create_mesh_render_buffers(core_system, &mesh_repository.color_meshes);

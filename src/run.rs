@@ -102,19 +102,21 @@ async fn init_world(window: &Window) -> Result<World> {
         Mesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
     );
 
-    camera_repository.perspective_cameras.insert(
-        CameraID(hash!("Camera")),
-        PerspectiveCamera::new(
-            CameraConfiguration::new_looking_at(
-                point![0.0, 0.0, 2.0],
-                Point3::origin(),
-                Vector3::y_axis(),
+    camera_repository
+        .add_perspective_camera(
+            CameraID(hash!("Camera")),
+            PerspectiveCamera::new(
+                CameraConfiguration::new_looking_at(
+                    point![0.0, 0.0, 2.0],
+                    Point3::origin(),
+                    Vector3::y_axis(),
+                ),
+                core_system.surface_aspect_ratio(),
+                Degrees(45.0),
+                UpperExclusiveBounds::new(0.1, 100.0),
             ),
-            core_system.surface_aspect_ratio(),
-            Degrees(45.0),
-            UpperExclusiveBounds::new(0.1, 100.0),
-        ),
-    );
+        )
+        .unwrap();
 
     let mut material_library = MaterialLibrary::new();
     let material_spec = MaterialSpecification {
