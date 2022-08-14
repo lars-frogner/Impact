@@ -62,6 +62,12 @@ impl<F: Float> Frustum<F> {
         &self.planes[5]
     }
 
+    /// Returns the matrix of the transform into the clip space
+    /// that this frustum represents.
+    pub fn transform_matrix(&self) -> &Matrix4<F> {
+        &self.transform_matrix
+    }
+
     /// Whether the given point is strictly inside the frustum.
     pub fn contains_point(&self, point: &Point3<F>) -> bool {
         self.planes

@@ -7,6 +7,7 @@ mod frustum;
 mod instance;
 mod mesh;
 mod plane;
+mod scene;
 mod sphere;
 mod tracking;
 
@@ -17,5 +18,6 @@ pub use frustum::Frustum;
 pub use instance::{ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool};
 pub use mesh::{ColorVertex, Mesh, MeshID, MeshRepository, TextureVertex};
 pub use plane::Plane;
+pub use scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, SceneGraph};
 pub use sphere::Sphere;
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};

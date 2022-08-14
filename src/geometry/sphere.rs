@@ -24,7 +24,7 @@ impl<F: Float> Sphere<F> {
 
     /// Finds the smallest sphere that fully encloses the two
     /// given spheres.
-    pub fn bounding_sphere(sphere_1: &Self, sphere_2: &Self) -> Self {
+    pub fn bounding_sphere_from_pair(sphere_1: &Self, sphere_2: &Self) -> Self {
         let center_displacement = sphere_2.center() - sphere_1.center();
         let distance_between_centra = center_displacement.magnitude();
 
@@ -104,6 +104,14 @@ impl<F: Float> Sphere<F> {
         )
     }
 
+    /// Finds the smallest sphere that fully encloses this and
+    /// all the given spheres.
+    pub fn bounding_sphere_with<'a>(self, spheres: impl IntoIterator<Item = &'a Self>) -> Self {
+        spheres.into_iter().fold(self, |bounding_sphere, sphere| {
+            Self::bounding_sphere_from_pair(&bounding_sphere, sphere)
+        })
+    }
+
     fn first_sphere_encloses_second_sphere(
         sphere_1_radius: F,
         sphere_2_radius: F,
@@ -127,7 +135,7 @@ mod test {
         ) => {{
             let sphere_1 = Sphere::new($center_1, $radius_1);
             let sphere_2 = Sphere::new($center_2, $radius_2);
-            let bounding_sphere = Sphere::bounding_sphere(&sphere_1, &sphere_2);
+            let bounding_sphere = Sphere::bounding_sphere_from_pair(&sphere_1, &sphere_2);
             assert_abs_diff_eq!(bounding_sphere.center(), &$center_bounding);
             assert_abs_diff_eq!(bounding_sphere.radius(), $radius_bounding);
             assert!(bounding_sphere.encloses_sphere(&sphere_1));
