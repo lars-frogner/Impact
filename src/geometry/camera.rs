@@ -7,7 +7,8 @@ use crate::{
 use anyhow::{anyhow, Result};
 use approx::assert_abs_diff_ne;
 use nalgebra::{
-    Isometry3, Perspective3, Point3, Projective3, Rotation3, Translation3, UnitVector3, Vector3,
+    Isometry3, Perspective3, Point3, Projective3, Rotation3, Similarity3, Translation3,
+    UnitVector3, Vector3,
 };
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -34,9 +35,12 @@ pub struct CameraConfiguration<F: Float> {
     position: Point3<F>,
     look_direction: UnitVector3<F>,
     up_direction: UnitVector3<F>,
-    view_transform: Isometry3<F>,
+    local_view_transform: Isometry3<F>,
+    model_transform: Similarity3<F>,
     /// Tracker for whether the view transform has changed.
-    view_transform_change_tracker: EntityChangeTracker,
+    local_view_transform_change_tracker: EntityChangeTracker,
+    /// Tracker for whether the model transform has changed.
+    model_transform_change_tracker: EntityChangeTracker,
 }
 
 /// 3D camera using a perspective transformation.
@@ -59,26 +63,27 @@ pub trait Camera<F: Float> {
 
     /// Returns the projection transform used by the camera.
     ///
-    /// When the projection transform is applied to a point
-    /// in world space, the point is transformed into
-    /// normalized device coordinates. In this coordinate space,
-    /// the camera frustum is a cube enclosing all coordinates
-    /// ranging from -1.0 to 1.0 in all three dimensions.
+    /// When the projection transform is applied to a point,
+    /// the point is transformed into normalized device
+    /// coordinates. In this coordinate space, the camera
+    /// frustum is a cube enclosing all coordinates ranging
+    /// from -1.0 to 1.0 in all three dimensions.
     fn projection_transform(&self) -> &Projective3<F>;
 
-    /// Computes the combined transform obtained by performing
-    /// the view transformation followed by the projection
-    /// transformation.
+    /// Computes the transformation from world space to
+    /// normalized device coordinates.
     fn compute_view_projection_transform(&self) -> Projective3<F> {
-        self.projection_transform() * self.config().view_transform()
+        self.projection_transform()
+            * self.config().local_view_transform()
+            * self.config().model_transform()
     }
 
     /// Whether the projection transform has changed since the
     /// last reset of change tracing.
     fn projection_transform_changed(&self) -> bool;
 
-    /// Whether the view projection transform has changed since
-    /// the last reset of change tracing.
+    /// Whether the view projection transform from world space
+    /// has changed since the last reset of change tracing.
     fn view_projection_transform_changed(&self) -> bool;
 
     /// Forgets any recorded changes to the projection transform.
@@ -134,8 +139,9 @@ impl<F: Float> CameraRepository<F> {
 
 impl<F: Float> CameraConfiguration<F> {
     /// Creates a new orientation for a camera located at the
-    /// given position, looking at the given direction with
-    /// the given up direction.
+    /// given position, looking in the given direction with
+    /// the given up direction, in a space defined by the
+    /// given world-to-model transform.
     ///
     /// # Panics
     /// If `look_direction` and `up_direction` are equal.
@@ -143,21 +149,44 @@ impl<F: Float> CameraConfiguration<F> {
         position: Point3<F>,
         look_direction: UnitVector3<F>,
         up_direction: UnitVector3<F>,
+        model_transform: Similarity3<F>,
     ) -> Self {
         assert_abs_diff_ne!(look_direction, up_direction);
-        let view_transform = Self::create_view_transform(&position, &look_direction, &up_direction);
+        let local_view_transform =
+            Self::create_local_view_transform(&position, &look_direction, &up_direction);
         Self {
             position,
             look_direction,
             up_direction,
-            view_transform,
-            view_transform_change_tracker: EntityChangeTracker::default(),
+            local_view_transform,
+            model_transform,
+            local_view_transform_change_tracker: EntityChangeTracker::default(),
+            model_transform_change_tracker: EntityChangeTracker::default(),
         }
     }
 
     /// Creates a new orientation for a camera located at the
+    /// given position, looking in the given direction with
+    /// the given up direction, all in world space.
+    ///
+    /// # Panics
+    /// If `look_direction` and `up_direction` are equal.
+    pub fn new_in_world_space(
+        position: Point3<F>,
+        look_direction: UnitVector3<F>,
+        up_direction: UnitVector3<F>,
+    ) -> Self {
+        Self::new(
+            position,
+            look_direction,
+            up_direction,
+            Similarity3::identity(),
+        )
+    }
+
+    /// Creates a new orientation for a camera located at the
     /// given position, looking at the given target position with
-    /// the given up direction.
+    /// the given up direction, all in world space.
     ///
     /// # Panics
     /// If the direction to `target_position` is the same as `up_direction`.
@@ -167,7 +196,7 @@ impl<F: Float> CameraConfiguration<F> {
         up_direction: UnitVector3<F>,
     ) -> Self {
         let look_direction = UnitVector3::new_normalize(target_position - camera_position);
-        Self::new(camera_position, look_direction, up_direction)
+        Self::new_in_world_space(camera_position, look_direction, up_direction)
     }
 
     /// Returns the position of the camera.
@@ -186,36 +215,56 @@ impl<F: Float> CameraConfiguration<F> {
         &self.up_direction
     }
 
-    /// Returns the transformation to this camera's view space (where
-    /// the camera is in the origin and looking along the positive z-axis).
-    pub fn view_transform(&self) -> &Isometry3<F> {
-        &self.view_transform
+    /// Returns the transformation to this camera's model space to its
+    /// view space (where the camera is in the origin and looking along
+    /// the positive z-axis).
+    pub fn local_view_transform(&self) -> &Isometry3<F> {
+        &self.local_view_transform
     }
 
-    /// Whether the view transform has changed since the last reset of
-    /// change tracing.
-    #[allow(dead_code)]
-    fn view_transform_changed(&self) -> bool {
-        self.view_transform_change_tracker.changed()
+    /// Returns the transformation from world space to this camera's model
+    /// space.
+    pub fn model_transform(&self) -> &Similarity3<F> {
+        &self.model_transform
+    }
+
+    /// Whether the local view transform has changed since the last reset of
+    /// view transform change tracing.
+    #[cfg(test)]
+    fn local_view_transform_changed(&self) -> bool {
+        self.local_view_transform_change_tracker.changed()
+    }
+
+    /// Whether the model transform has changed since the last reset of
+    /// model transform change tracing.
+    #[cfg(test)]
+    fn model_transform_changed(&self) -> bool {
+        self.model_transform_change_tracker.changed()
     }
 
     /// Moves the camera to the given position.
+    ///
+    /// This method operates in the camera's model space.
     pub fn move_to(&mut self, position: Point3<F>) {
         self.position = position;
-        self.update_view_transform();
+        self.update_local_view_transform();
     }
 
     /// Makes the camera look in the given direction.
+    ///
+    /// This method operates in the camera's model space.
     ///
     /// # Panics
     /// If `look_direction` is equal to the current `up_direction`.
     pub fn point_to(&mut self, look_direction: UnitVector3<F>) {
         assert_abs_diff_ne!(look_direction, self.up_direction);
         self.look_direction = look_direction;
-        self.update_view_transform();
+        self.update_local_view_transform();
     }
 
     /// Makes the camera look at the given target position.
+    ///
+    /// This method operates in the camera's model space.
     ///
     /// # Panics
     /// If the direction to `target_position` is the same as the current `up_direction`.
@@ -225,6 +274,8 @@ impl<F: Float> CameraConfiguration<F> {
 
     /// Moves the camera to the given position and makes it
     /// look at the given position.
+    ///
+    /// This method operates in the camera's model space.
     ///
     /// # Panics
     /// If the direction to `target_position` is the same as the current `up_direction`.
@@ -236,46 +287,64 @@ impl<F: Float> CameraConfiguration<F> {
 
     /// Translates the camera to a new position using the given
     /// translation.
+    ///
+    /// This method operates in the camera's model space.
     pub fn translate(&mut self, translation: &Translation3<F>) {
         self.position = translation.transform_point(self.position());
-        self.update_view_transform();
+        self.update_local_view_transform();
     }
 
     /// Rotates the camera orientation using the given rotation.
+    ///
+    /// This method operates in the camera's model space.
     pub fn rotate_orientation(&mut self, rotation: &Rotation3<F>) {
         self.look_direction =
             UnitVector3::new_unchecked(rotation.transform_vector(self.look_direction()));
         self.up_direction =
             UnitVector3::new_unchecked(rotation.transform_vector(self.up_direction()));
-        self.update_view_transform();
+        self.update_local_view_transform();
     }
 
     /// Transforms the position and orientation of the camera using
     /// the given transform.
+    ///
+    /// This method operates in the camera's model space.
     pub fn transform(&mut self, transform: &Isometry3<F>) {
         self.position = transform.transform_point(self.position());
         self.look_direction =
             UnitVector3::new_normalize(transform.transform_vector(self.look_direction()));
         self.up_direction =
             UnitVector3::new_normalize(transform.transform_vector(self.up_direction()));
-        self.update_view_transform();
+        self.update_local_view_transform();
     }
 
-    /// Forgets any recorded changes to the view transform.
-    pub fn reset_view_change_tracking(&self) {
-        self.view_transform_change_tracker.reset();
+    /// Sets the camera's model transform (the transform from world
+    /// space to model space) to the given transform.
+    pub fn set_model_transform(&mut self, transform: Similarity3<F>) {
+        self.model_transform = transform;
+        self.model_transform_change_tracker.notify_change();
     }
 
-    fn update_view_transform(&mut self) {
-        self.view_transform = Self::create_view_transform(
+    /// Forgets any recorded changes to the local view transform.
+    pub fn reset_local_view_change_tracking(&self) {
+        self.local_view_transform_change_tracker.reset();
+    }
+
+    /// Forgets any recorded changes to the model transform.
+    pub fn reset_model_change_tracking(&self) {
+        self.model_transform_change_tracker.reset();
+    }
+
+    fn update_local_view_transform(&mut self) {
+        self.local_view_transform = Self::create_local_view_transform(
             self.position(),
             self.look_direction(),
             self.up_direction(),
         );
-        self.view_transform_change_tracker.notify_change();
+        self.local_view_transform_change_tracker.notify_change();
     }
 
-    fn create_view_transform(
+    fn create_local_view_transform(
         position: &Point3<F>,
         look_direction: &UnitVector3<F>,
         up_direction: &UnitVector3<F>,
@@ -287,7 +356,7 @@ impl<F: Float> CameraConfiguration<F> {
 
 impl<F: Float> Default for CameraConfiguration<F> {
     fn default() -> Self {
-        Self::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis())
+        Self::new_in_world_space(Point3::origin(), Vector3::z_axis(), Vector3::y_axis())
     }
 }
 
@@ -402,7 +471,8 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
 
     fn view_projection_transform_changed(&self) -> bool {
         self.projection_transform_change_tracker
-            .merged(&self.configuration.view_transform_change_tracker)
+            .merged(&self.configuration.local_view_transform_change_tracker)
+            .merged(&self.configuration.model_transform_change_tracker)
             .changed()
     }
 
@@ -412,7 +482,8 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
 
     fn reset_view_projection_change_tracking(&self) {
         self.reset_projection_change_tracking();
-        self.configuration.reset_view_change_tracking();
+        self.configuration.reset_local_view_change_tracking();
+        self.configuration.reset_model_change_tracking();
     }
 }
 
@@ -427,7 +498,11 @@ mod test {
     #[test]
     #[should_panic]
     fn constructing_camera_config_with_same_look_and_up_direction() {
-        CameraConfiguration::<f64>::new(Point3::origin(), Vector3::z_axis(), Vector3::z_axis());
+        CameraConfiguration::<f64>::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::z_axis(),
+        );
     }
 
     #[test]
@@ -442,66 +517,82 @@ mod test {
 
     #[test]
     fn moving_camera_to_position_works() {
-        let mut config =
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         let position = point![1.0, 2.0, 3.0];
         config.move_to(position);
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
     fn pointing_camera_towards_direction_works() {
-        let mut config =
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         let direction = UnitVector3::new_normalize(vector![1.0, 2.0, 3.0]);
         config.point_to(direction);
         assert_abs_diff_eq!(config.position(), &Point3::origin());
         assert_abs_diff_eq!(config.look_direction(), &direction);
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
     fn pointing_camera_at_position_works() {
-        let mut config =
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         config.point_at(point![2.0, 0.0, 0.0]);
         assert_abs_diff_eq!(config.position(), &Point3::origin());
         assert_abs_diff_eq!(config.look_direction(), &Vector3::x_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
     fn moving_camera_to_position_and_pointing_at_position_works() {
-        let mut config =
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         let camera_position = point![1.0, 2.0, 0.0];
         config.move_to_and_point_at(camera_position, point![5.0, 2.0, 0.0]);
         assert_abs_diff_eq!(config.position(), &camera_position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::x_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
     fn translating_camera_works() {
-        let mut config =
-            CameraConfiguration::new(point![0.5, 1.5, 2.5], Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            point![0.5, 1.5, 2.5],
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         config.translate(&Translation3::new(1.0, 2.0, 3.0));
         assert_abs_diff_eq!(config.position(), &point![1.5, 3.5, 5.5]);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
     fn rotating_camera_orientation_works() {
         let position = point![0.5, 1.5, 2.5];
-        let mut config = CameraConfiguration::new(position, Vector3::z_axis(), Vector3::y_axis());
+        let mut config =
+            CameraConfiguration::new_in_world_space(position, Vector3::z_axis(), Vector3::y_axis());
         config.rotate_orientation(&Rotation3::from_axis_angle(&Vector3::y_axis(), PI));
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &-Vector3::z_axis());
@@ -510,13 +601,16 @@ mod test {
         assert_abs_diff_eq!(config.position(), &position);
         assert_abs_diff_eq!(config.look_direction(), &Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &-Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
     fn transforming_camera_works() {
-        let mut config =
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         config.transform(&Isometry3::from_parts(
             Translation3::new(0.5, 1.5, 2.5),
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI),
@@ -524,7 +618,7 @@ mod test {
         assert_abs_diff_eq!(config.position(), &point![0.5, 1.5, 2.5]);
         assert_abs_diff_eq!(config.look_direction(), &-Vector3::z_axis());
         assert_abs_diff_eq!(config.up_direction(), &Vector3::y_axis());
-        assert!(config.view_transform_changed());
+        assert!(config.local_view_transform_changed());
     }
 
     #[test]
@@ -533,20 +627,32 @@ mod test {
         let no_rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 0.0);
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(Point3::origin(), -Vector3::z_axis(), Vector3::y_axis(),)
-                .view_transform(),
+            CameraConfiguration::new_in_world_space(
+                Point3::origin(),
+                -Vector3::z_axis(),
+                Vector3::y_axis(),
+            )
+            .local_view_transform(),
             &Isometry3::from_parts(no_translation, no_rotation)
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(point![1.0, 2.0, 3.0], -Vector3::z_axis(), Vector3::y_axis(),)
-                .view_transform(),
+            CameraConfiguration::new_in_world_space(
+                point![1.0, 2.0, 3.0],
+                -Vector3::z_axis(),
+                Vector3::y_axis(),
+            )
+            .local_view_transform(),
             &Isometry3::from_parts(Translation3::new(-1.0, -2.0, -3.0), no_rotation)
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis(),)
-                .view_transform(),
+            CameraConfiguration::new_in_world_space(
+                Point3::origin(),
+                Vector3::z_axis(),
+                Vector3::y_axis(),
+            )
+            .local_view_transform(),
             &Isometry3::from_parts(
                 no_translation,
                 UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
@@ -554,8 +660,12 @@ mod test {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), -Vector3::y_axis(),)
-                .view_transform(),
+            CameraConfiguration::new_in_world_space(
+                Point3::origin(),
+                Vector3::z_axis(),
+                -Vector3::y_axis(),
+            )
+            .local_view_transform(),
             &Isometry3::from_parts(
                 no_translation,
                 UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI)
@@ -563,8 +673,12 @@ mod test {
         );
 
         assert_abs_diff_eq!(
-            CameraConfiguration::new(point![1.0, 2.0, 3.0], Vector3::z_axis(), Vector3::y_axis(),)
-                .view_transform(),
+            CameraConfiguration::new_in_world_space(
+                point![1.0, 2.0, 3.0],
+                Vector3::z_axis(),
+                Vector3::y_axis(),
+            )
+            .local_view_transform(),
             &Isometry3::from_parts(
                 Translation3::new(1.0, -2.0, 3.0),
                 UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
@@ -574,22 +688,25 @@ mod test {
 
     #[test]
     fn resetting_view_change_tracking_works() {
-        let mut config =
-            CameraConfiguration::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis());
+        let mut config = CameraConfiguration::new_in_world_space(
+            Point3::origin(),
+            Vector3::z_axis(),
+            Vector3::y_axis(),
+        );
         assert!(
-            !config.view_transform_changed(),
+            !config.local_view_transform_changed(),
             "View transform change reported after construction"
         );
 
         config.move_to(point![1.0, 2.0, 3.0]);
         assert!(
-            config.view_transform_changed(),
+            config.local_view_transform_changed(),
             "No view transform change reported after making change"
         );
 
-        config.reset_view_change_tracking();
+        config.reset_local_view_change_tracking();
         assert!(
-            !config.view_transform_changed(),
+            !config.local_view_transform_changed(),
             "View transform change reported after reset"
         );
     }
