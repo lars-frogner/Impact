@@ -9,7 +9,7 @@ use crate::{
     },
     rendering::{
         Assets, MaterialID, MaterialLibrary, MaterialSpecification, ModelLibrary,
-        ModelSpecification, ShaderID, TextureID,
+        ModelSpecification, RenderPassManager, ShaderID, TextureID,
     },
     window::InputHandler,
     window::Window,
@@ -139,24 +139,15 @@ async fn init_world(window: &Window) -> Result<World> {
     );
 
     let camera_id = CameraID(hash!("Camera"));
-    let model_ids = vec![ModelID(hash!("Test model"))];
 
-    let renderer = RenderingSystem::new(
-        core_system,
-        assets,
-        model_library,
-        &camera_repository,
-        &mesh_repository,
-        &model_instance_pool,
-        camera_id,
-        model_ids,
-        wgpu::Color::GREEN,
-    )
-    .await?;
+    let render_pass_manager = RenderPassManager::new(wgpu::Color::BLACK, Some(camera_id));
+
+    let renderer = RenderingSystem::new(core_system, assets, render_pass_manager).await?;
 
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
     Ok(World::new(
+        model_library,
         camera_repository,
         mesh_repository,
         model_instance_pool,

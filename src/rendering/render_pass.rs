@@ -1,19 +1,31 @@
 //! Rendering pipelines.
 
-use crate::geometry::{CameraID, MeshID, ModelID, ModelInstance};
-use crate::rendering::{
-    buffer::{BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
-    sync::SynchronizedRenderBuffers,
-    Assets, CoreRenderingSystem, ModelLibrary, ShaderID, TextureID,
+mod tasks;
+
+use crate::{
+    geometry::{CameraID, MeshID, ModelID, ModelInstance},
+    rendering::{
+        buffer::{BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
+        buffer_sync::SynchronizedRenderBuffers,
+        Assets, CoreRenderingSystem, ModelLibrary, ShaderID, TextureID,
+    },
 };
 use anyhow::{anyhow, Result};
-use std::{collections::HashSet, iter};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    iter,
+};
 
+/// Manager and owner of render passes.
+///
+/// Holds a pass for clearing the rendering surface,
+/// as well as a set of passes for rendering specific
+/// models.
 #[derive(Debug)]
-pub struct RenderPassCollection {
+pub struct RenderPassManager {
+    camera_id: Option<CameraID>,
     clearing_pass_recorder: RenderPassRecorder,
-    model_render_pass_recorders: Vec<RenderPassRecorder>,
-    model_id_set: HashSet<ModelID>,
+    model_render_pass_recorders: HashMap<ModelID, RenderPassRecorder>,
 }
 
 /// Holds the information describing a specific render pass,
@@ -37,80 +49,64 @@ pub struct RenderPassRecorder {
     load_operation: wgpu::LoadOp<wgpu::Color>,
 }
 
-impl RenderPassCollection {
-    pub fn new(clear_color: wgpu::Color) -> Self {
+impl RenderPassManager {
+    /// Creates a new manager with a pass that clears the
+    /// surface with the given color.
+    ///
+    /// Render passes created for models by this manager will
+    /// use the camera with the given ID if specified, otherwise
+    /// the models will be rendered without a camera.
+    pub fn new(clear_color: wgpu::Color, camera_id: Option<CameraID>) -> Self {
         Self {
+            camera_id,
             clearing_pass_recorder: RenderPassRecorder::clearing_pass(clear_color),
-            model_render_pass_recorders: Vec::new(),
-            model_id_set: HashSet::new(),
+            model_render_pass_recorders: HashMap::new(),
         }
     }
 
+    /// Returns an iterator over all render passes, starting with
+    /// the clearing pass.
     pub fn recorders(&self) -> impl Iterator<Item = &RenderPassRecorder> {
-        iter::once(&self.clearing_pass_recorder).chain(self.model_render_pass_recorders.iter())
+        iter::once(&self.clearing_pass_recorder).chain(self.model_render_pass_recorders.values())
     }
 
-    pub fn for_models(
-        core_system: &CoreRenderingSystem,
-        assets: &Assets,
-        model_library: &ModelLibrary,
-        render_buffers: &SynchronizedRenderBuffers,
-        camera_id: CameraID,
-        model_ids: Vec<ModelID>,
-        clear_color: wgpu::Color,
-    ) -> Result<Self> {
-        let mut model_id_set = HashSet::with_capacity(model_ids.len());
-        let recorders: Result<Vec<_>> = model_ids
-            .into_iter()
-            .filter_map(|model_id| {
-                if model_id_set.contains(&model_id) {
-                    None
-                } else {
-                    Some(
-                        Self::create_render_pass_recorder_for_model(
-                            core_system,
-                            assets,
-                            model_library,
-                            render_buffers,
-                            camera_id,
-                            model_id,
-                        )
-                        .map(|render_pass_recorder| {
-                            model_id_set.insert(model_id);
-                            render_pass_recorder
-                        }),
-                    )
-                }
-            })
-            .collect();
-        Ok(Self {
-            clearing_pass_recorder: RenderPassRecorder::clearing_pass(clear_color),
-            model_render_pass_recorders: recorders?,
-            model_id_set,
-        })
+    /// Returns an iterator over all render passes, excluding the
+    /// clearing pass.
+    pub fn recorders_no_clear(&self) -> impl Iterator<Item = &RenderPassRecorder> {
+        self.model_render_pass_recorders.values()
     }
 
-    pub fn include_pass_for_model(
+    /// Ensures that all render passes required for rendering the
+    /// entities present in the given render buffers exist.
+    ///
+    /// Render passes whose entities are no longer present in the
+    /// buffers will be removed, and missing render passes for
+    /// new entities will be created.
+    fn sync_with_render_buffers(
         &mut self,
         core_system: &CoreRenderingSystem,
         assets: &Assets,
         model_library: &ModelLibrary,
         render_buffers: &SynchronizedRenderBuffers,
-        camera_id: CameraID,
-        model_id: ModelID,
     ) -> Result<()> {
-        if !self.model_id_set.contains(&model_id) {
-            self.model_render_pass_recorders
-                .push(Self::create_render_pass_recorder_for_model(
+        let model_instance_buffers = render_buffers.model_instance_buffers();
+
+        for &model_id in model_instance_buffers.keys() {
+            if let Entry::Vacant(entry) = self.model_render_pass_recorders.entry(model_id) {
+                entry.insert(Self::create_render_pass_recorder_for_model(
                     core_system,
                     assets,
                     model_library,
                     render_buffers,
-                    camera_id,
+                    self.camera_id,
                     model_id,
                 )?);
-            self.model_id_set.insert(model_id);
+            }
         }
+
+        self.model_render_pass_recorders
+            .retain(|model_id, _| model_instance_buffers.contains_key(model_id));
+
         Ok(())
     }
 
@@ -119,16 +115,16 @@ impl RenderPassCollection {
         assets: &Assets,
         model_library: &ModelLibrary,
         render_buffers: &SynchronizedRenderBuffers,
-        camera_id: CameraID,
+        camera_id: Option<CameraID>,
         model_id: ModelID,
     ) -> Result<RenderPassRecorder> {
-        let specification = RenderPassSpecification::for_model(camera_id, model_library, model_id)?;
+        let specification = RenderPassSpecification::for_model(model_library, camera_id, model_id)?;
         RenderPassRecorder::new(core_system, assets, render_buffers, specification)
     }
 }
 
 impl RenderPassSpecification {
-    /// Creates a new empty render pass descriptor.
+    /// Creates a new empty render pass specification.
     pub fn new(label: String) -> Self {
         Self {
             shader_id: None,
@@ -141,9 +137,12 @@ impl RenderPassSpecification {
         }
     }
 
+    /// Creates the specification for the render pass that
+    /// will render the model with the given ID, using the
+    /// camera with the given ID if specified.
     pub fn for_model(
-        camera_id: CameraID,
         model_library: &ModelLibrary,
+        camera_id: Option<CameraID>,
         model_id: ModelID,
     ) -> Result<Self> {
         let model_spec = model_library
@@ -163,7 +162,7 @@ impl RenderPassSpecification {
         Ok(Self {
             shader_id: Some(material_spec.shader_id),
             image_texture_ids: material_spec.image_texture_ids.clone(),
-            camera_id: Some(camera_id),
+            camera_id,
             mesh_id: Some(model_spec.mesh_id),
             model_id: Some(model_id),
             clear_color: None,
@@ -171,7 +170,9 @@ impl RenderPassSpecification {
         })
     }
 
-    fn clearing_pass(clear_color: wgpu::Color) -> Self {
+    /// Creates the specification for the render pass that will
+    /// clear the rendering surface with the given color.
+    pub fn clearing_pass(clear_color: wgpu::Color) -> Self {
         Self {
             shader_id: None,
             image_texture_ids: Vec::new(),

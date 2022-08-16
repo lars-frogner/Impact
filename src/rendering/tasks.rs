@@ -1,5 +1,5 @@
 use crate::{
-    rendering::{RenderBufferManager, RenderingSystem, SyncRenderBuffers},
+    rendering::{RenderBufferManager, RenderPassManager, RenderingSystem, SyncRenderBuffers},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
@@ -22,6 +22,7 @@ define_task!(
 impl RenderingSystem {
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         RenderBufferManager::register_tasks(task_scheduler)?;
+        RenderPassManager::register_tasks(task_scheduler)?;
         task_scheduler.register_task(Render)
     }
 

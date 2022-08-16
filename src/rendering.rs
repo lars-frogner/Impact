@@ -13,17 +13,14 @@ mod tasks;
 
 pub use self::core::CoreRenderingSystem;
 pub use asset::{Assets, ImageTexture, Shader, ShaderID, TextureID};
-pub use buffer_sync::{RenderBufferManager, SyncRenderBuffers};
+pub use buffer_sync::SyncRenderBuffers;
 pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
 pub use model::{ModelLibrary, ModelSpecification};
-pub use render_pass::{RenderPassRecorder, RenderPassSpecification};
+pub use render_pass::RenderPassManager;
 pub use tasks::{Render, RenderingTag};
 
-use self::render_pass::RenderPassCollection;
-use crate::{
-    geometry::{CameraID, CameraRepository, MeshRepository, ModelID, ModelInstancePool},
-    window::ControlFlow,
-};
+use self::buffer_sync::RenderBufferManager;
+use crate::window::ControlFlow;
 use anyhow::{Error, Result};
 use std::sync::RwLock;
 
@@ -32,10 +29,8 @@ use std::sync::RwLock;
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
     assets: Assets,
-    model_library: ModelLibrary,
-    render_buffers: RwLock<RenderBufferManager>,
-    render_passes: RenderPassCollection,
-    camera_id: CameraID,
+    render_buffer_manager: RwLock<RenderBufferManager>,
+    render_pass_manager: RwLock<RenderPassManager>,
 }
 
 impl RenderingSystem {
@@ -44,38 +39,13 @@ impl RenderingSystem {
     pub async fn new(
         core_system: CoreRenderingSystem,
         assets: Assets,
-        model_library: ModelLibrary,
-        camera_repository: &CameraRepository<f32>,
-        mesh_repository: &MeshRepository<f32>,
-        model_instance_pool: &ModelInstancePool<f32>,
-        camera_id: CameraID,
-        model_ids: Vec<ModelID>,
-        clear_color: wgpu::Color,
+        render_pass_manager: RenderPassManager,
     ) -> Result<Self> {
-        let render_buffers = RwLock::new(RenderBufferManager::from_geometry(
-            &core_system,
-            camera_repository,
-            mesh_repository,
-            model_instance_pool,
-        ));
-
-        let render_passes = RenderPassCollection::for_models(
-            &core_system,
-            &assets,
-            &model_library,
-            render_buffers.read().unwrap().synchronized(),
-            camera_id,
-            model_ids,
-            clear_color,
-        )?;
-
         Ok(Self {
             core_system,
             assets,
-            model_library,
-            render_buffers,
-            render_passes,
-            camera_id,
+            render_buffer_manager: RwLock::new(RenderBufferManager::new()),
+            render_pass_manager: RwLock::new(render_pass_manager),
         })
     }
 
@@ -84,10 +54,21 @@ impl RenderingSystem {
         &self.core_system
     }
 
+    /// Returns a reference to the rendering assets.
+    pub fn assets(&self) -> &Assets {
+        &self.assets
+    }
+
     /// Returns a reference to the [`RenderBufferManager`], guarded
     /// by a [`RwLock`].
-    pub fn render_buffers(&self) -> &RwLock<RenderBufferManager> {
-        &self.render_buffers
+    pub fn render_buffer_manager(&self) -> &RwLock<RenderBufferManager> {
+        &self.render_buffer_manager
+    }
+
+    /// Returns a reference to the [`RenderPassManager`], guarded
+    /// by a [`RwLock`].
+    pub fn render_pass_manager(&self) -> &RwLock<RenderPassManager> {
+        &self.render_pass_manager
     }
 
     /// Creates and presents a rendering of the current data in the pipelines.
@@ -103,8 +84,8 @@ impl RenderingSystem {
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
         {
-            let render_buffers_guard = self.render_buffers.read().unwrap();
-            for render_pass_recorder in self.render_passes.recorders() {
+            let render_buffers_guard = self.render_buffer_manager.read().unwrap();
+            for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
                 render_pass_recorder.record_render_pass(
                     &self.assets,
                     render_buffers_guard.synchronized(),
@@ -112,7 +93,7 @@ impl RenderingSystem {
                     &mut command_encoder,
                 )?;
             }
-        } // <- Lock on `self.render_buffers` is released here
+        } // <- Lock on `self.render_buffer_manager` is released here
 
         self.core_system
             .queue()
