@@ -194,10 +194,14 @@ impl SynchronizedRenderBuffers {
     ) -> CameraRenderBufferMap {
         cameras
             .iter()
-            .map(|(&id, camera)| {
+            .map(|(&camera_id, camera)| {
                 (
-                    id,
-                    CameraRenderBufferManager::for_camera(core_system, camera, &id.to_string()),
+                    camera_id,
+                    CameraRenderBufferManager::for_camera(
+                        core_system,
+                        camera,
+                        &camera_id.to_string(),
+                    ),
                 )
             })
             .collect()
@@ -209,10 +213,10 @@ impl SynchronizedRenderBuffers {
     ) -> MeshRenderBufferMap {
         meshes
             .iter()
-            .map(|(&id, mesh)| {
+            .map(|(&mesh_id, mesh)| {
                 (
-                    id,
-                    MeshRenderBufferManager::for_mesh(core_system, mesh, id.to_string()),
+                    mesh_id,
+                    MeshRenderBufferManager::for_mesh(core_system, mesh, mesh_id.to_string()),
                 )
             })
             .collect()
@@ -224,13 +228,13 @@ impl SynchronizedRenderBuffers {
     ) -> ModelInstanceRenderBufferMap {
         model_instance_buffers
             .iter()
-            .map(|(&id, model_instance_buffer)| {
+            .map(|(&model_id, model_instance_buffer)| {
                 (
-                    id,
+                    model_id,
                     ModelInstanceRenderBufferManager::new(
                         core_system,
                         model_instance_buffer,
-                        id.to_string(),
+                        model_id.to_string(),
                     ),
                 )
             })
@@ -239,67 +243,90 @@ impl SynchronizedRenderBuffers {
 }
 
 impl DesynchronizedRenderBuffers {
-    /// Performs any required updates for keeping the given camera render
-    /// buffers in sync with the given cameras.
+    /// Performs any required updates for keeping the given map
+    /// of camera render buffers in sync with the given map of
+    /// cameras.
     ///
-    /// # Note
     /// Render buffers whose source geometry no longer
-    /// exists will be removed.
+    /// exists will be removed, and missing render buffers
+    /// for new geometry will be created.
     fn sync_camera_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         camera_render_buffers: &mut CameraRenderBufferMap,
         cameras: &HashMap<CameraID, impl Camera<f32>>,
     ) {
+        for (&camera_id, camera) in cameras {
+            camera_render_buffers
+                .entry(camera_id)
+                .and_modify(|camera_buffer| camera_buffer.sync_with_camera(core_system, camera))
+                .or_insert_with(|| {
+                    CameraRenderBufferManager::for_camera(
+                        core_system,
+                        camera,
+                        &camera_id.to_string(),
+                    )
+                });
+        }
         Self::remove_unmatched_render_buffers(camera_render_buffers, cameras);
-        camera_render_buffers
-            .iter_mut()
-            .for_each(|(label, camera_buffer)| {
-                camera_buffer.sync_with_camera(core_system, cameras.get(label).unwrap())
-            });
     }
 
-    /// Performs any required updates for keeping the given mesh render
-    /// buffers in sync with the given meshes.
+    /// Performs any required updates for keeping the given map
+    /// of mesh render buffers in sync with the given map of
+    /// meshes.
     ///
-    /// # Note
     /// Render buffers whose source geometry no longer
-    /// exists will be removed.
+    /// exists will be removed, and missing render buffers
+    /// for new geometry will be created.
     fn sync_mesh_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         mesh_render_buffers: &mut MeshRenderBufferMap,
         meshes: &HashMap<MeshID, TriangleMesh<impl BufferableVertex>>,
     ) {
+        for (&mesh_id, mesh) in meshes {
+            mesh_render_buffers
+                .entry(mesh_id)
+                .and_modify(|mesh_buffers| mesh_buffers.sync_with_mesh(core_system, mesh))
+                .or_insert_with(|| {
+                    MeshRenderBufferManager::for_mesh(core_system, mesh, mesh_id.to_string())
+                });
+        }
         Self::remove_unmatched_render_buffers(mesh_render_buffers, meshes);
-        mesh_render_buffers
-            .iter_mut()
-            .for_each(|(label, mesh_buffers)| {
-                mesh_buffers.sync_with_mesh(core_system, meshes.get(label).unwrap())
-            });
     }
 
-    /// Performs any required updates for keeping the given model
-    /// instance render buffers in sync with the given model instances.
+    /// Performs any required updates for keeping the given map
+    /// of model instance render buffers in sync with the given
+    /// map of model instances.
     ///
     /// # Note
     /// Render buffers whose source geometry no longer
-    /// exists will be removed.
+    /// exists will be removed, and missing render buffers
+    /// for new geometry will be created.
     fn sync_model_instance_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         model_instance_render_buffers: &mut ModelInstanceRenderBufferMap,
         model_instance_buffers: &HashMap<ModelID, ModelInstanceBuffer<f32>>,
     ) {
+        for (&model_id, model_instance_buffer) in model_instance_buffers {
+            model_instance_render_buffers
+                .entry(model_id)
+                .and_modify(|instance_render_buffer| {
+                    instance_render_buffer.transfer_model_instances_to_render_buffer(
+                        core_system,
+                        model_instance_buffer,
+                    )
+                })
+                .or_insert_with(|| {
+                    ModelInstanceRenderBufferManager::new(
+                        core_system,
+                        model_instance_buffer,
+                        model_id.to_string(),
+                    )
+                });
+        }
         Self::remove_unmatched_render_buffers(
             model_instance_render_buffers,
             model_instance_buffers,
         );
-        model_instance_render_buffers
-            .iter_mut()
-            .for_each(|(label, instance_render_buffer)| {
-                instance_render_buffer.transfer_model_instances_to_render_buffer(
-                    core_system,
-                    model_instance_buffers.get(label).unwrap(),
-                )
-            });
     }
 
     fn from_synchronized(render_buffers: SynchronizedRenderBuffers) -> Self {

@@ -2,7 +2,7 @@ use super::{DesynchronizedRenderBuffers, RenderBufferManager};
 use crate::{
     define_task,
     rendering::RenderingTag,
-    world::{World, WorldTaskScheduler},
+    world::{SyncCamera, SyncVisibleModelInstances, World, WorldTaskScheduler},
 };
 use anyhow::Result;
 
@@ -13,7 +13,8 @@ define_task!(
     ///
     /// # Note
     /// Render buffers whose source geometry no longer exists will
-    /// be removed.
+    /// be removed, and missing render buffers for new geometry
+    /// will be created.
     [pub] SyncRenderBuffers,
     depends_on = [
         SyncPerspectiveCameraBuffers,
@@ -44,7 +45,7 @@ impl RenderBufferManager {
 
 define_task!(
     SyncPerspectiveCameraBuffers,
-    depends_on = [],
+    depends_on = [SyncCamera],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing perspective camera render buffers"; {
@@ -113,7 +114,7 @@ define_task!(
 
 define_task!(
     SyncModelInstanceBuffers,
-    depends_on = [],
+    depends_on = [SyncVisibleModelInstances],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing model instance render buffers"; {
