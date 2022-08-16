@@ -16,7 +16,7 @@ pub use asset::{Assets, ImageTexture, Shader, ShaderID, TextureID};
 pub use buffer_sync::SyncRenderBuffers;
 pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
 pub use model::{ModelLibrary, ModelSpecification};
-pub use render_pass::RenderPassManager;
+pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use tasks::{Render, RenderingTag};
 
 use self::buffer_sync::RenderBufferManager;

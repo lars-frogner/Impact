@@ -2,6 +2,8 @@
 
 mod tasks;
 
+pub use tasks::SyncRenderPasses;
+
 use crate::{
     geometry::{CameraID, MeshID, ModelID, ModelInstance},
     rendering::{

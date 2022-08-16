@@ -1,5 +1,5 @@
 use crate::{
-    rendering::{RenderBufferManager, RenderPassManager, RenderingSystem, SyncRenderBuffers},
+    rendering::{RenderBufferManager, RenderPassManager, RenderingSystem, SyncRenderPasses},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
@@ -12,7 +12,7 @@ define_execution_tag!([pub] RenderingTag);
 
 define_task!(
     [pub] Render,
-    depends_on = [SyncRenderBuffers],
+    depends_on = [SyncRenderPasses],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Rendering"; world.renderer().read().unwrap().render())
