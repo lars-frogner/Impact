@@ -5,10 +5,7 @@ mod tasks;
 pub use tasks::SyncRenderBuffers;
 
 use crate::{
-    geometry::{
-        Camera, CameraID, CameraRepository, MeshID, MeshRepository, ModelID, ModelInstanceBuffer,
-        ModelInstancePool, TriangleMesh,
-    },
+    geometry::{Camera, CameraID, MeshID, ModelID, ModelInstanceBuffer, TriangleMesh},
     rendering::{
         buffer::BufferableVertex, camera::CameraRenderBufferManager, mesh::MeshRenderBufferManager,
         model::ModelInstanceRenderBufferManager, CoreRenderingSystem,
@@ -64,22 +61,12 @@ type MeshRenderBufferMap = HashMap<MeshID, MeshRenderBufferManager>;
 type ModelInstanceRenderBufferMap = HashMap<ModelID, ModelInstanceRenderBufferManager>;
 
 impl RenderBufferManager {
-    /// Creates all render buffers required for representing the
-    /// given geometrical data.
-    pub fn from_geometry(
-        core_system: &CoreRenderingSystem,
-        camera_repository: &CameraRepository<f32>,
-        mesh_repository: &MeshRepository<f32>,
-        model_instance_pool: &ModelInstancePool<f32>,
-    ) -> Self {
+    /// Creates a new render buffer manager with buffers that
+    /// are not synchronized with any geometry.
+    pub fn new() -> Self {
         Self {
-            synchronized_buffers: Some(SynchronizedRenderBuffers::from_geometry(
-                core_system,
-                camera_repository,
-                mesh_repository,
-                model_instance_pool,
-            )),
-            desynchronized_buffers: None,
+            synchronized_buffers: None,
+            desynchronized_buffers: Some(DesynchronizedRenderBuffers::new()),
         }
     }
 
@@ -135,6 +122,12 @@ impl RenderBufferManager {
     }
 }
 
+impl Default for RenderBufferManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SynchronizedRenderBuffers {
     /// Returns the render buffer manager for the given camera identifier
     /// if the camera exists, otherwise returns [`None`].
@@ -159,90 +152,52 @@ impl SynchronizedRenderBuffers {
         self.model_instance_buffers.get(&model_instance_buffer_id)
     }
 
-    fn from_geometry(
-        core_system: &CoreRenderingSystem,
-        camera_repository: &CameraRepository<f32>,
-        mesh_repository: &MeshRepository<f32>,
-        model_instance_pool: &ModelInstancePool<f32>,
-    ) -> Self {
-        let perspective_camera_buffers = Self::create_camera_render_buffers(
-            core_system,
-            camera_repository.perspective_cameras(),
-        );
-
-        let color_mesh_buffers =
-            Self::create_mesh_render_buffers(core_system, mesh_repository.color_meshes());
-        let texture_mesh_buffers =
-            Self::create_mesh_render_buffers(core_system, mesh_repository.texture_meshes());
-
-        let model_instance_buffers = Self::create_model_instance_render_buffers(
-            core_system,
-            &model_instance_pool.model_instance_buffers,
-        );
-
-        Self {
-            perspective_camera_buffers: Box::new(perspective_camera_buffers),
-            color_mesh_buffers: Box::new(color_mesh_buffers),
-            texture_mesh_buffers: Box::new(texture_mesh_buffers),
-            model_instance_buffers: Box::new(model_instance_buffers),
-        }
-    }
-
-    fn create_camera_render_buffers(
-        core_system: &CoreRenderingSystem,
-        cameras: &HashMap<CameraID, impl Camera<f32>>,
-    ) -> CameraRenderBufferMap {
-        cameras
-            .iter()
-            .map(|(&camera_id, camera)| {
-                (
-                    camera_id,
-                    CameraRenderBufferManager::for_camera(
-                        core_system,
-                        camera,
-                        &camera_id.to_string(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    fn create_mesh_render_buffers(
-        core_system: &CoreRenderingSystem,
-        meshes: &HashMap<MeshID, TriangleMesh<impl BufferableVertex>>,
-    ) -> MeshRenderBufferMap {
-        meshes
-            .iter()
-            .map(|(&mesh_id, mesh)| {
-                (
-                    mesh_id,
-                    MeshRenderBufferManager::for_mesh(core_system, mesh, mesh_id.to_string()),
-                )
-            })
-            .collect()
-    }
-
-    fn create_model_instance_render_buffers(
-        core_system: &CoreRenderingSystem,
-        model_instance_buffers: &HashMap<ModelID, ModelInstanceBuffer<f32>>,
-    ) -> ModelInstanceRenderBufferMap {
-        model_instance_buffers
-            .iter()
-            .map(|(&model_id, model_instance_buffer)| {
-                (
-                    model_id,
-                    ModelInstanceRenderBufferManager::new(
-                        core_system,
-                        model_instance_buffer,
-                        model_id.to_string(),
-                    ),
-                )
-            })
-            .collect()
+    /// Returns a reference to the map of model instance render buffers.
+    pub fn model_instance_buffers(&self) -> &ModelInstanceRenderBufferMap {
+        self.model_instance_buffers.as_ref()
     }
 }
 
 impl DesynchronizedRenderBuffers {
+    fn new() -> Self {
+        Self {
+            perspective_camera_buffers: Mutex::new(Box::new(HashMap::new())),
+            color_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
+            texture_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
+            model_instance_buffers: Mutex::new(Box::new(HashMap::new())),
+        }
+    }
+
+    fn from_synchronized(render_buffers: SynchronizedRenderBuffers) -> Self {
+        let SynchronizedRenderBuffers {
+            perspective_camera_buffers,
+            color_mesh_buffers,
+            texture_mesh_buffers,
+            model_instance_buffers,
+        } = render_buffers;
+        Self {
+            perspective_camera_buffers: Mutex::new(perspective_camera_buffers),
+            color_mesh_buffers: Mutex::new(color_mesh_buffers),
+            texture_mesh_buffers: Mutex::new(texture_mesh_buffers),
+            model_instance_buffers: Mutex::new(model_instance_buffers),
+        }
+    }
+
+    fn into_synchronized(self) -> SynchronizedRenderBuffers {
+        let DesynchronizedRenderBuffers {
+            perspective_camera_buffers,
+            color_mesh_buffers,
+            texture_mesh_buffers,
+            model_instance_buffers,
+        } = self;
+        SynchronizedRenderBuffers {
+            perspective_camera_buffers: perspective_camera_buffers.into_inner().unwrap(),
+            color_mesh_buffers: color_mesh_buffers.into_inner().unwrap(),
+            texture_mesh_buffers: texture_mesh_buffers.into_inner().unwrap(),
+            model_instance_buffers: model_instance_buffers.into_inner().unwrap(),
+        }
+    }
+
     /// Performs any required updates for keeping the given map
     /// of camera render buffers in sync with the given map of
     /// cameras.
@@ -297,7 +252,6 @@ impl DesynchronizedRenderBuffers {
     /// of model instance render buffers in sync with the given
     /// map of model instances.
     ///
-    /// # Note
     /// Render buffers whose source geometry no longer
     /// exists will be removed, and missing render buffers
     /// for new geometry will be created.
@@ -329,36 +283,6 @@ impl DesynchronizedRenderBuffers {
         );
     }
 
-    fn from_synchronized(render_buffers: SynchronizedRenderBuffers) -> Self {
-        let SynchronizedRenderBuffers {
-            perspective_camera_buffers,
-            color_mesh_buffers,
-            texture_mesh_buffers,
-            model_instance_buffers,
-        } = render_buffers;
-        Self {
-            perspective_camera_buffers: Mutex::new(perspective_camera_buffers),
-            color_mesh_buffers: Mutex::new(color_mesh_buffers),
-            texture_mesh_buffers: Mutex::new(texture_mesh_buffers),
-            model_instance_buffers: Mutex::new(model_instance_buffers),
-        }
-    }
-
-    fn into_synchronized(self) -> SynchronizedRenderBuffers {
-        let DesynchronizedRenderBuffers {
-            perspective_camera_buffers,
-            color_mesh_buffers,
-            texture_mesh_buffers,
-            model_instance_buffers,
-        } = self;
-        SynchronizedRenderBuffers {
-            perspective_camera_buffers: perspective_camera_buffers.into_inner().unwrap(),
-            color_mesh_buffers: color_mesh_buffers.into_inner().unwrap(),
-            texture_mesh_buffers: texture_mesh_buffers.into_inner().unwrap(),
-            model_instance_buffers: model_instance_buffers.into_inner().unwrap(),
-        }
-    }
-
     /// Removes render buffers whose source geometry is no longer present.
     fn remove_unmatched_render_buffers<K, T, U>(
         render_buffers: &mut HashMap<K, T>,
@@ -366,6 +290,6 @@ impl DesynchronizedRenderBuffers {
     ) where
         K: Eq + Hash,
     {
-        render_buffers.retain(|label, _| geometrical_data.contains_key(label));
+        render_buffers.retain(|id, _| geometrical_data.contains_key(id));
     }
 }

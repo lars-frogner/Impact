@@ -11,7 +11,6 @@ define_task!(
     /// updates for keeping the [`World`]s render buffers in sync with
     /// the source geometry.
     ///
-    /// # Note
     /// Render buffers whose source geometry no longer exists will
     /// be removed, and missing render buffers for new geometry
     /// will be created.
@@ -26,8 +25,8 @@ define_task!(
     |world: &World| {
         with_debug_logging!("Completing synchronization of render buffers"; {
             let renderer = world.renderer().read().unwrap();
-            let mut render_buffers = renderer.render_buffers().write().unwrap();
-            render_buffers.declare_synchronized();
+            let mut render_buffer_manager = renderer.render_buffer_manager().write().unwrap();
+            render_buffer_manager.declare_synchronized();
             Ok(())
         })
     }
@@ -50,10 +49,10 @@ define_task!(
     |world: &World| {
         with_debug_logging!("Synchronizing perspective camera render buffers"; {
             let renderer = world.renderer().read().unwrap();
-            let render_buffers = renderer.render_buffers().read().unwrap();
+            let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
             DesynchronizedRenderBuffers::sync_camera_buffers_with_geometry(
                 renderer.core_system(),
-                render_buffers
+                render_buffer_manager
                     .desynchronized()
                     .perspective_camera_buffers
                     .lock()
@@ -73,10 +72,10 @@ define_task!(
     |world: &World| {
         with_debug_logging!("Synchronizing color mesh render buffers"; {
             let renderer = world.renderer().read().unwrap();
-            let render_buffers = renderer.render_buffers().read().unwrap();
+            let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
             DesynchronizedRenderBuffers::sync_mesh_buffers_with_geometry(
                 renderer.core_system(),
-                render_buffers
+                render_buffer_manager
                     .desynchronized()
                     .color_mesh_buffers
                     .lock()
@@ -96,10 +95,10 @@ define_task!(
     |world: &World| {
         with_debug_logging!("Synchronizing texture mesh render buffers"; {
             let renderer = world.renderer().read().unwrap();
-            let render_buffers = renderer.render_buffers().read().unwrap();
+            let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
             DesynchronizedRenderBuffers::sync_mesh_buffers_with_geometry(
                 renderer.core_system(),
-                render_buffers
+                render_buffer_manager
                     .desynchronized()
                     .texture_mesh_buffers
                     .lock()
@@ -119,10 +118,10 @@ define_task!(
     |world: &World| {
         with_debug_logging!("Synchronizing model instance render buffers"; {
             let renderer = world.renderer().read().unwrap();
-            let render_buffers = renderer.render_buffers().read().unwrap();
+            let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
             DesynchronizedRenderBuffers::sync_model_instance_buffers_with_geometry(
                 renderer.core_system(),
-                render_buffers
+                render_buffer_manager
                     .desynchronized()
                     .model_instance_buffers
                     .lock()
