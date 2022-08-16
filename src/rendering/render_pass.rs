@@ -47,6 +47,7 @@ pub struct RenderPassRecorder {
     specification: RenderPassSpecification,
     pipeline: Option<wgpu::RenderPipeline>,
     load_operation: wgpu::LoadOp<wgpu::Color>,
+    disabled: bool,
 }
 
 impl RenderPassManager {
@@ -91,16 +92,25 @@ impl RenderPassManager {
     ) -> Result<()> {
         let model_instance_buffers = render_buffers.model_instance_buffers();
 
-        for &model_id in model_instance_buffers.keys() {
-            if let Entry::Vacant(entry) = self.model_render_pass_recorders.entry(model_id) {
-                entry.insert(Self::create_render_pass_recorder_for_model(
-                    core_system,
-                    assets,
-                    model_library,
-                    render_buffers,
-                    self.camera_id,
-                    model_id,
-                )?);
+        for (&model_id, instance_render_buffer) in model_instance_buffers {
+            // Avoid rendering the model if there are no instances
+            let disable_pass = instance_render_buffer.instance_buffer().n_valid_instances() == 0;
+
+            match self.model_render_pass_recorders.entry(model_id) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Self::create_render_pass_recorder_for_model(
+                        core_system,
+                        assets,
+                        model_library,
+                        render_buffers,
+                        self.camera_id,
+                        model_id,
+                        disable_pass,
+                    )?);
+                }
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().set_disabled(disable_pass);
+                }
             }
         }
 
@@ -117,9 +127,10 @@ impl RenderPassManager {
         render_buffers: &SynchronizedRenderBuffers,
         camera_id: Option<CameraID>,
         model_id: ModelID,
+        disabled: bool,
     ) -> Result<RenderPassRecorder> {
         let specification = RenderPassSpecification::for_model(model_library, camera_id, model_id)?;
-        RenderPassRecorder::new(core_system, assets, render_buffers, specification)
+        RenderPassRecorder::new(core_system, assets, render_buffers, specification, disabled)
     }
 }
 
@@ -330,6 +341,7 @@ impl RenderPassRecorder {
         assets: &Assets,
         render_buffers: &SynchronizedRenderBuffers,
         specification: RenderPassSpecification,
+        disabled: bool,
     ) -> Result<Self> {
         let vertex_buffer_layouts = specification.get_vertex_buffer_layouts(render_buffers)?;
 
@@ -367,6 +379,7 @@ impl RenderPassRecorder {
             specification,
             pipeline,
             load_operation,
+            disabled,
         })
     }
 
@@ -377,6 +390,7 @@ impl RenderPassRecorder {
             specification,
             pipeline: None,
             load_operation,
+            disabled: false,
         }
     }
 
@@ -392,6 +406,10 @@ impl RenderPassRecorder {
         view: &wgpu::TextureView,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        if self.disabled() {
+            return Ok(());
+        }
+
         // Make sure all data is available before doing anything else
         let bind_groups = self.specification.get_bind_groups(assets, render_buffers)?;
 
@@ -449,6 +467,16 @@ impl RenderPassRecorder {
         }
 
         Ok(())
+    }
+
+    /// Whether the render pass should be skipped.
+    pub fn disabled(&self) -> bool {
+        self.disabled
+    }
+
+    /// Set whether the render pass should be skipped.
+    pub fn set_disabled(&mut self, disabled: bool) {
+        self.disabled = disabled;
     }
 
     fn create_render_pipeline_layout(
