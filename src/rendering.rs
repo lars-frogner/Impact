@@ -2,21 +2,21 @@
 
 mod asset;
 mod buffer;
+mod buffer_sync;
 mod camera;
 mod core;
 mod material;
 mod mesh;
 mod model;
 mod render_pass;
-mod sync;
 mod tasks;
 
 pub use self::core::CoreRenderingSystem;
 pub use asset::{Assets, ImageTexture, Shader, ShaderID, TextureID};
+pub use buffer_sync::{RenderBufferManager, SyncRenderBuffers};
 pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
 pub use model::{ModelLibrary, ModelSpecification};
 pub use render_pass::{RenderPassRecorder, RenderPassSpecification};
-pub use sync::{RenderBufferManager, SyncRenderBuffers};
 pub use tasks::{Render, RenderingTag};
 
 use self::render_pass::RenderPassCollection;

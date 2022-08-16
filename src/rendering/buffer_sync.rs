@@ -1,4 +1,4 @@
-//! Render buffers for geometrical data.
+//! Synchronization of render buffers with geometrical data.
 
 mod tasks;
 
