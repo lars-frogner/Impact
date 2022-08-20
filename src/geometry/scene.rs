@@ -2,14 +2,14 @@
 
 use crate::{
     geometry::{
-        Camera, CameraID, CameraRepository, Frustum, ModelID, ModelInstance, ModelInstancePool,
-        Sphere,
+        CameraID, CameraRepository, Frustum, ModelID, ModelInstance, ModelInstancePool, Sphere,
     },
     num::Float,
     util::VecWithFreeList,
 };
 use anyhow::{anyhow, Result};
-use nalgebra::{Matrix4, Similarity3};
+use bytemuck::{Pod, Zeroable};
+use nalgebra::{Projective3, Similarity3};
 use std::collections::HashSet;
 
 #[derive(Clone, Debug)]
@@ -32,13 +32,16 @@ pub trait SceneGraphNode {
     fn set_model_transform(&mut self, transform: Self::Transform);
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct GroupNodeID(usize);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ModelInstanceNodeID(usize);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CameraNodeID(usize);
 
 pub trait NodeIDToIdx {
@@ -62,9 +65,9 @@ pub struct GroupNode<F: Float> {
 #[derive(Clone, Debug)]
 pub struct ModelInstanceNode<F: Float> {
     parent_node_id: GroupNodeID,
+    model_bounding_sphere: Sphere<F>,
     model_transform: Similarity3<F>,
     model_id: ModelID,
-    model_bounding_sphere: Sphere<F>,
 }
 
 #[derive(Clone, Debug)]
@@ -100,6 +103,10 @@ impl<F: Float> SceneGraph<F> {
         self.root_node_id
     }
 
+    pub fn camera_id(&self, camera_node_id: CameraNodeID) -> CameraID {
+        self.camera_nodes.node(camera_node_id).camera_id()
+    }
+
     pub fn create_group_node(
         &mut self,
         parent_node_id: GroupNodeID,
@@ -115,12 +122,13 @@ impl<F: Float> SceneGraph<F> {
 
     pub fn create_model_instance_node(
         &mut self,
-
         parent_node_id: GroupNodeID,
+        bounding_sphere: Sphere<F>,
         transform: <ModelInstanceNode<F> as SceneGraphNode>::Transform,
         model_id: ModelID,
     ) -> ModelInstanceNodeID {
-        let model_instance_node = ModelInstanceNode::new(parent_node_id, transform, model_id);
+        let model_instance_node =
+            ModelInstanceNode::new(parent_node_id, bounding_sphere, transform, model_id);
         let model_instance_node_id = self.model_instance_nodes.add_node(model_instance_node);
         self.group_nodes
             .node_mut(parent_node_id)
@@ -201,76 +209,92 @@ impl<F: Float> SceneGraph<F> {
         self.camera_nodes = camera_nodes;
     }
 
-    pub fn update_model_instances(
+    pub fn sync_visible_model_instances(
         &mut self,
-        camera_repository: &CameraRepository<F>,
         model_instance_pool: &mut ModelInstancePool<F>,
-        camera_node_id: CameraNodeID,
+        camera_repository: &CameraRepository<F>,
+        camera_node_id: Option<CameraNodeID>,
     ) -> Result<()> {
-        self.update_bounding_spheres(self.root_node_id());
+        let root_node_id = self.root_node_id();
 
-        let camera_node = self.camera_nodes.node(camera_node_id);
+        let (view_projection_transform, root_to_camera_transform) = match camera_node_id {
+            Some(camera_node_id) => {
+                let camera_node = self.camera_nodes.node(camera_node_id);
+                let camera_id = camera_node.camera_id();
+                let camera = camera_repository
+                    .get_camera(camera_id)
+                    .ok_or_else(|| anyhow!("Camera {} not found", camera_id))?;
+                (
+                    camera.compute_view_projection_transform(),
+                    self.compute_root_to_camera_transform(camera_node),
+                )
+            }
+            None => (
+                Projective3::identity(),
+                *self.group_nodes.node(root_node_id).model_transform(),
+            ),
+        };
 
-        let camera_id = camera_node.camera_id;
-        let camera = camera_repository
-            .perspective_cameras
-            .get(&camera_id)
-            .ok_or_else(|| anyhow!("Camera {} not found", camera_id))?;
+        let camera_frustum = Frustum::from_transform(&view_projection_transform);
 
-        let mut world_view_transform =
-            Similarity3::from_isometry(*camera.config().view_transform(), F::one());
+        self.update_bounding_spheres(root_node_id);
 
-        let mut parent_node = self.group_nodes.node(camera_node.parent_node_id());
-
-        while !parent_node.is_root() {
-            world_view_transform *= parent_node.model_transform();
-            parent_node = self.group_nodes.node(parent_node.parent_node_id());
-        }
-
-        let camera_frustum = Frustum::from_transform(camera.projection_transform());
-
-        self.update_model_view_projection_transforms_for_group(
+        self.update_model_transforms_for_group(
             model_instance_pool,
             &camera_frustum,
-            self.root_node_id(),
-            &world_view_transform,
+            root_node_id,
+            &root_to_camera_transform,
         );
 
         Ok(())
     }
 
-    fn update_model_view_projection_transforms_for_group(
+    fn compute_root_to_camera_transform(&self, camera_node: &CameraNode<F>) -> Similarity3<F> {
+        let mut root_to_camera_transform = *camera_node.model_transform();
+        let mut parent_node = self.group_nodes.node(camera_node.parent_node_id());
+
+        loop {
+            root_to_camera_transform *= parent_node.model_transform();
+
+            if parent_node.is_root() {
+                break;
+            } else {
+                parent_node = self.group_nodes.node(parent_node.parent_node_id());
+            }
+        }
+
+        root_to_camera_transform
+    }
+
+    fn update_model_transforms_for_group(
         &self,
         model_instance_pool: &mut ModelInstancePool<F>,
         camera_frustum: &Frustum<F>,
         group_node_id: GroupNodeID,
-        parent_model_view_transform: &Similarity3<F>,
+        parent_model_transform: &Similarity3<F>,
     ) {
         let group_node = self.group_nodes.node(group_node_id);
 
-        let model_view_transform = parent_model_view_transform * group_node.model_transform();
+        let model_transform = parent_model_transform * group_node.model_transform();
 
         if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
-            let bounding_sphere_view_space = bounding_sphere.transformed(&model_view_transform);
+            let bounding_sphere_world_space = bounding_sphere.transformed(&model_transform);
 
-            if !camera_frustum.sphere_lies_outside(&bounding_sphere_view_space) {
+            if !camera_frustum.sphere_lies_outside(&bounding_sphere_world_space) {
                 for &group_node_id in group_node.child_group_node_ids() {
-                    self.update_model_view_projection_transforms_for_group(
+                    self.update_model_transforms_for_group(
                         model_instance_pool,
                         camera_frustum,
                         group_node_id,
-                        &model_view_transform,
+                        &model_transform,
                     );
                 }
 
-                let model_view_projection_transform =
-                    camera_frustum.transform_matrix() * model_view_transform.to_homogeneous();
-
                 for &model_instance_node_id in group_node.child_model_instance_node_ids() {
-                    self.update_model_view_projection_transform_of_model_instance(
+                    self.update_model_transform_of_model_instance(
                         model_instance_pool,
                         model_instance_node_id,
-                        &model_view_projection_transform,
+                        &model_transform,
                     );
                 }
             }
@@ -327,11 +351,11 @@ impl<F: Float> SceneGraph<F> {
             .transformed(model_instance_node.model_transform())
     }
 
-    fn update_model_view_projection_transform_of_model_instance(
+    fn update_model_transform_of_model_instance(
         &self,
         model_instance_pool: &mut ModelInstancePool<F>,
         model_instance_node_id: ModelInstanceNodeID,
-        parent_model_view_projection_transform: &Matrix4<F>,
+        parent_model_transform: &Similarity3<F>,
     ) {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
@@ -339,11 +363,10 @@ impl<F: Float> SceneGraph<F> {
             .model_instance_buffers
             .get_mut(&model_instance_node.model_id())
         {
-            let model_view_projection_transform = parent_model_view_projection_transform
-                * model_instance_node.model_transform().to_homogeneous();
+            let model_transform = parent_model_transform * model_instance_node.model_transform();
 
             buffer.add_instance(ModelInstance::with_transform(
-                model_view_projection_transform,
+                model_transform.to_homogeneous(),
             ))
         }
     }
@@ -525,17 +548,21 @@ impl<F: Float> SceneGraphNode for GroupNode<F> {
 }
 
 impl<F: Float> ModelInstanceNode<F> {
+    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Sphere<F>) {
+        self.model_bounding_sphere = bounding_sphere;
+    }
+
     fn new(
         parent_node_id: GroupNodeID,
+        model_bounding_sphere: Sphere<F>,
         model_transform: Similarity3<F>,
         model_id: ModelID,
     ) -> Self {
-        let model_bounding_sphere = todo!();
         Self {
             parent_node_id,
+            model_bounding_sphere,
             model_transform,
             model_id,
-            model_bounding_sphere,
         }
     }
 
@@ -580,6 +607,10 @@ impl<F: Float> CameraNode<F> {
 
     fn parent_node_id(&self) -> GroupNodeID {
         self.parent_node_id
+    }
+
+    fn model_transform(&self) -> &Similarity3<F> {
+        &self.model_transform
     }
 
     fn camera_id(&self) -> CameraID {
