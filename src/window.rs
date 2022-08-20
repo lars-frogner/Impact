@@ -57,6 +57,12 @@ impl Window {
         &self.window
     }
 
+    /// Returns the ratio of width to height of the window.
+    pub fn aspect_ratio(&self) -> f32 {
+        let window_size = self.window().inner_size();
+        window_size.width as f32 / window_size.height as f32
+    }
+
     /// Wraps the given game loop in an event loop that can capture
     /// window events and runs the loop.
     pub fn run_game_loop(self, mut game_loop: GameLoop) -> ! {
