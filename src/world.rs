@@ -40,10 +40,10 @@ impl World {
     pub fn new(
         camera_repository: CameraRepository<f32>,
         mesh_repository: MeshRepository<f32>,
-        model_instance_pool: ModelInstancePool<f32>,
         renderer: RenderingSystem,
         controller: impl 'static + MotionController<f32>,
     ) -> Self {
+        let model_instance_pool = ModelInstancePool::for_models(model_library.model_ids());
         Self {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),

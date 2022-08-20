@@ -1,5 +1,5 @@
 use crate::{
-    geometry::{MeshID, ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool},
+    geometry::{MeshID, ModelID, ModelInstance, ModelInstanceBuffer},
     rendering::{
         buffer::{BufferableInstance, BufferableVertex, InstanceBuffer},
         CoreRenderingSystem, MaterialID, MaterialLibrary,
@@ -38,21 +38,16 @@ impl ModelLibrary {
         &self.material_library
     }
 
+    pub fn model_ids(&self) -> impl Iterator<Item = ModelID> + '_ {
+        self.model_specifications.keys().cloned()
+    }
+
     pub fn get_model(&self, model_id: ModelID) -> Option<&ModelSpecification> {
         self.model_specifications.get(&model_id)
     }
 
-    pub fn add_model(
-        &mut self,
-        instance_pool: &mut ModelInstancePool<f32>,
-        model_id: ModelID,
-        model_spec: ModelSpecification,
-    ) {
+    pub fn add_model(&mut self, model_id: ModelID, model_spec: ModelSpecification) {
         self.model_specifications.insert(model_id, model_spec);
-
-        instance_pool
-            .model_instance_buffers
-            .insert(model_id, ModelInstanceBuffer::new());
     }
 }
 

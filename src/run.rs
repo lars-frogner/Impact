@@ -4,8 +4,8 @@ use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{
-        CameraID, CameraRepository, ColorVertex, MeshID, MeshRepository, ModelID,
-        ModelInstancePool, TextureVertex, TriangleMesh,
+        CameraID, CameraRepository, ColorVertex, MeshID, MeshRepository, ModelID, TextureVertex,
+        TriangleMesh,
     },
     rendering::{
         Assets, MaterialID, MaterialLibrary, MaterialSpecification, ModelLibrary,
@@ -75,7 +75,6 @@ async fn init_world(window: &Window) -> Result<World> {
     let mut assets = Assets::new();
     let mut mesh_repository = MeshRepository::new();
     let mut camera_repository = CameraRepository::new();
-    let mut model_instance_pool = ModelInstancePool::new();
 
     assets.shaders.insert(
         ShaderID(hash!("Test shader")),
@@ -132,15 +131,7 @@ async fn init_world(window: &Window) -> Result<World> {
         material_id: MaterialID(hash!("Test material")),
         mesh_id: MeshID(hash!("Test mesh")),
     };
-    model_library.add_model(
-        &mut model_instance_pool,
-        ModelID(hash!("Test model")),
-        model_spec,
-    );
-
-    let camera_id = CameraID(hash!("Camera"));
-
-    let render_pass_manager = RenderPassManager::new(wgpu::Color::BLACK, Some(camera_id));
+    model_library.add_model(ModelID(hash!("Test model")), model_spec);
 
     let renderer = RenderingSystem::new(core_system, assets, render_pass_manager).await?;
 
@@ -150,7 +141,6 @@ async fn init_world(window: &Window) -> Result<World> {
         model_library,
         camera_repository,
         mesh_repository,
-        model_instance_pool,
         renderer,
         controller,
     ))

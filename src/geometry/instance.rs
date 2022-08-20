@@ -57,6 +57,17 @@ impl<F: Float> ModelInstancePool<F> {
             model_instance_buffers: HashMap::new(),
         }
     }
+
+    /// Creates a model instance pool for the models
+    /// with the given IDs.
+    pub fn for_models(model_ids: impl IntoIterator<Item = ModelID>) -> Self {
+        Self {
+            model_instance_buffers: model_ids
+                .into_iter()
+                .map(|model_id| (model_id, ModelInstanceBuffer::new()))
+                .collect(),
+        }
+    }
 }
 
 impl<F: Float> ModelInstanceBuffer<F> {
