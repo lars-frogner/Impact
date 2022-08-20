@@ -63,6 +63,17 @@ impl<F: Float> Sphere<F> {
         Self::new(bounding_center, bounding_radius)
     }
 
+    /// Finds the smallest sphere enclosing the axis-aligned bounding box
+    /// with the given lower and upper corner.
+    pub fn bounding_sphere_from_aabb_corners(
+        lower_corner: &Point3<F>,
+        upper_corner: &Point3<F>,
+    ) -> Self {
+        let center = na::center(lower_corner, upper_corner);
+        let radius = F::from_f64(0.5).unwrap() * na::distance(lower_corner, upper_corner);
+        Self::new(center, radius)
+    }
+
     /// Returns the center point of the sphere.
     pub fn center(&self) -> &Point3<F> {
         &self.center
