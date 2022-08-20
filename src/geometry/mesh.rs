@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, Vector2, Vector3};
+use nalgebra::{point, Point3, Vector2, Vector3};
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
@@ -30,9 +30,9 @@ pub struct MeshRepository<F: Float> {
 
 /// Represents a 3D polygonial mesh.
 pub trait Mesh<F: Float> {
-    /// Computes the smallest sphere that encloses all vertices
-    /// in the mesh.
-    fn compute_bounding_sphere(&self) -> Sphere<F>;
+    /// Returns a sphere enclosing all vertices in the mesh,
+    /// or [`None`] if the mesh has no vertices.
+    fn bounding_sphere(&self) -> Option<Sphere<F>>;
 }
 
 /// Represents a vertex of a polygon in a 3D mesh.
@@ -188,6 +188,11 @@ impl<V> TriangleMesh<V> {
         &self.indices
     }
 
+    /// Whether the mesh has any vertices.
+    pub fn has_vertices(&self) -> bool {
+        !self.vertices.is_empty()
+    }
+
     /// Returns the kind of change that has been made to the mesh
     /// vertices since the last reset of change tracing.
     pub fn vertex_change(&self) -> CollectionChange {
@@ -222,8 +227,25 @@ where
     F: Float,
     V: Vertex<F>,
 {
-    fn compute_bounding_sphere(&self) -> Sphere<F> {
-        todo!()
+    fn bounding_sphere(&self) -> Option<Sphere<F>> {
+        if !self.has_vertices() {
+            return None;
+        }
+        let (min_point, max_point) = self.vertices().iter().fold(
+            (
+                point![F::MAX, F::MAX, F::MAX],
+                point![F::MIN, F::MIN, F::MIN],
+            ),
+            |(min_point, max_point), vertex| {
+                (
+                    vertex.position().inf(&min_point),
+                    vertex.position().sup(&max_point),
+                )
+            },
+        );
+        Some(Sphere::bounding_sphere_from_aabb_corners(
+            &min_point, &max_point,
+        ))
     }
 }
 
