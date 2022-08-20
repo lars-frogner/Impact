@@ -68,12 +68,8 @@ impl GameLoop {
             .handle_event(self.world.as_ref(), control_flow, event)
     }
 
-    pub fn resize_rendering_surface(&mut self, new_size: (u32, u32)) {
-        self.world
-            .renderer()
-            .write()
-            .unwrap()
-            .resize_surface(new_size);
+    pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
+        self.world.resize_rendering_surface(new_size);
     }
 
     pub fn perform_iteration(&mut self, control_flow: &mut ControlFlow<'_>) -> ThreadPoolResult {

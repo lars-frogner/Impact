@@ -35,6 +35,11 @@ pub struct Window {
 #[derive(Debug)]
 pub struct ControlFlow<'a>(&'a mut WinitControlFlow);
 
+/// Calculates the ratio of width to height.
+pub fn calculate_aspect_ratio(width: u32, height: u32) -> f32 {
+    width as f32 / height as f32
+}
+
 impl Window {
     /// Creates a new window with an associated event loop.
     pub fn new() -> Result<Self> {
@@ -60,7 +65,7 @@ impl Window {
     /// Returns the ratio of width to height of the window.
     pub fn aspect_ratio(&self) -> f32 {
         let window_size = self.window().inner_size();
-        window_size.width as f32 / window_size.height as f32
+        calculate_aspect_ratio(window_size.width, window_size.height)
     }
 
     /// Wraps the given game loop in an event loop that can capture

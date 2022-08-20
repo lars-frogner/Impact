@@ -135,6 +135,13 @@ impl<F: Float> CameraRepository<F> {
             )),
         }
     }
+
+    /// Updates all cameras to have the given aspect ratio.
+    pub fn set_aspect_ratios(&mut self, aspect_ratio: F) {
+        for camera in self.perspective_cameras.values_mut() {
+            camera.set_aspect_ratio(aspect_ratio);
+        }
+    }
 }
 
 impl<F: Float> CameraConfiguration<F> {

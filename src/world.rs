@@ -13,7 +13,7 @@ use crate::{
     rendering::{ModelLibrary, RenderingSystem},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
-    window::ControlFlow,
+    window::{self, ControlFlow},
 };
 use anyhow::{anyhow, Result};
 use nalgebra::Similarity3;
@@ -88,6 +88,17 @@ impl World {
     /// by a [`RwLock`].
     pub fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
+    }
+
+    /// Sets a new size for the rendering surface and updates
+    /// the aspect ratio of all cameras.
+    pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
+        self.renderer.write().unwrap().resize_surface(new_size);
+
+        self.camera_repository
+            .write()
+            .unwrap()
+            .set_aspect_ratios(window::calculate_aspect_ratio(new_size.0, new_size.1));
     }
 
     pub fn get_active_camera_id(&self) -> Option<CameraID> {
