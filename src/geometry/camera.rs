@@ -107,6 +107,12 @@ impl<F: Float> CameraRepository<F> {
         Some(self.perspective_cameras.get(&camera_id).unwrap())
     }
 
+    /// Returns a mutable trait object representing the [`Camera`]
+    /// with the given ID, or [`None`] if the camera is not present.
+    pub fn get_camera_mut(&mut self, camera_id: CameraID) -> Option<&mut dyn Camera<F>> {
+        Some(self.perspective_cameras.get_mut(&camera_id).unwrap())
+    }
+
     /// Returns a reference to the [`HashMap`] storing all
     /// [`PerspectiveCamera`]s.
     pub fn perspective_cameras(&self) -> &HashMap<CameraID, PerspectiveCamera<F>> {
@@ -233,13 +239,6 @@ impl<F: Float> CameraConfiguration<F> {
     #[cfg(test)]
     fn local_view_transform_changed(&self) -> bool {
         self.local_view_transform_change_tracker.changed()
-    }
-
-    /// Whether the model transform has changed since the last reset of
-    /// model transform change tracing.
-    #[cfg(test)]
-    fn model_transform_changed(&self) -> bool {
-        self.model_transform_change_tracker.changed()
     }
 
     /// Moves the camera to the given position.
