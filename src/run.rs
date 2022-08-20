@@ -21,7 +21,7 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
-use nalgebra::{point, vector, Point3, Rotation3, Translation3, Vector3};
+use nalgebra::{point, vector, Point3, Rotation3, Similarity3, Translation3, Vector3};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -112,7 +112,7 @@ async fn init_world(window: &Window) -> Result<World> {
                     Point3::origin(),
                     Vector3::y_axis(),
                 ),
-                core_system.surface_aspect_ratio(),
+                window.aspect_ratio(),
                 Degrees(45.0),
                 UpperExclusiveBounds::new(0.1, 100.0),
             ),
@@ -137,13 +137,20 @@ async fn init_world(window: &Window) -> Result<World> {
 
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
-    Ok(World::new(
+    let mut world = World::new(
         model_library,
         camera_repository,
         mesh_repository,
         renderer,
         controller,
-    ))
+    );
+
+    world.spawn_model_instances(ModelID(hash!("Test model")), [Similarity3::identity()])?;
+
+    let camera_node_id = world.spawn_camera(CameraID(hash!("Camera")), Similarity3::identity());
+    world.set_active_camera(camera_node_id);
+
+    Ok(world)
 }
 
 const VERTICES: &[ColorVertex<f32>] = &[
