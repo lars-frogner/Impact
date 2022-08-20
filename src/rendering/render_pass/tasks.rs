@@ -19,16 +19,22 @@ define_task!(
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing render passes"; {
-            let renderer = world.renderer().read().unwrap();
-            let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
-            let mut render_pass_manager = renderer.render_pass_manager().write().unwrap();
+            match world.get_active_camera_id() {
+                Some(camera_id) => {
+                    let renderer = world.renderer().read().unwrap();
+                    let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
+                    let mut render_pass_manager = renderer.render_pass_manager().write().unwrap();
 
-            render_pass_manager.sync_with_render_buffers(
-                renderer.core_system(),
-                renderer.assets(),
-                &world.model_library().read().unwrap(),
-                render_buffer_manager.synchronized()
-            )
+                    render_pass_manager.sync_with_render_buffers(
+                        renderer.core_system(),
+                        renderer.assets(),
+                        &world.model_library().read().unwrap(),
+                        render_buffer_manager.synchronized(),
+                        camera_id
+                    )
+                },
+                None => Ok(())
+            }
         })
     }
 );
