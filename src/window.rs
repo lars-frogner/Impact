@@ -99,7 +99,11 @@ impl Window {
                 }
                 // When all queued input events have been handled we can do other work
                 Event::MainEventsCleared => {
-                    game_loop.perform_iteration(&mut control_flow);
+                    let result = game_loop.perform_iteration(&mut control_flow);
+                    if let Err(errors) = result {
+                        log::error!("Unhandled errors: {:?}", errors);
+                        control_flow.exit();
+                    }
                 }
                 _ => {}
             }
