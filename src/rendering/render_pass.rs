@@ -55,13 +55,9 @@ pub struct RenderPassRecorder {
 impl RenderPassManager {
     /// Creates a new manager with a pass that clears the
     /// surface with the given color.
-    ///
-    /// Render passes created for models by this manager will
-    /// use the camera with the given ID if specified, otherwise
-    /// the models will be rendered without a camera.
-    pub fn new(clear_color: wgpu::Color, camera_id: Option<CameraID>) -> Self {
+    pub fn new(clear_color: wgpu::Color) -> Self {
         Self {
-            camera_id,
+            camera_id: None,
             clearing_pass_recorder: RenderPassRecorder::clearing_pass(clear_color),
             model_render_pass_recorders: HashMap::new(),
         }
@@ -77,6 +73,20 @@ impl RenderPassManager {
     /// clearing pass.
     pub fn recorders_no_clear(&self) -> impl Iterator<Item = &RenderPassRecorder> {
         self.model_render_pass_recorders.values()
+    }
+
+    /// Sets the ID of the camera to use when creating render passes
+    /// for models. If [`None`] is given, the models will be rendered
+    /// without a camera.
+    ///
+    /// Changing the camera ID invalidates all existing model render
+    /// pass recorders and will cause them to be recreated.
+    pub fn set_camera(&mut self, camera_id: Option<CameraID>) {
+        if camera_id != self.camera_id {
+            self.camera_id = camera_id;
+            // The recorders have to be recreated with the new camera
+            self.model_render_pass_recorders.clear();
+        }
     }
 
     /// Ensures that all render passes required for rendering the

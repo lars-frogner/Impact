@@ -36,16 +36,12 @@ pub struct RenderingSystem {
 impl RenderingSystem {
     /// Creates a new rendering system consisting of the given
     /// core system and rendering pipelines.
-    pub async fn new(
-        core_system: CoreRenderingSystem,
-        assets: Assets,
-        render_pass_manager: RenderPassManager,
-    ) -> Result<Self> {
+    pub async fn new(core_system: CoreRenderingSystem, assets: Assets) -> Result<Self> {
         Ok(Self {
             core_system,
             assets,
             render_buffer_manager: RwLock::new(RenderBufferManager::new()),
-            render_pass_manager: RwLock::new(render_pass_manager),
+            render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
         })
     }
 

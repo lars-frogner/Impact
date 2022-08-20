@@ -9,7 +9,7 @@ use crate::{
     },
     rendering::{
         Assets, MaterialID, MaterialLibrary, MaterialSpecification, ModelLibrary,
-        ModelSpecification, RenderPassManager, ShaderID, TextureID,
+        ModelSpecification, ShaderID, TextureID,
     },
     window::InputHandler,
     window::Window,
@@ -133,7 +133,7 @@ async fn init_world(window: &Window) -> Result<World> {
     };
     model_library.add_model(ModelID(hash!("Test model")), model_spec);
 
-    let renderer = RenderingSystem::new(core_system, assets, render_pass_manager).await?;
+    let renderer = RenderingSystem::new(core_system, assets).await?;
 
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
