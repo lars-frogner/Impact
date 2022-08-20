@@ -410,7 +410,12 @@ fn create_initialized_vertex_buffer(
     vertices: &[impl Pod],
     label: &str,
 ) -> wgpu::Buffer {
-    create_initialized_buffer(device, vertices, wgpu::BufferUsages::VERTEX, label)
+    create_initialized_buffer(
+        device,
+        vertices,
+        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        label,
+    )
 }
 
 fn create_initialized_index_buffer(
@@ -418,7 +423,12 @@ fn create_initialized_index_buffer(
     indices: &[impl Pod],
     label: &str,
 ) -> wgpu::Buffer {
-    create_initialized_buffer(device, indices, wgpu::BufferUsages::INDEX, label)
+    create_initialized_buffer(
+        device,
+        indices,
+        wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        label,
+    )
 }
 
 fn create_initialized_uniform_buffer(
