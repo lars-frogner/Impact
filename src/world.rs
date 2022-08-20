@@ -1,5 +1,9 @@
 //! Container for all data in the world.
 
+mod tasks;
+
+pub use tasks::SyncVisibleModelInstances;
+
 use crate::{
     control::{MotionController, MotionDirection, MotionState},
     geometry::{
@@ -12,7 +16,6 @@ use crate::{
     window::ControlFlow,
 };
 use anyhow::{anyhow, Result};
-use bytemuck::{Pod, Zeroable};
 use nalgebra::Similarity3;
 use std::{
     num::NonZeroUsize,
@@ -30,15 +33,10 @@ pub struct World {
     scene_graph: RwLock<SceneGraph<f32>>,
     renderer: RwLock<RenderingSystem>,
     motion_controller: Mutex<Box<dyn MotionController<f32>>>,
+    active_camera: Option<(CameraID, CameraNodeID)>,
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SceneObject {
-    scene_object_id: u64,
-}
 
 impl World {
     /// Creates a new world data container.
@@ -58,6 +56,7 @@ impl World {
             scene_graph: RwLock::new(SceneGraph::new()),
             renderer: RwLock::new(renderer),
             motion_controller: Mutex::new(Box::new(controller)),
+            active_camera: None,
         }
     }
 
@@ -89,6 +88,14 @@ impl World {
     /// by a [`RwLock`].
     pub fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
+    }
+
+    pub fn get_active_camera_id(&self) -> Option<CameraID> {
+        self.active_camera.map(|(camera_id, _)| camera_id)
+    }
+
+    pub fn get_active_camera_node_id(&self) -> Option<CameraNodeID> {
+        self.active_camera.map(|(_, camera_node_id)| camera_node_id)
     }
 
     pub fn spawn_camera(&self, camera_id: CameraID, transform: Similarity3<f32>) -> CameraNodeID {
@@ -133,6 +140,11 @@ impl World {
             .collect())
     }
 
+    pub fn set_active_camera(&mut self, camera_node_id: CameraNodeID) {
+        let camera_id = self.scene_graph.read().unwrap().camera_id(camera_node_id);
+        self.active_camera = Some((camera_id, camera_node_id));
+    }
+
     /// Updates the motion controller with the given motion.
     pub fn update_motion_controller(&self, state: MotionState, direction: MotionDirection) {
         log::debug!(
@@ -172,6 +184,7 @@ impl World {
         task_errors: &mut ThreadPoolTaskErrors,
         control_flow: &mut ControlFlow<'_>,
     ) {
+        self.handle_world_task_errors(task_errors, control_flow);
         self.renderer
             .read()
             .unwrap()
@@ -179,7 +192,19 @@ impl World {
     }
 
     fn register_all_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+        Self::register_world_tasks(task_scheduler)?;
         RenderingSystem::register_tasks(task_scheduler)?;
         task_scheduler.complete_task_registration()
+    }
+
+    fn sync_visible_model_instances(&self) -> Result<()> {
+        self.scene_graph
+            .write()
+            .unwrap()
+            .sync_visible_model_instances(
+                &mut self.model_instance_pool.write().unwrap(),
+                &self.camera_repository.read().unwrap(),
+                self.get_active_camera_node_id(),
+            )
     }
 }

@@ -2,7 +2,7 @@ use super::{DesynchronizedRenderBuffers, RenderBufferManager};
 use crate::{
     define_task,
     rendering::RenderingTag,
-    world::{SyncCamera, SyncVisibleModelInstances, World, WorldTaskScheduler},
+    world::{SyncVisibleModelInstances, World, WorldTaskScheduler},
 };
 use anyhow::Result;
 
@@ -44,7 +44,7 @@ impl RenderBufferManager {
 
 define_task!(
     SyncPerspectiveCameraBuffers,
-    depends_on = [SyncCamera],
+    depends_on = [],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing perspective camera render buffers"; {
