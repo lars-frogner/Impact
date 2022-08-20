@@ -101,6 +101,12 @@ impl<F: Float> CameraRepository<F> {
         Some(self.perspective_cameras.get(&camera_id).unwrap())
     }
 
+    /// Returns a mutable trait object representing the [`Camera`]
+    /// with the given ID, or [`None`] if the camera is not present.
+    pub fn get_camera_mut(&mut self, camera_id: CameraID) -> Option<&mut dyn Camera<F>> {
+        Some(self.perspective_cameras.get_mut(&camera_id).unwrap())
+    }
+
     /// Returns a reference to the [`HashMap`] storing all
     /// [`PerspectiveCamera`]s.
     pub fn perspective_cameras(&self) -> &HashMap<CameraID, PerspectiveCamera<F>> {
