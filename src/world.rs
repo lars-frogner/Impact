@@ -123,7 +123,8 @@ impl World {
             .unwrap()
             .get_mesh(mesh_id)
             .ok_or_else(|| anyhow!("Mesh {} not present in mesh repository", mesh_id))?
-            .bounding_sphere();
+            .bounding_sphere()
+            .ok_or_else(|| anyhow!("Mesh {} is empty", mesh_id))?;
 
         let mut scene_graph = self.scene_graph.write().unwrap();
         let parent_node_id = scene_graph.root_node_id();
