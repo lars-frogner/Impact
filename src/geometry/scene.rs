@@ -5,7 +5,7 @@ use crate::{
         CameraID, CameraRepository, Frustum, ModelID, ModelInstance, ModelInstancePool, Sphere,
     },
     num::Float,
-    util::VecWithFreeList,
+    util::{GenerationalIdx, GenerationalReusingVec},
 };
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
@@ -34,7 +34,7 @@ pub struct SceneGraph<F: Float> {
 /// type.
 #[derive(Clone, Debug, Default)]
 pub struct NodeStorage<N> {
-    nodes: VecWithFreeList<N>,
+    nodes: GenerationalReusingVec<N>,
 }
 
 /// Represents a type of node in a [`SceneGraph`].
@@ -53,30 +53,30 @@ pub trait SceneGraphNode {
 /// Identifier for a [`GroupNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct GroupNodeID(usize);
+pub struct GroupNodeID(GenerationalIdx);
 
 /// Identifier for a [`ModelInstanceNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct ModelInstanceNodeID(usize);
+pub struct ModelInstanceNodeID(GenerationalIdx);
 
 /// Identifier for a [`CameraNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct CameraNodeID(usize);
+pub struct CameraNodeID(GenerationalIdx);
 
 /// Represents a type of node identifier that may provide
 /// an associated index.
 pub trait NodeIDToIdx {
     /// Returns the index corresponding to the node ID.
-    fn idx(&self) -> usize;
+    fn idx(&self) -> GenerationalIdx;
 }
 
 /// Represents a type of node identifier that may be created
 /// from an associated index.
 trait IdxToNodeID {
     /// Creates the node ID corresponding to the given index.
-    fn from_idx(idx: usize) -> Self;
+    fn from_idx(idx: GenerationalIdx) -> Self;
 }
 
 /// A [`SceneGraph`] node that has a group of other nodes as children.
@@ -554,12 +554,12 @@ impl<N: SceneGraphNode> NodeStorage<N> {
     where
         N::ID: NodeIDToIdx,
     {
-        self.nodes.has_element_at_idx(node_id.idx())
+        self.nodes.get_element(node_id.idx()).is_some()
     }
 
     fn new() -> Self {
         Self {
-            nodes: VecWithFreeList::new(),
+            nodes: GenerationalReusingVec::new(),
         }
     }
 
@@ -801,12 +801,12 @@ impl<F: Float> SceneGraphNode for CameraNode<F> {
 macro_rules! impl_node_id_idx_traits {
     ($node_id_type:ty) => {
         impl IdxToNodeID for $node_id_type {
-            fn from_idx(idx: usize) -> Self {
+            fn from_idx(idx: GenerationalIdx) -> Self {
                 Self(idx)
             }
         }
         impl NodeIDToIdx for $node_id_type {
-            fn idx(&self) -> usize {
+            fn idx(&self) -> GenerationalIdx {
                 self.0
             }
         }
