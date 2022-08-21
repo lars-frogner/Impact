@@ -255,20 +255,20 @@ impl<F: Float> SceneGraph<F> {
         let (child_group_node_ids, child_model_instance_node_ids, child_camera_node_ids) =
             group_node.obtain_child_node_ids();
 
+        for child_group_node_id in child_group_node_ids {
+            self.remove_group_node(child_group_node_id);
+        }
+        for child_model_instance_node_id in child_model_instance_node_ids {
+            self.remove_model_instance_node(child_model_instance_node_id);
+        }
+        for child_camera_node_id in child_camera_node_ids {
+            self.remove_camera_node(child_camera_node_id);
+        }
+
         self.group_nodes.remove_node(group_node_id);
         self.group_nodes
             .node_mut(parent_node_id)
             .remove_child_group_node(group_node_id);
-
-        for group_node_id in child_group_node_ids {
-            self.remove_group_node(group_node_id);
-        }
-        for model_instance_node_id in child_model_instance_node_ids {
-            self.remove_model_instance_node(model_instance_node_id);
-        }
-        for camera_node_id in child_camera_node_ids {
-            self.remove_camera_node(camera_node_id);
-        }
     }
 
     /// Removes the [`ModelInstanceNode`] with the given ID from the
