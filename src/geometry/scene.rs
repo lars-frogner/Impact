@@ -144,6 +144,24 @@ impl<F: Float> SceneGraph<F> {
         self.root_node_id
     }
 
+    /// Whether a group node with the given ID exists in the
+    /// scene graph.
+    pub fn has_group_node(&self, group_node_id: GroupNodeID) -> bool {
+        self.group_nodes.has_node(group_node_id)
+    }
+
+    /// Whether a model instance node with the given ID exists
+    /// in the scene graph.
+    pub fn has_model_instance_node(&self, model_instance_node_id: ModelInstanceNodeID) -> bool {
+        self.model_instance_nodes.has_node(model_instance_node_id)
+    }
+
+    /// Whether a camera node with the given ID exists in the
+    /// scene graph.
+    pub fn has_camera_node(&self, camera_node_id: CameraNodeID) -> bool {
+        self.camera_nodes.has_node(camera_node_id)
+    }
+
     /// Finds the [`CameraID`] of the camera represented by the
     /// camera node with the given ID.
     ///
@@ -529,6 +547,14 @@ impl<N: SceneGraphNode> NodeStorage<N> {
         N::ID: NodeIDToIdx,
     {
         self.node_mut(node_id).set_model_transform(transform);
+    }
+
+    /// Whether a node with the given ID exists in the storage.
+    pub fn has_node(&self, node_id: N::ID) -> bool
+    where
+        N::ID: NodeIDToIdx,
+    {
+        self.nodes.has_element_at_idx(node_id.idx())
     }
 
     fn new() -> Self {
