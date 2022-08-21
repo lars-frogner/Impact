@@ -36,6 +36,12 @@ impl<T> VecWithFreeList<T> {
         self.elements.len() - self.free_list.len()
     }
 
+    /// Whether an element exists at the given index. The index
+    /// is allowed to be out of bounds.
+    pub fn has_element_at_idx(&self, idx: usize) -> bool {
+        idx < self.elements.len() && !self.free_list.contains(&idx)
+    }
+
     /// Returns a reference to the element at the given index.
     ///
     /// # Panics
