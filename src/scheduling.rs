@@ -251,6 +251,7 @@ macro_rules! define_execution_tag {
         $(#[$attributes:meta])*
         $([$pub:ident])? $name:ident
     ) => {
+        $(#[$attributes])*
         #[derive(Copy, Clone, Debug)]
         $($pub)? struct $name;
 
