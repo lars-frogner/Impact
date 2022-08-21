@@ -307,7 +307,7 @@ impl<F: Float> SceneGraph<F> {
 
     /// Computes the model-to-camera space transforms of all the model
     /// instances in the scene graph that are visible with the specified
-    /// camera and adds them in the give model instance pool. If no camera
+    /// camera and adds them in the given model instance pool. If no camera
     /// is specified, the computed transforms will be model-to-root space
     /// transforms instead, and view culling is performed for the identity
     /// view projection transform.
@@ -378,6 +378,17 @@ impl<F: Float> SceneGraph<F> {
         root_to_camera_transform
     }
 
+    /// Updates the model transforms of the group and model instance
+    /// nodes that are children of the specified group node and
+    /// whose bounding spheres lie within the given camera frustum.
+    /// The given parent model transform and the model transform
+    /// of the specified group node are prepended to the transforms
+    /// of the children. For the children that are model instance
+    /// nodes, their final model-to-camera transforms are added in
+    /// the given model instance pool.
+    ///
+    /// # Panics
+    /// If the specified group node does not exist.
     fn update_model_transforms_for_group(
         &self,
         model_instance_pool: &mut ModelInstancePool<F>,
@@ -413,6 +424,43 @@ impl<F: Float> SceneGraph<F> {
         }
     }
 
+    /// Prepends the given parent model transform to the
+    /// model transform of the specified model instance node
+    /// and adds an instance with the resulting transform
+    /// in the given model instance pool.
+    ///
+    /// # Panics
+    /// If the specified model instance node does not exist.
+    fn update_model_transform_of_model_instance(
+        &self,
+        model_instance_pool: &mut ModelInstancePool<F>,
+        model_instance_node_id: ModelInstanceNodeID,
+        parent_model_transform: &Similarity3<F>,
+    ) {
+        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+        if let Some(buffer) = model_instance_pool
+            .model_instance_buffers
+            .get_mut(&model_instance_node.model_id())
+        {
+            let model_transform = parent_model_transform * model_instance_node.model_transform();
+
+            buffer.add_instance(ModelInstance::with_transform(
+                model_transform.to_homogeneous(),
+            ))
+        }
+    }
+
+    /// Updates the bounding sphere of the specified group node
+    /// and all its children. Each bounding sphere is defined
+    /// in the local space of its group node.
+    ///
+    /// # Returns
+    /// The bounding sphere of the specified group node, defined
+    /// in the space of its parent group node (used for recursion).
+    ///
+    /// # Panics
+    /// If the specified group node does not exist.
     fn update_bounding_spheres(&mut self, group_node_id: GroupNodeID) -> Option<Sphere<F>> {
         let group_node = self.group_nodes.node(group_node_id);
 
@@ -452,6 +500,9 @@ impl<F: Float> SceneGraph<F> {
         }
     }
 
+    /// Returns the bounding sphere of the model of the
+    /// specified model instance node, defined in the space
+    /// of the model instance.
     fn find_model_instance_bounding_sphere(
         &self,
         model_instance_node_id: ModelInstanceNodeID,
@@ -462,26 +513,6 @@ impl<F: Float> SceneGraph<F> {
             .model_bounding_sphere()
             .transformed(model_instance_node.model_transform())
     }
-
-    fn update_model_transform_of_model_instance(
-        &self,
-        model_instance_pool: &mut ModelInstancePool<F>,
-        model_instance_node_id: ModelInstanceNodeID,
-        parent_model_transform: &Similarity3<F>,
-    ) {
-        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-
-        if let Some(buffer) = model_instance_pool
-            .model_instance_buffers
-            .get_mut(&model_instance_node.model_id())
-        {
-            let model_transform = parent_model_transform * model_instance_node.model_transform();
-
-            buffer.add_instance(ModelInstance::with_transform(
-                model_transform.to_homogeneous(),
-            ))
-        }
-    }
 }
 
 impl<F: Float> Default for SceneGraph<F> {
@@ -491,6 +522,8 @@ impl<F: Float> Default for SceneGraph<F> {
 }
 
 impl<N: SceneGraphNode> NodeStorage<N> {
+    /// Sets the given transform as the model transform for
+    /// the node with the given ID.
     pub fn set_node_transform(&mut self, node_id: N::ID, transform: N::Transform)
     where
         N::ID: NodeIDToIdx,
