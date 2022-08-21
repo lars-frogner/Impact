@@ -21,7 +21,7 @@ macro_rules! hash {
 }
 
 /// Defines a new type with the given name that is a wrapper
-/// around a [`StringHash`](crate::hash::StringHash)
+/// around a [`StringHash`](crate::hash::StringHash).
 macro_rules! stringhash_newtype {
     (
         $(#[$attributes:meta])*
