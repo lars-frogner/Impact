@@ -12,6 +12,16 @@ use bytemuck::{Pod, Zeroable};
 use nalgebra::{Projective3, Similarity3};
 use std::collections::HashSet;
 
+/// A tree structure that defines a spatial hierarchy of
+/// objects in the world and enables useful operations on them.
+///
+/// The scene graph can contain leaf nodes representing
+/// [`ModelInstance`]s and [`Camera`](crate::geometry::Camera)s.
+/// Every leaf node has a parent "group" node, which itself
+/// has a group node as a parent and may have any number and
+/// type of children. Each node holds a transform from the
+/// space of the parent to the model space of the object or
+/// group it represents.
 #[derive(Clone, Debug)]
 pub struct SceneGraph<F: Float> {
     root_node_id: GroupNodeID,
@@ -20,38 +30,59 @@ pub struct SceneGraph<F: Float> {
     camera_nodes: NodeStorage<CameraNode<F>>,
 }
 
+/// Flat storage for all the [`SceneGraph`] nodes of a given
+/// type.
 #[derive(Clone, Debug, Default)]
 pub struct NodeStorage<N> {
     nodes: VecWithFreeList<N>,
 }
 
+/// Represents a type of node in a [`SceneGraph`].
 pub trait SceneGraphNode {
+    /// Type of the node's ID.
     type ID;
+    /// Type of the node's transform.
     type Transform;
 
+    /// Sets the given transform as the transform from
+    /// the space of the node's parent to the model
+    /// space of the group or object the node represents.
     fn set_model_transform(&mut self, transform: Self::Transform);
 }
 
+/// Identifier for a [`GroupNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct GroupNodeID(usize);
 
+/// Identifier for a [`ModelInstanceNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ModelInstanceNodeID(usize);
 
+/// Identifier for a [`CameraNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct CameraNodeID(usize);
 
+/// Represents a type of node identifier that may provide
+/// an associated index.
 pub trait NodeIDToIdx {
+    /// Returns the index corresponding to the node ID.
     fn idx(&self) -> usize;
 }
 
+/// Represents a type of node identifier that may be created
+/// from an associated index.
 trait IdxToNodeID {
+    /// Creates the node ID corresponding to the given index.
     fn from_idx(idx: usize) -> Self;
 }
 
+/// A [`SceneGraph`] node that has a group of other nodes as children.
+/// The children may be [`ModelInstanceNode`]s, [`CameraNode`]s and/or
+/// other group nodes. It holds a transform representing group's spatial
+/// relationship with its parent group.
 #[derive(Clone, Debug)]
 pub struct GroupNode<F: Float> {
     parent_node_id: Option<GroupNodeID>,
@@ -62,6 +93,9 @@ pub struct GroupNode<F: Float> {
     bounding_sphere: Option<Sphere<F>>,
 }
 
+/// A [`SceneGraph`] leaf node representing a [`ModelInstance`].
+/// It holds a transform representing the instance's spatial
+/// relationship with its parent group.
 #[derive(Clone, Debug)]
 pub struct ModelInstanceNode<F: Float> {
     parent_node_id: GroupNodeID,
@@ -70,6 +104,10 @@ pub struct ModelInstanceNode<F: Float> {
     model_id: ModelID,
 }
 
+/// A [`SceneGraph`] leaf node representing a
+/// [`Camera`](crate::geometry::Camera). It holds at transform
+/// representing the camera's spatial relationship with its parent
+/// group.
 #[derive(Clone, Debug)]
 pub struct CameraNode<F: Float> {
     parent_node_id: GroupNodeID,
@@ -77,6 +115,7 @@ pub struct CameraNode<F: Float> {
     camera_id: CameraID,
 }
 
+/// Storages for each [`SceneGraph`] node type.
 pub type SceneGraphStorages<F> = (
     NodeStorage<GroupNode<F>>,
     NodeStorage<ModelInstanceNode<F>>,
@@ -84,6 +123,7 @@ pub type SceneGraphStorages<F> = (
 );
 
 impl<F: Float> SceneGraph<F> {
+    /// Creates a new empty scene graph.
     pub fn new() -> Self {
         let mut group_nodes = NodeStorage::new();
         let model_instance_nodes = NodeStorage::new();
@@ -99,14 +139,28 @@ impl<F: Float> SceneGraph<F> {
         }
     }
 
+    /// Returns the ID of the root group node.
     pub fn root_node_id(&self) -> GroupNodeID {
         self.root_node_id
     }
 
+    /// Finds the [`CameraID`] of the camera represented by the
+    /// camera node with the given ID.
+    ///
+    /// # Panics
+    /// If the camera node with the given ID does not exist.
     pub fn camera_id(&self, camera_node_id: CameraNodeID) -> CameraID {
         self.camera_nodes.node(camera_node_id).camera_id()
     }
 
+    /// Creates a new empty [`GroupNode`] with the given parent
+    /// and model transform and includes it in the scene graph.
+    ///
+    /// # Returns
+    /// The ID of the created group node.
+    ///
+    /// # Panics
+    /// If the specified parent group node does not exist.
     pub fn create_group_node(
         &mut self,
         parent_node_id: GroupNodeID,
@@ -120,12 +174,22 @@ impl<F: Float> SceneGraph<F> {
         group_node_id
     }
 
+    /// Creates a new [`ModelInstanceNode`] for an instance of the
+    /// model with the given ID and bounding sphere. It is included
+    /// in the scene graph with the given transform relative to the
+    /// the given parent node.
+    ///
+    /// # Returns
+    /// The ID of the created model instance node.
+    ///
+    /// # Panics
+    /// If the specified parent group node does not exist.
     pub fn create_model_instance_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        bounding_sphere: Sphere<F>,
         transform: <ModelInstanceNode<F> as SceneGraphNode>::Transform,
         model_id: ModelID,
+        bounding_sphere: Sphere<F>,
     ) -> ModelInstanceNodeID {
         let model_instance_node =
             ModelInstanceNode::new(parent_node_id, bounding_sphere, transform, model_id);
@@ -136,6 +200,15 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node_id
     }
 
+    /// Creates a new [`CameraNode`] for the camera with the given ID.
+    /// It is included in the scene graph with the given transform
+    /// relative to the the given parent node.
+    ///
+    /// # Returns
+    /// The ID of the created camera node.
+    ///
+    /// # Panics
+    /// If the specified parent group node does not exist.
     pub fn create_camera_node(
         &mut self,
         parent_node_id: GroupNodeID,
@@ -150,6 +223,12 @@ impl<F: Float> SceneGraph<F> {
         camera_node_id
     }
 
+    /// Removes the [`GroupNode`] with the given ID and all its
+    /// children from the scene graph.
+    ///
+    /// # Panics
+    /// - If the specified group node does not exist.
+    /// - If the specified group node is the root node.
     pub fn remove_group_node(&mut self, group_node_id: GroupNodeID) {
         let group_node = self.group_nodes.node(group_node_id);
 
@@ -174,6 +253,11 @@ impl<F: Float> SceneGraph<F> {
         }
     }
 
+    /// Removes the [`ModelInstanceNode`] with the given ID from the
+    /// scene graph.
+    ///
+    /// # Panics
+    /// If the specified model instance node does not exist.
     pub fn remove_model_instance_node(&mut self, model_instance_node_id: ModelInstanceNodeID) {
         let parent_node_id = self
             .model_instance_nodes
@@ -186,6 +270,11 @@ impl<F: Float> SceneGraph<F> {
             .remove_child_model_instance_node(model_instance_node_id);
     }
 
+    /// Removes the [`CameraNode`] with the given ID from the scene
+    /// graph.
+    ///
+    /// # Panics
+    /// If the specified camera node does not exist.
     pub fn remove_camera_node(&mut self, camera_node_id: CameraNodeID) {
         let parent_node_id = self.camera_nodes.node(camera_node_id).parent_node_id();
         self.camera_nodes.remove_node(camera_node_id);
@@ -194,6 +283,10 @@ impl<F: Float> SceneGraph<F> {
             .remove_child_camera_node(camera_node_id);
     }
 
+    /// Returns all the storages of the scene graph's nodes by value,
+    /// leaving only empty storages in the scene graph.
+    /// Use [`return_storages`](Self::return_storages) to put the
+    /// storages back into the scene graph.
     pub fn take_storages(&mut self) -> SceneGraphStorages<F> {
         let group_nodes = std::mem::replace(&mut self.group_nodes, NodeStorage::new());
         let model_instance_nodes =
@@ -202,6 +295,9 @@ impl<F: Float> SceneGraph<F> {
         (group_nodes, model_instance_nodes, camera_nodes)
     }
 
+    /// Takes the given storages of scene graph nodes (typically
+    /// returned from [`take_storages`](Self::take_storages)) and
+    /// uses them as the storages for this scene graph.
     pub fn return_storages(&mut self, storages: SceneGraphStorages<F>) {
         let (group_nodes, model_instance_nodes, camera_nodes) = storages;
         self.group_nodes = group_nodes;
@@ -209,6 +305,19 @@ impl<F: Float> SceneGraph<F> {
         self.camera_nodes = camera_nodes;
     }
 
+    /// Computes the model-to-camera space transforms of all the model
+    /// instances in the scene graph that are visible with the specified
+    /// camera and adds them in the give model instance pool. If no camera
+    /// is specified, the computed transforms will be model-to-root space
+    /// transforms instead, and view culling is performed for the identity
+    /// view projection transform.
+    ///
+    /// # Errors
+    /// Returns an error if the specified camera is not present in the
+    /// given camera repository.
+    ///
+    /// # Panics
+    /// If the specified camera node does not exist.
     pub fn sync_visible_model_instances(
         &mut self,
         model_instance_pool: &mut ModelInstancePool<F>,
@@ -249,10 +358,13 @@ impl<F: Float> SceneGraph<F> {
         Ok(())
     }
 
+    /// Computes the transform from the scene graph's root node space
+    /// to the space of the given camera node.
     fn compute_root_to_camera_transform(&self, camera_node: &CameraNode<F>) -> Similarity3<F> {
         let mut root_to_camera_transform = *camera_node.model_transform();
         let mut parent_node = self.group_nodes.node(camera_node.parent_node_id());
 
+        // Walk up the tree and append transforms until reaching the root
         loop {
             root_to_camera_transform *= parent_node.model_transform();
 

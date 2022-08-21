@@ -12,7 +12,7 @@ use anyhow::Result;
 define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
     /// [`SceneGraph`](crate::scene::SceneGraph) to update the
-    /// model to camera space transforms of the model instances
+    /// model-to-camera space transforms of the model instances
     /// that are visible with the active camera.
     [pub] SyncVisibleModelInstances,
     depends_on = [],

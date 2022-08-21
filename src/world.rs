@@ -16,6 +16,11 @@ use crate::{
     window::{self, ControlFlow},
 };
 use anyhow::{anyhow, Result};
+use bytemuck::{Pod, Zeroable};
+use impact_ecs::{
+    world::{EntityID, World as ECSWorld},
+    Component,
+};
 use nalgebra::Similarity3;
 use std::{
     num::NonZeroUsize,
@@ -30,6 +35,7 @@ pub struct World {
     camera_repository: RwLock<CameraRepository<f32>>,
     mesh_repository: RwLock<MeshRepository<f32>>,
     model_instance_pool: RwLock<ModelInstancePool<f32>>,
+    ecs_world: ECSWorld,
     scene_graph: RwLock<SceneGraph<f32>>,
     renderer: RwLock<RenderingSystem>,
     motion_controller: Mutex<Box<dyn MotionController<f32>>>,
@@ -37,6 +43,12 @@ pub struct World {
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct SceneModelInstance {
+    node_id: ModelInstanceNodeID,
+}
 
 impl World {
     /// Creates a new world data container.
@@ -53,6 +65,7 @@ impl World {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),
             model_instance_pool: RwLock::new(model_instance_pool),
+            ecs_world: ECSWorld::new(),
             scene_graph: RwLock::new(SceneGraph::new()),
             renderer: RwLock::new(renderer),
             motion_controller: Mutex::new(Box::new(controller)),
@@ -148,9 +161,9 @@ impl World {
             .map(|transform| {
                 scene_graph.create_model_instance_node(
                     parent_node_id,
-                    bounding_sphere.clone(),
                     transform,
                     model_id,
+                    bounding_sphere.clone(),
                 )
             })
             .collect())
@@ -229,7 +242,7 @@ impl World {
 
     /// This [`Task`](crate::scheduling::Task) uses the
     /// [`SceneGraph`](crate::scene::SceneGraph) to update the
-    /// model to camera space transforms of the model instances
+    /// model-to-camera space transforms of the model instances
     /// that are visible with the active camera.
     fn sync_visible_model_instances(&self) -> Result<()> {
         self.scene_graph
