@@ -1,3 +1,5 @@
+//! Instances of specific models.
+
 use crate::num::Float;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Matrix4;

@@ -1,3 +1,5 @@
+//! Hash-related utilities.
+
 use lazy_static::lazy_static;
 use std::{
     cmp,

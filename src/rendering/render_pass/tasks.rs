@@ -1,3 +1,5 @@
+//! Tasks for synchronizing render passes.
+
 use super::RenderPassManager;
 use crate::{
     define_task,
@@ -40,6 +42,8 @@ define_task!(
 );
 
 impl RenderPassManager {
+    /// Registers tasks for synchronizing render passes
+    /// in the given task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncRenderPasses)
     }

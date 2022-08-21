@@ -9,6 +9,8 @@ macro_rules! with_debug_logging {
     }};
 }
 
+/// Creates a [`StringHash`](crate::hash::StringHash) for
+/// the given [`String`] or string literal.
 macro_rules! hash {
     ($string:literal) => {
         $crate::hash::StringHash::of_literal($string)
@@ -18,6 +20,8 @@ macro_rules! hash {
     };
 }
 
+/// Defines a new type with the given name that is a wrapper
+/// around a [`StringHash`](crate::hash::StringHash)
 macro_rules! stringhash_newtype {
     (
         $(#[$attributes:meta])*

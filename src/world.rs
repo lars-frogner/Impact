@@ -101,10 +101,14 @@ impl World {
             .set_aspect_ratios(window::calculate_aspect_ratio(new_size.0, new_size.1));
     }
 
+    /// Returns the [`CameraID`] if the currently active camera,
+    /// or [`None`] if there is no active camera.
     pub fn get_active_camera_id(&self) -> Option<CameraID> {
         self.active_camera.map(|(camera_id, _)| camera_id)
     }
 
+    /// Returns the [`CameraNodeID`] if the currently active camera,
+    /// or [`None`] if there is no active camera.
     pub fn get_active_camera_node_id(&self) -> Option<CameraNodeID> {
         self.active_camera.map(|(_, camera_node_id)| camera_node_id)
     }
@@ -152,6 +156,11 @@ impl World {
             .collect())
     }
 
+    /// Uses the camera with the given node ID in the [`SceneGraph`]
+    /// as the active camera.
+    ///
+    /// # Panics
+    /// If there is no node with the given [`CameraNodeID`].
     pub fn set_active_camera(&mut self, camera_node_id: CameraNodeID) {
         let camera_id = self.scene_graph.read().unwrap().camera_id(camera_node_id);
         self.active_camera = Some((camera_id, camera_node_id));
@@ -179,6 +188,12 @@ impl World {
         }
     }
 
+    /// Creates a new task scheduler with the given number of
+    /// workers and registers all tasks in it.
+    ///
+    /// # Errors
+    /// Returns an error the registration of any of the tasks
+    /// failed.
     pub fn create_task_scheduler(
         self,
         n_workers: NonZeroUsize,
@@ -191,6 +206,8 @@ impl World {
         Ok((world, task_scheduler))
     }
 
+    /// Identifies errors that need special handling in the given
+    /// set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
         task_errors: &mut ThreadPoolTaskErrors,
@@ -203,12 +220,17 @@ impl World {
             .handle_task_errors(task_errors, control_flow);
     }
 
+    /// Registers all tasks in the given task scheduler.
     fn register_all_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         Self::register_world_tasks(task_scheduler)?;
         RenderingSystem::register_tasks(task_scheduler)?;
         task_scheduler.complete_task_registration()
     }
 
+    /// This [`Task`](crate::scheduling::Task) uses the
+    /// [`SceneGraph`](crate::scene::SceneGraph) to update the
+    /// model to camera space transforms of the model instances
+    /// that are visible with the active camera.
     fn sync_visible_model_instances(&self) -> Result<()> {
         self.scene_graph
             .write()

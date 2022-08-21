@@ -1,5 +1,10 @@
+//! Generic utilities.
+
 use std::collections::LinkedList;
 
+/// A [`Vec`] that maintains a list of each index
+/// where the element has been deleted and reuses
+/// these locations when adding new items.
 #[derive(Clone, Debug, Default)]
 pub struct VecWithFreeList<T> {
     elements: Vec<T>,
@@ -7,6 +12,7 @@ pub struct VecWithFreeList<T> {
 }
 
 impl<T> VecWithFreeList<T> {
+    /// Creates a new empty vector.
     pub fn new() -> Self {
         Self {
             elements: Vec::new(),
@@ -14,6 +20,8 @@ impl<T> VecWithFreeList<T> {
         }
     }
 
+    /// Creates a new empty vector with the given capacity
+    /// pre-allocated.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             elements: Vec::with_capacity(capacity),
@@ -21,10 +29,18 @@ impl<T> VecWithFreeList<T> {
         }
     }
 
+    /// Returns the logical number of elements in the vector.
+    /// This number does not include elements that have been
+    /// deleted.
     pub fn n_elements(&self) -> usize {
         self.elements.len() - self.free_list.len()
     }
 
+    /// Returns a reference to the element at the given index.
+    ///
+    /// # Panics
+    /// If the index is out of bounds or refers to a location
+    /// that is currently freed.
     pub fn element(&self, idx: usize) -> &T {
         assert!(
             !self.free_list.contains(&idx),
@@ -33,6 +49,12 @@ impl<T> VecWithFreeList<T> {
         &self.elements[idx]
     }
 
+    /// Returns a mutable reference to the element at the given
+    /// index.
+    ///
+    /// # Panics
+    /// If the index is out of bounds or refers to a location
+    /// that is currently freed.
     pub fn element_mut(&mut self, idx: usize) -> &mut T {
         assert!(
             !self.free_list.contains(&idx),
@@ -41,6 +63,12 @@ impl<T> VecWithFreeList<T> {
         &mut self.elements[idx]
     }
 
+    /// Returns a reference to the element at the given index,
+    /// or [`None`] if the index refers to a location that
+    /// is currently freed.
+    ///
+    /// # Panics
+    /// If the index is out of bounds.
     pub fn get_element(&self, idx: usize) -> Option<&T> {
         if idx >= self.elements.len() || self.free_list.contains(&idx) {
             None
@@ -49,6 +77,12 @@ impl<T> VecWithFreeList<T> {
         }
     }
 
+    /// Returns a mutable reference to the element at the given
+    /// index, or [`None`] if the index refers to a location that
+    /// is currently freed.
+    ///
+    /// # Panics
+    /// If the index is out of bounds.
     pub fn get_element_mut(&mut self, idx: usize) -> Option<&mut T> {
         if idx >= self.elements.len() || self.free_list.contains(&idx) {
             None
@@ -57,6 +91,12 @@ impl<T> VecWithFreeList<T> {
         }
     }
 
+    /// Inserts the given element into the vector. If a freed
+    /// location is available, this is used, otherwise the vector
+    /// is grown in length and the element inserted at the end.
+    ///
+    /// # Returns
+    /// The index where the element was added.
     pub fn add_element(&mut self, element: T) -> usize {
         match self.free_list.pop_front() {
             Some(free_idx) => {
@@ -71,6 +111,13 @@ impl<T> VecWithFreeList<T> {
         }
     }
 
+    /// Removes the element at the given index. The underlying
+    /// [`Vec`] is not modified, instead the index is registered
+    /// as free.
+    ///
+    /// # Panics
+    /// If the index is out of bounds or refers to a location
+    /// that is currently freed.
     pub fn free_element_at_idx(&mut self, idx: usize) {
         assert!(
             idx < self.elements.len(),

@@ -1,3 +1,5 @@
+//! Tasks for rendering.
+
 use crate::{
     rendering::{RenderBufferManager, RenderPassManager, RenderingSystem, SyncRenderPasses},
     scheduling::Task,
@@ -8,9 +10,16 @@ use crate::{
 };
 use anyhow::Result;
 
-define_execution_tag!([pub] RenderingTag);
+define_execution_tag!(
+    /// Execution tag for [`Task`](crate::scheduling::Task)s
+    /// related to rendering.
+    [pub] RenderingTag
+);
 
 define_task!(
+    /// This [`Task`](crate::scheduling::Task) executes the
+    /// [`RenderingSystem::render`](crate::rendering::RenderingSystem::render)
+    /// method.
     [pub] Render,
     depends_on = [SyncRenderPasses],
     execute_on = [RenderingTag],
@@ -20,12 +29,16 @@ define_task!(
 );
 
 impl RenderingSystem {
+    /// Registers all tasks needed for rendering in the given
+    /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         RenderBufferManager::register_tasks(task_scheduler)?;
         RenderPassManager::register_tasks(task_scheduler)?;
         task_scheduler.register_task(Render)
     }
 
+    /// Identifies rendering-related errors that need special
+    /// handling in the given set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
         task_errors: &mut ThreadPoolTaskErrors,

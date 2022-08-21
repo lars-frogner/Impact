@@ -1,3 +1,5 @@
+//! Tasks for synchronizing render buffers.
+
 use super::{DesynchronizedRenderBuffers, RenderBufferManager};
 use crate::{
     define_task,
@@ -33,6 +35,8 @@ define_task!(
 );
 
 impl RenderBufferManager {
+    /// Registers tasks for synchronizing render buffers
+    /// in the given task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncPerspectiveCameraBuffers)?;
         task_scheduler.register_task(SyncColorMeshBuffers)?;
