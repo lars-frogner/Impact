@@ -6,12 +6,14 @@ pub use motion::{
     MotionDirection, MotionState, NoMotionController, SemiDirectionalMotionController,
 };
 
-use nalgebra::{Rotation3, Translation3};
+use crate::num::Float;
+use nalgebra::{Rotation3, Vector3};
 
 /// Represents controllers that are used for controlling
 /// the movement of entities.
-pub trait MotionController<F>: Send + Sync + std::fmt::Debug {
-    fn next_translation(&mut self) -> Option<Translation3<F>>;
+pub trait MotionController<F: Float>: Send + Sync + std::fmt::Debug {
+    /// Returns the current motion of the controlled entity.
+    fn current_motion(&self) -> &ControlledMotion<F>;
 
     /// Specifies whether the controlled entity should be moving in
     /// a given direction.
@@ -30,4 +32,11 @@ pub trait MotionController<F>: Send + Sync + std::fmt::Debug {
 
     /// Stops any motion of the controlled entity.
     fn stop(&mut self);
+}
+
+/// Possible types of motion that a controlled entity can have.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ControlledMotion<F: Float> {
+    Stationary,
+    ConstantVelocity(Vector3<F>),
 }

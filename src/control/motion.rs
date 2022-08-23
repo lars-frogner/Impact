@@ -1,10 +1,9 @@
 //! Motion controller implementations.
 
-use super::MotionController;
+use super::{ControlledMotion, MotionController};
 use crate::num::Float;
 use approx::{abs_diff_eq, assert_abs_diff_ne, AbsDiffEq};
-use nalgebra::{vector, Rotation3, Translation3, Vector3};
-use std::time::Instant;
+use nalgebra::{vector, Rotation3};
 
 /// Motion controller that allows no control over motion.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -18,7 +17,7 @@ pub struct SemiDirectionalMotionController<F: Float> {
     orientation: Rotation3<F>,
     movement_speed: F,
     state: SemiDirectionalMotionState,
-    time_of_last_motion: Instant,
+    motion: ControlledMotion<F>,
 }
 
 /// Whether there is motion in a certain direction.
@@ -51,16 +50,9 @@ struct SemiDirectionalMotionState {
     down: MotionState,
 }
 
-/// Possible types of motion.
-#[derive(Clone, Debug, PartialEq)]
-enum Motion<F: Float> {
-    Stationary,
-    ConstantVelocity(Vector3<F>),
-}
-
-impl<F> MotionController<F> for NoMotionController {
-    fn next_translation(&mut self) -> Option<Translation3<F>> {
-        None
+impl<F: Float> MotionController<F> for NoMotionController {
+    fn current_motion(&self) -> &ControlledMotion<F> {
+        &ControlledMotion::Stationary
     }
 
     fn update_motion(&mut self, _state: MotionState, _direction: MotionDirection) {}
@@ -83,15 +75,15 @@ impl<F: Float> SemiDirectionalMotionController<F> {
             orientation,
             movement_speed,
             state: SemiDirectionalMotionState::new(),
-            time_of_last_motion: Instant::now(),
+            motion: ControlledMotion::Stationary,
         }
     }
 
-    fn compute_motion(&self) -> Motion<F> {
+    fn compute_motion(&self) -> ControlledMotion<F> {
         if self.state.motion_state() == MotionState::Still
             || abs_diff_eq!(self.movement_speed, F::zero())
         {
-            Motion::Stationary
+            ControlledMotion::Stationary
         } else {
             // For scaling the magnitude to `self.movement_speed`
             let mut n_nonzero_components = F::zero();
@@ -134,7 +126,7 @@ impl<F: Float> SemiDirectionalMotionController<F> {
 
             let magnitude_scale = F::one() / F::sqrt(n_nonzero_components);
 
-            Motion::ConstantVelocity(
+            ControlledMotion::ConstantVelocity(
                 self.orientation * vector![velocity_x, velocity_y, velocity_z] * magnitude_scale,
             )
         }
@@ -142,21 +134,13 @@ impl<F: Float> SemiDirectionalMotionController<F> {
 }
 
 impl<F: Float> MotionController<F> for SemiDirectionalMotionController<F> {
-    fn next_translation(&mut self) -> Option<Translation3<F>> {
-        match self.compute_motion() {
-            Motion::Stationary => None,
-            Motion::ConstantVelocity(velocity) => {
-                let current_time = Instant::now();
-                let elapsed_time = current_time - self.time_of_last_motion;
-                let translation = velocity * F::from_f64(elapsed_time.as_secs_f64()).unwrap();
-                self.time_of_last_motion = current_time;
-                Some(translation.into())
-            }
-        }
+    fn current_motion(&self) -> &ControlledMotion<F> {
+        &self.motion
     }
 
     fn update_motion(&mut self, state: MotionState, direction: MotionDirection) {
         self.state.update(state, direction);
+        self.motion = self.compute_motion();
     }
 
     fn set_orientation(&mut self, orientation: Rotation3<F>) {
@@ -235,7 +219,7 @@ impl Default for SemiDirectionalMotionState {
     }
 }
 
-impl<F: Float> AbsDiffEq for Motion<F>
+impl<F: Float> AbsDiffEq for ControlledMotion<F>
 where
     F: Copy + AbsDiffEq,
     F::Epsilon: Copy,
@@ -261,6 +245,7 @@ where
 mod test {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
     use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI, SQRT_2};
     use MotionDirection::*;
     use MotionState::*;
@@ -271,33 +256,33 @@ mod test {
         let mut controller = SemiDirectionalMotionController::new(Rotation3::identity(), speed);
         assert_eq!(
             controller.compute_motion(),
-            Motion::Stationary,
+            ControlledMotion::Stationary,
             "Not stationary directly after initalization"
         );
 
         controller.update_motion(Moving, Forwards);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, 0.0, speed]),
+            ControlledMotion::ConstantVelocity(vector![0.0, 0.0, speed]),
         );
 
         controller.update_motion(Moving, Backwards);
         assert_eq!(
             controller.compute_motion(),
-            Motion::Stationary,
+            ControlledMotion::Stationary,
             "Motion does not cancel"
         );
 
         controller.update_motion(Moving, Left);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![-speed, 0.0, 0.0])
+            ControlledMotion::ConstantVelocity(vector![-speed, 0.0, 0.0])
         );
 
         controller.stop();
         assert_eq!(
             controller.compute_motion(),
-            Motion::Stationary,
+            ControlledMotion::Stationary,
             "Stopping command not working"
         );
 
@@ -306,7 +291,7 @@ mod test {
         controller.update_motion(Moving, Backwards);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, speed, -speed] / SQRT_2), // Magnitude should be `speed`
+            ControlledMotion::ConstantVelocity(vector![0.0, speed, -speed] / SQRT_2), // Magnitude should be `speed`
             epsilon = 1e-9
         );
 
@@ -314,7 +299,7 @@ mod test {
         controller.update_motion(Still, Backwards);
         assert_eq!(
             controller.compute_motion(),
-            Motion::Stationary,
+            ControlledMotion::Stationary,
             "Undoing updates does not stop motion"
         );
     }
@@ -328,35 +313,35 @@ mod test {
         );
         assert_eq!(
             controller.compute_motion(),
-            Motion::Stationary,
+            ControlledMotion::Stationary,
             "Not stationary directly after initalization"
         );
 
         controller.update_motion(Moving, Forwards);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, 0.0, -speed]), // Should move backwards due to rotation
+            ControlledMotion::ConstantVelocity(vector![0.0, 0.0, -speed]), // Should move backwards due to rotation
             epsilon = 1e-9
         );
 
         controller.rotate_orientation(&Rotation3::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2));
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, speed, 0.0]), // The additional rotation points us upwards
+            ControlledMotion::ConstantVelocity(vector![0.0, speed, 0.0]), // The additional rotation points us upwards
             epsilon = 1e-9
         );
 
         controller.set_orientation(Rotation3::identity());
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, 0.0, speed]),
+            ControlledMotion::ConstantVelocity(vector![0.0, 0.0, speed]),
             epsilon = 1e-9
         );
 
         controller.set_orientation(Rotation3::from_axis_angle(&Vector3::y_axis(), -FRAC_PI_4));
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![-speed, 0.0, speed] / SQRT_2), // Magnitude should be `speed`
+            ControlledMotion::ConstantVelocity(vector![-speed, 0.0, speed] / SQRT_2), // Magnitude should be `speed`
             epsilon = 1e-9
         );
     }
@@ -369,24 +354,24 @@ mod test {
         controller.update_motion(Moving, Down);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, -speed, 0.0]),
+            ControlledMotion::ConstantVelocity(vector![0.0, -speed, 0.0]),
         );
 
         let speed = 8.1;
         controller.set_movement_speed(speed);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, -speed, 0.0]),
+            ControlledMotion::ConstantVelocity(vector![0.0, -speed, 0.0]),
         );
 
         let speed = -0.1;
         controller.set_movement_speed(speed);
         assert_abs_diff_eq!(
             controller.compute_motion(),
-            Motion::ConstantVelocity(vector![0.0, -speed, 0.0]),
+            ControlledMotion::ConstantVelocity(vector![0.0, -speed, 0.0]),
         );
 
         controller.set_movement_speed(0.0);
-        assert_eq!(controller.compute_motion(), Motion::Stationary,);
+        assert_eq!(controller.compute_motion(), ControlledMotion::Stationary,);
     }
 }

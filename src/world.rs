@@ -190,15 +190,6 @@ impl World {
         let mut motion_controller = self.motion_controller.lock().unwrap();
 
         motion_controller.update_motion(state, direction);
-
-        if let Some(translation) = motion_controller.next_translation() {
-            drop(motion_controller); // Don't hold lock longer than neccessary
-
-            // self.geometrical_data
-            //     .write()
-            //     .unwrap()
-            //     .transform_cameras(&translation.into());
-        }
     }
 
     /// Creates a new task scheduler with the given number of
