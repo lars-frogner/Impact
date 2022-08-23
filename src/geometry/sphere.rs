@@ -136,6 +136,7 @@ impl<F: Float> Sphere<F> {
 mod test {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use na::vector;
     use nalgebra::point;
 
     macro_rules! test_bounding_sphere {
@@ -194,6 +195,21 @@ mod test {
             sphere_2 = (point![1.0, 0.0, 0.0], 2.0),
             bounding_sphere = (point![0.75, 0.0, 0.0], 2.25)
         );
+    }
+
+    #[test]
+    fn computing_bounding_sphere_from_aabb_corners_works() {
+        let lower_corner = point![0.1, 0.2, 0.3];
+        let upper_corner = point![2.1, 3.2, 4.3];
+        let small_displacement = vector![1e-9, 1e-9, 1e-9];
+
+        let bounding_sphere =
+            Sphere::bounding_sphere_from_aabb_corners(&lower_corner, &upper_corner);
+
+        assert!(bounding_sphere.contains_point(&(lower_corner + small_displacement)));
+        assert!(bounding_sphere.contains_point(&(upper_corner - small_displacement)));
+        assert!(!bounding_sphere.contains_point(&(lower_corner - small_displacement)));
+        assert!(!bounding_sphere.contains_point(&(upper_corner + small_displacement)));
     }
 
     #[test]

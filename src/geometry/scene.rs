@@ -546,6 +546,42 @@ impl<F: Float> SceneGraph<F> {
             .model_bounding_sphere()
             .transformed(model_instance_node.model_transform())
     }
+
+    #[cfg(test)]
+    fn node_has_group_node_as_child(
+        &self,
+        group_node_id: GroupNodeID,
+        child_group_node_id: GroupNodeID,
+    ) -> bool {
+        self.group_nodes
+            .node(group_node_id)
+            .child_group_node_ids()
+            .contains(&child_group_node_id)
+    }
+
+    #[cfg(test)]
+    fn node_has_model_instance_node_as_child(
+        &self,
+        group_node_id: GroupNodeID,
+        child_model_instance_node_id: ModelInstanceNodeID,
+    ) -> bool {
+        self.group_nodes
+            .node(group_node_id)
+            .child_model_instance_node_ids()
+            .contains(&child_model_instance_node_id)
+    }
+
+    #[cfg(test)]
+    fn node_has_camera_node_as_child(
+        &self,
+        group_node_id: GroupNodeID,
+        child_camera_node_id: CameraNodeID,
+    ) -> bool {
+        self.group_nodes
+            .node(group_node_id)
+            .child_camera_node_ids()
+            .contains(&child_camera_node_id)
+    }
 }
 
 impl<F: Float> Default for SceneGraph<F> {
@@ -639,10 +675,6 @@ impl<F: Float> GroupNode<F> {
         &self.model_transform
     }
 
-    fn inverse_model_transform(&self) -> Similarity3<F> {
-        self.model_transform.inverse()
-    }
-
     fn parent_node_id(&self) -> GroupNodeID {
         self.parent_node_id.unwrap()
     }
@@ -655,6 +687,7 @@ impl<F: Float> GroupNode<F> {
         &self.child_model_instance_node_ids
     }
 
+    #[allow(dead_code)]
     fn child_camera_node_ids(&self) -> &HashSet<CameraNodeID> {
         &self.child_camera_node_ids
     }
@@ -687,10 +720,6 @@ impl<F: Float> GroupNode<F> {
             self.obtain_child_model_instance_node_ids(),
             self.obtain_child_camera_node_ids(),
         )
-    }
-
-    fn set_parent_node_id(&mut self, parent_node_id: GroupNodeID) {
-        self.parent_node_id = Some(parent_node_id);
     }
 
     fn add_child_group_node(&mut self, group_node_id: GroupNodeID) {
@@ -831,3 +860,491 @@ macro_rules! impl_node_id_idx_traits {
 impl_node_id_idx_traits!(GroupNodeID);
 impl_node_id_idx_traits!(ModelInstanceNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+    use nalgebra::{point, Point3, Rotation3, Scale3, Translation3};
+
+    fn create_dummy_group_node<F: Float>(
+        scene_graph: &mut SceneGraph<F>,
+        parent_node_id: GroupNodeID,
+    ) -> GroupNodeID {
+        scene_graph.create_group_node(parent_node_id, Similarity3::identity())
+    }
+
+    fn create_dummy_model_instance_node<F: Float>(
+        scene_graph: &mut SceneGraph<F>,
+        parent_node_id: GroupNodeID,
+    ) -> ModelInstanceNodeID {
+        scene_graph.create_model_instance_node(
+            parent_node_id,
+            Similarity3::identity(),
+            ModelID(hash!("Test model")),
+            Sphere::new(Point3::origin(), F::one()),
+        )
+    }
+
+    fn create_dummy_camera_node<F: Float>(
+        scene_graph: &mut SceneGraph<F>,
+        parent_node_id: GroupNodeID,
+    ) -> CameraNodeID {
+        scene_graph.create_camera_node(
+            parent_node_id,
+            Similarity3::identity(),
+            CameraID(hash!("Test camera")),
+        )
+    }
+
+    #[test]
+    fn creating_scene_graph_works() {
+        let scene_graph = SceneGraph::<f64>::new();
+
+        assert!(scene_graph.has_group_node(scene_graph.root_node_id()));
+
+        assert_eq!(scene_graph.n_group_nodes(), 1);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+    }
+
+    #[test]
+    fn creating_group_node_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let id = create_dummy_group_node(&mut scene_graph, root_id);
+
+        assert!(scene_graph.has_group_node(id));
+        assert!(scene_graph.node_has_group_node_as_child(root_id, id));
+
+        assert_eq!(scene_graph.n_group_nodes(), 2);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+    }
+
+    #[test]
+    fn creating_model_instance_node_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let id = create_dummy_model_instance_node(&mut scene_graph, root_id);
+
+        assert!(scene_graph.has_model_instance_node(id));
+        assert!(scene_graph.node_has_model_instance_node_as_child(root_id, id));
+
+        assert_eq!(scene_graph.n_group_nodes(), 1);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 1);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+    }
+
+    #[test]
+    fn creating_camera_node_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let id = create_dummy_camera_node(&mut scene_graph, root_id);
+
+        assert!(scene_graph.has_camera_node(id));
+        assert!(scene_graph.node_has_camera_node_as_child(root_id, id));
+
+        assert_eq!(scene_graph.n_group_nodes(), 1);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 1);
+    }
+
+    #[test]
+    fn removing_model_instance_node_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let id = create_dummy_model_instance_node(&mut scene_graph, root_id);
+        scene_graph.remove_model_instance_node(id);
+
+        assert!(!scene_graph.has_model_instance_node(id));
+        assert!(!scene_graph.node_has_model_instance_node_as_child(root_id, id));
+
+        assert_eq!(scene_graph.n_group_nodes(), 1);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+    }
+
+    #[test]
+    fn removing_camera_node_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let id = create_dummy_camera_node(&mut scene_graph, root_id);
+        scene_graph.remove_camera_node(id);
+
+        assert!(!scene_graph.has_camera_node(id));
+        assert!(!scene_graph.node_has_camera_node_as_child(root_id, id));
+
+        assert_eq!(scene_graph.n_group_nodes(), 1);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+    }
+
+    #[test]
+    fn removing_group_node_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        let child_group_node_id = create_dummy_group_node(&mut scene_graph, group_node_id);
+        let child_camera_node_id = create_dummy_camera_node(&mut scene_graph, group_node_id);
+        let child_model_instance_node_id =
+            create_dummy_model_instance_node(&mut scene_graph, group_node_id);
+
+        scene_graph.remove_group_node(group_node_id);
+
+        assert!(!scene_graph.has_group_node(group_node_id));
+        assert!(!scene_graph.node_has_group_node_as_child(root_id, group_node_id));
+
+        assert!(!scene_graph.has_group_node(child_group_node_id));
+        assert!(!scene_graph.has_camera_node(child_camera_node_id));
+        assert!(!scene_graph.has_model_instance_node(child_model_instance_node_id));
+
+        assert_eq!(scene_graph.n_group_nodes(), 1);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_group_node_with_missing_parent_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        scene_graph.remove_group_node(group_node_id);
+
+        create_dummy_group_node(&mut scene_graph, group_node_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_model_instance_node_with_missing_parent_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        scene_graph.remove_group_node(group_node_id);
+
+        create_dummy_model_instance_node(&mut scene_graph, group_node_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_camera_node_with_missing_parent_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        scene_graph.remove_group_node(group_node_id);
+
+        create_dummy_camera_node(&mut scene_graph, group_node_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_root_node_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        scene_graph.remove_group_node(scene_graph.root_node_id());
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_group_node_twice_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        scene_graph.remove_group_node(group_node_id);
+        scene_graph.remove_group_node(group_node_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_model_instance_node_twice_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
+        scene_graph.remove_model_instance_node(model_instance_node_id);
+        scene_graph.remove_model_instance_node(model_instance_node_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_camera_node_twice_fails() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
+        scene_graph.remove_camera_node(camera_node_id);
+        scene_graph.remove_camera_node(camera_node_id);
+    }
+
+    #[test]
+    fn taking_and_returning_storages_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        create_dummy_group_node(&mut scene_graph, root_id);
+        create_dummy_group_node(&mut scene_graph, root_id);
+        create_dummy_camera_node(&mut scene_graph, root_id);
+        create_dummy_camera_node(&mut scene_graph, root_id);
+        create_dummy_model_instance_node(&mut scene_graph, root_id);
+        create_dummy_model_instance_node(&mut scene_graph, root_id);
+
+        assert_eq!(scene_graph.n_group_nodes(), 3);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 2);
+        assert_eq!(scene_graph.n_camera_nodes(), 2);
+
+        let (group_node_storage, model_instance_node_storage, camera_node_storage) =
+            scene_graph.take_storages();
+
+        assert_eq!(group_node_storage.n_nodes(), 3);
+        assert_eq!(model_instance_node_storage.n_nodes(), 2);
+        assert_eq!(camera_node_storage.n_nodes(), 2);
+
+        assert_eq!(scene_graph.n_group_nodes(), 0);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 0);
+        assert_eq!(scene_graph.n_camera_nodes(), 0);
+
+        scene_graph.return_storages((
+            group_node_storage,
+            model_instance_node_storage,
+            camera_node_storage,
+        ));
+
+        assert_eq!(scene_graph.n_group_nodes(), 3);
+        assert_eq!(scene_graph.n_model_instance_nodes(), 2);
+        assert_eq!(scene_graph.n_camera_nodes(), 2);
+    }
+
+    #[test]
+    fn computing_root_to_camera_transform_with_only_camera_transforms_works() {
+        let camera_transform = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            7.0,
+        );
+
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+        let camera =
+            scene_graph.create_camera_node(root, camera_transform, CameraID(hash!("Test camera")));
+
+        let transform =
+            scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
+
+        assert_abs_diff_eq!(transform, camera_transform);
+    }
+
+    #[test]
+    fn computing_root_to_camera_transform_with_only_identity_model_transforms_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+        let group_1 = scene_graph.create_group_node(root, Similarity3::identity());
+        let group_2 = scene_graph.create_group_node(group_1, Similarity3::identity());
+        let group_3 = scene_graph.create_group_node(group_2, Similarity3::identity());
+        let camera = scene_graph.create_camera_node(
+            group_3,
+            Similarity3::identity(),
+            CameraID(hash!("Test camera")),
+        );
+
+        let transform =
+            scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
+
+        assert_abs_diff_eq!(transform, Similarity3::identity());
+    }
+
+    #[test]
+    fn computing_root_to_camera_transform_with_different_model_transforms_works() {
+        let translation = Translation3::new(2.1, -5.9, 0.01);
+        let rotation = Rotation3::from_euler_angles(0.1, 0.2, 0.3);
+        let scaling = 7.0;
+
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+        let group_1 = scene_graph.create_group_node(
+            root,
+            Similarity3::from_parts(translation, Rotation3::identity().into(), 1.0),
+        );
+        let group_2 = scene_graph.create_group_node(
+            group_1,
+            Similarity3::from_parts(Translation3::identity(), rotation.into(), 1.0),
+        );
+        let camera = scene_graph.create_camera_node(
+            group_2,
+            Similarity3::from_parts(
+                Translation3::identity(),
+                Rotation3::identity().into(),
+                scaling,
+            ),
+            CameraID(hash!("Test camera")),
+        );
+
+        let transform =
+            scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
+
+        assert_abs_diff_eq!(
+            transform.to_homogeneous(),
+            Scale3::new(scaling, scaling, scaling).to_homogeneous()
+                * rotation.to_homogeneous()
+                * translation.to_homogeneous(),
+            epsilon = 1e-9
+        );
+    }
+
+    fn assert_spheres_equal<F: Float>(sphere_1: &Sphere<F>, sphere_2: &Sphere<F>) {
+        assert_abs_diff_eq!(sphere_1.center(), sphere_2.center());
+        assert_abs_diff_eq!(sphere_1.radius(), sphere_2.radius());
+    }
+
+    #[test]
+    fn updating_bounding_spheres_with_one_transformed_instance_in_world_space_works() {
+        let instance_transform = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            7.0,
+        );
+        let bounding_sphere = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
+
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+
+        let instance = scene_graph.create_model_instance_node(
+            root,
+            instance_transform,
+            ModelID(hash!("Test model")),
+            bounding_sphere.clone(),
+        );
+
+        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        assert_spheres_equal(
+            &root_bounding_sphere.unwrap(),
+            &bounding_sphere.transformed(&instance_transform),
+        );
+        assert_spheres_equal(
+            &scene_graph.find_model_instance_bounding_sphere(instance),
+            &bounding_sphere.transformed(&instance_transform),
+        )
+    }
+
+    #[test]
+    fn updating_bounding_spheres_with_two_instances_in_world_space_works() {
+        let bounding_sphere_1 = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
+        let bounding_sphere_2 = Sphere::new(point![-0.4, 7.7, 2.9], 4.8);
+
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+
+        scene_graph.create_model_instance_node(
+            root,
+            Similarity3::identity(),
+            ModelID(hash!("Test model 1")),
+            bounding_sphere_1.clone(),
+        );
+        scene_graph.create_model_instance_node(
+            root,
+            Similarity3::identity(),
+            ModelID(hash!("Test model 2")),
+            bounding_sphere_2.clone(),
+        );
+
+        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        assert_spheres_equal(
+            &root_bounding_sphere.unwrap(),
+            &Sphere::bounding_sphere_from_pair(&bounding_sphere_1, &bounding_sphere_2),
+        );
+    }
+
+    #[test]
+    fn updating_bounding_spheres_with_nested_instances_works() {
+        let bounding_sphere_1 = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
+        let bounding_sphere_2 = Sphere::new(point![-0.4, 7.7, 2.9], 4.8);
+
+        let group_1_transform = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::identity().into(),
+            2.0,
+        );
+        let group_2_transform = Similarity3::from_parts(
+            Translation3::new(0.01, 2.9, 10.1),
+            Rotation3::from_euler_angles(1.1, 2.2, 3.3).into(),
+            0.2,
+        );
+        let instance_2_transform = Similarity3::from_parts(
+            Translation3::new(-2.1, 8.9, 1.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            1.0,
+        );
+
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+
+        let group_1 = scene_graph.create_group_node(root, group_1_transform);
+        scene_graph.create_model_instance_node(
+            group_1,
+            Similarity3::identity(),
+            ModelID(hash!("Test model 1")),
+            bounding_sphere_1.clone(),
+        );
+        let group_2 = scene_graph.create_group_node(group_1, group_2_transform);
+        scene_graph.create_model_instance_node(
+            group_2,
+            instance_2_transform,
+            ModelID(hash!("Test model 2")),
+            bounding_sphere_2.clone(),
+        );
+
+        let correct_group_2_bounding_sphere = bounding_sphere_2.transformed(&instance_2_transform);
+        let correct_group_1_bounding_sphere = Sphere::bounding_sphere_from_pair(
+            &bounding_sphere_1,
+            &correct_group_2_bounding_sphere.transformed(&group_2_transform),
+        );
+        let correct_root_bounding_sphere =
+            correct_group_1_bounding_sphere.transformed(&group_1_transform);
+
+        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+
+        assert_spheres_equal(
+            &root_bounding_sphere.unwrap(),
+            &correct_root_bounding_sphere,
+        );
+
+        assert_spheres_equal(
+            scene_graph
+                .group_nodes
+                .node(group_1)
+                .get_bounding_sphere()
+                .unwrap(),
+            &correct_group_1_bounding_sphere,
+        );
+
+        assert_spheres_equal(
+            scene_graph
+                .group_nodes
+                .node(group_2)
+                .get_bounding_sphere()
+                .unwrap(),
+            &correct_group_2_bounding_sphere,
+        );
+    }
+
+    #[test]
+    fn branch_without_model_instance_child_has_no_bounding_spheres() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root = scene_graph.root_node_id();
+        let group_1 = scene_graph.create_group_node(root, Similarity3::identity());
+        let group_2 = scene_graph.create_group_node(group_1, Similarity3::identity());
+        let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
+        assert!(root_bounding_sphere.is_none());
+        assert!(scene_graph
+            .group_nodes
+            .node(group_1)
+            .get_bounding_sphere()
+            .is_none());
+        assert!(scene_graph
+            .group_nodes
+            .node(group_2)
+            .get_bounding_sphere()
+            .is_none());
+    }
+}
