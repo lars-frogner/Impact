@@ -144,6 +144,21 @@ impl<F: Float> SceneGraph<F> {
         self.root_node_id
     }
 
+    /// Returns the number of group nodes in the scene graph.
+    pub fn n_group_nodes(&self) -> usize {
+        self.group_nodes.n_nodes()
+    }
+
+    /// Returns the number of model instance nodes in the scene graph.
+    pub fn n_model_instance_nodes(&self) -> usize {
+        self.model_instance_nodes.n_nodes()
+    }
+
+    /// Returns the number of camera nodes in the scene graph.
+    pub fn n_camera_nodes(&self) -> usize {
+        self.camera_nodes.n_nodes()
+    }
+
     /// Whether a group node with the given ID exists in the
     /// scene graph.
     pub fn has_group_node(&self, group_node_id: GroupNodeID) -> bool {
