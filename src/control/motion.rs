@@ -93,7 +93,7 @@ impl<F: Float> SemiDirectionalMotionController<F> {
         {
             Motion::Stationary
         } else {
-            // For scaling the magnitude to `self.movement_spped`
+            // For scaling the magnitude to `self.movement_speed`
             let mut n_nonzero_components = F::zero();
 
             let velocity_x = if self.state.right == self.state.left {
