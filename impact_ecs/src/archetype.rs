@@ -270,7 +270,7 @@ pub struct ComponentStorageEntry<'a, C> {
     _phantom: PhantomData<C>,
 }
 
-/// Mmutable reference to the entry for a specific component
+/// Mutable reference to the entry for a specific component
 /// instance in a [`ComponentStorage`]
 #[derive(Debug)]
 pub struct ComponentStorageEntryMut<'a, C> {
@@ -309,7 +309,7 @@ impl ArchetypeTable {
         self.entity_index_mapper.is_empty()
     }
 
-    /// Whether the [`Entity`] with the given [`EntityID`] is present in the table.
+    /// Whether the [`Entity`](crate::world::Entity) with the given [`EntityID`] is present in the table.
     pub fn has_entity(&self, entity_id: EntityID) -> bool {
         self.entity_index_mapper.contains_key(entity_id)
     }

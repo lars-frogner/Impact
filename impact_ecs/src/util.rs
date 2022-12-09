@@ -9,7 +9,7 @@ use std::hash::Hash;
 ///
 /// This is useful if we want the flexibility of
 /// accessing data with a key but don't want to
-/// sacrifice compact data storage provided by a
+/// sacrifice the compact data storage provided by a
 /// `Vec`. It also enables us to reorder items in
 /// the `Vec` (like doing a swap remove) without
 /// invalidating the keys used to access the items.

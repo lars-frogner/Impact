@@ -70,12 +70,12 @@ pub use impact_ecs_macros::Component;
 ///
 /// When `query` is invoked, it loops through each
 /// [`ArchetypeTable`](archetype::ArchetypeTable) containing
-/// matching components and acquires its [`RwLock`] for shared
-/// access. This prevents concurrent changes to the table
+/// matching components and acquires its [`RwLock`](std::sync::RwLock)
+/// for shared access. This prevents concurrent changes to the table
 /// structure while the lock is held. Next, the `RwLock`
 /// guarding each of the table's
 /// [`ComponentStorage`](component::ComponentStorage)s
-/// matching the query is then acquired either for either shared
+/// matching the query is acquired either for either shared
 /// or exclusive access depending on whether an immutable or
 /// mutable reference was used in front of the component type
 /// in the provided closure. The locks on the table and component

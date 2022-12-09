@@ -90,7 +90,7 @@ impl World {
     /// - The given set of components does not have a valid
     /// [`Archetype`], which happens if there are multiple
     /// components of the same type.
-    /// - The more than one instance of each component type is
+    /// - More than one instance of each component type is
     /// provided (use [`World::create_entities`] for that).
     ///
     /// # Examples
@@ -265,7 +265,7 @@ impl World {
     }
 
     /// Adds the given [`Component`] to the given [`Entity`].
-    /// This changes the [`Archetype`], if the entity, which
+    /// This changes the [`Archetype`] of the entity, which
     /// is why the entity must be given as a
     /// mutable reference.
     ///
@@ -282,7 +282,7 @@ impl World {
     }
 
     /// Removes the given [`Component`] from the given [`Entity`].
-    /// This changes the [`Archetype`], if the entity, which is why
+    /// This changes the [`Archetype`] of the entity, which is why
     /// the entity must be given as a mutable reference.
     ///
     /// # Errors
