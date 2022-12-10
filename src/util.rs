@@ -35,7 +35,7 @@ struct GenerationalElement<T> {
     element: T,
 }
 
-type Generation = u64;
+type Generation = usize;
 
 impl<T> GenerationalReusingVec<T> {
     /// Creates a new empty vector.
