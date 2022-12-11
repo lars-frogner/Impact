@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Projective3, Similarity3};
+use nalgebra::{Projective3, Similarity3, Translation3};
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of
@@ -42,11 +42,19 @@ pub trait SceneGraphNode {
     type ID: SceneGraphNodeID;
     /// Type of the node's transform.
     type Transform;
+    /// Floating point type used for the node's transform.
+    type F: Float;
 
     /// Sets the given transform as the transform from
     /// the space of the node's parent to the model
     /// space of the group or object the node represents.
     fn set_model_transform(&mut self, transform: Self::Transform);
+
+    /// Sets the given translation as the translational part
+    /// of the transform from the space of the node's parent
+    /// to the model space of the group or object the node
+    /// represents.
+    fn set_model_translation(&mut self, translation: Translation3<Self::F>);
 }
 
 /// Represents the ID of a type of node in a [`SceneGraph`].
@@ -617,6 +625,12 @@ impl<N: SceneGraphNode> NodeStorage<N> {
         self.node_mut(node_id).set_model_transform(transform);
     }
 
+    /// Sets the given translation as the translational part
+    /// of the model transform for the node with the given ID.
+    pub fn set_node_translation(&mut self, node_id: N::ID, translation: Translation3<N::F>) {
+        self.node_mut(node_id).set_model_translation(translation);
+    }
+
     /// Whether a node with the given ID exists in the storage.
     pub fn has_node(&self, node_id: N::ID) -> bool {
         self.nodes.get_element(node_id.idx()).is_some()
@@ -760,9 +774,14 @@ impl SceneGraphNodeID for GroupNodeID {}
 impl<F: Float> SceneGraphNode for GroupNode<F> {
     type ID = GroupNodeID;
     type Transform = Similarity3<F>;
+    type F = F;
 
     fn set_model_transform(&mut self, transform: Self::Transform) {
         self.model_transform = transform;
+    }
+
+    fn set_model_translation(&mut self, translation: Translation3<Self::F>) {
+        self.model_transform.isometry.translation = translation;
     }
 }
 
@@ -807,9 +826,14 @@ impl SceneGraphNodeID for ModelInstanceNodeID {}
 impl<F: Float> SceneGraphNode for ModelInstanceNode<F> {
     type ID = ModelInstanceNodeID;
     type Transform = Similarity3<F>;
+    type F = F;
 
     fn set_model_transform(&mut self, transform: Self::Transform) {
         self.model_transform = transform;
+    }
+
+    fn set_model_translation(&mut self, translation: Translation3<Self::F>) {
+        self.model_transform.isometry.translation = translation;
     }
 }
 
@@ -844,9 +868,14 @@ impl SceneGraphNodeID for CameraNodeID {}
 impl<F: Float> SceneGraphNode for CameraNode<F> {
     type ID = CameraNodeID;
     type Transform = Similarity3<F>;
+    type F = F;
 
     fn set_model_transform(&mut self, transform: Self::Transform) {
         self.model_transform = transform;
+    }
+
+    fn set_model_translation(&mut self, translation: Translation3<Self::F>) {
+        self.model_transform.isometry.translation = translation;
     }
 }
 
@@ -1122,6 +1151,88 @@ mod test {
         assert_eq!(scene_graph.n_group_nodes(), 3);
         assert_eq!(scene_graph.n_model_instance_nodes(), 2);
         assert_eq!(scene_graph.n_camera_nodes(), 2);
+    }
+
+    #[test]
+    fn setting_transform_for_node_in_storage_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
+        let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
+
+        let new_transform = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            7.0,
+        );
+
+        let (mut group_node_storage, mut model_instance_node_storage, mut camera_node_storage) =
+            scene_graph.take_storages();
+
+        group_node_storage.set_node_transform(group_node_id, new_transform);
+        model_instance_node_storage.set_node_transform(model_instance_node_id, new_transform);
+        camera_node_storage.set_node_transform(camera_node_id, new_transform);
+
+        assert_eq!(
+            group_node_storage.node(group_node_id).model_transform(),
+            &new_transform
+        );
+        assert_eq!(
+            model_instance_node_storage
+                .node(model_instance_node_id)
+                .model_transform(),
+            &new_transform
+        );
+        assert_eq!(
+            camera_node_storage.node(camera_node_id).model_transform(),
+            &new_transform
+        );
+    }
+
+    #[test]
+    fn setting_translation_for_node_in_storage_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
+        let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
+
+        let new_translation = Translation3::new(2.1, -5.9, 0.01);
+
+        let (mut group_node_storage, mut model_instance_node_storage, mut camera_node_storage) =
+            scene_graph.take_storages();
+
+        group_node_storage.set_node_translation(group_node_id, new_translation);
+        model_instance_node_storage.set_node_translation(model_instance_node_id, new_translation);
+        camera_node_storage.set_node_translation(camera_node_id, new_translation);
+
+        assert_eq!(
+            group_node_storage
+                .node(group_node_id)
+                .model_transform()
+                .isometry
+                .translation,
+            new_translation
+        );
+        assert_eq!(
+            model_instance_node_storage
+                .node(model_instance_node_id)
+                .model_transform()
+                .isometry
+                .translation,
+            new_translation
+        );
+        assert_eq!(
+            camera_node_storage
+                .node(camera_node_id)
+                .model_transform()
+                .isometry
+                .translation,
+            new_translation
+        );
     }
 
     #[test]
