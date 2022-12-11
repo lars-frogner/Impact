@@ -21,7 +21,7 @@ define_task!(
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing render passes"; {
-            match world.get_active_camera_id() {
+            match world.scene().read().unwrap().get_active_camera_id() {
                 Some(camera_id) => {
                     let renderer = world.renderer().read().unwrap();
                     let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
@@ -30,7 +30,7 @@ define_task!(
                     render_pass_manager.sync_with_render_buffers(
                         renderer.core_system(),
                         renderer.assets(),
-                        &world.model_library().read().unwrap(),
+                        &world.scene().read().unwrap().model_library().read().unwrap(),
                         render_buffer_manager.synchronized(),
                         camera_id
                     )

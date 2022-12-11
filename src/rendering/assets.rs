@@ -1,12 +1,19 @@
-//! Static assets for rendering.
+//! Management of rendering assets.
 
-mod shader;
-mod texture;
-
-pub use shader::{Shader, ShaderID};
-pub use texture::{ImageTexture, TextureID};
-
+use crate::rendering::{ImageTexture, Shader};
 use std::collections::HashMap;
+
+stringhash_newtype!(
+    /// Identifier for specific shaders.
+    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    [pub] ShaderID
+);
+
+stringhash_newtype!(
+    /// Identifier for specific textures.
+    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    [pub] TextureID
+);
 
 /// Container for any rendering assets that never change.
 #[derive(Debug, Default)]

@@ -10,12 +10,6 @@ cfg_if::cfg_if! {
     }
 }
 
-stringhash_newtype!(
-    /// Identifier for specific shaders.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
-    [pub] ShaderID
-);
-
 /// A graphics shader program.
 #[derive(Debug)]
 pub struct Shader {

@@ -1,5 +1,6 @@
-//! Tasks for coordination between systems in the world.
+//! Tasks for coordination between systems in the scene.
 
+use super::Scene;
 use crate::{
     define_task,
     rendering::RenderingTag,
@@ -18,20 +19,20 @@ define_task!(
     depends_on = [],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing visible model instances"; world.sync_visible_model_instances())
+        with_debug_logging!("Synchronizing visible model instances"; world.scene().read().unwrap().sync_visible_model_instances())
     }
 );
 
-impl World {
+impl Scene {
     /// Registers all tasks needed for coordinate between systems
-    /// in the world in the given task scheduler.
-    pub fn register_world_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    /// in the scene in the given task scheduler.
+    pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncVisibleModelInstances)
     }
 
-    /// Identifies world-related errors that need special
+    /// Identifies scene-related errors that need special
     /// handling in the given set of task errors and handles them.
-    pub fn handle_world_task_errors(
+    pub fn handle_task_errors(
         &self,
         _task_errors: &mut ThreadPoolTaskErrors,
         _control_flow: &mut ControlFlow<'_>,

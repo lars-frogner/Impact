@@ -4,7 +4,8 @@ use super::{DesynchronizedRenderBuffers, RenderBufferManager};
 use crate::{
     define_task,
     rendering::RenderingTag,
-    world::{SyncVisibleModelInstances, World, WorldTaskScheduler},
+    scene::SyncVisibleModelInstances,
+    world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
 
@@ -62,7 +63,10 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                world.camera_repository().read().unwrap().perspective_cameras(),
+                world
+                    .scene().read().unwrap()
+                    .camera_repository().read().unwrap()
+                    .perspective_cameras(),
             );
             Ok(())
         })
@@ -85,7 +89,10 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                world.mesh_repository().read().unwrap().color_meshes(),
+                world
+                    .scene().read().unwrap()
+                    .mesh_repository().read().unwrap()
+                    .color_meshes(),
             );
             Ok(())
         })
@@ -108,7 +115,10 @@ define_task!(
                     .lock()
                     .unwrap()
                     .as_mut(),
-                world.mesh_repository().read().unwrap().texture_meshes(),
+                world
+                    .scene().read().unwrap()
+                    .mesh_repository().read().unwrap()
+                    .texture_meshes(),
             );
             Ok(())
         })
@@ -132,9 +142,8 @@ define_task!(
                     .unwrap()
                     .as_mut(),
                 &world
-                    .model_instance_pool()
-                    .read()
-                    .unwrap()
+                    .scene().read().unwrap()
+                    .model_instance_pool().read().unwrap()
                     .model_instance_buffers,
             );
             Ok(())

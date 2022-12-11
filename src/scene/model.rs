@@ -1,6 +1,10 @@
-//! Instances of specific models.
+//! Management of models.
 
-use crate::num::Float;
+use crate::{
+    num::Float,
+    rendering::{MaterialID, MaterialLibrary},
+    scene::MeshID,
+};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Matrix4;
 use std::{
@@ -14,6 +18,21 @@ stringhash_newtype!(
     /// Wraps a [`StringHash`](crate::hash::StringHash).
     [pub] ModelID
 );
+
+/// A model specified by a material and a mesh.
+#[derive(Clone, Debug)]
+pub struct ModelSpecification {
+    pub material_id: MaterialID,
+    pub mesh_id: MeshID,
+}
+
+/// Container for different model specifications and
+/// the materials they use.
+#[derive(Clone, Debug)]
+pub struct ModelLibrary {
+    material_library: MaterialLibrary,
+    model_specifications: HashMap<ModelID, ModelSpecification>,
+}
 
 /// Container for instances of specific models identified
 /// by [`ModelID`]s.
@@ -50,6 +69,41 @@ pub struct ModelInstanceBuffer<F> {
 #[derive(Copy, Clone, Debug)]
 pub struct ModelInstance<F> {
     transform_matrix: Matrix4<F>,
+}
+
+impl ModelLibrary {
+    /// Creates a new model library with the given material
+    /// library but no models.
+    pub fn new(material_library: MaterialLibrary) -> Self {
+        Self {
+            material_library,
+            model_specifications: HashMap::new(),
+        }
+    }
+
+    /// Returns the material library used by the models.
+    pub fn material_library(&self) -> &MaterialLibrary {
+        &self.material_library
+    }
+
+    /// Returns an iterator over the IDs of all the models
+    /// in the library.
+    pub fn model_ids(&self) -> impl Iterator<Item = ModelID> + '_ {
+        self.model_specifications.keys().cloned()
+    }
+
+    /// Returns the specification for the model with the
+    /// given ID, or [`None`] if the model does not exist.
+    pub fn get_model(&self, model_id: ModelID) -> Option<&ModelSpecification> {
+        self.model_specifications.get(&model_id)
+    }
+
+    /// Includes the given model specification in the library
+    /// under the given ID. If a model with the same ID exists,
+    /// it will be overwritten.
+    pub fn add_model(&mut self, model_id: ModelID, model_spec: ModelSpecification) {
+        self.model_specifications.insert(model_id, model_spec);
+    }
 }
 
 impl<F: Float> ModelInstancePool<F> {

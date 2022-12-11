@@ -1,7 +1,12 @@
 //! Representation of frustums.
 
-use super::{plane::SphereRelationToPlane, Plane, Sphere};
-use crate::{geometry::plane::IntersectsPlane, num::Float};
+use crate::{
+    geometry::{
+        plane::{IntersectsPlane, SphereRelationToPlane},
+        Plane, Sphere,
+    },
+    num::Float,
+};
 use nalgebra::{self as na, vector, Matrix4, Point3, Projective3, UnitVector3};
 
 /// A frustum, which in general is a pyramid truncated at the

@@ -5,12 +5,12 @@ mod tasks;
 pub use tasks::SyncRenderPasses;
 
 use crate::{
-    geometry::{CameraID, MeshID, ModelID, ModelInstance},
     rendering::{
         buffer::{BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
         buffer_sync::SynchronizedRenderBuffers,
-        Assets, CoreRenderingSystem, ModelLibrary, ShaderID, TextureID,
+        Assets, CoreRenderingSystem, ShaderID, TextureID,
     },
+    scene::{CameraID, MeshID, ModelID, ModelInstance, ModelLibrary},
 };
 use anyhow::{anyhow, Result};
 use std::{

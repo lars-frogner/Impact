@@ -1,7 +1,6 @@
 //! Representation of planes.
 
-use super::Sphere;
-use crate::num::Float;
+use crate::{geometry::Sphere, num::Float};
 use nalgebra::{Point3, UnitVector3};
 use num_traits::Signed;
 

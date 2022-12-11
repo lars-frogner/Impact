@@ -15,6 +15,7 @@ mod num;
 pub mod physics;
 pub mod rendering;
 pub mod run;
+pub mod scene;
 pub mod scheduling;
 pub mod thread;
 mod util;

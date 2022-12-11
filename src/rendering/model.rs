@@ -1,69 +1,19 @@
-//! Management of renderable models.
+//! Management of model instance data for rendering.
 
 use crate::{
-    geometry::{MeshID, ModelID, ModelInstance, ModelInstanceBuffer},
     rendering::{
         buffer::{BufferableInstance, BufferableVertex, InstanceBuffer},
-        CoreRenderingSystem, MaterialID, MaterialLibrary,
+        CoreRenderingSystem,
     },
+    scene::{ModelInstance, ModelInstanceBuffer},
 };
-use std::{collections::HashMap, mem};
-
-/// A model specified by a material and a mesh.
-#[derive(Clone, Debug)]
-pub struct ModelSpecification {
-    pub material_id: MaterialID,
-    pub mesh_id: MeshID,
-}
-
-/// Container for different model specifications and
-/// the materials they use.
-#[derive(Clone, Debug)]
-pub struct ModelLibrary {
-    material_library: MaterialLibrary,
-    model_specifications: HashMap<ModelID, ModelSpecification>,
-}
+use std::mem;
 
 /// Owner and manager of a render buffer for model instances.
 #[derive(Debug)]
 pub struct ModelInstanceRenderBufferManager {
     instance_render_buffer: InstanceBuffer,
     label: String,
-}
-
-impl ModelLibrary {
-    /// Creates a new model library with the given material
-    /// library but no models.
-    pub fn new(material_library: MaterialLibrary) -> Self {
-        Self {
-            material_library,
-            model_specifications: HashMap::new(),
-        }
-    }
-
-    /// Returns the material library used by the models.
-    pub fn material_library(&self) -> &MaterialLibrary {
-        &self.material_library
-    }
-
-    /// Returns an iterator over the IDs of all the models
-    /// in the library.
-    pub fn model_ids(&self) -> impl Iterator<Item = ModelID> + '_ {
-        self.model_specifications.keys().cloned()
-    }
-
-    /// Returns the specification for the model with the
-    /// given ID, or [`None`] if the model does not exist.
-    pub fn get_model(&self, model_id: ModelID) -> Option<&ModelSpecification> {
-        self.model_specifications.get(&model_id)
-    }
-
-    /// Includes the given model specification in the library
-    /// under the given ID. If a model with the same ID exists,
-    /// it will be overwritten.
-    pub fn add_model(&mut self, model_id: ModelID, model_spec: ModelSpecification) {
-        self.model_specifications.insert(model_id, model_spec);
-    }
 }
 
 impl ModelInstanceRenderBufferManager {

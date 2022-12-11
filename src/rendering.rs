@@ -1,6 +1,6 @@
 //! Graphics rendering.
 
-mod asset;
+mod assets;
 mod buffer;
 mod buffer_sync;
 mod camera;
@@ -9,15 +9,18 @@ mod material;
 mod mesh;
 mod model;
 mod render_pass;
+mod shader;
 mod tasks;
+mod texture;
 
 pub use self::core::CoreRenderingSystem;
-pub use asset::{Assets, ImageTexture, Shader, ShaderID, TextureID};
+pub use assets::{Assets, ShaderID, TextureID};
 pub use buffer_sync::SyncRenderBuffers;
 pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
-pub use model::{ModelLibrary, ModelSpecification};
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
+pub use shader::Shader;
 pub use tasks::{Render, RenderingTag};
+pub use texture::ImageTexture;
 
 use self::buffer_sync::RenderBufferManager;
 use crate::window::ControlFlow;

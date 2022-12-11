@@ -5,11 +5,12 @@ mod tasks;
 pub use tasks::SyncRenderBuffers;
 
 use crate::{
-    geometry::{Camera, CameraID, MeshID, ModelID, ModelInstanceBuffer, TriangleMesh},
+    geometry::{Camera, TriangleMesh},
     rendering::{
         buffer::BufferableVertex, camera::CameraRenderBufferManager, mesh::MeshRenderBufferManager,
         model::ModelInstanceRenderBufferManager, CoreRenderingSystem,
     },
+    scene::{CameraID, MeshID, ModelID, ModelInstanceBuffer},
 };
 use std::{collections::HashMap, hash::Hash, sync::Mutex};
 
