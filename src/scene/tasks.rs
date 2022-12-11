@@ -4,6 +4,7 @@ use super::Scene;
 use crate::{
     define_task,
     rendering::RenderingTag,
+    scene::systems::SyncSceneObjectTransformsWithPositions,
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
     world::{World, WorldTaskScheduler},
@@ -16,10 +17,12 @@ define_task!(
     /// model-to-camera space transforms of the model instances
     /// that are visible with the active camera.
     [pub] SyncVisibleModelInstances,
-    depends_on = [],
+    depends_on = [SyncSceneObjectTransformsWithPositions],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing visible model instances"; world.scene().read().unwrap().sync_visible_model_instances())
+        with_debug_logging!("Synchronizing visible model instances";
+            world.scene().read().unwrap().sync_visible_model_instances()
+        )
     }
 );
 
@@ -27,6 +30,7 @@ impl Scene {
     /// Registers all tasks needed for coordinate between systems
     /// in the scene in the given task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+        task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
         task_scheduler.register_task(SyncVisibleModelInstances)
     }
 

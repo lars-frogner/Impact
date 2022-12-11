@@ -1,13 +1,18 @@
 //! Scene containing data to render.
 
 mod camera;
+mod components;
 mod graph;
 mod mesh;
 mod model;
+mod systems;
 mod tasks;
 
 pub use camera::{CameraID, CameraRepository};
-pub use graph::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, SceneGraph};
+pub use components::Renderable;
+pub use graph::{
+    CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, SceneGraph, SceneGraphNodeID,
+};
 pub use mesh::{MeshID, MeshRepository};
 pub use model::{
     ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool, ModelLibrary,
