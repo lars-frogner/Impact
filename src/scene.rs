@@ -72,6 +72,12 @@ impl Scene {
         &self.model_instance_pool
     }
 
+    /// Returns a reference to the [`SceneGraph`], guarded
+    /// by a [`RwLock`].
+    pub fn scene_graph(&self) -> &RwLock<SceneGraph<f32>> {
+        &self.scene_graph
+    }
+
     /// Returns the [`CameraID`] if the currently active camera,
     /// or [`None`] if there is no active camera.
     pub fn get_active_camera_id(&self) -> Option<CameraID> {
