@@ -179,6 +179,24 @@ impl<F: Float> SceneGraph<F> {
         self.camera_nodes.has_node(camera_node_id)
     }
 
+    /// Returns a mutable reference to the storage of group nodes
+    /// in the scene graph.
+    pub fn group_nodes_mut(&mut self) -> &mut NodeStorage<GroupNode<F>> {
+        &mut self.group_nodes
+    }
+
+    /// Returns a mutable reference to the storage of model instance
+    /// nodes in the scene graph.
+    pub fn model_instance_nodes_mut(&mut self) -> &mut NodeStorage<ModelInstanceNode<F>> {
+        &mut self.model_instance_nodes
+    }
+
+    /// Returns a mutable reference to the storage of camera nodes
+    /// in the scene graph.
+    pub fn camera_nodes_mut(&mut self) -> &mut NodeStorage<CameraNode<F>> {
+        &mut self.camera_nodes
+    }
+
     /// Finds the [`CameraID`] of the camera represented by the
     /// camera node with the given ID.
     ///
