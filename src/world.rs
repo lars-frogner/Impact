@@ -19,7 +19,7 @@ use std::{
 /// rendering the world.
 #[derive(Debug)]
 pub struct World {
-    ecs_world: ECSWorld,
+    ecs_world: RwLock<ECSWorld>,
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
     motion_controller: Mutex<Box<dyn MotionController<f32>>>,
@@ -35,11 +35,17 @@ impl World {
         controller: impl 'static + MotionController<f32>,
     ) -> Self {
         Self {
-            ecs_world: ECSWorld::new(),
+            ecs_world: RwLock::new(ECSWorld::new()),
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
             motion_controller: Mutex::new(Box::new(controller)),
         }
+    }
+
+    /// Returns a reference to the ECS [`World`](impact_ecs::world::World), guarded
+    /// by a [`RwLock`].
+    pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
+        &self.ecs_world
     }
 
     /// Returns a reference to the [`Scene`], guarded
