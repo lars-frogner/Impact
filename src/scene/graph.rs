@@ -39,7 +39,7 @@ pub struct NodeStorage<N> {
 /// Represents a type of node in a [`SceneGraph`].
 pub trait SceneGraphNode {
     /// Type of the node's ID.
-    type ID;
+    type ID: SceneGraphNodeID;
     /// Type of the node's transform.
     type Transform;
 
@@ -48,6 +48,9 @@ pub trait SceneGraphNode {
     /// space of the group or object the node represents.
     fn set_model_transform(&mut self, transform: Self::Transform);
 }
+
+/// Represents the ID of a type of node in a [`SceneGraph`].
+pub trait SceneGraphNodeID: NodeIDToIdx + IdxToNodeID + Pod {}
 
 /// Identifier for a [`GroupNode`] in a [`SceneGraph`].
 #[repr(transparent)]
@@ -73,7 +76,7 @@ pub trait NodeIDToIdx {
 
 /// Represents a type of node identifier that may be created
 /// from an associated index.
-trait IdxToNodeID {
+pub trait IdxToNodeID {
     /// Creates the node ID corresponding to the given index.
     fn from_idx(idx: GenerationalIdx) -> Self;
 }
@@ -592,18 +595,12 @@ impl<F: Float> Default for SceneGraph<F> {
 impl<N: SceneGraphNode> NodeStorage<N> {
     /// Sets the given transform as the model transform for
     /// the node with the given ID.
-    pub fn set_node_transform(&mut self, node_id: N::ID, transform: N::Transform)
-    where
-        N::ID: NodeIDToIdx,
-    {
+    pub fn set_node_transform(&mut self, node_id: N::ID, transform: N::Transform) {
         self.node_mut(node_id).set_model_transform(transform);
     }
 
     /// Whether a node with the given ID exists in the storage.
-    pub fn has_node(&self, node_id: N::ID) -> bool
-    where
-        N::ID: NodeIDToIdx,
-    {
+    pub fn has_node(&self, node_id: N::ID) -> bool {
         self.nodes.get_element(node_id.idx()).is_some()
     }
 
@@ -617,31 +614,19 @@ impl<N: SceneGraphNode> NodeStorage<N> {
         self.nodes.n_elements()
     }
 
-    fn node(&self, node_id: N::ID) -> &N
-    where
-        N::ID: NodeIDToIdx,
-    {
+    fn node(&self, node_id: N::ID) -> &N {
         self.nodes.element(node_id.idx())
     }
 
-    fn node_mut(&mut self, node_id: N::ID) -> &mut N
-    where
-        N::ID: NodeIDToIdx,
-    {
+    fn node_mut(&mut self, node_id: N::ID) -> &mut N {
         self.nodes.element_mut(node_id.idx())
     }
 
-    fn add_node(&mut self, node: N) -> N::ID
-    where
-        N::ID: IdxToNodeID,
-    {
+    fn add_node(&mut self, node: N) -> N::ID {
         N::ID::from_idx(self.nodes.add_element(node))
     }
 
-    fn remove_node(&mut self, node_id: N::ID)
-    where
-        N::ID: NodeIDToIdx,
-    {
+    fn remove_node(&mut self, node_id: N::ID) {
         self.nodes.free_element_at_idx(node_id.idx());
     }
 }
@@ -752,6 +737,8 @@ impl<F: Float> GroupNode<F> {
     }
 }
 
+impl SceneGraphNodeID for GroupNodeID {}
+
 impl<F: Float> SceneGraphNode for GroupNode<F> {
     type ID = GroupNodeID;
     type Transform = Similarity3<F>;
@@ -797,6 +784,8 @@ impl<F: Float> ModelInstanceNode<F> {
     }
 }
 
+impl SceneGraphNodeID for ModelInstanceNodeID {}
+
 impl<F: Float> SceneGraphNode for ModelInstanceNode<F> {
     type ID = ModelInstanceNodeID;
     type Transform = Similarity3<F>;
@@ -831,6 +820,8 @@ impl<F: Float> CameraNode<F> {
         self.camera_id
     }
 }
+
+impl SceneGraphNodeID for CameraNodeID {}
 
 impl<F: Float> SceneGraphNode for CameraNode<F> {
     type ID = CameraNodeID;
