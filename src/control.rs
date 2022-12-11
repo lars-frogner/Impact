@@ -1,5 +1,6 @@
 //! Controllers for user interaction.
 
+mod components;
 mod motion;
 
 pub use motion::{
