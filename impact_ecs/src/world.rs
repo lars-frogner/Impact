@@ -311,6 +311,28 @@ impl World {
         })
     }
 
+    /// Returns an iterator over all [`ArchetypeTable`]s whose
+    /// entities have at least all the component types defined
+    /// by the given [`Archetype`], but not any of the given
+    /// disallowed component types.
+    pub fn find_tables_containing_archetype_except_disallowed<const N: usize>(
+        &self,
+        archetype: Archetype,
+        disallowed_component_ids: [ComponentID; N],
+    ) -> impl Iterator<Item = RwLockReadGuard<'_, ArchetypeTable>> {
+        self.archetype_tables.iter().filter_map(move |table| {
+            let table = table.read().unwrap();
+            let table_archetype = table.archetype();
+            if table_archetype.contains(&archetype)
+                && table_archetype.contains_none_of(&disallowed_component_ids)
+            {
+                Some(table)
+            } else {
+                None
+            }
+        })
+    }
+
     fn get_table_idx(&self, id: ArchetypeID) -> Result<usize> {
         self.archetype_index_mapper
             .get(id)
