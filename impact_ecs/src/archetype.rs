@@ -224,6 +224,13 @@ impl Archetype {
         self.component_ids.is_superset(&other.component_ids)
     }
 
+    /// Whether the archetype includes none of the component IDs
+    /// in the given array. If an empty array is given, the result
+    /// is always `true`.
+    pub fn contains_none_of<const N: usize>(&self, component_ids: &[ComponentID; N]) -> bool {
+        !(0..N).any(|idx| self.contains_component_id(component_ids[idx]))
+    }
+
     fn new_from_sorted_component_id_arr<const N: usize>(
         component_ids: [ComponentID; N],
     ) -> Result<Self> {
@@ -990,6 +997,32 @@ mod test {
         assert!(!without_byte.contains(&without_position));
         assert!(with_all_components.contains(&empty));
         assert!(!empty.contains(&with_all_components));
+    }
+
+    #[test]
+    fn archetypes_do_not_contain_other_components() {
+        let without_position =
+            Archetype::new_from_component_id_arr([Byte::component_id(), Rectangle::component_id()])
+                .unwrap();
+        let without_position_and_byte =
+            Archetype::new_from_component_id_arr([Rectangle::component_id()]).unwrap();
+        let empty = Archetype::new_from_component_id_arr([]).unwrap();
+
+        assert!(without_position.contains_none_of(&[Position::component_id()]));
+        assert!(without_position_and_byte
+            .contains_none_of(&[Position::component_id(), Byte::component_id()]));
+        assert!(empty.contains_none_of(&[
+            Position::component_id(),
+            Byte::component_id(),
+            Rectangle::component_id()
+        ]));
+
+        assert!(!without_position.contains_none_of(&[Byte::component_id()]));
+        assert!(!without_position_and_byte.contains_none_of(&[Rectangle::component_id()]));
+
+        assert!(without_position.contains_none_of(&[]));
+        assert!(without_position_and_byte.contains_none_of(&[]));
+        assert!(empty.contains_none_of(&[]));
     }
 
     #[test]
