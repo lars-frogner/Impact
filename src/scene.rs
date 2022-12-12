@@ -144,7 +144,13 @@ impl Scene {
     /// # Panics
     /// If there is no node with the given [`CameraNodeID`].
     pub fn set_active_camera(&mut self, camera_node_id: CameraNodeID) {
-        let camera_id = self.scene_graph.read().unwrap().camera_id(camera_node_id);
+        let camera_id = self
+            .scene_graph
+            .read()
+            .unwrap()
+            .camera_nodes()
+            .node(camera_node_id)
+            .camera_id();
         self.active_camera = Some((camera_id, camera_node_id));
     }
 

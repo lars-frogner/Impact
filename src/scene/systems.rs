@@ -2,16 +2,13 @@
 
 use crate::{
     define_task,
-    physics::{fmo, Position},
+    physics::Position,
     rendering::RenderingTag,
-    scene::{
-        graph::SceneGraphNode, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
-        Renderable,
-    },
+    scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, Renderable},
     world::World,
 };
 use impact_ecs::query;
-use nalgebra::{Point3, Translation3};
+use nalgebra::Translation3;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform
@@ -28,32 +25,20 @@ define_task!(
             let mut scene_graph = scene.scene_graph().write().unwrap();
             query!(
                 ecs_world, |renderable: &Renderable<GroupNodeID>, position: &Position| {
-                    set_node_translation_to_position(scene_graph.group_nodes_mut(), renderable, position);
+                    scene_graph.set_group_node_translation(renderable.node_id, Translation3::from(position.point.cast()));
                 }
             );
             query!(
                 ecs_world, |renderable: &Renderable<ModelInstanceNodeID>, position: &Position| {
-                    set_node_translation_to_position(scene_graph.model_instance_nodes_mut(), renderable, position);
+                    scene_graph.set_model_instance_node_translation(renderable.node_id, Translation3::from(position.point.cast()));
                 }
             );
             query!(
                 ecs_world, |renderable: &Renderable<CameraNodeID>, position: &Position| {
-                    set_node_translation_to_position(scene_graph.camera_nodes_mut(), renderable, position);
+                    scene_graph.set_camera_node_translation(renderable.node_id, Translation3::from(position.point.cast()));
                 }
             );
             Ok(())
         })
     }
 );
-
-fn set_node_translation_to_position<N>(
-    nodes: &mut NodeStorage<N>,
-    renderable: &Renderable<N::ID>,
-    position: &Position,
-) where
-    N: SceneGraphNode,
-    fmo: simba::scalar::SubsetOf<<N as SceneGraphNode>::F>,
-{
-    let point: Point3<<N as SceneGraphNode>::F> = position.point.cast();
-    nodes.set_node_translation(renderable.node_id, Translation3::from(point));
-}
