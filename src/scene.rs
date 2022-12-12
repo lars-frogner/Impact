@@ -153,19 +153,4 @@ impl Scene {
             .camera_id();
         self.active_camera = Some((camera_id, camera_node_id));
     }
-
-    /// This [`Task`](crate::scheduling::Task) uses the
-    /// [`SceneGraph`](crate::scene::SceneGraph) to update the
-    /// model-to-camera space transforms of the model instances
-    /// that are visible with the active camera.
-    fn sync_visible_model_instances(&self) -> Result<()> {
-        self.scene_graph
-            .write()
-            .unwrap()
-            .sync_visible_model_instances(
-                &mut self.model_instance_pool.write().unwrap(),
-                &self.camera_repository.read().unwrap(),
-                self.get_active_camera_node_id(),
-            )
-    }
 }

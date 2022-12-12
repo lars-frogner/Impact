@@ -20,9 +20,18 @@ define_task!(
     depends_on = [SyncSceneObjectTransformsWithPositions],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing visible model instances";
-            world.scene().read().unwrap().sync_visible_model_instances()
-        )
+        with_debug_logging!("Synchronizing visible model instances"; {
+            let scene = world.scene().read().unwrap();
+            let result = scene.scene_graph()
+                .write()
+                .unwrap()
+                .sync_visible_model_instances(
+                    &mut scene.model_instance_pool().write().unwrap(),
+                    &scene.camera_repository().read().unwrap(),
+                    scene.get_active_camera_node_id(),
+                );
+            result
+        })
     }
 );
 
