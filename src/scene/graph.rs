@@ -37,7 +37,7 @@ pub struct NodeStorage<N> {
 }
 
 /// Type of the transform used by scene graph nodes.
-type NodeTransform<F> = Similarity3<F>;
+pub type NodeTransform<F> = Similarity3<F>;
 
 /// Represents a type of node in a [`SceneGraph`].
 pub trait SceneGraphNode {

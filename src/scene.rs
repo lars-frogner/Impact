@@ -11,7 +11,8 @@ mod tasks;
 pub use camera::{CameraID, CameraRepository};
 pub use components::Renderable;
 pub use graph::{
-    CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, SceneGraph, SceneGraphNodeID,
+    CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph,
+    SceneGraphNodeID,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::{
@@ -21,7 +22,6 @@ pub use model::{
 pub use tasks::SyncVisibleModelInstances;
 
 use anyhow::{anyhow, Result};
-use nalgebra::Similarity3;
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
@@ -95,7 +95,7 @@ impl Scene {
         self.active_camera.map(|(_, camera_node_id)| camera_node_id)
     }
 
-    pub fn spawn_camera(&self, camera_id: CameraID, transform: Similarity3<f32>) -> CameraNodeID {
+    pub fn spawn_camera(&self, camera_id: CameraID, transform: NodeTransform<f32>) -> CameraNodeID {
         let mut scene_graph = self.scene_graph.write().unwrap();
         let parent_node_id = scene_graph.root_node_id();
         scene_graph.create_camera_node(parent_node_id, transform, camera_id)
@@ -104,7 +104,7 @@ impl Scene {
     pub fn spawn_model_instances(
         &self,
         model_id: ModelID,
-        transforms: impl IntoIterator<Item = Similarity3<f32>>,
+        transforms: impl IntoIterator<Item = NodeTransform<f32>>,
     ) -> Result<Vec<ModelInstanceNodeID>> {
         let mesh_id = self
             .model_library
