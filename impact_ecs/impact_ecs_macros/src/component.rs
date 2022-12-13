@@ -12,7 +12,7 @@ pub(crate) fn impl_component(input: DeriveInput, crate_root: &Ident) -> TokenStr
         quote! {
             impl #crate_root::component::Component for #type_name {
                 fn component_bytes(&self) -> #crate_root::component::ComponentByteView {
-                    #crate_root::component::ComponentByteView::new(
+                    #crate_root::component::ComponentByteView::new_for_single_instance(
                         Self::component_id(),
                         ::std::mem::size_of::<#type_name>(),
                         bytemuck::bytes_of(self),
@@ -26,7 +26,7 @@ pub(crate) fn impl_component(input: DeriveInput, crate_root: &Ident) -> TokenStr
         quote! {
             impl #impl_generics #crate_root::component::Component for #type_name #ty_generics #where_clause {
                 fn component_bytes(&self) -> #crate_root::component::ComponentByteView {
-                    #crate_root::component::ComponentByteView::new(
+                    #crate_root::component::ComponentByteView::new_for_single_instance(
                         Self::component_id(),
                         ::std::mem::size_of::<#type_name #ty_generics>(),
                         bytemuck::bytes_of(self),

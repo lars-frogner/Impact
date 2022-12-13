@@ -398,7 +398,6 @@ impl ArchetypeTable {
     ) -> Option<ComponentStorageEntry<'_, C>> {
         let component_idx = *self.component_index_map.get(&C::component_id())?;
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
-        dbg!(self.archetype().id(), entity_id, component_idx, entity_idx);
         Some(ComponentStorageEntry::new(
             self.component_storages[component_idx].read().unwrap(),
             entity_idx,
@@ -595,6 +594,9 @@ impl<'a> TableEntityEntry<'a> {
     /// Returns a reference to the component specified by the
     /// type parameter `C`. If the entity does not have this
     /// component, [`None`] is returned.
+    ///
+    /// # Panics
+    /// If `C` is a zero-sized type.
     pub fn get_component<C: Component>(&self) -> Option<&C> {
         let component_idx = *self.info.component_index_map.get(&C::component_id())?;
         Some(&self.components[component_idx].slice()[self.info.entity_idx])
@@ -604,7 +606,8 @@ impl<'a> TableEntityEntry<'a> {
     /// type parameter `C`.
     ///
     /// # Panics
-    /// If the entity does not have the specified component.
+    /// - If the entity does not have the specified component.
+    /// - If `C` is a zero-sized type.
     pub fn component<C: Component>(&self) -> &C {
         self.get_component::<C>()
             .expect("Requested invalid component")
@@ -642,6 +645,9 @@ impl<'a> TableEntityMutEntry<'a> {
     /// Returns a mutable reference to the component specified
     /// by the type parameter `C`. If the entity does not have
     /// this component, [`None`] is returned.
+    ///
+    /// # Panics
+    /// If `C` is a zero-sized type.
     pub fn get_component<C: Component>(&mut self) -> Option<&mut C> {
         let component_idx = *self.info.component_index_map.get(&C::component_id())?;
         Some(&mut self.components[component_idx].slice_mut()[self.info.entity_idx])
@@ -651,7 +657,8 @@ impl<'a> TableEntityMutEntry<'a> {
     /// by the type parameter `C`.
     ///
     /// # Panics
-    /// If the entity does not have the specified component.
+    /// - If the entity does not have the specified component.
+    /// - If `C` is a zero-sized type.
     pub fn component<C: Component>(&mut self) -> &mut C {
         self.get_component::<C>()
             .expect("Requested invalid component")
@@ -673,7 +680,7 @@ where
     C: Component,
 {
     fn new(storage: RwLockReadGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
-        assert!(entity_idx < storage.n_components());
+        assert!(entity_idx < storage.component_count());
         Self {
             entity_idx,
             storage,
@@ -682,6 +689,9 @@ where
     }
 
     /// Returns an immutable reference to the component instance.
+    ///
+    /// # Panics
+    /// If `C` is a zero-sized type.
     pub fn access(&self) -> &C {
         &self.storage.slice::<C>()[self.entity_idx]
     }
@@ -692,7 +702,7 @@ where
     C: Component,
 {
     fn new(storage: RwLockWriteGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
-        assert!(entity_idx < storage.n_components());
+        assert!(entity_idx < storage.component_count());
         Self {
             entity_idx,
             storage,
