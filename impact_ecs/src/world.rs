@@ -524,8 +524,11 @@ mod test {
     #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Temperature(f32);
 
+    type LikePosition = Position;
+
     const POS: Position = Position(2.5, 3.1, 42.0);
     const POS2: Position = Position(5.2, 1.3, 0.42);
+    const LIKEPOS: LikePosition = Position(5.5, 5.1, 52.0);
     const TEMP: Temperature = Temperature(-40.0);
     const TEMP2: Temperature = Temperature(140.0);
 
@@ -552,6 +555,20 @@ mod test {
         assert_eq!(entry.n_components(), 2);
         assert_eq!(entry.component::<Position>().access(), &POS);
         assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_entity_with_two_aliased_comps_fails() {
+        let mut world = World::new();
+        world.create_entity((&POS, &LIKEPOS)).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn creating_entity_with_two_of_three_aliased_comps_fails() {
+        let mut world = World::new();
+        world.create_entity((&POS, &TEMP, &LIKEPOS)).unwrap();
     }
 
     #[test]
@@ -710,6 +727,10 @@ mod query_test {
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Marked;
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Byte(u8);
 
     #[repr(C)]
@@ -722,6 +743,8 @@ mod query_test {
         center: [f32; 2],
         dimensions: [f32; 2],
     }
+
+    type LikeByte = Byte;
 
     const BYTE: Byte = Byte(7);
     const BYTE2: Byte = Byte(55);
@@ -754,6 +777,29 @@ mod query_test {
         query!(world, |_byte: &mut Byte,
                        _pos: &mut Position,
                        _rect: &mut Rectangle| {});
+
+        query!(world, |_byte: &Byte| {}, ![]);
+
+        query!(world, |_byte: &Byte| {}, ![Position]);
+
+        query!(world, |_pos: &Position| {}, ![LikeByte]);
+
+        query!(world, |_byte: &Byte| {}, ![Position, Rectangle]);
+
+        query!(world, |_pos: &Position, _byte: &mut Byte| {}, ![Rectangle]);
+
+        // The macro accepts this because it does not know they are
+        // the same type, but the result is just that there are no
+        // matches
+        query!(world, |_byte: &LikeByte| {}, ![Byte]);
+        query!(world, |_pos: &Position| {}, ![Byte, LikeByte]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn querying_aliased_comps_fails() {
+        let world = World::new();
+        query!(world, |_byte: &Byte, _likebyte: &LikeByte| {});
     }
 
     #[test]
@@ -909,5 +955,178 @@ mod query_test {
             count += 1;
         });
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn empty_disallowed_list_works() {
+        let mut world = World::new();
+        world.create_entity(&BYTE).unwrap();
+        query!(world, |_byte: &Byte, _likebyte: &LikeByte| {});
+    }
+
+    #[test]
+    fn excluding_one_comp_of_two_comp_entity_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![Rectangle]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_one_aliased_comp_of_two_comp_entity_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_rect: &Rectangle| {
+                count += 1;
+            },
+            ![LikeByte]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_comp_that_is_alias_of_queried_comp_works() {
+        let mut world = World::new();
+        world.create_entity(&BYTE).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![LikeByte]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_one_of_two_two_comp_entities_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &BYTE)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![Rectangle]
+        );
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn excluding_one_of_a_two_and_three_comp_entity_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &BYTE, &RECT)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![Position]
+        );
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn excluding_both_of_a_two_and_three_comp_entity_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &BYTE, &RECT)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![Rectangle]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_one_comp_of_three_comp_entity_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT, &POS)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte, _rect: &Rectangle| {
+                count += 1;
+            },
+            ![Position]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_two_comps_of_three_comp_entity_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT, &POS)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_rect: &Rectangle| {
+                count += 1;
+            },
+            ![Position, Byte]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_a_comp_each_of_two_two_comp_entities_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&BYTE, &POS)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![Position, Rectangle]
+        );
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn excluding_two_of_three_entities_with_two_disallowed_comps_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&BYTE, &POS)).unwrap();
+        world.create_entity(&BYTE).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            ![Position, Rectangle]
+        );
+        assert_eq!(count, 1);
     }
 }
