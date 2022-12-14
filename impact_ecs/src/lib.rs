@@ -18,12 +18,15 @@ pub use impact_ecs_macros::Component;
 /// ```ignore
 /// query!(
 ///     world,
-///     // Call closure for each entity that has `CompA` and `CompB`
-///     |comp_a: &CompA, comp_b: &mut CompB, ..| {
-///         // Do something with `comp_a`, `comp_b`, ..
+///     // Call closure for entities that have both `Comp1` and `Comp2`
+///     |comp_1: &Comp1, comp_2: &mut Comp2| {
+///         // Do something with `comp_1` and `comp_2`
 ///     },
-///     // Exclude any entity that has `CompC` or `CompD` (optional)
-///     ![CompC, CompD]
+///     // Require additionaly that included entities have `MarkerComp1`
+///     // and `MarkerComp2` (optional)
+///     [MarkerComp1, MarkerComp2]
+///     // Exclude any entity that has `Comp3` or `Comp4` (optional)
+///     ![Comp3, Comp4]
 /// );
 /// ```
 ///
@@ -38,11 +41,18 @@ pub use impact_ecs_macros::Component;
 /// instances. The closure will be called once for each
 /// [`Entity`](world::Entity) that has components of all types specified.
 ///
-/// Optionally, an array of disallowed component types can be included as
-/// a third argument to the macro. The array must be prefixed with `!`.
-/// If an entity is a match based on the closure signature, but also has a
-/// component specified in the dissalowed component list, it will not be
-/// included.
+/// Optionally, an array of additionaly required component types can be
+/// included as an argument to the macro. Only entities that also have the
+/// listed components will be included. The primary use of specifying a
+/// required component here instead of in the closure signature is for
+/// zero-sized marker components, which are not allowed in the closure
+/// signature.
+///
+/// Another option is to include an array of disallowed component types
+/// as an argument to the macro. The array must be prefixed with `!`.
+/// If an entity has all of the required components, but also has a
+/// component specified in the dissalowed component list, it will not
+/// be included.
 ///
 /// # Examples
 /// ```
@@ -67,26 +77,38 @@ pub use impact_ecs_macros::Component;
 /// # struct Mass(f32);
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Active;
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Stuck;
 /// #
 /// let mut world = World::new();
-/// let entity_1 = world.create_entity((&Mass(1.0), &Distance(1.0), &Speed(10.0)))?;
-/// let entity_2 = world.create_entity((&Mass(2.0), &Distance(0.0), &Speed(20.0), &Stuck))?;
+/// let entity_1 = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active))?;
+/// let entity_2 = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
+/// let entity_3 = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;
 ///
 /// query!(
 ///     world,
 ///     |distance: &mut Distance, speed: &Speed| {
-///         distance.0 += speed.0 * 0.1;
+///         distance.0 += speed.0;
 ///     },
+///     [Active],
 ///     ![Stuck]
 /// );
 ///
+/// // `entity_1` has moved
 /// assert_eq!(
 ///     world.entity(&entity_1).component::<Distance>().access(),
-///     &Distance(2.0)
+///     &Distance(10.0)
 /// );
+/// // `entity_2` has not moved, since it is not active
 /// assert_eq!(
 ///     world.entity(&entity_2).component::<Distance>().access(),
+///     &Distance(0.0)
+/// );
+/// // `entity_3` has not moved, since it is stuck
+/// assert_eq!(
+///     world.entity(&entity_3).component::<Distance>().access(),
 ///     &Distance(0.0)
 /// );
 /// #

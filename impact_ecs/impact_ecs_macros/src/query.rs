@@ -13,7 +13,8 @@ use syn::{
 pub(crate) struct QueryInput {
     world: Expr,
     closure: QueryClosure,
-    disallowed_list: Option<DisallowedList>,
+    also_required_list: Option<TypeList>,
+    disallowed_list: Option<TypeList>,
 }
 
 struct QueryClosure {
@@ -26,25 +27,38 @@ struct QueryClosureArg {
     ty: TypeReference,
 }
 
-struct DisallowedList {
+struct TypeList {
     tys: Punctuated<Type, Token![,]>,
 }
 
 pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream> {
-    let (world, arg_names, arg_type_refs, body, disallowed_comp_types) = input.into_components();
+    let (world, arg_names, arg_type_refs, body, also_required_comp_types, disallowed_comp_types) =
+        input.into_components();
     let arg_names_and_type_refs: Vec<_> = arg_names.iter().zip(arg_type_refs.iter()).collect();
 
     let arg_types: Vec<_> = arg_type_refs
         .iter()
-        .map(|type_ref| type_ref.elem.clone())
+        .map(|type_ref| type_ref.elem.as_ref().to_owned())
         .collect();
 
-    verify_arg_names_unique(&arg_names)?;
-    verify_arg_types_unique(&arg_types)?;
-    verify_disallowed_comps_unique(&arg_types, disallowed_comp_types.as_deref())?;
+    let required_comp_types: Vec<_> = match also_required_comp_types {
+        Some(mut also_required_comp_types) => {
+            also_required_comp_types.extend_from_slice(&arg_types);
+            also_required_comp_types
+        }
+        None => arg_types.clone(),
+    };
 
-    let verification_code =
-        generate_input_verification(&arg_types, disallowed_comp_types.as_deref(), crate_root)?;
+    verify_arg_names_unique(&arg_names)?;
+    verify_required_comp_types_unique(&required_comp_types)?;
+    verify_disallowed_comps_unique(&required_comp_types, disallowed_comp_types.as_deref())?;
+
+    let verification_code = generate_input_verification(
+        &arg_types,
+        &required_comp_types,
+        disallowed_comp_types.as_deref(),
+        crate_root,
+    )?;
 
     let closure_args: Vec<_> = arg_names_and_type_refs
         .iter()
@@ -103,10 +117,11 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
             // Define closure to call for each set of components
             let mut closure = |#(#closure_args),*| #body;
 
+            // Create archetype for all required components
             let archetype = #crate_root::archetype::Archetype::new_from_component_id_arr([
-                #(<#arg_types as Component>::component_id()),*
+                #(<#required_comp_types as Component>::component_id()),*
             ])
-            .unwrap(); // This `unwrap` will never panic since we have verified the components
+            .unwrap(); // This `unwrap` should never panic since we have verified the components
 
             // Obtain archetype tables matching the query
             #find_tables
@@ -128,18 +143,41 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
 impl Parse for QueryInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let world = input.parse()?;
+
         input.parse::<Token![,]>()?;
         let closure = input.parse()?;
-        let lookahead = input.lookahead1();
-        let disallowed_list = if lookahead.peek(Token![,]) {
+
+        let (also_required_list, disallowed_list) = if input.lookahead1().peek(Token![,]) {
             input.parse::<Token![,]>()?;
-            Some(input.parse()?)
+            if input.lookahead1().peek(Token![!]) {
+                input.parse::<Token![!]>()?;
+                let disallowed_list = Some(input.parse()?);
+                let also_required_list = if input.lookahead1().peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                    Some(input.parse()?)
+                } else {
+                    None
+                };
+                (also_required_list, disallowed_list)
+            } else {
+                let also_required_list = Some(input.parse()?);
+                let disallowed_list = if input.lookahead1().peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                    input.parse::<Token![!]>()?;
+                    Some(input.parse()?)
+                } else {
+                    None
+                };
+                (also_required_list, disallowed_list)
+            }
         } else {
-            None
+            (None, None)
         };
+
         Ok(Self {
             world,
             closure,
+            also_required_list,
             disallowed_list,
         })
     }
@@ -165,9 +203,8 @@ impl Parse for QueryClosureArg {
     }
 }
 
-impl Parse for DisallowedList {
+impl Parse for TypeList {
     fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<Token![!]>()?;
         let content;
         bracketed!(content in input);
         let tys = content.parse_terminated(Type::parse)?;
@@ -184,20 +221,36 @@ impl QueryInput {
         Vec<TypeReference>,
         Expr,
         Option<Vec<Type>>,
+        Option<Vec<Type>>,
     ) {
         let QueryInput {
             world,
             closure,
+            also_required_list,
             disallowed_list,
         } = self;
+
         let QueryClosure { args, body } = closure;
+
         let (arg_names, arg_type_refs) = args
             .into_iter()
             .map(|QueryClosureArg { var, ty }| (var, ty))
             .unzip();
+
+        let also_required_comp_types =
+            also_required_list.map(|TypeList { tys }| tys.into_iter().collect());
+
         let disallowed_comp_types =
-            disallowed_list.map(|DisallowedList { tys }| tys.into_iter().collect());
-        (world, arg_names, arg_type_refs, body, disallowed_comp_types)
+            disallowed_list.map(|TypeList { tys }| tys.into_iter().collect());
+
+        (
+            world,
+            arg_names,
+            arg_type_refs,
+            body,
+            also_required_comp_types,
+            disallowed_comp_types,
+        )
     }
 }
 
@@ -219,13 +272,13 @@ fn verify_arg_names_unique(arg_names: &[Ident]) -> Result<()> {
     Ok(())
 }
 
-/// Returns an error if any of the given argument types occurs
+/// Returns an error if any of the given required component types occurs
 /// more than once.
-fn verify_arg_types_unique(arg_types: &[Box<Type>]) -> Result<()> {
-    for (idx, ty) in arg_types.iter().enumerate() {
-        if arg_types[..idx].contains(ty) {
+fn verify_required_comp_types_unique(required_comp_types: &[Type]) -> Result<()> {
+    for (idx, ty) in required_comp_types.iter().enumerate() {
+        if required_comp_types[..idx].contains(ty) {
             return Err(Error::new_spanned(
-                &arg_types[idx],
+                &required_comp_types[idx],
                 format!(
                     "component type `{}` occurs more than once",
                     ty.to_token_stream().to_string()
@@ -237,14 +290,10 @@ fn verify_arg_types_unique(arg_types: &[Box<Type>]) -> Result<()> {
 }
 
 fn verify_disallowed_comps_unique(
-    requested_comp_types: &[Box<Type>],
+    required_comp_types: &[Type],
     disallowed_comp_types: Option<&[Type]>,
 ) -> Result<()> {
     if let Some(disallowed_comp_types) = disallowed_comp_types {
-        let requested_comp_types: Vec<_> = requested_comp_types
-            .into_iter()
-            .map(|ty| ty.as_ref())
-            .collect();
         for (idx, ty) in disallowed_comp_types.iter().enumerate() {
             if disallowed_comp_types[..idx].contains(ty) {
                 return Err(Error::new_spanned(
@@ -255,11 +304,11 @@ fn verify_disallowed_comps_unique(
                     ),
                 ));
             }
-            if requested_comp_types.contains(&ty) {
+            if required_comp_types.contains(&ty) {
                 return Err(Error::new_spanned(
                     &disallowed_comp_types[idx],
                     format!(
-                        "disallowed component type `{}` is requested in closure",
+                        "disallowed component type `{}` is also required",
                         ty.to_token_stream().to_string()
                     ),
                 ));
@@ -270,14 +319,22 @@ fn verify_disallowed_comps_unique(
 }
 
 fn generate_input_verification(
-    arg_types: &[Box<Type>],
+    arg_types: &[Type],
+    required_comp_types: &[Type],
     disallowed_comp_types: Option<&[Type]>,
     crate_root: &Ident,
 ) -> Result<TokenStream> {
     let mut impl_assertions: Vec<_> = arg_types
         .iter()
-        .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root))
+        .map(|ty| create_assertion_that_type_is_not_zero_sized(ty))
         .collect();
+
+    impl_assertions.extend(
+        required_comp_types
+            .iter()
+            .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root)),
+    );
+
     if let Some(disallowed_comp_types) = disallowed_comp_types {
         impl_assertions.extend(
             disallowed_comp_types
@@ -285,9 +342,16 @@ fn generate_input_verification(
                 .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root)),
         )
     }
+
     Ok(quote! {
         #(#impl_assertions)*
     })
+}
+
+fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenStream {
+    quote_spanned! {ty.span()=>
+        const _: () = assert!(::std::mem::size_of::<#ty>() != 0, "Zero-sized component in closure signature");
+    }
 }
 
 fn create_assertion_that_type_impls_trait(ty: &Type, crate_root: &Ident) -> TokenStream {
@@ -356,7 +420,7 @@ fn generate_immutable_storage_iter(
 }
 
 fn get_storage_iter_code_sorted_by_arg_type(
-    arg_types: &[Box<Type>],
+    arg_types: &[Type],
     storage_iter_code: Vec<TokenStream>,
 ) -> Vec<TokenStream> {
     let mut type_names_and_code: Vec<_> = arg_types
