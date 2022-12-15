@@ -778,6 +778,14 @@ mod query_test {
                        _pos: &mut Position,
                        _rect: &mut Rectangle| {});
 
+        query!(world, |_byte: &Byte| {}, []);
+
+        query!(world, |_byte: &Byte| {}, [Position]);
+
+        query!(world, |_byte: &Byte| {}, [Position, Rectangle]);
+
+        query!(world, |_pos: &Position, _byte: &mut Byte| {}, [Rectangle]);
+
         query!(world, |_byte: &Byte| {}, ![]);
 
         query!(world, |_byte: &Byte| {}, ![Position]);
@@ -788,11 +796,28 @@ mod query_test {
 
         query!(world, |_pos: &Position, _byte: &mut Byte| {}, ![Rectangle]);
 
+        query!(world, |_byte: &Byte| {}, [], ![]);
+
+        query!(world, |_byte: &Byte| {}, ![], []);
+
+        query!(world, |_byte: &Byte| {}, [Position], ![Rectangle]);
+
+        query!(world, |_byte: &Byte| {}, ![Position], [Rectangle]);
+
+        query!(world, |_byte: &Byte| {}, [Position, Rectangle], ![Marked]);
+
+        query!(world, |_byte: &Byte| {}, ![Position, Rectangle], [Marked]);
+
         // The macro accepts this because it does not know they are
         // the same type, but the result is just that there are no
         // matches
         query!(world, |_byte: &LikeByte| {}, ![Byte]);
         query!(world, |_pos: &Position| {}, ![Byte, LikeByte]);
+        query!(world, |_pos: &Position| {}, [Byte], ![LikeByte]);
+
+        // This compiles but panics at runtime
+        query!(world, |_byte: &Byte, _likebyte: &LikeByte| {}, []);
+        query!(world, |_byte: &Byte| {}, [LikeByte]);
     }
 
     #[test]
@@ -958,10 +983,42 @@ mod query_test {
     }
 
     #[test]
-    fn empty_disallowed_list_works() {
+    fn one_additional_required_comp_works() {
         let mut world = World::new();
-        world.create_entity(&BYTE).unwrap();
-        query!(world, |_byte: &Byte, _likebyte: &LikeByte| {});
+        world.create_entity((&POS, &BYTE)).unwrap();
+        world.create_entity((&BYTE, &Marked)).unwrap();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        world.create_entity((&Marked, &BYTE, &POS)).unwrap();
+        world.create_entity((&Marked, &POS)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            [Marked]
+        );
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn two_additional_required_comps_works() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT, &POS)).unwrap();
+        world.create_entity((&Marked, &BYTE, &RECT)).unwrap();
+        world.create_entity((&POS, &Marked, &BYTE)).unwrap();
+        world.create_entity((&POS, &RECT, &Marked, &BYTE)).unwrap();
+
+        let mut count = 0;
+        query!(
+            world,
+            |_byte: &Byte| {
+                count += 1;
+            },
+            [Marked, Position]
+        );
+        assert_eq!(count, 2);
     }
 
     #[test]
