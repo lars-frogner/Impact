@@ -296,7 +296,7 @@ impl ArchetypeTable {
     /// - If the number of entities differs from the number of instances
     /// of each component type.
     /// - If any of the entity IDs are equal.
-    pub fn new_with_entities(
+    pub(crate) fn new_with_entities(
         entity_ids: impl IntoIterator<Item = EntityID>,
         components: ArchetypeCompByteView<'_>,
     ) -> Self {
@@ -330,7 +330,7 @@ impl ArchetypeTable {
     /// of each component type.
     /// - If any of the given entity IDs are equal to a new or existing
     /// entity ID.
-    pub fn add_entities(
+    pub(crate) fn add_entities(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
         components: ArchetypeCompByteView<'_>,
@@ -357,7 +357,7 @@ impl ArchetypeTable {
     ///
     /// # Errors
     /// Returns an error if the entity is not present in the table.
-    pub fn remove_entity(&mut self, entity_id: EntityID) -> Result<ArchetypeCompBytes> {
+    pub(crate) fn remove_entity(&mut self, entity_id: EntityID) -> Result<ArchetypeCompBytes> {
         if !self.has_entity(entity_id) {
             bail!("Entity to remove not present in archetype table");
         }
@@ -778,7 +778,10 @@ impl<'a> ArchetypeCompByteView<'a> {
     /// - The type of the given component is already present.
     /// - The number of component instances differs between
     /// the new and the existing component types.
-    pub fn add_new_component(&mut self, component_bytes: ComponentByteView<'a>) -> Result<()> {
+    pub(crate) fn add_new_component(
+        &mut self,
+        component_bytes: ComponentByteView<'a>,
+    ) -> Result<()> {
         if self.component_bytes.is_empty() {
             self.component_count = component_bytes.component_count();
         } else if component_bytes.component_count() != self.component_count() {
@@ -812,7 +815,7 @@ impl<'a> ArchetypeCompByteView<'a> {
     /// # Errors
     /// Returns an error if the component type to remove is
     /// not present.
-    pub fn remove_component_with_id(&mut self, component_id: ComponentID) -> Result<()> {
+    pub(crate) fn remove_component_with_id(&mut self, component_id: ComponentID) -> Result<()> {
         let idx = self
             .component_bytes
             .binary_search_by_key(&component_id, ComponentByteView::component_id)

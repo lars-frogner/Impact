@@ -32,6 +32,7 @@ where
     }
 
     /// Creates a new mapper with the given key.
+    #[allow(dead_code)]
     pub fn new_with_key(key: K) -> Self {
         Self {
             indices_for_keys: [(key, 0)].into_iter().collect(),
@@ -78,6 +79,7 @@ where
     ///
     /// # Panics
     /// If the key does not exist.
+    #[allow(dead_code)]
     pub fn idx(&self, key: K) -> usize {
         self.indices_for_keys[&key]
     }
@@ -92,6 +94,7 @@ where
     ///
     /// # Panics
     /// If the index is outside the bounds of the [`Vec`].
+    #[allow(dead_code)]
     pub fn key_at_idx(&self, idx: usize) -> K {
         self.keys_at_indices[idx]
     }

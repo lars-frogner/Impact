@@ -33,7 +33,7 @@ pub struct EntityID(u64);
 
 #[cfg(test)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct EntityID(pub u64);
+pub struct EntityID(pub(crate) u64);
 
 /// Overall manager for [`Entity`]s in the world and
 /// their [`Component`] data.
@@ -55,6 +55,12 @@ pub struct EntityEntry<'a> {
 }
 
 impl Entity {
+    /// Creates a new entity with the given ID and archetype
+    /// ID.
+    pub(crate) fn new(id: EntityID, archetype_id: ArchetypeID) -> Self {
+        Self { id, archetype_id }
+    }
+
     /// Returns the ID that uniquely identifies this entity.
     pub fn id(&self) -> EntityID {
         self.id
@@ -442,7 +448,7 @@ impl World {
 
     fn create_next_entity(&mut self, archetype_id: ArchetypeID) -> Entity {
         let id = self.create_entity_id();
-        Entity { id, archetype_id }
+        Entity::new(id, archetype_id)
     }
 
     fn create_entity_id(&mut self) -> EntityID {

@@ -101,7 +101,7 @@ impl ComponentStorage {
     /// Initializes a new storage for instances of the component
     /// type that the given component bytes are associated with,
     /// and stores the given bytes there.
-    pub fn new_with_bytes(
+    pub(crate) fn new_with_bytes(
         ComponentByteView {
             component_id,
             component_count,
@@ -300,7 +300,7 @@ impl ComponentStorage {
 impl ComponentBytes {
     /// Creates a new container for the given bytes for a component
     /// with the given ID, count and size.
-    pub fn new(
+    pub(crate) fn new(
         component_id: ComponentID,
         component_count: usize,
         component_size: usize,
@@ -320,7 +320,7 @@ impl ComponentBytes {
 
     /// Creates a new container for the given bytes for a single
     /// instance of the component with the given ID, count and size.
-    pub fn new_for_single_instance(
+    pub(crate) fn new_for_single_instance(
         component_id: ComponentID,
         component_size: usize,
         bytes: Vec<u8>,
@@ -330,7 +330,7 @@ impl ComponentBytes {
 
     /// Creates a new container for a single instance of a zero-sized
     /// component.
-    pub fn new_for_single_zero_sized_instance(component_id: ComponentID) -> Self {
+    pub(crate) fn new_for_single_zero_sized_instance(component_id: ComponentID) -> Self {
         Self::new_for_single_instance(component_id, 0, Vec::new())
     }
 
