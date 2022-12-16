@@ -20,7 +20,7 @@ use std::{
 /// type of object that has certain specific [`Component`]s
 /// that define its properties. An entity can be created
 /// using a [`World`].
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entity {
     id: EntityID,
     archetype_id: ArchetypeID,
@@ -730,6 +730,7 @@ mod query_test {
         *,
     };
     use bytemuck::{Pod, Zeroable};
+    use std::collections::HashSet;
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
@@ -1191,5 +1192,76 @@ mod query_test {
             ![Position, Rectangle]
         );
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn correct_single_entity_is_included() {
+        let mut world = World::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        let correct_included = world.create_entity((&BYTE, &POS)).unwrap();
+        world.create_entity(&BYTE).unwrap();
+
+        query!(world, |entity: Entity, _rect: &Position, _byte: &Byte| {
+            assert_eq!(entity, correct_included);
+        });
+    }
+
+    #[test]
+    fn correct_two_entities_are_included() {
+        let mut world = World::new();
+        let mut correct_included = HashSet::new();
+        world.create_entity((&BYTE, &RECT)).unwrap();
+        correct_included.insert(world.create_entity((&BYTE, &POS, &Marked)).unwrap());
+        world.create_entity(&POS).unwrap();
+        correct_included.insert(world.create_entity((&BYTE, &Marked)).unwrap());
+
+        query!(
+            world,
+            |entity: Entity, _byte: &mut Byte| {
+                assert!(correct_included.remove(&entity));
+            },
+            [Marked]
+        );
+        assert!(correct_included.is_empty());
+    }
+
+    #[test]
+    fn correct_three_entities_are_included() {
+        let mut world = World::new();
+        let mut correct_included = HashSet::new();
+        correct_included.insert(world.create_entity((&RECT, &POS)).unwrap());
+        world.create_entity((&POS, &RECT, &Marked)).unwrap();
+        world.create_entity(&RECT).unwrap();
+        world.create_entity(&Marked).unwrap();
+        correct_included.insert(world.create_entity((&POS, &RECT)).unwrap());
+        world.create_entity((&BYTE, &Marked)).unwrap();
+        correct_included.insert(world.create_entity((&BYTE, &POS, &RECT)).unwrap());
+
+        query!(
+            world,
+            |entity: Entity, _rect: &mut Rectangle| {
+                assert!(correct_included.remove(&entity));
+            },
+            [Position],
+            ![Marked]
+        );
+        assert!(correct_included.is_empty());
+    }
+
+    #[test]
+    fn all_entities_are_included_when_no_comps_specified() {
+        let mut world = World::new();
+        let mut correct_included = HashSet::new();
+        correct_included.insert(world.create_entity((&POS, &RECT, &Marked)).unwrap());
+        correct_included.insert(world.create_entity((&BYTE, &RECT)).unwrap());
+        correct_included.insert(world.create_entity((&BYTE, &POS, &Marked)).unwrap());
+        correct_included.insert(world.create_entity(&POS).unwrap());
+        correct_included.insert(world.create_entity((&BYTE, &Marked)).unwrap());
+        correct_included.insert(world.create_entity(&BYTE).unwrap());
+
+        query!(world, |entity: Entity| {
+            assert!(correct_included.remove(&entity));
+        });
+        assert!(correct_included.is_empty());
     }
 }

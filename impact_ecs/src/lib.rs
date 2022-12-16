@@ -19,8 +19,8 @@ pub use impact_ecs_macros::Component;
 /// query!(
 ///     world,
 ///     // Call closure for entities that have both `Comp1` and `Comp2`
-///     |comp_1: &Comp1, comp_2: &mut Comp2| {
-///         // Do something with `comp_1` and `comp_2`
+///     |entity: Entity, comp_1: &Comp1, comp_2: &mut Comp2| {
+///         // Do something with `entity`, `comp_1` and `comp_2`
 ///     },
 ///     // Require additionaly that included entities have `MarkerComp1`
 ///     // and `MarkerComp2` (optional)
@@ -36,10 +36,13 @@ pub use impact_ecs_macros::Component;
 /// matching instances of as well as whether immutable or mutable
 /// access to each component type is required. The type of each closure
 /// argument must be annotated, and has to be an immutable or mutable
-/// reference to a type implementing the `Component` trait. The body of
-/// the closure specifies what to do with each set of matching component
-/// instances. The closure will be called once for each
-/// [`Entity`](world::Entity) that has components of all types specified.
+/// reference to a type implementing the `Component` trait. The exception
+/// is the first closure argument, which may be annotated with the
+/// [`Entity`](world::Entity) type, in which case the matching `Entity`
+/// will be passed to the closure along with the component instances.
+/// The body of the closure specifies what to do with each set of
+/// matching component instances. The closure will be called once
+/// for each `Entity` that has components of all types specified.
 ///
 /// Optionally, an array of additionaly required component types can be
 /// included as an argument to the macro. Only entities that also have the
@@ -57,7 +60,7 @@ pub use impact_ecs_macros::Component;
 /// # Examples
 /// ```
 /// # use impact_ecs::{
-/// #     world::World
+/// #     world::{World, Entity}
 /// # };
 /// # use impact_ecs_macros::{
 /// #     ComponentDoctest as Component,
@@ -65,6 +68,7 @@ pub use impact_ecs_macros::Component;
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
+/// # use std::collections::HashSet;
 /// #
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
@@ -87,9 +91,12 @@ pub use impact_ecs_macros::Component;
 /// let entity_2 = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
 /// let entity_3 = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;
 ///
+/// let mut matched_entities = HashSet::new();
+///
 /// query!(
 ///     world,
-///     |distance: &mut Distance, speed: &Speed| {
+///     |entity: Entity, distance: &mut Distance, speed: &Speed| {
+///         matched_entities.insert(entity);
 ///         distance.0 += speed.0;
 ///     },
 ///     [Active],
@@ -111,6 +118,9 @@ pub use impact_ecs_macros::Component;
 ///     world.entity(&entity_3).component::<Distance>().access(),
 ///     &Distance(0.0)
 /// );
+/// // Proof that only `entity_1` matched the query
+/// assert_eq!(matched_entities.len(), 1);
+/// assert!(matched_entities.contains(&entity_1));
 /// #
 /// # Ok::<(), Error>(())
 /// ```
