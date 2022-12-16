@@ -60,6 +60,13 @@ where
         self.indices_for_keys
     }
 
+    /// Returns an iterator over all keys in the order in
+    /// which their entries in the underlying [`Vec`] are
+    /// stored.
+    pub fn key_at_each_idx(&self) -> impl Iterator<Item = K> + '_ {
+        self.keys_at_indices.iter().copied()
+    }
+
     /// Whether the mapper has no keys.
     pub fn is_empty(&self) -> bool {
         self.keys_at_indices.is_empty()
@@ -191,6 +198,16 @@ mod test {
     #[should_panic]
     fn key_index_mapper_initializing_with_duplicate_keys_fails() {
         KeyIndexMapper::new_with_keys([2, 4, 2]);
+    }
+
+    #[test]
+    fn key_index_mapper_key_at_each_idx_gives_correct_keys() {
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
+        let mut iter = mapper.key_at_each_idx();
+        assert_eq!(iter.next().unwrap(), 4);
+        assert_eq!(iter.next().unwrap(), 2);
+        assert_eq!(iter.next().unwrap(), 100);
+        assert!(iter.next().is_none());
     }
 
     #[test]
