@@ -6,7 +6,7 @@ use super::{
         ComponentStorage,
     },
     util::KeyIndexMapper,
-    world::EntityID,
+    world::{Entity, EntityID},
 };
 use anyhow::{anyhow, bail, Result};
 use paste::paste;
@@ -319,6 +319,14 @@ impl ArchetypeTable {
     /// Whether the [`Entity`](crate::world::Entity) with the given [`EntityID`] is present in the table.
     pub fn has_entity(&self, entity_id: EntityID) -> bool {
         self.entity_index_mapper.contains_key(entity_id)
+    }
+
+    /// Returns an iterator over all [`Entity`]s whose components
+    /// are stored in the table.
+    pub fn all_entities(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.entity_index_mapper
+            .key_at_each_idx()
+            .map(|entity_id| Entity::new(entity_id, self.archetype().id()))
     }
 
     /// Takes an iterable of [`EntityID`]s and references to all the
@@ -1252,6 +1260,29 @@ mod test {
         assert_eq!(entity.component::<Byte>(), &BYTE);
         assert_eq!(entity.component::<Position>(), &POS);
         assert_eq!(entity.component::<Rectangle>(), &RECT);
+    }
+
+    #[test]
+    fn getting_iter_over_all_entities_works() {
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+        let mut inserted_entities: HashSet<_> = [entity_0, entity_1].into_iter().collect();
+
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
+        table.add_entities([entity_1], (&RECT, &POS).try_into().unwrap());
+
+        let mut entities = table.all_entities();
+
+        let entity = entities.next().unwrap();
+        assert_eq!(entity.archetype_id(), table.archetype().id());
+        assert!(inserted_entities.remove(&entity.id()));
+
+        let entity = entities.next().unwrap();
+        assert_eq!(entity.archetype_id(), table.archetype().id());
+        assert!(inserted_entities.remove(&entity.id()));
+
+        assert!(entities.next().is_none());
     }
 
     #[test]
