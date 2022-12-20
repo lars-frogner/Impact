@@ -1,7 +1,7 @@
 //! Task scheduling.
 
 use crate::{
-    hash::StringHash,
+    hash::ConstStringHash,
     thread::{
         TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
     },
@@ -73,7 +73,7 @@ pub struct TaskScheduler<S> {
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
-pub type ExecutionTag = StringHash;
+pub type ExecutionTag = ConstStringHash;
 
 /// A set of unique [`ExecutionTag`]s.
 pub type ExecutionTags = HashSet<ExecutionTag>;
@@ -214,7 +214,7 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::hash::StringHash::of_literal(stringify!($name));
+            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::hash::ConstStringHash::new(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
             const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
@@ -256,7 +256,7 @@ macro_rules! define_execution_tag {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::hash::StringHash::of_literal(stringify!($name));
+            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::hash::ConstStringHash::new(stringify!($name));
         }
     };
 }
@@ -848,10 +848,10 @@ impl<S> OrderedTask<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hash::StringHash;
+    use crate::hash::ConstStringHash;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
-    const EXEC_ALL: ExecutionTag = hash!("all");
+    const EXEC_ALL: ExecutionTag = ExecutionTag::new("all");
 
     #[derive(Debug)]
     struct TaskRecorder {
@@ -898,9 +898,9 @@ mod test {
             struct $task;
 
             impl $task {
-                const ID: TaskID = StringHash::of_literal(stringify!($task));
+                const ID: TaskID = ConstStringHash::new(stringify!($task));
                 #[allow(dead_code)]
-                const EXEC_TAG: ExecutionTag = StringHash::of_literal(stringify!($task));
+                const EXEC_TAG: ExecutionTag = ConstStringHash::new(stringify!($task));
             }
 
             impl Task<TaskRecorder> for $task

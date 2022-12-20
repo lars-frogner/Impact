@@ -10,13 +10,13 @@ macro_rules! with_debug_logging {
 }
 
 /// Creates a [`StringHash`](crate::hash::StringHash) for
-/// the given [`String`] or string literal.
+/// the given string.
 macro_rules! hash {
     ($string:literal) => {
-        $crate::hash::StringHash::of_literal($string)
+        $crate::hash::StringHash::new_with_hash($string, $crate::hash::compute_hash_str_64($string))
     };
     ($string:expr) => {
-        $crate::hash::StringHash::of_owned($string)
+        $crate::hash::StringHash::new($string)
     };
 }
 

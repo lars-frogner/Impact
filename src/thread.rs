@@ -1,6 +1,6 @@
 //! Utilities for multithreading.
 
-use crate::hash::StringHash;
+use crate::hash::ConstStringHash;
 use anyhow::Error;
 use std::{
     collections::HashMap,
@@ -85,7 +85,7 @@ pub struct WorkerID(pub usize);
 
 /// Type of ID used for identifying tasks that can be performed
 /// by worker threads in a [`ThreadPool`].
-pub type TaskID = StringHash;
+pub type TaskID = ConstStringHash;
 
 /// [`Result`] produced by the task closure executed by worker
 /// threads in a [`ThreadPool`]. The [`Err`] variant contains
@@ -715,8 +715,8 @@ mod test {
         });
         let result = pool.execute_and_wait(
             [
-                (Arc::clone(&count), hash!("0")),
-                (Arc::clone(&count), hash!("1")),
+                (Arc::clone(&count), TaskID::new("0")),
+                (Arc::clone(&count), TaskID::new("1")),
             ]
             .into_iter(),
             2,
@@ -728,8 +728,8 @@ mod test {
         assert_eq!(errors.n_errors(), 1);
 
         match (
-            errors.take_result_of(hash!("0")),
-            errors.take_result_of(hash!("1")),
+            errors.take_result_of(TaskID::new("0")),
+            errors.take_result_of(TaskID::new("1")),
         ) {
             (Err(err), Ok(_)) | (Ok(_), Err(err)) => assert_eq!(err.to_string(), "Underflow!"),
             _ => unreachable!(),
