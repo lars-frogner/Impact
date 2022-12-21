@@ -28,7 +28,8 @@ macro_rules! stringhash_newtype {
         $([$pub:ident])? $name:ident
     ) => {
         $(#[$attributes])*
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Zeroable, bytemuck::Pod)]
         $($pub)? struct $name($($pub)? $crate::hash::StringHash);
 
         impl ::std::fmt::Display for $name {
