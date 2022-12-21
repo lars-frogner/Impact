@@ -349,7 +349,7 @@ impl World {
         &mut self,
         archetype_data: ArchetypeCompByteView<'_>,
     ) -> Vec<Entity> {
-        let archetype_id = archetype_data.archetype_id();
+        let archetype_id = archetype_data.archetype().id();
         let entities: Vec<_> = (0..archetype_data.component_count())
             .map(|_| self.create_next_entity(archetype_id))
             .collect();
@@ -362,7 +362,7 @@ impl World {
         entity_ids: impl IntoIterator<Item = EntityID>,
         archetype_data: ArchetypeCompByteView<'_>,
     ) {
-        let archetype_id = archetype_data.archetype_id();
+        let archetype_id = archetype_data.archetype().id();
         match self.archetype_index_mapper.get(archetype_id) {
             // If we already have a table for the archetype, we add
             // the entity to it
@@ -418,7 +418,7 @@ impl World {
         updated_archetype_data.add_new_component(component_data)?;
 
         // Set new archetype for the entity
-        entity.archetype_id = updated_archetype_data.archetype_id();
+        entity.archetype_id = updated_archetype_data.archetype().id();
 
         // Finally we insert the modified entity into the appropriate table
         self.add_entities_to_table([entity.id()], updated_archetype_data);
@@ -439,7 +439,7 @@ impl World {
         updated_archetype_data.remove_component_with_id(component_id)?;
 
         // Set new archetype for the entity
-        entity.archetype_id = updated_archetype_data.archetype_id();
+        entity.archetype_id = updated_archetype_data.archetype().id();
 
         // Finally we insert the modified entity into the appropriate table
         self.add_entities_to_table([entity.id()], updated_archetype_data);

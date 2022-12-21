@@ -759,10 +759,10 @@ impl ArchetypeCompBytes {
 }
 
 impl<'a> ArchetypeCompByteView<'a> {
-    /// Returns the unique ID for the archetype corresponding
-    /// to the set of components whose bytes are referenced here.
-    pub fn archetype_id(&self) -> ArchetypeID {
-        self.archetype.id()
+    /// Returns the archetype corresponding to the set of
+    /// components whose bytes are referenced here.
+    pub fn archetype(&self) -> &Archetype {
+        &self.archetype
     }
 
     /// Returns the number of component types present in the bytes
