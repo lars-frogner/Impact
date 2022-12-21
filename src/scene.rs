@@ -9,7 +9,7 @@ mod systems;
 mod tasks;
 
 pub use camera::{CameraID, CameraRepository};
-pub use components::SceneGraphNodeComp;
+pub use components::{MeshComp, SceneGraphNodeComp};
 pub use graph::{
     CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph,
     SceneGraphNodeID,
