@@ -3,7 +3,7 @@
 mod components;
 mod systems;
 
-pub use components::{Position, Velocity};
+pub use components::{PositionComp, VelocityComp};
 
 /// Floating point type used for representing and
 /// computing motion.

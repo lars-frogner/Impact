@@ -10,7 +10,7 @@ use nalgebra::{Point3, Vector3};
 /// representing the 3D position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct Position {
+pub struct PositionComp {
     /// A point representing 3D position.
     pub point: Point3<fmo>,
 }
@@ -20,7 +20,7 @@ pub struct Position {
 /// representing the 3D velocity.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct Velocity {
+pub struct VelocityComp {
     /// A vector representing 3D velocity.
     pub vector: Vector3<fmo>,
 }
