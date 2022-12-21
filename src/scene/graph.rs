@@ -905,6 +905,7 @@ impl_node_id_idx_traits!(CameraNodeID);
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{rendering::MaterialID, scene::MeshID};
     use approx::assert_abs_diff_eq;
     use nalgebra::{point, Point3, Rotation3, Scale3, Translation3};
 
@@ -922,7 +923,7 @@ mod test {
         scene_graph.create_model_instance_node(
             parent_node_id,
             Similarity3::identity(),
-            ModelID(hash!("Test model")),
+            create_dummy_model_id(""),
             Sphere::new(Point3::origin(), F::one()),
         )
     }
@@ -935,6 +936,13 @@ mod test {
             parent_node_id,
             Similarity3::identity(),
             CameraID(hash!("Test camera")),
+        )
+    }
+
+    fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
+        ModelID::for_mesh_and_material(
+            MeshID(hash!(format!("Test mesh {}", tag.as_ref()))),
+            MaterialID(hash!(format!("Test material {}", tag.as_ref()))),
         )
     }
 
@@ -1305,7 +1313,7 @@ mod test {
         let instance = scene_graph.create_model_instance_node(
             root,
             instance_transform,
-            ModelID(hash!("Test model")),
+            create_dummy_model_id(""),
             bounding_sphere.clone(),
         );
 
@@ -1331,13 +1339,13 @@ mod test {
         scene_graph.create_model_instance_node(
             root,
             Similarity3::identity(),
-            ModelID(hash!("Test model 1")),
+            create_dummy_model_id("1"),
             bounding_sphere_1.clone(),
         );
         scene_graph.create_model_instance_node(
             root,
             Similarity3::identity(),
-            ModelID(hash!("Test model 2")),
+            create_dummy_model_id("2"),
             bounding_sphere_2.clone(),
         );
 
@@ -1376,14 +1384,14 @@ mod test {
         scene_graph.create_model_instance_node(
             group_1,
             Similarity3::identity(),
-            ModelID(hash!("Test model 1")),
+            create_dummy_model_id("1"),
             bounding_sphere_1.clone(),
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_transform);
         scene_graph.create_model_instance_node(
             group_2,
             instance_2_transform,
-            ModelID(hash!("Test model 2")),
+            create_dummy_model_id("2"),
             bounding_sphere_2.clone(),
         );
 

@@ -15,12 +15,10 @@ pub use graph::{
     SceneGraphNodeID,
 };
 pub use mesh::{MeshID, MeshRepository};
-pub use model::{
-    ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool, ModelLibrary,
-    ModelSpecification,
-};
+pub use model::{ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool};
 pub use tasks::SyncVisibleModelInstances;
 
+use crate::rendering::MaterialLibrary;
 use anyhow::{anyhow, Result};
 use std::sync::RwLock;
 
@@ -29,7 +27,7 @@ use std::sync::RwLock;
 pub struct Scene {
     camera_repository: RwLock<CameraRepository<f32>>,
     mesh_repository: RwLock<MeshRepository<f32>>,
-    model_library: RwLock<ModelLibrary>,
+    material_library: RwLock<MaterialLibrary>,
     scene_graph: RwLock<SceneGraph<f32>>,
     model_instance_pool: RwLock<ModelInstancePool<f32>>,
     active_camera: Option<(CameraID, CameraNodeID)>,
@@ -40,23 +38,16 @@ impl Scene {
     pub fn new(
         camera_repository: CameraRepository<f32>,
         mesh_repository: MeshRepository<f32>,
-        model_library: ModelLibrary,
+        material_library: MaterialLibrary,
     ) -> Self {
-        let model_instance_pool = ModelInstancePool::for_models(model_library.model_ids());
         Self {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),
-            model_library: RwLock::new(model_library),
-            model_instance_pool: RwLock::new(model_instance_pool),
+            material_library: RwLock::new(material_library),
+            model_instance_pool: RwLock::new(ModelInstancePool::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
             active_camera: None,
         }
-    }
-
-    /// Returns a reference to the [`ModelLibrary`], guarded
-    /// by a [`RwLock`].
-    pub fn model_library(&self) -> &RwLock<ModelLibrary> {
-        &self.model_library
     }
 
     /// Returns a reference to the [`CameraRepository`], guarded
@@ -69,6 +60,12 @@ impl Scene {
     /// by a [`RwLock`].
     pub fn mesh_repository(&self) -> &RwLock<MeshRepository<f32>> {
         &self.mesh_repository
+    }
+
+    /// Returns a reference to the [`MaterialLibrary`], guarded
+    /// by a [`RwLock`].
+    pub fn material_library(&self) -> &RwLock<MaterialLibrary> {
+        &self.material_library
     }
 
     /// Returns a reference to the [`ModelInstancePool`], guarded
@@ -106,36 +103,37 @@ impl Scene {
         model_id: ModelID,
         transforms: impl IntoIterator<Item = NodeTransform<f32>>,
     ) -> Result<Vec<ModelInstanceNodeID>> {
-        let mesh_id = self
-            .model_library
-            .read()
-            .unwrap()
-            .get_model(model_id)
-            .ok_or_else(|| anyhow!("Model {} not present in model library", model_id))?
-            .mesh_id;
+        // let mesh_id = self
+        //     .model_library
+        //     .read()
+        //     .unwrap()
+        //     .get_model(model_id)
+        //     .ok_or_else(|| anyhow!("Model {} not present in model library", model_id))?
+        //     .mesh_id;
 
-        let bounding_sphere = self
-            .mesh_repository()
-            .read()
-            .unwrap()
-            .get_mesh(mesh_id)
-            .ok_or_else(|| anyhow!("Mesh {} not present in mesh repository", mesh_id))?
-            .bounding_sphere()
-            .ok_or_else(|| anyhow!("Mesh {} is empty", mesh_id))?;
+        // let bounding_sphere = self
+        //     .mesh_repository()
+        //     .read()
+        //     .unwrap()
+        //     .get_mesh(mesh_id)
+        //     .ok_or_else(|| anyhow!("Mesh {} not present in mesh repository", mesh_id))?
+        //     .bounding_sphere()
+        //     .ok_or_else(|| anyhow!("Mesh {} is empty", mesh_id))?;
 
-        let mut scene_graph = self.scene_graph.write().unwrap();
-        let parent_node_id = scene_graph.root_node_id();
-        Ok(transforms
-            .into_iter()
-            .map(|transform| {
-                scene_graph.create_model_instance_node(
-                    parent_node_id,
-                    transform,
-                    model_id,
-                    bounding_sphere.clone(),
-                )
-            })
-            .collect())
+        // let mut scene_graph = self.scene_graph.write().unwrap();
+        // let parent_node_id = scene_graph.root_node_id();
+        // Ok(transforms
+        //     .into_iter()
+        //     .map(|transform| {
+        //         scene_graph.create_model_instance_node(
+        //             parent_node_id,
+        //             transform,
+        //             model_id,
+        //             bounding_sphere.clone(),
+        //         )
+        //     })
+        //     .collect())
+        todo!()
     }
 
     /// Uses the camera with the given node ID in the [`SceneGraph`]

@@ -1,37 +1,29 @@
 //! Management of models.
 
 use crate::{
+    hash::{self, Hash64},
     num::Float,
-    rendering::{MaterialID, MaterialLibrary},
+    rendering::MaterialID,
     scene::MeshID,
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Matrix4;
 use std::{
+    cmp,
     collections::HashMap,
-    fmt::Debug,
+    fmt::{self, Debug},
+    hash::{Hash, Hasher},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-stringhash_newtype!(
-    /// Identifier for specific models.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
-    [pub] ModelID
-);
-
-/// A model specified by a material and a mesh.
-#[derive(Clone, Debug)]
-pub struct ModelSpecification {
-    pub material_id: MaterialID,
-    pub mesh_id: MeshID,
-}
-
-/// Container for different model specifications and
-/// the materials they use.
-#[derive(Clone, Debug)]
-pub struct ModelLibrary {
-    material_library: MaterialLibrary,
-    model_specifications: HashMap<ModelID, ModelSpecification>,
+/// Identifier for specific models.
+///
+/// A model is uniquely defined by its mesh and material.
+#[derive(Copy, Clone, Debug)]
+pub struct ModelID {
+    mesh_id: MeshID,
+    material_id: MaterialID,
+    hash: Hash64,
 }
 
 /// Container for instances of specific models identified
@@ -71,38 +63,62 @@ pub struct ModelInstance<F> {
     transform_matrix: Matrix4<F>,
 }
 
-impl ModelLibrary {
-    /// Creates a new model library with the given material
-    /// library but no models.
-    pub fn new(material_library: MaterialLibrary) -> Self {
+impl ModelID {
+    /// Creates a new [`ModelID`] for the model comprised of the
+    /// mesh and material with the given IDs.
+    pub fn for_mesh_and_material(mesh_id: MeshID, material_id: MaterialID) -> Self {
+        let hash = hash::compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
         Self {
-            material_library,
-            model_specifications: HashMap::new(),
+            mesh_id,
+            material_id,
+            hash,
         }
     }
 
-    /// Returns the material library used by the models.
-    pub fn material_library(&self) -> &MaterialLibrary {
-        &self.material_library
+    /// The ID of the model mesh.
+    pub fn mesh_id(&self) -> MeshID {
+        self.mesh_id
     }
 
-    /// Returns an iterator over the IDs of all the models
-    /// in the library.
-    pub fn model_ids(&self) -> impl Iterator<Item = ModelID> + '_ {
-        self.model_specifications.keys().cloned()
+    /// The ID of the model material.
+    pub fn material_id(&self) -> MaterialID {
+        self.material_id
     }
+}
 
-    /// Returns the specification for the model with the
-    /// given ID, or [`None`] if the model does not exist.
-    pub fn get_model(&self, model_id: ModelID) -> Option<&ModelSpecification> {
-        self.model_specifications.get(&model_id)
+impl fmt::Display for ModelID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{mesh: {}, material: {}}}",
+            self.mesh_id, self.material_id
+        )
     }
+}
 
-    /// Includes the given model specification in the library
-    /// under the given ID. If a model with the same ID exists,
-    /// it will be overwritten.
-    pub fn add_model(&mut self, model_id: ModelID, model_spec: ModelSpecification) {
-        self.model_specifications.insert(model_id, model_spec);
+impl PartialEq for ModelID {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash.eq(&other.hash)
+    }
+}
+
+impl Eq for ModelID {}
+
+impl Ord for ModelID {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.hash.cmp(&other.hash)
+    }
+}
+
+impl PartialOrd for ModelID {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Hash for ModelID {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hash.hash(state);
     }
 }
 

@@ -5,10 +5,7 @@ use crate::{
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
     rendering::{Assets, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID, TextureID},
-    scene::{
-        CameraID, CameraRepository, MeshID, MeshRepository, ModelID, ModelLibrary,
-        ModelSpecification, Scene,
-    },
+    scene::{CameraID, CameraRepository, MeshID, MeshRepository, ModelID, Scene},
     window::InputHandler,
     window::Window,
     world::World,
@@ -124,23 +121,22 @@ async fn init_world(window: &Window) -> Result<World> {
     };
     material_library.add_material(MaterialID(hash!("Test material")), material_spec);
 
-    let mut model_library = ModelLibrary::new(material_library);
-    let model_spec = ModelSpecification {
-        material_id: MaterialID(hash!("Test material")),
-        mesh_id: MeshID(hash!("Test mesh")),
-    };
-    model_library.add_model(ModelID(hash!("Test model")), model_spec);
-
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
-    let scene = Scene::new(camera_repository, mesh_repository, model_library);
+    let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(scene, renderer, controller);
 
     let mut scene = world.scene().write().unwrap();
 
-    scene.spawn_model_instances(ModelID(hash!("Test model")), [Similarity3::identity()])?;
+    scene.spawn_model_instances(
+        ModelID::for_mesh_and_material(
+            MeshID(hash!("Test mesh")),
+            MaterialID(hash!("Test material")),
+        ),
+        [Similarity3::identity()],
+    )?;
 
     let camera_node_id = scene.spawn_camera(CameraID(hash!("Camera")), Similarity3::identity());
     scene.set_active_camera(camera_node_id);

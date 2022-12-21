@@ -72,6 +72,11 @@ impl StringHash {
             .or_insert(string.to_string());
         Self(hash)
     }
+
+    /// The 64-bit hash value.
+    pub fn hash(&self) -> Hash64 {
+        self.0
+    }
 }
 
 impl ConstStringHash {
@@ -91,6 +96,20 @@ impl ConstStringHash {
 /// Computes a 64-bit hash of the given string literal.
 pub const fn compute_hash_str_64(string: &str) -> Hash64 {
     Hash64(const_fnv1a_hash::fnv1a_hash_str_64(string))
+}
+
+/// Computes a 64-bit hash of the concatenated bytes of the
+/// given pair of 64-bit hashes.
+pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> Hash64 {
+    let b1 = &hash_1.0.to_le_bytes();
+    let b2 = &hash_2.0.to_le_bytes();
+    Hash64(const_fnv1a_hash::fnv1a_hash_64(
+        &[
+            b1[0], b1[1], b1[2], b1[3], b1[4], b1[5], b1[6], b1[7], b2[0], b2[1], b2[2], b2[3],
+            b2[4], b2[5], b2[6], b2[7],
+        ],
+        None,
+    ))
 }
 
 impl fmt::Display for StringHash {

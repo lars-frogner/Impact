@@ -30,7 +30,7 @@ define_task!(
                     render_pass_manager.sync_with_render_buffers(
                         renderer.core_system(),
                         renderer.assets(),
-                        &world.scene().read().unwrap().model_library().read().unwrap(),
+                        &world.scene().read().unwrap().material_library().read().unwrap(),
                         render_buffer_manager.synchronized(),
                         camera_id
                     )
