@@ -542,12 +542,16 @@ impl ArchetypeTable {
 
     fn new_with_entity_index_mapper(
         entity_index_mapper: KeyIndexMapper<EntityID>,
-        ArchetypeCompByteView {
+        components: ArchetypeCompByteView<'_>,
+    ) -> Self {
+        let component_index_map = components.create_component_index_map();
+
+        let ArchetypeCompByteView {
             archetype,
             component_bytes,
             component_count,
-        }: ArchetypeCompByteView<'_>,
-    ) -> Self {
+        } = components;
+
         assert_eq!(
             entity_index_mapper.len(),
             component_count,
@@ -556,16 +560,11 @@ impl ArchetypeTable {
         Self {
             archetype,
             entity_index_mapper,
-            // For component IDs we don't need a full `KeyIndexMapper`, so we just
-            // unwrap to the underlying `HashMap`
-            component_index_map: KeyIndexMapper::new_with_keys(
-                component_bytes.iter().map(ComponentByteView::component_id),
-            )
-            .into_map(),
+            component_index_map,
             // Initialize storages with component data for the provided entity
             component_storages: component_bytes
                 .into_iter()
-                .map(|bytes| RwLock::new(ComponentStorage::new_with_bytes(bytes)))
+                .map(|bytes| RwLock::new(ComponentStorage::new_from_byte_view(bytes)))
                 .collect(),
         }
     }
@@ -835,6 +834,17 @@ impl<'a> ArchetypeCompByteView<'a> {
         self.archetype = Self::find_archetype_from_sorted_components(&self.component_bytes);
 
         Ok(())
+    }
+
+    pub(crate) fn create_component_index_map(&self) -> HashMap<ComponentID, usize> {
+        // For component IDs we don't need a full `KeyIndexMapper`, so we just
+        // unwrap to the underlying `HashMap`
+        KeyIndexMapper::new_with_keys(
+            self.component_bytes
+                .iter()
+                .map(ComponentByteView::component_id),
+        )
+        .into_map()
     }
 
     fn find_archetype_from_sorted_components(
