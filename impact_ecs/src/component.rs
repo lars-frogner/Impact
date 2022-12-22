@@ -409,6 +409,33 @@ impl<'a> ComponentByteView<'a> {
         self.component_count
     }
 
+    /// Returns a slice of all the components whose bytes this reference
+    /// points to.
+    ///
+    /// # Panics
+    /// - If `C` is not the component type this reference points to.
+    /// - If `C` is a zero-sized type.
+    pub(crate) fn slice<C: Component>(&self) -> &[C] {
+        self.validate_component::<C>();
+        assert_ne!(
+            mem::size_of::<C>(),
+            0,
+            "Tried to obtain slice of zero-sized component values from component byte view"
+        );
+        bytemuck::cast_slice(self.bytes)
+    }
+
+    fn validate_component<C: Component>(&self) {
+        self.validate_component_id(C::component_id());
+    }
+
+    fn validate_component_id(&self, component_id: ComponentID) {
+        assert!(
+            component_id == self.component_id,
+            "Tried to use component byte view with invalid component type"
+        );
+    }
+
     /// Creates a [`ComponentBytes`] holding a copy of the referenced
     /// component bytes.
     pub fn to_owned(&self) -> ComponentBytes {
@@ -494,6 +521,7 @@ mod test {
         assert_eq!(data.component_size(), mem::size_of::<Byte>());
         assert_eq!(data.bytes.len(), 1);
         assert_eq!(data.bytes[0], 42);
+        assert_eq!(data.slice::<Byte>()[0], component);
     }
 
     #[test]
