@@ -936,6 +936,21 @@ impl<'a> TryFrom<&'a ArchetypeCompExtender<'a>> for ArchetypeCompByteView<'a> {
     }
 }
 
+/// Creates a new archetype defined by the given component
+/// types. The order of the component types does not affect
+/// the result. Providing no components still gives a valid
+/// archetype.
+///
+/// # Errors
+/// Returns an error if the same component types occurs
+/// multiple times.
+#[macro_export]
+macro_rules! archetype_of {
+    ($($component:ty),*) => {
+        $crate::archetype::Archetype::new_from_component_id_arr([$(<$component>::component_id()),*])
+    };
+}
+
 // Implement `TryFrom` so that an array of `ComponentByteView`s can
 // be converted into an `ArchetypeCompByteView`.
 impl<'a, const N: usize> TryFrom<[ComponentByteView<'a>; N]> for ArchetypeCompByteView<'a> {
@@ -1083,22 +1098,23 @@ mod test {
     };
 
     #[test]
-    fn larger_archetypes_contain_smaller_archetypes() {
-        let with_all_components = Archetype::new_from_component_id_arr([
+    fn archetype_macro_works() {
+        let archetype = Archetype::new_from_component_id_arr([
             Byte::component_id(),
             Position::component_id(),
             Rectangle::component_id(),
         ])
         .unwrap();
-        let without_byte = Archetype::new_from_component_id_arr([
-            Rectangle::component_id(),
-            Position::component_id(),
-        ])
-        .unwrap();
-        let without_position =
-            Archetype::new_from_component_id_arr([Byte::component_id(), Rectangle::component_id()])
-                .unwrap();
-        let empty = Archetype::new_from_component_id_arr([]).unwrap();
+        let archetype_from_macro = archetype_of!(Byte, Position, Rectangle).unwrap();
+        assert_eq!(archetype, archetype_from_macro);
+    }
+
+    #[test]
+    fn larger_archetypes_contain_smaller_archetypes() {
+        let with_all_components = archetype_of!(Byte, Position, Rectangle).unwrap();
+        let without_byte = archetype_of!(Rectangle, Position).unwrap();
+        let without_position = archetype_of!(Byte, Rectangle).unwrap();
+        let empty = archetype_of!().unwrap();
 
         assert!(with_all_components.contains(&with_all_components));
         assert!(with_all_components.contains(&without_byte));
@@ -1110,12 +1126,9 @@ mod test {
 
     #[test]
     fn archetypes_do_not_contain_other_components() {
-        let without_position =
-            Archetype::new_from_component_id_arr([Byte::component_id(), Rectangle::component_id()])
-                .unwrap();
-        let without_position_and_byte =
-            Archetype::new_from_component_id_arr([Rectangle::component_id()]).unwrap();
-        let empty = Archetype::new_from_component_id_arr([]).unwrap();
+        let without_position = archetype_of!(Byte, Rectangle).unwrap();
+        let without_position_and_byte = archetype_of!(Rectangle).unwrap();
+        let empty = archetype_of!().unwrap();
 
         assert!(without_position.contains_none_of(&[Position::component_id()]));
         assert!(without_position_and_byte
@@ -1157,25 +1170,15 @@ mod test {
     #[test]
     fn valid_conversion_of_comp_arrays_to_byte_views_succeed() {
         let view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([]).unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!().unwrap());
 
         let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes()].try_into().unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Byte::component_id()]).unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
 
         let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes(), POS.component_bytes()]
             .try_into()
             .unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Byte::component_id(), Position::component_id()])
-                .unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
 
         let view: ArchetypeCompByteView<'_> = [
             BYTE.component_bytes(),
@@ -1186,12 +1189,7 @@ mod test {
         .unwrap();
         assert_eq!(
             view.archetype,
-            Archetype::new_from_component_id_arr([
-                Byte::component_id(),
-                Position::component_id(),
-                Rectangle::component_id()
-            ])
-            .unwrap()
+            archetype_of!(Byte, Position, Rectangle).unwrap()
         );
     }
 
@@ -1219,27 +1217,15 @@ mod test {
     #[test]
     fn valid_conversion_of_comp_tuples_to_byte_views_succeed() {
         let view: ArchetypeCompByteView<'_> = (&BYTE).into();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Byte::component_id()]).unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
 
         let view: ArchetypeCompByteView<'_> = (&BYTE, &POS).try_into().unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Byte::component_id(), Position::component_id()])
-                .unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
 
         let view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         assert_eq!(
             view.archetype,
-            Archetype::new_from_component_id_arr([
-                Byte::component_id(),
-                Position::component_id(),
-                Rectangle::component_id()
-            ])
-            .unwrap()
+            archetype_of!(Byte, Position, Rectangle).unwrap()
         );
     }
 
@@ -1247,27 +1233,15 @@ mod test {
     fn adding_components_to_archetype_byte_view_works() {
         let mut view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
         view.add_new_component(BYTE.component_bytes()).unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Byte::component_id()]).unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
 
         view.add_new_component(POS.component_bytes()).unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Byte::component_id(), Position::component_id()])
-                .unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
 
         view.add_new_component(RECT.component_bytes()).unwrap();
         assert_eq!(
             view.archetype,
-            Archetype::new_from_component_id_arr([
-                Byte::component_id(),
-                Position::component_id(),
-                Rectangle::component_id()
-            ])
-            .unwrap()
+            archetype_of!(Byte, Position, Rectangle).unwrap()
         );
     }
 
@@ -1282,28 +1256,15 @@ mod test {
     fn removing_components_from_archetype_byte_view_works() {
         let mut view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         view.remove_component_with_id(Byte::component_id()).unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([
-                Position::component_id(),
-                Rectangle::component_id()
-            ])
-            .unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Position, Rectangle).unwrap());
 
         view.remove_component_with_id(Rectangle::component_id())
             .unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([Position::component_id()]).unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!(Position).unwrap());
 
         view.remove_component_with_id(Position::component_id())
             .unwrap();
-        assert_eq!(
-            view.archetype,
-            Archetype::new_from_component_id_arr([]).unwrap()
-        );
+        assert_eq!(view.archetype, archetype_of!().unwrap());
     }
 
     #[test]
@@ -1329,10 +1290,7 @@ mod test {
         let all_components = extender.all_components().unwrap();
         assert_eq!(all_components.n_component_types(), 0);
         assert_eq!(all_components.component_count(), 0);
-        assert_eq!(
-            all_components.archetype(),
-            &Archetype::new_from_component_id_arr([]).unwrap()
-        );
+        assert_eq!(all_components.archetype(), &archetype_of!().unwrap());
     }
 
     #[test]
@@ -1348,12 +1306,7 @@ mod test {
         assert_eq!(all_components.component_count(), 1);
         assert_eq!(
             all_components.archetype(),
-            &Archetype::new_from_component_id_arr([
-                Byte::component_id(),
-                Position::component_id(),
-                Rectangle::component_id()
-            ])
-            .unwrap()
+            &archetype_of!(Byte, Position, Rectangle).unwrap()
         );
     }
 
@@ -1380,7 +1333,7 @@ mod test {
         assert_eq!(extended_components.component_count(), 1);
         assert_eq!(
             extended_components.archetype(),
-            &Archetype::new_from_component_id_arr([Position::component_id()]).unwrap()
+            &archetype_of!(Position).unwrap()
         );
     }
 
@@ -1399,11 +1352,7 @@ mod test {
         assert_eq!(extended_components.component_count(), 1);
         assert_eq!(
             extended_components.archetype(),
-            &Archetype::new_from_component_id_arr([
-                Rectangle::component_id(),
-                Position::component_id()
-            ])
-            .unwrap()
+            &archetype_of!(Rectangle, Position).unwrap()
         );
 
         let mut byte_storage = extender.new_storage::<Byte>();
@@ -1416,12 +1365,7 @@ mod test {
         assert_eq!(extended_components.component_count(), 1);
         assert_eq!(
             extended_components.archetype(),
-            &Archetype::new_from_component_id_arr([
-                Rectangle::component_id(),
-                Position::component_id(),
-                Byte::component_id()
-            ])
-            .unwrap()
+            &archetype_of!(Rectangle, Position, Byte).unwrap()
         );
     }
 
@@ -1444,12 +1388,7 @@ mod test {
         assert_eq!(extended_components.component_count(), 2);
         assert_eq!(
             extended_components.archetype(),
-            &Archetype::new_from_component_id_arr([
-                Rectangle::component_id(),
-                Position::component_id(),
-                Byte::component_id()
-            ])
-            .unwrap()
+            &archetype_of!(Rectangle, Position, Byte).unwrap()
         );
     }
 

@@ -519,7 +519,10 @@ impl<'a> EntityEntry<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::{super::Component, *};
+    use super::{
+        super::{archetype_of, Component},
+        *,
+    };
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]
@@ -640,12 +643,7 @@ mod test {
 
         assert_eq!(
             entity.archetype_id(),
-            Archetype::new_from_component_id_arr([
-                Position::component_id(),
-                Temperature::component_id()
-            ])
-            .unwrap()
-            .id()
+            archetype_of!(Position, Temperature).unwrap().id()
         );
 
         let entry = world.entity(&entity);
@@ -673,9 +671,7 @@ mod test {
 
         assert_eq!(
             entity.archetype_id(),
-            Archetype::new_from_component_id_arr([Temperature::component_id()])
-                .unwrap()
-                .id()
+            archetype_of!(Temperature).unwrap().id()
         );
 
         let entry = world.entity(&entity);
@@ -696,10 +692,7 @@ mod test {
             .unwrap();
         let entry = world.entity(&entity);
         assert_eq!(entry.n_components(), 0);
-        assert_eq!(
-            entity.archetype_id(),
-            Archetype::new_from_component_id_arr([]).unwrap().id()
-        );
+        assert_eq!(entity.archetype_id(), archetype_of!().unwrap().id());
     }
 
     #[test]
