@@ -100,8 +100,8 @@ pub struct ComponentByteView<'a> {
 impl ComponentStorage {
     /// Initializes a new storage for instances of the component
     /// type that the given component bytes are associated with,
-    /// and stores the given bytes there.
-    pub(crate) fn new_with_bytes(
+    /// and stores a copy of the given bytes there.
+    pub(crate) fn new_from_byte_view(
         ComponentByteView {
             component_id,
             component_count,
@@ -116,6 +116,35 @@ impl ComponentStorage {
             bytes: bytes.to_vec(),
         }
     }
+    /// Initializes a new storage for instances of the component
+    /// type that the given component bytes are associated with,
+    /// and stores a the given bytes there.
+    pub(crate) fn new_from_bytes(
+        ComponentBytes {
+            component_id,
+            component_count,
+            component_size,
+            bytes,
+        }: ComponentBytes,
+    ) -> Self {
+        Self {
+            component_id,
+            component_count,
+            component_size,
+            bytes,
+        }
+    }
+    /// Initializes an empty storage with preallocated capacity for
+    /// the given number of components of type `C`.
+    pub(crate) fn with_capacity<C: Component>(component_count: usize) -> Self {
+        let component_size = mem::size_of::<C>();
+        Self::new_from_bytes(ComponentBytes::new(
+            C::component_id(),
+            0,
+            component_size,
+            Vec::with_capacity(component_count * component_size),
+        ))
+    }
 
     /// Returns the size of the storage in bytes.
     pub fn size(&self) -> usize {
@@ -125,6 +154,16 @@ impl ComponentStorage {
     /// Returns the number of stored components.
     pub fn component_count(&self) -> usize {
         self.component_count
+    }
+
+    /// Returns a [`ComponentByteView`] of all the components in the storage.
+    pub(crate) fn byte_view(&self) -> ComponentByteView<'_> {
+        ComponentByteView {
+            component_id: self.component_id,
+            component_count: self.component_count,
+            component_size: self.component_size,
+            bytes: &self.bytes,
+        }
     }
 
     /// Returns a slice of all stored components.
@@ -292,7 +331,7 @@ impl ComponentStorage {
     fn validate_component_id(&self, component_id: ComponentID) {
         assert!(
             component_id == self.component_id,
-            "Tried to use component storage with invalid component"
+            "Tried to use component storage with invalid component type"
         );
     }
 }
@@ -525,6 +564,22 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
+    fn requesting_slice_of_wrong_component_from_byte_view_fails() {
+        let component = Byte(42);
+        let data = component.component_bytes();
+        data.slice::<Rectangle>();
+    }
+
+    #[test]
+    #[should_panic]
+    fn requesting_slice_of_zero_size_component_from_byte_view_fails() {
+        let component = Marked;
+        let data = component.component_bytes();
+        data.slice::<Marked>();
+    }
+
+    #[test]
     fn creating_component_data_for_zero_sized_component_works() {
         let component = Marked;
         let data = component.component_bytes();
@@ -535,43 +590,51 @@ mod test {
 
     #[test]
     fn storage_initialization_works() {
-        let storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         assert_eq!(storage.component_count(), 1);
         assert_eq!(storage.size(), mem::size_of::<Rectangle>());
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_1]);
     }
 
     #[test]
+    fn empty_storage_creation_works() {
+        let storage = ComponentStorage::with_capacity::<Rectangle>(10);
+        assert_eq!(storage.component_count(), 0);
+        assert_eq!(storage.size(), 0);
+        assert_eq!(storage.slice::<Rectangle>(), &[]);
+    }
+
+    #[test]
     #[should_panic]
     fn requesting_slice_of_wrong_component_from_storage_fails() {
-        let storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.slice::<Byte>();
     }
 
     #[test]
     #[should_panic]
     fn requesting_mutable_slice_of_wrong_component_from_storage_fails() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.slice_mut::<Byte>();
     }
 
     #[test]
     #[should_panic]
     fn requesting_slice_of_zero_sized_component_from_storage_fails() {
-        let storage = ComponentStorage::new_with_bytes(Marked.component_bytes());
+        let storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
         storage.slice::<Marked>();
     }
 
     #[test]
     #[should_panic]
     fn requesting_mutable_slice_of_zero_sized_component_from_storage_fails() {
-        let mut storage = ComponentStorage::new_with_bytes(Marked.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
         storage.slice_mut::<Marked>();
     }
 
     #[test]
     fn modifying_stored_component_works() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.slice_mut::<Rectangle>()[0] = RECT_2;
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
     }
@@ -579,13 +642,13 @@ mod test {
     #[test]
     #[should_panic]
     fn pushing_different_component_to_storage_fails() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.push(&Byte(42));
     }
 
     #[test]
     fn pushing_component_to_storage_works() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.push(&RECT_2);
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.size(), 2 * mem::size_of::<Rectangle>());
@@ -594,7 +657,7 @@ mod test {
 
     #[test]
     fn pushing_zero_sized_component_to_storage_works() {
-        let mut storage = ComponentStorage::new_with_bytes(Marked.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
         storage.push(&Marked);
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.size(), 0);
@@ -603,13 +666,13 @@ mod test {
     #[test]
     #[should_panic]
     fn pushing_different_component_bytes_to_storage_fails() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.push_bytes(Byte(42).component_bytes());
     }
 
     #[test]
     fn pushing_component_bytes_to_storage_works() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.push_bytes(RECT_2.component_bytes());
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.size(), 2 * mem::size_of::<Rectangle>());
@@ -618,7 +681,7 @@ mod test {
 
     #[test]
     fn pushing_zero_sized_component_bytes_to_storage_works() {
-        let mut storage = ComponentStorage::new_with_bytes(Marked.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
         storage.push_bytes(Marked.component_bytes());
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.size(), 0);
@@ -627,20 +690,20 @@ mod test {
     #[test]
     #[should_panic]
     fn removing_different_component_from_storage_fails() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.swap_remove::<Byte>(0);
     }
 
     #[test]
     #[should_panic]
     fn removing_component_from_storage_with_invalid_idx_fails() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         storage.swap_remove::<Rectangle>(1);
     }
 
     #[test]
     fn swap_removing_component_from_storage_works() {
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         assert_eq!(storage.swap_remove::<Rectangle>(0), RECT_1);
         assert_eq!(storage.slice::<Rectangle>(), &[]);
 
@@ -668,7 +731,7 @@ mod test {
 
     #[test]
     fn swap_removing_zero_sized_component_from_storage_works() {
-        let mut storage = ComponentStorage::new_with_bytes(Marked.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
         storage.push(&Marked);
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.swap_remove::<Marked>(0), Marked);
@@ -693,7 +756,7 @@ mod test {
         let rect_1_bytes = RECT_1.component_bytes().to_owned();
         let rect_2_bytes = RECT_2.component_bytes().to_owned();
 
-        let mut storage = ComponentStorage::new_with_bytes(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
         assert_eq!(storage.swap_remove_bytes(0), rect_1_bytes);
         assert_eq!(storage.slice::<Rectangle>(), &[]);
 
@@ -723,7 +786,7 @@ mod test {
     fn swap_removing_zero_sized_component_bytes_from_storage_works() {
         let marked_bytes = Marked.component_bytes().to_owned();
 
-        let mut storage = ComponentStorage::new_with_bytes(Marked.component_bytes());
+        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
         storage.push(&Marked);
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.swap_remove_bytes(0), marked_bytes);
