@@ -17,130 +17,74 @@ pub(crate) struct QueryInput {
     disallowed_list: Option<TypeList>,
 }
 
-struct QueryClosure {
-    entity_arg: Option<EntityClosureArg>,
-    args: Punctuated<QueryClosureArg, Token![,]>,
-    body: Expr,
-}
-
-struct EntityClosureArg {
+struct ClosureArg<T> {
     var: Ident,
-    ty: Type,
-}
-
-struct QueryClosureArg {
-    var: Ident,
-    ty: TypeReference,
+    ty: T,
 }
 
 struct TypeList {
     tys: Punctuated<Type, Token![,]>,
 }
 
+struct QueryClosure {
+    entity_arg: Option<EntityClosureArg>,
+    comp_args: Punctuated<QueryCompClosureArg, Token![,]>,
+    body: Expr,
+}
+
+type EntityClosureArg = ClosureArg<Type>;
+type QueryCompClosureArg = ClosureArg<TypeReference>;
+
+struct ProcessedQueryInput {
+    world: Expr,
+    closure_body: Expr,
+    entity_arg: Option<EntityClosureArg>,
+    comp_arg_names: Vec<Ident>,
+    comp_arg_type_refs: Vec<TypeReference>,
+    comp_arg_types: Vec<Type>,
+    disallowed_comp_types: Option<Vec<Type>>,
+    required_comp_types: Vec<Type>,
+    closure_arg_names: Vec<Ident>,
+    full_closure_args: Vec<TokenStream>,
+}
+
 pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream> {
-    let (
-        world,
-        entity_arg,
-        comp_arg_names,
-        comp_arg_type_refs,
-        body,
-        also_required_comp_types,
-        disallowed_comp_types,
-    ) = input.into_components();
-    let comp_arg_names_and_type_refs: Vec<_> = comp_arg_names
-        .iter()
-        .zip(comp_arg_type_refs.iter())
-        .collect();
+    let input = input.process();
 
-    let comp_arg_types: Vec<_> = comp_arg_type_refs
-        .iter()
-        .map(|type_ref| type_ref.elem.as_ref().to_owned())
-        .collect();
+    verify_required_comp_types_unique(&input.required_comp_types)?;
+    verify_disallowed_comps_unique(&input.required_comp_types, &input.disallowed_comp_types)?;
 
-    let required_comp_types: Vec<_> = match also_required_comp_types {
-        Some(mut also_required_comp_types) => {
-            also_required_comp_types.extend_from_slice(&comp_arg_types);
-            also_required_comp_types
-        }
-        None => comp_arg_types.clone(),
-    };
-
-    verify_required_comp_types_unique(&required_comp_types)?;
-    verify_disallowed_comps_unique(&required_comp_types, disallowed_comp_types.as_deref())?;
-
-    let verification_code = generate_input_verification(
-        &comp_arg_types,
-        &required_comp_types,
-        disallowed_comp_types.as_deref(),
+    let input_verification_code = generate_input_verification_code(
+        &input.comp_arg_types,
+        &input.required_comp_types,
+        &input.disallowed_comp_types,
         crate_root,
     )?;
 
-    let (mut arg_names, mut closure_args) = match &entity_arg {
-        Some(EntityClosureArg { var, ty }) => (vec![var.clone()], vec![quote! { #var: #ty }]),
-        None => (Vec::new(), Vec::new()),
-    };
-    arg_names.extend_from_slice(&comp_arg_names);
-    closure_args.extend(
-        comp_arg_names_and_type_refs
-            .iter()
-            .map(|(name, type_ref)| quote! { #name: #type_ref }),
+    let (closure_name, closure_def_code) =
+        generate_closure_def_code(&input.full_closure_args, &input.closure_body);
+
+    let (archetype_name, archetype_creation_code) =
+        generate_archetype_creation_code(&input.required_comp_types, &crate_root);
+
+    let (tables_iter_name, table_search_code) =
+        generate_table_search_code(&input.world, &input.disallowed_comp_types, &archetype_name);
+
+    let (table_var_name, table_iter_names, table_iter_code) =
+        generate_table_iter_names_and_code(&input.entity_arg, &input.full_closure_args);
+
+    let (storage_iter_names, storage_iter_code) = generate_storage_iter_names_and_code(
+        &table_var_name,
+        &input.comp_arg_names,
+        &input.comp_arg_type_refs,
     );
 
-    let find_tables = match disallowed_comp_types {
-        Some(disallowed_comp_types) if !disallowed_comp_types.is_empty() => {
-            quote! {
-                let tables = (#world).find_tables_containing_archetype_except_disallowed(
-                    archetype, [#(<#disallowed_comp_types as Component>::component_id()),*]
-                );
-            }
-        }
-        _ => {
-            quote! { let tables = (#world).find_tables_containing_archetype(archetype); }
-        }
-    };
-
-    let table_name = Ident::new("table", Span::call_site());
-
-    let mut iter_names = Vec::with_capacity(closure_args.len());
-    let mut iter_code = Vec::with_capacity(closure_args.len());
-
-    if let Some(EntityClosureArg { var, ty: _ }) = &entity_arg {
-        let (entity_iter_name, entity_iter_code) = generate_entity_iter(&table_name, var);
-        iter_names.push(entity_iter_name);
-        iter_code.push(entity_iter_code);
-    }
-
-    let (mut storage_iter_names, storage_iter_code): (Vec<_>, Vec<_>) =
-        comp_arg_names_and_type_refs
-            .iter()
-            .map(|(name, type_ref)| generate_storage_iter(&table_name, name, type_ref))
-            .unzip();
-
-    // `storage_iter_code` contains statements acquiring locks on
-    // each of the involved ComponentStorages. When multiple locks
-    // need to be acquired before continuing, there is a chance of
-    // deadlock if another thread begins acquiring some of the same
-    // locks in the opposite order. We therefore sort the statements
-    // so that locks are always acquired in the same order regardless
-    // of which order the component types were specified in.
-    let mut storage_iter_code =
-        get_storage_iter_code_sorted_by_arg_type(&comp_arg_types, storage_iter_code);
-
-    iter_names.append(&mut storage_iter_names);
-    iter_code.append(&mut storage_iter_code);
-
-    let (zipped_iter, nested_arg_names) = if arg_names.len() > 1 {
-        (
-            generate_nested_tuple(&quote! { ::core::iter::zip }, &iter_names),
-            generate_nested_tuple(&quote! {}, &arg_names),
-        )
-    } else {
-        // For a single component type no zipping is needed
-        (
-            iter_names[0].to_token_stream(),
-            arg_names[0].to_token_stream(),
-        )
-    };
+    let closure_call_code = generate_closure_call_code(
+        &closure_name,
+        &input.closure_arg_names,
+        &table_iter_names,
+        &storage_iter_names,
+    );
 
     Ok(quote! {
         // Use local scope to avoid polluting surrounding code
@@ -148,29 +92,25 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
             use #crate_root::component::Component;
 
             // Code for verifying argument types
-            #verification_code
+            #input_verification_code
 
             // Define closure to call for each set of components
-            let mut closure = |#(#closure_args),*| #body;
+            #closure_def_code
 
             // Create archetype for all required components
-            let archetype = #crate_root::archetype::Archetype::new_from_component_id_arr([
-                #(<#required_comp_types as Component>::component_id()),*
-            ])
-            .unwrap(); // This `unwrap` should never panic since we have verified the components
+            #archetype_creation_code
 
             // Obtain archetype tables matching the query
-            #find_tables
+            #table_search_code
 
-            for #table_name in tables {
+            for #table_var_name in #tables_iter_name {
                 // Code for acquiring read/write locks and creating iterator
                 // over each component type
-                #(#iter_code)*
+                #(#table_iter_code)*
+                #(#storage_iter_code)*
 
                 // Loop through zipped iterators and call closure
-                for #nested_arg_names in #zipped_iter {
-                    closure(#(#arg_names),*);
-                }
+                #closure_call_code
             }
         }
     })
@@ -222,12 +162,12 @@ impl Parse for QueryInput {
 impl Parse for QueryClosure {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![|]>()?;
-        let mut args = Punctuated::new();
+        let mut comp_args = Punctuated::new();
         let first_arg_var = input.parse()?;
         input.parse::<Token![:]>()?;
         let entity_arg = match input.parse()? {
             Type::Reference(first_arg_ty) => {
-                args.push(QueryClosureArg {
+                comp_args.push(QueryCompClosureArg {
                     var: first_arg_var,
                     ty: first_arg_ty,
                 });
@@ -240,8 +180,8 @@ impl Parse for QueryClosure {
         };
         if input.lookahead1().peek(Token![,]) {
             input.parse::<Token![,]>()?;
-            args.extend(
-                Punctuated::<QueryClosureArg, Token![,]>::parse_separated_nonempty(input)?
+            comp_args.extend(
+                Punctuated::<QueryCompClosureArg, Token![,]>::parse_separated_nonempty(input)?
                     .into_iter(),
             );
         }
@@ -249,13 +189,13 @@ impl Parse for QueryClosure {
         let body = input.parse()?;
         Ok(Self {
             entity_arg,
-            args,
+            comp_args,
             body,
         })
     }
 }
 
-impl Parse for QueryClosureArg {
+impl<T: Parse> Parse for ClosureArg<T> {
     fn parse(input: ParseStream) -> Result<Self> {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
@@ -275,18 +215,8 @@ impl Parse for TypeList {
 }
 
 impl QueryInput {
-    fn into_components(
-        self,
-    ) -> (
-        Expr,
-        Option<EntityClosureArg>,
-        Vec<Ident>,
-        Vec<TypeReference>,
-        Expr,
-        Option<Vec<Type>>,
-        Option<Vec<Type>>,
-    ) {
-        let QueryInput {
+    fn process(self) -> ProcessedQueryInput {
+        let Self {
             world,
             closure,
             also_required_list,
@@ -295,14 +225,19 @@ impl QueryInput {
 
         let QueryClosure {
             entity_arg,
-            args,
-            body,
+            comp_args,
+            body: closure_body,
         } = closure;
 
-        let (arg_names, arg_type_refs) = args
+        let (comp_arg_names, comp_arg_type_refs): (Vec<_>, Vec<_>) = comp_args
             .into_iter()
-            .map(|QueryClosureArg { var, ty }| (var, ty))
+            .map(|QueryCompClosureArg { var, ty }| (var, ty))
             .unzip();
+
+        let comp_arg_types: Vec<_> = comp_arg_type_refs
+            .iter()
+            .map(|type_ref| type_ref.elem.as_ref().to_owned())
+            .collect();
 
         let also_required_comp_types =
             also_required_list.map(|TypeList { tys }| tys.into_iter().collect());
@@ -310,15 +245,37 @@ impl QueryInput {
         let disallowed_comp_types =
             disallowed_list.map(|TypeList { tys }| tys.into_iter().collect());
 
-        (
+        let required_comp_types =
+            determine_all_required_comp_types(&comp_arg_types, also_required_comp_types);
+
+        let (closure_arg_names, full_closure_args) =
+            determine_all_closure_args(&comp_arg_names, &comp_arg_type_refs, &entity_arg);
+
+        ProcessedQueryInput {
             world,
+            closure_body,
             entity_arg,
-            arg_names,
-            arg_type_refs,
-            body,
-            also_required_comp_types,
+            comp_arg_names,
+            comp_arg_type_refs,
+            comp_arg_types,
             disallowed_comp_types,
-        )
+            required_comp_types,
+            closure_arg_names,
+            full_closure_args,
+        }
+    }
+}
+
+fn determine_all_required_comp_types(
+    comp_arg_types: &[Type],
+    also_required_comp_types: Option<Vec<Type>>,
+) -> Vec<Type> {
+    match also_required_comp_types {
+        Some(mut also_required_comp_types) => {
+            also_required_comp_types.extend_from_slice(comp_arg_types);
+            also_required_comp_types
+        }
+        None => comp_arg_types.to_vec(),
     }
 }
 
@@ -341,7 +298,7 @@ fn verify_required_comp_types_unique(required_comp_types: &[Type]) -> Result<()>
 
 fn verify_disallowed_comps_unique(
     required_comp_types: &[Type],
-    disallowed_comp_types: Option<&[Type]>,
+    disallowed_comp_types: &Option<Vec<Type>>,
 ) -> Result<()> {
     if let Some(disallowed_comp_types) = disallowed_comp_types {
         for (idx, ty) in disallowed_comp_types.iter().enumerate() {
@@ -368,10 +325,10 @@ fn verify_disallowed_comps_unique(
     Ok(())
 }
 
-fn generate_input_verification(
+fn generate_input_verification_code(
     comp_arg_types: &[Type],
     required_comp_types: &[Type],
-    disallowed_comp_types: Option<&[Type]>,
+    disallowed_comp_types: &Option<Vec<Type>>,
     crate_root: &Ident,
 ) -> Result<TokenStream> {
     let mut impl_assertions: Vec<_> = comp_arg_types
@@ -398,6 +355,137 @@ fn generate_input_verification(
     })
 }
 
+fn determine_all_closure_args<T: ToTokens>(
+    comp_arg_names: &[Ident],
+    comp_arg_types: &[T],
+    entity_arg: &Option<EntityClosureArg>,
+) -> (Vec<Ident>, Vec<TokenStream>) {
+    let (mut arg_names, mut full_args) = match entity_arg {
+        Some(EntityClosureArg { var, ty }) => (vec![var.clone()], vec![quote! { #var: #ty }]),
+        None => (Vec::new(), Vec::new()),
+    };
+    arg_names.extend_from_slice(&comp_arg_names);
+    full_args.extend(
+        comp_arg_names
+            .iter()
+            .zip(comp_arg_types.iter())
+            .map(|(name, ty)| quote! { #name: #ty }),
+    );
+    (arg_names, full_args)
+}
+
+fn generate_closure_def_code(
+    full_closure_args: &[TokenStream],
+    closure_body: &Expr,
+) -> (Ident, TokenStream) {
+    let closure_name = Ident::new("_closure_internal__", Span::call_site());
+    let closure_def_code = quote! {
+        let mut #closure_name = |#(#full_closure_args),*| #closure_body;
+    };
+    (closure_name, closure_def_code)
+}
+
+fn generate_archetype_creation_code(
+    required_comp_types: &[Type],
+    crate_root: &Ident,
+) -> (Ident, TokenStream) {
+    let archetype_name = Ident::new("archetype", Span::call_site());
+    let archetype_creation_code = quote! {
+        let #archetype_name = #crate_root::archetype_of!(
+            #(#required_comp_types),*
+        )
+        .unwrap(); // This `unwrap` should never panic since we have verified the components
+    };
+    (archetype_name, archetype_creation_code)
+}
+
+fn generate_table_search_code(
+    world: &Expr,
+    disallowed_comp_types: &Option<Vec<Type>>,
+    archetype_name: &Ident,
+) -> (Ident, TokenStream) {
+    let tables_iter_name = Ident::new("tables", Span::call_site());
+    let table_search_code = match disallowed_comp_types {
+        Some(disallowed_comp_types) if !disallowed_comp_types.is_empty() => {
+            quote! {
+                let #tables_iter_name = (#world).find_tables_containing_archetype_except_disallowed(
+                    #archetype_name, [#(<#disallowed_comp_types as Component>::component_id()),*]
+                );
+            }
+        }
+        _ => {
+            quote! { let #tables_iter_name = (#world).find_tables_containing_archetype(#archetype_name); }
+        }
+    };
+    (tables_iter_name, table_search_code)
+}
+
+fn generate_table_iter_names_and_code(
+    entity_arg: &Option<EntityClosureArg>,
+    full_closure_args: &[TokenStream],
+) -> (Ident, Vec<Ident>, Vec<TokenStream>) {
+    let table_var_name = Ident::new("table", Span::call_site());
+    let mut iter_names = Vec::with_capacity(full_closure_args.len());
+    let mut iter_code = Vec::with_capacity(full_closure_args.len());
+
+    if let Some(EntityClosureArg { var, ty: _ }) = entity_arg {
+        let (entity_iter_name, entity_iter_code) = generate_entity_iter_code(&table_var_name, var);
+        iter_names.push(entity_iter_name);
+        iter_code.push(entity_iter_code);
+    }
+    (table_var_name, iter_names, iter_code)
+}
+
+fn generate_storage_iter_names_and_code(
+    table_var_name: &Ident,
+    comp_arg_names: &[Ident],
+    comp_arg_type_refs: &[TypeReference],
+) -> (Vec<Ident>, Vec<TokenStream>) {
+    let (iter_names, iter_code): (Vec<_>, Vec<_>) = comp_arg_names
+        .iter()
+        .zip(comp_arg_type_refs.iter())
+        .map(|(name, type_ref)| generate_storage_iter_code(table_var_name, name, type_ref))
+        .unzip();
+
+    // `iter_code` contains statements acquiring locks on
+    // each of the involved ComponentStorages. When multiple locks
+    // need to be acquired before continuing, there is a chance of
+    // deadlock if another thread begins acquiring some of the same
+    // locks in the opposite order. We therefore sort the statements
+    // so that locks are always acquired in the same order regardless
+    // of which order the component types were specified in.
+    let iter_code = get_storage_iter_code_sorted_by_arg_type(comp_arg_type_refs, iter_code);
+
+    (iter_names, iter_code)
+}
+
+fn generate_closure_call_code(
+    closure_name: &Ident,
+    closure_arg_names: &[Ident],
+    table_iter_names: &[Ident],
+    storage_iter_names: &[Ident],
+) -> TokenStream {
+    let mut iter_names = table_iter_names.iter().chain(storage_iter_names.iter());
+
+    let (zipped_iter, nested_arg_names) = if closure_arg_names.len() > 1 {
+        (
+            generate_nested_tuple(&quote! { ::core::iter::zip }, iter_names),
+            generate_nested_tuple(&quote! {}, closure_arg_names.iter()),
+        )
+    } else {
+        // For a single component type, no zipping is needed
+        (
+            iter_names.next().unwrap().to_token_stream(),
+            closure_arg_names[0].to_token_stream(),
+        )
+    };
+    quote! {
+        for #nested_arg_names in #zipped_iter {
+            #closure_name(#(#closure_arg_names),*);
+        }
+    }
+}
+
 fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenStream {
     quote_spanned! {ty.span()=>
         const _: () = assert!(::std::mem::size_of::<#ty>() != 0, "Zero-sized component in closure signature");
@@ -416,7 +504,7 @@ fn create_assertion_that_type_impls_trait(ty: &Type, crate_root: &Ident) -> Toke
     }
 }
 
-fn generate_entity_iter(table_name: &Ident, entity_arg_name: &Ident) -> (Ident, TokenStream) {
+fn generate_entity_iter_code(table_name: &Ident, entity_arg_name: &Ident) -> (Ident, TokenStream) {
     let iter_name = format_ident!("{}_iter_internal__", entity_arg_name);
     let code = quote! {
         let #iter_name = #table_name.all_entities();
@@ -424,7 +512,7 @@ fn generate_entity_iter(table_name: &Ident, entity_arg_name: &Ident) -> (Ident, 
     (iter_name, code)
 }
 
-fn generate_storage_iter(
+fn generate_storage_iter_code(
     table_name: &Ident,
     arg_name: &Ident,
     arg_type_ref: &TypeReference,
@@ -478,12 +566,12 @@ fn generate_immutable_storage_iter(
 }
 
 fn get_storage_iter_code_sorted_by_arg_type(
-    arg_types: &[Type],
+    arg_type_refs: &[TypeReference],
     storage_iter_code: Vec<TokenStream>,
 ) -> Vec<TokenStream> {
-    let mut type_names_and_code: Vec<_> = arg_types
+    let mut type_names_and_code: Vec<_> = arg_type_refs
         .iter()
-        .map(|ty| ty.to_token_stream().to_string())
+        .map(|ty| ty.elem.to_token_stream().to_string())
         .zip(storage_iter_code.into_iter())
         .collect();
     type_names_and_code.sort_by_key(|(ty, _)| ty.to_string());
@@ -493,11 +581,11 @@ fn get_storage_iter_code_sorted_by_arg_type(
         .collect()
 }
 
-fn generate_nested_tuple<T: ToTokens>(pre_tokens: &TokenStream, values: &[T]) -> TokenStream {
-    generate_nested_token_tuple(
-        pre_tokens,
-        values.iter().map(ToTokens::to_token_stream).collect(),
-    )
+fn generate_nested_tuple<'a, T: ToTokens + 'a>(
+    pre_tokens: &TokenStream,
+    values: impl Iterator<Item = &'a T>,
+) -> TokenStream {
+    generate_nested_token_tuple(pre_tokens, values.map(ToTokens::to_token_stream).collect())
 }
 
 fn generate_nested_token_tuple(
