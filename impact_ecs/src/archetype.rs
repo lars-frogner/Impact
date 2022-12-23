@@ -885,6 +885,11 @@ impl<'a> ArchetypeCompExtender<'a> {
         }
     }
 
+    /// Returns the archetype for the initial set of component types.
+    pub fn initial_archetype(&self) -> &Archetype {
+        self.initial_components.archetype()
+    }
+
     /// Returns a slice of all the instances of the initial
     /// component of type `C`.
     ///
@@ -1287,6 +1292,7 @@ mod test {
     fn creating_component_extender_with_no_initial_components_works() {
         let initial_components = [].try_into().unwrap();
         let extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        assert_eq!(extender.initial_archetype(), &archetype_of!().unwrap());
         let all_components = extender.all_components().unwrap();
         assert_eq!(all_components.n_component_types(), 0);
         assert_eq!(all_components.component_count(), 0);
@@ -1297,6 +1303,10 @@ mod test {
     fn creating_component_extender_with_initial_components_works() {
         let initial_components = (&BYTE, &POS, &RECT).try_into().unwrap();
         let extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        assert_eq!(
+            extender.initial_archetype(),
+            &archetype_of!(Byte, Position, Rectangle).unwrap()
+        );
         assert_eq!(extender.initial_components::<Byte>(), &[BYTE]);
         assert_eq!(extender.initial_components::<Rectangle>(), &[RECT]);
         assert_eq!(extender.initial_components::<Position>(), &[POS]);
