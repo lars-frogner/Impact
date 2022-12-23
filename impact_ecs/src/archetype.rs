@@ -952,7 +952,9 @@ impl<'a> TryFrom<&'a ArchetypeCompExtender<'a>> for ArchetypeCompByteView<'a> {
 #[macro_export]
 macro_rules! archetype_of {
     ($($component:ty),*) => {
-        $crate::archetype::Archetype::new_from_component_id_arr([$(<$component>::component_id()),*])
+        $crate::archetype::Archetype::new_from_component_id_arr(
+            [$(<$component as $crate::component::Component>::component_id()),*]
+        )
     };
 }
 
