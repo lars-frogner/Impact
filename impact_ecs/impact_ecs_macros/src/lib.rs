@@ -2,6 +2,7 @@
 
 mod component;
 mod query;
+mod querying_util;
 
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;

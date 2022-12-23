@@ -1,13 +1,12 @@
 //! Macro for querying for specific sets of component types.
 
+use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
-    bracketed,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    spanned::Spanned,
-    Error, Expr, Result, Token, Type, TypeReference,
+    Expr, Result, Token, Type, TypeReference,
 };
 
 pub(crate) struct QueryInput {
@@ -17,23 +16,19 @@ pub(crate) struct QueryInput {
     disallowed_list: Option<TypeList>,
 }
 
-struct ClosureArg<T> {
-    var: Ident,
-    ty: T,
-}
-
-struct TypeList {
-    tys: Punctuated<Type, Token![,]>,
-}
-
 struct QueryClosure {
     entity_arg: Option<EntityClosureArg>,
     comp_args: Punctuated<QueryCompClosureArg, Token![,]>,
     body: Expr,
 }
 
-type EntityClosureArg = ClosureArg<Type>;
-type QueryCompClosureArg = ClosureArg<TypeReference>;
+struct QueryClosureArg<T> {
+    var: Ident,
+    ty: T,
+}
+
+type EntityClosureArg = QueryClosureArg<Type>;
+type QueryCompClosureArg = QueryClosureArg<TypeReference>;
 
 struct ProcessedQueryInput {
     world: Expr,
@@ -51,13 +46,16 @@ struct ProcessedQueryInput {
 pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream> {
     let input = input.process();
 
-    verify_required_comp_types_unique(&input.required_comp_types)?;
-    verify_disallowed_comps_unique(&input.required_comp_types, &input.disallowed_comp_types)?;
-
-    let input_verification_code = generate_input_verification_code(
-        &input.comp_arg_types,
+    querying_util::verify_comp_types_unique(&input.required_comp_types)?;
+    querying_util::verify_disallowed_comps_unique(
         &input.required_comp_types,
         &input.disallowed_comp_types,
+    )?;
+
+    let input_verification_code = querying_util::generate_input_verification_code(
+        &input.comp_arg_types,
+        &input.required_comp_types,
+        [&input.disallowed_comp_types],
         crate_root,
     )?;
 
@@ -65,7 +63,7 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
         generate_closure_def_code(&input.full_closure_args, &input.closure_body);
 
     let (archetype_name, archetype_creation_code) =
-        generate_archetype_creation_code(&input.required_comp_types, &crate_root);
+        querying_util::generate_archetype_creation_code(&input.required_comp_types, &crate_root);
 
     let (tables_iter_name, table_search_code) =
         generate_table_search_code(&input.world, &input.disallowed_comp_types, &archetype_name);
@@ -118,38 +116,8 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
 
 impl Parse for QueryInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let world = input.parse()?;
-
-        input.parse::<Token![,]>()?;
-        let closure = input.parse()?;
-
-        let (also_required_list, disallowed_list) = if input.lookahead1().peek(Token![,]) {
-            input.parse::<Token![,]>()?;
-            if input.lookahead1().peek(Token![!]) {
-                input.parse::<Token![!]>()?;
-                let disallowed_list = Some(input.parse()?);
-                let also_required_list = if input.lookahead1().peek(Token![,]) {
-                    input.parse::<Token![,]>()?;
-                    Some(input.parse()?)
-                } else {
-                    None
-                };
-                (also_required_list, disallowed_list)
-            } else {
-                let also_required_list = Some(input.parse()?);
-                let disallowed_list = if input.lookahead1().peek(Token![,]) {
-                    input.parse::<Token![,]>()?;
-                    input.parse::<Token![!]>()?;
-                    Some(input.parse()?)
-                } else {
-                    None
-                };
-                (also_required_list, disallowed_list)
-            }
-        } else {
-            (None, None)
-        };
-
+        let (world, closure, also_required_list, disallowed_list) =
+            querying_util::parse_querying_input(input)?;
         Ok(Self {
             world,
             closure,
@@ -195,22 +163,13 @@ impl Parse for QueryClosure {
     }
 }
 
-impl<T: Parse> Parse for ClosureArg<T> {
+impl<T: Parse> Parse for QueryClosureArg<T> {
     fn parse(input: ParseStream) -> Result<Self> {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
         let ty = input.parse()?;
 
         Ok(Self { var, ty })
-    }
-}
-
-impl Parse for TypeList {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        bracketed!(content in input);
-        let tys = content.parse_terminated(Type::parse)?;
-        Ok(Self { tys })
     }
 }
 
@@ -245,8 +204,10 @@ impl QueryInput {
         let disallowed_comp_types =
             disallowed_list.map(|TypeList { tys }| tys.into_iter().collect());
 
-        let required_comp_types =
-            determine_all_required_comp_types(&comp_arg_types, also_required_comp_types);
+        let required_comp_types = querying_util::determine_all_required_comp_types(
+            &comp_arg_types,
+            also_required_comp_types,
+        );
 
         let (closure_arg_names, full_closure_args) =
             determine_all_closure_args(&comp_arg_names, &comp_arg_type_refs, &entity_arg);
@@ -266,95 +227,6 @@ impl QueryInput {
     }
 }
 
-fn determine_all_required_comp_types(
-    comp_arg_types: &[Type],
-    also_required_comp_types: Option<Vec<Type>>,
-) -> Vec<Type> {
-    match also_required_comp_types {
-        Some(mut also_required_comp_types) => {
-            also_required_comp_types.extend_from_slice(comp_arg_types);
-            also_required_comp_types
-        }
-        None => comp_arg_types.to_vec(),
-    }
-}
-
-/// Returns an error if any of the given required component types occurs
-/// more than once.
-fn verify_required_comp_types_unique(required_comp_types: &[Type]) -> Result<()> {
-    for (idx, ty) in required_comp_types.iter().enumerate() {
-        if required_comp_types[..idx].contains(ty) {
-            return Err(Error::new_spanned(
-                &required_comp_types[idx],
-                format!(
-                    "component type `{}` occurs more than once",
-                    ty.to_token_stream().to_string()
-                ),
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn verify_disallowed_comps_unique(
-    required_comp_types: &[Type],
-    disallowed_comp_types: &Option<Vec<Type>>,
-) -> Result<()> {
-    if let Some(disallowed_comp_types) = disallowed_comp_types {
-        for (idx, ty) in disallowed_comp_types.iter().enumerate() {
-            if disallowed_comp_types[..idx].contains(ty) {
-                return Err(Error::new_spanned(
-                    &disallowed_comp_types[idx],
-                    format!(
-                        "disallowed component type `{}` occurs more than once",
-                        ty.to_token_stream().to_string()
-                    ),
-                ));
-            }
-            if required_comp_types.contains(&ty) {
-                return Err(Error::new_spanned(
-                    &disallowed_comp_types[idx],
-                    format!(
-                        "disallowed component type `{}` is also required",
-                        ty.to_token_stream().to_string()
-                    ),
-                ));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn generate_input_verification_code(
-    comp_arg_types: &[Type],
-    required_comp_types: &[Type],
-    disallowed_comp_types: &Option<Vec<Type>>,
-    crate_root: &Ident,
-) -> Result<TokenStream> {
-    let mut impl_assertions: Vec<_> = comp_arg_types
-        .iter()
-        .map(|ty| create_assertion_that_type_is_not_zero_sized(ty))
-        .collect();
-
-    impl_assertions.extend(
-        required_comp_types
-            .iter()
-            .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root)),
-    );
-
-    if let Some(disallowed_comp_types) = disallowed_comp_types {
-        impl_assertions.extend(
-            disallowed_comp_types
-                .iter()
-                .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root)),
-        )
-    }
-
-    Ok(quote! {
-        #(#impl_assertions)*
-    })
-}
-
 fn determine_all_closure_args<T: ToTokens>(
     comp_arg_names: &[Ident],
     comp_arg_types: &[T],
@@ -366,10 +238,7 @@ fn determine_all_closure_args<T: ToTokens>(
     };
     arg_names.extend_from_slice(&comp_arg_names);
     full_args.extend(
-        comp_arg_names
-            .iter()
-            .zip(comp_arg_types.iter())
-            .map(|(name, ty)| quote! { #name: #ty }),
+        querying_util::create_full_closure_args(comp_arg_names, comp_arg_types).into_iter(),
     );
     (arg_names, full_args)
 }
@@ -385,26 +254,12 @@ fn generate_closure_def_code(
     (closure_name, closure_def_code)
 }
 
-fn generate_archetype_creation_code(
-    required_comp_types: &[Type],
-    crate_root: &Ident,
-) -> (Ident, TokenStream) {
-    let archetype_name = Ident::new("archetype", Span::call_site());
-    let archetype_creation_code = quote! {
-        let #archetype_name = #crate_root::archetype_of!(
-            #(#required_comp_types),*
-        )
-        .unwrap(); // This `unwrap` should never panic since we have verified the components
-    };
-    (archetype_name, archetype_creation_code)
-}
-
 fn generate_table_search_code(
     world: &Expr,
     disallowed_comp_types: &Option<Vec<Type>>,
     archetype_name: &Ident,
 ) -> (Ident, TokenStream) {
-    let tables_iter_name = Ident::new("tables", Span::call_site());
+    let tables_iter_name = Ident::new("_tables_internal__", Span::call_site());
     let table_search_code = match disallowed_comp_types {
         Some(disallowed_comp_types) if !disallowed_comp_types.is_empty() => {
             quote! {
@@ -424,7 +279,7 @@ fn generate_table_iter_names_and_code(
     entity_arg: &Option<EntityClosureArg>,
     full_closure_args: &[TokenStream],
 ) -> (Ident, Vec<Ident>, Vec<TokenStream>) {
-    let table_var_name = Ident::new("table", Span::call_site());
+    let table_var_name = Ident::new("_table_internal__", Span::call_site());
     let mut iter_names = Vec::with_capacity(full_closure_args.len());
     let mut iter_code = Vec::with_capacity(full_closure_args.len());
 
@@ -469,8 +324,8 @@ fn generate_closure_call_code(
 
     let (zipped_iter, nested_arg_names) = if closure_arg_names.len() > 1 {
         (
-            generate_nested_tuple(&quote! { ::core::iter::zip }, iter_names),
-            generate_nested_tuple(&quote! {}, closure_arg_names.iter()),
+            querying_util::generate_nested_tuple(&quote! { ::core::iter::zip }, iter_names),
+            querying_util::generate_nested_tuple(&quote! {}, closure_arg_names.iter()),
         )
     } else {
         // For a single component type, no zipping is needed
@@ -483,24 +338,6 @@ fn generate_closure_call_code(
         for #nested_arg_names in #zipped_iter {
             #closure_name(#(#closure_arg_names),*);
         }
-    }
-}
-
-fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenStream {
-    quote_spanned! {ty.span()=>
-        const _: () = assert!(::std::mem::size_of::<#ty>() != 0, "Zero-sized component in closure signature");
-    }
-}
-
-fn create_assertion_that_type_impls_trait(ty: &Type, crate_root: &Ident) -> TokenStream {
-    let mut ty_name = ty.to_token_stream().to_string();
-    ty_name.retain(|c| c.is_alphanumeric()); // Remove possible invalid characters for identifier
-    let dummy_struct_name = format_ident!("__assert_{}_impls_component", ty_name);
-    quote_spanned! {ty.span()=>
-        // This definition will fail to compile if the type `ty`
-        // doesn't implement `Component`
-        #[allow(non_camel_case_types)]
-        struct #dummy_struct_name where #ty: #crate_root::component::Component;
     }
 }
 
@@ -579,25 +416,4 @@ fn get_storage_iter_code_sorted_by_arg_type(
         .into_iter()
         .map(|(_, code)| code)
         .collect()
-}
-
-fn generate_nested_tuple<'a, T: ToTokens + 'a>(
-    pre_tokens: &TokenStream,
-    values: impl Iterator<Item = &'a T>,
-) -> TokenStream {
-    generate_nested_token_tuple(pre_tokens, values.map(ToTokens::to_token_stream).collect())
-}
-
-fn generate_nested_token_tuple(
-    pre_tokens: &TokenStream,
-    mut items: Vec<TokenStream>,
-) -> TokenStream {
-    assert!(items.len() > 1);
-    let tail = items.pop().unwrap();
-    let head = if items.len() > 1 {
-        generate_nested_token_tuple(pre_tokens, items)
-    } else {
-        items.pop().unwrap()
-    };
-    quote! { #pre_tokens (#head, #tail) }
 }
