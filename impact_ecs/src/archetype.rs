@@ -876,13 +876,19 @@ impl<'a> ArchetypeCompByteView<'a> {
 impl<'a> ArchetypeCompExtender<'a> {
     /// Creates a new [`ArchetypeCompExtender`] for extending
     /// the given initial components.
-    pub fn with_initial_components(components: ArchetypeCompByteView<'a>) -> Self {
+    pub fn with_initial_components<E>(
+        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+    ) -> Result<Self>
+    where
+        E: Into<anyhow::Error>,
+    {
+        let components = components.try_into().map_err(E::into)?;
         let component_index_map = components.create_component_index_map();
-        Self {
+        Ok(Self {
             initial_components: components,
             component_index_map,
             extra_components: Vec::new(),
-        }
+        })
     }
 
     /// Returns the archetype for the initial set of component types.
@@ -901,6 +907,12 @@ impl<'a> ArchetypeCompExtender<'a> {
             .get(&C::component_id())
             .expect("Requested invalid component");
         self.initial_components.bytes()[component_idx].slice()
+    }
+
+    /// Returns the number of instances of each initial component
+    /// type present.
+    pub fn initial_component_count(&self) -> usize {
+        self.initial_components.component_count()
     }
 
     /// Creates an empty [`ComponentStorage`] for components
@@ -1292,9 +1304,9 @@ mod test {
 
     #[test]
     fn creating_component_extender_with_no_initial_components_works() {
-        let initial_components = [].try_into().unwrap();
-        let extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let extender = ArchetypeCompExtender::with_initial_components([]).unwrap();
         assert_eq!(extender.initial_archetype(), &archetype_of!().unwrap());
+        assert_eq!(extender.initial_component_count(), 0);
         let all_components = extender.all_components().unwrap();
         assert_eq!(all_components.n_component_types(), 0);
         assert_eq!(all_components.component_count(), 0);
@@ -1303,12 +1315,13 @@ mod test {
 
     #[test]
     fn creating_component_extender_with_initial_components_works() {
-        let initial_components = (&BYTE, &POS, &RECT).try_into().unwrap();
-        let extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let extender =
+            ArchetypeCompExtender::with_initial_components((&BYTE, &POS, &RECT)).unwrap();
         assert_eq!(
             extender.initial_archetype(),
             &archetype_of!(Byte, Position, Rectangle).unwrap()
         );
+        assert_eq!(extender.initial_component_count(), 1);
         assert_eq!(extender.initial_components::<Byte>(), &[BYTE]);
         assert_eq!(extender.initial_components::<Rectangle>(), &[RECT]);
         assert_eq!(extender.initial_components::<Position>(), &[POS]);
@@ -1325,15 +1338,13 @@ mod test {
     #[test]
     #[should_panic]
     fn requesting_missing_initial_component_from_component_extender_fails() {
-        let initial_components = (&BYTE, &RECT).try_into().unwrap();
-        let extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let extender = ArchetypeCompExtender::with_initial_components((&BYTE, &RECT)).unwrap();
         extender.initial_components::<Position>();
     }
 
     #[test]
     fn adding_extra_component_to_empty_component_extender_works() {
-        let initial_components = [].try_into().unwrap();
-        let mut extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let mut extender = ArchetypeCompExtender::with_initial_components([]).unwrap();
 
         let mut pos_storage = extender.new_storage::<Position>();
         pos_storage.push(&POS);
@@ -1341,6 +1352,7 @@ mod test {
 
         let extended_components = extender.all_components().unwrap();
 
+        assert_eq!(extender.initial_component_count(), 0);
         assert_eq!(extended_components.n_component_types(), 1);
         assert_eq!(extended_components.component_count(), 1);
         assert_eq!(
@@ -1351,8 +1363,7 @@ mod test {
 
     #[test]
     fn adding_extra_component_to_component_extender_works() {
-        let initial_components = (&RECT).try_into().unwrap();
-        let mut extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let mut extender = ArchetypeCompExtender::with_initial_components(&RECT).unwrap();
 
         let mut pos_storage = extender.new_storage::<Position>();
         pos_storage.push(&POS);
@@ -1360,6 +1371,7 @@ mod test {
 
         let extended_components = extender.all_components().unwrap();
 
+        assert_eq!(extender.initial_component_count(), 1);
         assert_eq!(extended_components.n_component_types(), 2);
         assert_eq!(extended_components.component_count(), 1);
         assert_eq!(
@@ -1373,6 +1385,7 @@ mod test {
 
         let extended_components = extender.all_components().unwrap();
 
+        assert_eq!(extender.initial_component_count(), 1);
         assert_eq!(extended_components.n_component_types(), 3);
         assert_eq!(extended_components.component_count(), 1);
         assert_eq!(
@@ -1383,8 +1396,7 @@ mod test {
 
     #[test]
     fn adding_extra_components_to_component_extender_works() {
-        let initial_components = (&[RECT, RECT]).try_into().unwrap();
-        let mut extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let mut extender = ArchetypeCompExtender::with_initial_components(&[RECT, RECT]).unwrap();
 
         let mut pos_storage = extender.new_storage::<Position>();
         let mut byte_storage = extender.new_storage::<Byte>();
@@ -1396,6 +1408,7 @@ mod test {
 
         let extended_components = extender.all_components().unwrap();
 
+        assert_eq!(extender.initial_component_count(), 2);
         assert_eq!(extended_components.n_component_types(), 3);
         assert_eq!(extended_components.component_count(), 2);
         assert_eq!(
@@ -1407,8 +1420,7 @@ mod test {
     #[test]
     #[should_panic]
     fn adding_extra_component_of_existing_type_to_component_extender_fails() {
-        let initial_components = (&POS).try_into().unwrap();
-        let mut extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let mut extender = ArchetypeCompExtender::with_initial_components(&POS).unwrap();
 
         let mut pos_storage = extender.new_storage::<Position>();
         pos_storage.push(&POS);
@@ -1420,8 +1432,8 @@ mod test {
     #[test]
     #[should_panic]
     fn adding_extra_component_with_wrong_count_to_component_extender_fails() {
-        let initial_components = (&[RECT, RECT], &[POS, POS]).try_into().unwrap();
-        let mut extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let mut extender =
+            ArchetypeCompExtender::with_initial_components((&[RECT, RECT], &[POS, POS])).unwrap();
 
         let mut byte_storage = extender.new_storage::<Byte>();
         byte_storage.push(&BYTE);
@@ -1432,8 +1444,7 @@ mod test {
 
     #[test]
     fn converting_from_component_extender_to_archetype_comp_byte_view_works() {
-        let initial_components = [].try_into().unwrap();
-        let extender = ArchetypeCompExtender::with_initial_components(initial_components);
+        let extender = ArchetypeCompExtender::with_initial_components([]).unwrap();
         let _: ArchetypeCompByteView<'_> = (&extender).try_into().unwrap();
     }
 
