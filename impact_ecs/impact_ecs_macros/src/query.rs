@@ -227,9 +227,9 @@ impl QueryInput {
     }
 }
 
-fn determine_all_closure_args<T: ToTokens>(
+fn determine_all_closure_args(
     comp_arg_names: &[Ident],
-    comp_arg_types: &[T],
+    comp_arg_type_refs: &[TypeReference],
     entity_arg: &Option<EntityClosureArg>,
 ) -> (Vec<Ident>, Vec<TokenStream>) {
     let (mut arg_names, mut full_args) = match entity_arg {
@@ -238,7 +238,10 @@ fn determine_all_closure_args<T: ToTokens>(
     };
     arg_names.extend_from_slice(&comp_arg_names);
     full_args.extend(
-        querying_util::create_full_closure_args(comp_arg_names, comp_arg_types).into_iter(),
+        comp_arg_names
+            .iter()
+            .zip(comp_arg_type_refs.iter())
+            .map(|(name, type_ref)| quote! { #name: #type_ref }),
     );
     (arg_names, full_args)
 }

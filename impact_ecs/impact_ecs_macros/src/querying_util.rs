@@ -78,17 +78,6 @@ pub(crate) fn determine_all_required_comp_types(
     }
 }
 
-pub(crate) fn create_full_closure_args<T: ToTokens>(
-    comp_arg_names: &[Ident],
-    comp_arg_types: &[T],
-) -> Vec<TokenStream> {
-    comp_arg_names
-        .iter()
-        .zip(comp_arg_types.iter())
-        .map(|(name, ty)| quote! { #name: #ty })
-        .collect()
-}
-
 /// Returns an error if any of the given component types occurs
 /// more than once.
 pub(crate) fn verify_comp_types_unique(comp_types: &[Type]) -> Result<()> {
