@@ -90,6 +90,7 @@ pub(crate) fn prepare(input: PrepareInput, crate_root: &Ident) -> Result<TokenSt
         );
 
     let closure_call_code = generate_closure_call_code(
+        &input.extender_name,
         &closure_name,
         &input.comp_arg_names,
         &initial_component_iter_names,
@@ -331,6 +332,7 @@ fn generate_initial_component_iter_code(
 }
 
 fn generate_closure_call_code(
+    extender_name: &Ident,
     closure_name: &Ident,
     comp_arg_names: &[Ident],
     initial_component_iter_names: &[Ident],
@@ -345,11 +347,16 @@ fn generate_closure_call_code(
             ),
             querying_util::generate_nested_tuple(&quote! {}, comp_arg_names.iter()),
         )
-    } else {
+    } else if !comp_arg_names.is_empty() {
         // For a single component type, no zipping is needed
         (
             initial_component_iter_names[0].to_token_stream(),
             comp_arg_names[0].to_token_stream(),
+        )
+    } else {
+        (
+            quote! {0..#extender_name.initial_component_count()},
+            quote! {_},
         )
     };
 
