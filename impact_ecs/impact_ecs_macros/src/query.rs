@@ -65,8 +65,12 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
     let (archetype_name, archetype_creation_code) =
         querying_util::generate_archetype_creation_code(&input.required_comp_types, &crate_root);
 
-    let (tables_iter_name, table_search_code) =
-        generate_table_search_code(&input.world, &input.disallowed_comp_types, &archetype_name);
+    let (tables_iter_name, table_search_code) = generate_table_search_code(
+        &input.world,
+        &input.disallowed_comp_types,
+        &archetype_name,
+        &crate_root,
+    );
 
     let (table_var_name, table_iter_names, table_iter_code) =
         generate_table_iter_names_and_code(&input.entity_arg, &input.full_closure_args);
@@ -75,6 +79,7 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
         &table_var_name,
         &input.comp_arg_names,
         &input.comp_arg_type_refs,
+        &crate_root,
     );
 
     let closure_call_code = generate_closure_call_code(
@@ -87,8 +92,6 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
     Ok(quote! {
         // Use local scope to avoid polluting surrounding code
         {
-            use #crate_root::component::Component;
-
             // Code for verifying argument types
             #input_verification_code
 
@@ -261,13 +264,14 @@ fn generate_table_search_code(
     world: &Expr,
     disallowed_comp_types: &Option<Vec<Type>>,
     archetype_name: &Ident,
+    crate_root: &Ident,
 ) -> (Ident, TokenStream) {
     let tables_iter_name = Ident::new("_tables_internal__", Span::call_site());
     let table_search_code = match disallowed_comp_types {
         Some(disallowed_comp_types) if !disallowed_comp_types.is_empty() => {
             quote! {
                 let #tables_iter_name = (#world).find_tables_containing_archetype_except_disallowed(
-                    #archetype_name, [#(<#disallowed_comp_types as Component>::component_id()),*]
+                    #archetype_name, [#(<#disallowed_comp_types as #crate_root::component::Component>::component_id()),*]
                 );
             }
         }
@@ -298,11 +302,14 @@ fn generate_storage_iter_names_and_code(
     table_var_name: &Ident,
     comp_arg_names: &[Ident],
     comp_arg_type_refs: &[TypeReference],
+    crate_root: &Ident,
 ) -> (Vec<Ident>, Vec<TokenStream>) {
     let (iter_names, iter_code): (Vec<_>, Vec<_>) = comp_arg_names
         .iter()
         .zip(comp_arg_type_refs.iter())
-        .map(|(name, type_ref)| generate_storage_iter_code(table_var_name, name, type_ref))
+        .map(|(name, type_ref)| {
+            generate_storage_iter_code(table_var_name, name, type_ref, crate_root)
+        })
         .unzip();
 
     // `iter_code` contains statements acquiring locks on
@@ -356,6 +363,7 @@ fn generate_storage_iter_code(
     table_name: &Ident,
     arg_name: &Ident,
     arg_type_ref: &TypeReference,
+    crate_root: &Ident,
 ) -> (Ident, TokenStream) {
     let storage_name = format_ident!("{}_storage_internal__", arg_name);
     let iter_name = format_ident!("{}_iter_internal__", arg_name);
@@ -365,6 +373,7 @@ fn generate_storage_iter_code(
             &storage_name,
             &iter_name,
             arg_type_ref.elem.as_ref(),
+            crate_root,
         )
     } else {
         generate_immutable_storage_iter(
@@ -372,6 +381,7 @@ fn generate_storage_iter_code(
             &storage_name,
             &iter_name,
             arg_type_ref.elem.as_ref(),
+            crate_root,
         )
     };
     (iter_name, code)
@@ -382,10 +392,11 @@ fn generate_mutable_storage_iter(
     storage_name: &Ident,
     iter_name: &Ident,
     arg_type: &Type,
+    crate_root: &Ident,
 ) -> TokenStream {
     quote! {
         let mut #storage_name = #table_name.component_storage(
-            <#arg_type as Component>::component_id()
+            <#arg_type as #crate_root::component::Component>::component_id()
         ).write().unwrap();
         let #iter_name = #storage_name.slice_mut::<#arg_type>().iter_mut();
     }
@@ -396,10 +407,11 @@ fn generate_immutable_storage_iter(
     storage_name: &Ident,
     iter_name: &Ident,
     arg_type: &Type,
+    crate_root: &Ident,
 ) -> TokenStream {
     quote! {
         let #storage_name = #table_name.component_storage(
-            <#arg_type as Component>::component_id()
+            <#arg_type as #crate_root::component::Component>::component_id()
         ).read().unwrap();
         let #iter_name = #storage_name.slice::<#arg_type>().iter();
     }
