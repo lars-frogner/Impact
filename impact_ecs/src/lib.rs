@@ -13,6 +13,9 @@ pub mod world;
 /// [`Component`](component::Component).
 pub use impact_ecs_macros::Component;
 
+///
+pub use impact_ecs_macros::prepare;
+
 /// Macro for querying for a specific set of component types.
 ///
 /// ```ignore
