@@ -1,4 +1,4 @@
-//! Macro for performing preparation on components before
+//! Macro for performing setup on components before
 //! creating entities.
 
 use crate::querying_util::{self, TypeList};
@@ -13,7 +13,7 @@ use syn::{
 };
 
 pub(crate) struct SetupInput {
-    extender_name: Ident,
+    manager_name: Ident,
     closure: SetupClosure,
     also_required_list: Option<TypeList>,
     disallowed_list: Option<TypeList>,
@@ -31,7 +31,7 @@ struct SetupClosure {
 }
 
 struct ProcessedSetupInput {
-    extender_name: Ident,
+    manager_name: Ident,
     closure_body: Expr,
     comp_arg_names: Vec<Ident>,
     comp_arg_types: Vec<Type>,
@@ -70,7 +70,7 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
         querying_util::generate_archetype_creation_code(&input.required_comp_types, &crate_root);
 
     let if_expr_code = generate_if_expr_code(
-        &input.extender_name,
+        &input.manager_name,
         &archetype_name,
         &input.disallowed_comp_types,
         &crate_root,
@@ -78,19 +78,19 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
 
     let (component_storage_array_name, component_storage_array_creation_code) =
         generate_component_storage_array_creation_code(
-            &input.extender_name,
+            &input.manager_name,
             &input.return_comp_types,
         );
 
     let (initial_component_iter_names, initial_component_iter_code) =
         generate_initial_component_iter_names_and_code(
-            &input.extender_name,
+            &input.manager_name,
             &input.comp_arg_names,
             &input.comp_arg_types,
         );
 
     let closure_call_code = generate_closure_call_code(
-        &input.extender_name,
+        &input.manager_name,
         &closure_name,
         &input.comp_arg_names,
         &initial_component_iter_names,
@@ -99,7 +99,7 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
     );
 
     let extension_code =
-        generate_extension_code(&input.extender_name, &component_storage_array_name);
+        generate_extension_code(&input.manager_name, &component_storage_array_name);
 
     Ok(quote! {
         // Use local scope to avoid polluting surrounding code
@@ -126,7 +126,7 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
                 // and store any returned components
                 #closure_call_code
 
-                // Pass any new components to extender
+                // Pass any new components to manager
                 #extension_code
             }
         }
@@ -135,10 +135,10 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
 
 impl Parse for SetupInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let (extender_name, closure, also_required_list, disallowed_list) =
+        let (manager_name, closure, also_required_list, disallowed_list) =
             querying_util::parse_querying_input(input)?;
         Ok(Self {
-            extender_name,
+            manager_name,
             closure,
             also_required_list,
             disallowed_list,
@@ -195,7 +195,7 @@ impl Parse for SetupCompClosureArg {
 impl SetupInput {
     fn process(self) -> ProcessedSetupInput {
         let Self {
-            extender_name,
+            manager_name,
             closure,
             also_required_list,
             disallowed_list,
@@ -229,7 +229,7 @@ impl SetupInput {
         let full_closure_args = create_full_closure_args(&comp_arg_names, &comp_arg_types);
 
         ProcessedSetupInput {
-            extender_name,
+            manager_name,
             closure_body,
             comp_arg_names,
             comp_arg_types,
@@ -266,19 +266,19 @@ fn generate_closure_def_code(
 }
 
 fn generate_if_expr_code(
-    extender_name: &Ident,
+    manager_name: &Ident,
     archetype_name: &Ident,
     disallowed_comp_types: &Option<Vec<Type>>,
     crate_root: &Ident,
 ) -> TokenStream {
     let contains_all_expr = quote! {
-        #extender_name.initial_archetype().contains(&#archetype_name)
+        #manager_name.initial_archetype().contains(&#archetype_name)
     };
     match disallowed_comp_types {
         Some(disallowed_comp_types) if !disallowed_comp_types.is_empty() => {
             quote! {
                 #contains_all_expr &&
-                #extender_name.initial_archetype().contains_none_of(&[
+                #manager_name.initial_archetype().contains_none_of(&[
                     #(<#disallowed_comp_types as #crate_root::component::Component>::component_id()),*
                 ])
             }
@@ -288,7 +288,7 @@ fn generate_if_expr_code(
 }
 
 fn generate_component_storage_array_creation_code(
-    extender_name: &Ident,
+    manager_name: &Ident,
     return_comp_types: &Option<Vec<Type>>,
 ) -> (Option<Ident>, TokenStream) {
     match return_comp_types {
@@ -296,7 +296,7 @@ fn generate_component_storage_array_creation_code(
             let array_name = Ident::new("_component_storage_array_internal__", Span::call_site());
             let array_creation_code = quote! {
                 let mut #array_name = [
-                    #(#extender_name.new_storage::<#return_comp_types>()),*
+                    #(#manager_name.new_storage::<#return_comp_types>()),*
                 ];
             };
             (Some(array_name), array_creation_code)
@@ -306,33 +306,33 @@ fn generate_component_storage_array_creation_code(
 }
 
 fn generate_initial_component_iter_names_and_code(
-    extender_name: &Ident,
+    manager_name: &Ident,
     comp_arg_names: &[Ident],
     comp_arg_types: &[Type],
 ) -> (Vec<Ident>, Vec<TokenStream>) {
     let (iter_names, iter_code): (Vec<_>, Vec<_>) = comp_arg_names
         .iter()
         .zip(comp_arg_types.iter())
-        .map(|(name, ty)| generate_initial_component_iter_code(extender_name, name, ty))
+        .map(|(name, ty)| generate_initial_component_iter_code(manager_name, name, ty))
         .unzip();
 
     (iter_names, iter_code)
 }
 
 fn generate_initial_component_iter_code(
-    extender_name: &Ident,
+    manager_name: &Ident,
     arg_name: &Ident,
     arg_type: &Type,
 ) -> (Ident, TokenStream) {
     let iter_name = format_ident!("{}_iter_internal__", arg_name);
     let code = quote! {
-        let #iter_name = #extender_name.initial_components::<#arg_type>().iter();
+        let #iter_name = #manager_name.initial_components::<#arg_type>().iter();
     };
     (iter_name, code)
 }
 
 fn generate_closure_call_code(
-    extender_name: &Ident,
+    manager_name: &Ident,
     closure_name: &Ident,
     comp_arg_names: &[Ident],
     initial_component_iter_names: &[Ident],
@@ -355,7 +355,7 @@ fn generate_closure_call_code(
         )
     } else {
         (
-            quote! {0..#extender_name.initial_component_count()},
+            quote! {0..#manager_name.initial_component_count()},
             quote! {_},
         )
     };
@@ -412,12 +412,12 @@ fn create_return_comp_names(return_comp_types: &[Type]) -> Vec<Ident> {
 }
 
 fn generate_extension_code(
-    extender_name: &Ident,
+    manager_name: &Ident,
     component_storage_array_name: &Option<Ident>,
 ) -> TokenStream {
     if let Some(storage_array_name) = component_storage_array_name {
         quote! {
-            #extender_name.extend(#storage_array_name);
+            #manager_name.add_extra_components(#storage_array_name);
         }
     } else {
         quote! {}
