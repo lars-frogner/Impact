@@ -7,8 +7,9 @@ pub use tasks::SyncRenderBuffers;
 use crate::{
     geometry::{Camera, TriangleMesh},
     rendering::{
-        buffer::BufferableVertex, camera::CameraRenderBufferManager, mesh::MeshRenderBufferManager,
-        model::ModelInstanceRenderBufferManager, CoreRenderingSystem,
+        buffer::BufferableVertex, camera::CameraRenderBufferManager, fre,
+        mesh::MeshRenderBufferManager, model::ModelInstanceRenderBufferManager,
+        CoreRenderingSystem,
     },
     scene::{CameraID, MeshID, ModelID, ModelInstanceBuffer},
 };
@@ -209,7 +210,7 @@ impl DesynchronizedRenderBuffers {
     fn sync_camera_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         camera_render_buffers: &mut CameraRenderBufferMap,
-        cameras: &HashMap<CameraID, impl Camera<f32>>,
+        cameras: &HashMap<CameraID, impl Camera<fre>>,
     ) {
         for (&camera_id, camera) in cameras {
             camera_render_buffers
@@ -259,7 +260,7 @@ impl DesynchronizedRenderBuffers {
     fn sync_model_instance_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         model_instance_render_buffers: &mut ModelInstanceRenderBufferMap,
-        model_instance_buffers: &HashMap<ModelID, ModelInstanceBuffer<f32>>,
+        model_instance_buffers: &HashMap<ModelID, ModelInstanceBuffer<fre>>,
     ) {
         for (&model_id, model_instance_buffer) in model_instance_buffers {
             model_instance_render_buffers

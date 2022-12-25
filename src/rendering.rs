@@ -29,6 +29,14 @@ use crate::window::ControlFlow;
 use anyhow::{Error, Result};
 use std::sync::RwLock;
 
+/// Floating point type used for rendering.
+///
+/// # Note
+/// Changing this would also require additional
+/// code changes where the type is hardcoded.
+#[allow(non_camel_case_types)]
+pub type fre = f32;
+
 /// Container for all data and logic required for rendering.
 #[derive(Debug)]
 pub struct RenderingSystem {

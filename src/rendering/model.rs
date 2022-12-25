@@ -3,7 +3,7 @@
 use crate::{
     rendering::{
         buffer::{BufferableInstance, BufferableVertex, InstanceBuffer},
-        CoreRenderingSystem,
+        fre, CoreRenderingSystem,
     },
     scene::{ModelInstance, ModelInstanceBuffer},
 };
@@ -21,7 +21,7 @@ impl ModelInstanceRenderBufferManager {
     /// from the given model instance buffer.
     pub fn new(
         core_system: &CoreRenderingSystem,
-        model_instance_buffer: &ModelInstanceBuffer<f32>,
+        model_instance_buffer: &ModelInstanceBuffer<fre>,
         label: String,
     ) -> Self {
         let n_valid_instances = u32::try_from(model_instance_buffer.n_valid_instances()).unwrap();
@@ -46,7 +46,7 @@ impl ModelInstanceRenderBufferManager {
     pub fn transfer_model_instances_to_render_buffer(
         &mut self,
         core_system: &CoreRenderingSystem,
-        model_instance_buffer: &ModelInstanceBuffer<f32>,
+        model_instance_buffer: &ModelInstanceBuffer<fre>,
     ) {
         let n_valid_instances = u32::try_from(model_instance_buffer.n_valid_instances()).unwrap();
 
@@ -74,7 +74,7 @@ impl ModelInstanceRenderBufferManager {
     }
 }
 
-impl BufferableVertex for ModelInstance<f32> {
+impl BufferableVertex for ModelInstance<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Instance,
@@ -82,4 +82,4 @@ impl BufferableVertex for ModelInstance<f32> {
     };
 }
 
-impl BufferableInstance for ModelInstance<f32> {}
+impl BufferableInstance for ModelInstance<fre> {}

@@ -18,26 +18,26 @@ pub use mesh::{MeshID, MeshRepository};
 pub use model::{ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool};
 pub use tasks::SyncVisibleModelInstances;
 
-use crate::rendering::MaterialLibrary;
+use crate::rendering::{fre, MaterialLibrary};
 use anyhow::{anyhow, Result};
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
-    camera_repository: RwLock<CameraRepository<f32>>,
-    mesh_repository: RwLock<MeshRepository<f32>>,
+    camera_repository: RwLock<CameraRepository<fre>>,
+    mesh_repository: RwLock<MeshRepository<fre>>,
     material_library: RwLock<MaterialLibrary>,
-    scene_graph: RwLock<SceneGraph<f32>>,
-    model_instance_pool: RwLock<ModelInstancePool<f32>>,
+    scene_graph: RwLock<SceneGraph<fre>>,
+    model_instance_pool: RwLock<ModelInstancePool<fre>>,
     active_camera: Option<(CameraID, CameraNodeID)>,
 }
 
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(
-        camera_repository: CameraRepository<f32>,
-        mesh_repository: MeshRepository<f32>,
+        camera_repository: CameraRepository<fre>,
+        mesh_repository: MeshRepository<fre>,
         material_library: MaterialLibrary,
     ) -> Self {
         Self {
@@ -52,13 +52,13 @@ impl Scene {
 
     /// Returns a reference to the [`CameraRepository`], guarded
     /// by a [`RwLock`].
-    pub fn camera_repository(&self) -> &RwLock<CameraRepository<f32>> {
+    pub fn camera_repository(&self) -> &RwLock<CameraRepository<fre>> {
         &self.camera_repository
     }
 
     /// Returns a reference to the [`MeshRepository`], guarded
     /// by a [`RwLock`].
-    pub fn mesh_repository(&self) -> &RwLock<MeshRepository<f32>> {
+    pub fn mesh_repository(&self) -> &RwLock<MeshRepository<fre>> {
         &self.mesh_repository
     }
 
@@ -70,13 +70,13 @@ impl Scene {
 
     /// Returns a reference to the [`ModelInstancePool`], guarded
     /// by a [`RwLock`].
-    pub fn model_instance_pool(&self) -> &RwLock<ModelInstancePool<f32>> {
+    pub fn model_instance_pool(&self) -> &RwLock<ModelInstancePool<fre>> {
         &self.model_instance_pool
     }
 
     /// Returns a reference to the [`SceneGraph`], guarded
     /// by a [`RwLock`].
-    pub fn scene_graph(&self) -> &RwLock<SceneGraph<f32>> {
+    pub fn scene_graph(&self) -> &RwLock<SceneGraph<fre>> {
         &self.scene_graph
     }
 
@@ -92,7 +92,7 @@ impl Scene {
         self.active_camera.map(|(_, camera_node_id)| camera_node_id)
     }
 
-    pub fn spawn_camera(&self, camera_id: CameraID, transform: NodeTransform<f32>) -> CameraNodeID {
+    pub fn spawn_camera(&self, camera_id: CameraID, transform: NodeTransform<fre>) -> CameraNodeID {
         let mut scene_graph = self.scene_graph.write().unwrap();
         let parent_node_id = scene_graph.root_node_id();
         scene_graph.create_camera_node(parent_node_id, transform, camera_id)
@@ -101,7 +101,7 @@ impl Scene {
     pub fn spawn_model_instances(
         &self,
         model_id: ModelID,
-        transforms: impl IntoIterator<Item = NodeTransform<f32>>,
+        transforms: impl IntoIterator<Item = NodeTransform<fre>>,
     ) -> Result<Vec<ModelInstanceNodeID>> {
         // let mesh_id = self
         //     .model_library

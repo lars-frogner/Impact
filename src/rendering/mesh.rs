@@ -4,7 +4,7 @@ use crate::{
     geometry::{CollectionChange, ColorVertex, TextureVertex, TriangleMesh},
     rendering::{
         buffer::{BufferableVertex, IndexBuffer, VertexBuffer},
-        CoreRenderingSystem,
+        fre, CoreRenderingSystem,
     },
 };
 use std::mem;
@@ -106,7 +106,7 @@ impl MeshRenderBufferManager {
     }
 }
 
-impl BufferableVertex for ColorVertex<f32> {
+impl BufferableVertex for ColorVertex<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
@@ -114,7 +114,7 @@ impl BufferableVertex for ColorVertex<f32> {
     };
 }
 
-impl BufferableVertex for TextureVertex<f32> {
+impl BufferableVertex for TextureVertex<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,

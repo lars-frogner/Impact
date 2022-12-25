@@ -4,7 +4,9 @@ use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
-    rendering::{Assets, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID, TextureID},
+    rendering::{
+        fre, Assets, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID, TextureID,
+    },
     scene::{CameraID, CameraRepository, MeshID, MeshRepository, ModelID, Scene},
     window::InputHandler,
     window::Window,
@@ -146,7 +148,7 @@ async fn init_world(window: &Window) -> Result<World> {
     Ok(world)
 }
 
-const VERTICES: &[ColorVertex<f32>] = &[
+const VERTICES: &[ColorVertex<fre>] = &[
     ColorVertex {
         position: point![-0.0868241, 0.49240386, 0.0],
         color: vector![1.0, 0.0, 0.0],
@@ -169,7 +171,7 @@ const VERTICES: &[ColorVertex<f32>] = &[
     },
 ];
 
-const VERTICES_WITH_TEXTURE: &[TextureVertex<f32>] = &[
+const VERTICES_WITH_TEXTURE: &[TextureVertex<fre>] = &[
     TextureVertex {
         position: point![-0.0868241, 0.49240386, 0.0],
         texture_coords: vector![0.4131759, 1.0 - 0.99240386],

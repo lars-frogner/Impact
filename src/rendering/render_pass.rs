@@ -8,7 +8,7 @@ use crate::{
     rendering::{
         buffer::{BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
         buffer_sync::SynchronizedRenderBuffers,
-        Assets, CoreRenderingSystem, MaterialLibrary, MaterialSpecification, ShaderID,
+        fre, Assets, CoreRenderingSystem, MaterialLibrary, MaterialSpecification, ShaderID,
     },
     scene::{CameraID, MeshID, ModelID, ModelInstance},
 };
@@ -286,7 +286,7 @@ impl RenderPassSpecification {
             );
             // Assume that we have model instances if we have a model ID
             if self.model_id.is_some() {
-                layouts.push(ModelInstance::<f32>::BUFFER_LAYOUT);
+                layouts.push(ModelInstance::<fre>::BUFFER_LAYOUT);
             }
         }
         Ok(layouts)

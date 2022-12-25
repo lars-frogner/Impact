@@ -3,7 +3,7 @@
 use crate::geometry::Camera;
 use crate::rendering::{
     buffer::{BufferableUniform, UniformBuffer},
-    CoreRenderingSystem,
+    fre, CoreRenderingSystem,
 };
 use nalgebra::Projective3;
 
@@ -21,7 +21,7 @@ impl CameraRenderBufferManager {
     /// from the view projection transform of the given camera.
     pub fn for_camera(
         core_system: &CoreRenderingSystem,
-        camera: &impl Camera<f32>,
+        camera: &impl Camera<fre>,
         label: &str,
     ) -> Self {
         let view_projection_transform = camera.compute_view_projection_transform();
@@ -33,7 +33,7 @@ impl CameraRenderBufferManager {
     pub fn sync_with_camera(
         &mut self,
         core_system: &CoreRenderingSystem,
-        camera: &impl Camera<f32>,
+        camera: &impl Camera<fre>,
     ) {
         if camera.view_projection_transform_changed() {
             let view_projection_transform = camera.compute_view_projection_transform();
@@ -64,7 +64,7 @@ impl CameraRenderBufferManager {
     /// from the given view projection transform.
     fn new(
         core_system: &CoreRenderingSystem,
-        view_projection_transform: Projective3<f32>,
+        view_projection_transform: Projective3<fre>,
         label: &str,
     ) -> Self {
         let transform_buffer = UniformBuffer::new(core_system, &[view_projection_transform], label);
@@ -82,7 +82,7 @@ impl CameraRenderBufferManager {
     fn sync_render_buffer(
         &mut self,
         core_system: &CoreRenderingSystem,
-        view_projection_transform: Projective3<f32>,
+        view_projection_transform: Projective3<fre>,
     ) {
         self.transform_buffer.queue_update_of_uniforms(
             core_system,
@@ -92,7 +92,7 @@ impl CameraRenderBufferManager {
     }
 }
 
-impl BufferableUniform for Projective3<f32> {
+impl BufferableUniform for Projective3<fre> {
     const BIND_GROUP_LAYOUT_DESCRIPTOR: wgpu::BindGroupLayoutDescriptor<'static> =
         wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
