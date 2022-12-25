@@ -105,9 +105,16 @@ fn test_valid_query_inputs() {
 
 #[test]
 #[should_panic]
-fn querying_aliased_comps_fails() {
+fn querying_aliased_comps_fails_1() {
     let world = World::new();
     query!(world, |_byte: &Byte, _likebyte: &LikeByte| {});
+}
+
+#[test]
+#[should_panic]
+fn querying_aliased_comps_fails_2() {
+    let world = World::new();
+    query!(world, |_byte: &Byte| {}, [LikeByte]);
 }
 
 #[test]
