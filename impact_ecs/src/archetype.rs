@@ -1096,6 +1096,10 @@ mod test {
 
     #[repr(C)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+    struct Marked;
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Byte(u8);
 
     #[repr(C)]
@@ -1187,9 +1191,12 @@ mod test {
     }
 
     #[test]
-    fn valid_conversion_of_comp_arrays_to_byte_views_succeed() {
+    fn valid_conversion_of_comp_byte_arrays_to_byte_views_succeed() {
         let view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
         assert_eq!(view.archetype, archetype_of!().unwrap());
+
+        let view: ArchetypeCompByteView<'_> = [Marked.component_bytes()].try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
 
         let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes()].try_into().unwrap();
         assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
@@ -1210,6 +1217,37 @@ mod test {
             view.archetype,
             archetype_of!(Byte, Position, Rectangle).unwrap()
         );
+    }
+
+    #[test]
+    fn valid_conversion_of_comp_slice_byte_arrays_to_byte_views_succeed() {
+        let view: ArchetypeCompByteView<'_> = [(&[Marked]).component_bytes()].try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
+
+        let view: ArchetypeCompByteView<'_> =
+            [(&[Marked, Marked]).component_bytes()].try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = [(&[BYTE]).component_bytes()].try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
+
+        let view: ArchetypeCompByteView<'_> =
+            [(&[BYTE, BYTE]).component_bytes()].try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
+
+        let view: ArchetypeCompByteView<'_> =
+            [(&[BYTE]).component_bytes(), (&[POS]).component_bytes()]
+                .try_into()
+                .unwrap();
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = [
+            (&[BYTE, BYTE]).component_bytes(),
+            (&[POS, POS]).component_bytes(),
+        ]
+        .try_into()
+        .unwrap();
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
     }
 
     #[test]
@@ -1235,6 +1273,9 @@ mod test {
 
     #[test]
     fn valid_conversion_of_comp_tuples_to_byte_views_succeed() {
+        let view: ArchetypeCompByteView<'_> = (&Marked).into();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
+
         let view: ArchetypeCompByteView<'_> = (&BYTE).into();
         assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
 
@@ -1246,6 +1287,50 @@ mod test {
             view.archetype,
             archetype_of!(Byte, Position, Rectangle).unwrap()
         );
+    }
+
+    #[test]
+    fn valid_conversion_of_comp_slice_tuples_to_byte_views_succeed() {
+        let view: ArchetypeCompByteView<'_> = (&[Marked]).into();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[Marked, Marked]).into();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE]).into();
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE, BYTE]).into();
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE], &[POS]).try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE, BYTE], &[POS, POS]).try_into().unwrap();
+        assert_eq!(view.archetype, archetype_of!(Byte, Position).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE], &[POS], &[RECT]).try_into().unwrap();
+        assert_eq!(
+            view.archetype,
+            archetype_of!(Byte, Position, Rectangle).unwrap()
+        );
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE, BYTE], &[POS, POS], &[RECT, RECT])
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            view.archetype,
+            archetype_of!(Byte, Position, Rectangle).unwrap()
+        );
+    }
+
+    #[test]
+    fn valid_conversion_of_comp_slices_to_byte_views_succeed() {
+        let view: ArchetypeCompByteView<'_> = (&[Marked]).into();
+        assert_eq!(view.archetype, archetype_of!(Marked).unwrap());
+
+        let view: ArchetypeCompByteView<'_> = (&[BYTE]).into();
+        assert_eq!(view.archetype, archetype_of!(Byte).unwrap());
     }
 
     #[test]
