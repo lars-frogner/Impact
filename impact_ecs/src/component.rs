@@ -493,12 +493,13 @@ impl<'a, C: Component> ComponentInstances<'a, C> for &'a [C] {
     }
 
     fn component_bytes(&self) -> ComponentByteView<'a> {
-        ComponentByteView::new(
-            Self::component_id(),
-            self.len(),
-            mem::size_of::<C>(),
-            bytemuck::cast_slice(self),
-        )
+        let component_size = mem::size_of::<C>();
+        let bytes = if component_size == 0 {
+            &[]
+        } else {
+            bytemuck::cast_slice(self)
+        };
+        ComponentByteView::new(Self::component_id(), self.len(), component_size, bytes)
     }
 }
 
@@ -508,12 +509,13 @@ impl<'a, const N: usize, C: Component> ComponentInstances<'a, C> for &'a [C; N] 
     }
 
     fn component_bytes(&self) -> ComponentByteView<'a> {
-        ComponentByteView::new(
-            Self::component_id(),
-            self.len(),
-            mem::size_of::<C>(),
-            bytemuck::cast_slice(*self),
-        )
+        let component_size = mem::size_of::<C>();
+        let bytes = if component_size == 0 {
+            &[]
+        } else {
+            bytemuck::cast_slice(*self)
+        };
+        ComponentByteView::new(Self::component_id(), self.len(), component_size, bytes)
     }
 }
 
