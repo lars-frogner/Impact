@@ -25,17 +25,17 @@ define_task!(
             let mut scene_graph = scene.scene_graph().write().unwrap();
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, position: &PositionComp| {
-                    scene_graph.set_group_node_translation(node.node_id, Translation3::from(position.point.cast()));
+                    scene_graph.set_group_node_translation(node.id, Translation3::from(position.point.cast()));
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, position: &PositionComp| {
-                    scene_graph.set_model_instance_node_translation(node.node_id, Translation3::from(position.point.cast()));
+                    scene_graph.set_model_instance_node_translation(node.id, Translation3::from(position.point.cast()));
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, position: &PositionComp| {
-                    scene_graph.set_camera_node_translation(node.node_id, Translation3::from(position.point.cast()));
+                    scene_graph.set_camera_node_translation(node.id, Translation3::from(position.point.cast()));
                 }
             );
             Ok(())

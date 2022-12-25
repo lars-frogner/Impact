@@ -11,7 +11,7 @@ use impact_ecs::Component;
 pub struct SceneGraphNodeComp<ID: SceneGraphNodeID + Pod> {
     /// The ID of the [`SceneGraph`](crate::scene::SceneGraph) node
     /// representing the entity.
-    pub node_id: ID,
+    pub id: ID,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that
@@ -20,5 +20,5 @@ pub struct SceneGraphNodeComp<ID: SceneGraphNodeID + Pod> {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MeshComp {
     /// The ID of the entity's [`Mesh`](crate::geometry::Mesh).
-    pub mesh_id: MeshID,
+    pub id: MeshID,
 }
