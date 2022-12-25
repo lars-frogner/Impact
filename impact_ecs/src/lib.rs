@@ -13,6 +13,120 @@ pub mod world;
 /// [`Component`](component::Component).
 pub use impact_ecs_macros::Component;
 
+/// Macro for performing setup on components before creating entities.
+///
+/// ```ignore
+/// setup!(
+///     manager,
+///     // Call closure for each component instance if `manager` has both
+///     // `Comp1` and `Comp2`
+///     |comp_1: &Comp1, comp_2: &mut Comp2| -> (Comp3, Comp4) {
+///         // Do something with `entity`, `comp_1` and `comp_2`
+///         // ...
+///         // Return instances of `comp_3` and `comp_4` to add to `manager`
+///         (comp_3, comp_4)
+///     },
+///     // Require additionaly that `manager` has `MarkerComp1` and
+///     // `MarkerComp2` (optional)
+///     [MarkerComp1, MarkerComp2]
+///     // Do not call the closure if `manager` has `Comp3` or `Comp4`
+///     // (optional)
+///     ![Comp3, Comp4]
+/// );
+/// ```
+///
+/// The macro takes as input a [`ComponentManager`](archetype::ComponentManager)
+/// wrapping an initial set of component instances, followed by a closure
+/// definition whose type signature specifies the set of
+/// [`Component`](component::Component) types to look for in the set of initial
+/// components as well as the component types the closure will return instances
+/// of for inclusion as extra components in the `ComponentManager`. The type of
+/// each closure argument must be annotated, and has to be an immutable reference
+/// to a type implementing the `Component` trait. If the closure returns anything,
+/// it must be a single value or a tuple of values implementing the `Component`
+/// trait, and the return type has to be annotated in the closure signature.
+///
+/// The body of the closure specifies what to do with each set of matching initial
+/// component instances present in the `ComponentManager`. The closure will only
+/// be called if the `ComponentManager` has the requested initial component types
+/// and if so it will be called once with each set of requested component instances.
+/// Any new component instances that the closure returns will be included as extra
+/// components in the `ComponentManager`.
+///
+/// Optionally, an array of additionaly required component types can be
+/// included as an argument to the macro. The closure will only be called
+/// if the `ComponentManager` also has these initial component types.
+/// The primary use of specifying a required component here instead of in
+/// the closure signature is for zero-sized marker components, which are
+/// not allowed in the closure signature.
+///
+/// Another option is to include an array of disallowed component types
+/// as an argument to the macro. The array must be prefixed with `!`.
+/// If the `ComponentManager` has all of the required initial components, but
+/// also has an initial component type specified in the dissalowed component
+/// list, the closure will not be called.
+///
+/// # Examples
+/// ```
+/// # use impact_ecs::{
+/// #     archetype::ComponentManager,
+/// #     world::{World, Entity}
+/// # };
+/// # use impact_ecs_macros::{
+/// #     ComponentDoctest as Component,
+/// #     setup_doctest as setup,
+/// # };
+/// # use bytemuck::{Zeroable, Pod};
+/// # use anyhow::Error;
+/// # use std::collections::HashSet;
+/// #
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Flux(f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Area(f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
+/// # struct Luminosity(f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Light;
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Disabled;
+/// #
+/// fn setup_area_lights(manager: &mut ComponentManager) {
+///     setup!(
+///         manager,
+///         |flux: &Flux, area: &Area| -> Luminosity {
+///             Luminosity(flux.0 * area.0)
+///         },
+///         [Light],
+///         ![Disabled]
+///     );
+/// }
+///
+/// let mut world = World::new();
+/// let mut manager = ComponentManager::with_initial_components(
+///     (&[Light, Light], &[Flux(1.0), Flux(5.0)], &[Area(2.0), Area(2.0)])
+/// )?;
+///
+/// setup_area_lights(&mut manager);
+///
+/// let entities = world.create_entities(manager.all_components()?)?;
+///
+/// assert_eq!(
+///     world.entity(&entities[0]).component::<Luminosity>().access(),
+///     &Luminosity(2.0)
+/// );
+/// assert_eq!(
+///     world.entity(&entities[1]).component::<Luminosity>().access(),
+///     &Luminosity(10.0)
+/// );
+/// #
+/// # Ok::<(), Error>(())
+/// ```
 ///
 pub use impact_ecs_macros::setup;
 
@@ -43,6 +157,7 @@ pub use impact_ecs_macros::setup;
 /// is the first closure argument, which may be annotated with the
 /// [`Entity`](world::Entity) type, in which case the matching `Entity`
 /// will be passed to the closure along with the component instances.
+///
 /// The body of the closure specifies what to do with each set of
 /// matching component instances. The closure will be called once
 /// for each `Entity` that has components of all types specified.
