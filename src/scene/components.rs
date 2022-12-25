@@ -22,3 +22,19 @@ pub struct MeshComp {
     /// The ID of the entity's [`Mesh`](crate::geometry::Mesh).
     pub id: MeshID,
 }
+
+impl<ID: SceneGraphNodeID + Pod> SceneGraphNodeComp<ID> {
+    /// Creates a new component representing a [`SceneGraph`](crate::scene::SceneGraph)
+    /// node with the given ID.
+    pub fn new(node_id: ID) -> Self {
+        Self { id: node_id }
+    }
+}
+
+impl MeshComp {
+    /// Creates a new component representing a [`Mesh`](crate::geometry::Mesh)
+    /// with the given ID.
+    pub fn new(mesh_id: MeshID) -> Self {
+        Self { id: mesh_id }
+    }
+}

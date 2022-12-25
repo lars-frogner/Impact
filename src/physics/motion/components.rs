@@ -24,3 +24,17 @@ pub struct VelocityComp {
     /// A vector representing 3D velocity.
     pub vector: Vector3<fmo>,
 }
+
+impl PositionComp {
+    /// Creates a new component representing the given position.
+    pub fn new(position: Point3<fmo>) -> Self {
+        Self { point: position }
+    }
+}
+
+impl VelocityComp {
+    /// Creates a new component representing the given velocity.
+    pub fn new(velocity: Vector3<fmo>) -> Self {
+        Self { vector: velocity }
+    }
+}

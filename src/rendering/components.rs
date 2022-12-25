@@ -12,3 +12,12 @@ pub struct MaterialComp {
     /// The ID of the entity's [`MaterialSpecification`](crate::rendering::MaterialSpecification).
     pub id: MaterialID,
 }
+
+impl MaterialComp {
+    /// Creates a new component representing a
+    /// [`MaterialSpecification`](crate::rendering::MaterialSpecification)
+    /// with the given ID.
+    pub fn new(material_id: MaterialID) -> Self {
+        Self { id: material_id }
+    }
+}
