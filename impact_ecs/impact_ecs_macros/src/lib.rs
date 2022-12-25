@@ -1,9 +1,9 @@
 //! Procedural macros for the `impact_ecs` crate.
 
 mod component;
-mod prepare;
 mod query;
 mod querying_util;
+mod setup;
 
 use lazy_static::lazy_static;
 use proc_macro::TokenStream;
@@ -25,18 +25,18 @@ pub fn derive_component_doctest(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn prepare(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as prepare::PrepareInput);
-    prepare::prepare(input, &crate_root_ident())
+pub fn setup(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as setup::SetupInput);
+    setup::setup(input, &crate_root_ident())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
 
 /// For use in doctests, where `crate` doesn't work as root identifier.
 #[proc_macro]
-pub fn prepare_doctest(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as prepare::PrepareInput);
-    prepare::prepare(input, &crate_root_ident_doctest())
+pub fn setup_doctest(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as setup::SetupInput);
+    setup::setup(input, &crate_root_ident_doctest())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }

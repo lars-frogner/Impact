@@ -12,25 +12,25 @@ use syn::{
     Expr, Result, Token, Type,
 };
 
-pub(crate) struct PrepareInput {
+pub(crate) struct SetupInput {
     extender_name: Ident,
-    closure: PrepareClosure,
+    closure: SetupClosure,
     also_required_list: Option<TypeList>,
     disallowed_list: Option<TypeList>,
 }
 
-struct PrepareCompClosureArg {
+struct SetupCompClosureArg {
     var: Ident,
     ty: Type,
 }
 
-struct PrepareClosure {
-    comp_args: Punctuated<PrepareCompClosureArg, Token![,]>,
+struct SetupClosure {
+    comp_args: Punctuated<SetupCompClosureArg, Token![,]>,
     return_comp_types: Option<Punctuated<Type, Token![,]>>,
     body: Expr,
 }
 
-struct ProcessedPrepareInput {
+struct ProcessedSetupInput {
     extender_name: Ident,
     closure_body: Expr,
     comp_arg_names: Vec<Ident>,
@@ -41,7 +41,7 @@ struct ProcessedPrepareInput {
     full_closure_args: Vec<TokenStream>,
 }
 
-pub(crate) fn prepare(input: PrepareInput, crate_root: &Ident) -> Result<TokenStream> {
+pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream> {
     let input = input.process();
 
     querying_util::verify_comp_types_unique(&input.required_comp_types)?;
@@ -133,7 +133,7 @@ pub(crate) fn prepare(input: PrepareInput, crate_root: &Ident) -> Result<TokenSt
     })
 }
 
-impl Parse for PrepareInput {
+impl Parse for SetupInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let (extender_name, closure, also_required_list, disallowed_list) =
             querying_util::parse_querying_input(input)?;
@@ -146,7 +146,7 @@ impl Parse for PrepareInput {
     }
 }
 
-impl Parse for PrepareClosure {
+impl Parse for SetupClosure {
     fn parse(input: ParseStream) -> Result<Self> {
         input.parse::<Token![|]>()?;
 
@@ -181,7 +181,7 @@ impl Parse for PrepareClosure {
     }
 }
 
-impl Parse for PrepareCompClosureArg {
+impl Parse for SetupCompClosureArg {
     fn parse(input: ParseStream) -> Result<Self> {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
@@ -192,8 +192,8 @@ impl Parse for PrepareCompClosureArg {
     }
 }
 
-impl PrepareInput {
-    fn process(self) -> ProcessedPrepareInput {
+impl SetupInput {
+    fn process(self) -> ProcessedSetupInput {
         let Self {
             extender_name,
             closure,
@@ -201,7 +201,7 @@ impl PrepareInput {
             disallowed_list,
         } = self;
 
-        let PrepareClosure {
+        let SetupClosure {
             comp_args,
             return_comp_types,
             body: closure_body,
@@ -209,7 +209,7 @@ impl PrepareInput {
 
         let (comp_arg_names, comp_arg_types): (Vec<_>, Vec<_>) = comp_args
             .into_iter()
-            .map(|PrepareCompClosureArg { var, ty }| (var, ty))
+            .map(|SetupCompClosureArg { var, ty }| (var, ty))
             .unzip();
 
         let return_comp_types =
@@ -228,7 +228,7 @@ impl PrepareInput {
 
         let full_closure_args = create_full_closure_args(&comp_arg_names, &comp_arg_types);
 
-        ProcessedPrepareInput {
+        ProcessedSetupInput {
             extender_name,
             closure_body,
             comp_arg_names,

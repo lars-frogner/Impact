@@ -14,7 +14,7 @@ pub mod world;
 pub use impact_ecs_macros::Component;
 
 ///
-pub use impact_ecs_macros::prepare;
+pub use impact_ecs_macros::setup;
 
 /// Macro for querying for a specific set of component types.
 ///
