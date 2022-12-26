@@ -13,6 +13,19 @@ pub mod world;
 /// [`Component`](component::Component).
 pub use impact_ecs_macros::Component;
 
+/// Creates a new [`Archetype`](archetype::Archetype) defined by
+/// the given component types.
+///
+/// Providing no components still gives a valid archetype.
+/// All provided types must implement the [`Component`](component::Component)
+/// trait, and no type can be repeated. The order in which
+/// the component types are specified does not affect the result.
+///
+/// ```ignore
+/// archetype_of!(Comp1, Comp2, ...)
+/// ```
+pub use impact_ecs_macros::archetype_of;
+
 /// Macro for performing setup on components before creating entities.
 ///
 /// ```ignore

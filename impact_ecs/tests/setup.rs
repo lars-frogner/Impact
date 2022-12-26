@@ -390,10 +390,7 @@ fn setup_adding_one_zero_size_comp_to_one_comp_one_instance_manager_works() {
     let mut manager = ComponentManager::with_initial_components(&BYTE).unwrap();
     setup!(manager, || -> Marked { Marked }, [Byte]);
     let components = manager.all_components().unwrap();
-    assert_eq!(
-        components.archetype(),
-        &archetype_of!(Byte, Marked).unwrap()
-    );
+    assert_eq!(components.archetype(), &archetype_of!(Byte, Marked));
     assert_eq!(components.component_count(), 1);
 }
 
@@ -403,10 +400,7 @@ fn setup_adding_one_comp_to_one_comp_one_instance_manager_works() {
     setup!(manager, || -> Rectangle { RECT }, [Byte]);
     let manager =
         ComponentManager::with_initial_components(manager.all_components().unwrap()).unwrap();
-    assert_eq!(
-        manager.initial_archetype(),
-        &archetype_of!(Byte, Rectangle).unwrap()
-    );
+    assert_eq!(manager.initial_archetype(), &archetype_of!(Byte, Rectangle));
     assert_eq!(manager.initial_component_count(), 1);
     assert_eq!(manager.initial_components::<Byte>(), &[BYTE]);
     assert_eq!(manager.initial_components::<Rectangle>(), &[RECT]);
@@ -420,7 +414,7 @@ fn setup_adding_one_comp_to_two_comp_one_instance_manager_works() {
         ComponentManager::with_initial_components(manager.all_components().unwrap()).unwrap();
     assert_eq!(
         manager.initial_archetype(),
-        &archetype_of!(Byte, Rectangle, Position).unwrap()
+        &archetype_of!(Byte, Rectangle, Position)
     );
     assert_eq!(manager.initial_component_count(), 1);
     assert_eq!(manager.initial_components::<Byte>(), &[BYTE]);
@@ -440,7 +434,7 @@ fn setup_adding_two_comps_to_one_comp_one_instance_manager_works() {
         ComponentManager::with_initial_components(manager.all_components().unwrap()).unwrap();
     assert_eq!(
         manager.initial_archetype(),
-        &archetype_of!(Marked, Byte, Rectangle).unwrap()
+        &archetype_of!(Marked, Byte, Rectangle)
     );
     assert_eq!(manager.initial_component_count(), 1);
     assert_eq!(manager.initial_components::<Byte>(), &[BYTE]);
@@ -459,7 +453,7 @@ fn setup_adding_two_comps_to_two_comp_one_instance_manager_works() {
         ComponentManager::with_initial_components(manager.all_components().unwrap()).unwrap();
     assert_eq!(
         manager.initial_archetype(),
-        &archetype_of!(Marked, Byte, Rectangle, Position).unwrap()
+        &archetype_of!(Marked, Byte, Rectangle, Position)
     );
     assert_eq!(manager.initial_component_count(), 1);
     assert_eq!(manager.initial_components::<Byte>(), &[BYTE]);
@@ -485,10 +479,7 @@ fn setup_adding_one_comp_to_one_comp_two_instance_manager_works() {
     );
     let manager =
         ComponentManager::with_initial_components(manager.all_components().unwrap()).unwrap();
-    assert_eq!(
-        manager.initial_archetype(),
-        &archetype_of!(Byte, Position).unwrap()
-    );
+    assert_eq!(manager.initial_archetype(), &archetype_of!(Byte, Position));
     assert_eq!(manager.initial_component_count(), 2);
     assert_eq!(manager.initial_components::<Byte>(), &[BYTE, BYTE2]);
     assert_eq!(manager.initial_components::<Position>(), &[POS, POS2]);
@@ -514,7 +505,7 @@ fn setup_adding_two_comps_to_one_comp_two_instance_manager_works() {
         ComponentManager::with_initial_components(manager.all_components().unwrap()).unwrap();
     assert_eq!(
         manager.initial_archetype(),
-        &archetype_of!(Byte, Position, Rectangle).unwrap()
+        &archetype_of!(Byte, Position, Rectangle)
     );
     assert_eq!(manager.initial_component_count(), 2);
     assert_eq!(manager.initial_components::<Byte>(), &[BYTE, BYTE2]);

@@ -138,7 +138,7 @@ pub(crate) fn generate_input_verification_code<'a>(
     impl_assertions.extend(
         required_comp_types
             .iter()
-            .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root)),
+            .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
     );
 
     for comp_types in additional_comp_types {
@@ -146,7 +146,7 @@ pub(crate) fn generate_input_verification_code<'a>(
             impl_assertions.extend(
                 comp_types
                     .iter()
-                    .map(|ty| create_assertion_that_type_impls_trait(ty, crate_root)),
+                    .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
             )
         }
     }
@@ -156,14 +156,36 @@ pub(crate) fn generate_input_verification_code<'a>(
     })
 }
 
+pub(crate) fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenStream {
+    quote_spanned! {ty.span()=>
+        const _: () = assert!(::std::mem::size_of::<#ty>() != 0, "Zero-sized component in closure signature");
+    }
+}
+
+pub(crate) fn create_assertion_that_type_impls_component_trait(
+    ty: &Type,
+    crate_root: &Ident,
+) -> TokenStream {
+    let dummy_struct_name = format_ident!(
+        "__assert_{}_impls_component",
+        type_to_valid_ident_string(ty)
+    );
+    quote_spanned! {ty.span()=>
+        // This definition will fail to compile if the type `ty`
+        // doesn't implement `Component`
+        #[allow(non_camel_case_types)]
+        struct #dummy_struct_name where #ty: #crate_root::component::Component;
+    }
+}
+
 pub(crate) fn generate_archetype_creation_code(
     required_comp_types: &[Type],
     crate_root: &Ident,
 ) -> (Ident, TokenStream) {
     let archetype_name = Ident::new("_archetype_internal__", Span::call_site());
     let archetype_creation_code = quote! {
-        let #archetype_name = #crate_root::archetype_of!(
-            #(#required_comp_types),*
+        let #archetype_name = #crate_root::archetype::Archetype::new_from_component_id_arr(
+            [#(<#required_comp_types as #crate_root::component::Component>::component_id()),*]
         )
         .unwrap(); // This `unwrap` should never panic since we have verified the components
     };
@@ -195,23 +217,4 @@ fn generate_nested_token_tuple(
         items.pop().unwrap()
     };
     quote! { #pre_tokens (#head, #tail) }
-}
-
-fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenStream {
-    quote_spanned! {ty.span()=>
-        const _: () = assert!(::std::mem::size_of::<#ty>() != 0, "Zero-sized component in closure signature");
-    }
-}
-
-fn create_assertion_that_type_impls_trait(ty: &Type, crate_root: &Ident) -> TokenStream {
-    let dummy_struct_name = format_ident!(
-        "__assert_{}_impls_component",
-        type_to_valid_ident_string(ty)
-    );
-    quote_spanned! {ty.span()=>
-        // This definition will fail to compile if the type `ty`
-        // doesn't implement `Component`
-        #[allow(non_camel_case_types)]
-        struct #dummy_struct_name where #ty: #crate_root::component::Component;
-    }
 }

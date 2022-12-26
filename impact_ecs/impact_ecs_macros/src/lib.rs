@@ -1,5 +1,6 @@
 //! Procedural macros for the `impact_ecs` crate.
 
+mod archetype;
 mod component;
 mod query;
 mod querying_util;
@@ -22,6 +23,23 @@ pub fn derive_component(input: TokenStream) -> TokenStream {
 pub fn derive_component_doctest(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     component::impl_component(input, &crate_root_ident_doctest()).into()
+}
+
+#[proc_macro]
+pub fn archetype_of(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as archetype::ArchetypeOfInput);
+    archetype::archetype_of(input, &crate_root_ident())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+/// For use in doctests, where `crate` doesn't work as root identifier.
+#[proc_macro]
+pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as archetype::ArchetypeOfInput);
+    archetype::archetype_of(input, &crate_root_ident_doctest())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }
 
 #[proc_macro]
