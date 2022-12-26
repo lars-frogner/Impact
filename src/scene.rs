@@ -11,7 +11,7 @@ mod tasks;
 pub use camera::{CameraID, CameraRepository};
 pub use components::{CameraComp, MeshComp, SceneGraphNodeComp};
 pub use graph::{
-    CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph,
+    model_to_world_transform_from_position, CameraNodeID, GroupNodeID, ModelInstanceNodeID,
     SceneGraphNodeID,
 };
 pub use mesh::{MeshID, MeshRepository};

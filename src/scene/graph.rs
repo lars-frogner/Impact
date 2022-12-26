@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Projective3, Similarity3, Translation3};
+use nalgebra::{Point3, Projective3, Similarity3, Translation3, UnitQuaternion, Vector3};
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of
@@ -901,6 +901,16 @@ macro_rules! impl_node_id_idx_traits {
 impl_node_id_idx_traits!(GroupNodeID);
 impl_node_id_idx_traits!(ModelInstanceNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
+
+/// Creates a [`NodeTransform`] from model to world space
+/// for a model with the given position.
+pub fn model_to_world_transform_from_position<F: Float>(position: Point3<F>) -> NodeTransform<F> {
+    NodeTransform::from_parts(
+        position.into(),
+        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), F::ZERO),
+        F::ONE,
+    )
+}
 
 #[cfg(test)]
 mod test {
