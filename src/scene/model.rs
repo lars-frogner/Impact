@@ -328,3 +328,221 @@ impl<F: Float> Default for UserCountingModelInstanceBuffer<F> {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use nalgebra::{Similarity3, Translation3, UnitQuaternion};
+
+    fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
+        ModelID::for_mesh_and_material(
+            MeshID(hash!(format!("Test mesh {}", tag.as_ref()))),
+            MaterialID(hash!(format!("Test material {}", tag.as_ref()))),
+        )
+    }
+
+    fn create_dummy_instance() -> ModelInstance<f32> {
+        ModelInstance::with_transform(
+            Similarity3::from_parts(
+                Translation3::new(2.1, -5.9, 0.01),
+                UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+                7.0,
+            )
+            .to_homogeneous(),
+        )
+    }
+
+    #[test]
+    fn creating_model_instance_buffer_works() {
+        let buffer = ModelInstanceBuffer::<f32>::new();
+        assert_eq!(buffer.n_valid_instances(), 0);
+        assert_eq!(buffer.valid_instances(), &[]);
+    }
+
+    #[test]
+    fn adding_one_instance_to_model_instance_buffer_works() {
+        let mut buffer = ModelInstanceBuffer::<f32>::new();
+        let instance = create_dummy_instance();
+        buffer.add_instance(instance);
+        assert_eq!(buffer.n_valid_instances(), 1);
+        assert_eq!(buffer.valid_instances(), &[instance]);
+    }
+
+    #[test]
+    fn adding_two_instances_to_model_instance_buffer_works() {
+        let mut buffer = ModelInstanceBuffer::<f32>::new();
+        let instance_1 = ModelInstance::new();
+        let instance_2 = create_dummy_instance();
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        assert_eq!(buffer.n_valid_instances(), 2);
+        assert_eq!(buffer.valid_instances(), &[instance_1, instance_2]);
+    }
+
+    #[test]
+    fn adding_three_instances_to_model_instance_buffer_works() {
+        let mut buffer = ModelInstanceBuffer::<f32>::new();
+        let instance_1 = create_dummy_instance();
+        let instance_2 = ModelInstance::new();
+        let instance_3 = create_dummy_instance();
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        buffer.add_instance(instance_3);
+        assert_eq!(buffer.n_valid_instances(), 3);
+        assert_eq!(
+            buffer.valid_instances(),
+            &[instance_1, instance_2, instance_3]
+        );
+    }
+
+    #[test]
+    fn clearing_empty_model_instance_buffer_works() {
+        let buffer = ModelInstanceBuffer::<f32>::new();
+        buffer.clear();
+        assert_eq!(buffer.n_valid_instances(), 0);
+        assert_eq!(buffer.valid_instances(), &[]);
+    }
+
+    #[test]
+    fn clearing_one_instance_from_model_instance_buffer_works() {
+        let mut buffer = ModelInstanceBuffer::<f32>::new();
+        let instance_1 = ModelInstance::new();
+        let instance_2 = create_dummy_instance();
+        buffer.add_instance(instance_1);
+        buffer.clear();
+        assert_eq!(buffer.n_valid_instances(), 0);
+        assert_eq!(buffer.valid_instances(), &[]);
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        assert_eq!(buffer.n_valid_instances(), 2);
+        assert_eq!(buffer.valid_instances(), &[instance_1, instance_2]);
+    }
+
+    #[test]
+    fn clearing_two_instances_from_model_instance_buffer_works() {
+        let mut buffer = ModelInstanceBuffer::<f32>::new();
+        let instance_1 = ModelInstance::new();
+        let instance_2 = create_dummy_instance();
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        buffer.clear();
+        assert_eq!(buffer.n_valid_instances(), 0);
+        assert_eq!(buffer.valid_instances(), &[]);
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        assert_eq!(buffer.n_valid_instances(), 2);
+        assert_eq!(buffer.valid_instances(), &[instance_1, instance_2]);
+    }
+
+    #[test]
+    fn clearing_three_instances_from_model_instance_buffer_works() {
+        let mut buffer = ModelInstanceBuffer::<f32>::new();
+        let instance_1 = create_dummy_instance();
+        let instance_2 = ModelInstance::new();
+        let instance_3 = create_dummy_instance();
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        buffer.add_instance(instance_3);
+        buffer.clear();
+        assert_eq!(buffer.n_valid_instances(), 0);
+        assert_eq!(buffer.valid_instances(), &[]);
+        buffer.add_instance(instance_1);
+        buffer.add_instance(instance_2);
+        buffer.add_instance(instance_3);
+        assert_eq!(buffer.n_valid_instances(), 3);
+        assert_eq!(
+            buffer.valid_instances(),
+            &[instance_1, instance_2, instance_3]
+        );
+    }
+
+    #[test]
+    fn creating_model_instance_pool_works() {
+        let pool = ModelInstancePool::<f32>::new();
+        assert!(pool.models_and_buffers().next().is_none());
+    }
+
+    #[test]
+    fn adding_one_use_of_model_in_model_instance_pool_works() {
+        let model_id = create_dummy_model_id("");
+        let mut pool = ModelInstancePool::<f32>::new();
+        pool.increment_user_count(model_id);
+        let mut models_and_buffers = pool.models_and_buffers();
+        assert_eq!(models_and_buffers.next().unwrap().0, model_id);
+        assert!(models_and_buffers.next().is_none());
+        drop(models_and_buffers);
+        assert!(pool.has_buffer_for_model(model_id));
+        assert!(pool.get_buffer(model_id).is_some());
+    }
+
+    #[test]
+    fn adding_one_use_of_two_models_in_model_instance_pool_works() {
+        let model_id_1 = create_dummy_model_id("1");
+        let model_id_2 = create_dummy_model_id("2");
+        let mut pool = ModelInstancePool::<f32>::new();
+        pool.increment_user_count(model_id_1);
+        pool.increment_user_count(model_id_2);
+        let mut models_and_buffers = pool.models_and_buffers();
+        assert_ne!(
+            models_and_buffers.next().unwrap().0,
+            models_and_buffers.next().unwrap().0
+        );
+        assert!(models_and_buffers.next().is_none());
+        drop(models_and_buffers);
+        assert!(pool.has_buffer_for_model(model_id_1));
+        assert!(pool.has_buffer_for_model(model_id_2));
+        assert!(pool.get_buffer(model_id_1).is_some());
+        assert!(pool.get_buffer(model_id_2).is_some());
+    }
+
+    #[test]
+    fn adding_two_uses_of_model_in_model_instance_pool_works() {
+        let model_id = create_dummy_model_id("");
+        let mut pool = ModelInstancePool::<f32>::new();
+        pool.increment_user_count(model_id);
+        pool.increment_user_count(model_id);
+        let mut models_and_buffers = pool.models_and_buffers();
+        assert_eq!(models_and_buffers.next().unwrap().0, model_id);
+        assert!(models_and_buffers.next().is_none());
+        drop(models_and_buffers);
+        assert!(pool.has_buffer_for_model(model_id));
+        assert!(pool.get_buffer(model_id).is_some());
+    }
+
+    #[test]
+    fn adding_and_then_removing_one_use_of_model_in_model_instance_pool_works() {
+        let model_id = create_dummy_model_id("");
+        let mut pool = ModelInstancePool::<f32>::new();
+        pool.increment_user_count(model_id);
+        pool.decrement_user_count(model_id);
+        assert!(pool.models_and_buffers().next().is_none());
+        assert!(!pool.has_buffer_for_model(model_id));
+        assert!(pool.get_buffer(model_id).is_none());
+        pool.increment_user_count(model_id);
+        pool.decrement_user_count(model_id);
+        assert!(pool.models_and_buffers().next().is_none());
+        assert!(!pool.has_buffer_for_model(model_id));
+        assert!(pool.get_buffer(model_id).is_none());
+    }
+
+    #[test]
+    fn adding_and_then_removing_two_uses_of_model_in_model_instance_pool_works() {
+        let model_id = create_dummy_model_id("");
+        let mut pool = ModelInstancePool::<f32>::new();
+        pool.increment_user_count(model_id);
+        pool.increment_user_count(model_id);
+        pool.decrement_user_count(model_id);
+        pool.decrement_user_count(model_id);
+        assert!(pool.models_and_buffers().next().is_none());
+        assert!(!pool.has_buffer_for_model(model_id));
+        assert!(pool.get_buffer(model_id).is_none());
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_use_of_model_in_empty_model_instance_pool_fails() {
+        let model_id = create_dummy_model_id("");
+        let mut pool = ModelInstancePool::<f32>::new();
+        pool.decrement_user_count(model_id);
+    }
+}
