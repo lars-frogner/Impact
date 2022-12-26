@@ -78,56 +78,63 @@ impl World {
         let mut manager =
             ComponentManager::with_initial_components(components.try_into().map_err(E::into)?)?;
 
-        let scene = self.scene().read().unwrap();
-        let mut scene_graph = scene.scene_graph().write().unwrap();
-        let root_node_id = scene_graph.root_node_id();
-        setup!(manager, |camera: &CameraComp,
-                         position: &PositionComp|
-         -> SceneGraphNodeComp::<CameraNodeID> {
-            let camera_to_world_transform =
-                sc::model_to_world_transform_from_position(position.point.cast());
-
-            let node_id =
-                scene_graph.create_camera_node(root_node_id, camera_to_world_transform, camera.id);
-
-            scene.set_active_camera(Some(node_id));
-
-            SceneGraphNodeComp::new(node_id)
-        });
-
-        let scene = self.scene().read().unwrap();
-        let mesh_repository = scene.mesh_repository().read().unwrap();
-        let mut model_instance_pool = scene.model_instance_pool().write().unwrap();
-        let mut scene_graph = scene.scene_graph().write().unwrap();
-        let root_node_id = scene_graph.root_node_id();
-        setup!(
-            manager,
-            |mesh: &MeshComp,
-             material: &MaterialComp,
-             position: &PositionComp|
-             -> SceneGraphNodeComp::<ModelInstanceNodeID> {
-                let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
-                model_instance_pool.increment_user_count(model_id);
-
-                let model_to_world_transform =
+        {
+            let scene = self.scene().read().unwrap();
+            let mut scene_graph = scene.scene_graph().write().unwrap();
+            let root_node_id = scene_graph.root_node_id();
+            setup!(manager, |camera: &CameraComp,
+                             position: &PositionComp|
+             -> SceneGraphNodeComp::<CameraNodeID> {
+                let camera_to_world_transform =
                     sc::model_to_world_transform_from_position(position.point.cast());
 
-                // Panic on errors since returning an error could leave us
-                // in an inconsistent state
-                let bounding_sphere = mesh_repository
+                let node_id = scene_graph.create_camera_node(
+                    root_node_id,
+                    camera_to_world_transform,
+                    camera.id,
+                );
+
+                scene.set_active_camera(Some((camera.id, node_id)));
+
+                SceneGraphNodeComp::new(node_id)
+            });
+        }
+
+        {
+            let scene = self.scene().read().unwrap();
+            let mesh_repository = scene.mesh_repository().read().unwrap();
+            let mut model_instance_pool = scene.model_instance_pool().write().unwrap();
+            let mut scene_graph = scene.scene_graph().write().unwrap();
+            let root_node_id = scene_graph.root_node_id();
+            setup!(
+                manager,
+                |mesh: &MeshComp,
+                 material: &MaterialComp,
+                 position: &PositionComp|
+                 -> SceneGraphNodeComp::<ModelInstanceNodeID> {
+                    let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
+                    model_instance_pool.increment_user_count(model_id);
+
+                    let model_to_world_transform =
+                        sc::model_to_world_transform_from_position(position.point.cast());
+
+                    // Panic on errors since returning an error could leave us
+                    // in an inconsistent state
+                    let bounding_sphere = mesh_repository
                     .get_mesh(mesh.id)
                     .expect("Tried to create renderable entity with mesh not present in mesh repository")
                     .bounding_sphere()
                     .expect("Tried to create renderable entity with empty mesh");
 
-                SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
-                    root_node_id,
-                    model_to_world_transform,
-                    model_id,
-                    bounding_sphere,
-                ))
-            }
-        );
+                    SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
+                        root_node_id,
+                        model_to_world_transform,
+                        model_id,
+                        bounding_sphere,
+                    ))
+                }
+            );
+        }
 
         self.ecs_world.write().unwrap().create_entities(&manager)
     }

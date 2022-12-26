@@ -97,23 +97,14 @@ impl Scene {
             .map(|(_, camera_node_id)| camera_node_id)
     }
 
-    /// Uses the camera with the given node ID in the [`SceneGraph`]
-    /// as the active camera.
+    /// Uses the camera with the given camera ID and node ID in the
+    /// [`SceneGraph`] as the active camera, or disable the active
+    /// camera if the value is [`None`].
     ///
-    /// # Panics
-    /// If there is no node with the given [`CameraNodeID`].
-    pub fn set_active_camera(&self, camera_node_id: Option<CameraNodeID>) {
-        if let Some(camera_node_id) = camera_node_id {
-            let camera_id = self
-                .scene_graph
-                .read()
-                .unwrap()
-                .camera_nodes()
-                .node(camera_node_id)
-                .camera_id();
-            *self.active_camera.write().unwrap() = Some((camera_id, camera_node_id));
-        } else {
-            *self.active_camera.write().unwrap() = None;
-        }
+    /// # Note
+    /// It is the responsibility of the caller to ensure that the
+    /// given combination of camera ID and node ID is valid.
+    pub fn set_active_camera(&self, active_camera: Option<(CameraID, CameraNodeID)>) {
+        *self.active_camera.write().unwrap() = active_camera;
     }
 }
