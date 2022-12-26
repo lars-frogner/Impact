@@ -114,6 +114,7 @@ impl<T> GenerationalReusingVec<T> {
     /// # Panics
     /// If the index is out of bounds (in which case it belongs
     /// to a different vector).
+    #[allow(dead_code)]
     pub fn get_element_mut(&mut self, gen_idx: GenerationalIdx) -> Option<&mut T> {
         if self.free_list.contains(&gen_idx.idx()) {
             None
