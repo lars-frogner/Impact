@@ -3,6 +3,7 @@
 mod components;
 mod motion;
 
+pub use components::Controllable;
 pub use motion::{
     MotionDirection, MotionState, NoMotionController, SemiDirectionalMotionController,
 };
