@@ -34,7 +34,7 @@ pub struct ModelID {
 /// final transforms for model instances that will be passed
 /// on to the renderer.
 #[derive(Debug, Default)]
-pub struct ModelInstancePool<F> {
+pub struct ModelInstancePool<F: Float> {
     /// Buffers each holding the instances of a specific model.
     model_instance_buffers: HashMap<ModelID, UserCountingModelInstanceBuffer<F>>,
 }
@@ -48,7 +48,7 @@ pub struct ModelInstancePool<F> {
 /// This allows the it to be filled and emptied
 /// repeatedly without unneccesary allocations.
 #[derive(Debug)]
-pub struct ModelInstanceBuffer<F> {
+pub struct ModelInstanceBuffer<F: Float> {
     raw_buffer: Vec<ModelInstance<F>>,
     n_valid_instances: AtomicUsize,
 }
@@ -58,13 +58,13 @@ pub struct ModelInstanceBuffer<F> {
 ///
 /// Used to represent multiple versions of the same basic model.
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug)]
-pub struct ModelInstance<F> {
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct ModelInstance<F: Float> {
     transform_matrix: Matrix4<F>,
 }
 
 #[derive(Debug)]
-struct UserCountingModelInstanceBuffer<F> {
+struct UserCountingModelInstanceBuffer<F: Float> {
     user_count: u64,
     buffer: ModelInstanceBuffer<F>,
 }
@@ -292,7 +292,7 @@ impl<F: Float> Default for ModelInstance<F> {
 
 // Since `MeshInstance` is `#[repr(transparent)]`, it will be
 // `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
-unsafe impl<F> Zeroable for ModelInstance<F> where Matrix4<F>: Zeroable {}
+unsafe impl<F: Float> Zeroable for ModelInstance<F> where Matrix4<F>: Zeroable {}
 
 unsafe impl<F> Pod for ModelInstance<F>
 where
