@@ -4,10 +4,12 @@ use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
+    physics::PositionComp,
     rendering::{
-        fre, Assets, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID, TextureID,
+        fre, Assets, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID,
+        TextureID,
     },
-    scene::{CameraID, CameraRepository, MeshID, MeshRepository, ModelID, Scene},
+    scene::{CameraComp, CameraID, CameraRepository, MeshComp, MeshID, MeshRepository, Scene},
     window::InputHandler,
     window::Window,
     world::World,
@@ -18,7 +20,7 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
-use nalgebra::{point, vector, Point3, Rotation3, Similarity3, Translation3, Vector3};
+use nalgebra::{point, vector, Point3, Rotation3, Vector3};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -130,20 +132,20 @@ async fn init_world(window: &Window) -> Result<World> {
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(scene, renderer, controller);
 
-    let mut scene = world.scene().write().unwrap();
+    world
+        .create_entities((
+            &CameraComp::new(CameraID(hash!("Camera"))),
+            &PositionComp::new(Point3::origin()),
+        ))
+        .unwrap();
 
-    scene.spawn_model_instances(
-        ModelID::for_mesh_and_material(
-            MeshID(hash!("Test mesh")),
-            MaterialID(hash!("Test material")),
-        ),
-        [Similarity3::identity()],
-    )?;
-
-    let camera_node_id = scene.spawn_camera(CameraID(hash!("Camera")), Similarity3::identity());
-    scene.set_active_camera(camera_node_id);
-
-    drop(scene);
+    world
+        .create_entities((
+            &MeshComp::new(MeshID(hash!("Test mesh"))),
+            &MaterialComp::new(MaterialID(hash!("Test material"))),
+            &PositionComp::new(Point3::new(0.0, 0.0, -5.0)),
+        ))
+        .unwrap();
 
     Ok(world)
 }

@@ -2,14 +2,22 @@
 
 use crate::{
     control::{MotionController, MotionDirection, MotionState},
-    rendering::RenderingSystem,
-    scene::Scene,
+    physics::PositionComp,
+    rendering::{MaterialComp, RenderingSystem},
+    scene::{
+        self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
+        SceneGraphNodeComp,
+    },
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     window::{self, ControlFlow},
 };
 use anyhow::Result;
-use impact_ecs::world::World as ECSWorld;
+use impact_ecs::{
+    archetype::{ArchetypeCompByteView, ComponentManager},
+    setup,
+    world::{Entity, World as ECSWorld},
+};
 use std::{
     num::NonZeroUsize,
     sync::{Arc, Mutex, RwLock},
@@ -58,6 +66,111 @@ impl World {
     /// by a [`RwLock`].
     pub fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
+    }
+
+    pub fn create_entities<'a, E>(
+        &self,
+        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+    ) -> Result<Vec<Entity>>
+    where
+        E: Into<anyhow::Error>,
+    {
+        let mut manager =
+            ComponentManager::with_initial_components(components.try_into().map_err(E::into)?)?;
+
+        let scene = self.scene().read().unwrap();
+        let mut scene_graph = scene.scene_graph().write().unwrap();
+        let root_node_id = scene_graph.root_node_id();
+        setup!(manager, |camera: &CameraComp,
+                         position: &PositionComp|
+         -> SceneGraphNodeComp::<CameraNodeID> {
+            let camera_to_world_transform =
+                sc::model_to_world_transform_from_position(position.point.cast());
+
+            let node_id =
+                scene_graph.create_camera_node(root_node_id, camera_to_world_transform, camera.id);
+
+            scene.set_active_camera(Some(node_id));
+
+            SceneGraphNodeComp::new(node_id)
+        });
+
+        let scene = self.scene().read().unwrap();
+        let mesh_repository = scene.mesh_repository().read().unwrap();
+        let mut model_instance_pool = scene.model_instance_pool().write().unwrap();
+        let mut scene_graph = scene.scene_graph().write().unwrap();
+        let root_node_id = scene_graph.root_node_id();
+        setup!(
+            manager,
+            |mesh: &MeshComp,
+             material: &MaterialComp,
+             position: &PositionComp|
+             -> SceneGraphNodeComp::<ModelInstanceNodeID> {
+                let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
+                model_instance_pool.increment_user_count(model_id);
+
+                let model_to_world_transform =
+                    sc::model_to_world_transform_from_position(position.point.cast());
+
+                // Panic on errors since returning an error could leave us
+                // in an inconsistent state
+                let bounding_sphere = mesh_repository
+                    .get_mesh(mesh.id)
+                    .expect("Tried to create renderable entity with mesh not present in mesh repository")
+                    .bounding_sphere()
+                    .expect("Tried to create renderable entity with empty mesh");
+
+                SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
+                    root_node_id,
+                    model_to_world_transform,
+                    model_id,
+                    bounding_sphere,
+                ))
+            }
+        );
+
+        self.ecs_world.write().unwrap().create_entities(&manager)
+    }
+
+    pub fn remove_entity(&self, entity: &Entity) -> Result<()> {
+        let mut ecs_world = self.ecs_world.write().unwrap();
+
+        let entry = ecs_world.entity(entity);
+
+        if let Some(node) = entry.get_component::<SceneGraphNodeComp<CameraNodeID>>() {
+            let node_id = node.access().id;
+
+            let scene = self.scene().read().unwrap();
+
+            scene
+                .scene_graph()
+                .write()
+                .unwrap()
+                .remove_camera_node(node_id);
+
+            if let Some(active_camera_node_id) = scene.get_active_camera_node_id() {
+                if active_camera_node_id == node_id {
+                    scene.set_active_camera(None);
+                }
+            }
+        }
+
+        if let Some(node) = entry.get_component::<SceneGraphNodeComp<ModelInstanceNodeID>>() {
+            let scene = self.scene().read().unwrap();
+            let model_id = scene
+                .scene_graph()
+                .write()
+                .unwrap()
+                .remove_model_instance_node(node.access().id);
+            scene
+                .model_instance_pool()
+                .write()
+                .unwrap()
+                .decrement_user_count(model_id);
+        }
+
+        drop(entry);
+        ecs_world.remove_entity(entity)
     }
 
     /// Sets a new size for the rendering surface and updates
