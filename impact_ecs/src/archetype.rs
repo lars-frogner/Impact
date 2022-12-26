@@ -222,6 +222,11 @@ impl Archetype {
         self.component_ids.len()
     }
 
+    /// Whether this archetype includes components of type `C`.
+    pub fn contains_component<C: Component>(&self) -> bool {
+        self.contains_component_id(C::component_id())
+    }
+
     /// Whether this archetype includes the component type
     /// with the given ID.
     pub fn contains_component_id(&self, component_id: ComponentID) -> bool {

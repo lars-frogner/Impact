@@ -469,6 +469,11 @@ impl<'a> EntityEntry<'a> {
         Self { entity_id, table }
     }
 
+    /// Returns the [`Archetype`] of the entity.
+    pub fn archetype(&self) -> &Archetype {
+        self.table.archetype()
+    }
+
     /// Returns the number of components the entity has.
     pub fn n_components(&self) -> usize {
         self.table.archetype().n_components()
@@ -477,9 +482,7 @@ impl<'a> EntityEntry<'a> {
     /// Whether the entity has the component specified by the
     /// type parameter `C`.
     pub fn has_component<C: Component>(&self) -> bool {
-        self.table
-            .archetype()
-            .contains_component_id(C::component_id())
+        self.table.archetype().contains_component::<C>()
     }
 
     /// Returns a reference to the component specified by the
@@ -554,6 +557,7 @@ mod test {
         let entity_1 = world.create_entity(&POS).unwrap();
         assert_eq!(world.entity_count(), 1);
         let entry = world.entity(&entity_1);
+        assert_eq!(entry.archetype(), &archetype_of!(Position).unwrap());
         assert_eq!(entry.n_components(), 1);
         assert_eq!(entry.component::<Position>().access(), &POS);
         drop(entry);
@@ -561,6 +565,10 @@ mod test {
         let entity_2 = world.create_entity((&POS, &TEMP)).unwrap();
         assert_eq!(world.entity_count(), 2);
         let entry = world.entity(&entity_2);
+        assert_eq!(
+            entry.archetype(),
+            &archetype_of!(Position, Temperature).unwrap()
+        );
         assert_eq!(entry.n_components(), 2);
         assert_eq!(entry.component::<Position>().access(), &POS);
         assert_eq!(entry.component::<Temperature>().access(), &TEMP);
@@ -641,12 +649,11 @@ mod test {
         let mut entity = world.create_entity(&POS).unwrap();
         world.add_component_for_entity(&mut entity, &TEMP).unwrap();
 
-        assert_eq!(
-            entity.archetype_id(),
-            archetype_of!(Position, Temperature).unwrap().id()
-        );
-
         let entry = world.entity(&entity);
+        assert_eq!(
+            entry.archetype(),
+            &archetype_of!(Position, Temperature).unwrap()
+        );
         assert_eq!(entry.n_components(), 2);
         assert_eq!(entry.component::<Position>().access(), &POS);
         assert_eq!(entry.component::<Temperature>().access(), &TEMP);
@@ -669,12 +676,8 @@ mod test {
             .remove_component_for_entity::<Position>(&mut entity)
             .unwrap();
 
-        assert_eq!(
-            entity.archetype_id(),
-            archetype_of!(Temperature).unwrap().id()
-        );
-
         let entry = world.entity(&entity);
+        assert_eq!(entry.archetype(), &archetype_of!(Temperature).unwrap());
         assert_eq!(entry.n_components(), 1);
         assert_eq!(entry.component::<Temperature>().access(), &TEMP);
         assert!(!entry.has_component::<Position>());
@@ -691,8 +694,8 @@ mod test {
             .remove_component_for_entity::<Temperature>(&mut entity)
             .unwrap();
         let entry = world.entity(&entity);
+        assert_eq!(entry.archetype(), &archetype_of!().unwrap());
         assert_eq!(entry.n_components(), 0);
-        assert_eq!(entity.archetype_id(), archetype_of!().unwrap().id());
     }
 
     #[test]
