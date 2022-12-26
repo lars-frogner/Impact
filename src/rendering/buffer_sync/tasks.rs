@@ -143,8 +143,7 @@ define_task!(
                     .as_mut(),
                 &world
                     .scene().read().unwrap()
-                    .model_instance_pool().read().unwrap()
-                    .model_instance_buffers,
+                    .model_instance_pool().read().unwrap(),
             );
             Ok(())
         })

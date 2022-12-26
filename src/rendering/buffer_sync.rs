@@ -11,7 +11,7 @@ use crate::{
         mesh::MeshRenderBufferManager, model::ModelInstanceRenderBufferManager,
         CoreRenderingSystem,
     },
-    scene::{CameraID, MeshID, ModelID, ModelInstanceBuffer},
+    scene::{CameraID, MeshID, ModelID, ModelInstancePool},
 };
 use std::{collections::HashMap, hash::Hash, sync::Mutex};
 
@@ -252,7 +252,7 @@ impl DesynchronizedRenderBuffers {
 
     /// Performs any required updates for keeping the given map
     /// of model instance render buffers in sync with the given
-    /// map of model instances.
+    /// pool of model instances buffers.
     ///
     /// Render buffers whose source geometry no longer
     /// exists will be removed, and missing render buffers
@@ -260,9 +260,9 @@ impl DesynchronizedRenderBuffers {
     fn sync_model_instance_buffers_with_geometry(
         core_system: &CoreRenderingSystem,
         model_instance_render_buffers: &mut ModelInstanceRenderBufferMap,
-        model_instance_buffers: &HashMap<ModelID, ModelInstanceBuffer<fre>>,
+        model_instance_pool: &ModelInstancePool<fre>,
     ) {
-        for (&model_id, model_instance_buffer) in model_instance_buffers {
+        for (model_id, model_instance_buffer) in model_instance_pool.models_and_buffers() {
             model_instance_render_buffers
                 .entry(model_id)
                 .and_modify(|instance_render_buffer| {
@@ -279,10 +279,8 @@ impl DesynchronizedRenderBuffers {
                     )
                 });
         }
-        Self::remove_unmatched_render_buffers(
-            model_instance_render_buffers,
-            model_instance_buffers,
-        );
+        model_instance_render_buffers
+            .retain(|model_id, _| model_instance_pool.has_buffer_for_model(*model_id));
     }
 
     /// Removes render buffers whose source geometry is no longer present.

@@ -524,10 +524,7 @@ impl<F: Float> SceneGraph<F> {
     ) {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-        if let Some(buffer) = model_instance_pool
-            .model_instance_buffers
-            .get_mut(&model_instance_node.model_id())
-        {
+        if let Some(buffer) = model_instance_pool.get_buffer_mut(model_instance_node.model_id()) {
             let model_transform = parent_model_transform * model_instance_node.model_transform();
 
             buffer.add_instance(ModelInstance::with_transform(

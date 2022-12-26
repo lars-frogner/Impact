@@ -36,7 +36,7 @@ pub struct ModelID {
 #[derive(Debug, Default)]
 pub struct ModelInstancePool<F> {
     /// Buffers each holding the instances of a specific model.
-    pub model_instance_buffers: HashMap<ModelID, ModelInstanceBuffer<F>>,
+    model_instance_buffers: HashMap<ModelID, UserCountingModelInstanceBuffer<F>>,
 }
 
 /// A buffer for instances of the same model.
@@ -61,6 +61,12 @@ pub struct ModelInstanceBuffer<F> {
 #[derive(Copy, Clone, Debug)]
 pub struct ModelInstance<F> {
     transform_matrix: Matrix4<F>,
+}
+
+#[derive(Debug)]
+struct UserCountingModelInstanceBuffer<F> {
+    user_count: u64,
+    buffer: ModelInstanceBuffer<F>,
 }
 
 impl ModelID {
@@ -130,14 +136,60 @@ impl<F: Float> ModelInstancePool<F> {
         }
     }
 
-    /// Creates a model instance pool for the models
-    /// with the given IDs.
-    pub fn for_models(model_ids: impl IntoIterator<Item = ModelID>) -> Self {
-        Self {
-            model_instance_buffers: model_ids
-                .into_iter()
-                .map(|model_id| (model_id, ModelInstanceBuffer::new()))
-                .collect(),
+    /// Returns an iterator over the model IDs and the associated
+    /// instance buffers in the pool.
+    pub fn models_and_buffers<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (ModelID, &'a ModelInstanceBuffer<F>)> {
+        self.model_instance_buffers
+            .iter()
+            .map(|(model_id, buffer)| (*model_id, &buffer.buffer))
+    }
+
+    /// Whether the pool has an instance buffer for the model with
+    /// the given ID.
+    pub fn has_buffer_for_model(&self, model_id: ModelID) -> bool {
+        self.model_instance_buffers.contains_key(&model_id)
+    }
+
+    /// Returns a reference to the  [`ModelInstanceBuffer`] for
+    /// the model with the given ID, or [`None`] if the model is
+    /// not present.
+    pub fn get_buffer(&mut self, model_id: ModelID) -> Option<&ModelInstanceBuffer<F>> {
+        self.model_instance_buffers
+            .get(&model_id)
+            .map(|buffer| &buffer.buffer)
+    }
+
+    /// Returns a mutable reference to the  [`ModelInstanceBuffer`]
+    /// for the model with the given ID, or [`None`] if the model is
+    /// not present.
+    pub fn get_buffer_mut(&mut self, model_id: ModelID) -> Option<&mut ModelInstanceBuffer<F>> {
+        self.model_instance_buffers
+            .get_mut(&model_id)
+            .map(|buffer| &mut buffer.buffer)
+    }
+
+    /// Increments the count of users of the model with the given ID.
+    pub fn increment_user_count(&mut self, model_id: ModelID) {
+        self.model_instance_buffers
+            .entry(model_id)
+            .and_modify(|buffer| buffer.increment_user_count())
+            .or_default();
+    }
+
+    /// Decrements the count of users of the model with the given ID.
+    ///
+    /// # Panics
+    /// If the specified model is not represented in the pool.
+    pub fn decrement_user_count(&mut self, model_id: ModelID) {
+        let buffer = self
+            .model_instance_buffers
+            .get_mut(&model_id)
+            .expect("Tried to decrement user count of model missing from pool");
+        buffer.decrement_user_count();
+        if buffer.no_users() {
+            self.model_instance_buffers.remove(&model_id);
         }
     }
 }
@@ -247,4 +299,32 @@ where
     F: Float,
     Matrix4<F>: Pod,
 {
+}
+
+impl<F: Float> UserCountingModelInstanceBuffer<F> {
+    fn new() -> Self {
+        Self {
+            user_count: 1,
+            buffer: ModelInstanceBuffer::new(),
+        }
+    }
+
+    fn no_users(&self) -> bool {
+        self.user_count == 0
+    }
+
+    fn increment_user_count(&mut self) {
+        self.user_count += 1;
+    }
+
+    fn decrement_user_count(&mut self) {
+        assert!(self.user_count >= 1);
+        self.user_count -= 1;
+    }
+}
+
+impl<F: Float> Default for UserCountingModelInstanceBuffer<F> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
