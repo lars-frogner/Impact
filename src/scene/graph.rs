@@ -287,16 +287,19 @@ impl<F: Float> SceneGraph<F> {
     ///
     /// # Panics
     /// If the specified model instance node does not exist.
-    pub fn remove_model_instance_node(&mut self, model_instance_node_id: ModelInstanceNodeID) {
-        let parent_node_id = self
-            .model_instance_nodes
-            .node(model_instance_node_id)
-            .parent_node_id();
+    pub fn remove_model_instance_node(
+        &mut self,
+        model_instance_node_id: ModelInstanceNodeID,
+    ) -> ModelID {
+        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+        let model_id = model_instance_node.model_id();
+        let parent_node_id = model_instance_node.parent_node_id();
         self.model_instance_nodes
             .remove_node(model_instance_node_id);
         self.group_nodes
             .node_mut(parent_node_id)
             .remove_child_model_instance_node(model_instance_node_id);
+        model_id
     }
 
     /// Removes the [`CameraNode`] with the given ID from the scene
@@ -1016,8 +1019,9 @@ mod test {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
         let id = create_dummy_model_instance_node(&mut scene_graph, root_id);
-        scene_graph.remove_model_instance_node(id);
+        let model_id = scene_graph.remove_model_instance_node(id);
 
+        assert_eq!(model_id, create_dummy_model_id(""));
         assert!(!scene_graph.model_instance_nodes().has_node(id));
         assert!(!scene_graph.node_has_model_instance_node_as_child(root_id, id));
 
