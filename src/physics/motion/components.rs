@@ -1,9 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion.
 
-use super::fmo;
+use super::{Position, Velocity};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use nalgebra::{Point3, Vector3};
 
 /// [`Component`](impact_ecs::component::Component) for entities
 /// that have a spatial position. Transparently wraps a [`Point3`]
@@ -12,7 +11,7 @@ use nalgebra::{Point3, Vector3};
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct PositionComp {
     /// A point representing 3D position.
-    pub point: Point3<fmo>,
+    pub position: Position,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities
@@ -22,19 +21,19 @@ pub struct PositionComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VelocityComp {
     /// A vector representing 3D velocity.
-    pub vector: Vector3<fmo>,
+    pub velocity: Velocity,
 }
 
 impl PositionComp {
     /// Creates a new component representing the given position.
-    pub fn new(position: Point3<fmo>) -> Self {
-        Self { point: position }
+    pub fn new(position: Position) -> Self {
+        Self { position }
     }
 }
 
 impl VelocityComp {
     /// Creates a new component representing the given velocity.
-    pub fn new(velocity: Vector3<fmo>) -> Self {
-        Self { vector: velocity }
+    pub fn new(velocity: Velocity) -> Self {
+        Self { velocity }
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::{
     define_execution_tag_set,
+    physics::PhysicsTag,
     rendering::RenderingTag,
     thread::ThreadPoolResult,
     window::{ControlFlow, HandlingResult, InputHandler, WindowEvent},
@@ -32,6 +33,7 @@ pub struct GameLoopConfig {
     max_fps: Option<NonZeroU32>,
 }
 
+define_execution_tag_set!(PHYSICS_AND_RENDERING_TAGS, [PhysicsTag, RenderingTag]);
 define_execution_tag_set!(RENDERING_TAGS, [RenderingTag]);
 
 #[derive(Clone, Debug)]
@@ -73,7 +75,9 @@ impl GameLoop {
     }
 
     pub fn perform_iteration(&mut self, control_flow: &mut ControlFlow<'_>) -> ThreadPoolResult {
-        let execution_result = self.task_scheduler.execute_and_wait(&RENDERING_TAGS);
+        let execution_result = self
+            .task_scheduler
+            .execute_and_wait(&PHYSICS_AND_RENDERING_TAGS);
 
         if let Err(mut task_errors) = execution_result {
             self.world

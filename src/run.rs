@@ -4,7 +4,7 @@ use crate::{
     control::{NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
-    physics::PositionComp,
+    physics::{PhysicsSimulator, PositionComp, SimulatorConfig},
     rendering::{
         fre, Assets, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID,
         TextureID,
@@ -127,10 +127,12 @@ async fn init_world(window: &Window) -> Result<World> {
 
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
+    let simulator = PhysicsSimulator::new(SimulatorConfig::default());
+
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
-    let world = World::new(scene, renderer, controller);
+    let world = World::new(scene, renderer, simulator, controller);
 
     world
         .create_entities((

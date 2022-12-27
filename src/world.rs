@@ -2,7 +2,7 @@
 
 use crate::{
     control::{MotionController, MotionDirection, MotionState},
-    physics::PositionComp,
+    physics::{PhysicsSimulator, PositionComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
         self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
@@ -30,6 +30,7 @@ pub struct World {
     ecs_world: RwLock<ECSWorld>,
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
+    simulator: RwLock<PhysicsSimulator>,
     motion_controller: Mutex<Box<dyn MotionController<f32>>>,
 }
 
@@ -40,12 +41,14 @@ impl World {
     pub fn new(
         scene: Scene,
         renderer: RenderingSystem,
+        simulator: PhysicsSimulator,
         controller: impl 'static + MotionController<f32>,
     ) -> Self {
         Self {
             ecs_world: RwLock::new(ECSWorld::new()),
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
+            simulator: RwLock::new(simulator),
             motion_controller: Mutex::new(Box::new(controller)),
         }
     }
@@ -68,6 +71,12 @@ impl World {
         &self.renderer
     }
 
+    /// Returns a reference to the [`PhysicsSimulator`], guarded
+    /// by a [`RwLock`].
+    pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
+        &self.simulator
+    }
+
     pub fn create_entities<'a, E>(
         &self,
         components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
@@ -87,7 +96,7 @@ impl World {
             manager,
             |camera: &CameraComp, position: &PositionComp| -> SceneGraphNodeComp::<CameraNodeID> {
                 let camera_to_world_transform =
-                    sc::model_to_world_transform_from_position(position.point.cast());
+                    sc::model_to_world_transform_from_position(position.position.cast());
 
                 let node_id = scene_graph.create_camera_node(
                     root_node_id,
@@ -118,7 +127,7 @@ impl World {
                 model_instance_pool.increment_user_count(model_id);
 
                 let model_to_world_transform =
-                    sc::model_to_world_transform_from_position(position.point.cast());
+                    sc::model_to_world_transform_from_position(position.position.cast());
 
                 // Panic on errors since returning an error could leave us
                 // in an inconsistent state
@@ -233,6 +242,11 @@ impl World {
         task_errors: &mut ThreadPoolTaskErrors,
         control_flow: &mut ControlFlow<'_>,
     ) {
+        self.simulator
+            .read()
+            .unwrap()
+            .handle_task_errors(task_errors, control_flow);
+
         self.scene
             .read()
             .unwrap()
@@ -248,6 +262,7 @@ impl World {
     fn register_all_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         Scene::register_tasks(task_scheduler)?;
         RenderingSystem::register_tasks(task_scheduler)?;
+        PhysicsSimulator::register_tasks(task_scheduler)?;
         task_scheduler.complete_task_registration()
     }
 }
