@@ -95,9 +95,18 @@ impl GameLoop {
         }
 
         let iter_end_time = self.wait_for_target_frame_duration();
-        self.frame_rate_tracker
-            .add_frame_duration(iter_end_time - self.previous_iter_end_time);
+        let iter_duration = iter_end_time - self.previous_iter_end_time;
+        self.frame_rate_tracker.add_frame_duration(iter_duration);
         self.previous_iter_end_time = iter_end_time;
+
+        let smooth_fps =
+            frame_duration_to_fps(self.frame_rate_tracker.compute_smooth_frame_duration());
+
+        log::info!(
+            "Game loop iteration took {:.1} ms (~{} FPS)",
+            iter_duration.as_secs_f64() * 1e3,
+            smooth_fps
+        );
 
         Ok(())
     }
@@ -161,7 +170,7 @@ impl Default for GameLoopConfig {
     fn default() -> Self {
         Self {
             n_worker_threads: NonZeroUsize::new(1).unwrap(),
-            max_fps: None,
+            max_fps: Some(NonZeroU32::new(30).unwrap()),
         }
     }
 }
