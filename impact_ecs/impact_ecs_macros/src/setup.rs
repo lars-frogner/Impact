@@ -135,8 +135,9 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
 
 impl Parse for SetupInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let (manager_name, closure, also_required_list, disallowed_list) =
-            querying_util::parse_querying_input(input)?;
+        let manager_name = querying_util::parse_state(input)?;
+        let closure = querying_util::parse_closure(input)?;
+        let (also_required_list, disallowed_list) = querying_util::parse_type_lists(input)?;
         Ok(Self {
             manager_name,
             closure,

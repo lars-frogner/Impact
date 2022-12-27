@@ -119,8 +119,9 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
 
 impl Parse for QueryInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let (world, closure, also_required_list, disallowed_list) =
-            querying_util::parse_querying_input(input)?;
+        let world = querying_util::parse_state(input)?;
+        let closure = querying_util::parse_closure(input)?;
+        let (also_required_list, disallowed_list) = querying_util::parse_type_lists(input)?;
         Ok(Self {
             world,
             closure,

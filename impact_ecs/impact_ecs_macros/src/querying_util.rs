@@ -23,19 +23,19 @@ impl Parse for TypeList {
     }
 }
 
-pub(crate) fn parse_querying_input<S, C>(
-    input: ParseStream,
-) -> Result<(S, C, Option<TypeList>, Option<TypeList>)>
-where
-    S: Parse,
-    C: Parse,
-{
+
+pub(crate) fn parse_state<S: Parse>(input: ParseStream) -> Result<S> {
     let state = input.parse()?;
-
     input.parse::<Token![,]>()?;
-    let closure = input.parse()?;
+    Ok(state)
+}
 
-    let (also_required_list, disallowed_list) = if input.lookahead1().peek(Token![,]) {
+pub(crate) fn parse_closure<C: Parse>(input: ParseStream) -> Result<C> {
+    input.parse()
+}
+
+pub(crate) fn parse_type_lists(input: ParseStream) -> Result<(Option<TypeList>, Option<TypeList>)> {
+    if input.lookahead1().peek(Token![,]) {
         input.parse::<Token![,]>()?;
         if input.lookahead1().peek(Token![!]) {
             input.parse::<Token![!]>()?;
@@ -46,7 +46,7 @@ where
             } else {
                 None
             };
-            (also_required_list, disallowed_list)
+            Ok((also_required_list, disallowed_list))
         } else {
             let also_required_list = Some(input.parse()?);
             let disallowed_list = if input.lookahead1().peek(Token![,]) {
@@ -56,13 +56,11 @@ where
             } else {
                 None
             };
-            (also_required_list, disallowed_list)
+            Ok((also_required_list, disallowed_list))
         }
     } else {
-        (None, None)
-    };
-
-    Ok((state, closure, also_required_list, disallowed_list))
+        Ok((None, None))
+    }
 }
 
 pub(crate) fn determine_all_required_comp_types(
