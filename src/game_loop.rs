@@ -73,15 +73,6 @@ impl GameLoop {
     }
 
     pub fn perform_iteration(&mut self, control_flow: &mut ControlFlow<'_>) -> ThreadPoolResult {
-        self.world
-            .renderer()
-            .read()
-            .unwrap()
-            .render_buffer_manager()
-            .write()
-            .unwrap()
-            .declare_desynchronized();
-
         let execution_result = self.task_scheduler.execute_and_wait(&RENDERING_TAGS);
 
         if let Err(mut task_errors) = execution_result {

@@ -72,6 +72,12 @@ impl RenderBufferManager {
         }
     }
 
+    /// Whether the render buffers are marked as being out of sync
+    /// with the source geometry.
+    pub fn is_desynchronized(&self) -> bool {
+        self.desynchronized_buffers.is_some()
+    }
+
     /// Returns a reference to the render buffers wrapped in
     /// a [`SynchronizedRenderBuffers`], providing lock free
     /// read access to the buffers.

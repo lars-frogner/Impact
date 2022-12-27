@@ -30,6 +30,16 @@ define_task!(
                     &scene.camera_repository().read().unwrap(),
                     scene.get_active_camera_node_id(),
                 );
+
+            world
+                .renderer()
+                .read()
+                .unwrap()
+                .render_buffer_manager()
+                .write()
+                .unwrap()
+                .declare_desynchronized();
+
             result
         })
     }

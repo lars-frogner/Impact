@@ -55,19 +55,21 @@ define_task!(
         with_debug_logging!("Synchronizing perspective camera render buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
-            DesynchronizedRenderBuffers::sync_camera_buffers_with_geometry(
-                renderer.core_system(),
-                render_buffer_manager
-                    .desynchronized()
-                    .perspective_camera_buffers
-                    .lock()
-                    .unwrap()
-                    .as_mut(),
-                world
-                    .scene().read().unwrap()
-                    .camera_repository().read().unwrap()
-                    .perspective_cameras(),
-            );
+            if render_buffer_manager.is_desynchronized() {
+                DesynchronizedRenderBuffers::sync_camera_buffers_with_geometry(
+                    renderer.core_system(),
+                    render_buffer_manager
+                        .desynchronized()
+                        .perspective_camera_buffers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    world
+                        .scene().read().unwrap()
+                        .camera_repository().read().unwrap()
+                        .perspective_cameras(),
+                );
+            }
             Ok(())
         })
     }
@@ -81,19 +83,21 @@ define_task!(
         with_debug_logging!("Synchronizing color mesh render buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
-            DesynchronizedRenderBuffers::sync_mesh_buffers_with_geometry(
-                renderer.core_system(),
-                render_buffer_manager
-                    .desynchronized()
-                    .color_mesh_buffers
-                    .lock()
-                    .unwrap()
-                    .as_mut(),
-                world
-                    .scene().read().unwrap()
-                    .mesh_repository().read().unwrap()
-                    .color_meshes(),
-            );
+            if render_buffer_manager.is_desynchronized() {
+                DesynchronizedRenderBuffers::sync_mesh_buffers_with_geometry(
+                    renderer.core_system(),
+                    render_buffer_manager
+                        .desynchronized()
+                        .color_mesh_buffers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    world
+                        .scene().read().unwrap()
+                        .mesh_repository().read().unwrap()
+                        .color_meshes(),
+                );
+            }
             Ok(())
         })
     }
@@ -107,19 +111,21 @@ define_task!(
         with_debug_logging!("Synchronizing texture mesh render buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
-            DesynchronizedRenderBuffers::sync_mesh_buffers_with_geometry(
-                renderer.core_system(),
-                render_buffer_manager
-                    .desynchronized()
-                    .texture_mesh_buffers
-                    .lock()
-                    .unwrap()
-                    .as_mut(),
-                world
-                    .scene().read().unwrap()
-                    .mesh_repository().read().unwrap()
-                    .texture_meshes(),
-            );
+            if render_buffer_manager.is_desynchronized() {
+                DesynchronizedRenderBuffers::sync_mesh_buffers_with_geometry(
+                    renderer.core_system(),
+                    render_buffer_manager
+                        .desynchronized()
+                        .texture_mesh_buffers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    world
+                        .scene().read().unwrap()
+                        .mesh_repository().read().unwrap()
+                        .texture_meshes(),
+                );
+            }
             Ok(())
         })
     }
@@ -133,18 +139,20 @@ define_task!(
         with_debug_logging!("Synchronizing model instance render buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_buffer_manager = renderer.render_buffer_manager().read().unwrap();
-            DesynchronizedRenderBuffers::sync_model_instance_buffers_with_geometry(
-                renderer.core_system(),
-                render_buffer_manager
-                    .desynchronized()
-                    .model_instance_buffers
-                    .lock()
-                    .unwrap()
-                    .as_mut(),
-                &world
-                    .scene().read().unwrap()
-                    .model_instance_pool().read().unwrap(),
-            );
+            if render_buffer_manager.is_desynchronized() {
+                DesynchronizedRenderBuffers::sync_model_instance_buffers_with_geometry(
+                    renderer.core_system(),
+                    render_buffer_manager
+                        .desynchronized()
+                        .model_instance_buffers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    &world
+                        .scene().read().unwrap()
+                        .model_instance_pool().read().unwrap(),
+                );
+            }
             Ok(())
         })
     }
