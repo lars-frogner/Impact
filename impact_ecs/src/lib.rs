@@ -30,6 +30,11 @@ pub use impact_ecs_macros::archetype_of;
 ///
 /// ```ignore
 /// setup!(
+///     {
+///         // Setup to run once if criteria are matched (optional)
+///         // ....
+///     },
+///     // Identifier for the `ComponentManager` to match on
 ///     manager,
 ///     // Call closure for each component instance if `manager` has both
 ///     // `Comp1` and `Comp2`
@@ -79,6 +84,12 @@ pub use impact_ecs_macros::archetype_of;
 /// also has an initial component type specified in the dissalowed component
 /// list, the closure will not be called.
 ///
+/// Finally, arbitrary code to run once if (and only if) the `ComponentManager`
+/// has all of the required initial components can be specified inside curly
+/// braces as the first argument to the macro. This code will be included in the
+/// parent scope of the closure, and will go out of scope when all closure calls
+/// have been executed.
+///
 /// # Examples
 /// ```
 /// # use impact_ecs::{
@@ -109,8 +120,11 @@ pub use impact_ecs_macros::archetype_of;
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Disabled;
 /// #
-/// fn setup_area_lights(manager: &mut ComponentManager) {
+/// fn setup_area_lights(manager: &mut ComponentManager, contains_area_lights: &mut bool) {
 ///     setup!(
+///         {
+///             *contains_area_lights = true;
+///         },
 ///         manager,
 ///         |flux: &Flux, area: &Area| -> Luminosity {
 ///             Luminosity(flux.0 * area.0)
@@ -124,11 +138,13 @@ pub use impact_ecs_macros::archetype_of;
 /// let mut manager = ComponentManager::with_initial_components(
 ///     (&[Light, Light], &[Flux(1.0), Flux(5.0)], &[Area(2.0), Area(2.0)])
 /// )?;
+/// let mut contains_area_lights = false;
 ///
-/// setup_area_lights(&mut manager);
+/// setup_area_lights(&mut manager, &mut contains_area_lights);
 ///
 /// let entities = world.create_entities(manager.all_components()?)?;
 ///
+/// assert!(contains_area_lights);
 /// assert_eq!(
 ///     world.entity(&entities[0]).component::<Luminosity>().access(),
 ///     &Luminosity(2.0)

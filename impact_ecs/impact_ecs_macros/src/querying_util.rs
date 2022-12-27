@@ -7,6 +7,7 @@ use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
+    token::Brace,
     Error, Result, Token, Type,
 };
 
@@ -23,6 +24,15 @@ impl Parse for TypeList {
     }
 }
 
+pub(crate) fn parse_scope<Sc: Parse>(input: ParseStream) -> Result<Option<Sc>> {
+    if input.lookahead1().peek(Brace) {
+        let scope = input.parse()?;
+        input.parse::<Token![,]>()?;
+        Ok(Some(scope))
+    } else {
+        Ok(None)
+    }
+}
 
 pub(crate) fn parse_state<S: Parse>(input: ParseStream) -> Result<S> {
     let state = input.parse()?;

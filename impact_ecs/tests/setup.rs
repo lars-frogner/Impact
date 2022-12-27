@@ -46,11 +46,21 @@ fn test_valid_setup_inputs() {
 
     setup!(manager, || {});
 
+    setup!({}, manager, || {});
+
     setup!(manager, || {}, [Position]);
 
     setup!(manager, || {}, [Position], ![LikeByte]);
 
     setup!(manager, || -> Byte { BYTE });
+
+    setup!(
+        {
+            let comp = BYTE;
+        },
+        manager,
+        || -> Byte { comp }
+    );
 
     setup!(
         manager,
@@ -244,6 +254,63 @@ fn setup_on_manager_missing_one_required_comp_runs_nothing_4() {
         },
         [Position, Rectangle]
     );
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn setup_state_is_available_in_closure() {
+    let manager = ComponentManager::with_initial_components(&[BYTE, BYTE]).unwrap();
+    let mut count = 0;
+    setup!(
+        {
+            let var_1 = 1;
+            let var_2 = 2;
+        },
+        manager,
+        || {
+            assert_eq!(var_1, 1);
+            assert_eq!(var_2, 2);
+            count += 1;
+        }
+    );
+    assert_eq!(count, 2);
+}
+
+#[test]
+fn setup_state_is_unavailable_after_closure() {
+    let manager = ComponentManager::with_initial_components(&[BYTE, BYTE]).unwrap();
+    let mut count = 0;
+    let var = 0;
+    setup!(
+        {
+            let var = 1;
+        },
+        manager,
+        || {
+            assert_eq!(var, 1);
+            count += 1;
+        }
+    );
+    assert_eq!(var, 0);
+    assert_eq!(count, 2);
+}
+
+#[test]
+fn setup_state_is_not_run_if_closure_is_not_run() {
+    let manager = ComponentManager::with_initial_components(&[BYTE, BYTE]).unwrap();
+    let mut count = 0;
+    let mut var = 0;
+    setup!(
+        {
+            var = 1;
+        },
+        manager,
+        || {
+            count += 1;
+        },
+        [Marked]
+    );
+    assert_eq!(var, 0);
     assert_eq!(count, 0);
 }
 

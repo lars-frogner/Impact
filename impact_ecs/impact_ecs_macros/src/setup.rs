@@ -5,7 +5,7 @@ use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parenthesized,
+    braced, parenthesized,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     token::Paren,
@@ -13,10 +13,15 @@ use syn::{
 };
 
 pub(crate) struct SetupInput {
+    scope: Option<SetupScope>,
     manager_name: Ident,
     closure: SetupClosure,
     also_required_list: Option<TypeList>,
     disallowed_list: Option<TypeList>,
+}
+
+struct SetupScope {
+    scope: TokenStream,
 }
 
 struct SetupCompClosureArg {
@@ -31,6 +36,7 @@ struct SetupClosure {
 }
 
 struct ProcessedSetupInput {
+    scope: Option<TokenStream>,
     manager_name: Ident,
     closure_body: Expr,
     comp_arg_names: Vec<Ident>,
@@ -76,6 +82,8 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
         &crate_root,
     );
 
+    let scope_code = input.scope.unwrap_or_else(|| quote! {});
+
     let (component_storage_array_name, component_storage_array_creation_code) =
         generate_component_storage_array_creation_code(
             &input.manager_name,
@@ -113,6 +121,8 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
             // Run code if components match query
             if #if_expr_code
             {
+                #scope_code
+
                 // Define closure to call for each set of components
                 #closure_def_code
 
@@ -135,15 +145,26 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
 
 impl Parse for SetupInput {
     fn parse(input: ParseStream) -> Result<Self> {
+        let scope = querying_util::parse_scope(input)?;
         let manager_name = querying_util::parse_state(input)?;
         let closure = querying_util::parse_closure(input)?;
         let (also_required_list, disallowed_list) = querying_util::parse_type_lists(input)?;
         Ok(Self {
+            scope,
             manager_name,
             closure,
             also_required_list,
             disallowed_list,
         })
+    }
+}
+
+impl Parse for SetupScope {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        braced!(content in input);
+        let scope = content.parse()?;
+        Ok(Self { scope })
     }
 }
 
@@ -196,11 +217,14 @@ impl Parse for SetupCompClosureArg {
 impl SetupInput {
     fn process(self) -> ProcessedSetupInput {
         let Self {
+            scope,
             manager_name,
             closure,
             also_required_list,
             disallowed_list,
         } = self;
+
+        let scope = scope.map(|s| s.scope);
 
         let SetupClosure {
             comp_args,
@@ -230,6 +254,7 @@ impl SetupInput {
         let full_closure_args = create_full_closure_args(&comp_arg_names, &comp_arg_types);
 
         ProcessedSetupInput {
+            scope,
             manager_name,
             closure_body,
             comp_arg_names,
