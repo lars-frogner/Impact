@@ -1,12 +1,12 @@
 //! Input handling.
 
-use std::collections::HashMap;
-
 use crate::{
     control::{MotionDirection, MotionState},
     window::ControlFlow,
     world::World,
 };
+use anyhow::Result;
+use std::collections::HashMap;
 use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 /// Handler for any user input events.
@@ -66,20 +66,20 @@ impl InputHandler {
     /// Takes a window event and possibly performs an action
     /// on the world.
     ///
-    /// The returned [`HandlingResult`] signals whether the event
-    /// should be handled by some other system instead.
+    /// If no errors occur, returns a [`HandlingResult`] that signals
+    /// whether the event should be handled by some other system instead.
     pub fn handle_event(
         &self,
         world: &World,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
-    ) -> HandlingResult {
+    ) -> Result<HandlingResult> {
         match event {
             // Handle keyboard input events
             WindowEvent::KeyboardInput { input, .. } => {
                 self.key_handler.handle_event(world, control_flow, input)
             }
-            _ => HandlingResult::Unhandled,
+            _ => Ok(HandlingResult::Unhandled),
         }
     }
 }
@@ -94,7 +94,7 @@ impl KeyInputHandler {
         world: &World,
         control_flow: &mut ControlFlow<'_>,
         key_input_event: &KeyboardInput,
-    ) -> HandlingResult {
+    ) -> Result<HandlingResult> {
         match key_input_event {
             KeyboardInput {
                 state,
@@ -104,13 +104,13 @@ impl KeyInputHandler {
                 Some(action) => match action {
                     KeyboardInputAction::Exit => {
                         control_flow.exit();
-                        HandlingResult::Handled
+                        Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleInteractionMode => {
                         if state == &ElementState::Released {
                             world.toggle_interaction_mode();
                         }
-                        HandlingResult::Handled
+                        Ok(HandlingResult::Handled)
                     }
                     // Check if the input is for the motion controller,
                     // and if so, performed the required motion update
@@ -120,14 +120,14 @@ impl KeyInputHandler {
                                 MotionState::from_key_state(*state),
                                 direction,
                             );
-                            HandlingResult::Handled
+                            Ok(HandlingResult::Handled)
                         }
-                        None => HandlingResult::Unhandled,
+                        None => Ok(HandlingResult::Unhandled),
                     },
                 },
-                None => HandlingResult::Unhandled,
+                None => Ok(HandlingResult::Unhandled),
             },
-            _ => HandlingResult::Unhandled,
+            _ => Ok(HandlingResult::Unhandled),
         }
     }
 }

@@ -98,8 +98,8 @@ impl EventLoop {
                     if window_id == game_loop.world().window().window().id() =>
                 {
                     match game_loop.handle_input_event(&mut control_flow, &event) {
-                        HandlingResult::Handled => {}
-                        HandlingResult::Unhandled => {
+                        Ok(HandlingResult::Handled) => {}
+                        Ok(HandlingResult::Unhandled) => {
                             match event {
                                 // Exit if user requests close
                                 WindowEvent::CloseRequested => control_flow.exit(),
@@ -119,6 +119,10 @@ impl EventLoop {
                                 }
                                 _ => {}
                             }
+                        }
+                        Err(error) => {
+                            log::error!("Unhandled error: {:?}", error);
+                            control_flow.exit();
                         }
                     }
                 }

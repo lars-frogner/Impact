@@ -69,7 +69,7 @@ impl GameLoop {
         &self,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
-    ) -> HandlingResult {
+    ) -> Result<HandlingResult> {
         self.input_handler
             .handle_event(self.world(), control_flow, event)
     }
