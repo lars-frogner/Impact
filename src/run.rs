@@ -28,11 +28,12 @@ use wasm_bindgen::prelude::*;
 pub async fn run() -> Result<()> {
     init_logging()?;
 
-    let window = Window::new()?;
+    let (window, event_loop) = Window::new_window_and_event_loop()?;
     let world = init_world(window).await?;
     let input_handler = InputHandler::default();
 
-    window.run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap());
+    event_loop
+        .run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap());
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -68,6 +69,7 @@ fn init_logging_native() -> Result<()> {
     Ok(())
 }
 
+async fn init_world(window: Window) -> Result<World> {
     let core_system = CoreRenderingSystem::new(&window).await?;
 
     let mut assets = Assets::new();

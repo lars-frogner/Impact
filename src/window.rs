@@ -9,7 +9,7 @@ use crate::game_loop::GameLoop;
 use anyhow::Result;
 use winit::{
     event::Event,
-    event_loop::{ControlFlow as WinitControlFlow, EventLoop},
+    event_loop::{ControlFlow as WinitControlFlow, EventLoop as WinitEventLoop},
     window::{Window as WinitWindow, WindowBuilder},
 };
 
@@ -24,11 +24,16 @@ cfg_if::cfg_if! {
     }
 }
 
-/// Wrapper for a window with an associated event loop.
+/// Wrapper for a window.
 #[derive(Debug)]
 pub struct Window {
     window: WinitWindow,
-    event_loop: EventLoop<()>,
+}
+
+/// Wrapper for an event loop.
+#[derive(Debug)]
+pub struct EventLoop {
+    event_loop: WinitEventLoop<()>,
 }
 
 /// Wrapper for an event loop control flow.
@@ -42,8 +47,8 @@ pub fn calculate_aspect_ratio(width: u32, height: u32) -> f32 {
 
 impl Window {
     /// Creates a new window with an associated event loop.
-    pub fn new() -> Result<Self> {
-        let event_loop = EventLoop::new();
+    pub fn new_window_and_event_loop() -> Result<(Self, EventLoop)> {
+        let event_loop = WinitEventLoop::new();
         let window = WindowBuilder::new().build(&event_loop)?;
 
         #[cfg(target_arch = "wasm32")]
@@ -54,7 +59,7 @@ impl Window {
             add_window_canvas_to_parent_element(&window)?;
         }
 
-        Ok(Self { event_loop, window })
+        Ok((Self::wrap(window), EventLoop::wrap(event_loop)))
     }
 
     /// Returns the underlying [`winit::Window`].
@@ -68,10 +73,17 @@ impl Window {
         calculate_aspect_ratio(window_size.width, window_size.height)
     }
 
+
+    fn wrap(window: WinitWindow) -> Self {
+        Self { window }
+    }
+}
+
+impl EventLoop {
     /// Wraps the given game loop in an event loop that can capture
     /// window events and runs the loop.
     pub fn run_game_loop(self, mut game_loop: GameLoop) -> ! {
-        let Self { window, event_loop } = self;
+        let event_loop = self.unwrap();
         event_loop.run(move |event, _, control_flow| {
             let mut control_flow = ControlFlow(control_flow);
             match event {
@@ -115,6 +127,15 @@ impl Window {
                 _ => {}
             }
         });
+    }
+
+    fn wrap(event_loop: WinitEventLoop<()>) -> Self {
+        Self { event_loop }
+    }
+
+    fn unwrap(self) -> WinitEventLoop<()> {
+        let Self { event_loop } = self;
+        event_loop
     }
 }
 
