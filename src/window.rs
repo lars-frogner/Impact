@@ -76,7 +76,9 @@ impl Window {
             let mut control_flow = ControlFlow(control_flow);
             match event {
                 // Handle window events
-                Event::WindowEvent { event, window_id } if window_id == window.id() => {
+                Event::WindowEvent { event, window_id }
+                    if window_id == game_loop.world().window().window().id() =>
+                {
                     match game_loop.handle_input_event(&mut control_flow, &event) {
                         HandlingResult::Handled => {}
                         HandlingResult::Unhandled => {

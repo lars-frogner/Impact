@@ -61,13 +61,17 @@ impl GameLoop {
         })
     }
 
+    pub fn world(&self) -> &World {
+        self.world.as_ref()
+    }
+
     pub fn handle_input_event(
         &self,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
     ) -> HandlingResult {
         self.input_handler
-            .handle_event(self.world.as_ref(), control_flow, event)
+            .handle_event(self.world(), control_flow, event)
     }
 
     pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {

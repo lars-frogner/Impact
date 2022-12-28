@@ -29,7 +29,7 @@ pub async fn run() -> Result<()> {
     init_logging()?;
 
     let window = Window::new()?;
-    let world = init_world(&window).await?;
+    let world = init_world(window).await?;
     let input_handler = InputHandler::default();
 
     window.run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap());
@@ -68,8 +68,7 @@ fn init_logging_native() -> Result<()> {
     Ok(())
 }
 
-async fn init_world(window: &Window) -> Result<World> {
-    let core_system = CoreRenderingSystem::new(window).await?;
+    let core_system = CoreRenderingSystem::new(&window).await?;
 
     let mut assets = Assets::new();
     let mut mesh_repository = MeshRepository::new();
@@ -132,7 +131,13 @@ async fn init_world(window: &Window) -> Result<World> {
     let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 0.2);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
-    let world = World::new(scene, renderer, simulator, controller);
+    let world = World::new(
+        window,
+        scene,
+        renderer,
+        simulator,
+        controller,
+    );
 
     world
         .create_entities((

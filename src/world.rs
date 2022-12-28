@@ -10,7 +10,7 @@ use crate::{
     },
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
-    window::{self, ControlFlow},
+    window::{self, ControlFlow, Window},
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -27,6 +27,7 @@ use std::{
 /// rendering the world.
 #[derive(Debug)]
 pub struct World {
+    window: Window,
     ecs_world: RwLock<ECSWorld>,
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
@@ -39,12 +40,14 @@ pub type WorldTaskScheduler = TaskScheduler<World>;
 impl World {
     /// Creates a new world data container.
     pub fn new(
+        window: Window,
         scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
         controller: impl 'static + MotionController<f32>,
     ) -> Self {
         Self {
+            window,
             ecs_world: RwLock::new(ECSWorld::new()),
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
@@ -53,6 +56,10 @@ impl World {
         }
     }
 
+    /// Returns a reference to the [`Window`].
+    pub fn window(&self) -> &Window {
+        &self.window
+    }
     /// Returns a reference to the ECS [`World`](impact_ecs::world::World), guarded
     /// by a [`RwLock`].
     pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
