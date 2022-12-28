@@ -10,6 +10,7 @@ use crate::{
     },
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
+    ui::UserInterface,
     window::{self, ControlFlow, Window},
 };
 use anyhow::Result;
@@ -28,6 +29,7 @@ use std::{
 #[derive(Debug)]
 pub struct World {
     window: Window,
+    user_interface: RwLock<UserInterface>,
     ecs_world: RwLock<ECSWorld>,
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
@@ -41,6 +43,7 @@ impl World {
     /// Creates a new world data container.
     pub fn new(
         window: Window,
+        user_interface: UserInterface,
         scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
@@ -48,6 +51,7 @@ impl World {
     ) -> Self {
         Self {
             window,
+            user_interface: RwLock::new(user_interface),
             ecs_world: RwLock::new(ECSWorld::new()),
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
@@ -60,6 +64,13 @@ impl World {
     pub fn window(&self) -> &Window {
         &self.window
     }
+
+    /// Returns a reference to the [`UserInterface`], guarded
+    /// by a [`RwLock`].
+    pub fn user_interface(&self) -> &RwLock<UserInterface> {
+        &self.user_interface
+    }
+
     /// Returns a reference to the ECS [`World`](impact_ecs::world::World), guarded
     /// by a [`RwLock`].
     pub fn ecs_world(&self) -> &RwLock<ECSWorld> {

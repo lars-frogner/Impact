@@ -10,6 +10,7 @@ use crate::{
         TextureID,
     },
     scene::{CameraComp, CameraID, CameraRepository, MeshComp, MeshID, MeshRepository, Scene},
+    ui::UserInterface,
     window::InputHandler,
     window::Window,
     world::World,
@@ -70,6 +71,8 @@ fn init_logging_native() -> Result<()> {
 }
 
 async fn init_world(window: Window) -> Result<World> {
+    let user_interface = UserInterface::new();
+
     let core_system = CoreRenderingSystem::new(&window).await?;
 
     let mut assets = Assets::new();
@@ -135,6 +138,7 @@ async fn init_world(window: Window) -> Result<World> {
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(
         window,
+        user_interface,
         scene,
         renderer,
         simulator,

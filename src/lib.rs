@@ -18,6 +18,7 @@ pub mod run;
 pub mod scene;
 pub mod scheduling;
 pub mod thread;
+pub mod ui;
 mod util;
 pub mod window;
 pub mod world;
