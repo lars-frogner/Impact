@@ -1,10 +1,10 @@
 //! Running an event loop.
 
 use crate::{
-    control::{NoMotionController, SemiDirectionalMotionController},
+    control::{Controllable, NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
-    physics::{PhysicsSimulator, PositionComp, SimulatorConfig},
+    physics::{PhysicsSimulator, PositionComp, SimulatorConfig, VelocityComp},
     rendering::{
         fre, Assets, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID,
         TextureID,
@@ -129,7 +129,7 @@ async fn init_world(window: &Window) -> Result<World> {
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
 
-    let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 1.0);
+    let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 0.2);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(scene, renderer, simulator, controller);
@@ -138,6 +138,8 @@ async fn init_world(window: &Window) -> Result<World> {
         .create_entities((
             &CameraComp::new(CameraID(hash!("Camera"))),
             &PositionComp::new(Point3::origin()),
+            &VelocityComp::new(Vector3::zeros()),
+            &Controllable,
         ))
         .unwrap();
 

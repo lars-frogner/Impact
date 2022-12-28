@@ -1,8 +1,8 @@
 //! Container for all data in the world.
 
 use crate::{
-    control::{MotionController, MotionDirection, MotionState},
-    physics::{PhysicsSimulator, PositionComp},
+    control::{Controllable, MotionController, MotionDirection, MotionState},
+    physics::{PhysicsSimulator, PositionComp, VelocityComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
         self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
@@ -15,7 +15,7 @@ use crate::{
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeCompByteView, ComponentManager},
-    setup,
+    query, setup,
     world::{Entity, World as ECSWorld},
 };
 use std::{
@@ -214,7 +214,19 @@ impl World {
 
         let mut motion_controller = self.motion_controller.lock().unwrap();
 
-        motion_controller.update_motion(state, direction);
+        let changed = motion_controller.update_motion(state, direction);
+
+        if changed {
+            let motion_velocity = motion_controller.current_motion().velocity().cast();
+            let ecs_world = self.ecs_world().read().unwrap();
+            query!(
+                ecs_world,
+                |velocity: &mut VelocityComp| {
+                    velocity.velocity = motion_velocity;
+                },
+                [Controllable]
+            );
+        }
     }
 
     /// Creates a new task scheduler with the given number of
