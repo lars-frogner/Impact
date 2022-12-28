@@ -4,7 +4,7 @@ mod motion;
 mod tasks;
 mod time;
 
-pub use motion::{AdvancePositions, PositionComp, VelocityComp};
+pub use motion::{AdvancePositions, Position, PositionComp, Velocity, VelocityComp};
 pub use tasks::PhysicsTag;
 
 /// Floating point type used for physics simulation.
