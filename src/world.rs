@@ -2,7 +2,7 @@
 
 use crate::{
     control::{Controllable, MotionController, MotionDirection, MotionState},
-    physics::{PhysicsSimulator, PositionComp, VelocityComp},
+    physics::{PhysicsSimulator, PositionComp, Velocity, VelocityComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
         self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
@@ -28,7 +28,7 @@ use std::{
 /// rendering the world.
 #[derive(Debug)]
 pub struct World {
-    window: Window,
+    window: Arc<Window>,
     user_interface: RwLock<UserInterface>,
     ecs_world: RwLock<ECSWorld>,
     scene: RwLock<Scene>,
@@ -43,15 +43,15 @@ impl World {
     /// Creates a new world data container.
     pub fn new(
         window: Window,
-        user_interface: UserInterface,
         scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
         controller: impl 'static + MotionController<f32>,
     ) -> Self {
+        let window = Arc::new(window);
         Self {
-            window,
-            user_interface: RwLock::new(user_interface),
+            window: Arc::clone(&window),
+            user_interface: RwLock::new(UserInterface::new(window)),
             ecs_world: RwLock::new(ECSWorld::new()),
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
@@ -62,7 +62,7 @@ impl World {
 
     /// Returns a reference to the [`Window`].
     pub fn window(&self) -> &Window {
-        &self.window
+        self.window.as_ref()
     }
 
     /// Returns a reference to the [`UserInterface`], guarded
@@ -220,31 +220,51 @@ impl World {
             .write()
             .unwrap()
             .set_aspect_ratios(window::calculate_aspect_ratio(new_size.0, new_size.1));
+    pub fn toggle_interaction_mode(&self) {
+        let mut user_interface = self.user_interface().write().unwrap();
+        if user_interface.control_mode_active() {
+            self.stop_motion_controller();
+            user_interface.activate_cursor_mode();
+        } else {
+            user_interface.activate_control_mode();
+        }
     }
 
     /// Updates the motion controller with the given motion.
     pub fn update_motion_controller(&self, state: MotionState, direction: MotionDirection) {
-        log::debug!(
-            "Updating motion controller to state {:?} and direction {:?}",
-            state,
-            direction
-        );
-
-        let mut motion_controller = self.motion_controller.lock().unwrap();
-
-        let changed = motion_controller.update_motion(state, direction);
-
-        if changed {
-            let motion_velocity = motion_controller.current_motion().velocity().cast();
-            let ecs_world = self.ecs_world().read().unwrap();
-            query!(
-                ecs_world,
-                |velocity: &mut VelocityComp| {
-                    velocity.velocity = motion_velocity;
-                },
-                [Controllable]
+        if self.user_interface().read().unwrap().control_mode_active() {
+            log::debug!(
+                "Updating motion controller to state {:?} and direction {:?}",
+                state,
+                direction
             );
+
+            let mut motion_controller = self.motion_controller.lock().unwrap();
+
+            let changed = motion_controller.update_motion(state, direction);
+
+            if changed {
+                let controller_velocity = motion_controller.current_motion().velocity().cast();
+                self.set_velocity_for_controllable_entities(controller_velocity);
+            }
         }
+    }
+
+    fn stop_motion_controller(&self) {
+        let mut motion_controller = self.motion_controller.lock().unwrap();
+        motion_controller.stop();
+        self.set_velocity_for_controllable_entities(Velocity::zeros());
+    }
+
+    fn set_velocity_for_controllable_entities(&self, controller_velocity: Velocity) {
+        let ecs_world = self.ecs_world().read().unwrap();
+        query!(
+            ecs_world,
+            |velocity: &mut VelocityComp| {
+                velocity.velocity = controller_velocity;
+            },
+            [Controllable]
+        );
     }
 
     /// Creates a new task scheduler with the given number of

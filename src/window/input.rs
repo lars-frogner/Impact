@@ -37,6 +37,7 @@ pub enum KeyboardInputAction {
     MoveLeft,
     MoveUp,
     MoveDown,
+    ToggleInteractionMode,
     Exit,
 }
 
@@ -105,6 +106,12 @@ impl KeyInputHandler {
                         control_flow.exit();
                         HandlingResult::Handled
                     }
+                    KeyboardInputAction::ToggleInteractionMode => {
+                        if state == &ElementState::Released {
+                            world.toggle_interaction_mode();
+                        }
+                        HandlingResult::Handled
+                    }
                     // Check if the input is for the motion controller,
                     // and if so, performed the required motion update
                     action => match MotionDirection::try_from_input_action(action) {
@@ -144,6 +151,7 @@ impl Default for KeyActionMap {
             MoveLeft => A,
             MoveUp => Q,
             MoveDown => E,
+            ToggleInteractionMode => Tab,
             Exit => Escape
         ))
     }

@@ -1,25 +1,56 @@
 //! User interface.
 
 use crate::window::Window;
+use std::sync::Arc;
 
 /// User interface state.
 #[derive(Debug)]
 pub struct UserInterface {
-    cursor_visible: bool,
+    window: Arc<Window>,
+    interaction_mode: InteractionMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InteractionMode {
+    Control,
+    Cursor,
 }
 
 impl UserInterface {
     /// Creates a new user interface state.
-    pub fn new() -> Self {
+    pub fn new(window: Arc<Window>) -> Self {
+        let interaction_mode = InteractionMode::control(&window);
         Self {
-            cursor_visible: true,
+            window,
+            interaction_mode,
         }
     }
 
-    /// If the cursor is visible, hide it. If the cursor is hidden,
-    /// show make it visible.
-    pub fn toggle_cursor_visibility(&mut self, window: &Window) {
-        self.cursor_visible = !self.cursor_visible;
-        window.set_cursor_visible(self.cursor_visible);
+    pub fn control_mode_active(&self) -> bool {
+        self.interaction_mode == InteractionMode::Control
+    }
+
+    pub fn activate_control_mode(&mut self) {
+        if self.interaction_mode != InteractionMode::Control {
+            self.interaction_mode = InteractionMode::control(&self.window);
+        }
+    }
+
+    pub fn activate_cursor_mode(&mut self) {
+        if self.interaction_mode != InteractionMode::Cursor {
+            self.interaction_mode = InteractionMode::cursor(&self.window);
+        }
+    }
+}
+
+impl InteractionMode {
+    fn control(window: &Window) -> Self {
+        window.set_cursor_visible(false);
+        Self::Control
+    }
+
+    fn cursor(window: &Window) -> Self {
+        window.set_cursor_visible(true);
+        Self::Cursor
     }
 }

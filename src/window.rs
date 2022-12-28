@@ -73,6 +73,12 @@ impl Window {
         calculate_aspect_ratio(window_size.width, window_size.height)
     }
 
+    /// Modifies the cursor's visibility.
+    ///
+    /// If `false`, this will hide the cursor. If `true`, this will show the cursor.
+    pub fn set_cursor_visible(&self, visible: bool) {
+        self.window.set_cursor_visible(visible);
+    }
 
     fn wrap(window: WinitWindow) -> Self {
         Self { window }
