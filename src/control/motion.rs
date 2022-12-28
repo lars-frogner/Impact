@@ -55,7 +55,9 @@ impl<F: Float> MotionController<F> for NoMotionController {
         &ControlledMotion::Stationary
     }
 
-    fn update_motion(&mut self, _state: MotionState, _direction: MotionDirection) {}
+    fn update_motion(&mut self, _state: MotionState, _direction: MotionDirection) -> bool {
+        false
+    }
 
     fn set_orientation(&mut self, _orientation: Rotation3<F>) {}
 
@@ -138,9 +140,12 @@ impl<F: Float> MotionController<F> for SemiDirectionalMotionController<F> {
         &self.motion
     }
 
-    fn update_motion(&mut self, state: MotionState, direction: MotionDirection) {
-        self.state.update(state, direction);
-        self.motion = self.compute_motion();
+    fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> bool {
+        let changed = self.state.update(state, direction);
+        if changed {
+            self.motion = self.compute_motion();
+        }
+        changed
     }
 
     fn set_orientation(&mut self, orientation: Rotation3<F>) {
@@ -168,6 +173,12 @@ impl MotionState {
     pub fn is_moving(&self) -> bool {
         *self == Self::Moving
     }
+
+    pub fn update(&mut self, state: Self) -> bool {
+        let changed = self != &state;
+        *self = state;
+        changed
+    }
 }
 
 impl SemiDirectionalMotionState {
@@ -192,15 +203,15 @@ impl SemiDirectionalMotionState {
         }
     }
 
-    fn update(&mut self, state: MotionState, direction: MotionDirection) {
+    fn update(&mut self, state: MotionState, direction: MotionDirection) -> bool {
         match direction {
-            MotionDirection::Forwards => self.forwards = state,
-            MotionDirection::Backwards => self.backwards = state,
-            MotionDirection::Right => self.right = state,
-            MotionDirection::Left => self.left = state,
-            MotionDirection::Up => self.up = state,
-            MotionDirection::Down => self.down = state,
-        };
+            MotionDirection::Forwards => self.forwards.update(state),
+            MotionDirection::Backwards => self.backwards.update(state),
+            MotionDirection::Right => self.right.update(state),
+            MotionDirection::Left => self.left.update(state),
+            MotionDirection::Up => self.up.update(state),
+            MotionDirection::Down => self.down.update(state),
+        }
     }
 
     fn stop(&mut self) {
@@ -260,20 +271,22 @@ mod test {
             "Not stationary directly after initalization"
         );
 
-        controller.update_motion(Moving, Forwards);
+        assert!(controller.update_motion(Moving, Forwards));
         assert_abs_diff_eq!(
             controller.compute_motion(),
             ControlledMotion::ConstantVelocity(vector![0.0, 0.0, speed]),
         );
 
-        controller.update_motion(Moving, Backwards);
+        assert!(!controller.update_motion(Moving, Forwards));
+
+        assert!(controller.update_motion(Moving, Backwards));
         assert_eq!(
             controller.compute_motion(),
             ControlledMotion::Stationary,
             "Motion does not cancel"
         );
 
-        controller.update_motion(Moving, Left);
+        assert!(controller.update_motion(Moving, Left));
         assert_abs_diff_eq!(
             controller.compute_motion(),
             ControlledMotion::ConstantVelocity(vector![-speed, 0.0, 0.0])
@@ -287,16 +300,16 @@ mod test {
         );
 
         // Motion along multiple axes should be combined
-        controller.update_motion(Moving, Up);
-        controller.update_motion(Moving, Backwards);
+        assert!(controller.update_motion(Moving, Up));
+        assert!(controller.update_motion(Moving, Backwards));
         assert_abs_diff_eq!(
             controller.compute_motion(),
             ControlledMotion::ConstantVelocity(vector![0.0, speed, -speed] / SQRT_2), // Magnitude should be `speed`
             epsilon = 1e-9
         );
 
-        controller.update_motion(Still, Up);
-        controller.update_motion(Still, Backwards);
+        assert!(controller.update_motion(Still, Up));
+        assert!(controller.update_motion(Still, Backwards));
         assert_eq!(
             controller.compute_motion(),
             ControlledMotion::Stationary,

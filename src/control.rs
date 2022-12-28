@@ -19,7 +19,11 @@ pub trait MotionController<F: Float>: Send + Sync + std::fmt::Debug {
 
     /// Specifies whether the controlled entity should be moving in
     /// a given direction.
-    fn update_motion(&mut self, state: MotionState, direction: MotionDirection);
+    ///
+    /// # Returns
+    /// A [`bool`] that is `true` if the motion actually changed as
+    /// a result of the update.
+    fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> bool;
 
     /// Specifies how the local coordinate system of the
     /// controlled entity is oriented.
@@ -41,4 +45,15 @@ pub trait MotionController<F: Float>: Send + Sync + std::fmt::Debug {
 pub enum ControlledMotion<F: Float> {
     Stationary,
     ConstantVelocity(Vector3<F>),
+}
+
+impl<F: Float> ControlledMotion<F> {
+    /// Returns the instantaneous velocity vector corresponding
+    /// to this motion.
+    pub fn velocity(&self) -> Vector3<F> {
+        match self {
+            Self::Stationary => Vector3::zeros(),
+            Self::ConstantVelocity(velocity) => *velocity,
+        }
+    }
 }
