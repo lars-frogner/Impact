@@ -211,7 +211,7 @@ impl World {
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
     pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
-        self.renderer.write().unwrap().resize_surface(new_size);
+        self.renderer().write().unwrap().resize_surface(new_size);
 
         self.scene()
             .read()
@@ -220,6 +220,16 @@ impl World {
             .write()
             .unwrap()
             .set_aspect_ratios(window::calculate_aspect_ratio(new_size.0, new_size.1));
+
+        self.renderer()
+            .read()
+            .unwrap()
+            .render_buffer_manager()
+            .write()
+            .unwrap()
+            .declare_desynchronized();
+    }
+
     pub fn toggle_interaction_mode(&self) {
         let mut user_interface = self.user_interface().write().unwrap();
         if user_interface.control_mode_active() {
