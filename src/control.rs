@@ -8,52 +8,26 @@ pub use motion::{
     MotionDirection, MotionState, NoMotionController, SemiDirectionalMotionController,
 };
 
-use crate::num::Float;
-use nalgebra::{Rotation3, Vector3};
+use crate::physics::fph;
+use impact_ecs::world::World as ECSWorld;
 
 /// Represents controllers that are used for controlling
 /// the movement of entities.
-pub trait MotionController<F: Float>: Send + Sync + std::fmt::Debug {
-    /// Returns the current motion of the controlled entity.
-    fn current_motion(&self) -> &ControlledMotion<F>;
+pub trait MotionController: Send + Sync + std::fmt::Debug {
+    /// Updates the motion of the controlled entity based on the given
+    /// [`MotionState`] specifying whether the entity should be moving
+    /// in the given [`MotionDirection`] in its local coordinate system.
+    fn update_motion(
+        &mut self,
+        ecs_world: &ECSWorld,
+        state: MotionState,
+        direction: MotionDirection,
+    );
 
-    /// Specifies whether the controlled entity should be moving in
-    /// a given direction.
-    ///
-    /// # Returns
-    /// A [`bool`] that is `true` if the motion actually changed as
-    /// a result of the update.
-    fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> bool;
-
-    /// Specifies how the local coordinate system of the
-    /// controlled entity is oriented.
-    fn set_orientation(&mut self, orientation: Rotation3<F>);
-
-    /// Rotates the orientation of the local coordinate system.
-    fn rotate_orientation(&mut self, rotation: &Rotation3<F>);
-
-    /// Specifies how fast the controlled entity should be moving when
+    /// Updates the speed in which the controlled entity should be moving when
     /// in motion.
-    fn set_movement_speed(&mut self, movement_speed: F);
+    fn set_movement_speed(&mut self, ecs_world: &ECSWorld, movement_speed: fph);
 
     /// Stops any motion of the controlled entity.
-    fn stop(&mut self);
-}
-
-/// Possible types of motion that a controlled entity can have.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ControlledMotion<F: Float> {
-    Stationary,
-    ConstantVelocity(Vector3<F>),
-}
-
-impl<F: Float> ControlledMotion<F> {
-    /// Returns the instantaneous velocity vector corresponding
-    /// to this motion.
-    pub fn velocity(&self) -> Vector3<F> {
-        match self {
-            Self::Stationary => Vector3::zeros(),
-            Self::ConstantVelocity(velocity) => *velocity,
-        }
-    }
+    fn stop(&mut self, ecs_world: &ECSWorld);
 }

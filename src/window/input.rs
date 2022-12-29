@@ -114,7 +114,8 @@ impl KeyInputHandler {
                     }
                     // Check if the input is for the motion controller,
                     // and if so, performed the required motion update
-                    action => match MotionDirection::try_from_input_action(action) {
+                    action if world.control_mode_active() => {
+                        match MotionDirection::try_from_input_action(action) {
                         Some(direction) => {
                             world.update_motion_controller(
                                 MotionState::from_key_state(*state),
@@ -123,7 +124,9 @@ impl KeyInputHandler {
                             Ok(HandlingResult::Handled)
                         }
                         None => Ok(HandlingResult::Unhandled),
-                    },
+                        }
+                    }
+                    _ => Ok(HandlingResult::Handled),
                 },
                 None => Ok(HandlingResult::Unhandled),
             },
@@ -145,8 +148,10 @@ impl KeyActionMap {
 impl Default for KeyActionMap {
     fn default() -> Self {
         Self::new(def_key_action_map!(
-            MoveForwards => W,
-            MoveBackwards => S,
+            // Since camera looks towards -z, we invert the inputs
+            // so that pressing W makes us appear to move forwards
+            MoveForwards => S,
+            MoveBackwards => W,
             MoveRight => D,
             MoveLeft => A,
             MoveUp => Q,

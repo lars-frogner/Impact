@@ -1,8 +1,8 @@
 //! Container for all data in the world.
 
 use crate::{
-    control::{Controllable, MotionController, MotionDirection, MotionState},
-    physics::{PhysicsSimulator, PositionComp, Velocity, VelocityComp},
+    control::{MotionController, MotionDirection, MotionState},
+    physics::{PhysicsSimulator, PositionComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
         self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
@@ -16,7 +16,7 @@ use crate::{
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeCompByteView, ComponentManager},
-    query, setup,
+    setup,
     world::{Entity, World as ECSWorld},
 };
 use std::{
@@ -34,7 +34,7 @@ pub struct World {
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
     simulator: RwLock<PhysicsSimulator>,
-    motion_controller: Mutex<Box<dyn MotionController<f32>>>,
+    motion_controller: Mutex<Box<dyn MotionController>>,
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
@@ -46,7 +46,7 @@ impl World {
         scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
-        controller: impl 'static + MotionController<f32>,
+        controller: impl 'static + MotionController,
     ) -> Self {
         let window = Arc::new(window);
         Self {
@@ -240,41 +240,30 @@ impl World {
         }
     }
 
+    pub fn control_mode_active(&self) -> bool {
+        self.user_interface().read().unwrap().control_mode_active()
+    }
+
     /// Updates the motion controller with the given motion.
     pub fn update_motion_controller(&self, state: MotionState, direction: MotionDirection) {
-        if self.user_interface().read().unwrap().control_mode_active() {
-            log::debug!(
-                "Updating motion controller to state {:?} and direction {:?}",
-                state,
-                direction
-            );
+        log::debug!(
+            "Updating motion controller to state {:?} and direction {:?}",
+            state,
+            direction
+        );
 
-            let mut motion_controller = self.motion_controller.lock().unwrap();
-
-            let changed = motion_controller.update_motion(state, direction);
-
-            if changed {
-                let controller_velocity = motion_controller.current_motion().velocity().cast();
-                self.set_velocity_for_controllable_entities(controller_velocity);
-            }
-        }
+        self.motion_controller.lock().unwrap().update_motion(
+            &self.ecs_world().read().unwrap(),
+            state,
+            direction,
+        );
     }
 
     fn stop_motion_controller(&self) {
-        let mut motion_controller = self.motion_controller.lock().unwrap();
-        motion_controller.stop();
-        self.set_velocity_for_controllable_entities(Velocity::zeros());
-    }
-
-    fn set_velocity_for_controllable_entities(&self, controller_velocity: Velocity) {
-        let ecs_world = self.ecs_world().read().unwrap();
-        query!(
-            ecs_world,
-            |velocity: &mut VelocityComp| {
-                velocity.velocity = controller_velocity;
-            },
-            [Controllable]
-        );
+        self.motion_controller
+            .lock()
+            .unwrap()
+            .stop(&self.ecs_world().read().unwrap());
     }
 
     /// Creates a new task scheduler with the given number of
