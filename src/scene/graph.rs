@@ -446,12 +446,12 @@ impl<F: Float> SceneGraph<F> {
     /// Computes the transform from the scene graph's root node space
     /// to the space of the given camera node.
     fn compute_root_to_camera_transform(&self, camera_node: &CameraNode<F>) -> NodeTransform<F> {
-        let mut root_to_camera_transform = *camera_node.model_transform();
+        let mut root_to_camera_transform = camera_node.model_transform().inverse();
         let mut parent_node = self.group_nodes.node(camera_node.parent_node_id());
 
         // Walk up the tree and append transforms until reaching the root
         loop {
-            root_to_camera_transform *= parent_node.model_transform();
+            root_to_camera_transform *= parent_node.model_transform().inverse();
 
             if parent_node.is_root() {
                 break;
@@ -1244,7 +1244,7 @@ mod test {
         let transform =
             scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
 
-        assert_abs_diff_eq!(transform, camera_transform);
+        assert_abs_diff_eq!(transform, camera_transform.inverse());
     }
 
     #[test]
@@ -1297,9 +1297,12 @@ mod test {
 
         assert_abs_diff_eq!(
             transform.to_homogeneous(),
-            Scale3::new(scaling, scaling, scaling).to_homogeneous()
-                * rotation.to_homogeneous()
-                * translation.to_homogeneous(),
+            Scale3::new(scaling, scaling, scaling)
+                .try_inverse()
+                .unwrap()
+                .to_homogeneous()
+                * rotation.inverse().to_homogeneous()
+                * translation.inverse().to_homogeneous(),
             epsilon = 1e-9
         );
     }
