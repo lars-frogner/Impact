@@ -224,7 +224,7 @@ impl<F: Float> CameraConfiguration<F> {
 
 impl<F: Float> Default for CameraConfiguration<F> {
     fn default() -> Self {
-        Self::new(Point3::origin(), Vector3::z_axis(), Vector3::y_axis())
+        Self::new(Point3::origin(), -Vector3::z_axis(), Vector3::y_axis())
     }
 }
 
