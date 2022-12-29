@@ -19,8 +19,8 @@ use std::collections::HashSet;
 /// Every leaf node has a parent "group" node, which itself
 /// has a group node as a parent and may have any number and
 /// type of children. Each node holds a transform from the
-/// space of the parent to the model space of the object or
-/// group it represents.
+/// model space of the object or group it represents to the
+/// space of the parent.
 #[derive(Clone, Debug)]
 pub struct SceneGraph<F: Float> {
     root_node_id: GroupNodeID,
@@ -49,19 +49,20 @@ pub trait SceneGraphNode {
     /// Returns a mutable reference to the node's model transform.
     fn model_transform_mut(&mut self) -> &mut NodeTransform<Self::F>;
 
-    /// Sets the given transform as the transform from
-    /// the space of the node's parent to the model
-    /// space of the group or object the node represents.
-    fn set_model_transform(&mut self, transform: NodeTransform<Self::F>) {
-        *self.model_transform_mut() = transform;
-    }
-
     /// Sets the given translation as the translational part
-    /// of the transform from the space of the node's parent
-    /// to the model space of the group or object the node
-    /// represents.
+    /// of the transform from the model space of the group or
+    /// object the node represents to the space of the node's
+    /// parent.
     fn set_model_translation(&mut self, translation: Translation3<Self::F>) {
         self.model_transform_mut().isometry.translation = translation;
+    }
+
+    /// Sets the given rotation as the rotational part
+    /// of the transform from the model space of the group or
+    /// object the node represents to the space of the node's
+    /// parent.
+    fn set_model_rotation(&mut self, rotation: UnitQuaternion<Self::F>) {
+        self.model_transform_mut().isometry.rotation = rotation;
     }
 }
 
@@ -315,42 +316,6 @@ impl<F: Float> SceneGraph<F> {
             .remove_child_camera_node(camera_node_id);
     }
 
-    /// Sets the given transform as the model transform for
-    /// the [`GroupNode`] with the given ID.
-    pub fn set_group_node_transform(
-        &mut self,
-        group_node_id: GroupNodeID,
-        transform: NodeTransform<F>,
-    ) {
-        self.group_nodes
-            .node_mut(group_node_id)
-            .set_model_transform(transform);
-    }
-
-    /// Sets the given transform as the model transform for
-    /// the [`ModelInstanceNode`] with the given ID.
-    pub fn set_model_instance_node_transform(
-        &mut self,
-        model_instance_node_id: ModelInstanceNodeID,
-        transform: NodeTransform<F>,
-    ) {
-        self.model_instance_nodes
-            .node_mut(model_instance_node_id)
-            .set_model_transform(transform);
-    }
-
-    /// Sets the given transform as the model transform for
-    /// the [`CameraNode`] with the given ID.
-    pub fn set_camera_node_transform(
-        &mut self,
-        camera_node_id: CameraNodeID,
-        transform: NodeTransform<F>,
-    ) {
-        self.camera_nodes
-            .node_mut(camera_node_id)
-            .set_model_transform(transform);
-    }
-
     /// Sets the given translation as the translational part
     /// of the model transform for the [`GroupNode`] with the
     /// given ID.
@@ -388,6 +353,45 @@ impl<F: Float> SceneGraph<F> {
         self.camera_nodes
             .node_mut(camera_node_id)
             .set_model_translation(translation);
+    }
+
+    /// Sets the given rotation as the rotational part of
+    /// the model transform for the [`GroupNode`] with the
+    /// given ID.
+    pub fn set_group_node_rotation(
+        &mut self,
+        group_node_id: GroupNodeID,
+        rotation: UnitQuaternion<<GroupNode<F> as SceneGraphNode>::F>,
+    ) {
+        self.group_nodes
+            .node_mut(group_node_id)
+            .set_model_rotation(rotation);
+    }
+
+    /// Sets the given rotation as the rotational part of
+    /// the model transform for the [`ModelInstanceNode`] with the
+    /// given ID.
+    pub fn set_model_instance_node_rotation(
+        &mut self,
+        model_instance_node_id: ModelInstanceNodeID,
+        rotation: UnitQuaternion<<ModelInstanceNode<F> as SceneGraphNode>::F>,
+    ) {
+        self.model_instance_nodes
+            .node_mut(model_instance_node_id)
+            .set_model_rotation(rotation);
+    }
+
+    /// Sets the given rotation as the rotational part of
+    /// the model transform for the [`CameraNode`] with the
+    /// given ID.
+    pub fn set_camera_node_rotation(
+        &mut self,
+        camera_node_id: CameraNodeID,
+        rotation: UnitQuaternion<<CameraNode<F> as SceneGraphNode>::F>,
+    ) {
+        self.camera_nodes
+            .node_mut(camera_node_id)
+            .set_model_rotation(rotation);
     }
 
     /// Computes the model-to-camera space transforms of all the model
@@ -1143,48 +1147,6 @@ mod test {
     }
 
     #[test]
-    fn setting_transform_for_nodes_in_storage_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
-        let root_id = scene_graph.root_node_id();
-
-        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
-        let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
-        let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
-
-        let new_transform = Similarity3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
-            7.0,
-        );
-
-        scene_graph.set_group_node_transform(group_node_id, new_transform);
-        scene_graph.set_model_instance_node_transform(model_instance_node_id, new_transform);
-        scene_graph.set_camera_node_transform(camera_node_id, new_transform);
-
-        assert_eq!(
-            scene_graph
-                .group_nodes()
-                .node(group_node_id)
-                .model_transform(),
-            &new_transform
-        );
-        assert_eq!(
-            scene_graph
-                .model_instance_nodes()
-                .node(model_instance_node_id)
-                .model_transform(),
-            &new_transform
-        );
-        assert_eq!(
-            scene_graph
-                .camera_nodes()
-                .node(camera_node_id)
-                .model_transform(),
-            &new_transform
-        );
-    }
-
-    #[test]
     fn setting_translation_for_node_in_storage_works() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
@@ -1225,6 +1187,50 @@ mod test {
                 .isometry
                 .translation,
             new_translation
+        );
+    }
+
+    #[test]
+    fn setting_rotation_for_node_in_storage_works() {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+
+        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
+        let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
+        let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
+
+        let new_rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 1.2);
+
+        scene_graph.set_group_node_rotation(group_node_id, new_rotation);
+        scene_graph.set_model_instance_node_rotation(model_instance_node_id, new_rotation);
+        scene_graph.set_camera_node_rotation(camera_node_id, new_rotation);
+
+        assert_eq!(
+            scene_graph
+                .group_nodes()
+                .node(group_node_id)
+                .model_transform()
+                .isometry
+                .rotation,
+            new_rotation
+        );
+        assert_eq!(
+            scene_graph
+                .model_instance_nodes()
+                .node(model_instance_node_id)
+                .model_transform()
+                .isometry
+                .rotation,
+            new_rotation
+        );
+        assert_eq!(
+            scene_graph
+                .camera_nodes()
+                .node(camera_node_id)
+                .model_transform()
+                .isometry
+                .rotation,
+            new_rotation
         );
     }
 

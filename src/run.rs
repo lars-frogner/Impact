@@ -4,7 +4,9 @@ use crate::{
     control::{Controllable, NoMotionController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
-    physics::{PhysicsSimulator, PositionComp, SimulatorConfig, VelocityComp},
+    physics::{
+        Orientation, OrientationComp, PhysicsSimulator, PositionComp, SimulatorConfig, VelocityComp,
+    },
     rendering::{
         fre, Assets, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID,
         TextureID,
@@ -107,11 +109,7 @@ async fn init_world(window: Window) -> Result<World> {
         .add_perspective_camera(
             CameraID(hash!("Camera")),
             PerspectiveCamera::new(
-                CameraConfiguration::new_looking_at(
-                    point![0.0, 0.0, 2.0],
-                    Point3::origin(),
-                    Vector3::y_axis(),
-                ),
+                CameraConfiguration::default(),
                 window.aspect_ratio(),
                 Degrees(45.0),
                 UpperExclusiveBounds::new(0.1, 100.0),
@@ -130,7 +128,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
 
-    let controller = SemiDirectionalMotionController::new(Rotation3::identity(), 0.2);
+    let controller = SemiDirectionalMotionController::new(0.2, false);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(window, scene, renderer, simulator, controller);
@@ -138,7 +136,8 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &CameraComp::new(CameraID(hash!("Camera"))),
-            &PositionComp::new(Point3::origin()),
+            &PositionComp::new(Point3::new(0.0, 0.0, 5.0)),
+            &OrientationComp::new(Orientation::identity()),
             &VelocityComp::new(Vector3::zeros()),
             &Controllable,
         ))
@@ -148,7 +147,8 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entities((
             &MeshComp::new(MeshID(hash!("Test mesh"))),
             &MaterialComp::new(MaterialID(hash!("Test material"))),
-            &PositionComp::new(Point3::new(0.0, 0.0, -5.0)),
+            &PositionComp::new(Point3::new(0.0, 0.0, 2.0)),
+            &OrientationComp::new(Orientation::identity()),
         ))
         .unwrap();
 

@@ -4,7 +4,9 @@ use super::Scene;
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::systems::SyncSceneObjectTransformsWithPositions,
+    scene::systems::{
+        SyncSceneObjectTransformsWithOrientations, SyncSceneObjectTransformsWithPositions,
+    },
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
     world::{World, WorldTaskScheduler},
@@ -50,6 +52,7 @@ impl Scene {
     /// in the scene in the given task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
+        task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
         task_scheduler.register_task(SyncVisibleModelInstances)
     }
 
