@@ -26,17 +26,17 @@ define_task!(
 
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, position: &PositionComp| {
-                    scene_graph.set_group_node_translation(node.id, Translation3::from(position.position.cast()));
+                    scene_graph.set_translation_of_group_to_parent_transform(node.id, Translation3::from(position.position.cast()));
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, position: &PositionComp| {
-                    scene_graph.set_model_instance_node_translation(node.id, Translation3::from(position.position.cast()));
+                    scene_graph.set_translation_of_model_to_parent_transform(node.id, Translation3::from(position.position.cast()));
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, position: &PositionComp| {
-                    scene_graph.set_camera_node_translation(node.id, Translation3::from(position.position.cast()));
+                    scene_graph.set_translation_of_camera_to_parent_transform(node.id, Translation3::from(position.position.cast()));
                 }
             );
 
@@ -61,17 +61,17 @@ define_task!(
 
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, orientation: &OrientationComp| {
-                    scene_graph.set_group_node_rotation(node.id, orientation.orientation.cast());
+                    scene_graph.set_rotation_of_group_to_parent_transform(node.id, orientation.orientation.cast());
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, orientation: &OrientationComp| {
-                    scene_graph.set_model_instance_node_rotation(node.id, orientation.orientation.cast());
+                    scene_graph.set_rotation_of_model_to_parent_transform(node.id, orientation.orientation.cast());
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, orientation: &OrientationComp| {
-                    scene_graph.set_camera_node_rotation(node.id, orientation.orientation.cast());
+                    scene_graph.set_rotation_of_camera_to_parent_transform(node.id, orientation.orientation.cast());
                 }
             );
 

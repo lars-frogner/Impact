@@ -53,8 +53,8 @@ pub struct ModelInstanceBuffer<F: Float> {
     n_valid_instances: AtomicUsize,
 }
 
-/// An instance of a model with a certain transformation
-/// applied to it.
+/// An instance of a model with a specific model-to-camera
+/// transform.
 ///
 /// Used to represent multiple versions of the same basic model.
 #[repr(transparent)]
@@ -266,13 +266,13 @@ impl<F: Float> Default for ModelInstanceBuffer<F> {
 }
 
 impl<F: Float> ModelInstance<F> {
-    /// Creates a new model instance with no transform.
+    /// Creates a new model instance with no model-to-camera transform.
     pub fn new() -> Self {
-        Self::with_transform(Matrix4::identity())
+        Self::with_model_to_camera_transform(Matrix4::identity())
     }
 
-    /// Creates a new model instance with the given transform.
-    pub fn with_transform(transform_matrix: Matrix4<F>) -> Self {
+    /// Creates a new model instance with the given model-to-camera transform.
+    pub fn with_model_to_camera_transform(transform_matrix: Matrix4<F>) -> Self {
         Self { transform_matrix }
     }
 
@@ -342,7 +342,7 @@ mod test {
     }
 
     fn create_dummy_instance() -> ModelInstance<f32> {
-        ModelInstance::with_transform(
+        ModelInstance::with_model_to_camera_transform(
             Similarity3::from_parts(
                 Translation3::new(2.1, -5.9, 0.01),
                 UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
