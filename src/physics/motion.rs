@@ -69,3 +69,39 @@ pub fn advance_orientation(
     );
     UnitQuaternion::new_normalize(rotation * orientation.into_inner())
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::geometry::Radians;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn advancing_orientation_with_zero_angular_speed_gives_same_orientation() {
+        let orientation = Orientation::identity();
+        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Degrees(0.0));
+        let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 1.2);
+        assert_abs_diff_eq!(advanced_orientation, orientation);
+    }
+
+    #[test]
+    fn advancing_orientation_by_zero_duration_gives_same_orientation() {
+        let orientation = Orientation::identity();
+        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Degrees(1.2));
+        let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 0.0);
+        assert_abs_diff_eq!(advanced_orientation, orientation);
+    }
+
+    #[test]
+    fn advancing_orientation_about_its_own_axis_works() {
+        let angular_speed = 0.1;
+        let duration = 2.0;
+        let orientation = Orientation::from_axis_angle(&Vector3::y_axis(), 0.1);
+        let angular_velocity = AngularVelocity::new(Vector3::y_axis(), Radians(angular_speed));
+        let advanced_orientation = advance_orientation(&orientation, &angular_velocity, duration);
+        assert_abs_diff_eq!(
+            advanced_orientation.angle(),
+            orientation.angle() + angular_speed * duration
+        );
+    }
+}
