@@ -9,7 +9,7 @@ pub use systems::{AdvanceOrientations, AdvancePositions};
 use super::fph;
 use crate::geometry::{Angle, Degrees};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, Vector3};
+use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, Vector3};
 
 /// A unit vector in 3D space.
 pub type Direction = Unit<Vector3<fph>>;
@@ -61,12 +61,13 @@ pub fn advance_orientation(
     duration: fph,
 ) -> Orientation {
     let angle = angular_velocity.angular_speed().radians() * duration;
+    let (sin_half_angle, cos_half_angle) = (0.5 * angle).simd_sin_cos();
+
     let rotation = Quaternion::from_parts(
-        fph::cos(0.5 * angle),
-        angular_velocity
-            .axis_of_rotation()
-            .scale(fph::sin(0.5 * angle)),
+        cos_half_angle,
+        angular_velocity.axis_of_rotation().scale(sin_half_angle),
     );
+
     UnitQuaternion::new_normalize(rotation * orientation.into_inner())
 }
 
