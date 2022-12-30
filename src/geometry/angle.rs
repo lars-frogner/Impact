@@ -2,6 +2,7 @@
 
 use crate::num::Float;
 use approx::{AbsDiffEq, RelativeEq};
+use bytemuck::{Pod, Zeroable};
 use std::{
     cmp::Ordering,
     ops::{Add, Div, Mul, Sub},
@@ -26,11 +27,13 @@ pub trait Angle<F>: Copy {
 }
 
 // An angle in degrees.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Zeroable, Pod)]
 pub struct Degrees<F>(pub F);
 
 // An angle in radians.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Zeroable, Pod)]
 pub struct Radians<F>(pub F);
 
 impl<F> Degrees<F> {
