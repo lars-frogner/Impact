@@ -1,7 +1,7 @@
 //! Running an event loop.
 
 use crate::{
-    control::{Controllable, NoMotionController, SemiDirectionalMotionController},
+    control::{CameraOrientationController, Controllable, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
     physics::{
@@ -14,7 +14,7 @@ use crate::{
     },
     scene::{CameraComp, CameraID, CameraRepository, MeshComp, MeshID, MeshRepository, Scene},
     window::InputHandler,
-    window::Window,
+    window::{KeyActionMap, Window},
     world::World,
 };
 use std::f64::consts::PI;
@@ -24,7 +24,7 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
 };
 use anyhow::Result;
-use nalgebra::{point, vector, Point3, Rotation3, Vector3};
+use nalgebra::{point, vector, Point3, Vector3};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -34,7 +34,7 @@ pub async fn run() -> Result<()> {
 
     let (window, event_loop) = Window::new_window_and_event_loop()?;
     let world = init_world(window).await?;
-    let input_handler = InputHandler::default();
+    let input_handler = InputHandler::new(KeyActionMap::default());
 
     event_loop
         .run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap());
@@ -107,13 +107,14 @@ async fn init_world(window: Window) -> Result<World> {
         )
         .unwrap();
 
+    let vertical_field_of_view = Degrees(45.0);
     camera_repository
         .add_perspective_camera(
             CameraID(hash!("Camera")),
             PerspectiveCamera::new(
                 CameraConfiguration::default(),
                 window.aspect_ratio(),
-                Degrees(45.0),
+                vertical_field_of_view,
                 UpperExclusiveBounds::new(0.1, 100.0),
             ),
         )
@@ -130,10 +131,19 @@ async fn init_world(window: Window) -> Result<World> {
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
 
-    let controller = SemiDirectionalMotionController::new(0.2, false);
+    let motion_controller = SemiDirectionalMotionController::new(0.2, false);
+    let orientation_controller =
+        CameraOrientationController::new(Degrees(vertical_field_of_view.0 as f64), 1.0);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
-    let world = World::new(window, scene, renderer, simulator, controller);
+    let world = World::new(
+        window,
+        scene,
+        renderer,
+        simulator,
+        motion_controller,
+        orientation_controller,
+    );
 
     world
         .create_entities((
@@ -141,7 +151,7 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, 0.0, 0.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
             &VelocityComp(Vector3::zeros()),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.1))),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             &Controllable,
         ))
         .unwrap();
@@ -152,7 +162,7 @@ async fn init_world(window: Window) -> Result<World> {
             &MaterialComp::new(MaterialID(hash!("Test material"))),
             &PositionComp(Point3::new(0.0, 0.0, 3.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.1))),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.0))),
         ))
         .unwrap();
 

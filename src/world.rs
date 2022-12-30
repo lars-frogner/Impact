@@ -1,7 +1,7 @@
 //! Container for all data in the world.
 
 use crate::{
-    control::{MotionController, MotionDirection, MotionState},
+    control::{MotionController, MotionDirection, MotionState, OrientationController},
     physics::{OrientationComp, PhysicsSimulator, PositionComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
@@ -35,6 +35,7 @@ pub struct World {
     renderer: RwLock<RenderingSystem>,
     simulator: RwLock<PhysicsSimulator>,
     motion_controller: Mutex<Box<dyn MotionController>>,
+    orientation_controller: Mutex<Box<dyn OrientationController>>,
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
@@ -46,7 +47,8 @@ impl World {
         scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
-        controller: impl 'static + MotionController,
+        motion_controller: impl 'static + MotionController,
+        orientation_controller: impl 'static + OrientationController,
     ) -> Self {
         let window = Arc::new(window);
         Self {
@@ -56,7 +58,8 @@ impl World {
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
             simulator: RwLock::new(simulator),
-            motion_controller: Mutex::new(Box::new(controller)),
+            motion_controller: Mutex::new(Box::new(motion_controller)),
+            orientation_controller: Mutex::new(Box::new(orientation_controller)),
         }
     }
 
@@ -274,6 +277,25 @@ impl World {
             .lock()
             .unwrap()
             .stop(&self.ecs_world().read().unwrap());
+    }
+
+    /// Updates the orientation controller with the given mouse
+    /// displacement.
+    pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
+        log::info!(
+            "Updating orientation controller by mouse delta ({}, {})",
+            mouse_displacement.0,
+            mouse_displacement.1
+        );
+
+        self.orientation_controller
+            .lock()
+            .unwrap()
+            .update_orientation(
+                self.window(),
+                &self.ecs_world().read().unwrap(),
+                mouse_displacement,
+            );
     }
 
     /// Creates a new task scheduler with the given number of

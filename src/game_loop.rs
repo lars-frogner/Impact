@@ -15,6 +15,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use winit::event::DeviceEvent;
 
 /// A loop driving simulation and rendering of a [`World`].
 #[derive(Debug)]
@@ -65,13 +66,22 @@ impl GameLoop {
         self.world.as_ref()
     }
 
-    pub fn handle_input_event(
+    pub fn handle_window_event(
         &self,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
     ) -> Result<HandlingResult> {
         self.input_handler
-            .handle_event(self.world(), control_flow, event)
+            .handle_window_event(&self.world, control_flow, event)
+    }
+
+    pub fn handle_device_event(
+        &self,
+        control_flow: &mut ControlFlow<'_>,
+        event: &DeviceEvent,
+    ) -> Result<HandlingResult> {
+        self.input_handler
+            .handle_device_event(&self.world, control_flow, event)
     }
 
     pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {

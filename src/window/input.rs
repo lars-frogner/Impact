@@ -6,12 +6,13 @@ use crate::{
     world::World,
 };
 use anyhow::Result;
-use std::collections::HashMap;
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
+use std::{collections::HashMap, sync::Arc};
+use winit::event::{DeviceEvent, ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 /// Handler for any user input events.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct InputHandler {
+    mouse_handler: MouseInputHandler,
     key_handler: KeyInputHandler,
 }
 
@@ -22,6 +23,10 @@ pub enum HandlingResult {
     Handled,
     Unhandled,
 }
+
+/// Handler for mouse input events.
+#[derive(Clone, Debug)]
+pub struct MouseInputHandler;
 
 /// A map associating specific keyboard key inputs
 /// with the actions they should perform.
@@ -59,6 +64,7 @@ impl InputHandler {
     /// keyboard action map.
     pub fn new(key_map: KeyActionMap) -> Self {
         Self {
+            mouse_handler: MouseInputHandler,
             key_handler: KeyInputHandler::new(key_map),
         }
     }
@@ -68,9 +74,9 @@ impl InputHandler {
     ///
     /// If no errors occur, returns a [`HandlingResult`] that signals
     /// whether the event should be handled by some other system instead.
-    pub fn handle_event(
+    pub fn handle_window_event(
         &self,
-        world: &World,
+        world: &Arc<World>,
         control_flow: &mut ControlFlow<'_>,
         event: &WindowEvent<'_>,
     ) -> Result<HandlingResult> {
@@ -81,6 +87,37 @@ impl InputHandler {
             }
             _ => Ok(HandlingResult::Unhandled),
         }
+    }
+
+    /// Takes a device event and possibly performs an action
+    /// on the world.
+    ///
+    /// If no errors occur, returns a [`HandlingResult`] that signals
+    /// whether the event should be handled by some other system instead.
+    pub fn handle_device_event(
+        &self,
+        world: &Arc<World>,
+        _control_flow: &mut ControlFlow<'_>,
+        event: &DeviceEvent,
+    ) -> Result<HandlingResult> {
+        match event {
+            // Handle cursor movement events
+            DeviceEvent::MouseMotion { delta } => self.mouse_handler.handle_event(world, *delta),
+            _ => Ok(HandlingResult::Unhandled),
+        }
+    }
+}
+
+impl MouseInputHandler {
+    fn handle_event(
+        &self,
+        world: &World,
+        mouse_displacement: (f64, f64),
+    ) -> Result<HandlingResult> {
+        if world.control_mode_active() {
+            world.update_orientation_controller(mouse_displacement);
+        }
+        Ok(HandlingResult::Handled)
     }
 }
 
@@ -116,14 +153,14 @@ impl KeyInputHandler {
                     // and if so, performed the required motion update
                     action if world.control_mode_active() => {
                         match MotionDirection::try_from_input_action(action) {
-                        Some(direction) => {
-                            world.update_motion_controller(
-                                MotionState::from_key_state(*state),
-                                direction,
-                            );
-                            Ok(HandlingResult::Handled)
-                        }
-                        None => Ok(HandlingResult::Unhandled),
+                            Some(direction) => {
+                                world.update_motion_controller(
+                                    MotionState::from_key_state(*state),
+                                    direction,
+                                );
+                                Ok(HandlingResult::Handled)
+                            }
+                            None => Ok(HandlingResult::Unhandled),
                         }
                     }
                     _ => Ok(HandlingResult::Handled),

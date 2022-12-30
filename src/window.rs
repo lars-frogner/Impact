@@ -2,12 +2,13 @@
 
 mod input;
 
-pub use input::{HandlingResult, InputHandler};
+pub use input::{HandlingResult, InputHandler, KeyActionMap, MouseInputHandler};
 pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
 use anyhow::Result;
 use winit::{
+    dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow as WinitControlFlow, EventLoop as WinitEventLoop},
     window::{Window as WinitWindow, WindowBuilder},
@@ -49,7 +50,9 @@ impl Window {
     /// Creates a new window with an associated event loop.
     pub fn new_window_and_event_loop() -> Result<(Self, EventLoop)> {
         let event_loop = WinitEventLoop::new();
-        let window = WindowBuilder::new().build(&event_loop)?;
+        let window = WindowBuilder::new()
+            .with_inner_size(PhysicalSize::new(800, 600))
+            .build(&event_loop)?;
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -67,10 +70,17 @@ impl Window {
         &self.window
     }
 
+    /// Returns a tuple (width, height) with the extents of the
+    /// window in number of pixels.
+    pub fn dimensions(&self) -> (u32, u32) {
+        let window_size = self.window().inner_size();
+        (window_size.width, window_size.height)
+    }
+
     /// Returns the ratio of width to height of the window.
     pub fn aspect_ratio(&self) -> f32 {
-        let window_size = self.window().inner_size();
-        calculate_aspect_ratio(window_size.width, window_size.height)
+        let (width, height) = self.dimensions();
+        calculate_aspect_ratio(width, height)
     }
 
     /// Modifies the cursor's visibility.
@@ -97,7 +107,7 @@ impl EventLoop {
                 Event::WindowEvent { event, window_id }
                     if window_id == game_loop.world().window().window().id() =>
                 {
-                    match game_loop.handle_input_event(&mut control_flow, &event) {
+                    match game_loop.handle_window_event(&mut control_flow, &event) {
                         Ok(HandlingResult::Handled) => {}
                         Ok(HandlingResult::Unhandled) => {
                             match event {
@@ -121,7 +131,16 @@ impl EventLoop {
                             }
                         }
                         Err(error) => {
-                            log::error!("Unhandled error: {:?}", error);
+                            log::error!("Window event handling error: {:?}", error);
+                            control_flow.exit();
+                        }
+                    }
+                }
+                Event::DeviceEvent { event, .. } => {
+                    match game_loop.handle_device_event(&mut control_flow, &event) {
+                        Ok(_) => {}
+                        Err(error) => {
+                            log::error!("Device event handling error: {:?}", error);
                             control_flow.exit();
                         }
                     }
