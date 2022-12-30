@@ -1,13 +1,11 @@
 //! Motion controller implementations.
 
-use super::MotionController;
+use super::{MotionChanged, MotionController};
 use crate::{
-    control::Controllable,
     num::Float,
-    physics::{fph, OrientationComp, Velocity, VelocityComp},
+    physics::{fph, Velocity},
 };
 use approx::{abs_diff_eq, assert_abs_diff_ne};
-use impact_ecs::{query, world::World as ECSWorld};
 use nalgebra::vector;
 
 /// Motion controller that allows no control over motion.
@@ -21,6 +19,7 @@ pub struct NoMotionController;
 pub struct SemiDirectionalMotionController {
     movement_speed: fph,
     state: SemiDirectionalMotionState,
+    local_velocity: Velocity,
 }
 
 /// Whether there is motion in a certain direction.
@@ -54,17 +53,21 @@ struct SemiDirectionalMotionState {
 }
 
 impl MotionController for NoMotionController {
-    fn update_motion(
-        &mut self,
-        _ecs_world: &ECSWorld,
-        _state: MotionState,
-        _direction: MotionDirection,
-    ) {
+    fn local_velocity(&self) -> Velocity {
+        Velocity::zeros()
     }
 
-    fn set_movement_speed(&mut self, _ecs_world: &ECSWorld, _movement_speed: fph) {}
+    fn update_motion(&mut self, _state: MotionState, _direction: MotionDirection) -> MotionChanged {
+        MotionChanged::No
+    }
 
-    fn stop(&mut self, _ecs_world: &ECSWorld) {}
+    fn set_movement_speed(&mut self, _movement_speed: fph) -> MotionChanged {
+        MotionChanged::No
+    }
+
+    fn stop(&mut self) -> MotionChanged {
+        MotionChanged::No
+    }
 }
 
 impl SemiDirectionalMotionController {
@@ -74,6 +77,7 @@ impl SemiDirectionalMotionController {
         Self {
             movement_speed,
             state: SemiDirectionalMotionState::new(),
+            local_velocity: Velocity::zeros(),
         }
     }
 
@@ -129,57 +133,38 @@ impl SemiDirectionalMotionController {
             vector![velocity_x, velocity_y, velocity_z] * magnitude_scale
         }
     }
-
-    fn update_motion_no_ecs(&mut self, state: MotionState, direction: MotionDirection) -> bool {
-        self.state.update(state, direction)
-    }
-
-    fn set_movement_speed_no_ecs(&mut self, movement_speed: fph) -> bool {
-        let changed = movement_speed != self.movement_speed;
-        self.movement_speed = movement_speed;
-        changed
-    }
-
-    fn stop_no_ecs(&mut self) -> bool {
-        let changed = self.state.motion_state().is_moving();
-        self.state.stop();
-        changed
-    }
-
-    fn update_controlled_entity_velocity(&self, ecs_world: &ECSWorld) {
-        let local_velocity = self.compute_local_velocity();
-        query!(
-            ecs_world,
-            |velocity: &mut VelocityComp, orientation: &OrientationComp| {
-                let world_velocity = orientation.0.transform_vector(&local_velocity);
-                velocity.0 = world_velocity;
-            },
-            [Controllable]
-        );
-    }
 }
 
 impl MotionController for SemiDirectionalMotionController {
-    fn update_motion(
-        &mut self,
-        ecs_world: &ECSWorld,
-        state: MotionState,
-        direction: MotionDirection,
-    ) {
-        if self.update_motion_no_ecs(state, direction) {
-            self.update_controlled_entity_velocity(ecs_world);
+    fn local_velocity(&self) -> Velocity {
+        self.local_velocity
+    }
+
+    fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged {
+        let result = self.state.update(state, direction);
+        if result.motion_changed() {
+            self.local_velocity = self.compute_local_velocity();
+        }
+        result
+    }
+
+    fn set_movement_speed(&mut self, movement_speed: fph) -> MotionChanged {
+        if movement_speed != self.movement_speed {
+            self.movement_speed = movement_speed;
+            self.local_velocity = self.compute_local_velocity();
+            MotionChanged::Yes
+        } else {
+            MotionChanged::No
         }
     }
 
-    fn set_movement_speed(&mut self, ecs_world: &ECSWorld, movement_speed: fph) {
-        if self.set_movement_speed_no_ecs(movement_speed) {
-            self.update_controlled_entity_velocity(ecs_world);
-        }
-    }
-
-    fn stop(&mut self, ecs_world: &ECSWorld) {
-        if self.stop_no_ecs() {
-            self.update_controlled_entity_velocity(ecs_world);
+    fn stop(&mut self) -> MotionChanged {
+        if self.state.motion_state().is_moving() {
+            self.state.stop();
+            self.local_velocity = self.compute_local_velocity();
+            MotionChanged::Yes
+        } else {
+            MotionChanged::No
         }
     }
 }
@@ -193,10 +178,13 @@ impl MotionState {
         *self == Self::Moving
     }
 
-    pub fn update(&mut self, state: Self) -> bool {
-        let changed = self != &state;
-        *self = state;
-        changed
+    pub fn update(&mut self, state: Self) -> MotionChanged {
+        if self != &state {
+            *self = state;
+            MotionChanged::Yes
+        } else {
+            MotionChanged::No
+        }
     }
 }
 
@@ -222,7 +210,7 @@ impl SemiDirectionalMotionState {
         }
     }
 
-    fn update(&mut self, state: MotionState, direction: MotionDirection) -> bool {
+    fn update(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged {
         match direction {
             MotionDirection::Forwards => self.forwards.update(state),
             MotionDirection::Backwards => self.backwards.update(state),
@@ -262,52 +250,46 @@ mod test {
         let speed = 1.3;
         let mut controller = SemiDirectionalMotionController::new(speed);
         assert_eq!(
-            controller.compute_local_velocity(),
+            controller.local_velocity(),
             Velocity::zeros(),
             "Not stationary directly after initalization"
         );
 
-        assert!(controller.update_motion_no_ecs(Moving, Forwards));
-        assert_abs_diff_eq!(
-            controller.compute_local_velocity(),
-            vector![0.0, 0.0, speed],
-        );
+        assert!(controller.update_motion(Moving, Forwards).motion_changed());
+        assert_abs_diff_eq!(controller.local_velocity(), vector![0.0, 0.0, speed],);
 
-        assert!(!controller.update_motion_no_ecs(Moving, Forwards));
+        assert!(!controller.update_motion(Moving, Forwards).motion_changed());
 
-        assert!(controller.update_motion_no_ecs(Moving, Backwards));
+        assert!(controller.update_motion(Moving, Backwards).motion_changed());
         assert_eq!(
-            controller.compute_local_velocity(),
+            controller.local_velocity(),
             Velocity::zeros(),
             "Motion does not cancel"
         );
 
-        assert!(controller.update_motion_no_ecs(Moving, Left));
-        assert_abs_diff_eq!(
-            controller.compute_local_velocity(),
-            vector![-speed, 0.0, 0.0]
-        );
+        assert!(controller.update_motion(Moving, Left).motion_changed());
+        assert_abs_diff_eq!(controller.local_velocity(), vector![-speed, 0.0, 0.0]);
 
-        assert!(controller.stop_no_ecs());
+        assert!(controller.stop().motion_changed());
         assert_eq!(
-            controller.compute_local_velocity(),
+            controller.local_velocity(),
             Velocity::zeros(),
             "Stopping command not working"
         );
 
         // Motion along multiple axes should be combined
-        assert!(controller.update_motion_no_ecs(Moving, Up));
-        assert!(controller.update_motion_no_ecs(Moving, Backwards));
+        assert!(controller.update_motion(Moving, Up).motion_changed());
+        assert!(controller.update_motion(Moving, Backwards).motion_changed());
         assert_abs_diff_eq!(
-            controller.compute_local_velocity(),
+            controller.local_velocity(),
             vector![0.0, speed, -speed] / SQRT_2, // Magnitude should be `speed`
             epsilon = 1e-9
         );
 
-        assert!(controller.update_motion_no_ecs(Still, Up));
-        assert!(controller.update_motion_no_ecs(Still, Backwards));
+        assert!(controller.update_motion(Still, Up).motion_changed());
+        assert!(controller.update_motion(Still, Backwards).motion_changed());
         assert_eq!(
-            controller.compute_local_velocity(),
+            controller.local_velocity(),
             Velocity::zeros(),
             "Undoing updates does not stop motion"
         );
@@ -318,29 +300,20 @@ mod test {
         let speed = 4.2;
         let mut controller = SemiDirectionalMotionController::new(speed);
 
-        controller.update_motion_no_ecs(Moving, Down);
-        assert_abs_diff_eq!(
-            controller.compute_local_velocity(),
-            vector![0.0, -speed, 0.0],
-        );
+        controller.update_motion(Moving, Down);
+        assert_abs_diff_eq!(controller.local_velocity(), vector![0.0, -speed, 0.0],);
 
         let speed = 8.1;
-        assert!(controller.set_movement_speed_no_ecs(speed));
-        assert_abs_diff_eq!(
-            controller.compute_local_velocity(),
-            vector![0.0, -speed, 0.0],
-        );
+        assert!(controller.set_movement_speed(speed).motion_changed());
+        assert_abs_diff_eq!(controller.local_velocity(), vector![0.0, -speed, 0.0],);
 
         let speed = -0.1;
-        assert!(controller.set_movement_speed_no_ecs(speed));
-        assert_abs_diff_eq!(
-            controller.compute_local_velocity(),
-            vector![0.0, -speed, 0.0],
-        );
+        assert!(controller.set_movement_speed(speed).motion_changed());
+        assert_abs_diff_eq!(controller.local_velocity(), vector![0.0, -speed, 0.0],);
 
-        assert!(!controller.set_movement_speed_no_ecs(speed));
+        assert!(!controller.set_movement_speed(speed).motion_changed());
 
-        assert!(controller.set_movement_speed_no_ecs(0.0));
-        assert_eq!(controller.compute_local_velocity(), Velocity::zeros());
+        assert!(controller.set_movement_speed(0.0).motion_changed());
+        assert_eq!(controller.local_velocity(), Velocity::zeros());
     }
 }

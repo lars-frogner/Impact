@@ -2,12 +2,10 @@
 
 use super::OrientationController;
 use crate::{
-    control::Controllable,
     geometry::{Angle, Radians},
-    physics::{fph, OrientationComp},
+    physics::{fph, Orientation},
     window::Window,
 };
-use impact_ecs::{query, world::World as ECSWorld};
 use nalgebra::{UnitQuaternion, Vector3};
 
 /// Orientation controller that allows no control over
@@ -37,38 +35,31 @@ impl CameraOrientationController {
 }
 
 impl OrientationController for NoOrientationController {
-    fn update_orientation(
+    fn determine_orientation_change(
         &self,
         _window: &Window,
-        _ecs_world: &ECSWorld,
         _mouse_displacement: (f64, f64),
-    ) {
+    ) -> Option<Orientation> {
+        None
     }
 }
 
 impl OrientationController for CameraOrientationController {
-    fn update_orientation(
+    fn determine_orientation_change(
         &self,
         window: &Window,
-        ecs_world: &ECSWorld,
         mouse_displacement: (f64, f64),
-    ) {
+    ) -> Option<Orientation> {
         let (_, height) = window.dimensions();
         let degrees_per_pixel = self.vertical_field_of_view / (height as f64);
 
         let offset_x = degrees_per_pixel * mouse_displacement.0 * self.sensitivity;
         let offset_y = degrees_per_pixel * (-mouse_displacement.1) * self.sensitivity;
 
-        let rotation =
+        let orientation_change =
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), offset_y.radians() as fph)
                 * UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -offset_x.radians() as fph);
 
-        query!(
-            ecs_world,
-            |orientation: &mut OrientationComp| {
-                orientation.0 = orientation.0 * rotation;
-            },
-            [Controllable]
-        );
+        Some(orientation_change)
     }
 }

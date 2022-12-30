@@ -1,7 +1,7 @@
 //! Container for all data in the world.
 
 use crate::{
-    control::{MotionController, MotionDirection, MotionState, OrientationController},
+    control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     physics::{OrientationComp, PhysicsSimulator, PositionComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
@@ -265,18 +265,29 @@ impl World {
             direction
         );
 
-        self.motion_controller.lock().unwrap().update_motion(
-            &self.ecs_world().read().unwrap(),
-            state,
-            direction,
-        );
+        let mut motion_controller = self.motion_controller.lock().unwrap();
+
+        let result = motion_controller.update_motion(state, direction);
+
+        if result.motion_changed() {
+            control::set_velocities_of_controlled_entities(
+                &self.ecs_world().read().unwrap(),
+                &motion_controller.local_velocity(),
+            );
+        }
     }
 
     fn stop_motion_controller(&self) {
-        self.motion_controller
-            .lock()
-            .unwrap()
-            .stop(&self.ecs_world().read().unwrap());
+        let mut motion_controller = self.motion_controller.lock().unwrap();
+
+        let result = motion_controller.stop();
+
+        if result.motion_changed() {
+            control::set_velocities_of_controlled_entities(
+                &self.ecs_world().read().unwrap(),
+                &motion_controller.local_velocity(),
+            );
+        }
     }
 
     /// Updates the orientation controller with the given mouse
@@ -288,14 +299,19 @@ impl World {
             mouse_displacement.1
         );
 
-        self.orientation_controller
+        if let Some(orientation_change) = self
+            .orientation_controller
             .lock()
             .unwrap()
-            .update_orientation(
-                self.window(),
-                &self.ecs_world().read().unwrap(),
-                mouse_displacement,
+            .determine_orientation_change(self.window(), mouse_displacement)
+        {
+            let ecs_world = self.ecs_world().read().unwrap();
+            control::update_orientations_of_controlled_entities(&ecs_world, &orientation_change);
+            control::set_velocities_of_controlled_entities(
+                &ecs_world,
+                &self.motion_controller.lock().unwrap().local_velocity(),
             );
+        }
     }
 
     /// Creates a new task scheduler with the given number of
