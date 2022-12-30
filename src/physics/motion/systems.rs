@@ -19,7 +19,7 @@ define_task!(
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
-                    position.position += velocity.velocity*time_step_duration;
+                    position.0 += velocity.0*time_step_duration;
                 }
             );
             Ok(())
@@ -39,7 +39,7 @@ define_task!(
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world, |orientation: &mut OrientationComp, angular_velocity: &AngularVelocityComp| {
-                    orientation.orientation = physics::advance_orientation(&orientation.orientation, &angular_velocity.angular_velocity, time_step_duration);
+                    orientation.0 = physics::advance_orientation(&orientation.0, &angular_velocity.0, time_step_duration);
                 }
             );
             Ok(())

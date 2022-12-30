@@ -5,7 +5,8 @@ use crate::{
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
     physics::{
-        Orientation, OrientationComp, PhysicsSimulator, PositionComp, SimulatorConfig, VelocityComp,
+        AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
+        PositionComp, SimulatorConfig, VelocityComp,
     },
     rendering::{
         fre, Assets, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID,
@@ -16,6 +17,7 @@ use crate::{
     window::Window,
     world::World,
 };
+use std::f64::consts::PI;
 
 use super::{
     geometry::{CameraConfiguration, Degrees, PerspectiveCamera, UpperExclusiveBounds},
@@ -136,9 +138,10 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &CameraComp::new(CameraID(hash!("Camera"))),
-            &PositionComp::new(Point3::new(0.0, 0.0, 5.0)),
-            &OrientationComp::new(Orientation::identity()),
-            &VelocityComp::new(Vector3::zeros()),
+            &PositionComp(Point3::new(0.0, 0.0, 0.0)),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
+            &VelocityComp(Vector3::zeros()),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.1))),
             &Controllable,
         ))
         .unwrap();
@@ -147,8 +150,9 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entities((
             &MeshComp::new(MeshID(hash!("Test mesh"))),
             &MaterialComp::new(MaterialID(hash!("Test material"))),
-            &PositionComp::new(Point3::new(0.0, 0.0, 2.0)),
-            &OrientationComp::new(Orientation::identity()),
+            &PositionComp(Point3::new(0.0, 0.0, 3.0)),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.1))),
         ))
         .unwrap();
 

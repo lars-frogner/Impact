@@ -151,8 +151,8 @@ impl SemiDirectionalMotionController {
         query!(
             ecs_world,
             |velocity: &mut VelocityComp, orientation: &OrientationComp| {
-                let world_velocity = orientation.orientation.transform_vector(&local_velocity);
-                velocity.velocity = world_velocity;
+                let world_velocity = orientation.0.transform_vector(&local_velocity);
+                velocity.0 = world_velocity;
             },
             [Controllable]
         );

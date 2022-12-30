@@ -118,8 +118,8 @@ impl World {
              -> SceneGraphNodeComp::<CameraNodeID> {
                 let camera_to_world_transform =
                     sc::model_to_world_transform_from_position_and_orientation(
-                        position.position.cast(),
-                        orientation.orientation.cast(),
+                        position.0.cast(),
+                        orientation.0.cast(),
                     );
 
                 let node_id = scene_graph.create_camera_node(
@@ -153,8 +153,8 @@ impl World {
 
                 let model_to_world_transform =
                     sc::model_to_world_transform_from_position_and_orientation(
-                        position.position.cast(),
-                        orientation.orientation.cast(),
+                        position.0.cast(),
+                        orientation.0.cast(),
                     );
 
                 // Panic on errors since returning an error could leave us
