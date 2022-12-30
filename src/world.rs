@@ -2,7 +2,7 @@
 
 use crate::{
     control::{MotionController, MotionDirection, MotionState},
-    physics::{PhysicsSimulator, PositionComp},
+    physics::{OrientationComp, PhysicsSimulator, PositionComp},
     rendering::{MaterialComp, RenderingSystem},
     scene::{
         self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
@@ -112,9 +112,15 @@ impl World {
                 let root_node_id = scene_graph.root_node_id();
             },
             manager,
-            |camera: &CameraComp, position: &PositionComp| -> SceneGraphNodeComp::<CameraNodeID> {
+            |camera: &CameraComp,
+             position: &PositionComp,
+             orientation: &OrientationComp|
+             -> SceneGraphNodeComp::<CameraNodeID> {
                 let camera_to_world_transform =
-                    sc::model_to_world_transform_from_position(position.position.cast());
+                    sc::model_to_world_transform_from_position_and_orientation(
+                        position.position.cast(),
+                        orientation.orientation.cast(),
+                    );
 
                 let node_id = scene_graph.create_camera_node(
                     root_node_id,
@@ -139,13 +145,17 @@ impl World {
             manager,
             |mesh: &MeshComp,
              material: &MaterialComp,
-             position: &PositionComp|
+             position: &PositionComp,
+             orientation: &OrientationComp|
              -> SceneGraphNodeComp::<ModelInstanceNodeID> {
                 let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
                 model_instance_pool.increment_user_count(model_id);
 
                 let model_to_world_transform =
-                    sc::model_to_world_transform_from_position(position.position.cast());
+                    sc::model_to_world_transform_from_position_and_orientation(
+                        position.position.cast(),
+                        orientation.orientation.cast(),
+                    );
 
                 // Panic on errors since returning an error could leave us
                 // in an inconsistent state
