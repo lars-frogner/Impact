@@ -7,7 +7,7 @@ pub use components::{AngularVelocityComp, OrientationComp, PositionComp, Velocit
 pub use systems::{AdvanceOrientations, AdvancePositions};
 
 use super::fph;
-use crate::geometry::{Angle, Degrees};
+use crate::geometry::{Angle, Radians};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, Vector3};
 
@@ -29,7 +29,7 @@ pub type Orientation = UnitQuaternion<fph>;
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct AngularVelocity {
     axis_of_rotation: Direction,
-    angular_speed: Degrees<fph>,
+    angular_speed: Radians<fph>,
 }
 
 impl AngularVelocity {
@@ -38,7 +38,7 @@ impl AngularVelocity {
     pub fn new<A: Angle<fph>>(axis_of_rotation: Direction, angular_speed: A) -> Self {
         Self {
             axis_of_rotation,
-            angular_speed: angular_speed.as_degrees(),
+            angular_speed: angular_speed.as_radians(),
         }
     }
 
@@ -48,7 +48,7 @@ impl AngularVelocity {
     }
 
     /// Returns the angular speed.
-    pub fn angular_speed(&self) -> Degrees<fph> {
+    pub fn angular_speed(&self) -> Radians<fph> {
         self.angular_speed
     }
 }
@@ -74,7 +74,7 @@ pub fn advance_orientation(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::geometry::Radians;
+    use crate::geometry::{Degrees, Radians};
     use approx::assert_abs_diff_eq;
 
     #[test]
