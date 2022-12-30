@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    physics::{AdvancePositions, OrientationComp, PositionComp},
+    physics::{AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp},
     rendering::RenderingTag,
     scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeComp},
     world::World,
@@ -51,7 +51,7 @@ define_task!(
     /// an entity that also has the [`PositionComp`] component so that the
     /// rotational part matches the orientation.
     [pub] SyncSceneObjectTransformsWithOrientations,
-    depends_on = [],
+    depends_on = [AdvanceOrientations],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing scene graph node transforms with orientations"; {

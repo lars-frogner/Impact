@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    physics::{PhysicsTag, PositionComp, VelocityComp},
+    physics::{self, AngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, VelocityComp},
     world::World,
 };
 use impact_ecs::query;
@@ -20,6 +20,26 @@ define_task!(
             query!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
                     position.position += velocity.velocity*time_step_duration;
+                }
+            );
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// This [`Task`](crate::scheduling::Task) advances the orientation
+    /// of all entities with angluar velocities by one time step.
+    [pub] AdvanceOrientations,
+    depends_on = [],
+    execute_on = [PhysicsTag],
+    |world: &World| {
+        with_debug_logging!("Advancing orientations"; {
+            let time_step_duration = world.simulator().read().unwrap().time_step_duration();
+            let ecs_world = world.ecs_world().read().unwrap();
+            query!(
+                ecs_world, |orientation: &mut OrientationComp, angular_velocity: &AngularVelocityComp| {
+                    orientation.orientation = physics::advance_orientation(&orientation.orientation, &angular_velocity.angular_velocity, time_step_duration);
                 }
             );
             Ok(())

@@ -9,6 +9,8 @@ use crate::{
 };
 use anyhow::Result;
 
+use super::AdvanceOrientations;
+
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s
     /// related to physics.
@@ -19,7 +21,8 @@ impl PhysicsSimulator {
     /// Registers all tasks needed for physics in the given
     /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(AdvancePositions)
+        task_scheduler.register_task(AdvancePositions)?;
+        task_scheduler.register_task(AdvanceOrientations)
     }
 
     /// Identifies physics-related errors that need special

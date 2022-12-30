@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion.
 
-use super::{Orientation, Position, Velocity};
+use super::{AngularVelocity, Orientation, Position, Velocity};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -35,6 +35,15 @@ pub struct OrientationComp {
     pub orientation: Orientation,
 }
 
+/// [`Component`](impact_ecs::component::Component) for entities
+/// that have an angular velocity. Transparently wraps an
+/// [`AngularVelocity`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct AngularVelocityComp {
+    pub angular_velocity: AngularVelocity,
+}
+
 impl PositionComp {
     /// Creates a new component representing the given position.
     pub fn new(position: Position) -> Self {
@@ -53,5 +62,12 @@ impl OrientationComp {
     /// Creates a new component representing the given orientation.
     pub fn new(orientation: Orientation) -> Self {
         Self { orientation }
+    }
+}
+
+impl AngularVelocityComp {
+    /// Creates a new component representing the given angular velocity.
+    pub fn new(angular_velocity: AngularVelocity) -> Self {
+        Self { angular_velocity }
     }
 }
