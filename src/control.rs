@@ -17,9 +17,9 @@ use impact_ecs::{query, world::World as ECSWorld};
 /// Represents controllers that are used for controlling
 /// the movement of entities.
 pub trait MotionController: Send + Sync + std::fmt::Debug {
-    /// Computes the world-space velocity of a controlled entity
+    /// Updates the given world-space velocity of a controlled entity
     /// given its orientation.
-    fn compute_world_velocity(&self, orientation: &Orientation) -> Velocity;
+    fn update_world_velocity(&self, velocity: &mut Velocity, orientation: &Orientation);
 
     /// Updates the overall motion state of the controlled entity based on the
     /// given [`MotionState`] specifying whether the entity should be moving
@@ -51,7 +51,7 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
     /// Modifies the given orientation of a controlled entity so
     /// that the current changes in orientation are applied to it.
-    fn apply_orientation_change(&self, orientation: &Orientation) -> Orientation;
+    fn update_orientation(&self, orientation: &mut Orientation);
 
     /// Determines and registers the change in orientation of the
     /// controlled entity based on the given displacement of the mouse.
@@ -79,7 +79,7 @@ pub fn set_velocities_of_controlled_entities(
     query!(
         ecs_world,
         |velocity: &mut VelocityComp, orientation: &OrientationComp| {
-            velocity.0 = motion_controller.compute_world_velocity(&orientation.0);
+            motion_controller.update_world_velocity(&mut velocity.0, &orientation.0);
         },
         [Controllable]
     );
@@ -94,7 +94,7 @@ pub fn update_orientations_of_controlled_entities(
     query!(
         ecs_world,
         |orientation: &mut OrientationComp| {
-            orientation.0 = orientation_controller.apply_orientation_change(&orientation.0);
+            orientation_controller.update_orientation(&mut orientation.0);
         },
         [Controllable]
     );

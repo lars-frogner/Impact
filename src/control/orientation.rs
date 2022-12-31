@@ -67,6 +67,10 @@ impl RollFreeCameraOrientationController {
 }
 
 impl OrientationController for CameraOrientationController {
+    fn update_orientation(&self, orientation: &mut Orientation) {
+        *orientation *= self.orientation_change;
+    }
+
     fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
         let (angular_displacement_x, angular_displacement_y) = self
             .base
@@ -76,13 +80,13 @@ impl OrientationController for CameraOrientationController {
             CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y)
                 * CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x);
     }
-
-    fn apply_orientation_change(&self, orientation: &Orientation) -> Orientation {
-        orientation * self.orientation_change
-    }
 }
 
 impl OrientationController for RollFreeCameraOrientationController {
+    fn update_orientation(&self, orientation: &mut Orientation) {
+        *orientation = self.yaw_change * (*orientation) * self.pitch_change;
+    }
+
     fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
         let (angular_displacement_x, angular_displacement_y) = self
             .base
@@ -92,10 +96,6 @@ impl OrientationController for RollFreeCameraOrientationController {
             CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x);
         self.pitch_change =
             CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y);
-    }
-
-    fn apply_orientation_change(&self, orientation: &Orientation) -> Orientation {
-        self.yaw_change * orientation * self.pitch_change
     }
 }
 
