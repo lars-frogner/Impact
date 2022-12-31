@@ -14,6 +14,7 @@ use nalgebra::vector;
 #[derive(Clone, Debug)]
 pub struct SemiDirectionalMotionController {
     movement_speed: fph,
+    vertical_control: bool,
     state: SemiDirectionalMotionState,
     local_velocity: Velocity,
 }
@@ -50,10 +51,13 @@ struct SemiDirectionalMotionState {
 
 impl SemiDirectionalMotionController {
     /// Creates a new motion controller for an entity
-    /// that can move with the given speed.
-    pub fn new(movement_speed: fph) -> Self {
+    /// that can move with the given `movement_speed`.
+    /// `vertical_control` specifies whether the controller
+    /// can move the entity in the vertical direction.
+    pub fn new(movement_speed: fph, vertical_control: bool) -> Self {
         Self {
             movement_speed,
+            vertical_control,
             state: SemiDirectionalMotionState::new(),
             local_velocity: Velocity::zeros(),
         }
@@ -118,7 +122,9 @@ impl MotionController for SemiDirectionalMotionController {
         let new_velocity = orientation.transform_vector(&self.local_velocity);
         velocity.x = new_velocity.x;
         velocity.z = new_velocity.z;
+        if self.vertical_control {
             velocity.y = new_velocity.y;
+        }
     }
 
     fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged {
@@ -229,7 +235,7 @@ mod test {
     #[test]
     fn updating_semi_directional_motion_works() {
         let speed = 1.3;
-        let mut controller = SemiDirectionalMotionController::new(speed);
+        let mut controller = SemiDirectionalMotionController::new(speed, false);
         assert_eq!(
             controller.local_velocity,
             Velocity::zeros(),
@@ -279,7 +285,7 @@ mod test {
     #[test]
     fn setting_semi_directional_motion_speed_works() {
         let speed = 4.2;
-        let mut controller = SemiDirectionalMotionController::new(speed);
+        let mut controller = SemiDirectionalMotionController::new(speed, false);
 
         controller.update_motion(Moving, Down);
         assert_abs_diff_eq!(controller.local_velocity, vector![0.0, -speed, 0.0],);
