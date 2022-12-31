@@ -5,10 +5,8 @@ mod motion;
 mod orientation;
 
 pub use components::Controllable;
-pub use motion::{
-    MotionDirection, MotionState, NoMotionController, SemiDirectionalMotionController,
-};
-pub use orientation::{CameraOrientationController, NoOrientationController};
+pub use motion::{MotionDirection, MotionState, SemiDirectionalMotionController};
+pub use orientation::{CameraOrientationController, RollFreeCameraOrientationController};
 
 use crate::{
     physics::{fph, Orientation, OrientationComp, Velocity, VelocityComp},
@@ -19,9 +17,9 @@ use impact_ecs::{query, world::World as ECSWorld};
 /// Represents controllers that are used for controlling
 /// the movement of entities.
 pub trait MotionController: Send + Sync + std::fmt::Debug {
-    /// Returns the current [`Velocity`] of the controlled entity in its
-    /// local coordinate system.
-    fn local_velocity(&self) -> Velocity;
+    /// Computes the world-space velocity of a controlled entity
+    /// given its orientation.
+    fn compute_world_velocity(&self, orientation: &Orientation) -> Velocity;
 
     /// Updates the overall motion state of the controlled entity based on the
     /// given [`MotionState`] specifying whether the entity should be moving
@@ -51,13 +49,13 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 /// Represents controllers that are used for controlling
 /// the orientation of entities.
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
-    /// Determines the change in orientation of the controlled entity based
-    /// on the given displacement of the mouse.
-    fn determine_orientation_change(
-        &self,
-        window: &Window,
-        mouse_displacement: (f64, f64),
-    ) -> Option<Orientation>;
+    /// Modifies the given orientation of a controlled entity so
+    /// that the current changes in orientation are applied to it.
+    fn apply_orientation_change(&self, orientation: &Orientation) -> Orientation;
+
+    /// Determines and registers the change in orientation of the
+    /// controlled entity based on the given displacement of the mouse.
+    fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64));
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -72,31 +70,31 @@ impl MotionChanged {
     }
 }
 
-/// Sets the world-space velocities of all controlled
-/// entities based on the given local velocity and their
-/// orientations.
-pub fn set_velocities_of_controlled_entities(ecs_world: &ECSWorld, local_velocity: &Velocity) {
+/// Sets the world-space velocities of all entities
+/// controlled by the given motion controller.
+pub fn set_velocities_of_controlled_entities(
+    ecs_world: &ECSWorld,
+    motion_controller: &(impl MotionController + ?Sized),
+) {
     query!(
         ecs_world,
         |velocity: &mut VelocityComp, orientation: &OrientationComp| {
-            let world_velocity = orientation.0.transform_vector(local_velocity);
-            velocity.0 = world_velocity;
+            velocity.0 = motion_controller.compute_world_velocity(&orientation.0);
         },
         [Controllable]
     );
 }
 
-/// Updates the orientations of all controlled entities
-/// with the given orientation change (the change is
-/// appended to the existing orientation).
+/// Updates the orientations of all entities controlled
+/// by the given orientation controller.
 pub fn update_orientations_of_controlled_entities(
     ecs_world: &ECSWorld,
-    orientation_change: &Orientation,
+    orientation_controller: &(impl OrientationController + ?Sized),
 ) {
     query!(
         ecs_world,
         |orientation: &mut OrientationComp| {
-            orientation.0 *= orientation_change;
+            orientation.0 = orientation_controller.apply_orientation_change(&orientation.0);
         },
         [Controllable]
     );

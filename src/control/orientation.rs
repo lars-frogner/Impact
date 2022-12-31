@@ -8,16 +8,35 @@ use crate::{
 };
 use nalgebra::{UnitQuaternion, Vector3};
 
-/// Orientation controller that allows no control over
-/// orientation.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NoOrientationController;
+/// Orientation controller that updates the orientation
+/// in the way a first-person camera should respond to
+/// mouse movement.
+///
+/// Orienting the camera may introduce roll (viewed objects
+/// may not stay upright).
+#[derive(Clone, Debug)]
+pub struct CameraOrientationController {
+    base: CameraOrientationControllerBase,
+    orientation_change: Orientation,
+}
 
 /// Orientation controller that updates the orientation
 /// in the way a first-person camera should respond to
 /// mouse movement.
+///
+/// Orienting the camera will not introduce any roll
+/// (viewed objects remain upright), but orientation
+/// only remains correct when the camera stays in the
+/// world's horizontal plane.
 #[derive(Clone, Debug)]
-pub struct CameraOrientationController {
+pub struct RollFreeCameraOrientationController {
+    base: CameraOrientationControllerBase,
+    yaw_change: Orientation,
+    pitch_change: Orientation,
+}
+
+#[derive(Clone, Debug)]
+struct CameraOrientationControllerBase {
     vertical_field_of_view: Radians<f64>,
     sensitivity: f64,
 }
@@ -28,38 +47,88 @@ impl CameraOrientationController {
     /// given sensitivity to mouse motions.
     pub fn new<A: Angle<f64>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
         Self {
-            vertical_field_of_view: vertical_field_of_view.as_radians(),
-            sensitivity,
+            base: CameraOrientationControllerBase::new(vertical_field_of_view, sensitivity),
+            orientation_change: Orientation::identity(),
         }
     }
 }
 
-impl OrientationController for NoOrientationController {
-    fn determine_orientation_change(
-        &self,
-        _window: &Window,
-        _mouse_displacement: (f64, f64),
-    ) -> Option<Orientation> {
-        None
+impl RollFreeCameraOrientationController {
+    /// Creates a new orientation controller for a first-person
+    /// camera with the given vertical field of view, with the
+    /// given sensitivity to mouse motions.
+    pub fn new<A: Angle<f64>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
+        Self {
+            base: CameraOrientationControllerBase::new(vertical_field_of_view, sensitivity),
+            pitch_change: Orientation::identity(),
+            yaw_change: Orientation::identity(),
+        }
     }
 }
 
 impl OrientationController for CameraOrientationController {
-    fn determine_orientation_change(
+    fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
+        let (angular_displacement_x, angular_displacement_y) = self
+            .base
+            .compute_angular_displacements(window, mouse_displacement);
+
+        self.orientation_change =
+            CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y)
+                * CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x);
+    }
+
+    fn apply_orientation_change(&self, orientation: &Orientation) -> Orientation {
+        orientation * self.orientation_change
+    }
+}
+
+impl OrientationController for RollFreeCameraOrientationController {
+    fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
+        let (angular_displacement_x, angular_displacement_y) = self
+            .base
+            .compute_angular_displacements(window, mouse_displacement);
+
+        self.yaw_change =
+            CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x);
+        self.pitch_change =
+            CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y);
+    }
+
+    fn apply_orientation_change(&self, orientation: &Orientation) -> Orientation {
+        self.yaw_change * orientation * self.pitch_change
+    }
+}
+
+impl CameraOrientationControllerBase {
+    fn new<A: Angle<f64>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
+        Self {
+            vertical_field_of_view: vertical_field_of_view.as_radians(),
+            sensitivity,
+        }
+    }
+
+    fn compute_angular_displacements(
         &self,
         window: &Window,
         mouse_displacement: (f64, f64),
-    ) -> Option<Orientation> {
+    ) -> (Radians<f64>, Radians<f64>) {
         let (_, height) = window.dimensions();
         let degrees_per_pixel = self.vertical_field_of_view / (height as f64);
 
-        let offset_x = degrees_per_pixel * mouse_displacement.0 * self.sensitivity;
-        let offset_y = degrees_per_pixel * (-mouse_displacement.1) * self.sensitivity;
+        let angular_displacement_x = degrees_per_pixel * mouse_displacement.0 * self.sensitivity;
+        let angular_displacement_y = degrees_per_pixel * (-mouse_displacement.1) * self.sensitivity;
 
-        let orientation_change =
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), offset_y.radians() as fph)
-                * UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -offset_x.radians() as fph);
+        (angular_displacement_x, angular_displacement_y)
+    }
 
-        Some(orientation_change)
+    fn compute_yaw_rotation(angular_displacement_x: Radians<f64>) -> Orientation {
+        UnitQuaternion::from_axis_angle(
+            &Vector3::y_axis(),
+            -angular_displacement_x.radians() as fph,
+        )
+    }
+
+    fn compute_pitch_rotation(angular_displacement_y: Radians<f64>) -> Orientation {
+        UnitQuaternion::from_axis_angle(&Vector3::x_axis(), angular_displacement_y.radians() as fph)
     }
 }

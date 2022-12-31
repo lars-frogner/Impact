@@ -34,8 +34,8 @@ pub struct World {
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
     simulator: RwLock<PhysicsSimulator>,
-    motion_controller: Mutex<Box<dyn MotionController>>,
-    orientation_controller: Mutex<Box<dyn OrientationController>>,
+    motion_controller: Option<Mutex<Box<dyn MotionController>>>,
+    orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
@@ -47,8 +47,8 @@ impl World {
         scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
-        motion_controller: impl 'static + MotionController,
-        orientation_controller: impl 'static + OrientationController,
+        motion_controller: Option<Box<dyn MotionController>>,
+        orientation_controller: Option<Box<dyn OrientationController>>,
     ) -> Self {
         let window = Arc::new(window);
         Self {
@@ -58,8 +58,8 @@ impl World {
             scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
             simulator: RwLock::new(simulator),
-            motion_controller: Mutex::new(Box::new(motion_controller)),
-            orientation_controller: Mutex::new(Box::new(orientation_controller)),
+            motion_controller: motion_controller.map(Mutex::new),
+            orientation_controller: orientation_controller.map(Mutex::new),
         }
     }
 
@@ -259,58 +259,66 @@ impl World {
 
     /// Updates the motion controller with the given motion.
     pub fn update_motion_controller(&self, state: MotionState, direction: MotionDirection) {
-        log::debug!(
-            "Updating motion controller to state {:?} and direction {:?}",
-            state,
-            direction
-        );
-
-        let mut motion_controller = self.motion_controller.lock().unwrap();
-
-        let result = motion_controller.update_motion(state, direction);
-
-        if result.motion_changed() {
-            control::set_velocities_of_controlled_entities(
-                &self.ecs_world().read().unwrap(),
-                &motion_controller.local_velocity(),
+        if let Some(motion_controller) = &self.motion_controller {
+            log::debug!(
+                "Updating motion controller to state {:?} and direction {:?}",
+                state,
+                direction
             );
+
+            let mut motion_controller = motion_controller.lock().unwrap();
+
+            let result = motion_controller.update_motion(state, direction);
+
+            if result.motion_changed() {
+                control::set_velocities_of_controlled_entities(
+                    &self.ecs_world().read().unwrap(),
+                    motion_controller.as_ref(),
+                );
+            }
         }
     }
 
     fn stop_motion_controller(&self) {
-        let mut motion_controller = self.motion_controller.lock().unwrap();
+        if let Some(motion_controller) = &self.motion_controller {
+            let mut motion_controller = motion_controller.lock().unwrap();
 
-        let result = motion_controller.stop();
+            let result = motion_controller.stop();
 
-        if result.motion_changed() {
-            control::set_velocities_of_controlled_entities(
-                &self.ecs_world().read().unwrap(),
-                &motion_controller.local_velocity(),
-            );
+            if result.motion_changed() {
+                control::set_velocities_of_controlled_entities(
+                    &self.ecs_world().read().unwrap(),
+                    motion_controller.as_ref(),
+                );
+            }
         }
     }
 
     /// Updates the orientation controller with the given mouse
     /// displacement.
     pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
-        log::info!(
-            "Updating orientation controller by mouse delta ({}, {})",
-            mouse_displacement.0,
-            mouse_displacement.1
-        );
-
-        if let Some(orientation_change) = self
-            .orientation_controller
-            .lock()
-            .unwrap()
-            .determine_orientation_change(self.window(), mouse_displacement)
-        {
-            let ecs_world = self.ecs_world().read().unwrap();
-            control::update_orientations_of_controlled_entities(&ecs_world, &orientation_change);
-            control::set_velocities_of_controlled_entities(
-                &ecs_world,
-                &self.motion_controller.lock().unwrap().local_velocity(),
+        if let Some(orientation_controller) = &self.orientation_controller {
+            log::info!(
+                "Updating orientation controller by mouse delta ({}, {})",
+                mouse_displacement.0,
+                mouse_displacement.1
             );
+
+            let mut orientation_controller = orientation_controller.lock().unwrap();
+
+            orientation_controller.update_orientation_change(self.window(), mouse_displacement);
+
+            let ecs_world = self.ecs_world().read().unwrap();
+            control::update_orientations_of_controlled_entities(
+                &ecs_world,
+                orientation_controller.as_ref(),
+            );
+            if let Some(motion_controller) = &self.motion_controller {
+                control::set_velocities_of_controlled_entities(
+                    &ecs_world,
+                    motion_controller.lock().unwrap().as_ref(),
+                );
+            }
         }
     }
 

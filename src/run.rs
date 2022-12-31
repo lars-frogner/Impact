@@ -1,7 +1,10 @@
 //! Running an event loop.
 
 use crate::{
-    control::{CameraOrientationController, Controllable, SemiDirectionalMotionController},
+    control::{
+        CameraOrientationController, Controllable, RollFreeCameraOrientationController,
+        SemiDirectionalMotionController,
+    },
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{ColorVertex, TextureVertex, TriangleMesh},
     physics::{
@@ -133,7 +136,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let motion_controller = SemiDirectionalMotionController::new(0.2, false);
     let orientation_controller =
-        CameraOrientationController::new(Degrees(vertical_field_of_view.0 as f64), 1.0);
+        RollFreeCameraOrientationController::new(Degrees(vertical_field_of_view.0 as f64), 1.0);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(
@@ -141,8 +144,8 @@ async fn init_world(window: Window) -> Result<World> {
         scene,
         renderer,
         simulator,
-        motion_controller,
-        orientation_controller,
+        Some(Box::new(motion_controller)),
+        Some(Box::new(orientation_controller)),
     );
 
     world
