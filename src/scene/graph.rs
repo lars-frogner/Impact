@@ -1,9 +1,9 @@
 //! Scene graph implementation.
 
 use crate::{
-    geometry::{Frustum, Sphere},
+    geometry::{Frustum, ModelInstance, Sphere},
     num::Float,
-    scene::{CameraID, CameraRepository, ModelID, ModelInstance, ModelInstancePool},
+    scene::{CameraID, CameraRepository, ModelID, ModelInstancePool},
     util::{GenerationalIdx, GenerationalReusingVec},
 };
 use anyhow::{anyhow, Result};

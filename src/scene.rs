@@ -15,7 +15,7 @@ pub use graph::{
     ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,
 };
 pub use mesh::{MeshID, MeshRepository};
-pub use model::{ModelID, ModelInstance, ModelInstanceBuffer, ModelInstancePool};
+pub use model::{ModelID, ModelInstancePool};
 pub use tasks::SyncVisibleModelInstances;
 
 use crate::rendering::{fre, MaterialLibrary};

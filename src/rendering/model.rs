@@ -1,18 +1,18 @@
 //! Management of model instance data for rendering.
 
 use crate::{
+    geometry::{ModelInstance, ModelInstanceBuffer},
     rendering::{
-        buffer::{BufferableInstance, BufferableVertex, InstanceBuffer},
+        buffer::{BufferableInstance, BufferableVertex, InstanceRenderBuffer},
         fre, CoreRenderingSystem,
     },
-    scene::{ModelInstance, ModelInstanceBuffer},
 };
 use std::mem;
 
 /// Owner and manager of a render buffer for model instances.
 #[derive(Debug)]
 pub struct ModelInstanceRenderBufferManager {
-    instance_render_buffer: InstanceBuffer,
+    instance_render_buffer: InstanceRenderBuffer,
     label: String,
 }
 
@@ -26,7 +26,7 @@ impl ModelInstanceRenderBufferManager {
     ) -> Self {
         let n_valid_instances = u32::try_from(model_instance_buffer.n_valid_instances()).unwrap();
 
-        let instance_render_buffer = InstanceBuffer::new(
+        let instance_render_buffer = InstanceRenderBuffer::new(
             core_system,
             model_instance_buffer.raw_buffer(),
             n_valid_instances,
@@ -52,7 +52,7 @@ impl ModelInstanceRenderBufferManager {
 
         if n_valid_instances > self.instance_render_buffer.max_instances() {
             // Reallocate render buffer since it is too small
-            self.instance_render_buffer = InstanceBuffer::new(
+            self.instance_render_buffer = InstanceRenderBuffer::new(
                 core_system,
                 model_instance_buffer.raw_buffer(),
                 n_valid_instances,
@@ -68,8 +68,8 @@ impl ModelInstanceRenderBufferManager {
         model_instance_buffer.clear();
     }
 
-    /// Returns the buffer of instances.
-    pub fn instance_buffer(&self) -> &InstanceBuffer {
+    /// Returns the render buffer of instances.
+    pub fn instance_render_buffer(&self) -> &InstanceRenderBuffer {
         &self.instance_render_buffer
     }
 }
