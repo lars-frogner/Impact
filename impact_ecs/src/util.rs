@@ -86,7 +86,6 @@ where
     ///
     /// # Panics
     /// If the key does not exist.
-    #[allow(dead_code)]
     pub fn idx(&self, key: K) -> usize {
         self.indices_for_keys[&key]
     }
