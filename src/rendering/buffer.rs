@@ -34,7 +34,7 @@ pub trait BufferableUniform: Pod {
 
 /// A buffer containing vertices.
 #[derive(Debug)]
-pub struct VertexBuffer {
+pub struct VertexRenderBuffer {
     layout: wgpu::VertexBufferLayout<'static>,
     buffer: wgpu::Buffer,
     n_vertices: u32,
@@ -50,14 +50,14 @@ pub struct VertexBuffer {
 /// numbers of instances without having to reallocate the buffer
 /// every time.
 #[derive(Debug)]
-pub struct InstanceBuffer {
-    vertex_buffer: VertexBuffer,
+pub struct InstanceRenderBuffer {
+    vertex_buffer: VertexRenderBuffer,
     n_valid_instances: AtomicU32,
 }
 
 /// A buffer containing vertex indices.
 #[derive(Debug)]
-pub struct IndexBuffer {
+pub struct IndexRenderBuffer {
     format: wgpu::IndexFormat,
     buffer: wgpu::Buffer,
     n_indices: u32,
@@ -65,11 +65,25 @@ pub struct IndexBuffer {
 
 /// A buffer containing uniforms.
 #[derive(Debug)]
-pub struct UniformBuffer {
-    bind_group_layout_descriptor: wgpu::BindGroupLayoutDescriptor<'static>,
-    bind_group_label: String,
+pub struct UniformRenderBuffer {
     buffer: wgpu::Buffer,
+    bind_group_layout_descriptor: wgpu::BindGroupLayoutDescriptor<'static>,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
     n_uniforms: u32,
+}
+
+/// A dynamic buffer containing uniforms.
+///
+/// This [`UniformBuffer`] wrapper keeps a record of the number
+/// of uniforms, beginning at the start of the buffer, that are
+/// considered to have valid values. This enables the buffer to be
+/// reused with varying numbers of uniforms without having to
+/// reallocate the buffer every time.
+#[derive(Debug)]
+pub struct DynamicUniformRenderBuffer {
+    uniform_buffer: UniformRenderBuffer,
+    n_valid_uniforms: AtomicU32,
 }
 
 impl BufferableIndex for u16 {
@@ -80,7 +94,7 @@ impl BufferableIndex for u32 {
     const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
 }
 
-impl VertexBuffer {
+impl VertexRenderBuffer {
     /// Creates a vertex buffer from the given slice of vertices.
     ///
     /// # Panics
@@ -147,7 +161,7 @@ impl VertexBuffer {
     }
 }
 
-impl InstanceBuffer {
+impl InstanceRenderBuffer {
     /// Creates an instance buffer from the given slice of instances.
     /// Only the first `n_valid_instances` in the slice are considered
     /// to actually represent valid values, the rest is just buffer
@@ -156,8 +170,8 @@ impl InstanceBuffer {
     /// reallocating.
     ///
     /// # Panics
-    /// - If the length of `instances` can not be converted to [`u32`].
-    /// - If `n_valid_instances` exceeds the length of `instances`.
+    /// - If the length of `instance_buffer` can not be converted to [`u32`].
+    /// - If `n_valid_instances` exceeds the length of `instance_buffer`.
     pub fn new<INS: BufferableInstance>(
         core_system: &CoreRenderingSystem,
         instance_buffer: &[INS],
@@ -166,7 +180,7 @@ impl InstanceBuffer {
     ) -> Self {
         assert!(n_valid_instances as usize <= instance_buffer.len());
         Self {
-            vertex_buffer: VertexBuffer::new(core_system, instance_buffer, label),
+            vertex_buffer: VertexRenderBuffer::new(core_system, instance_buffer, label),
             n_valid_instances: AtomicU32::new(n_valid_instances),
         }
     }
@@ -239,7 +253,7 @@ impl InstanceBuffer {
     }
 }
 
-impl IndexBuffer {
+impl IndexRenderBuffer {
     /// Creates an index buffer from the given slice of indices.
     ///
     /// # Panics
@@ -304,7 +318,7 @@ impl IndexBuffer {
     }
 }
 
-impl UniformBuffer {
+impl UniformRenderBuffer {
     /// Creates a uniform buffer from the given slice of uniforms.
     pub fn new<U: BufferableUniform>(
         core_system: &CoreRenderingSystem,
@@ -313,16 +327,47 @@ impl UniformBuffer {
     ) -> Self {
         let buffer_label = format!("{} uniform buffer", label);
         let bind_group_label = format!("{} bind group", &buffer_label);
-        let bind_group_layout_descriptor = U::BIND_GROUP_LAYOUT_DESCRIPTOR;
+
         let buffer =
             create_initialized_uniform_buffer(core_system.device(), uniforms, &buffer_label);
+
+        let bind_group_layout_descriptor = U::BIND_GROUP_LAYOUT_DESCRIPTOR;
+
+        let bind_group_layout = core_system
+            .device()
+            .create_bind_group_layout(&bind_group_layout_descriptor);
+
+        let bind_group = Self::create_bind_group(
+            core_system.device(),
+            &bind_group_layout_descriptor,
+            &bind_group_layout,
+            &buffer,
+            &bind_group_label,
+        );
+
         let n_uniforms = u32::try_from(uniforms.len()).unwrap();
+
         Self {
-            bind_group_layout_descriptor,
-            bind_group_label,
             buffer,
+            bind_group_layout_descriptor,
+            bind_group_layout,
+            bind_group,
             n_uniforms,
         }
+    }
+
+    /// Returns the bind group layout for the uniform buffer.
+    ///
+    /// The layout only depends on the type of uniform the buffer
+    /// stores, and can thus be used for multiple uniform buffers
+    /// with the same uniform type.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
+    }
+
+    /// Returns the bind group for the uniform buffer.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 
     /// Returns the underlying [`wgpu::Buffer`].
@@ -333,38 +378,6 @@ impl UniformBuffer {
     /// Returns the number of uniforms in the buffer.
     pub fn n_uniforms(&self) -> u32 {
         self.n_uniforms
-    }
-
-    /// Creates a bind group for the uniform buffer and returns it
-    /// together with its layout.
-    pub fn create_bind_group_and_layout(
-        &self,
-        device: &wgpu::Device,
-    ) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
-        let bind_group_layout = device.create_bind_group_layout(&self.bind_group_layout_descriptor);
-        let bind_group = Self::create_bind_group(
-            device,
-            &bind_group_layout,
-            &self.buffer,
-            &self.bind_group_label,
-        );
-        (bind_group, bind_group_layout)
-    }
-
-    fn create_bind_group(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        buffer: &wgpu::Buffer,
-        label: &str,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-            label: Some(label),
-        })
     }
 
     /// Queues a write of the given slice of uniforms to the existing
@@ -401,6 +414,123 @@ impl UniformBuffer {
             first_updated_uniform_idx,
             updated_uniforms,
             self.n_uniforms(),
+        );
+    }
+
+    fn create_bind_group(
+        device: &wgpu::Device,
+        layout_descriptor: &wgpu::BindGroupLayoutDescriptor<'static>,
+        layout: &wgpu::BindGroupLayout,
+        buffer: &wgpu::Buffer,
+        label: &str,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: layout_descriptor.entries[0].binding,
+                resource: buffer.as_entire_binding(),
+            }],
+            label: Some(label),
+        })
+    }
+}
+
+impl DynamicUniformRenderBuffer {
+    /// Creates a dynamic uniform buffer from the given slice of uniforms.
+    /// Only the first `n_valid_uniforms` in the slice are considered
+    /// to actually represent valid values, the rest is just buffer
+    /// filling that gives room for writing a larger number of uniforms
+    /// than `n_valid_uniforms` into the buffer at a later point without
+    /// reallocating.
+    ///
+    /// # Panics
+    /// - If the length of `uniform_buffer` can not be converted to [`u32`].
+    /// - If `n_valid_uniforms` exceeds the length of `uniform_buffer`.
+    pub fn new<U: BufferableUniform>(
+        core_system: &CoreRenderingSystem,
+        uniform_buffer: &[U],
+        n_valid_uniforms: u32,
+        label: &str,
+    ) -> Self {
+        assert!(n_valid_uniforms as usize <= uniform_buffer.len());
+        Self {
+            uniform_buffer: UniformRenderBuffer::new(core_system, uniform_buffer, label),
+            n_valid_uniforms: AtomicU32::new(n_valid_uniforms),
+        }
+    }
+
+    /// Returns the bind group layout for the uniform buffer.
+    ///
+    /// The layout only depends on the type of uniform the buffer
+    /// stores, and can thus be used for multiple uniform buffers
+    /// with the same uniform type.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        self.uniform_buffer.bind_group_layout()
+    }
+
+    /// Returns the bind group for the uniform buffer.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        self.uniform_buffer.bind_group()
+    }
+
+    /// Returns the underlying [`wgpu::Buffer`].
+    pub fn buffer(&self) -> &wgpu::Buffer {
+        self.uniform_buffer.buffer()
+    }
+
+    /// Returns the maximum number of uniforms the buffer has room
+    /// for.
+    pub fn max_uniforms(&self) -> u32 {
+        self.uniform_buffer.n_uniforms()
+    }
+
+    /// Returns the number of uniforms, starting from the beginning
+    /// of the buffer, that have valid values.
+    pub fn n_valid_uniforms(&self) -> u32 {
+        self.n_valid_uniforms.load(Ordering::Acquire)
+    }
+
+    /// Queues a write of the given slice of uniforms to the existing
+    /// buffer, starting at the beginning of the buffer. Any existing
+    /// uniforms in the buffer that are not overwritten are from then
+    /// on considered invalid.
+    ///
+    /// # Panics
+    /// - If the updated uniform type has a buffer layout different from
+    ///   the original layout.
+    /// - If the slice of updated uniforms exceeds the bounds of the
+    ///   original uniform buffer.
+    /// - If integer overflow occurs.
+    pub fn update_valid_uniforms<U: BufferableUniform>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        updated_uniforms: &[U],
+    ) {
+        let n_updated_uniforms = u32::try_from(updated_uniforms.len()).unwrap();
+        self.n_valid_uniforms
+            .store(n_updated_uniforms, Ordering::Release);
+        self.queue_update_of_uniforms(core_system, 0, updated_uniforms);
+    }
+
+    /// Queues a write of the given slice of uniforms to the existing
+    /// buffer, starting at the given uniform index.
+    ///
+    /// # Panics
+    /// - If the updated uniform type has a buffer layout different from
+    ///   the original layout.
+    /// - If the offset slice of updated uniforms exceeds the bounds
+    ///   of the original uniform buffer.
+    /// - If integer overflow occurs.
+    fn queue_update_of_uniforms<U: BufferableUniform>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        first_updated_uniform_idx: u32,
+        updated_uniforms: &[U],
+    ) {
+        self.uniform_buffer.queue_update_of_uniforms(
+            core_system,
+            first_updated_uniform_idx,
+            updated_uniforms,
         );
     }
 }
