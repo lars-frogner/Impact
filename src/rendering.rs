@@ -13,6 +13,7 @@ mod render_pass;
 mod shader;
 mod tasks;
 mod texture;
+mod uniform;
 
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, ShaderID, TextureID};
