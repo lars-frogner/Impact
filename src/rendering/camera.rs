@@ -2,7 +2,7 @@
 
 use crate::geometry::Camera;
 use crate::rendering::{
-    buffer::{BufferableUniform, UniformBuffer},
+    buffer::{BufferableUniform, UniformRenderBuffer},
     fre, CoreRenderingSystem,
 };
 use nalgebra::Projective3;
@@ -11,9 +11,7 @@ use nalgebra::Projective3;
 /// transformation.
 #[derive(Debug)]
 pub struct CameraRenderBufferManager {
-    transform_buffer: UniformBuffer,
-    transform_bind_group_layout: wgpu::BindGroupLayout,
-    transform_bind_group: wgpu::BindGroup,
+    transform_buffer: UniformRenderBuffer,
 }
 
 impl CameraRenderBufferManager {
@@ -48,7 +46,7 @@ impl CameraRenderBufferManager {
     /// The layout will remain valid even though the transform
     /// may change.
     pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.transform_bind_group_layout
+        self.transform_buffer.bind_group_layout()
     }
 
     /// Returns the bind group to which the camera transform
@@ -57,7 +55,7 @@ impl CameraRenderBufferManager {
     /// The bind group will remain valid even though the transform
     /// may change.
     pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.transform_bind_group
+        self.transform_buffer.bind_group()
     }
 
     /// Creates a new manager with a render buffer initialized
@@ -67,16 +65,9 @@ impl CameraRenderBufferManager {
         view_projection_transform: Projective3<fre>,
         label: &str,
     ) -> Self {
-        let transform_buffer = UniformBuffer::new(core_system, &[view_projection_transform], label);
-
-        let (transform_bind_group, transform_bind_group_layout) =
-            transform_buffer.create_bind_group_and_layout(core_system.device());
-
-        Self {
-            transform_buffer,
-            transform_bind_group_layout,
-            transform_bind_group,
-        }
+        let transform_buffer =
+            UniformRenderBuffer::new(core_system, &[view_projection_transform], label);
+        Self { transform_buffer }
     }
 
     fn sync_render_buffer(

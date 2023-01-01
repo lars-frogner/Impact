@@ -5,12 +5,13 @@ mod tasks;
 pub use tasks::SyncRenderPasses;
 
 use crate::{
+    geometry::ModelInstance,
     rendering::{
-        buffer::{BufferableVertex, IndexBuffer, InstanceBuffer, VertexBuffer},
+        buffer::{BufferableVertex, IndexRenderBuffer, InstanceRenderBuffer, VertexRenderBuffer},
         buffer_sync::SynchronizedRenderBuffers,
         fre, Assets, CoreRenderingSystem, MaterialLibrary, MaterialSpecification, ShaderID,
     },
-    scene::{CameraID, MeshID, ModelID, ModelInstance},
+    scene::{CameraID, MeshID, ModelID},
 };
 use anyhow::{anyhow, Result};
 use std::{
@@ -91,7 +92,10 @@ impl RenderPassManager {
 
         for (&model_id, instance_render_buffer) in model_instance_buffers {
             // Avoid rendering the model if there are no instances
-            let disable_pass = instance_render_buffer.instance_buffer().n_valid_instances() == 0;
+            let disable_pass = instance_render_buffer
+                .instance_render_buffer()
+                .n_valid_instances()
+                == 0;
 
             match self.model_render_pass_recorders.entry(model_id) {
                 Entry::Vacant(entry) => {
@@ -321,7 +325,7 @@ impl RenderPassSpecification {
     fn get_mesh_buffers(
         render_buffers: &SynchronizedRenderBuffers,
         mesh_id: MeshID,
-    ) -> Result<(&VertexBuffer, &IndexBuffer)> {
+    ) -> Result<(&VertexRenderBuffer, &IndexRenderBuffer)> {
         let (vertex_buffer, index_buffer) = render_buffers
             .get_mesh_buffer(mesh_id)
             .map(|mesh_data| (mesh_data.vertex_buffer(), mesh_data.index_buffer()))
@@ -333,10 +337,10 @@ impl RenderPassSpecification {
     fn get_model_instance_buffer(
         render_buffers: &SynchronizedRenderBuffers,
         model_id: ModelID,
-    ) -> Result<&InstanceBuffer> {
+    ) -> Result<&InstanceRenderBuffer> {
         render_buffers
             .get_model_instance_buffer(model_id)
-            .map(|instance_data| instance_data.instance_buffer())
+            .map(|instance_data| instance_data.instance_render_buffer())
             .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
     }
 }
@@ -544,7 +548,7 @@ impl RenderPassRecorder {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None, //Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,

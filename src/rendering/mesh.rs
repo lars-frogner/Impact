@@ -3,7 +3,7 @@
 use crate::{
     geometry::{CollectionChange, ColorVertex, TextureVertex, TriangleMesh},
     rendering::{
-        buffer::{BufferableVertex, IndexBuffer, VertexBuffer},
+        buffer::{BufferableVertex, IndexRenderBuffer, VertexRenderBuffer},
         fre, CoreRenderingSystem,
     },
 };
@@ -12,8 +12,8 @@ use std::mem;
 /// Owner and manager of render buffers for mesh geometry.
 #[derive(Debug)]
 pub struct MeshRenderBufferManager {
-    vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,
+    vertex_buffer: VertexRenderBuffer,
+    index_buffer: IndexRenderBuffer,
     label: String,
 }
 
@@ -45,12 +45,12 @@ impl MeshRenderBufferManager {
     }
 
     /// Returns the buffer of vertices.
-    pub fn vertex_buffer(&self) -> &VertexBuffer {
+    pub fn vertex_buffer(&self) -> &VertexRenderBuffer {
         &self.vertex_buffer
     }
 
     /// Returns the buffer of indices.
-    pub fn index_buffer(&self) -> &IndexBuffer {
+    pub fn index_buffer(&self) -> &IndexRenderBuffer {
         &self.index_buffer
     }
 
@@ -62,8 +62,8 @@ impl MeshRenderBufferManager {
         indices: &[u16],
         label: String,
     ) -> Self {
-        let vertex_buffer = VertexBuffer::new(core_system, vertices, &label);
-        let index_buffer = IndexBuffer::new(core_system, indices, &label);
+        let vertex_buffer = VertexRenderBuffer::new(core_system, vertices, &label);
+        let index_buffer = IndexRenderBuffer::new(core_system, indices, &label);
         Self {
             vertex_buffer,
             index_buffer,
@@ -90,7 +90,7 @@ impl MeshRenderBufferManager {
             CollectionChange::Count => {
                 // If the size of the buffer has changed, we simply
                 // rebuild the buffer
-                self.vertex_buffer = VertexBuffer::new(core_system, vertices, &self.label);
+                self.vertex_buffer = VertexRenderBuffer::new(core_system, vertices, &self.label);
             }
         }
         match index_change {
@@ -100,7 +100,7 @@ impl MeshRenderBufferManager {
                     .queue_update_of_indices(core_system, 0, indices);
             }
             CollectionChange::Count => {
-                self.index_buffer = IndexBuffer::new(core_system, indices, &self.label);
+                self.index_buffer = IndexRenderBuffer::new(core_system, indices, &self.label);
             }
         }
     }
