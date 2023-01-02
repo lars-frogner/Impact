@@ -2,7 +2,6 @@
 
 mod assets;
 mod buffer;
-mod buffer_sync;
 mod camera;
 mod components;
 mod core;
@@ -10,6 +9,7 @@ mod material;
 mod mesh;
 mod model;
 mod render_pass;
+mod resource;
 mod shader;
 mod tasks;
 mod texture;
@@ -17,15 +17,15 @@ mod uniform;
 
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, ShaderID, TextureID};
-pub use buffer_sync::SyncRenderResources;
 pub use components::MaterialComp;
 pub use material::MaterialResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
+pub use resource::SyncRenderResources;
 pub use shader::Shader;
 pub use tasks::{Render, RenderingTag};
 pub use texture::ImageTexture;
 
-use self::buffer_sync::RenderResourceManager;
+use self::resource::RenderResourceManager;
 use crate::window::ControlFlow;
 use anyhow::{Error, Result};
 use std::sync::RwLock;

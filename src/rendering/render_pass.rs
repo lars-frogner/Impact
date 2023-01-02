@@ -8,8 +8,9 @@ use crate::{
     geometry::ModelInstance,
     rendering::{
         buffer::{BufferableVertex, IndexRenderBuffer, InstanceRenderBuffer, VertexRenderBuffer},
-        buffer_sync::SynchronizedRenderResources,
-        fre, Assets, CoreRenderingSystem, ShaderID,
+        fre,
+        resource::SynchronizedRenderResources,
+        Assets, CoreRenderingSystem, ShaderID,
     },
     scene::{CameraID, MaterialLibrary, MaterialSpecification, MeshID, ModelID},
 };
