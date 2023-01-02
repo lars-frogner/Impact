@@ -1,7 +1,7 @@
 //! Management of rendering assets.
 
 use crate::rendering::{ImageTexture, Shader};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 stringhash_newtype!(
     /// Identifier for specific shaders.
@@ -19,7 +19,7 @@ stringhash_newtype!(
 #[derive(Debug, Default)]
 pub struct Assets {
     /// Shader programs.
-    pub shaders: HashMap<ShaderID, Shader>,
+    pub shaders: HashMap<ShaderID, Arc<Shader>>,
     /// Textures sourced from images.
     pub image_textures: HashMap<TextureID, ImageTexture>,
 }

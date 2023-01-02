@@ -11,16 +11,16 @@ use crate::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{
-        fre, Assets, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, ShaderID,
-        TextureID,
+    rendering::{fre, Assets, MaterialComp, ShaderID, TextureID},
+    scene::{
+        CameraComp, CameraID, CameraRepository, MaterialID, MaterialLibrary, MaterialSpecification,
+        MeshComp, MeshID, MeshRepository, Scene,
     },
-    scene::{CameraComp, CameraID, CameraRepository, MeshComp, MeshID, MeshRepository, Scene},
     window::InputHandler,
     window::{KeyActionMap, Window},
     world::World,
 };
-use std::f64::consts::PI;
+use std::{f64::consts::PI, sync::Arc};
 
 use super::{
     geometry::{CameraConfiguration, Degrees, PerspectiveCamera, UpperExclusiveBounds},
@@ -85,12 +85,12 @@ async fn init_world(window: Window) -> Result<World> {
 
     assets.shaders.insert(
         ShaderID(hash!("Test shader")),
-        Shader::from_source(
+        Arc::new(Shader::from_source(
             &core_system,
             include_str!("texture_shader.wgsl"),
             // include_str!("shader.wgsl"),
             "Test shader",
-        ),
+        )),
     );
 
     // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
