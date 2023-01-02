@@ -37,7 +37,7 @@ define_task!(
                 .renderer()
                 .read()
                 .unwrap()
-                .render_buffer_manager()
+                .render_resource_manager()
                 .write()
                 .unwrap()
                 .declare_desynchronized();

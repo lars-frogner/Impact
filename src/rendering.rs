@@ -17,7 +17,7 @@ mod uniform;
 
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, ShaderID, TextureID};
-pub use buffer_sync::SyncRenderBuffers;
+pub use buffer_sync::SyncRenderResources;
 pub use components::MaterialComp;
 pub use material::MaterialResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
@@ -25,7 +25,7 @@ pub use shader::Shader;
 pub use tasks::{Render, RenderingTag};
 pub use texture::ImageTexture;
 
-use self::buffer_sync::RenderBufferManager;
+use self::buffer_sync::RenderResourceManager;
 use crate::window::ControlFlow;
 use anyhow::{Error, Result};
 use std::sync::RwLock;
@@ -43,7 +43,7 @@ pub type fre = f32;
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
     assets: Assets,
-    render_buffer_manager: RwLock<RenderBufferManager>,
+    render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
 }
 
@@ -54,7 +54,7 @@ impl RenderingSystem {
         Ok(Self {
             core_system,
             assets,
-            render_buffer_manager: RwLock::new(RenderBufferManager::new()),
+            render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
         })
     }
@@ -71,8 +71,8 @@ impl RenderingSystem {
 
     /// Returns a reference to the [`RenderBufferManager`], guarded
     /// by a [`RwLock`].
-    pub fn render_buffer_manager(&self) -> &RwLock<RenderBufferManager> {
-        &self.render_buffer_manager
+    pub fn render_resource_manager(&self) -> &RwLock<RenderResourceManager> {
+        &self.render_resource_manager
     }
 
     /// Returns a reference to the [`RenderPassManager`], guarded
@@ -94,16 +94,16 @@ impl RenderingSystem {
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
         {
-            let render_buffers_guard = self.render_buffer_manager.read().unwrap();
+            let render_resources_guard = self.render_resource_manager.read().unwrap();
             for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
                 render_pass_recorder.record_render_pass(
                     &self.assets,
-                    render_buffers_guard.synchronized(),
+                    render_resources_guard.synchronized(),
                     &view,
                     &mut command_encoder,
                 )?;
             }
-        } // <- Lock on `self.render_buffer_manager` is released here
+        } // <- Lock on `self.render_resource_manager` is released here
 
         self.core_system
             .queue()
