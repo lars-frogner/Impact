@@ -1,46 +1,155 @@
 //! Management of materials.
 
-use crate::rendering::{ShaderID, TextureID};
-use std::collections::HashMap;
+use crate::{
+    rendering::{Assets, CoreRenderingSystem, ImageTexture, Shader, TextureID},
+    scene::MaterialSpecification,
+};
+use anyhow::{anyhow, Result};
+use std::sync::Arc;
 
-stringhash_newtype!(
-    /// Identifier for specific materials.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
-    [pub] MaterialID
-);
-
-/// A material specified by textures and a shader.
-#[derive(Clone, Debug)]
-pub struct MaterialSpecification {
-    pub shader_id: ShaderID,
-    pub image_texture_ids: Vec<TextureID>,
+pub struct MaterialResourceManager {
+    shader: Arc<Shader>,
+    image_texture_ids: Vec<TextureID>,
+    texture_bind_group_layout: Option<wgpu::BindGroupLayout>,
+    texture_bind_group: Option<wgpu::BindGroup>,
+    label: String,
 }
 
-/// Container for different material specifications.
-#[derive(Clone, Debug, Default)]
-pub struct MaterialLibrary {
-    material_specifications: HashMap<MaterialID, MaterialSpecification>,
-}
+impl MaterialResourceManager {
+    pub fn for_material_specification(
+        core_system: &CoreRenderingSystem,
+        assets: &Assets,
+        material_specification: &MaterialSpecification,
+        label: String,
+    ) -> Result<Self> {
+        let shader = Arc::clone(
+            assets
+                .shaders
+                .get(&material_specification.shader_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Shader {} missing from assets",
+                        material_specification.shader_id
+                    )
+                })?,
+        );
 
-impl MaterialLibrary {
-    /// Creates a new empty material library.
-    pub fn new() -> Self {
-        Self {
-            material_specifications: HashMap::new(),
+        let image_texture_ids = material_specification.image_texture_ids.clone();
+
+        let (texture_bind_group_layout, texture_bind_group) = if image_texture_ids.is_empty() {
+            (None, None)
+        } else {
+            let texture_bind_group_layout = Self::create_texture_bind_group_layout(
+                core_system.device(),
+                image_texture_ids.len(),
+                &label,
+            );
+            let texture_bind_group = Self::create_texture_bind_group(
+                core_system.device(),
+                assets,
+                &image_texture_ids,
+                &texture_bind_group_layout,
+                &label,
+            )?;
+            (Some(texture_bind_group_layout), Some(texture_bind_group))
+        };
+
+        Ok(Self {
+            shader,
+            image_texture_ids,
+            texture_bind_group_layout,
+            texture_bind_group,
+            label,
+        })
+    }
+
+    pub fn shader_module(&self) -> &wgpu::ShaderModule {
+        self.shader.module()
+    }
+
+    pub fn texture_bind_group_layout(&self) -> Option<&wgpu::BindGroupLayout> {
+        self.texture_bind_group_layout.as_ref()
+    }
+
+    pub fn texture_bind_group(&self) -> Option<&wgpu::BindGroup> {
+        self.texture_bind_group.as_ref()
+    }
+
+    pub fn sync_with_material_specification(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        assets: &Assets,
+        material_specification: &MaterialSpecification,
+    ) -> Result<()> {
+        assert_eq!(
+            self.image_texture_ids.len(),
+            material_specification.image_texture_ids.len(),
+            "Changed number of textures in material specification"
+        );
+        if let Some(layout) = self.texture_bind_group_layout {
+            if material_specification.image_texture_ids != self.image_texture_ids {
+                self.image_texture_ids = material_specification.image_texture_ids.clone();
+                self.texture_bind_group = Some(Self::create_texture_bind_group(
+                    core_system.device(),
+                    assets,
+                    &material_specification.image_texture_ids,
+                    &layout,
+                    &self.label,
+                )?);
+            }
         }
+        Ok(())
     }
 
-    /// Returns the specification for the material with the
-    /// given ID, or [`None`] if the material does not exist.
-    pub fn get_material(&self, material_id: MaterialID) -> Option<&MaterialSpecification> {
-        self.material_specifications.get(&material_id)
+    fn create_texture_bind_group_layout(
+        device: &wgpu::Device,
+        n_textures: usize,
+        label: &str,
+    ) -> wgpu::BindGroupLayout {
+        let n_entries = 2 * n_textures;
+        let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
+
+        for idx in 0..n_textures {
+            let binding = (2 * idx).try_into().unwrap();
+            bind_group_layout_entries.push(ImageTexture::create_texture_bind_group_layout_entry(
+                binding,
+            ));
+            bind_group_layout_entries.push(ImageTexture::create_sampler_bind_group_layout_entry(
+                binding + 1,
+            ));
+        }
+
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &bind_group_layout_entries,
+            label: Some(&format!("{} bind group layout", label)),
+        })
     }
 
-    /// Includes the given material specification in the library
-    /// under the given ID. If a material with the same ID exists,
-    /// it will be overwritten.
-    pub fn add_material(&mut self, material_id: MaterialID, material_spec: MaterialSpecification) {
-        self.material_specifications
-            .insert(material_id, material_spec);
+    fn create_texture_bind_group(
+        device: &wgpu::Device,
+        assets: &Assets,
+        texture_ids: &[TextureID],
+        layout: &wgpu::BindGroupLayout,
+        label: &str,
+    ) -> Result<wgpu::BindGroup> {
+        let n_entries = 2 * texture_ids.len();
+        let mut bind_group_entries = Vec::with_capacity(n_entries);
+
+        for (idx, texture_id) in texture_ids.into_iter().enumerate() {
+            let image_texture = assets
+                .image_textures
+                .get(texture_id)
+                .ok_or_else(|| anyhow!("Texture {} missing from assets", texture_id))?;
+
+            let binding = (2 * idx).try_into().unwrap();
+            bind_group_entries.push(image_texture.create_texture_bind_group_entry(binding));
+            bind_group_entries.push(image_texture.create_sampler_bind_group_entry(binding + 1));
+        }
+
+        Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &bind_group_entries,
+            label: Some(&format!("{} bind group", label)),
+        }))
     }
 }

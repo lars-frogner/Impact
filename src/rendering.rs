@@ -19,7 +19,7 @@ pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, ShaderID, TextureID};
 pub use buffer_sync::SyncRenderBuffers;
 pub use components::MaterialComp;
-pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
+pub use material::MaterialResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use shader::Shader;
 pub use tasks::{Render, RenderingTag};
