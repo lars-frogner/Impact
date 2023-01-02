@@ -4,7 +4,7 @@ use crate::{
     geometry::{ModelInstanceBuffer, UserCountingModelInstanceBuffer},
     hash::{self, Hash64},
     num::Float,
-    rendering::MaterialID,
+    scene::MaterialID,
     scene::MeshID,
 };
 use std::{

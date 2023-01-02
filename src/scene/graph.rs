@@ -939,7 +939,7 @@ pub fn model_to_world_transform_from_position_and_orientation<F: Float>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{rendering::MaterialID, scene::MeshID};
+    use crate::{scene::MaterialID, scene::MeshID};
     use approx::assert_abs_diff_eq;
     use nalgebra::{point, Point3, Rotation3, Scale3, Translation3, Vector3};
 

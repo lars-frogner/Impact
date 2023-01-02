@@ -9,9 +9,9 @@ use crate::{
     rendering::{
         buffer::{BufferableVertex, IndexRenderBuffer, InstanceRenderBuffer, VertexRenderBuffer},
         buffer_sync::SynchronizedRenderBuffers,
-        fre, Assets, CoreRenderingSystem, MaterialLibrary, MaterialSpecification, ShaderID,
+        fre, Assets, CoreRenderingSystem, ShaderID,
     },
-    scene::{CameraID, MeshID, ModelID},
+    scene::{CameraID, MaterialLibrary, MaterialSpecification, MeshID, ModelID},
 };
 use anyhow::{anyhow, Result};
 use std::{

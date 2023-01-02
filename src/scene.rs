@@ -3,6 +3,7 @@
 mod camera;
 mod components;
 mod graph;
+mod material;
 mod mesh;
 mod model;
 mod systems;
@@ -14,11 +15,12 @@ pub use graph::{
     model_to_world_transform_from_position_and_orientation, CameraNodeID, GroupNodeID,
     ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,
 };
+pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
 pub use mesh::{MeshID, MeshRepository};
 pub use model::{ModelID, ModelInstancePool};
 pub use tasks::SyncVisibleModelInstances;
 
-use crate::rendering::{fre, MaterialLibrary};
+use crate::rendering::fre;
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.

@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to rendering.
 
-use crate::rendering::MaterialID;
+use crate::scene::MaterialID;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
