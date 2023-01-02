@@ -141,7 +141,8 @@ impl World {
             {
                 let scene = self.scene().read().unwrap();
                 let mesh_repository = scene.mesh_repository().read().unwrap();
-                let mut model_instance_pool = scene.model_instance_pool().write().unwrap();
+                let mut instance_transform_pool =
+                    scene.model_instance_transform_pool().write().unwrap();
                 let mut scene_graph = scene.scene_graph().write().unwrap();
                 let root_node_id = scene_graph.root_node_id();
             },
@@ -152,7 +153,7 @@ impl World {
              orientation: &OrientationComp|
              -> SceneGraphNodeComp::<ModelInstanceNodeID> {
                 let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
-                model_instance_pool.increment_user_count(model_id);
+                instance_transform_pool.increment_user_count(model_id);
 
                 let model_to_world_transform =
                     sc::model_to_world_transform_from_position_and_orientation(
@@ -211,7 +212,7 @@ impl World {
                 .unwrap()
                 .remove_model_instance_node(node.access().id);
             scene
-                .model_instance_pool()
+                .model_instance_transform_pool()
                 .write()
                 .unwrap()
                 .decrement_user_count(model_id);

@@ -8,72 +8,70 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-/// A buffer for instances of the same model.
+/// A buffer for transforms associated with instances
+/// of the same model.
 ///
 /// The buffer is grown on demand, but never shrunk.
 /// Instead, a counter keeps track of the position
-/// of the last valid instance in the buffer, and the
+/// of the last valid transform in the buffer, and the
 /// counter is reset to zero when the buffer is cleared.
 /// This allows the it to be filled and emptied
 /// repeatedly without unneccesary allocations.
 #[derive(Debug)]
-pub struct ModelInstanceBuffer<F: Float> {
-    raw_buffer: Vec<ModelInstance<F>>,
-    n_valid_instances: AtomicUsize,
+pub struct ModelInstanceTransformBuffer<F: Float> {
+    raw_buffer: Vec<ModelInstanceTransform<F>>,
+    n_valid_transforms: AtomicUsize,
 }
 
-/// Wrapper around a [`ModelInstanceBuffer`] that enables
+/// Wrapper around a [`ModelInstanceTransformBuffer`] that enables
 /// counting the number of uses of the buffer.
 #[derive(Debug)]
-pub struct UserCountingModelInstanceBuffer<F: Float> {
+pub struct UserCountingModelInstanceTransformBuffer<F: Float> {
     user_count: u64,
-    buffer: ModelInstanceBuffer<F>,
+    buffer: ModelInstanceTransformBuffer<F>,
 }
 
-/// An instance of a model with a specific model-to-camera
-/// transform.
-///
-/// Used to represent multiple versions of the same basic model.
+/// A model-to-camera transform for a specific instance of a model.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct ModelInstance<F: Float> {
+pub struct ModelInstanceTransform<F: Float> {
     transform_matrix: Matrix4<F>,
 }
 
-impl<F: Float> ModelInstanceBuffer<F> {
-    /// Creates a new empty buffer for model instances.
+impl<F: Float> ModelInstanceTransformBuffer<F> {
+    /// Creates a new empty buffer for model instance transforms.
     pub fn new() -> Self {
         Self {
             raw_buffer: Vec::new(),
-            n_valid_instances: AtomicUsize::new(0),
+            n_valid_transforms: AtomicUsize::new(0),
         }
     }
 
-    /// Returns the current number of valid instances in the buffer.
-    pub fn n_valid_instances(&self) -> usize {
-        self.n_valid_instances.load(Ordering::Acquire)
+    /// Returns the current number of valid transforms in the buffer.
+    pub fn n_valid_transforms(&self) -> usize {
+        self.n_valid_transforms.load(Ordering::Acquire)
     }
 
-    /// Returns a slice with all the instances in the buffer,
+    /// Returns a slice with all the transforms in the buffer,
     /// including invalid ones.
     ///
     /// # Warning
     /// Only the elements below
-    /// [`n_valid_instances`](Self::n_valid_instances) are
+    /// [`n_valid_transforms`](Self::n_valid_transforms) are
     /// considered to have valid values.
-    pub fn raw_buffer(&self) -> &[ModelInstance<F>] {
+    pub fn raw_buffer(&self) -> &[ModelInstanceTransform<F>] {
         &self.raw_buffer
     }
 
-    /// Returns a slice with the valid instances in the buffer.
-    pub fn valid_instances(&self) -> &[ModelInstance<F>] {
-        &self.raw_buffer[0..self.n_valid_instances()]
+    /// Returns a slice with the valid transforms in the buffer.
+    pub fn valid_transforms(&self) -> &[ModelInstanceTransform<F>] {
+        &self.raw_buffer[0..self.n_valid_transforms()]
     }
 
-    /// Inserts the given instance into the buffer.
-    pub fn add_instance(&mut self, instance: ModelInstance<F>) {
+    /// Inserts the given transform into the buffer.
+    pub fn add_transform(&mut self, transform: ModelInstanceTransform<F>) {
         let buffer_length = self.raw_buffer.len();
-        let idx = self.n_valid_instances.fetch_add(1, Ordering::SeqCst);
+        let idx = self.n_valid_transforms.fetch_add(1, Ordering::SeqCst);
         assert!(idx <= buffer_length);
 
         // If the buffer is full, grow it first
@@ -81,15 +79,15 @@ impl<F: Float> ModelInstanceBuffer<F> {
             self.grow_buffer();
         }
 
-        self.raw_buffer[idx] = instance;
+        self.raw_buffer[idx] = transform;
     }
 
-    /// Empties the buffer of instances.
+    /// Empties the buffer of transforms.
     ///
     /// Does not actually drop anything, just resets the count of
-    /// valid instances to zero.
+    /// valid transforms to zero.
     pub fn clear(&self) {
-        self.n_valid_instances.store(0, Ordering::Release);
+        self.n_valid_transforms.store(0, Ordering::Release);
     }
 
     fn grow_buffer(&mut self) {
@@ -98,37 +96,37 @@ impl<F: Float> ModelInstanceBuffer<F> {
         // Add one before doubling to avoid getting stuck at zero
         let new_buffer_length = (old_buffer_length + 1).checked_mul(2).unwrap();
 
-        let mut new_buffer = vec![ModelInstance::new(); new_buffer_length];
+        let mut new_buffer = vec![ModelInstanceTransform::identity(); new_buffer_length];
         new_buffer[0..old_buffer_length].copy_from_slice(&self.raw_buffer);
 
         self.raw_buffer = new_buffer;
     }
 }
 
-impl<F: Float> Default for ModelInstanceBuffer<F> {
+impl<F: Float> Default for ModelInstanceTransformBuffer<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Float> UserCountingModelInstanceBuffer<F> {
-    /// Creates a new model instance buffer with a user count
+impl<F: Float> UserCountingModelInstanceTransformBuffer<F> {
+    /// Creates a new model instance transform buffer with a user count
     /// of one.
     pub fn new() -> Self {
         Self {
             user_count: 1,
-            buffer: ModelInstanceBuffer::new(),
+            buffer: ModelInstanceTransformBuffer::new(),
         }
     }
 
-    /// Returns a reference to the wrapped model instance buffer.
-    pub fn inner(&self) -> &ModelInstanceBuffer<F> {
+    /// Returns a reference to the wrapped model instance transform buffer.
+    pub fn inner(&self) -> &ModelInstanceTransformBuffer<F> {
         &self.buffer
     }
 
     /// Returns a mutable reference to the wrapped model instance
-    /// buffer.
-    pub fn inner_mut(&mut self) -> &mut ModelInstanceBuffer<F> {
+    /// transform buffer.
+    pub fn inner_mut(&mut self) -> &mut ModelInstanceTransformBuffer<F> {
         &mut self.buffer
     }
 
@@ -152,42 +150,41 @@ impl<F: Float> UserCountingModelInstanceBuffer<F> {
     }
 }
 
-impl<F: Float> Default for UserCountingModelInstanceBuffer<F> {
+impl<F: Float> Default for UserCountingModelInstanceTransformBuffer<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Float> ModelInstance<F> {
-    /// Creates a new model instance with no model-to-camera transform.
-    pub fn new() -> Self {
+impl<F: Float> ModelInstanceTransform<F> {
+    /// Creates a new identity model-to-camera transform.
+    pub fn identity() -> Self {
         Self::with_model_to_camera_transform(Matrix4::identity())
     }
 
-    /// Creates a new model instance with the given model-to-camera transform.
+    /// Creates a new model-to-camera transform with the given
+    /// transform matrix.
     pub fn with_model_to_camera_transform(transform_matrix: Matrix4<F>) -> Self {
         Self { transform_matrix }
     }
 
-    /// Returns the transform matrix describing the configuration of
-    /// this model instance in relation to the default configuration of
-    /// the model.
+    /// Returns the matrix for the model-to-camera transform.
     pub fn transform_matrix(&self) -> &Matrix4<F> {
         &self.transform_matrix
     }
 }
 
-impl<F: Float> Default for ModelInstance<F> {
+impl<F: Float> Default for ModelInstanceTransform<F> {
     fn default() -> Self {
-        Self::new()
+        Self::identity()
     }
 }
 
 // Since `MeshInstance` is `#[repr(transparent)]`, it will be
 // `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
-unsafe impl<F: Float> Zeroable for ModelInstance<F> where Matrix4<F>: Zeroable {}
+unsafe impl<F: Float> Zeroable for ModelInstanceTransform<F> where Matrix4<F>: Zeroable {}
 
-unsafe impl<F> Pod for ModelInstance<F>
+unsafe impl<F> Pod for ModelInstanceTransform<F>
 where
     F: Float,
     Matrix4<F>: Pod,
@@ -199,8 +196,8 @@ mod test {
     use super::*;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
-    fn create_dummy_instance() -> ModelInstance<f32> {
-        ModelInstance::with_model_to_camera_transform(
+    fn create_dummy_instance() -> ModelInstanceTransform<f32> {
+        ModelInstanceTransform::with_model_to_camera_transform(
             Similarity3::from_parts(
                 Translation3::new(2.1, -5.9, 0.01),
                 UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
@@ -211,106 +208,106 @@ mod test {
     }
 
     #[test]
-    fn creating_model_instance_buffer_works() {
-        let buffer = ModelInstanceBuffer::<f32>::new();
-        assert_eq!(buffer.n_valid_instances(), 0);
-        assert_eq!(buffer.valid_instances(), &[]);
+    fn creating_model_instance_transform_buffer_works() {
+        let buffer = ModelInstanceTransformBuffer::<f32>::new();
+        assert_eq!(buffer.n_valid_transforms(), 0);
+        assert_eq!(buffer.valid_transforms(), &[]);
     }
 
     #[test]
-    fn adding_one_instance_to_model_instance_buffer_works() {
-        let mut buffer = ModelInstanceBuffer::<f32>::new();
-        let instance = create_dummy_instance();
-        buffer.add_instance(instance);
-        assert_eq!(buffer.n_valid_instances(), 1);
-        assert_eq!(buffer.valid_instances(), &[instance]);
+    fn adding_one_instance_to_model_instance_transform_buffer_works() {
+        let mut buffer = ModelInstanceTransformBuffer::<f32>::new();
+        let transform = create_dummy_instance();
+        buffer.add_transform(transform);
+        assert_eq!(buffer.n_valid_transforms(), 1);
+        assert_eq!(buffer.valid_transforms(), &[transform]);
     }
 
     #[test]
-    fn adding_two_instances_to_model_instance_buffer_works() {
-        let mut buffer = ModelInstanceBuffer::<f32>::new();
-        let instance_1 = ModelInstance::new();
-        let instance_2 = create_dummy_instance();
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
-        assert_eq!(buffer.n_valid_instances(), 2);
-        assert_eq!(buffer.valid_instances(), &[instance_1, instance_2]);
+    fn adding_two_instances_to_model_instance_transform_buffer_works() {
+        let mut buffer = ModelInstanceTransformBuffer::<f32>::new();
+        let transform_1 = ModelInstanceTransform::identity();
+        let transform_2 = create_dummy_instance();
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
+        assert_eq!(buffer.n_valid_transforms(), 2);
+        assert_eq!(buffer.valid_transforms(), &[transform_1, transform_2]);
     }
 
     #[test]
-    fn adding_three_instances_to_model_instance_buffer_works() {
-        let mut buffer = ModelInstanceBuffer::<f32>::new();
-        let instance_1 = create_dummy_instance();
-        let instance_2 = ModelInstance::new();
-        let instance_3 = create_dummy_instance();
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
-        buffer.add_instance(instance_3);
-        assert_eq!(buffer.n_valid_instances(), 3);
+    fn adding_three_instances_to_model_instance_transform_buffer_works() {
+        let mut buffer = ModelInstanceTransformBuffer::<f32>::new();
+        let transform_1 = create_dummy_instance();
+        let transform_2 = ModelInstanceTransform::identity();
+        let transform_3 = create_dummy_instance();
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
+        buffer.add_transform(transform_3);
+        assert_eq!(buffer.n_valid_transforms(), 3);
         assert_eq!(
-            buffer.valid_instances(),
-            &[instance_1, instance_2, instance_3]
+            buffer.valid_transforms(),
+            &[transform_1, transform_2, transform_3]
         );
     }
 
     #[test]
-    fn clearing_empty_model_instance_buffer_works() {
-        let buffer = ModelInstanceBuffer::<f32>::new();
+    fn clearing_empty_model_instance_transform_buffer_works() {
+        let buffer = ModelInstanceTransformBuffer::<f32>::new();
         buffer.clear();
-        assert_eq!(buffer.n_valid_instances(), 0);
-        assert_eq!(buffer.valid_instances(), &[]);
+        assert_eq!(buffer.n_valid_transforms(), 0);
+        assert_eq!(buffer.valid_transforms(), &[]);
     }
 
     #[test]
-    fn clearing_one_instance_from_model_instance_buffer_works() {
-        let mut buffer = ModelInstanceBuffer::<f32>::new();
-        let instance_1 = ModelInstance::new();
-        let instance_2 = create_dummy_instance();
-        buffer.add_instance(instance_1);
+    fn clearing_one_instance_from_model_instance_transform_buffer_works() {
+        let mut buffer = ModelInstanceTransformBuffer::<f32>::new();
+        let transform_1 = ModelInstanceTransform::identity();
+        let transform_2 = create_dummy_instance();
+        buffer.add_transform(transform_1);
         buffer.clear();
-        assert_eq!(buffer.n_valid_instances(), 0);
-        assert_eq!(buffer.valid_instances(), &[]);
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
-        assert_eq!(buffer.n_valid_instances(), 2);
-        assert_eq!(buffer.valid_instances(), &[instance_1, instance_2]);
+        assert_eq!(buffer.n_valid_transforms(), 0);
+        assert_eq!(buffer.valid_transforms(), &[]);
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
+        assert_eq!(buffer.n_valid_transforms(), 2);
+        assert_eq!(buffer.valid_transforms(), &[transform_1, transform_2]);
     }
 
     #[test]
-    fn clearing_two_instances_from_model_instance_buffer_works() {
-        let mut buffer = ModelInstanceBuffer::<f32>::new();
-        let instance_1 = ModelInstance::new();
-        let instance_2 = create_dummy_instance();
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
+    fn clearing_two_instances_from_model_instance_transform_buffer_works() {
+        let mut buffer = ModelInstanceTransformBuffer::<f32>::new();
+        let transform_1 = ModelInstanceTransform::identity();
+        let transform_2 = create_dummy_instance();
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
         buffer.clear();
-        assert_eq!(buffer.n_valid_instances(), 0);
-        assert_eq!(buffer.valid_instances(), &[]);
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
-        assert_eq!(buffer.n_valid_instances(), 2);
-        assert_eq!(buffer.valid_instances(), &[instance_1, instance_2]);
+        assert_eq!(buffer.n_valid_transforms(), 0);
+        assert_eq!(buffer.valid_transforms(), &[]);
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
+        assert_eq!(buffer.n_valid_transforms(), 2);
+        assert_eq!(buffer.valid_transforms(), &[transform_1, transform_2]);
     }
 
     #[test]
-    fn clearing_three_instances_from_model_instance_buffer_works() {
-        let mut buffer = ModelInstanceBuffer::<f32>::new();
-        let instance_1 = create_dummy_instance();
-        let instance_2 = ModelInstance::new();
-        let instance_3 = create_dummy_instance();
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
-        buffer.add_instance(instance_3);
+    fn clearing_three_instances_from_model_instance_transform_buffer_works() {
+        let mut buffer = ModelInstanceTransformBuffer::<f32>::new();
+        let transform_1 = create_dummy_instance();
+        let transform_2 = ModelInstanceTransform::identity();
+        let transform_3 = create_dummy_instance();
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
+        buffer.add_transform(transform_3);
         buffer.clear();
-        assert_eq!(buffer.n_valid_instances(), 0);
-        assert_eq!(buffer.valid_instances(), &[]);
-        buffer.add_instance(instance_1);
-        buffer.add_instance(instance_2);
-        buffer.add_instance(instance_3);
-        assert_eq!(buffer.n_valid_instances(), 3);
+        assert_eq!(buffer.n_valid_transforms(), 0);
+        assert_eq!(buffer.valid_transforms(), &[]);
+        buffer.add_transform(transform_1);
+        buffer.add_transform(transform_2);
+        buffer.add_transform(transform_3);
+        assert_eq!(buffer.n_valid_transforms(), 3);
         assert_eq!(
-            buffer.valid_instances(),
-            &[instance_1, instance_2, instance_3]
+            buffer.valid_transforms(),
+            &[transform_1, transform_2, transform_3]
         );
     }
 }

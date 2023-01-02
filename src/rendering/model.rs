@@ -1,80 +1,83 @@
 //! Management of model instance data for rendering.
 
 use crate::{
-    geometry::{ModelInstance, ModelInstanceBuffer},
+    geometry::{ModelInstanceTransform, ModelInstanceTransformBuffer},
     rendering::{
-        buffer::{BufferableInstance, BufferableVertex, InstanceRenderBuffer},
+        buffer::{BufferableInstanceFeature, BufferableVertex, InstanceFeatureRenderBuffer},
         fre, CoreRenderingSystem,
     },
 };
 use std::mem;
 
-/// Owner and manager of a render buffer for model instances.
+/// Owner and manager of a render buffer for model instance transforms.
 #[derive(Debug)]
-pub struct ModelInstanceRenderBufferManager {
-    instance_render_buffer: InstanceRenderBuffer,
+pub struct ModelInstanceTransformRenderBufferManager {
+    transform_render_buffer: InstanceFeatureRenderBuffer,
     label: String,
 }
 
-impl ModelInstanceRenderBufferManager {
+impl ModelInstanceTransformRenderBufferManager {
     /// Creates a new manager with a render buffer initialized
-    /// from the given model instance buffer.
+    /// from the given model instance transform buffer.
     pub fn new(
         core_system: &CoreRenderingSystem,
-        model_instance_buffer: &ModelInstanceBuffer<fre>,
+        transform_buffer: &ModelInstanceTransformBuffer<fre>,
         label: String,
     ) -> Self {
-        let n_valid_instances = u32::try_from(model_instance_buffer.n_valid_instances()).unwrap();
+        let n_valid_transforms = u32::try_from(transform_buffer.n_valid_transforms()).unwrap();
 
-        let instance_render_buffer = InstanceRenderBuffer::new(
+        let transform_render_buffer = InstanceFeatureRenderBuffer::new(
             core_system,
-            model_instance_buffer.raw_buffer(),
-            n_valid_instances,
+            transform_buffer.raw_buffer(),
+            n_valid_transforms,
             &label,
         );
 
         Self {
-            instance_render_buffer,
+            transform_render_buffer,
             label,
         }
     }
 
-    /// Writes the valid instances in the given model instance
-    /// buffer into the instance render buffer (reallocating
-    /// the render buffer if required). The model instance
-    /// buffer is then cleared.
-    pub fn transfer_model_instances_to_render_buffer(
+    /// Writes the valid transforms in the given model instance transform
+    /// buffer into the instance transform render buffer (reallocating the
+    /// render buffer if required). The model instance transform buffer is
+    /// then cleared.
+    pub fn transfer_instance_transforms_to_render_buffer(
         &mut self,
         core_system: &CoreRenderingSystem,
-        model_instance_buffer: &ModelInstanceBuffer<fre>,
+        instance_transform_buffer: &ModelInstanceTransformBuffer<fre>,
     ) {
-        let n_valid_instances = u32::try_from(model_instance_buffer.n_valid_instances()).unwrap();
+        let n_valid_transforms =
+            u32::try_from(instance_transform_buffer.n_valid_transforms()).unwrap();
 
-        if n_valid_instances > self.instance_render_buffer.max_instances() {
+        if n_valid_transforms > self.transform_render_buffer.max_instance_features() {
             // Reallocate render buffer since it is too small
-            self.instance_render_buffer = InstanceRenderBuffer::new(
+            self.transform_render_buffer = InstanceFeatureRenderBuffer::new(
                 core_system,
-                model_instance_buffer.raw_buffer(),
-                n_valid_instances,
+                instance_transform_buffer.raw_buffer(),
+                n_valid_transforms,
                 &self.label,
             );
         } else {
-            // Write valid instances into the beginning of the render buffer
-            self.instance_render_buffer
-                .update_valid_instances(core_system, model_instance_buffer.valid_instances());
+            // Write valid transforms into the beginning of the render buffer
+            self.transform_render_buffer.update_valid_instance_features(
+                core_system,
+                instance_transform_buffer.valid_transforms(),
+            );
         }
 
         // Clear container so that it is ready for reuse
-        model_instance_buffer.clear();
+        instance_transform_buffer.clear();
     }
 
-    /// Returns the render buffer of instances.
-    pub fn instance_render_buffer(&self) -> &InstanceRenderBuffer {
-        &self.instance_render_buffer
+    /// Returns the render buffer of instance transforms.
+    pub fn transform_render_buffer(&self) -> &InstanceFeatureRenderBuffer {
+        &self.transform_render_buffer
     }
 }
 
-impl BufferableVertex for ModelInstance<fre> {
+impl BufferableVertex for ModelInstanceTransform<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Instance,
@@ -82,4 +85,4 @@ impl BufferableVertex for ModelInstance<fre> {
     };
 }
 
-impl BufferableInstance for ModelInstance<fre> {}
+impl BufferableInstanceFeature for ModelInstanceTransform<fre> {}

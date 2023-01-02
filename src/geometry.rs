@@ -18,7 +18,9 @@ pub use camera::{Camera, CameraConfiguration, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use light::PointLight;
 pub use mesh::{ColorVertex, Mesh, TextureVertex, TriangleMesh};
-pub use model::{ModelInstance, ModelInstanceBuffer, UserCountingModelInstanceBuffer};
+pub use model::{
+    ModelInstanceTransform, ModelInstanceTransformBuffer, UserCountingModelInstanceTransformBuffer,
+};
 pub use plane::Plane;
 pub use sphere::Sphere;
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};

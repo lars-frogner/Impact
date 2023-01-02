@@ -1,9 +1,9 @@
 //! Scene graph implementation.
 
 use crate::{
-    geometry::{Frustum, ModelInstance, Sphere},
+    geometry::{Frustum, ModelInstanceTransform, Sphere},
     num::Float,
-    scene::{CameraID, CameraRepository, ModelID, ModelInstancePool},
+    scene::{CameraID, CameraRepository, ModelID, ModelInstanceTransformPool},
     util::{GenerationalIdx, GenerationalReusingVec},
 };
 use anyhow::{anyhow, Result};
@@ -15,7 +15,7 @@ use std::collections::HashSet;
 /// objects in the world and enables useful operations on them.
 ///
 /// The scene graph can contain leaf nodes representing
-/// [`ModelInstance`]s and [`Camera`](crate::geometry::Camera)s.
+/// model instances and cameras.
 /// Every leaf node has a parent "group" node, which itself
 /// has a group node as a parent and may have any number and
 /// type of children. Each node holds a transform from the model
@@ -112,7 +112,7 @@ pub struct GroupNode<F: Float> {
     bounding_sphere: Option<Sphere<F>>,
 }
 
-/// A [`SceneGraph`] leaf node representing a [`ModelInstance`].
+/// A [`SceneGraph`] leaf node representing a model instance.
 /// It holds a transform representing the instance's spatial
 /// relationship with its parent group.
 #[derive(Clone, Debug)]
@@ -411,9 +411,9 @@ impl<F: Float> SceneGraph<F> {
     ///
     /// # Panics
     /// If the specified camera node does not exist.
-    pub fn sync_visible_model_instances(
+    pub fn sync_transforms_of_visible_model_instances(
         &mut self,
-        model_instance_pool: &mut ModelInstancePool<F>,
+        instance_transform_pool: &mut ModelInstanceTransformPool<F>,
         camera_repository: &CameraRepository<F>,
         camera_node_id: Option<CameraNodeID>,
     ) -> Result<()> {
@@ -438,8 +438,8 @@ impl<F: Float> SceneGraph<F> {
 
         self.update_bounding_spheres(root_node_id);
 
-        self.update_model_to_camera_transforms_models_in_for_group(
-            model_instance_pool,
+        self.update_model_to_camera_transforms_for_model_instances_in_group(
+            instance_transform_pool,
             &camera_frustum,
             root_node_id,
             &root_to_camera_transform,
@@ -479,9 +479,9 @@ impl<F: Float> SceneGraph<F> {
     ///
     /// # Panics
     /// If the specified group node does not exist.
-    fn update_model_to_camera_transforms_models_in_for_group(
+    fn update_model_to_camera_transforms_for_model_instances_in_group(
         &self,
-        model_instance_pool: &mut ModelInstancePool<F>,
+        instance_transform_pool: &mut ModelInstanceTransformPool<F>,
         camera_frustum: &Frustum<F>,
         group_node_id: GroupNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
@@ -497,8 +497,8 @@ impl<F: Float> SceneGraph<F> {
 
             if !camera_frustum.sphere_lies_outside(&bounding_sphere_world_space) {
                 for &group_node_id in group_node.child_group_node_ids() {
-                    self.update_model_to_camera_transforms_models_in_for_group(
-                        model_instance_pool,
+                    self.update_model_to_camera_transforms_for_model_instances_in_group(
+                        instance_transform_pool,
                         camera_frustum,
                         group_node_id,
                         &group_to_camera_transform,
@@ -507,7 +507,7 @@ impl<F: Float> SceneGraph<F> {
 
                 for &model_instance_node_id in group_node.child_model_instance_node_ids() {
                     self.update_model_to_camera_transform_of_model_instance(
-                        model_instance_pool,
+                        instance_transform_pool,
                         model_instance_node_id,
                         &group_to_camera_transform,
                     );
@@ -525,17 +525,18 @@ impl<F: Float> SceneGraph<F> {
     /// If the specified model instance node does not exist.
     fn update_model_to_camera_transform_of_model_instance(
         &self,
-        model_instance_pool: &mut ModelInstancePool<F>,
+        instance_transform_pool: &mut ModelInstanceTransformPool<F>,
         model_instance_node_id: ModelInstanceNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-        if let Some(buffer) = model_instance_pool.get_buffer_mut(model_instance_node.model_id()) {
+        if let Some(buffer) = instance_transform_pool.get_buffer_mut(model_instance_node.model_id())
+        {
             let model_to_camera_transform =
                 parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-            buffer.add_instance(ModelInstance::with_model_to_camera_transform(
+            buffer.add_transform(ModelInstanceTransform::with_model_to_camera_transform(
                 model_to_camera_transform.to_homogeneous(),
             ))
         }

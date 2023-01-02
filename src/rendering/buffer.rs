@@ -14,11 +14,11 @@ pub trait BufferableVertex: Pod {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
 }
 
-/// Represents instance types that can be written to a vertex buffer.
+/// Represents instance feature types that can be written to a vertex buffer.
 ///
-/// Since instances are stored in vertex buffers, any type that can be
-/// written to a vertex buffer can also be written to an instance buffer.
-pub trait BufferableInstance: BufferableVertex {}
+/// Since per-instance features are stored in vertex buffers, any type that can be
+/// written to a vertex buffer can also be written to an instance feature buffer.
+pub trait BufferableInstanceFeature: BufferableVertex {}
 
 /// Represents index types that can be written to an index buffer.
 pub trait BufferableIndex: Pod {
@@ -44,19 +44,20 @@ pub struct VertexRenderBuffer {
     n_vertices: u32,
 }
 
-/// A buffer containing model instances.
+/// A buffer containing features associated with individual
+/// instances of a model.
 ///
-/// Since a vertex buffer is used for storing the instances,
-/// this buffer wraps a [`VertexBuffer`]. In addition, it
-/// keeps a record of the number of instances, beginning at
+/// Since a vertex buffer is used for storing the instance features,
+/// this buffer wraps a [`VertexRenderBuffer`]. In addition, it
+/// keeps a record of the number of features, beginning at
 /// the start of the buffer, that are considered to have valid
 /// values. This enables the buffer to be reused with varying
 /// numbers of instances without having to reallocate the buffer
 /// every time.
 #[derive(Debug)]
-pub struct InstanceRenderBuffer {
+pub struct InstanceFeatureRenderBuffer {
     vertex_buffer: VertexRenderBuffer,
-    n_valid_instances: AtomicU32,
+    n_valid_instance_features: AtomicU32,
 }
 
 /// A buffer containing vertex indices.
@@ -163,32 +164,32 @@ impl VertexRenderBuffer {
     }
 }
 
-impl InstanceRenderBuffer {
-    /// Creates an instance buffer from the given slice of instances.
-    /// Only the first `n_valid_instances` in the slice are considered
-    /// to actually represent valid values, the rest is just buffer
-    /// filling that gives room for writing a larger number of instances
-    /// than `n_valid_instances` into the buffer at a later point without
+impl InstanceFeatureRenderBuffer {
+    /// Creates an instance feature buffer from the given slice of features.
+    /// Only the first `n_valid_instance_features` in the slice are considered
+    /// to actually represent valid feature values, the rest is just buffer
+    /// filling that gives room for writing a larger number of features
+    /// than `n_valid_instance_features` into the buffer at a later point without
     /// reallocating.
     ///
     /// # Panics
-    /// - If the length of `instance_buffer` can not be converted to [`u32`].
-    /// - If `n_valid_instances` exceeds the length of `instance_buffer`.
-    pub fn new<INS: BufferableInstance>(
+    /// - If the length of `feature_buffer` can not be converted to [`u32`].
+    /// - If `n_valid_instance_features` exceeds the length of `feature_buffer`.
+    pub fn new<INS: BufferableInstanceFeature>(
         core_system: &CoreRenderingSystem,
-        instance_buffer: &[INS],
-        n_valid_instances: u32,
+        instance_features: &[INS],
+        n_valid_instance_features: u32,
         label: &str,
     ) -> Self {
-        assert!(n_valid_instances as usize <= instance_buffer.len());
+        assert!(n_valid_instance_features as usize <= instance_features.len());
         Self {
-            vertex_buffer: VertexRenderBuffer::new(core_system, instance_buffer, label),
-            n_valid_instances: AtomicU32::new(n_valid_instances),
+            vertex_buffer: VertexRenderBuffer::new(core_system, instance_features, label),
+            n_valid_instance_features: AtomicU32::new(n_valid_instance_features),
         }
     }
 
     /// Returns the layout of the vertex buffer used for storing
-    /// instances.
+    /// instance features.
     pub fn layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         self.vertex_buffer.layout()
     }
@@ -198,59 +199,59 @@ impl InstanceRenderBuffer {
         self.vertex_buffer.buffer()
     }
 
-    /// Returns the maximum number of instances the buffer has room
-    /// for.
-    pub fn max_instances(&self) -> u32 {
+    /// Returns the maximum number of instance features the buffer has
+    /// room for.
+    pub fn max_instance_features(&self) -> u32 {
         self.vertex_buffer.n_vertices()
     }
 
     /// Returns the number of instances, starting from the beginning
-    /// of the buffer, that have valid values.
-    pub fn n_valid_instances(&self) -> u32 {
-        self.n_valid_instances.load(Ordering::Acquire)
+    /// of the buffer, that have valid features.
+    pub fn n_valid_instance_features(&self) -> u32 {
+        self.n_valid_instance_features.load(Ordering::Acquire)
     }
 
-    /// Queues a write of the given slice of instances to the existing
+    /// Queues a write of the given slice of instance features to the existing
     /// buffer, starting at the beginning of the buffer. Any existing
-    /// instances in the buffer that are not overwritten are from then
+    /// features in the buffer that are not overwritten are from then
     /// on considered invalid.
     ///
     /// # Panics
-    /// - If the updated instance type has a buffer layout different from
-    ///   the original layout.
-    /// - If the slice of updated instances exceeds the bounds of the
-    ///   original instance buffer.
+    /// - If the updated instance feature type has a buffer layout different
+    ///   from the original layout.
+    /// - If the slice of updated features exceeds the bounds of the original
+    ///   instance feature buffer.
     /// - If integer overflow occurs.
-    pub fn update_valid_instances<INS: BufferableInstance>(
+    pub fn update_valid_instance_features<INS: BufferableInstanceFeature>(
         &self,
         core_system: &CoreRenderingSystem,
-        updated_instances: &[INS],
+        updated_instance_features: &[INS],
     ) {
-        let n_updated_instances = u32::try_from(updated_instances.len()).unwrap();
-        self.n_valid_instances
-            .store(n_updated_instances, Ordering::Release);
-        self.queue_update_of_instances(core_system, 0, updated_instances);
+        let n_updated_features = u32::try_from(updated_instance_features.len()).unwrap();
+        self.n_valid_instance_features
+            .store(n_updated_features, Ordering::Release);
+        self.queue_update_of_instance_features(core_system, 0, updated_instance_features);
     }
 
-    /// Queues a write of the given slice of instances to the existing
-    /// buffer, starting at the given instance index.
+    /// Queues a write of the given slice of instance features to the existing
+    /// buffer, starting at the given feature index.
     ///
     /// # Panics
-    /// - If the updated instance type has a buffer layout different from
-    ///   the original layout.
-    /// - If the offset slice of updated instances exceeds the bounds
-    ///   of the original instance buffer.
+    /// - If the updated instance feature type has a buffer layout different
+    ///   from the original layout.
+    /// - If the offset slice of updated features exceeds the bounds of the
+    ///   original instance feature buffer.
     /// - If integer overflow occurs.
-    fn queue_update_of_instances<INS: BufferableInstance>(
+    fn queue_update_of_instance_features<INS: BufferableInstanceFeature>(
         &self,
         core_system: &CoreRenderingSystem,
-        first_updated_instance_idx: u32,
-        updated_instances: &[INS],
+        first_updated_feature_idx: u32,
+        updated_instance_features: &[INS],
     ) {
         self.vertex_buffer.queue_update_of_vertices(
             core_system,
-            first_updated_instance_idx,
-            updated_instances,
+            first_updated_feature_idx,
+            updated_instance_features,
         );
     }
 }

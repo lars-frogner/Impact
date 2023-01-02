@@ -8,10 +8,12 @@ use crate::{
     geometry::{Camera, TriangleMesh},
     rendering::{
         buffer::BufferableVertex, camera::CameraRenderBufferManager, fre,
-        mesh::MeshRenderBufferManager, model::ModelInstanceRenderBufferManager, Assets,
+        mesh::MeshRenderBufferManager, model::ModelInstanceTransformRenderBufferManager, Assets,
         CoreRenderingSystem, MaterialRenderResourceManager,
     },
-    scene::{CameraID, MaterialID, MaterialSpecification, MeshID, ModelID, ModelInstancePool},
+    scene::{
+        CameraID, MaterialID, MaterialSpecification, MeshID, ModelID, ModelInstanceTransformPool,
+    },
 };
 use anyhow::Result;
 use std::{
@@ -50,7 +52,7 @@ pub struct SynchronizedRenderResources {
     color_mesh_buffers: Box<MeshRenderBufferMap>,
     texture_mesh_buffers: Box<MeshRenderBufferMap>,
     material_resources: Box<MaterialResourceMap>,
-    model_instance_buffers: Box<ModelInstanceRenderBufferMap>,
+    instance_transform_buffers: Box<InstanceTransformRenderBufferMap>,
 }
 
 /// Wrapper for render resources that are assumed to be out of sync
@@ -62,13 +64,13 @@ struct DesynchronizedRenderResources {
     color_mesh_buffers: Mutex<Box<MeshRenderBufferMap>>,
     texture_mesh_buffers: Mutex<Box<MeshRenderBufferMap>>,
     material_resources: Mutex<Box<MaterialResourceMap>>,
-    model_instance_buffers: Mutex<Box<ModelInstanceRenderBufferMap>>,
+    instance_transform_buffers: Mutex<Box<InstanceTransformRenderBufferMap>>,
 }
 
 type CameraRenderBufferMap = HashMap<CameraID, CameraRenderBufferManager>;
 type MeshRenderBufferMap = HashMap<MeshID, MeshRenderBufferManager>;
 type MaterialResourceMap = HashMap<MaterialID, MaterialRenderResourceManager>;
-type ModelInstanceRenderBufferMap = HashMap<ModelID, ModelInstanceRenderBufferManager>;
+type InstanceTransformRenderBufferMap = HashMap<ModelID, ModelInstanceTransformRenderBufferManager>;
 
 impl RenderResourceManager {
     /// Creates a new render resource manager with resources that
@@ -170,16 +172,17 @@ impl SynchronizedRenderResources {
 
     /// Returns the render buffer manager for the given model instance
     /// buffer if the model exists, otherwise returns [`None`].
-    pub fn get_model_instance_buffer(
+    pub fn get_instance_transform_buffer(
         &self,
-        model_instance_buffer_id: ModelID,
-    ) -> Option<&ModelInstanceRenderBufferManager> {
-        self.model_instance_buffers.get(&model_instance_buffer_id)
+        instance_transform_buffer_id: ModelID,
+    ) -> Option<&ModelInstanceTransformRenderBufferManager> {
+        self.instance_transform_buffers
+            .get(&instance_transform_buffer_id)
     }
 
     /// Returns a reference to the map of model instance render buffers.
-    pub fn model_instance_buffers(&self) -> &ModelInstanceRenderBufferMap {
-        self.model_instance_buffers.as_ref()
+    pub fn instance_transform_buffers(&self) -> &InstanceTransformRenderBufferMap {
+        self.instance_transform_buffers.as_ref()
     }
 }
 
@@ -190,7 +193,7 @@ impl DesynchronizedRenderResources {
             color_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
             texture_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
             material_resources: Mutex::new(Box::new(HashMap::new())),
-            model_instance_buffers: Mutex::new(Box::new(HashMap::new())),
+            instance_transform_buffers: Mutex::new(Box::new(HashMap::new())),
         }
     }
 
@@ -200,14 +203,14 @@ impl DesynchronizedRenderResources {
             color_mesh_buffers,
             texture_mesh_buffers,
             material_resources,
-            model_instance_buffers,
+            instance_transform_buffers,
         } = render_resources;
         Self {
             perspective_camera_buffers: Mutex::new(perspective_camera_buffers),
             color_mesh_buffers: Mutex::new(color_mesh_buffers),
             texture_mesh_buffers: Mutex::new(texture_mesh_buffers),
             material_resources: Mutex::new(material_resources),
-            model_instance_buffers: Mutex::new(model_instance_buffers),
+            instance_transform_buffers: Mutex::new(instance_transform_buffers),
         }
     }
 
@@ -217,14 +220,14 @@ impl DesynchronizedRenderResources {
             color_mesh_buffers,
             texture_mesh_buffers,
             material_resources,
-            model_instance_buffers,
+            instance_transform_buffers,
         } = self;
         SynchronizedRenderResources {
             perspective_camera_buffers: perspective_camera_buffers.into_inner().unwrap(),
             color_mesh_buffers: color_mesh_buffers.into_inner().unwrap(),
             texture_mesh_buffers: texture_mesh_buffers.into_inner().unwrap(),
             material_resources: material_resources.into_inner().unwrap(),
-            model_instance_buffers: model_instance_buffers.into_inner().unwrap(),
+            instance_transform_buffers: instance_transform_buffers.into_inner().unwrap(),
         }
     }
 
@@ -312,37 +315,37 @@ impl DesynchronizedRenderResources {
         Ok(())
     }
 
-    /// Performs any required updates for keeping the given map
-    /// of model instance render buffers in sync with the given
-    /// pool of model instances buffers.
+    /// Performs any required updates for keeping the given map of
+    /// model instance transform render buffers in sync with the given
+    /// pool of model instance transforms.
     ///
     /// Render buffers whose source data no longer
     /// exists will be removed, and missing render buffers
     /// for new source data will be created.
-    fn sync_model_instance_buffers_with_instance_pool(
+    fn sync_model_instance_transform_buffers_with_instance_transform_pool(
         core_system: &CoreRenderingSystem,
-        model_instance_render_buffers: &mut ModelInstanceRenderBufferMap,
-        model_instance_pool: &ModelInstancePool<fre>,
+        instance_transform_render_buffers: &mut InstanceTransformRenderBufferMap,
+        instance_transform_pool: &ModelInstanceTransformPool<fre>,
     ) {
-        for (model_id, model_instance_buffer) in model_instance_pool.models_and_buffers() {
-            model_instance_render_buffers
+        for (model_id, instance_transform_buffer) in instance_transform_pool.models_and_buffers() {
+            instance_transform_render_buffers
                 .entry(model_id)
-                .and_modify(|instance_render_buffer| {
-                    instance_render_buffer.transfer_model_instances_to_render_buffer(
+                .and_modify(|instance_transform_render_buffer| {
+                    instance_transform_render_buffer.transfer_instance_transforms_to_render_buffer(
                         core_system,
-                        model_instance_buffer,
+                        instance_transform_buffer,
                     )
                 })
                 .or_insert_with(|| {
-                    ModelInstanceRenderBufferManager::new(
+                    ModelInstanceTransformRenderBufferManager::new(
                         core_system,
-                        model_instance_buffer,
+                        instance_transform_buffer,
                         model_id.to_string(),
                     )
                 });
         }
-        model_instance_render_buffers
-            .retain(|model_id, _| model_instance_pool.has_buffer_for_model(*model_id));
+        instance_transform_render_buffers
+            .retain(|model_id, _| instance_transform_pool.has_buffer_for_model(*model_id));
     }
 
     /// Removes render resources whose source data is no longer present.

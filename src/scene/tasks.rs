@@ -18,7 +18,7 @@ define_task!(
     /// [`SceneGraph`](crate::scene::SceneGraph) to update the
     /// model-to-camera space transforms of the model instances
     /// that are visible with the active camera.
-    [pub] SyncVisibleModelInstances,
+    [pub] SyncVisibleModelInstanceTransforms,
     depends_on = [SyncSceneObjectTransformsWithPositions],
     execute_on = [RenderingTag],
     |world: &World| {
@@ -27,8 +27,8 @@ define_task!(
             let result = scene.scene_graph()
                 .write()
                 .unwrap()
-                .sync_visible_model_instances(
-                    &mut scene.model_instance_pool().write().unwrap(),
+                .sync_transforms_of_visible_model_instances(
+                    &mut scene.model_instance_transform_pool().write().unwrap(),
                     &scene.camera_repository().read().unwrap(),
                     scene.get_active_camera_node_id(),
                 );
@@ -53,7 +53,7 @@ impl Scene {
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
         task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
-        task_scheduler.register_task(SyncVisibleModelInstances)
+        task_scheduler.register_task(SyncVisibleModelInstanceTransforms)
     }
 
     /// Identifies scene-related errors that need special

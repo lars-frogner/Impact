@@ -5,9 +5,11 @@ mod tasks;
 pub use tasks::SyncRenderPasses;
 
 use crate::{
-    geometry::ModelInstance,
+    geometry::ModelInstanceTransform,
     rendering::{
-        buffer::{BufferableVertex, IndexRenderBuffer, InstanceRenderBuffer, VertexRenderBuffer},
+        buffer::{
+            BufferableVertex, IndexRenderBuffer, InstanceFeatureRenderBuffer, VertexRenderBuffer,
+        },
         fre,
         resource::SynchronizedRenderResources,
         CoreRenderingSystem,
@@ -86,13 +88,13 @@ impl RenderPassManager {
         render_resources: &SynchronizedRenderResources,
         camera_id: CameraID,
     ) -> Result<()> {
-        let model_instance_buffers = render_resources.model_instance_buffers();
+        let instance_transform_buffers = render_resources.instance_transform_buffers();
 
-        for (&model_id, instance_render_buffer) in model_instance_buffers {
+        for (&model_id, transform_render_buffer) in instance_transform_buffers {
             // Avoid rendering the model if there are no instances
-            let disable_pass = instance_render_buffer
-                .instance_render_buffer()
-                .n_valid_instances()
+            let disable_pass = transform_render_buffer
+                .transform_render_buffer()
+                .n_valid_instance_features()
                 == 0;
 
             match self.model_render_pass_recorders.entry(model_id) {
@@ -114,7 +116,7 @@ impl RenderPassManager {
         }
 
         self.model_render_pass_recorders
-            .retain(|model_id, _| model_instance_buffers.contains_key(model_id));
+            .retain(|model_id, _| instance_transform_buffers.contains_key(model_id));
 
         Ok(())
     }
@@ -274,9 +276,9 @@ impl RenderPassSpecification {
                     .layout()
                     .clone(),
             );
-            // Assume that we have model instances if we have a model ID
+            // Assume that we have model instance transforms if we have a model ID
             if self.model_id.is_some() {
-                layouts.push(ModelInstance::<fre>::BUFFER_LAYOUT);
+                layouts.push(ModelInstanceTransform::<fre>::BUFFER_LAYOUT);
             }
         }
         Ok(layouts)
@@ -301,13 +303,13 @@ impl RenderPassSpecification {
         Ok((vertex_buffer, index_buffer))
     }
 
-    fn get_model_instance_buffer(
+    fn get_instance_transform_buffer(
         render_resources: &SynchronizedRenderResources,
         model_id: ModelID,
-    ) -> Result<&InstanceRenderBuffer> {
+    ) -> Result<&InstanceFeatureRenderBuffer> {
         render_resources
-            .get_model_instance_buffer(model_id)
-            .map(|instance_data| instance_data.instance_render_buffer())
+            .get_instance_transform_buffer(model_id)
+            .map(|instance_data| instance_data.transform_render_buffer())
             .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
     }
 }
@@ -395,8 +397,8 @@ impl RenderPassRecorder {
             _ => None,
         };
 
-        let instance_buffer = match self.specification.model_id {
-            Some(model_id) => Some(RenderPassSpecification::get_model_instance_buffer(
+        let instance_transform_buffer = match self.specification.model_id {
+            Some(model_id) => Some(RenderPassSpecification::get_instance_transform_buffer(
                 render_resources,
                 model_id,
             )?),
@@ -428,9 +430,9 @@ impl RenderPassRecorder {
 
             render_pass.set_vertex_buffer(0, vertex_buffer.buffer().slice(..));
 
-            let n_instances = if let Some(instance_buffer) = instance_buffer {
-                render_pass.set_vertex_buffer(1, instance_buffer.buffer().slice(..));
-                instance_buffer.n_valid_instances()
+            let n_instances = if let Some(instance_transform_buffer) = instance_transform_buffer {
+                render_pass.set_vertex_buffer(1, instance_transform_buffer.buffer().slice(..));
+                instance_transform_buffer.n_valid_instance_features()
             } else {
                 1
             };

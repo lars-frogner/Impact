@@ -4,7 +4,7 @@ use super::{DesynchronizedRenderResources, RenderResourceManager};
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::SyncVisibleModelInstances,
+    scene::SyncVisibleModelInstanceTransforms,
     world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
@@ -23,7 +23,7 @@ define_task!(
         SyncColorMeshBuffers,
         SyncTextureMeshBuffers,
         SyncMaterialRenderResources,
-        SyncModelInstanceBuffers
+        SyncModelInstanceTransformBuffers
     ],
     execute_on = [RenderingTag],
     |world: &World| {
@@ -44,7 +44,7 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncColorMeshBuffers)?;
         task_scheduler.register_task(SyncTextureMeshBuffers)?;
         task_scheduler.register_task(SyncMaterialRenderResources)?;
-        task_scheduler.register_task(SyncModelInstanceBuffers)?;
+        task_scheduler.register_task(SyncModelInstanceTransformBuffers)?;
         task_scheduler.register_task(SyncRenderResources)
     }
 }
@@ -163,25 +163,25 @@ define_task!(
 );
 
 define_task!(
-    SyncModelInstanceBuffers,
-    depends_on = [SyncVisibleModelInstances],
+    SyncModelInstanceTransformBuffers,
+    depends_on = [SyncVisibleModelInstanceTransforms],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing model instance render buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_model_instance_buffers_with_instance_pool(
+                DesynchronizedRenderResources::sync_model_instance_transform_buffers_with_instance_transform_pool(
                     renderer.core_system(),
                     render_resource_manager
                         .desynchronized()
-                        .model_instance_buffers
+                        .instance_transform_buffers
                         .lock()
                         .unwrap()
                         .as_mut(),
                     &world
                         .scene().read().unwrap()
-                        .model_instance_pool().read().unwrap(),
+                        .model_instance_transform_pool().read().unwrap(),
                 );
             }
             Ok(())
