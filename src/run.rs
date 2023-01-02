@@ -128,7 +128,7 @@ async fn init_world(window: Window) -> Result<World> {
         shader_id: ShaderID(hash!("Test shader")),
         image_texture_ids: vec![TextureID(hash!("Tree texture"))],
     };
-    material_library.add_material(MaterialID(hash!("Test material")), material_spec);
+    material_library.add_material_specification(MaterialID(hash!("Test material")), material_spec);
 
     let renderer = RenderingSystem::new(core_system, assets).await?;
 

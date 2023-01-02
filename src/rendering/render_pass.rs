@@ -170,7 +170,7 @@ impl RenderPassSpecification {
         let material_id = model_id.material_id();
 
         let material_spec = material_library
-            .get_material(material_id)
+            .get_material_specification(material_id)
             .ok_or_else(|| anyhow!("Material {} missing from material library", material_id))?
             .clone();
 

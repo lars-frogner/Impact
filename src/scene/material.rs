@@ -30,16 +30,29 @@ impl MaterialLibrary {
         }
     }
 
+    /// Returns a reference to the [`HashMap`] storing all
+    /// [`MaterialSpecification`]s.
+    pub fn material_specifications(&self) -> &HashMap<MaterialID, MaterialSpecification> {
+        &self.material_specifications
+    }
+
     /// Returns the specification for the material with the
     /// given ID, or [`None`] if the material does not exist.
-    pub fn get_material(&self, material_id: MaterialID) -> Option<&MaterialSpecification> {
+    pub fn get_material_specification(
+        &self,
+        material_id: MaterialID,
+    ) -> Option<&MaterialSpecification> {
         self.material_specifications.get(&material_id)
     }
 
     /// Includes the given material specification in the library
     /// under the given ID. If a material with the same ID exists,
     /// it will be overwritten.
-    pub fn add_material(&mut self, material_id: MaterialID, material_spec: MaterialSpecification) {
+    pub fn add_material_specification(
+        &mut self,
+        material_id: MaterialID,
+        material_spec: MaterialSpecification,
+    ) {
         self.material_specifications
             .insert(material_id, material_spec);
     }
