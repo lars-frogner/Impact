@@ -7,7 +7,8 @@ use crate::{
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
-pub struct MaterialResourceManager {
+#[derive(Debug)]
+pub struct MaterialRenderResourceManager {
     shader: Arc<Shader>,
     image_texture_ids: Vec<TextureID>,
     texture_bind_group_layout: Option<wgpu::BindGroupLayout>,
@@ -15,7 +16,7 @@ pub struct MaterialResourceManager {
     label: String,
 }
 
-impl MaterialResourceManager {
+impl MaterialRenderResourceManager {
     pub fn for_material_specification(
         core_system: &CoreRenderingSystem,
         assets: &Assets,

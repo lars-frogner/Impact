@@ -18,7 +18,7 @@ mod uniform;
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, ShaderID, TextureID};
 pub use components::MaterialComp;
-pub use material::MaterialResourceManager;
+pub use material::MaterialRenderResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::Shader;
