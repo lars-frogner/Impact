@@ -13,7 +13,6 @@ use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 #[derive(Debug)]
 pub struct UniformRenderBufferManager<U> {
     uniform_render_buffer: DynamicUniformRenderBuffer,
-    label: String,
     _phantom: PhantomData<U>,
 }
 
@@ -23,11 +22,7 @@ where
 {
     /// Creates a new manager with a render buffer initialized
     /// from the given uniform buffer.
-    pub fn new<ID>(
-        core_system: &CoreRenderingSystem,
-        uniform_buffer: &UniformBuffer<ID, U>,
-        label: String,
-    ) -> Self
+    pub fn new<ID>(core_system: &CoreRenderingSystem, uniform_buffer: &UniformBuffer<ID, U>) -> Self
     where
         ID: Copy + Hash + Eq + Debug,
     {
@@ -37,14 +32,18 @@ where
             core_system,
             uniform_buffer.raw_buffer(),
             n_valid_uniforms,
-            &label,
         );
 
         Self {
             uniform_render_buffer,
-            label,
             _phantom: PhantomData,
         }
+    }
+
+    /// Creates the bind group entry for the uniform buffer,
+    /// based on the given layout.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        self.uniform_render_buffer.create_bind_group_entry(binding)
     }
 
     /// Writes the valid uniforms in the given uniform
@@ -67,7 +66,6 @@ where
                     core_system,
                     uniform_buffer.raw_buffer(),
                     n_valid_uniforms,
-                    &self.label,
                 );
             } else {
                 // Write valid uniforms into the beginning of the render buffer

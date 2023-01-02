@@ -18,8 +18,6 @@ pub struct ImageTexture {
     _texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
 }
 
 impl ImageTexture {
@@ -100,34 +98,11 @@ impl ImageTexture {
 
         let sampler = Self::create_sampler(device);
 
-        let bind_group_layout = Self::create_bind_group_layout(device);
-        let bind_group = Self::create_bind_group(
-            device,
-            &bind_group_layout,
-            &view,
-            &sampler,
-            &format!("{} bind group", label),
-        );
-
         Self {
             _texture: texture,
             view,
             sampler,
-            bind_group_layout,
-            bind_group,
         }
-    }
-
-    /// Returns the layout of the bind group to which the
-    /// texture view and sampler are bound.
-    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.bind_group_layout
-    }
-
-    /// Returns the bind group to which the texture view and
-    /// sampler are bound.
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
     }
 
     /// Returns a view into the image texture.
@@ -140,53 +115,54 @@ impl ImageTexture {
         &self.sampler
     }
 
-    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    // The sampler binding type must be consistent with the `filterable`
-                    // field in the texture sample type.
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-            label: Some("Image texture bind group layout"),
-        })
+    /// Creates the bind group layout entry for this texture type,
+    /// assigned to the given binding.
+    pub const fn create_texture_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        }
     }
 
-    fn create_bind_group(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        texture_view: &wgpu::TextureView,
-        sampler: &wgpu::Sampler,
-        label: &str,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(sampler),
-                },
-            ],
-            label: Some(label),
-        })
+    /// Creates the bind group layout entry for this texture's sampler
+    /// type, assigned to the given binding.
+    pub const fn create_sampler_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            // The sampler binding type must be consistent with the `filterable`
+            // field in the texture sample type.
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            count: None,
+        }
+    }
+
+    /// Creates the bind group entry for this texture,
+    /// assigned to the given binding.
+    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(self.view()),
+        }
+    }
+
+    /// Creates the bind group entry for this texture's sampler,
+    /// assigned to the given binding.
+    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(self.sampler()),
+        }
     }
 
     /// Creates a new [`wgpu::Texture`] configured to hold 2D image data

@@ -1,6 +1,6 @@
 //! Data buffers for rendering.
 
-use crate::rendering::CoreRenderingSystem;
+use crate::{hash::ConstStringHash, rendering::CoreRenderingSystem};
 use bytemuck::Pod;
 use std::{
     mem,
@@ -28,8 +28,12 @@ pub trait BufferableIndex: Pod {
 
 /// Represents uniform types that can be written to a uniform buffer.
 pub trait BufferableUniform: Pod {
-    /// Descriptor for the layout of the uniform's bind group.
-    const BIND_GROUP_LAYOUT_DESCRIPTOR: wgpu::BindGroupLayoutDescriptor<'static>;
+    /// ID for uniform type.
+    const ID: ConstStringHash;
+
+    /// Creates the bind group layout entry for this uniform type,
+    /// assigned to the given binding.
+    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry;
 }
 
 /// A buffer containing vertices.
@@ -66,10 +70,8 @@ pub struct IndexRenderBuffer {
 /// A buffer containing uniforms.
 #[derive(Debug)]
 pub struct UniformRenderBuffer {
+    uniform_id: ConstStringHash,
     buffer: wgpu::Buffer,
-    bind_group_layout_descriptor: wgpu::BindGroupLayoutDescriptor<'static>,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
     n_uniforms: u32,
 }
 
@@ -320,54 +322,31 @@ impl IndexRenderBuffer {
 
 impl UniformRenderBuffer {
     /// Creates a uniform buffer from the given slice of uniforms.
-    pub fn new<U: BufferableUniform>(
-        core_system: &CoreRenderingSystem,
-        uniforms: &[U],
-        label: &str,
-    ) -> Self {
-        let buffer_label = format!("{} uniform buffer", label);
-        let bind_group_label = format!("{} bind group", &buffer_label);
+    pub fn new<U: BufferableUniform>(core_system: &CoreRenderingSystem, uniforms: &[U]) -> Self {
+        let uniform_id = U::ID;
 
-        let buffer =
-            create_initialized_uniform_buffer(core_system.device(), uniforms, &buffer_label);
-
-        let bind_group_layout_descriptor = U::BIND_GROUP_LAYOUT_DESCRIPTOR;
-
-        let bind_group_layout = core_system
-            .device()
-            .create_bind_group_layout(&bind_group_layout_descriptor);
-
-        let bind_group = Self::create_bind_group(
+        let buffer = create_initialized_uniform_buffer(
             core_system.device(),
-            &bind_group_layout_descriptor,
-            &bind_group_layout,
-            &buffer,
-            &bind_group_label,
+            uniforms,
+            &format!("{} uniform buffer", uniform_id),
         );
 
         let n_uniforms = u32::try_from(uniforms.len()).unwrap();
 
         Self {
+            uniform_id,
             buffer,
-            bind_group_layout_descriptor,
-            bind_group_layout,
-            bind_group,
             n_uniforms,
         }
     }
 
-    /// Returns the bind group layout for the uniform buffer.
-    ///
-    /// The layout only depends on the type of uniform the buffer
-    /// stores, and can thus be used for multiple uniform buffers
-    /// with the same uniform type.
-    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.bind_group_layout
-    }
-
-    /// Returns the bind group for the uniform buffer.
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
+    /// Creates the bind group entry for the uniform buffer,
+    /// assigned to the given binding.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: self.buffer().as_entire_binding(),
+        }
     }
 
     /// Returns the underlying [`wgpu::Buffer`].
@@ -395,19 +374,11 @@ impl UniformRenderBuffer {
         first_updated_uniform_idx: u32,
         updated_uniforms: &[U],
     ) {
-        let descriptor = U::BIND_GROUP_LAYOUT_DESCRIPTOR;
-        let original_descriptor = self.bind_group_layout_descriptor.clone();
-        assert!(
-            descriptor.label == original_descriptor.label
-                && descriptor.entries.len() == original_descriptor.entries.len()
-                && descriptor
-                    .entries
-                    .iter()
-                    .zip(original_descriptor.entries.iter())
-                    .all(|(entry, original_entry)| entry == original_entry),
-            "Updated uniforms do not have original bind group descriptor"
+        assert_eq!(
+            U::ID,
+            self.uniform_id,
+            "Updated uniforms do not have original ID"
         );
-
         queue_write_to_buffer(
             core_system.queue(),
             self.buffer(),
@@ -415,23 +386,6 @@ impl UniformRenderBuffer {
             updated_uniforms,
             self.n_uniforms(),
         );
-    }
-
-    fn create_bind_group(
-        device: &wgpu::Device,
-        layout_descriptor: &wgpu::BindGroupLayoutDescriptor<'static>,
-        layout: &wgpu::BindGroupLayout,
-        buffer: &wgpu::Buffer,
-        label: &str,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: layout_descriptor.entries[0].binding,
-                resource: buffer.as_entire_binding(),
-            }],
-            label: Some(label),
-        })
     }
 }
 
@@ -450,27 +404,18 @@ impl DynamicUniformRenderBuffer {
         core_system: &CoreRenderingSystem,
         uniform_buffer: &[U],
         n_valid_uniforms: u32,
-        label: &str,
     ) -> Self {
         assert!(n_valid_uniforms as usize <= uniform_buffer.len());
         Self {
-            uniform_buffer: UniformRenderBuffer::new(core_system, uniform_buffer, label),
+            uniform_buffer: UniformRenderBuffer::new(core_system, uniform_buffer),
             n_valid_uniforms: AtomicU32::new(n_valid_uniforms),
         }
     }
 
-    /// Returns the bind group layout for the uniform buffer.
-    ///
-    /// The layout only depends on the type of uniform the buffer
-    /// stores, and can thus be used for multiple uniform buffers
-    /// with the same uniform type.
-    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        self.uniform_buffer.bind_group_layout()
-    }
-
-    /// Returns the bind group for the uniform buffer.
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        self.uniform_buffer.bind_group()
+    /// Creates the bind group entry for the uniform buffer,
+    /// assigned to the given binding.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        self.uniform_buffer.create_bind_group_entry(binding)
     }
 
     /// Returns the underlying [`wgpu::Buffer`].
