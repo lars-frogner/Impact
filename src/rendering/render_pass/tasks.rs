@@ -29,8 +29,6 @@ define_task!(
 
                     render_pass_manager.sync_with_render_resources(
                         renderer.core_system(),
-                        renderer.assets(),
-                        &world.scene().read().unwrap().material_library().read().unwrap(),
                         render_resource_manager.synchronized(),
                         camera_id
                     )

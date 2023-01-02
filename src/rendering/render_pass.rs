@@ -10,9 +10,9 @@ use crate::{
         buffer::{BufferableVertex, IndexRenderBuffer, InstanceRenderBuffer, VertexRenderBuffer},
         fre,
         resource::SynchronizedRenderResources,
-        Assets, CoreRenderingSystem, ShaderID,
+        CoreRenderingSystem,
     },
-    scene::{CameraID, MaterialLibrary, MaterialSpecification, MeshID, ModelID},
+    scene::{CameraID, MeshID, ModelID},
 };
 use anyhow::{anyhow, Result};
 use std::{
@@ -38,7 +38,6 @@ pub struct RenderPassSpecification {
     camera_id: Option<CameraID>,
     model_id: Option<ModelID>,
     mesh_id: Option<MeshID>,
-    material_spec: Option<MaterialSpecification>,
     clear_color: Option<wgpu::Color>,
     label: String,
 }
@@ -84,8 +83,6 @@ impl RenderPassManager {
     fn sync_with_render_resources(
         &mut self,
         core_system: &CoreRenderingSystem,
-        assets: &Assets,
-        material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         camera_id: CameraID,
     ) -> Result<()> {
@@ -102,8 +99,6 @@ impl RenderPassManager {
                 Entry::Vacant(entry) => {
                     entry.insert(Self::create_render_pass_recorder_for_model(
                         core_system,
-                        assets,
-                        material_library,
                         render_resources,
                         camera_id,
                         model_id,
@@ -126,22 +121,13 @@ impl RenderPassManager {
 
     fn create_render_pass_recorder_for_model(
         core_system: &CoreRenderingSystem,
-        assets: &Assets,
-        material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         camera_id: CameraID,
         model_id: ModelID,
         disabled: bool,
     ) -> Result<RenderPassRecorder> {
-        let specification =
-            RenderPassSpecification::for_model(material_library, camera_id, model_id)?;
-        RenderPassRecorder::new(
-            core_system,
-            assets,
-            render_resources,
-            specification,
-            disabled,
-        )
+        let specification = RenderPassSpecification::for_model(camera_id, model_id)?;
+        RenderPassRecorder::new(core_system, render_resources, specification, disabled)
     }
 }
 
@@ -152,7 +138,6 @@ impl RenderPassSpecification {
             camera_id: None,
             model_id: None,
             mesh_id: None,
-            material_spec: None,
             clear_color: None,
             label,
         }
@@ -161,24 +146,11 @@ impl RenderPassSpecification {
     /// Creates the specification for the render pass that
     /// will render the model with the given ID, using the
     /// camera with the given ID.
-    pub fn for_model(
-        material_library: &MaterialLibrary,
-        camera_id: CameraID,
-        model_id: ModelID,
-    ) -> Result<Self> {
-        let mesh_id = model_id.mesh_id();
-        let material_id = model_id.material_id();
-
-        let material_spec = material_library
-            .get_material_specification(material_id)
-            .ok_or_else(|| anyhow!("Material {} missing from material library", material_id))?
-            .clone();
-
+    pub fn for_model(camera_id: CameraID, model_id: ModelID) -> Result<Self> {
         Ok(Self {
             camera_id: Some(camera_id),
             model_id: Some(model_id),
-            mesh_id: Some(mesh_id),
-            material_spec: Some(material_spec),
+            mesh_id: Some(model_id.mesh_id()),
             clear_color: None,
             label: model_id.to_string(),
         })
@@ -191,7 +163,6 @@ impl RenderPassSpecification {
             camera_id: None,
             model_id: None,
             mesh_id: None,
-            material_spec: None,
             clear_color: Some(clear_color),
             label: "Clearing pass".to_string(),
         }
@@ -201,8 +172,24 @@ impl RenderPassSpecification {
         self.camera_id.is_some()
     }
 
+    fn has_model(&self) -> bool {
+        self.model_id.is_some()
+    }
+
     fn set_camera_id(&mut self, camera_id: Option<CameraID>) {
         self.camera_id = camera_id;
+    }
+
+    /// Obtains the shader module to use for the render pass.
+    fn get_shader_module<'a>(
+        &self,
+        render_resources: &'a SynchronizedRenderResources,
+    ) -> Result<&'a wgpu::ShaderModule> {
+        let material_id = self.model_id.unwrap().material_id();
+        Ok(render_resources
+            .get_material_resources(material_id)
+            .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
+            .shader_module())
     }
 
     /// Obtains the layouts of all bind groups involved in the render
@@ -210,13 +197,12 @@ impl RenderPassSpecification {
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
-    /// 2. Image textures in same order as in the `image_textures` vector.
+    /// 2. Material textures.
     fn get_bind_group_layouts<'a>(
         &self,
-        assets: &'a Assets,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<Vec<&'a wgpu::BindGroupLayout>> {
-        let mut layouts = Vec::with_capacity(self.find_number_of_bind_groups());
+        let mut layouts = Vec::with_capacity(2);
         if let Some(camera_id) = self.camera_id {
             layouts.push(
                 render_resources
@@ -225,17 +211,14 @@ impl RenderPassSpecification {
                     .bind_group_layout(),
             );
         }
-        if let Some(material_spec) = &self.material_spec {
-            for image_texture_id in &material_spec.image_texture_ids {
-                layouts.push(
-                    assets
-                        .image_textures
-                        .get(image_texture_id)
-                        .ok_or_else(|| {
-                            anyhow!("Image texture {} missing from assets", image_texture_id)
-                        })?
-                        .bind_group_layout(),
-                );
+        if let Some(model_id) = self.model_id {
+            let material_id = model_id.material_id();
+            if let Some(layout) = render_resources
+                .get_material_resources(material_id)
+                .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
+                .texture_bind_group_layout()
+            {
+                layouts.push(layout);
             }
         }
         Ok(layouts)
@@ -245,13 +228,12 @@ impl RenderPassSpecification {
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
-    /// 2. Image textures in same order as in the `image_textures` vector.
+    /// 2. Material textures.
     fn get_bind_groups<'a>(
         &self,
-        assets: &'a Assets,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
-        let mut bind_groups = Vec::with_capacity(self.find_number_of_bind_groups());
+        let mut bind_groups = Vec::with_capacity(2);
         if let Some(camera_id) = self.camera_id {
             bind_groups.push(
                 render_resources
@@ -260,17 +242,14 @@ impl RenderPassSpecification {
                     .bind_group(),
             );
         }
-        if let Some(material_spec) = &self.material_spec {
-            for image_texture_id in &material_spec.image_texture_ids {
-                bind_groups.push(
-                    assets
-                        .image_textures
-                        .get(image_texture_id)
-                        .ok_or_else(|| {
-                            anyhow!("Image texture {} missing from assets", image_texture_id)
-                        })?
-                        .bind_group(),
-                );
+        if let Some(model_id) = self.model_id {
+            let material_id = model_id.material_id();
+            if let Some(bind_group) = render_resources
+                .get_material_resources(material_id)
+                .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
+                .texture_bind_group()
+            {
+                bind_groups.push(bind_group);
             }
         }
         Ok(bind_groups)
@@ -303,30 +282,11 @@ impl RenderPassSpecification {
         Ok(layouts)
     }
 
-    fn find_number_of_bind_groups(&self) -> usize {
-        let mut n = 0;
-        if self.has_camera() {
-            n += 1;
-        }
-        if let Some(material_spec) = &self.material_spec {
-            n += material_spec.image_texture_ids.len();
-        }
-        n
-    }
-
     fn determine_load_operation(&self) -> wgpu::LoadOp<wgpu::Color> {
         match self.clear_color {
             Some(clear_color) => wgpu::LoadOp::Clear(clear_color),
             None => wgpu::LoadOp::Load,
         }
-    }
-
-    fn get_shader_module(assets: &Assets, shader_id: ShaderID) -> Result<&wgpu::ShaderModule> {
-        assets
-            .shaders
-            .get(&shader_id)
-            .map(|shader| shader.module())
-            .ok_or_else(|| anyhow!("Shader {} missing from assets", shader_id))
     }
 
     fn get_mesh_buffers(
@@ -357,25 +317,17 @@ impl RenderPassRecorder {
     /// the given specification.
     pub fn new(
         core_system: &CoreRenderingSystem,
-        assets: &Assets,
         render_resources: &SynchronizedRenderResources,
         specification: RenderPassSpecification,
         disabled: bool,
     ) -> Result<Self> {
-        let vertex_buffer_layouts = specification.get_vertex_buffer_layouts(render_resources)?;
+        let pipeline = if specification.has_model() {
+            let vertex_buffer_layouts =
+                specification.get_vertex_buffer_layouts(render_resources)?;
 
-        let pipeline = if vertex_buffer_layouts.is_empty() || specification.material_spec.is_none()
-        {
-            // If we don't have vertices and a material we don't need a pipeline
-            None
-        } else {
-            let shader_module = RenderPassSpecification::get_shader_module(
-                assets,
-                specification.material_spec.as_ref().unwrap().shader_id,
-            )?;
+            let bind_group_layouts = specification.get_bind_group_layouts(render_resources)?;
 
-            let bind_group_layouts =
-                specification.get_bind_group_layouts(assets, render_resources)?;
+            let shader_module = specification.get_shader_module(render_resources)?;
 
             let pipeline_layout = Self::create_render_pipeline_layout(
                 core_system.device(),
@@ -391,6 +343,9 @@ impl RenderPassRecorder {
                 core_system.surface_config().format,
                 &format!("{} render pipeline", &specification.label),
             ))
+        } else {
+            // If we don't have vertices and a material we don't need a pipeline
+            None
         };
 
         let load_operation = specification.determine_load_operation();
@@ -417,11 +372,10 @@ impl RenderPassRecorder {
     /// Records the render pass to the given command encoder.
     ///
     /// # Errors
-    /// Returns an error if any of the assets or render buffers
+    /// Returns an error if any of the render resources
     /// used in this render pass are no longer available.
     pub fn record_render_pass(
         &self,
-        assets: &Assets,
         render_resources: &SynchronizedRenderResources,
         view: &wgpu::TextureView,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -431,9 +385,7 @@ impl RenderPassRecorder {
         }
 
         // Make sure all data is available before doing anything else
-        let bind_groups = self
-            .specification
-            .get_bind_groups(assets, render_resources)?;
+        let bind_groups = self.specification.get_bind_groups(render_resources)?;
 
         let mesh_buffers = match self.specification.mesh_id {
             Some(mesh_id) => Some(RenderPassSpecification::get_mesh_buffers(

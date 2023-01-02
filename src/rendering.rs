@@ -97,7 +97,6 @@ impl RenderingSystem {
             let render_resources_guard = self.render_resource_manager.read().unwrap();
             for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
                 render_pass_recorder.record_render_pass(
-                    &self.assets,
                     render_resources_guard.synchronized(),
                     &view,
                     &mut command_encoder,
