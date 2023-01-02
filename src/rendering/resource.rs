@@ -293,7 +293,7 @@ impl DesynchronizedRenderResources {
     ) -> Result<()> {
         for (&material_id, material_specification) in material_specifications {
             match material_resources.entry(material_id) {
-                Entry::Occupied(entry) => entry.get_mut().sync_with_material_specification(
+                Entry::Occupied(mut entry) => entry.get_mut().sync_with_material_specification(
                     core_system,
                     assets,
                     material_specification,
