@@ -1,4 +1,4 @@
-//!
+//! Management of materials.
 
 use crate::rendering::{ShaderID, TextureID};
 use std::collections::HashMap;

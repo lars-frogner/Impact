@@ -1,4 +1,4 @@
-//! Management of materials.
+//! Management of material data for rendering.
 
 use crate::{
     rendering::{Assets, CoreRenderingSystem, ImageTexture, Shader, TextureID},
@@ -7,6 +7,9 @@ use crate::{
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
+/// Owner and manager of a render resources for a material,
+/// including a bind group for the set of textures used for
+/// the material.
 #[derive(Debug)]
 pub struct MaterialRenderResourceManager {
     shader: Arc<Shader>,
@@ -17,6 +20,8 @@ pub struct MaterialRenderResourceManager {
 }
 
 impl MaterialRenderResourceManager {
+    /// Creates a new manager with render resources initialized
+    /// from the given material specification.
     pub fn for_material_specification(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
@@ -64,18 +69,27 @@ impl MaterialRenderResourceManager {
         })
     }
 
+    /// Returns a reference to the compiled shader module used
+    /// for the material.
     pub fn shader_module(&self) -> &wgpu::ShaderModule {
         self.shader.module()
     }
 
+    /// Returns a reference to the bind group layout for the
+    /// set of textures used for the material.
     pub fn texture_bind_group_layout(&self) -> Option<&wgpu::BindGroupLayout> {
         self.texture_bind_group_layout.as_ref()
     }
 
+    /// Returns a reference to the bind group for the set of
+    /// textures used for the material.
     pub fn texture_bind_group(&self) -> Option<&wgpu::BindGroup> {
         self.texture_bind_group.as_ref()
     }
 
+    /// Ensures that the render resources are in sync with the
+    /// given material specification. This includes recreating
+    /// the bind group if the set of textures has changed.
     pub fn sync_with_material_specification(
         &mut self,
         core_system: &CoreRenderingSystem,
@@ -87,7 +101,7 @@ impl MaterialRenderResourceManager {
             material_specification.image_texture_ids.len(),
             "Changed number of textures in material specification"
         );
-        if let Some(layout) = self.texture_bind_group_layout {
+        if let Some(layout) = &self.texture_bind_group_layout {
             if material_specification.image_texture_ids != self.image_texture_ids {
                 self.image_texture_ids = material_specification.image_texture_ids.clone();
                 self.texture_bind_group = Some(Self::create_texture_bind_group(
