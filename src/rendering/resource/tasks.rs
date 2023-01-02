@@ -22,6 +22,7 @@ define_task!(
         SyncPerspectiveCameraBuffers,
         SyncColorMeshBuffers,
         SyncTextureMeshBuffers,
+        SyncMaterialRenderResources,
         SyncModelInstanceBuffers
     ],
     execute_on = [RenderingTag],
@@ -42,6 +43,7 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncPerspectiveCameraBuffers)?;
         task_scheduler.register_task(SyncColorMeshBuffers)?;
         task_scheduler.register_task(SyncTextureMeshBuffers)?;
+        task_scheduler.register_task(SyncMaterialRenderResources)?;
         task_scheduler.register_task(SyncModelInstanceBuffers)?;
         task_scheduler.register_task(SyncRenderResources)
     }
@@ -127,6 +129,35 @@ define_task!(
                 );
             }
             Ok(())
+        })
+    }
+);
+
+define_task!(
+    SyncMaterialRenderResources,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing material render resources"; {
+            let renderer = world.renderer().read().unwrap();
+            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+            if render_resource_manager.is_desynchronized() {
+                DesynchronizedRenderResources::sync_material_resources_with_material_specifications(
+                    renderer.core_system(),
+                    renderer.assets(),
+                    render_resource_manager
+                        .desynchronized()
+                        .material_resources
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    world
+                        .scene().read().unwrap().material_library().read().unwrap()
+                        .material_specifications(),
+                )
+            } else {
+                Ok(())
+            }
         })
     }
 );

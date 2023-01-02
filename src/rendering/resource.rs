@@ -8,12 +8,17 @@ use crate::{
     geometry::{Camera, TriangleMesh},
     rendering::{
         buffer::BufferableVertex, camera::CameraRenderBufferManager, fre,
-        mesh::MeshRenderBufferManager, model::ModelInstanceRenderBufferManager,
-        CoreRenderingSystem,
+        mesh::MeshRenderBufferManager, model::ModelInstanceRenderBufferManager, Assets,
+        CoreRenderingSystem, MaterialRenderResourceManager,
     },
-    scene::{CameraID, MeshID, ModelID, ModelInstancePool},
+    scene::{CameraID, MaterialID, MaterialSpecification, MeshID, ModelID, ModelInstancePool},
 };
-use std::{collections::HashMap, hash::Hash, sync::Mutex};
+use anyhow::Result;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    hash::Hash,
+    sync::Mutex,
+};
 
 /// Manager and owner of render resources representing world data.
 ///
@@ -44,6 +49,7 @@ pub struct SynchronizedRenderResources {
     perspective_camera_buffers: Box<CameraRenderBufferMap>,
     color_mesh_buffers: Box<MeshRenderBufferMap>,
     texture_mesh_buffers: Box<MeshRenderBufferMap>,
+    material_resources: Box<MaterialResourceMap>,
     model_instance_buffers: Box<ModelInstanceRenderBufferMap>,
 }
 
@@ -55,11 +61,13 @@ struct DesynchronizedRenderResources {
     perspective_camera_buffers: Mutex<Box<CameraRenderBufferMap>>,
     color_mesh_buffers: Mutex<Box<MeshRenderBufferMap>>,
     texture_mesh_buffers: Mutex<Box<MeshRenderBufferMap>>,
+    material_resources: Mutex<Box<MaterialResourceMap>>,
     model_instance_buffers: Mutex<Box<ModelInstanceRenderBufferMap>>,
 }
 
 type CameraRenderBufferMap = HashMap<CameraID, CameraRenderBufferManager>;
 type MeshRenderBufferMap = HashMap<MeshID, MeshRenderBufferManager>;
+type MaterialResourceMap = HashMap<MaterialID, MaterialRenderResourceManager>;
 type ModelInstanceRenderBufferMap = HashMap<ModelID, ModelInstanceRenderBufferManager>;
 
 impl RenderResourceManager {
@@ -151,6 +159,15 @@ impl SynchronizedRenderResources {
             .or_else(|| self.texture_mesh_buffers.get(&mesh_id))
     }
 
+    /// Returns the render resource manager for the given material identifier
+    /// if the material exists, otherwise returns [`None`].
+    pub fn get_material_resources(
+        &self,
+        material_id: MaterialID,
+    ) -> Option<&MaterialRenderResourceManager> {
+        self.material_resources.get(&material_id)
+    }
+
     /// Returns the render buffer manager for the given model instance
     /// buffer if the model exists, otherwise returns [`None`].
     pub fn get_model_instance_buffer(
@@ -172,6 +189,7 @@ impl DesynchronizedRenderResources {
             perspective_camera_buffers: Mutex::new(Box::new(HashMap::new())),
             color_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
             texture_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
+            material_resources: Mutex::new(Box::new(HashMap::new())),
             model_instance_buffers: Mutex::new(Box::new(HashMap::new())),
         }
     }
@@ -181,12 +199,14 @@ impl DesynchronizedRenderResources {
             perspective_camera_buffers,
             color_mesh_buffers,
             texture_mesh_buffers,
+            material_resources,
             model_instance_buffers,
         } = render_resources;
         Self {
             perspective_camera_buffers: Mutex::new(perspective_camera_buffers),
             color_mesh_buffers: Mutex::new(color_mesh_buffers),
             texture_mesh_buffers: Mutex::new(texture_mesh_buffers),
+            material_resources: Mutex::new(material_resources),
             model_instance_buffers: Mutex::new(model_instance_buffers),
         }
     }
@@ -196,12 +216,14 @@ impl DesynchronizedRenderResources {
             perspective_camera_buffers,
             color_mesh_buffers,
             texture_mesh_buffers,
+            material_resources,
             model_instance_buffers,
         } = self;
         SynchronizedRenderResources {
             perspective_camera_buffers: perspective_camera_buffers.into_inner().unwrap(),
             color_mesh_buffers: color_mesh_buffers.into_inner().unwrap(),
             texture_mesh_buffers: texture_mesh_buffers.into_inner().unwrap(),
+            material_resources: material_resources.into_inner().unwrap(),
             model_instance_buffers: model_instance_buffers.into_inner().unwrap(),
         }
     }
@@ -254,6 +276,40 @@ impl DesynchronizedRenderResources {
                 });
         }
         Self::remove_unmatched_render_resources(mesh_render_buffers, meshes);
+    }
+
+    /// Performs any required updates for keeping the given map
+    /// of material render resources in sync with the given map
+    /// of material specifications.
+    ///
+    /// Render resources whose source data no longer
+    /// exists will be removed, and missing render resources
+    /// for new source data will be created.
+    fn sync_material_resources_with_material_specifications(
+        core_system: &CoreRenderingSystem,
+        assets: &Assets,
+        material_resources: &mut MaterialResourceMap,
+        material_specifications: &HashMap<MaterialID, MaterialSpecification>,
+    ) -> Result<()> {
+        for (&material_id, material_specification) in material_specifications {
+            match material_resources.entry(material_id) {
+                Entry::Occupied(entry) => entry.get_mut().sync_with_material_specification(
+                    core_system,
+                    assets,
+                    material_specification,
+                )?,
+                Entry::Vacant(entry) => {
+                    entry.insert(MaterialRenderResourceManager::for_material_specification(
+                        core_system,
+                        assets,
+                        material_specification,
+                        material_id.to_string(),
+                    )?);
+                }
+            }
+        }
+        Self::remove_unmatched_render_resources(material_resources, material_specifications);
+        Ok(())
     }
 
     /// Performs any required updates for keeping the given map
