@@ -3,7 +3,7 @@
 use crate::{
     geometry::{Frustum, ModelInstanceTransform, Sphere},
     num::Float,
-    scene::{CameraID, CameraRepository, ModelID, ModelInstanceTransformPool},
+    scene::{CameraID, CameraRepository, ModelID, ModelInstanceFeatureManager},
     util::{GenerationalIdx, GenerationalReusingVec},
 };
 use anyhow::{anyhow, Result};
@@ -413,7 +413,7 @@ impl<F: Float> SceneGraph<F> {
     /// If the specified camera node does not exist.
     pub fn sync_transforms_of_visible_model_instances(
         &mut self,
-        instance_transform_pool: &mut ModelInstanceTransformPool<F>,
+        instance_transform_pool: &mut ModelInstanceFeatureManager<F>,
         camera_repository: &CameraRepository<F>,
         camera_node_id: Option<CameraNodeID>,
     ) -> Result<()> {
@@ -481,7 +481,7 @@ impl<F: Float> SceneGraph<F> {
     /// If the specified group node does not exist.
     fn update_model_to_camera_transforms_for_model_instances_in_group(
         &self,
-        instance_transform_pool: &mut ModelInstanceTransformPool<F>,
+        instance_transform_pool: &mut ModelInstanceFeatureManager<F>,
         camera_frustum: &Frustum<F>,
         group_node_id: GroupNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
@@ -525,7 +525,7 @@ impl<F: Float> SceneGraph<F> {
     /// If the specified model instance node does not exist.
     fn update_model_to_camera_transform_of_model_instance(
         &self,
-        instance_transform_pool: &mut ModelInstanceTransformPool<F>,
+        instance_transform_pool: &mut ModelInstanceFeatureManager<F>,
         model_instance_node_id: ModelInstanceNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) {
@@ -538,7 +538,7 @@ impl<F: Float> SceneGraph<F> {
 
             buffer.add_transform(ModelInstanceTransform::with_model_to_camera_transform(
                 model_to_camera_transform.to_homogeneous(),
-            ))
+            ));
         }
     }
 
@@ -1370,7 +1370,7 @@ mod test {
         assert_spheres_equal(
             &scene_graph.find_model_instance_bounding_sphere(instance),
             &bounding_sphere.transformed(&model_to_parent_transform),
-        )
+        );
     }
 
     #[test]

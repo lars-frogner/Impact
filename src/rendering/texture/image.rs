@@ -203,7 +203,7 @@ impl ImageTexture {
                 rows_per_image: NonZeroU32::new(texture_size.height),
             },
             texture_size,
-        )
+        );
     }
 
     fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {

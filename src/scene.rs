@@ -17,7 +17,7 @@ pub use graph::{
 };
 pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
 pub use mesh::{MeshID, MeshRepository};
-pub use model::{ModelID, ModelInstanceTransformPool};
+pub use model::{ModelID, ModelInstanceFeatureManager};
 pub use tasks::SyncVisibleModelInstanceTransforms;
 
 use crate::rendering::fre;
@@ -30,7 +30,7 @@ pub struct Scene {
     mesh_repository: RwLock<MeshRepository<fre>>,
     material_library: RwLock<MaterialLibrary>,
     scene_graph: RwLock<SceneGraph<fre>>,
-    model_instance_transform_pool: RwLock<ModelInstanceTransformPool<fre>>,
+    model_instance_transform_pool: RwLock<ModelInstanceFeatureManager<fre>>,
     active_camera: RwLock<Option<(CameraID, CameraNodeID)>>,
 }
 
@@ -45,7 +45,7 @@ impl Scene {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),
             material_library: RwLock::new(material_library),
-            model_instance_transform_pool: RwLock::new(ModelInstanceTransformPool::new()),
+            model_instance_transform_pool: RwLock::new(ModelInstanceFeatureManager::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
             active_camera: RwLock::new(None),
         }
@@ -71,7 +71,7 @@ impl Scene {
 
     /// Returns a reference to the [`ModelInstanceTransformPool`], guarded
     /// by a [`RwLock`].
-    pub fn model_instance_transform_pool(&self) -> &RwLock<ModelInstanceTransformPool<fre>> {
+    pub fn model_instance_transform_pool(&self) -> &RwLock<ModelInstanceFeatureManager<fre>> {
         &self.model_instance_transform_pool
     }
 

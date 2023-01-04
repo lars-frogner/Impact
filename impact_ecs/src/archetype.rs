@@ -847,7 +847,7 @@ impl<'a> ArchetypeCompByteView<'a> {
         let idx = self
             .component_bytes
             .binary_search_by_key(&component_id, ComponentByteView::component_id)
-            .map_err(|_| anyhow!("Tried to remove missing component"))?;
+            .map_err(|_idx| anyhow!("Tried to remove missing component"))?;
 
         self.component_bytes.remove(idx);
 

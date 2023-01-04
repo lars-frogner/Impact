@@ -12,7 +12,7 @@ use crate::{
         CoreRenderingSystem, MaterialRenderResourceManager,
     },
     scene::{
-        CameraID, MaterialID, MaterialSpecification, MeshID, ModelID, ModelInstanceTransformPool,
+        CameraID, MaterialID, MaterialSpecification, MeshID, ModelID, ModelInstanceFeatureManager,
     },
 };
 use anyhow::Result;
@@ -325,7 +325,7 @@ impl DesynchronizedRenderResources {
     fn sync_model_instance_transform_buffers_with_instance_transform_pool(
         core_system: &CoreRenderingSystem,
         instance_transform_render_buffers: &mut InstanceTransformRenderBufferMap,
-        instance_transform_pool: &ModelInstanceTransformPool<fre>,
+        instance_transform_pool: &ModelInstanceFeatureManager<fre>,
     ) {
         for (model_id, instance_transform_buffer) in instance_transform_pool.models_and_buffers() {
             instance_transform_render_buffers
@@ -334,7 +334,7 @@ impl DesynchronizedRenderResources {
                     instance_transform_render_buffer.transfer_instance_transforms_to_render_buffer(
                         core_system,
                         instance_transform_buffer,
-                    )
+                    );
                 })
                 .or_insert_with(|| {
                     ModelInstanceTransformRenderBufferManager::new(

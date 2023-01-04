@@ -156,7 +156,7 @@ pub(crate) fn generate_input_verification_code<'a>(
             comp_types
                 .iter()
                 .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
-        )
+        );
     }
 
     Ok(quote! {

@@ -12,7 +12,6 @@ use winit::event::{DeviceEvent, ElementState, KeyboardInput, VirtualKeyCode, Win
 /// Handler for any user input events.
 #[derive(Clone, Debug)]
 pub struct InputHandler {
-    mouse_handler: MouseInputHandler,
     key_handler: KeyInputHandler,
 }
 
@@ -64,7 +63,6 @@ impl InputHandler {
     /// keyboard action map.
     pub fn new(key_map: KeyActionMap) -> Self {
         Self {
-            mouse_handler: MouseInputHandler,
             key_handler: KeyInputHandler::new(key_map),
         }
     }
@@ -102,18 +100,14 @@ impl InputHandler {
     ) -> Result<HandlingResult> {
         match event {
             // Handle cursor movement events
-            DeviceEvent::MouseMotion { delta } => self.mouse_handler.handle_event(world, *delta),
+            DeviceEvent::MouseMotion { delta } => MouseInputHandler::handle_event(world, *delta),
             _ => Ok(HandlingResult::Unhandled),
         }
     }
 }
 
 impl MouseInputHandler {
-    fn handle_event(
-        &self,
-        world: &World,
-        mouse_displacement: (f64, f64),
-    ) -> Result<HandlingResult> {
+    fn handle_event(world: &World, mouse_displacement: (f64, f64)) -> Result<HandlingResult> {
         if world.control_mode_active() {
             world.update_orientation_controller(mouse_displacement);
         }

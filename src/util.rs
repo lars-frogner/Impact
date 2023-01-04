@@ -1,7 +1,7 @@
 //! Generic utilities.
 
 use bytemuck::{Pod, Zeroable};
-use std::{cmp, collections::LinkedList};
+use std::{cmp, collections::VecDeque};
 
 /// A [`Vec`] that maintains a list of each index where
 /// the element has been deleted and reuses these locations
@@ -18,7 +18,7 @@ use std::{cmp, collections::LinkedList};
 #[derive(Clone, Debug, Default)]
 pub struct GenerationalReusingVec<T> {
     elements: Vec<GenerationalElement<T>>,
-    free_list: LinkedList<usize>,
+    free_list: VecDeque<usize>,
 }
 
 /// An index into a [`GenerationalReusingVec`].
@@ -42,7 +42,7 @@ impl<T> GenerationalReusingVec<T> {
     pub fn new() -> Self {
         Self {
             elements: Vec::new(),
-            free_list: LinkedList::new(),
+            free_list: VecDeque::new(),
         }
     }
 
@@ -135,17 +135,14 @@ impl<T> GenerationalReusingVec<T> {
     /// # Returns
     /// The index where the element was added.
     pub fn add_element(&mut self, element: T) -> GenerationalIdx {
-        match self.free_list.pop_front() {
-            Some(free_idx) => {
-                let generation = self.elements[free_idx].update_and_advance_generation(element);
-                GenerationalIdx::new(generation, free_idx)
-            }
-            None => {
-                let idx = GenerationalIdx::new_first_generation(self.elements.len());
-                self.elements
-                    .push(GenerationalElement::new_first_generation(element));
-                idx
-            }
+        if let Some(free_idx) = self.free_list.pop_front() {
+            let generation = self.elements[free_idx].update_and_advance_generation(element);
+            GenerationalIdx::new(generation, free_idx)
+        } else {
+            let idx = GenerationalIdx::new_first_generation(self.elements.len());
+            self.elements
+                .push(GenerationalElement::new_first_generation(element));
+            idx
         }
     }
 

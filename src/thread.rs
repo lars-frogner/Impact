@@ -6,7 +6,6 @@ use std::{
     collections::HashMap,
     fmt,
     num::NonZeroUsize,
-    ops::DerefMut,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, Receiver, Sender},
@@ -68,7 +67,7 @@ pub struct ThreadPool<M> {
 /// to make them begin executing their task with a given
 /// messsage of type `M` (which can be any piece of data), or to
 /// terminate so that they can be joined.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkerInstruction<M> {
     Execute(M),
     Terminate,
@@ -538,7 +537,7 @@ impl TaskStatus {
             Err(ThreadPoolTaskErrors::new(
                 // Move the `HashMap` of errors out of the mutex and
                 // replace with an empty one
-                std::mem::take(self.errors_of_failed_tasks.lock().unwrap().deref_mut()),
+                std::mem::take(&mut *self.errors_of_failed_tasks.lock().unwrap()),
             ))
         } else {
             Ok(())

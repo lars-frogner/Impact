@@ -199,7 +199,7 @@ impl QueryInput {
 
         let comp_arg_types: Vec<_> = comp_arg_type_refs
             .iter()
-            .map(|type_ref| type_ref.elem.as_ref().to_owned())
+            .map(|type_ref| type_ref.elem.as_ref().clone())
             .collect();
 
         let also_required_comp_types =

@@ -499,7 +499,7 @@ impl<S> TaskDependencyGraph<S> {
             // Get task IDs sorted to topological order, meaning an order
             // where each task comes after all its dependencies
             let topologically_sorted_ids = algo::toposort(&self.graph, Some(&mut self.space))
-                .map_err(|_| anyhow!("Found circular task dependencies"))?;
+                .map_err(|_cycle| anyhow!("Found circular task dependencies"))?;
 
             // Add all tasks with dependencies in topological order
             sorted_ids.extend(
@@ -617,7 +617,7 @@ where
                         return TaskClosureReturnValue::failure(task.id(), error);
                     }
                 }
-            )
+            );
         } else {
             log::debug!(
                 "Worker {} skipped execution of task {}",
@@ -738,7 +738,7 @@ impl<S> TaskOrdering<S> {
 
     fn reset_completed_dependency_counts(&self) {
         for task in &self.tasks {
-            task.reset_completed_dependency_count()
+            task.reset_completed_dependency_count();
         }
     }
 
@@ -1067,12 +1067,12 @@ mod test {
         let recorded_task_ids = scheduler.world_state().get_recorded_task_ids();
 
         match recorded_task_ids[..] {
-            [Task1::ID, Task2::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID] => {}
-            [Task2::ID, Task1::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID] => {}
-            [Task1::ID, Task2::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] => {}
-            [Task2::ID, Task1::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] => {}
-            [Task1::ID, Task2::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID] => {}
-            [Task2::ID, Task1::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID] => {}
+            [Task1::ID, Task2::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
+            | [Task2::ID, Task1::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
+            | [Task1::ID, Task2::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID]
+            | [Task2::ID, Task1::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID]
+            | [Task1::ID, Task2::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID]
+            | [Task2::ID, Task1::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID] => {}
             _ => panic!("Incorrect task order"),
         }
 
@@ -1098,8 +1098,8 @@ mod test {
         // respectively. DepDepTask1Task2 should execute last and
         // on the thread that executed DepTask1.
         match sorted_worker_ids[..] {
-            [WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0)] => {}
-            [WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1)] => {}
+            [WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0)]
+            | [WorkerID(1), WorkerID(0), WorkerID(1), WorkerID(0), WorkerID(1)] => {}
             _ => panic!("Incorrect worker contribution"),
         }
     }
@@ -1198,12 +1198,12 @@ mod test {
         let ordered_task_ids = dependency_graph.obtain_ordered_task_ids().unwrap();
 
         match ordered_task_ids[..] {
-            [Task1::ID, Task2::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID] => {}
-            [Task2::ID, Task1::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID] => {}
-            [Task1::ID, Task2::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID] => {}
-            [Task2::ID, Task1::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID] => {}
-            [Task1::ID, Task2::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] => {}
-            [Task2::ID, Task1::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] => {}
+            [Task1::ID, Task2::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID]
+            | [Task2::ID, Task1::ID, DepTask1::ID, DepDepTask1Task2::ID, DepTask1Task2::ID]
+            | [Task1::ID, Task2::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
+            | [Task2::ID, Task1::ID, DepTask1::ID, DepTask1Task2::ID, DepDepTask1Task2::ID]
+            | [Task1::ID, Task2::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID]
+            | [Task2::ID, Task1::ID, DepTask1Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] => {}
             _ => panic!("Incorrect task order"),
         }
     }

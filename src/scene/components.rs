@@ -26,7 +26,7 @@ pub struct MeshComp {
 /// have a node in the [`SceneGraph`](crate::scene::SceneGraph).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SceneGraphNodeComp<ID: SceneGraphNodeID + Pod> {
+pub struct SceneGraphNodeComp<ID: SceneGraphNodeID> {
     /// The ID of the [`SceneGraph`](crate::scene::SceneGraph) node
     /// representing the entity.
     pub id: ID,

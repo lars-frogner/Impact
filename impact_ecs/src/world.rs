@@ -363,23 +363,22 @@ impl World {
         archetype_data: ArchetypeCompByteView<'_>,
     ) {
         let archetype_id = archetype_data.archetype().id();
-        match self.archetype_index_mapper.get(archetype_id) {
+        if let Some(idx) = self.archetype_index_mapper.get(archetype_id) {
             // If we already have a table for the archetype, we add
             // the entity to it
-            Some(idx) => self.archetype_tables[idx]
+            self.archetype_tables[idx]
                 .write()
                 .unwrap()
-                .add_entities(entity_ids, archetype_data),
+                .add_entities(entity_ids, archetype_data);
+        } else {
             // If we don't have the table, initialize it with the entity
             // as the first entry
-            None => {
-                self.archetype_index_mapper.push_key(archetype_id);
-                self.archetype_tables
-                    .push(RwLock::new(ArchetypeTable::new_with_entities(
-                        entity_ids,
-                        archetype_data,
-                    )));
-            }
+            self.archetype_index_mapper.push_key(archetype_id);
+            self.archetype_tables
+                .push(RwLock::new(ArchetypeTable::new_with_entities(
+                    entity_ids,
+                    archetype_data,
+                )));
         }
     }
 

@@ -5,6 +5,7 @@ mod buffer;
 mod camera;
 mod components;
 mod core;
+mod light;
 mod material;
 mod mesh;
 mod model;
@@ -114,13 +115,13 @@ impl RenderingSystem {
 
     /// Sets a new size for the rendering surface.
     pub fn resize_surface(&mut self, new_size: (u32, u32)) {
-        self.core_system.resize_surface(new_size)
+        self.core_system.resize_surface(new_size);
     }
 
     /// Initializes the surface for presentation using the
     /// current surface configuration.
     fn initialize_surface(&self) {
-        self.core_system.initialize_surface()
+        self.core_system.initialize_surface();
     }
 
     fn handle_render_error(&self, error: Error, control_flow: &mut ControlFlow<'_>) {

@@ -136,7 +136,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let motion_controller = SemiDirectionalMotionController::new(0.2, false);
     let orientation_controller =
-        RollFreeCameraOrientationController::new(Degrees(vertical_field_of_view.0 as f64), 1.0);
+        RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
     let scene = Scene::new(camera_repository, mesh_repository, material_library);
     let world = World::new(

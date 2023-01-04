@@ -113,7 +113,7 @@ impl CameraOrientationControllerBase {
         mouse_displacement: (f64, f64),
     ) -> (Radians<f64>, Radians<f64>) {
         let (_, height) = window.dimensions();
-        let degrees_per_pixel = self.vertical_field_of_view / (height as f64);
+        let degrees_per_pixel = self.vertical_field_of_view / f64::from(height);
 
         let angular_displacement_x = degrees_per_pixel * mouse_displacement.0 * self.sensitivity;
         let angular_displacement_y = degrees_per_pixel * (-mouse_displacement.1) * self.sensitivity;
