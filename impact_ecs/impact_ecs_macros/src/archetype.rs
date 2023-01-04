@@ -36,7 +36,7 @@ pub(crate) fn archetype_of(input: ArchetypeOfInput, crate_root: &Ident) -> Resul
 }
 
 impl Parse for ArchetypeOfInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(Self {
             component_types: Punctuated::parse_terminated(input)?,
         })

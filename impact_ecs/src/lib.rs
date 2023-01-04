@@ -2,7 +2,7 @@
 
 #![warn(missing_debug_implementations)]
 #![warn(rust_2018_idioms)]
-#![warn(clippy::cast_lossless)]
+// #![warn(clippy::pedantic)]
 
 pub mod archetype;
 pub mod component;

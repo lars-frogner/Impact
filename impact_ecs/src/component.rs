@@ -67,7 +67,7 @@ pub type ComponentID = TypeId;
 /// Can also "store" zero-sized components, but without providing
 /// references to stored component values since no values are
 /// actually stored.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComponentStorage {
     component_id: ComponentID,
     component_count: usize,
@@ -78,7 +78,7 @@ pub struct ComponentStorage {
 /// Container owning the bytes associated with one or more
 /// components of the same type, along with the component ID,
 /// count and size required to safely reconstruct the components.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComponentBytes {
     component_id: ComponentID,
     component_count: usize,
@@ -89,7 +89,7 @@ pub struct ComponentBytes {
 /// Reference to the bytes of one or more components of the same
 /// type, which also includes the component ID, count and size
 /// required to safely reconstruct the components.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComponentByteView<'a> {
     component_id: ComponentID,
     component_count: usize,
@@ -513,6 +513,7 @@ impl<'a, const N: usize, C: Component> ComponentInstances<'a, C> for &'a [C; N] 
         let bytes = if component_size == 0 {
             &[]
         } else {
+            #[allow(clippy::explicit_auto_deref)]
             bytemuck::cast_slice(*self)
         };
         ComponentByteView::new(Self::component_id(), self.len(), component_size, bytes)

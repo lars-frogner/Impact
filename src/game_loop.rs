@@ -28,7 +28,7 @@ pub struct GameLoop {
     config: GameLoopConfig,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameLoopConfig {
     n_worker_threads: NonZeroUsize,
     max_fps: Option<NonZeroU32>,

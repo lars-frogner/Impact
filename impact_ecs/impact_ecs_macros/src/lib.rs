@@ -1,5 +1,8 @@
 //! Procedural macros for the `impact_ecs` crate.
 
+#![warn(missing_debug_implementations)]
+#![warn(rust_2018_idioms)]
+
 mod archetype;
 mod component;
 mod query;

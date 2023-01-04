@@ -24,7 +24,7 @@ pub struct Plane<F: Float> {
 }
 
 /// How a sphere is positioned relative to a plane.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SphereRelationToPlane {
     /// The center of the sphere lies strictly in the negative
     /// halfspace of the plane.
@@ -35,7 +35,7 @@ pub enum SphereRelationToPlane {
 }
 
 /// Whether any part of a sphere intersects a plane.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum IntersectsPlane {
     /// Some part of the sphere intersects the plane.
     Yes,

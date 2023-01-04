@@ -69,7 +69,7 @@ impl StringHash {
             .lock()
             .unwrap()
             .entry(hash)
-            .or_insert(string.to_string());
+            .or_insert_with(|| string.to_string());
         Self(hash)
     }
 
@@ -168,7 +168,7 @@ mod test {
     #[test]
     fn const_string_hash_remembers_string() {
         let string = "Foo-bar";
-        let hash = ConstStringHash::new(&string);
+        let hash = ConstStringHash::new(string);
         assert_eq!(string, hash.to_string());
     }
 

@@ -28,12 +28,12 @@ pub trait Angle<F>: Copy {
 
 // An angle in degrees.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod)]
 pub struct Degrees<F>(pub F);
 
 // An angle in radians.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod)]
 pub struct Radians<F>(pub F);
 
 impl<F> Degrees<F> {

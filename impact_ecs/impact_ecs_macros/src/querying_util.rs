@@ -16,7 +16,7 @@ pub(crate) struct TypeList {
 }
 
 impl Parse for TypeList {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
         bracketed!(content in input);
         let tys = content.parse_terminated(Type::parse)?;
@@ -24,7 +24,7 @@ impl Parse for TypeList {
     }
 }
 
-pub(crate) fn parse_scope<Sc: Parse>(input: ParseStream) -> Result<Option<Sc>> {
+pub(crate) fn parse_scope<Sc: Parse>(input: ParseStream<'_>) -> Result<Option<Sc>> {
     if input.lookahead1().peek(Brace) {
         let scope = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -34,17 +34,19 @@ pub(crate) fn parse_scope<Sc: Parse>(input: ParseStream) -> Result<Option<Sc>> {
     }
 }
 
-pub(crate) fn parse_state<S: Parse>(input: ParseStream) -> Result<S> {
+pub(crate) fn parse_state<S: Parse>(input: ParseStream<'_>) -> Result<S> {
     let state = input.parse()?;
     input.parse::<Token![,]>()?;
     Ok(state)
 }
 
-pub(crate) fn parse_closure<C: Parse>(input: ParseStream) -> Result<C> {
+pub(crate) fn parse_closure<C: Parse>(input: ParseStream<'_>) -> Result<C> {
     input.parse()
 }
 
-pub(crate) fn parse_type_lists(input: ParseStream) -> Result<(Option<TypeList>, Option<TypeList>)> {
+pub(crate) fn parse_type_lists(
+    input: ParseStream<'_>,
+) -> Result<(Option<TypeList>, Option<TypeList>)> {
     if input.lookahead1().peek(Token![,]) {
         input.parse::<Token![,]>()?;
         if input.lookahead1().peek(Token![!]) {
@@ -95,7 +97,7 @@ pub(crate) fn verify_comp_types_unique(comp_types: &[Type]) -> Result<()> {
                 &comp_types[idx],
                 format!(
                     "component type `{}` occurs more than once",
-                    ty.to_token_stream().to_string()
+                    ty.to_token_stream()
                 ),
             ));
         }
@@ -114,16 +116,16 @@ pub(crate) fn verify_disallowed_comps_unique(
                     &disallowed_comp_types[idx],
                     format!(
                         "disallowed component type `{}` occurs more than once",
-                        ty.to_token_stream().to_string()
+                        ty.to_token_stream()
                     ),
                 ));
             }
-            if required_comp_types.contains(&ty) {
+            if required_comp_types.contains(ty) {
                 return Err(Error::new_spanned(
                     &disallowed_comp_types[idx],
                     format!(
                         "disallowed component type `{}` is also required",
-                        ty.to_token_stream().to_string()
+                        ty.to_token_stream()
                     ),
                 ));
             }
@@ -140,7 +142,7 @@ pub(crate) fn generate_input_verification_code<'a>(
 ) -> Result<TokenStream> {
     let mut impl_assertions: Vec<_> = comp_arg_types
         .iter()
-        .map(|ty| create_assertion_that_type_is_not_zero_sized(ty))
+        .map(create_assertion_that_type_is_not_zero_sized)
         .collect();
 
     impl_assertions.extend(
@@ -149,14 +151,12 @@ pub(crate) fn generate_input_verification_code<'a>(
             .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
     );
 
-    for comp_types in additional_comp_types {
-        if let Some(comp_types) = comp_types {
-            impl_assertions.extend(
-                comp_types
-                    .iter()
-                    .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
-            )
-        }
+    for comp_types in additional_comp_types.into_iter().flatten() {
+        impl_assertions.extend(
+            comp_types
+                .iter()
+                .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
+        )
     }
 
     Ok(quote! {

@@ -108,7 +108,7 @@ impl MaterialRenderResourceManager {
                     core_system.device(),
                     assets,
                     &material_specification.image_texture_ids,
-                    &layout,
+                    layout,
                     &self.label,
                 )?);
             }
@@ -150,7 +150,7 @@ impl MaterialRenderResourceManager {
         let n_entries = 2 * texture_ids.len();
         let mut bind_group_entries = Vec::with_capacity(n_entries);
 
-        for (idx, texture_id) in texture_ids.into_iter().enumerate() {
+        for (idx, texture_id) in texture_ids.iter().enumerate() {
             let image_texture = assets
                 .image_textures
                 .get(texture_id)

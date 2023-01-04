@@ -73,13 +73,13 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
     );
 
     let (archetype_name, archetype_creation_code) =
-        querying_util::generate_archetype_creation_code(&input.required_comp_types, &crate_root);
+        querying_util::generate_archetype_creation_code(&input.required_comp_types, crate_root);
 
     let if_expr_code = generate_if_expr_code(
         &input.manager_name,
         &archetype_name,
         &input.disallowed_comp_types,
-        &crate_root,
+        crate_root,
     );
 
     let scope_code = input.scope.unwrap_or_else(|| quote! {});
@@ -144,7 +144,7 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
 }
 
 impl Parse for SetupInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let scope = querying_util::parse_scope(input)?;
         let manager_name = querying_util::parse_state(input)?;
         let closure = querying_util::parse_closure(input)?;
@@ -160,7 +160,7 @@ impl Parse for SetupInput {
 }
 
 impl Parse for SetupScope {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
         braced!(content in input);
         let scope = content.parse()?;
@@ -169,7 +169,7 @@ impl Parse for SetupScope {
 }
 
 impl Parse for SetupClosure {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         input.parse::<Token![|]>()?;
 
         let comp_args = if input.lookahead1().peek(Token![|]) {
@@ -204,7 +204,7 @@ impl Parse for SetupClosure {
 }
 
 impl Parse for SetupCompClosureArg {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
         input.parse::<Token![&]>()?;

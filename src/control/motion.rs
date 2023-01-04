@@ -20,7 +20,7 @@ pub struct SemiDirectionalMotionController {
 }
 
 /// Whether there is motion in a certain direction.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionState {
     Still,
     Moving,
@@ -28,7 +28,7 @@ pub enum MotionState {
 
 /// Possible directions of motion in the local coordinate
 /// system.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionDirection {
     Forwards,
     Backwards,

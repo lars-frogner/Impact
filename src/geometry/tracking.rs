@@ -17,7 +17,7 @@ pub struct CollectionChangeTracker {
 
 /// In what way a collection has changed.
 #[atomic_enum]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum CollectionChange {
     None,
     Contents,

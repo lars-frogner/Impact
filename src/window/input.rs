@@ -18,7 +18,7 @@ pub struct InputHandler {
 
 /// Whether or not an event has been handled by
 /// the input handler.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandlingResult {
     Handled,
     Unhandled,
@@ -34,7 +34,7 @@ pub struct MouseInputHandler;
 pub struct KeyActionMap(HashMap<VirtualKeyCode, KeyboardInputAction>);
 
 /// Actions that can be performed with a keyboard.
-#[derive(Clone, Copy, Debug, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum KeyboardInputAction {
     MoveForwards,
     MoveBackwards,

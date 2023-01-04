@@ -63,13 +63,13 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
         generate_closure_def_code(&input.full_closure_args, &input.closure_body);
 
     let (archetype_name, archetype_creation_code) =
-        querying_util::generate_archetype_creation_code(&input.required_comp_types, &crate_root);
+        querying_util::generate_archetype_creation_code(&input.required_comp_types, crate_root);
 
     let (tables_iter_name, table_search_code) = generate_table_search_code(
         &input.world,
         &input.disallowed_comp_types,
         &archetype_name,
-        &crate_root,
+        crate_root,
     );
 
     let (table_var_name, table_iter_names, table_iter_code) =
@@ -79,7 +79,7 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
         &table_var_name,
         &input.comp_arg_names,
         &input.comp_arg_type_refs,
-        &crate_root,
+        crate_root,
     );
 
     let closure_call_code = generate_closure_call_code(
@@ -118,7 +118,7 @@ pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream
 }
 
 impl Parse for QueryInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let world = querying_util::parse_state(input)?;
         let closure = querying_util::parse_closure(input)?;
         let (also_required_list, disallowed_list) = querying_util::parse_type_lists(input)?;
@@ -132,7 +132,7 @@ impl Parse for QueryInput {
 }
 
 impl Parse for QueryClosure {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         input.parse::<Token![|]>()?;
         let mut comp_args = Punctuated::new();
         let first_arg_var = input.parse()?;
@@ -168,7 +168,7 @@ impl Parse for QueryClosure {
 }
 
 impl<T: Parse> Parse for QueryClosureArg<T> {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
         let ty = input.parse()?;
@@ -240,7 +240,7 @@ fn determine_all_closure_args(
         Some(EntityClosureArg { var, ty }) => (vec![var.clone()], vec![quote! { #var: #ty }]),
         None => (Vec::new(), Vec::new()),
     };
-    arg_names.extend_from_slice(&comp_arg_names);
+    arg_names.extend_from_slice(comp_arg_names);
     full_args.extend(
         comp_arg_names
             .iter()
