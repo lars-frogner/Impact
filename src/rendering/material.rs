@@ -31,16 +31,16 @@ impl MaterialRenderResourceManager {
         let shader = Arc::clone(
             assets
                 .shaders
-                .get(&material_specification.shader_id)
+                .get(&material_specification.shader_id())
                 .ok_or_else(|| {
                     anyhow!(
                         "Shader {} missing from assets",
-                        material_specification.shader_id
+                        material_specification.shader_id()
                     )
                 })?,
         );
 
-        let image_texture_ids = material_specification.image_texture_ids.clone();
+        let image_texture_ids = material_specification.image_texture_ids().to_vec();
 
         let (texture_bind_group_layout, texture_bind_group) = if image_texture_ids.is_empty() {
             (None, None)
@@ -98,16 +98,16 @@ impl MaterialRenderResourceManager {
     ) -> Result<()> {
         assert_eq!(
             self.image_texture_ids.len(),
-            material_specification.image_texture_ids.len(),
+            material_specification.image_texture_ids().len(),
             "Changed number of textures in material specification"
         );
         if let Some(layout) = &self.texture_bind_group_layout {
-            if material_specification.image_texture_ids != self.image_texture_ids {
-                self.image_texture_ids = material_specification.image_texture_ids.clone();
+            if material_specification.image_texture_ids() != self.image_texture_ids {
+                self.image_texture_ids = material_specification.image_texture_ids().to_vec();
                 self.texture_bind_group = Some(Self::create_texture_bind_group(
                     core_system.device(),
                     assets,
-                    &material_specification.image_texture_ids,
+                    &self.image_texture_ids,
                     layout,
                     &self.label,
                 )?);
