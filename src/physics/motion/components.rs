@@ -32,3 +32,9 @@ pub struct OrientationComp(pub Orientation);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct AngularVelocityComp(pub AngularVelocity);
+
+/// Marker [`Component`](impact_ecs::component::Component) for entities
+/// whose position and orientation are not supposed to change.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct Static;

@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    physics::{AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp},
+    physics::{AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp, Static},
     rendering::RenderingTag,
     scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeComp},
     world::World,
@@ -27,17 +27,20 @@ define_task!(
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, position: &PositionComp| {
                     scene_graph.set_translation_of_group_to_parent_transform(node.id, Translation3::from(position.0.cast()));
-                }
+                },
+                ![Static]
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, position: &PositionComp| {
                     scene_graph.set_translation_of_model_to_parent_transform(node.id, Translation3::from(position.0.cast()));
-                }
+                },
+                ![Static]
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, position: &PositionComp| {
                     scene_graph.set_translation_of_camera_to_parent_transform(node.id, Translation3::from(position.0.cast()));
-                }
+                },
+                ![Static]
             );
 
             Ok(())
@@ -62,17 +65,20 @@ define_task!(
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, orientation: &OrientationComp| {
                     scene_graph.set_rotation_of_group_to_parent_transform(node.id, orientation.0.cast());
-                }
+                },
+                ![Static]
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, orientation: &OrientationComp| {
                     scene_graph.set_rotation_of_model_to_parent_transform(node.id, orientation.0.cast());
-                }
+                },
+                ![Static]
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, orientation: &OrientationComp| {
                     scene_graph.set_rotation_of_camera_to_parent_transform(node.id, orientation.0.cast());
-                }
+                },
+                ![Static]
             );
 
             Ok(())

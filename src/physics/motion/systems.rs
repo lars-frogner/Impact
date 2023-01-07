@@ -2,7 +2,9 @@
 
 use crate::{
     define_task,
-    physics::{self, AngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, VelocityComp},
+    physics::{
+        self, AngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, Static, VelocityComp,
+    },
     world::World,
 };
 use impact_ecs::query;
@@ -20,7 +22,8 @@ define_task!(
             query!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
                     position.0 += velocity.0*time_step_duration;
-                }
+                },
+                ![Static]
             );
             Ok(())
         })
@@ -40,7 +43,8 @@ define_task!(
             query!(
                 ecs_world, |orientation: &mut OrientationComp, angular_velocity: &AngularVelocityComp| {
                     orientation.0 = physics::advance_orientation(&orientation.0, &angular_velocity.0, time_step_duration);
-                }
+                },
+                ![Static]
             );
             Ok(())
         })
