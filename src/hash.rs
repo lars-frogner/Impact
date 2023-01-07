@@ -132,6 +132,12 @@ impl fmt::Display for ConstStringHash {
     }
 }
 
+impl AsRef<str> for ConstStringHash {
+    fn as_ref(&self) -> &str {
+        self.string
+    }
+}
+
 impl Ord for ConstStringHash {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.hash.cmp(&other.hash)
