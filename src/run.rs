@@ -20,6 +20,7 @@ use crate::{
     window::{KeyActionMap, Window},
     world::World,
 };
+use impact_utils::hash;
 use std::{f64::consts::PI, sync::Arc};
 
 use super::{

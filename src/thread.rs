@@ -1,7 +1,7 @@
 //! Utilities for multithreading.
 
-use crate::hash::ConstStringHash;
 use anyhow::Error;
+use impact_utils::ConstStringHash;
 use std::{
     collections::HashMap,
     fmt,

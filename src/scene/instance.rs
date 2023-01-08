@@ -219,6 +219,7 @@ impl InstanceFeatureManager {
 mod test {
     use super::*;
     use crate::scene::{MaterialID, MeshID};
+    use impact_utils::hash;
 
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(

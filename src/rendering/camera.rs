@@ -1,11 +1,11 @@
 //! Management of camera data for rendering.
 
 use crate::geometry::Camera;
-use crate::hash::ConstStringHash;
 use crate::rendering::{
     buffer::{self, RenderBuffer, UniformBufferable},
     fre, CoreRenderingSystem,
 };
+use impact_utils::ConstStringHash;
 use nalgebra::Projective3;
 
 /// Owner and manager of a render buffer for a camera

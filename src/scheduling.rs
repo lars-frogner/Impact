@@ -1,12 +1,10 @@
 //! Task scheduling.
 
-use crate::{
-    hash::ConstStringHash,
-    thread::{
-        TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
-    },
+use crate::thread::{
+    TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };
 use anyhow::{anyhow, bail, Result};
+use impact_utils::ConstStringHash;
 use petgraph::{
     algo::{self, DfsSpace},
     graphmap::DiGraphMap,
@@ -214,7 +212,7 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: $crate::thread::TaskID = $crate::hash::ConstStringHash::new(stringify!($name));
+            $($pub)? const TASK_ID: $crate::thread::TaskID = impact_utils::ConstStringHash::new(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
             const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
@@ -256,7 +254,7 @@ macro_rules! define_execution_tag {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = $crate::hash::ConstStringHash::new(stringify!($name));
+            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = impact_utils::ConstStringHash::new(stringify!($name));
         }
     };
 }
@@ -848,7 +846,7 @@ impl<S> OrderedTask<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hash::ConstStringHash;
+    use impact_utils::ConstStringHash;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
     const EXEC_ALL: ExecutionTag = ExecutionTag::new("all");

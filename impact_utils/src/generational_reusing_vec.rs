@@ -1,4 +1,6 @@
-//! Generic utilities.
+//! A [`Vec`] that maintains a list of each index where
+//! the element has been deleted and reuses these locations
+//! when adding new items.
 
 use bytemuck::{Pod, Zeroable};
 use std::{cmp, collections::VecDeque};

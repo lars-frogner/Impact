@@ -4,6 +4,7 @@ use crate::{
     geometry::InstanceFeatureTypeID,
     rendering::{ShaderID, TextureID},
 };
+use impact_utils::stringhash_newtype;
 use std::collections::HashMap;
 
 stringhash_newtype!(

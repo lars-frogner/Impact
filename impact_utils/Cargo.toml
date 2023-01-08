@@ -1,0 +1,9 @@
+[package]
+name = "impact_utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = { version = "1.4", features = ["derive"] }
+const-fnv1a-hash = "1.0.1"
+lazy_static = "1.4.0"

@@ -4,10 +4,10 @@ use crate::{
     geometry::{Frustum, InstanceFeature, InstanceFeatureID, ModelInstanceTransform, Sphere},
     num::Float,
     scene::{CameraID, CameraRepository, InstanceFeatureManager, ModelID},
-    util::{GenerationalIdx, GenerationalReusingVec},
 };
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
+use impact_utils::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::{Point3, Projective3, Similarity3, Translation3, UnitQuaternion};
 use std::collections::HashSet;
 
@@ -962,6 +962,7 @@ mod test {
     use super::*;
     use crate::{scene::MaterialID, scene::MeshID};
     use approx::assert_abs_diff_eq;
+    use impact_utils::hash;
     use nalgebra::{point, Point3, Rotation3, Scale3, Translation3, Vector3};
 
     fn create_dummy_group_node<F: Float>(

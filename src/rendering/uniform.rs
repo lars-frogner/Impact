@@ -2,12 +2,12 @@
 
 use crate::{
     geometry::{CollectionChange, UniformBuffer},
-    hash::ConstStringHash,
     rendering::{
         buffer::{self, RenderBuffer, RenderBufferType, UniformBufferable},
         CoreRenderingSystem,
     },
 };
+use impact_utils::ConstStringHash;
 use std::{fmt::Debug, hash::Hash, mem};
 
 /// Owner and manager of a render buffer for uniforms.

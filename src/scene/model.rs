@@ -1,10 +1,7 @@
 //! Management of models.
 
-use crate::{
-    hash::{self, Hash64},
-    scene::MaterialID,
-    scene::MeshID,
-};
+use crate::{scene::MaterialID, scene::MeshID};
+use impact_utils::{self, Hash64};
 use std::{
     cmp,
     fmt::{self, Debug},
@@ -25,7 +22,8 @@ impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the
     /// mesh and material with the given IDs.
     pub fn for_mesh_and_material(mesh_id: MeshID, material_id: MaterialID) -> Self {
-        let hash = hash::compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
+        let hash =
+            impact_utils::compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
         Self {
             mesh_id,
             material_id,

@@ -6,9 +6,9 @@ use super::{
         ComponentStorageEntry, ComponentStorageEntryMut,
     },
     component::{Component, ComponentByteView, ComponentID},
-    util::KeyIndexMapper,
 };
 use anyhow::{anyhow, Result};
+use impact_utils::KeyIndexMapper;
 use std::{
     hash::Hash,
     sync::{RwLock, RwLockReadGuard},

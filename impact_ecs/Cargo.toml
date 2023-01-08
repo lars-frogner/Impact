@@ -9,3 +9,4 @@ bytemuck = { version = "1.4", features = ["derive"] }
 paste = "1.0.7"
 
 impact_ecs_macros = { path = "impact_ecs_macros" }
+impact_utils = { path = "../impact_utils" }

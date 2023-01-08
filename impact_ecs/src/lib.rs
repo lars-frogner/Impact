@@ -78,7 +78,6 @@
 
 pub mod archetype;
 pub mod component;
-pub mod util;
 pub mod world;
 
 /// Derive macro generating an impl of the trait

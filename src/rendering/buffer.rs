@@ -1,7 +1,8 @@
 //! Data buffers for rendering.
 
-use crate::{hash::ConstStringHash, rendering::CoreRenderingSystem};
+use crate::rendering::CoreRenderingSystem;
 use bytemuck::Pod;
+use impact_utils::ConstStringHash;
 use std::{
     mem,
     sync::atomic::{AtomicUsize, Ordering},

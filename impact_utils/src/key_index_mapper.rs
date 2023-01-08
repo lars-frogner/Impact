@@ -1,4 +1,5 @@
-//! Utilities for ECS.
+//! Map for keeping track of which [`HashMap`] key
+//! corresponds to which index in an underlying [`Vec`].
 
 use std::collections::HashMap;
 use std::fmt::Debug;

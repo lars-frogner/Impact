@@ -1,6 +1,7 @@
 //! Management of rendering assets.
 
 use crate::rendering::{ImageTexture, Shader};
+use impact_utils::stringhash_newtype;
 use std::{collections::HashMap, sync::Arc};
 
 stringhash_newtype!(

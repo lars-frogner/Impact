@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["impact_ecs", "impact_ecs/impact_ecs_macros"]
+members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -15,7 +15,6 @@ approx = "0.5.1"
 atomic_enum = "0.2.0"
 bytemuck = { version = "1.4", features = ["derive"] }
 cfg-if = "1"
-const-fnv1a-hash = "1.0.1"
 env_logger = "0.9"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 lazy_static = "1.4.0"
@@ -30,6 +29,7 @@ wgpu = "0.12"
 winit = "0.26"
 
 impact_ecs = { path = "impact_ecs" }
+impact_utils = { path = "impact_utils" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"

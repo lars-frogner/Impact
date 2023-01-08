@@ -5,6 +5,7 @@ use crate::{
     num::Float,
 };
 use anyhow::{anyhow, bail, Result};
+use impact_utils::stringhash_newtype;
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,

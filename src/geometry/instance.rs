@@ -2,7 +2,7 @@
 
 use crate::num::Float;
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::util::KeyIndexMapper;
+use impact_utils::KeyIndexMapper;
 use nalgebra::Matrix4;
 use std::{
     any::TypeId,

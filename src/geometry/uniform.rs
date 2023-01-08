@@ -2,7 +2,7 @@
 
 use crate::geometry::{CollectionChange, CollectionChangeTracker};
 use bytemuck::Zeroable;
-use impact_ecs::util::KeyIndexMapper;
+use impact_utils::KeyIndexMapper;
 use std::{
     fmt::Debug,
     hash::Hash,

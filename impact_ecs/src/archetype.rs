@@ -5,10 +5,10 @@ use super::{
         Component, ComponentByteView, ComponentBytes, ComponentID, ComponentInstances,
         ComponentStorage,
     },
-    util::KeyIndexMapper,
     world::{Entity, EntityID},
 };
 use anyhow::{anyhow, bail, Result};
+use impact_utils::KeyIndexMapper;
 use paste::paste;
 use std::{
     any::TypeId,
