@@ -4,30 +4,32 @@ use crate::{hash::ConstStringHash, rendering::CoreRenderingSystem};
 use bytemuck::Pod;
 use std::{
     mem,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use wgpu::util::DeviceExt;
 
-/// Represents vertex types that can be written to a vertex buffer.
-pub trait BufferableVertex: Pod {
+/// Represents types that can be written to a vertex buffer.
+pub trait VertexBufferable: Pod {
     /// The layout of buffers made up of this vertex type.
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
 }
 
-/// Represents instance feature types that can be written to a vertex buffer.
-///
-/// Since per-instance features are stored in vertex buffers, any type that can be
-/// written to a vertex buffer can also be written to an instance feature buffer.
-pub trait BufferableInstanceFeature: BufferableVertex {}
-
-/// Represents index types that can be written to an index buffer.
-pub trait BufferableIndex: Pod {
-    /// The data format of this index type.
+/// Represents types that can be written to an index buffer.
+pub trait IndexBufferable: Pod {
+    /// The data format of the index type.
     const INDEX_FORMAT: wgpu::IndexFormat;
 }
 
-/// Represents uniform types that can be written to a uniform buffer.
-pub trait BufferableUniform: Pod {
+impl IndexBufferable for u16 {
+    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
+}
+
+impl IndexBufferable for u32 {
+    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
+}
+
+/// Represents types that can be written to a uniform buffer.
+pub trait UniformBufferable: Pod {
     /// ID for uniform type.
     const ID: ConstStringHash;
 
@@ -36,527 +38,286 @@ pub trait BufferableUniform: Pod {
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry;
 }
 
-/// A buffer containing vertices.
+/// A buffer containing bytes that can be passed to the GPU.
 #[derive(Debug)]
-pub struct VertexRenderBuffer {
-    layout: wgpu::VertexBufferLayout<'static>,
+pub struct RenderBuffer {
     buffer: wgpu::Buffer,
-    n_vertices: u32,
+    buffer_size: usize,
+    n_valid_bytes: AtomicUsize,
 }
 
-/// A buffer containing features associated with individual
-/// instances of a model.
-///
-/// Since a vertex buffer is used for storing the instance features,
-/// this buffer wraps a [`VertexRenderBuffer`]. In addition, it
-/// keeps a record of the number of features, beginning at
-/// the start of the buffer, that are considered to have valid
-/// values. This enables the buffer to be reused with varying
-/// numbers of instances without having to reallocate the buffer
-/// every time.
-#[derive(Debug)]
-pub struct InstanceFeatureRenderBuffer {
-    vertex_buffer: VertexRenderBuffer,
-    n_valid_instance_features: AtomicU32,
+/// The type of information contained in a render buffer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RenderBufferType {
+    Vertex,
+    Index,
+    Uniform,
 }
 
-/// A buffer containing vertex indices.
-#[derive(Debug)]
-pub struct IndexRenderBuffer {
-    format: wgpu::IndexFormat,
-    buffer: wgpu::Buffer,
-    n_indices: u32,
-}
-
-/// A buffer containing uniforms.
-#[derive(Debug)]
-pub struct UniformRenderBuffer {
-    uniform_id: ConstStringHash,
-    buffer: wgpu::Buffer,
-    n_uniforms: u32,
-}
-
-/// A dynamic buffer containing uniforms.
-///
-/// This [`UniformBuffer`] wrapper keeps a record of the number
-/// of uniforms, beginning at the start of the buffer, that are
-/// considered to have valid values. This enables the buffer to be
-/// reused with varying numbers of uniforms without having to
-/// reallocate the buffer every time.
-#[derive(Debug)]
-pub struct DynamicUniformRenderBuffer {
-    uniform_buffer: UniformRenderBuffer,
-    n_valid_uniforms: AtomicU32,
-}
-
-impl BufferableIndex for u16 {
-    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
-}
-
-impl BufferableIndex for u32 {
-    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
-}
-
-impl VertexRenderBuffer {
-    /// Creates a vertex buffer from the given slice of vertices.
-    ///
-    /// # Panics
-    /// If the length of `vertices` can not be converted to `u32`.
-    pub fn new<V: BufferableVertex>(
+impl RenderBuffer {
+    /// Creates a vertex render buffer initialized with the given vertex
+    /// data.
+    pub fn new_full_vertex_buffer<V>(
         core_system: &CoreRenderingSystem,
         vertices: &[V],
         label: &str,
-    ) -> Self {
-        let buffer_label = format!("{} vertex buffer", label);
-        let layout = V::BUFFER_LAYOUT;
-        let buffer =
-            create_initialized_vertex_buffer(core_system.device(), vertices, &buffer_label);
-        let n_vertices = u32::try_from(vertices.len()).unwrap();
-        Self {
-            layout,
-            buffer,
-            n_vertices,
-        }
-    }
-
-    /// Returns the layout of the vertex buffer.
-    pub fn layout(&self) -> &wgpu::VertexBufferLayout<'static> {
-        &self.layout
-    }
-
-    /// Returns the underlying [`wgpu::Buffer`].
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
-    }
-
-    /// Returns the number of vertices in the buffer.
-    pub fn n_vertices(&self) -> u32 {
-        self.n_vertices
-    }
-
-    /// Queues a write of the given slice of vertices to the existing
-    /// buffer, starting at the given vertex index.
-    ///
-    /// # Panics
-    /// - If the updated vertex type has a buffer layout different from
-    ///   the original layout.
-    /// - If the offset slice of updated vertices exceeds the bounds
-    ///   of the original vertex buffer.
-    /// - If integer overflow occurs.
-    pub fn queue_update_of_vertices<V: BufferableVertex>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        first_updated_vertex_idx: u32,
-        updated_vertices: &[V],
-    ) {
-        assert!(
-            &V::BUFFER_LAYOUT == self.layout(),
-            "Updated vertices do not have original buffer layout"
-        );
-
-        queue_write_to_buffer(
-            core_system.queue(),
-            self.buffer(),
-            first_updated_vertex_idx,
-            updated_vertices,
-            self.n_vertices(),
-        );
-    }
-}
-
-impl InstanceFeatureRenderBuffer {
-    /// Creates an instance feature buffer from the given slice of features.
-    /// Only the first `n_valid_instance_features` in the slice are considered
-    /// to actually represent valid feature values, the rest is just buffer
-    /// filling that gives room for writing a larger number of features
-    /// than `n_valid_instance_features` into the buffer at a later point without
-    /// reallocating.
-    ///
-    /// # Panics
-    /// - If the length of `feature_buffer` can not be converted to [`u32`].
-    /// - If `n_valid_instance_features` exceeds the length of `feature_buffer`.
-    pub fn new<INS: BufferableInstanceFeature>(
-        core_system: &CoreRenderingSystem,
-        instance_features: &[INS],
-        n_valid_instance_features: u32,
-        label: &str,
-    ) -> Self {
-        assert!(n_valid_instance_features as usize <= instance_features.len());
-        Self {
-            vertex_buffer: VertexRenderBuffer::new(core_system, instance_features, label),
-            n_valid_instance_features: AtomicU32::new(n_valid_instance_features),
-        }
-    }
-
-    /// Returns the layout of the vertex buffer used for storing
-    /// instance features.
-    pub fn layout(&self) -> &wgpu::VertexBufferLayout<'static> {
-        self.vertex_buffer.layout()
-    }
-
-    /// Returns the underlying [`wgpu::Buffer`].
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        self.vertex_buffer.buffer()
-    }
-
-    /// Returns the maximum number of instance features the buffer has
-    /// room for.
-    pub fn max_instance_features(&self) -> u32 {
-        self.vertex_buffer.n_vertices()
-    }
-
-    /// Returns the number of instances, starting from the beginning
-    /// of the buffer, that have valid features.
-    pub fn n_valid_instance_features(&self) -> u32 {
-        self.n_valid_instance_features.load(Ordering::Acquire)
-    }
-
-    /// Queues a write of the given slice of instance features to the existing
-    /// buffer, starting at the beginning of the buffer. Any existing
-    /// features in the buffer that are not overwritten are from then
-    /// on considered invalid.
-    ///
-    /// # Panics
-    /// - If the updated instance feature type has a buffer layout different
-    ///   from the original layout.
-    /// - If the slice of updated features exceeds the bounds of the original
-    ///   instance feature buffer.
-    /// - If integer overflow occurs.
-    pub fn update_valid_instance_features<INS: BufferableInstanceFeature>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        updated_instance_features: &[INS],
-    ) {
-        let n_updated_features = u32::try_from(updated_instance_features.len()).unwrap();
-        self.n_valid_instance_features
-            .store(n_updated_features, Ordering::Release);
-        self.queue_update_of_instance_features(core_system, 0, updated_instance_features);
-    }
-
-    /// Queues a write of the given slice of instance features to the existing
-    /// buffer, starting at the given feature index.
-    ///
-    /// # Panics
-    /// - If the updated instance feature type has a buffer layout different
-    ///   from the original layout.
-    /// - If the offset slice of updated features exceeds the bounds of the
-    ///   original instance feature buffer.
-    /// - If integer overflow occurs.
-    fn queue_update_of_instance_features<INS: BufferableInstanceFeature>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        first_updated_feature_idx: u32,
-        updated_instance_features: &[INS],
-    ) {
-        self.vertex_buffer.queue_update_of_vertices(
+    ) -> Self
+    where
+        V: VertexBufferable,
+    {
+        let bytes = bytemuck::cast_slice(vertices);
+        Self::new(
             core_system,
-            first_updated_feature_idx,
-            updated_instance_features,
-        );
+            RenderBufferType::Vertex,
+            bytes,
+            bytes.len(),
+            &format!("{} vertex", label),
+        )
     }
-}
 
-impl IndexRenderBuffer {
-    /// Creates an index buffer from the given slice of indices.
+    /// Creates an index render buffer initialized with the given index
+    /// data.
+    pub fn new_full_index_buffer<I>(
+        core_system: &CoreRenderingSystem,
+        indices: &[I],
+        label: &str,
+    ) -> Self
+    where
+        I: IndexBufferable,
+    {
+        let bytes = bytemuck::cast_slice(indices);
+        Self::new(
+            core_system,
+            RenderBufferType::Index,
+            bytes,
+            bytes.len(),
+            &format!("{} index", label),
+        )
+    }
+
+    /// Creates a uniform render buffer initialized with the given uniform
+    /// data.
+    pub fn new_full_uniform_buffer<U>(
+        core_system: &CoreRenderingSystem,
+        uniforms: &[U],
+        label: &str,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        let bytes = bytemuck::cast_slice(uniforms);
+        Self::new(
+            core_system,
+            RenderBufferType::Uniform,
+            bytes,
+            bytes.len(),
+            &format!("{} uniform", label),
+        )
+    }
+
+    /// Creates a render buffer of the given type from the given slice of
+    /// bytes. Only the first `n_valid_bytes` in the slice are considered
+    /// to actually represent valid data, the rest is just buffer filling
+    /// that gives room for writing a larger number of bytes than `n_valid_bytes`
+    /// into the buffer at a later point without reallocating.
     ///
     /// # Panics
-    /// If the length of `indices` can not be converted to [`u32`].
-    pub fn new<IDX: BufferableIndex>(
+    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
+    pub fn new(
         core_system: &CoreRenderingSystem,
-        indices: &[IDX],
+        buffer_type: RenderBufferType,
+        bytes: &[u8],
+        n_valid_bytes: usize,
         label: &str,
     ) -> Self {
-        let buffer_label = format!("{} index buffer", label);
-        let format = IDX::INDEX_FORMAT;
-        let buffer = create_initialized_index_buffer(core_system.device(), indices, &buffer_label);
-        let n_indices = u32::try_from(indices.len()).unwrap();
-        Self {
-            format,
-            buffer,
-            n_indices,
-        }
-    }
+        let buffer_size = bytes.len();
+        assert!(n_valid_bytes <= buffer_size);
 
-    /// Returns the format of the indices in the buffer.
-    pub fn format(&self) -> wgpu::IndexFormat {
-        self.format
-    }
-
-    /// Returns the underlying [`wgpu::Buffer`].
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
-    }
-
-    /// Returns the number of indices in the buffer.
-    pub fn n_indices(&self) -> u32 {
-        self.n_indices
-    }
-
-    /// Queues a write of the given slice of indices to the existing
-    /// buffer, starting at the given index.
-    ///
-    /// # Panics
-    /// - If the updated index type is different from the original type.
-    /// - If the offset slice of updated indices exceeds the bounds
-    ///   of the original index buffer.
-    /// - If integer overflow occurs.
-    pub fn queue_update_of_indices<IDX: BufferableIndex>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        first_updated_index_idx: u32,
-        updated_indices: &[IDX],
-    ) {
-        assert!(
-            IDX::INDEX_FORMAT == self.format(),
-            "Updated indices do not have original type"
-        );
-
-        queue_write_to_buffer(
-            core_system.queue(),
-            self.buffer(),
-            first_updated_index_idx,
-            updated_indices,
-            self.n_indices(),
-        );
-    }
-}
-
-impl UniformRenderBuffer {
-    /// Creates a uniform buffer from the given slice of uniforms.
-    pub fn new<U: BufferableUniform>(core_system: &CoreRenderingSystem, uniforms: &[U]) -> Self {
-        let uniform_id = U::ID;
-
-        let buffer = create_initialized_uniform_buffer(
+        let buffer_label = format!("{} render buffer", label);
+        let buffer = create_initialized_buffer_of_type(
             core_system.device(),
-            uniforms,
-            &format!("{} uniform buffer", uniform_id),
+            buffer_type,
+            bytes,
+            &buffer_label,
         );
 
-        let n_uniforms = u32::try_from(uniforms.len()).unwrap();
-
         Self {
-            uniform_id,
             buffer,
-            n_uniforms,
+            buffer_size,
+            n_valid_bytes: AtomicUsize::new(n_valid_bytes),
         }
     }
 
-    /// Creates the bind group entry for the uniform buffer,
-    /// assigned to the given binding.
-    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: self.buffer().as_entire_binding(),
-        }
+    /// Returns a slice of the underlying [`wgpu::Buffer`]
+    /// containing only valid bytes.
+    pub fn valid_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
+        let upper_address = self.n_valid_bytes() as wgpu::BufferAddress;
+        self.buffer.slice(..upper_address)
     }
 
-    /// Returns the underlying [`wgpu::Buffer`].
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
+    /// Returns the total size of the buffer in bytes.
+    pub fn buffer_size(&self) -> usize {
+        self.buffer_size
     }
 
-    /// Returns the number of uniforms in the buffer.
-    pub fn n_uniforms(&self) -> u32 {
-        self.n_uniforms
+    /// Returns the number of bytes, starting from the beginning
+    /// of the buffer, that is considered to contain valid data.
+    pub fn n_valid_bytes(&self) -> usize {
+        self.n_valid_bytes.load(Ordering::Acquire)
     }
 
-    /// Queues a write of the given slice of uniforms to the existing
-    /// buffer, starting at the given uniform index.
-    ///
-    /// # Panics
-    /// - If the updated uniform bind group description is different from
-    ///   the original description.
-    /// - If the offset slice of updated uniforms exceeds the bounds
-    ///   of the original uniform buffer.
-    /// - If integer overflow occurs.
-    pub fn queue_update_of_uniforms<U: BufferableUniform>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        first_updated_uniform_idx: u32,
-        updated_uniforms: &[U],
-    ) {
-        assert_eq!(
-            U::ID,
-            self.uniform_id,
-            "Updated uniforms do not have original ID"
-        );
-        queue_write_to_buffer(
-            core_system.queue(),
-            self.buffer(),
-            first_updated_uniform_idx,
-            updated_uniforms,
-            self.n_uniforms(),
-        );
-    }
-}
-
-impl DynamicUniformRenderBuffer {
-    /// Creates a dynamic uniform buffer from the given slice of uniforms.
-    /// Only the first `n_valid_uniforms` in the slice are considered
-    /// to actually represent valid values, the rest is just buffer
-    /// filling that gives room for writing a larger number of uniforms
-    /// than `n_valid_uniforms` into the buffer at a later point without
-    /// reallocating.
-    ///
-    /// # Panics
-    /// - If the length of `uniform_buffer` can not be converted to [`u32`].
-    /// - If `n_valid_uniforms` exceeds the length of `uniform_buffer`.
-    pub fn new<U: BufferableUniform>(
-        core_system: &CoreRenderingSystem,
-        uniform_buffer: &[U],
-        n_valid_uniforms: u32,
-    ) -> Self {
-        assert!(n_valid_uniforms as usize <= uniform_buffer.len());
-        Self {
-            uniform_buffer: UniformRenderBuffer::new(core_system, uniform_buffer),
-            n_valid_uniforms: AtomicU32::new(n_valid_uniforms),
-        }
+    /// Whether the buffer is empty, meaning that it does not
+    /// contain any valid data.
+    pub fn is_empty(&self) -> bool {
+        self.n_valid_bytes() == 0
     }
 
-    /// Creates the bind group entry for the uniform buffer,
-    /// assigned to the given binding.
-    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        self.uniform_buffer.create_bind_group_entry(binding)
-    }
-
-    /// Returns the underlying [`wgpu::Buffer`].
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        self.uniform_buffer.buffer()
-    }
-
-    /// Returns the maximum number of uniforms the buffer has room
-    /// for.
-    pub fn max_uniforms(&self) -> u32 {
-        self.uniform_buffer.n_uniforms()
-    }
-
-    /// Returns the number of uniforms, starting from the beginning
-    /// of the buffer, that have valid values.
-    pub fn n_valid_uniforms(&self) -> u32 {
-        self.n_valid_uniforms.load(Ordering::Acquire)
-    }
-
-    /// Queues a write of the given slice of uniforms to the existing
+    /// Queues a write of the given slice of bytes to the existing
     /// buffer, starting at the beginning of the buffer. Any existing
-    /// uniforms in the buffer that are not overwritten are from then
+    /// bytes in the buffer that are not overwritten are from then
     /// on considered invalid.
     ///
     /// # Panics
-    /// - If the updated uniform type has a buffer layout different from
-    ///   the original layout.
-    /// - If the slice of updated uniforms exceeds the bounds of the
-    ///   original uniform buffer.
-    /// - If integer overflow occurs.
-    pub fn update_valid_uniforms<U: BufferableUniform>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        updated_uniforms: &[U],
-    ) {
-        let n_updated_uniforms = u32::try_from(updated_uniforms.len()).unwrap();
-        self.n_valid_uniforms
-            .store(n_updated_uniforms, Ordering::Release);
-        self.queue_update_of_uniforms(core_system, 0, updated_uniforms);
-    }
+    /// If the slice of updated bytes exceeds the total size of the
+    /// buffer.
+    pub fn update_valid_bytes(&self, core_system: &CoreRenderingSystem, updated_bytes: &[u8]) {
+        self.n_valid_bytes
+            .store(updated_bytes.len(), Ordering::Release);
 
-    /// Queues a write of the given slice of uniforms to the existing
-    /// buffer, starting at the given uniform index.
-    ///
-    /// # Panics
-    /// - If the updated uniform type has a buffer layout different from
-    ///   the original layout.
-    /// - If the offset slice of updated uniforms exceeds the bounds
-    ///   of the original uniform buffer.
-    /// - If integer overflow occurs.
-    fn queue_update_of_uniforms<U: BufferableUniform>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        first_updated_uniform_idx: u32,
-        updated_uniforms: &[U],
-    ) {
-        self.uniform_buffer.queue_update_of_uniforms(
-            core_system,
-            first_updated_uniform_idx,
-            updated_uniforms,
+        queue_write_to_buffer(
+            core_system.queue(),
+            self.buffer(),
+            0,
+            updated_bytes,
+            self.buffer_size(),
         );
     }
+
+    /// Queues a write of the given slice of bytes to the existing
+    /// buffer, starting at the beginning of the buffer. The slice
+    /// must have the same size as the buffer.
+    ///
+    /// # Panics
+    /// If the slice of updated bytes does not match the total size of
+    /// the buffer.
+    pub fn update_all_bytes(&self, core_system: &CoreRenderingSystem, updated_bytes: &[u8]) {
+        assert_eq!(updated_bytes.len(), self.buffer_size());
+        self.update_valid_bytes(core_system, updated_bytes);
+    }
+
+    /// Returns the underlying [`wgpu::Buffer`].
+    fn buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
+    }
 }
 
-fn create_initialized_vertex_buffer(
-    device: &wgpu::Device,
-    vertices: &[impl Pod],
-    label: &str,
-) -> wgpu::Buffer {
-    create_initialized_buffer(
-        device,
-        vertices,
-        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        label,
-    )
+/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
+/// vertex data of type `T`, with data layout defined by the given
+/// vertex attributes.
+pub const fn create_vertex_buffer_layout_for_vertex<T>(
+    attributes: &'static [wgpu::VertexAttribute],
+) -> wgpu::VertexBufferLayout<'static>
+where
+    T: VertexBufferable,
+{
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes,
+    }
 }
 
-fn create_initialized_index_buffer(
-    device: &wgpu::Device,
-    indices: &[impl Pod],
-    label: &str,
-) -> wgpu::Buffer {
-    create_initialized_buffer(
-        device,
-        indices,
-        wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-        label,
-    )
+/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
+/// instance data of type `T`, with data layout defined by the given
+/// instance attributes.
+pub const fn create_vertex_buffer_layout_for_instance<T>(
+    attributes: &'static [wgpu::VertexAttribute],
+) -> wgpu::VertexBufferLayout<'static>
+where
+    T: VertexBufferable,
+{
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes,
+    }
 }
 
-fn create_initialized_uniform_buffer(
+/// Creates a [`BindGroupLayoutEntry`](wgpu::BindGroupLayoutEntry) for
+/// a uniform buffer, using the given binding and visibility for the
+/// bind group.
+pub const fn create_uniform_buffer_bind_group_layout_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
+/// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
+/// binding for the given uniform buffer,
+pub fn create_uniform_buffer_bind_group_entry(
+    binding: u32,
+    render_buffer: &RenderBuffer,
+) -> wgpu::BindGroupEntry<'_> {
+    wgpu::BindGroupEntry {
+        binding,
+        resource: render_buffer.buffer().as_entire_binding(),
+    }
+}
+
+fn create_initialized_buffer_of_type(
     device: &wgpu::Device,
-    uniforms: &[impl Pod],
+    buffer_type: RenderBufferType,
+    bytes: &[u8],
     label: &str,
 ) -> wgpu::Buffer {
-    create_initialized_buffer(
-        device,
-        uniforms,
-        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        label,
-    )
+    let usage = match buffer_type {
+        RenderBufferType::Vertex => wgpu::BufferUsages::VERTEX,
+        RenderBufferType::Index => wgpu::BufferUsages::INDEX,
+        RenderBufferType::Uniform => wgpu::BufferUsages::UNIFORM,
+    } | wgpu::BufferUsages::COPY_DST;
+
+    create_initialized_buffer(device, bytes, usage, label)
 }
 
 fn create_initialized_buffer(
     device: &wgpu::Device,
-    data: &[impl Pod],
+    bytes: &[u8],
     usage: wgpu::BufferUsages,
     label: &str,
 ) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        contents: bytemuck::cast_slice(data),
+        contents: bytes,
         usage,
         label: Some(label),
     })
 }
 
-fn queue_write_to_buffer<T: Pod>(
+fn queue_write_to_buffer(
     queue: &wgpu::Queue,
     buffer: &wgpu::Buffer,
-    first_element_idx: u32,
-    elements: &[T],
-    n_original_elements: u32,
+    byte_offset: usize,
+    bytes: &[u8],
+    buffer_size: usize,
 ) {
-    let n_updated_elements = u32::try_from(elements.len()).unwrap();
-    if n_updated_elements == 0 {
+    let n_updated_bytes = bytes.len();
+    if n_updated_bytes == 0 {
         return;
     }
 
     assert!(
-        first_element_idx.checked_add(n_updated_elements).unwrap() <= n_original_elements,
-        "Elements to write do not fit in original buffer"
+        byte_offset.checked_add(n_updated_bytes).unwrap() <= buffer_size,
+        "Bytes to write do not fit in original buffer"
     );
 
-    let byte_offset = (mem::size_of::<T>() as u64)
-        .checked_mul(u64::from(first_element_idx))
-        .unwrap();
-
-    queue.write_buffer(
-        buffer,
-        byte_offset as wgpu::BufferAddress,
-        bytemuck::cast_slice(elements),
-    );
+    queue.write_buffer(buffer, byte_offset as wgpu::BufferAddress, bytes);
 }

@@ -3,17 +3,19 @@
 use crate::{
     geometry::{CollectionChange, ColorVertex, TextureVertex, TriangleMesh},
     rendering::{
-        buffer::{BufferableVertex, IndexRenderBuffer, VertexRenderBuffer},
+        buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
         fre, CoreRenderingSystem,
     },
 };
-use std::mem;
 
 /// Owner and manager of render buffers for mesh geometry.
 #[derive(Debug)]
 pub struct MeshRenderBufferManager {
-    vertex_buffer: VertexRenderBuffer,
-    index_buffer: IndexRenderBuffer,
+    vertex_buffer: RenderBuffer,
+    index_buffer: RenderBuffer,
+    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    index_format: wgpu::IndexFormat,
+    n_indices: usize,
     label: String,
 }
 
@@ -22,7 +24,7 @@ impl MeshRenderBufferManager {
     /// from the given mesh.
     pub fn for_mesh(
         core_system: &CoreRenderingSystem,
-        mesh: &TriangleMesh<impl BufferableVertex>,
+        mesh: &TriangleMesh<impl VertexBufferable>,
         label: String,
     ) -> Self {
         Self::new(core_system, mesh.vertices(), mesh.indices(), label)
@@ -32,92 +34,125 @@ impl MeshRenderBufferManager {
     pub fn sync_with_mesh(
         &mut self,
         core_system: &CoreRenderingSystem,
-        mesh: &TriangleMesh<impl BufferableVertex>,
+        mesh: &TriangleMesh<impl VertexBufferable>,
     ) {
-        self.sync_render_buffers(
-            core_system,
-            mesh.vertices(),
-            mesh.indices(),
-            mesh.vertex_change(),
-            mesh.index_change(),
-        );
+        self.sync_vertex_buffer(core_system, mesh.vertices(), mesh.vertex_change());
+        self.sync_index_buffer(core_system, mesh.indices(), mesh.index_change());
         mesh.reset_vertex_index_change_tracking();
     }
 
-    /// Returns the buffer of vertices.
-    pub fn vertex_buffer(&self) -> &VertexRenderBuffer {
+    /// Returns the layout of the vertex buffer.
+    pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
+        &self.vertex_buffer_layout
+    }
+
+    /// Returns the format of the indices in the index buffer.
+    pub fn index_format(&self) -> wgpu::IndexFormat {
+        self.index_format
+    }
+
+    /// Returns the render buffer of vertices.
+    pub fn vertex_render_buffer(&self) -> &RenderBuffer {
         &self.vertex_buffer
     }
 
-    /// Returns the buffer of indices.
-    pub fn index_buffer(&self) -> &IndexRenderBuffer {
+    /// Returns the render buffer of indices.
+    pub fn index_render_buffer(&self) -> &RenderBuffer {
         &self.index_buffer
+    }
+
+    /// Returns the number of indices in the index buffer.
+    pub fn n_indices(&self) -> usize {
+        self.n_indices
     }
 
     /// Creates a new manager with a render buffer initialized
     /// from the given slices of vertices and indices.
-    fn new(
+    fn new<V, I>(
         core_system: &CoreRenderingSystem,
-        vertices: &[impl BufferableVertex],
-        indices: &[u16],
+        vertices: &[V],
+        indices: &[I],
         label: String,
-    ) -> Self {
-        let vertex_buffer = VertexRenderBuffer::new(core_system, vertices, &label);
-        let index_buffer = IndexRenderBuffer::new(core_system, indices, &label);
+    ) -> Self
+    where
+        V: VertexBufferable,
+        I: IndexBufferable,
+    {
+        let vertex_buffer = RenderBuffer::new_full_vertex_buffer(core_system, vertices, &label);
+        let index_buffer = RenderBuffer::new_full_index_buffer(core_system, indices, &label);
         Self {
             vertex_buffer,
             index_buffer,
+            vertex_buffer_layout: V::BUFFER_LAYOUT,
+            index_format: I::INDEX_FORMAT,
+            n_indices: indices.len(),
             label,
         }
     }
 
-    fn sync_render_buffers(
+    fn sync_vertex_buffer<V>(
         &mut self,
         core_system: &CoreRenderingSystem,
-        vertices: &[impl BufferableVertex],
-        indices: &[u16],
+        vertices: &[V],
         vertex_change: CollectionChange,
-        index_change: CollectionChange,
-    ) {
-        match vertex_change {
-            CollectionChange::None => {}
-            CollectionChange::Contents => {
-                // If the contents of the buffer needs to be updated,
-                // we queue a write of the new vertices into the buffer
+    ) where
+        V: VertexBufferable,
+    {
+        assert_eq!(V::BUFFER_LAYOUT, self.vertex_buffer_layout);
+
+        if vertex_change != CollectionChange::None {
+            let vertex_bytes = bytemuck::cast_slice(vertices);
+
+            if vertex_bytes.len() > self.vertex_buffer.buffer_size() {
+                // If the new number of vertices exceeds the size of the existing buffer,
+                // we create a new one that is large enough
+                self.vertex_buffer =
+                    RenderBuffer::new_full_vertex_buffer(core_system, vertices, &self.label);
+            } else {
                 self.vertex_buffer
-                    .queue_update_of_vertices(core_system, 0, vertices);
-            }
-            CollectionChange::Count => {
-                // If the size of the buffer has changed, we simply
-                // rebuild the buffer
-                self.vertex_buffer = VertexRenderBuffer::new(core_system, vertices, &self.label);
+                    .update_valid_bytes(core_system, vertex_bytes);
             }
         }
-        match index_change {
-            CollectionChange::None => {}
-            CollectionChange::Contents => {
+    }
+
+    fn sync_index_buffer<I>(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        indices: &[I],
+        index_change: CollectionChange,
+    ) where
+        I: IndexBufferable,
+    {
+        assert_eq!(I::INDEX_FORMAT, self.index_format);
+
+        if index_change != CollectionChange::None {
+            let index_bytes = bytemuck::cast_slice(indices);
+
+            if index_bytes.len() > self.index_buffer.buffer_size() {
+                // If the new number of indices exceeds the size of the existing buffer,
+                // we create a new one that is large enough
+                self.index_buffer =
+                    RenderBuffer::new_full_index_buffer(core_system, indices, &self.label);
+            } else {
                 self.index_buffer
-                    .queue_update_of_indices(core_system, 0, indices);
+                    .update_valid_bytes(core_system, index_bytes);
             }
-            CollectionChange::Count => {
-                self.index_buffer = IndexRenderBuffer::new(core_system, indices, &self.label);
-            }
+
+            self.n_indices = indices.len();
         }
     }
 }
 
-impl BufferableVertex for ColorVertex<fre> {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
-    };
+impl VertexBufferable for ColorVertex<fre> {
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(
+            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
+        );
 }
 
-impl BufferableVertex for TextureVertex<fre> {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
-    };
+impl VertexBufferable for TextureVertex<fre> {
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(
+            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
+        );
 }

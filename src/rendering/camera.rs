@@ -3,7 +3,7 @@
 use crate::geometry::Camera;
 use crate::hash::ConstStringHash;
 use crate::rendering::{
-    buffer::{BufferableUniform, UniformRenderBuffer},
+    buffer::{self, RenderBuffer, UniformBufferable},
     fre, CoreRenderingSystem,
 };
 use nalgebra::Projective3;
@@ -12,7 +12,7 @@ use nalgebra::Projective3;
 /// transformation.
 #[derive(Debug)]
 pub struct CameraRenderBufferManager {
-    transform_render_buffer: UniformRenderBuffer,
+    transform_render_buffer: RenderBuffer,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
@@ -69,7 +69,7 @@ impl CameraRenderBufferManager {
         label: &str,
     ) -> Self {
         let transform_render_buffer =
-            UniformRenderBuffer::new(core_system, &[view_projection_transform]);
+            RenderBuffer::new_full_uniform_buffer(core_system, &[view_projection_transform], label);
 
         let bind_group_layout = Self::create_bind_group_layout(core_system.device(), label);
 
@@ -96,8 +96,7 @@ impl CameraRenderBufferManager {
     /// Creates the bind group entry for the camera transform
     /// uniform buffer, assigned to the given binding.
     fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        self.transform_render_buffer
-            .create_bind_group_entry(binding)
+        buffer::create_uniform_buffer_bind_group_entry(binding, &self.transform_render_buffer)
     }
 
     fn create_bind_group_layout(device: &wgpu::Device, label: &str) -> wgpu::BindGroupLayout {
@@ -109,13 +108,16 @@ impl CameraRenderBufferManager {
 
     fn create_bind_group(
         device: &wgpu::Device,
-        transform_render_buffer: &UniformRenderBuffer,
+        transform_render_buffer: &RenderBuffer,
         layout: &wgpu::BindGroupLayout,
         label: &str,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            entries: &[transform_render_buffer.create_bind_group_entry(0)],
+            entries: &[buffer::create_uniform_buffer_bind_group_entry(
+                0,
+                transform_render_buffer,
+            )],
             label: Some(&format!("{} bind group", label)),
         })
     }
@@ -125,27 +127,17 @@ impl CameraRenderBufferManager {
         core_system: &CoreRenderingSystem,
         view_projection_transform: Projective3<fre>,
     ) {
-        self.transform_render_buffer.queue_update_of_uniforms(
+        self.transform_render_buffer.update_all_bytes(
             core_system,
-            0,
-            &[view_projection_transform],
+            bytemuck::cast_slice(&[view_projection_transform]),
         );
     }
 }
 
-impl BufferableUniform for Projective3<fre> {
+impl UniformBufferable for Projective3<fre> {
     const ID: ConstStringHash = ConstStringHash::new("Camera projection");
 
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }
+        buffer::create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::VERTEX)
     }
 }
