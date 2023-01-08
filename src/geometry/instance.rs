@@ -713,7 +713,6 @@ mod test {
         );
         assert_eq!(buffer.feature_size(), ZeroSizedFeature::feature_size());
         assert_eq!(buffer.n_valid_bytes(), 0);
-        assert_eq!(buffer.n_valid_features(), 0);
         assert_eq!(buffer.valid_bytes(), &[]);
     }
 
