@@ -5,14 +5,9 @@ mod tasks;
 pub use tasks::SyncRenderPasses;
 
 use crate::{
-    geometry::ModelInstanceTransform,
     rendering::{
-        buffer::{
-            BufferableVertex, IndexRenderBuffer, InstanceFeatureRenderBuffer, VertexRenderBuffer,
-        },
-        fre,
-        resource::SynchronizedRenderResources,
-        CoreRenderingSystem,
+        instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager,
+        resource::SynchronizedRenderResources, CoreRenderingSystem,
     },
     scene::{CameraID, MeshID, ModelID},
 };
@@ -88,14 +83,15 @@ impl RenderPassManager {
         render_resources: &SynchronizedRenderResources,
         camera_id: CameraID,
     ) -> Result<()> {
-        let instance_transform_buffers = render_resources.instance_transform_buffers();
+        let feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
-        for (&model_id, transform_render_buffer) in instance_transform_buffers {
+        for (&model_id, feature_buffer_manager) in feature_buffer_managers {
             // Avoid rendering the model if there are no instances
-            let disable_pass = transform_render_buffer
-                .transform_render_buffer()
-                .n_valid_instance_features()
-                == 0;
+            let disable_pass = feature_buffer_manager
+                .first()
+                .unwrap()
+                .vertex_render_buffer()
+                .is_empty();
 
             match self.model_render_pass_recorders.entry(model_id) {
                 Entry::Vacant(entry) => {
@@ -116,7 +112,7 @@ impl RenderPassManager {
         }
 
         self.model_render_pass_recorders
-            .retain(|model_id, _| instance_transform_buffers.contains_key(model_id));
+            .retain(|model_id, _| feature_buffer_managers.contains_key(model_id));
 
         Ok(())
     }
@@ -189,7 +185,7 @@ impl RenderPassSpecification {
     ) -> Result<&'a wgpu::ShaderModule> {
         let material_id = self.model_id.unwrap().material_id();
         Ok(render_resources
-            .get_material_resources(material_id)
+            .get_material_resource_manager(material_id)
             .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
             .shader_module())
     }
@@ -208,7 +204,7 @@ impl RenderPassSpecification {
         if let Some(camera_id) = self.camera_id {
             layouts.push(
                 render_resources
-                    .get_camera_buffer(camera_id)
+                    .get_camera_buffer_manager(camera_id)
                     .ok_or_else(|| anyhow!("Missing render buffer for camera {}", camera_id))?
                     .bind_group_layout(),
             );
@@ -216,7 +212,7 @@ impl RenderPassSpecification {
         if let Some(model_id) = self.model_id {
             let material_id = model_id.material_id();
             if let Some(layout) = render_resources
-                .get_material_resources(material_id)
+                .get_material_resource_manager(material_id)
                 .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
                 .texture_bind_group_layout()
             {
@@ -239,7 +235,7 @@ impl RenderPassSpecification {
         if let Some(camera_id) = self.camera_id {
             bind_groups.push(
                 render_resources
-                    .get_camera_buffer(camera_id)
+                    .get_camera_buffer_manager(camera_id)
                     .ok_or_else(|| anyhow!("Missing render buffer for camera {}", camera_id))?
                     .bind_group(),
             );
@@ -247,7 +243,7 @@ impl RenderPassSpecification {
         if let Some(model_id) = self.model_id {
             let material_id = model_id.material_id();
             if let Some(bind_group) = render_resources
-                .get_material_resources(material_id)
+                .get_material_resource_manager(material_id)
                 .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
                 .texture_bind_group()
             {
@@ -266,19 +262,25 @@ impl RenderPassSpecification {
         &self,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
-        let mut layouts = Vec::with_capacity(2);
+        let mut layouts = Vec::with_capacity(4);
         if let Some(mesh_id) = self.mesh_id {
             layouts.push(
                 render_resources
-                    .get_mesh_buffer(mesh_id)
+                    .get_mesh_buffer_manager(mesh_id)
                     .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))?
-                    .vertex_buffer()
-                    .layout()
+                    .vertex_buffer_layout()
                     .clone(),
             );
-            // Assume that we have model instance transforms if we have a model ID
-            if self.model_id.is_some() {
-                layouts.push(ModelInstanceTransform::<fre>::BUFFER_LAYOUT);
+            if let Some(model_id) = self.model_id {
+                if let Some(buffers) =
+                    render_resources.get_instance_feature_buffer_managers(model_id)
+                {
+                    layouts.extend(
+                        buffers
+                            .iter()
+                            .map(|buffer| buffer.vertex_buffer_layout().clone()),
+                    );
+                }
             }
         }
         Ok(layouts)
@@ -291,25 +293,22 @@ impl RenderPassSpecification {
         }
     }
 
-    fn get_mesh_buffers(
+    fn get_mesh_buffer_manager(
         render_resources: &SynchronizedRenderResources,
         mesh_id: MeshID,
-    ) -> Result<(&VertexRenderBuffer, &IndexRenderBuffer)> {
-        let (vertex_buffer, index_buffer) = render_resources
-            .get_mesh_buffer(mesh_id)
-            .map(|mesh_data| (mesh_data.vertex_buffer(), mesh_data.index_buffer()))
-            .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))?;
-
-        Ok((vertex_buffer, index_buffer))
+    ) -> Result<&MeshRenderBufferManager> {
+        render_resources
+            .get_mesh_buffer_manager(mesh_id)
+            .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))
     }
 
-    fn get_instance_transform_buffer(
+    fn get_instance_feature_buffer_managers(
         render_resources: &SynchronizedRenderResources,
         model_id: ModelID,
-    ) -> Result<&InstanceFeatureRenderBuffer> {
+    ) -> Result<impl Iterator<Item = &InstanceFeatureRenderBufferManager>> {
         render_resources
-            .get_instance_transform_buffer(model_id)
-            .map(|instance_data| instance_data.transform_render_buffer())
+            .get_instance_feature_buffer_managers(model_id)
+            .map(|buffers| buffers.iter())
             .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
     }
 }
@@ -389,19 +388,21 @@ impl RenderPassRecorder {
         // Make sure all data is available before doing anything else
         let bind_groups = self.specification.get_bind_groups(render_resources)?;
 
-        let mesh_buffers = match self.specification.mesh_id {
-            Some(mesh_id) => Some(RenderPassSpecification::get_mesh_buffers(
+        let mesh_buffer_manager = match self.specification.mesh_id {
+            Some(mesh_id) => Some(RenderPassSpecification::get_mesh_buffer_manager(
                 render_resources,
                 mesh_id,
             )?),
             _ => None,
         };
 
-        let instance_transform_buffer = match self.specification.model_id {
-            Some(model_id) => Some(RenderPassSpecification::get_instance_transform_buffer(
-                render_resources,
-                model_id,
-            )?),
+        let feature_buffer_managers = match self.specification.model_id {
+            Some(model_id) => Some(
+                RenderPassSpecification::get_instance_feature_buffer_managers(
+                    render_resources,
+                    model_id,
+                )?,
+            ),
             _ => None,
         };
 
@@ -420,7 +421,7 @@ impl RenderPassRecorder {
         });
 
         if let Some(ref pipeline) = self.pipeline {
-            let (vertex_buffer, index_buffer) = mesh_buffers.expect("Has pipeline but no vertices");
+            let mesh_buffer_manager = mesh_buffer_manager.expect("Has pipeline but no vertices");
 
             render_pass.set_pipeline(pipeline);
 
@@ -428,18 +429,41 @@ impl RenderPassRecorder {
                 render_pass.set_bind_group(u32::try_from(index).unwrap(), bind_group, &[]);
             }
 
-            render_pass.set_vertex_buffer(0, vertex_buffer.buffer().slice(..));
+            render_pass.set_vertex_buffer(
+                0,
+                mesh_buffer_manager
+                    .vertex_render_buffer()
+                    .valid_buffer_slice(),
+            );
 
-            let n_instances = if let Some(instance_transform_buffer) = instance_transform_buffer {
-                render_pass.set_vertex_buffer(1, instance_transform_buffer.buffer().slice(..));
-                instance_transform_buffer.n_valid_instance_features()
+            let n_instances = if let Some(feature_buffer_managers) = feature_buffer_managers {
+                let mut n_instances = 0;
+                for (index, feature_buffer_manager) in feature_buffer_managers.enumerate() {
+                    render_pass.set_vertex_buffer(
+                        u32::try_from(index + 1).unwrap(),
+                        feature_buffer_manager
+                            .vertex_render_buffer()
+                            .valid_buffer_slice(),
+                    );
+                    n_instances = feature_buffer_manager.n_features();
+                }
+                n_instances
             } else {
                 1
             };
 
-            render_pass.set_index_buffer(index_buffer.buffer().slice(..), index_buffer.format());
+            render_pass.set_index_buffer(
+                mesh_buffer_manager
+                    .index_render_buffer()
+                    .valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
 
-            render_pass.draw_indexed(0..index_buffer.n_indices(), 0, 0..n_instances);
+            render_pass.draw_indexed(
+                0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                0,
+                0..u32::try_from(n_instances).unwrap(),
+            );
         }
 
         Ok(())

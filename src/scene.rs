@@ -3,6 +3,7 @@
 mod camera;
 mod components;
 mod graph;
+mod instance;
 mod material;
 mod mesh;
 mod model;
@@ -15,10 +16,11 @@ pub use graph::{
     model_to_world_transform_from_position_and_orientation, CameraNodeID, GroupNodeID,
     ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,
 };
+pub use instance::InstanceFeatureManager;
 pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
 pub use mesh::{MeshID, MeshRepository};
-pub use model::{ModelID, ModelInstanceFeatureManager};
-pub use tasks::SyncVisibleModelInstanceTransforms;
+pub use model::ModelID;
+pub use tasks::BufferVisibleModelInstances;
 
 use crate::rendering::fre;
 use std::sync::RwLock;
@@ -30,7 +32,7 @@ pub struct Scene {
     mesh_repository: RwLock<MeshRepository<fre>>,
     material_library: RwLock<MaterialLibrary>,
     scene_graph: RwLock<SceneGraph<fre>>,
-    model_instance_transform_pool: RwLock<ModelInstanceFeatureManager<fre>>,
+    instance_feature_manager: RwLock<InstanceFeatureManager>,
     active_camera: RwLock<Option<(CameraID, CameraNodeID)>>,
 }
 
@@ -45,7 +47,7 @@ impl Scene {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),
             material_library: RwLock::new(material_library),
-            model_instance_transform_pool: RwLock::new(ModelInstanceFeatureManager::new()),
+            instance_feature_manager: RwLock::new(InstanceFeatureManager::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
             active_camera: RwLock::new(None),
         }
@@ -69,10 +71,10 @@ impl Scene {
         &self.material_library
     }
 
-    /// Returns a reference to the [`ModelInstanceTransformPool`], guarded
+    /// Returns a reference to the [`InstanceFeatureManager`], guarded
     /// by a [`RwLock`].
-    pub fn model_instance_transform_pool(&self) -> &RwLock<ModelInstanceFeatureManager<fre>> {
-        &self.model_instance_transform_pool
+    pub fn instance_feature_manager(&self) -> &RwLock<InstanceFeatureManager> {
+        &self.instance_feature_manager
     }
 
     /// Returns a reference to the [`SceneGraph`], guarded

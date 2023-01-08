@@ -7,13 +7,11 @@ pub use tasks::SyncRenderResources;
 use crate::{
     geometry::{Camera, TriangleMesh},
     rendering::{
-        buffer::BufferableVertex, camera::CameraRenderBufferManager, fre,
-        mesh::MeshRenderBufferManager, model::ModelInstanceTransformRenderBufferManager, Assets,
+        buffer::VertexBufferable, camera::CameraRenderBufferManager, fre,
+        instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager, Assets,
         CoreRenderingSystem, MaterialRenderResourceManager,
     },
-    scene::{
-        CameraID, MaterialID, MaterialSpecification, MeshID, ModelID, ModelInstanceFeatureManager,
-    },
+    scene::{CameraID, InstanceFeatureManager, MaterialID, MaterialSpecification, MeshID, ModelID},
 };
 use anyhow::Result;
 use std::{
@@ -48,11 +46,11 @@ pub struct RenderResourceManager {
 /// are assumed to be in sync with the source data.
 #[derive(Debug)]
 pub struct SynchronizedRenderResources {
-    perspective_camera_buffers: Box<CameraRenderBufferMap>,
-    color_mesh_buffers: Box<MeshRenderBufferMap>,
-    texture_mesh_buffers: Box<MeshRenderBufferMap>,
-    material_resources: Box<MaterialResourceMap>,
-    instance_transform_buffers: Box<InstanceTransformRenderBufferMap>,
+    perspective_camera_buffer_managers: Box<CameraRenderBufferManagerMap>,
+    color_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
+    texture_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
+    material_resource_managers: Box<MaterialResourceManagerMap>,
+    instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
 }
 
 /// Wrapper for render resources that are assumed to be out of sync
@@ -60,17 +58,18 @@ pub struct SynchronizedRenderResources {
 /// enabling concurrent re-synchronization of the resources.
 #[derive(Debug)]
 struct DesynchronizedRenderResources {
-    perspective_camera_buffers: Mutex<Box<CameraRenderBufferMap>>,
-    color_mesh_buffers: Mutex<Box<MeshRenderBufferMap>>,
-    texture_mesh_buffers: Mutex<Box<MeshRenderBufferMap>>,
-    material_resources: Mutex<Box<MaterialResourceMap>>,
-    instance_transform_buffers: Mutex<Box<InstanceTransformRenderBufferMap>>,
+    perspective_camera_buffer_managers: Mutex<Box<CameraRenderBufferManagerMap>>,
+    color_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
+    texture_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
+    material_resource_managers: Mutex<Box<MaterialResourceManagerMap>>,
+    instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
 }
 
-type CameraRenderBufferMap = HashMap<CameraID, CameraRenderBufferManager>;
-type MeshRenderBufferMap = HashMap<MeshID, MeshRenderBufferManager>;
-type MaterialResourceMap = HashMap<MaterialID, MaterialRenderResourceManager>;
-type InstanceTransformRenderBufferMap = HashMap<ModelID, ModelInstanceTransformRenderBufferManager>;
+type CameraRenderBufferManagerMap = HashMap<CameraID, CameraRenderBufferManager>;
+type MeshRenderBufferManagerMap = HashMap<MeshID, MeshRenderBufferManager>;
+type MaterialResourceManagerMap = HashMap<MaterialID, MaterialRenderResourceManager>;
+type InstanceFeatureRenderBufferManagerMap =
+    HashMap<ModelID, Vec<InstanceFeatureRenderBufferManager>>;
 
 impl RenderResourceManager {
     /// Creates a new render resource manager with resources that
@@ -149,85 +148,87 @@ impl Default for RenderResourceManager {
 impl SynchronizedRenderResources {
     /// Returns the render buffer manager for the given camera identifier
     /// if the camera exists, otherwise returns [`None`].
-    pub fn get_camera_buffer(&self, camera_id: CameraID) -> Option<&CameraRenderBufferManager> {
-        self.perspective_camera_buffers.get(&camera_id)
+    pub fn get_camera_buffer_manager(
+        &self,
+        camera_id: CameraID,
+    ) -> Option<&CameraRenderBufferManager> {
+        self.perspective_camera_buffer_managers.get(&camera_id)
     }
 
     /// Returns the render buffer manager for the given mesh identifier
     /// if the mesh exists, otherwise returns [`None`].
-    pub fn get_mesh_buffer(&self, mesh_id: MeshID) -> Option<&MeshRenderBufferManager> {
-        self.color_mesh_buffers
+    pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshRenderBufferManager> {
+        self.color_mesh_buffer_managers
             .get(&mesh_id)
-            .or_else(|| self.texture_mesh_buffers.get(&mesh_id))
+            .or_else(|| self.texture_mesh_buffer_managers.get(&mesh_id))
     }
 
     /// Returns the render resource manager for the given material identifier
     /// if the material exists, otherwise returns [`None`].
-    pub fn get_material_resources(
+    pub fn get_material_resource_manager(
         &self,
         material_id: MaterialID,
     ) -> Option<&MaterialRenderResourceManager> {
-        self.material_resources.get(&material_id)
+        self.material_resource_managers.get(&material_id)
     }
 
-    /// Returns the render buffer manager for the given model instance
-    /// buffer if the model exists, otherwise returns [`None`].
-    pub fn get_instance_transform_buffer(
+    /// Returns the instance feature render buffer managers for the given model
+    /// identifier if the model exists, otherwise returns [`None`].
+    pub fn get_instance_feature_buffer_managers(
         &self,
-        instance_transform_buffer_id: ModelID,
-    ) -> Option<&ModelInstanceTransformRenderBufferManager> {
-        self.instance_transform_buffers
-            .get(&instance_transform_buffer_id)
+        model_id: ModelID,
+    ) -> Option<&Vec<InstanceFeatureRenderBufferManager>> {
+        self.instance_feature_buffer_managers.get(&model_id)
     }
 
-    /// Returns a reference to the map of model instance render buffers.
-    pub fn instance_transform_buffers(&self) -> &InstanceTransformRenderBufferMap {
-        self.instance_transform_buffers.as_ref()
+    /// Returns a reference to the map of instance feature render buffer managers.
+    pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureRenderBufferManagerMap {
+        self.instance_feature_buffer_managers.as_ref()
     }
 }
 
 impl DesynchronizedRenderResources {
     fn new() -> Self {
         Self {
-            perspective_camera_buffers: Mutex::new(Box::new(HashMap::new())),
-            color_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
-            texture_mesh_buffers: Mutex::new(Box::new(HashMap::new())),
-            material_resources: Mutex::new(Box::new(HashMap::new())),
-            instance_transform_buffers: Mutex::new(Box::new(HashMap::new())),
+            perspective_camera_buffer_managers: Mutex::new(Box::new(HashMap::new())),
+            color_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
+            texture_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
+            material_resource_managers: Mutex::new(Box::new(HashMap::new())),
+            instance_feature_buffer_managers: Mutex::new(Box::new(HashMap::new())),
         }
     }
 
     fn from_synchronized(render_resources: SynchronizedRenderResources) -> Self {
         let SynchronizedRenderResources {
-            perspective_camera_buffers,
-            color_mesh_buffers,
-            texture_mesh_buffers,
-            material_resources,
-            instance_transform_buffers,
+            perspective_camera_buffer_managers: perspective_camera_buffers,
+            color_mesh_buffer_managers: color_mesh_buffers,
+            texture_mesh_buffer_managers: texture_mesh_buffers,
+            material_resource_managers: material_resources,
+            instance_feature_buffer_managers: instance_feature_buffers,
         } = render_resources;
         Self {
-            perspective_camera_buffers: Mutex::new(perspective_camera_buffers),
-            color_mesh_buffers: Mutex::new(color_mesh_buffers),
-            texture_mesh_buffers: Mutex::new(texture_mesh_buffers),
-            material_resources: Mutex::new(material_resources),
-            instance_transform_buffers: Mutex::new(instance_transform_buffers),
+            perspective_camera_buffer_managers: Mutex::new(perspective_camera_buffers),
+            color_mesh_buffer_managers: Mutex::new(color_mesh_buffers),
+            texture_mesh_buffer_managers: Mutex::new(texture_mesh_buffers),
+            material_resource_managers: Mutex::new(material_resources),
+            instance_feature_buffer_managers: Mutex::new(instance_feature_buffers),
         }
     }
 
     fn into_synchronized(self) -> SynchronizedRenderResources {
         let DesynchronizedRenderResources {
-            perspective_camera_buffers,
-            color_mesh_buffers,
-            texture_mesh_buffers,
-            material_resources,
-            instance_transform_buffers,
+            perspective_camera_buffer_managers: perspective_camera_buffers,
+            color_mesh_buffer_managers: color_mesh_buffers,
+            texture_mesh_buffer_managers: texture_mesh_buffers,
+            material_resource_managers: material_resources,
+            instance_feature_buffer_managers: instance_feature_buffers,
         } = self;
         SynchronizedRenderResources {
-            perspective_camera_buffers: perspective_camera_buffers.into_inner().unwrap(),
-            color_mesh_buffers: color_mesh_buffers.into_inner().unwrap(),
-            texture_mesh_buffers: texture_mesh_buffers.into_inner().unwrap(),
-            material_resources: material_resources.into_inner().unwrap(),
-            instance_transform_buffers: instance_transform_buffers.into_inner().unwrap(),
+            perspective_camera_buffer_managers: perspective_camera_buffers.into_inner().unwrap(),
+            color_mesh_buffer_managers: color_mesh_buffers.into_inner().unwrap(),
+            texture_mesh_buffer_managers: texture_mesh_buffers.into_inner().unwrap(),
+            material_resource_managers: material_resources.into_inner().unwrap(),
+            instance_feature_buffer_managers: instance_feature_buffers.into_inner().unwrap(),
         }
     }
 
@@ -240,7 +241,7 @@ impl DesynchronizedRenderResources {
     /// for new source data will be created.
     fn sync_camera_buffers_with_cameras(
         core_system: &CoreRenderingSystem,
-        camera_render_buffers: &mut CameraRenderBufferMap,
+        camera_render_buffers: &mut CameraRenderBufferManagerMap,
         cameras: &HashMap<CameraID, impl Camera<fre>>,
     ) {
         for (&camera_id, camera) in cameras {
@@ -267,8 +268,8 @@ impl DesynchronizedRenderResources {
     /// for new source data will be created.
     fn sync_mesh_buffers_with_meshes(
         core_system: &CoreRenderingSystem,
-        mesh_render_buffers: &mut MeshRenderBufferMap,
-        meshes: &HashMap<MeshID, TriangleMesh<impl BufferableVertex>>,
+        mesh_render_buffers: &mut MeshRenderBufferManagerMap,
+        meshes: &HashMap<MeshID, TriangleMesh<impl VertexBufferable>>,
     ) {
         for (&mesh_id, mesh) in meshes {
             mesh_render_buffers
@@ -291,7 +292,7 @@ impl DesynchronizedRenderResources {
     fn sync_material_resources_with_material_specifications(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
-        material_resources: &mut MaterialResourceMap,
+        material_resources: &mut MaterialResourceManagerMap,
         material_specifications: &HashMap<MaterialID, MaterialSpecification>,
     ) -> Result<()> {
         for (&material_id, material_specification) in material_specifications {
@@ -316,36 +317,48 @@ impl DesynchronizedRenderResources {
     }
 
     /// Performs any required updates for keeping the given map of
-    /// model instance transform render buffers in sync with the given
-    /// pool of model instance transforms.
+    /// model instance feature render buffers in sync with the data
+    /// of the given instance feature manager.
     ///
     /// Render buffers whose source data no longer
     /// exists will be removed, and missing render buffers
     /// for new source data will be created.
-    fn sync_model_instance_transform_buffers_with_instance_transform_pool(
+    fn sync_instance_feature_buffers_with_manager(
         core_system: &CoreRenderingSystem,
-        instance_transform_render_buffers: &mut InstanceTransformRenderBufferMap,
-        instance_transform_pool: &ModelInstanceFeatureManager<fre>,
+        feature_render_buffer_managers: &mut InstanceFeatureRenderBufferManagerMap,
+        instance_feature_manager: &InstanceFeatureManager,
     ) {
-        for (model_id, instance_transform_buffer) in instance_transform_pool.models_and_buffers() {
-            instance_transform_render_buffers
+        for (model_id, instance_feature_buffers) in instance_feature_manager.model_ids_and_buffers()
+        {
+            feature_render_buffer_managers
                 .entry(model_id)
-                .and_modify(|instance_transform_render_buffer| {
-                    instance_transform_render_buffer.transfer_instance_transforms_to_render_buffer(
-                        core_system,
-                        instance_transform_buffer,
-                    );
+                .and_modify(|feature_render_buffer_managers| {
+                    for (feature_buffer, render_buffer_manager) in instance_feature_buffers
+                        .iter()
+                        .zip(feature_render_buffer_managers.iter_mut())
+                    {
+                        render_buffer_manager
+                            .copy_instance_features_to_render_buffer(core_system, feature_buffer);
+                        feature_buffer.clear();
+                    }
                 })
                 .or_insert_with(|| {
-                    ModelInstanceTransformRenderBufferManager::new(
-                        core_system,
-                        instance_transform_buffer,
-                        model_id.to_string(),
-                    )
+                    instance_feature_buffers
+                        .iter()
+                        .map(|feature_buffer| {
+                            let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
+                                core_system,
+                                feature_buffer,
+                                model_id.to_string(),
+                            );
+                            feature_buffer.clear();
+                            render_buffer_manager
+                        })
+                        .collect()
                 });
         }
-        instance_transform_render_buffers
-            .retain(|model_id, _| instance_transform_pool.has_buffer_for_model(*model_id));
+        feature_render_buffer_managers
+            .retain(|model_id, _| instance_feature_manager.has_model_id(*model_id));
     }
 
     /// Removes render resources whose source data is no longer present.

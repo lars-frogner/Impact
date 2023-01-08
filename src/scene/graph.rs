@@ -1,9 +1,9 @@
 //! Scene graph implementation.
 
 use crate::{
-    geometry::{Frustum, ModelInstanceTransform, Sphere},
+    geometry::{Frustum, InstanceFeature, InstanceFeatureID, ModelInstanceTransform, Sphere},
     num::Float,
-    scene::{CameraID, CameraRepository, ModelID, ModelInstanceFeatureManager},
+    scene::{CameraID, CameraRepository, InstanceFeatureManager, ModelID},
     util::{GenerationalIdx, GenerationalReusingVec},
 };
 use anyhow::{anyhow, Result};
@@ -114,13 +114,15 @@ pub struct GroupNode<F: Float> {
 
 /// A [`SceneGraph`] leaf node representing a model instance.
 /// It holds a transform representing the instance's spatial
-/// relationship with its parent group.
+/// relationship with its parent group, as well as a list of
+/// instance feature IDs.
 #[derive(Clone, Debug)]
 pub struct ModelInstanceNode<F: Float> {
     parent_node_id: GroupNodeID,
     model_bounding_sphere: Sphere<F>,
     model_to_parent_transform: NodeTransform<F>,
     model_id: ModelID,
+    feature_ids: Vec<InstanceFeatureID>,
 }
 
 /// A [`SceneGraph`] leaf node representing a
@@ -205,9 +207,9 @@ impl<F: Float> SceneGraph<F> {
     }
 
     /// Creates a new [`ModelInstanceNode`] for an instance of the
-    /// model with the given ID and bounding sphere. It is included
-    /// in the scene graph with the given transform relative to the
-    /// the given parent node.
+    /// model with the given ID, bounding sphere and feature IDs.
+    /// It is included in the scene graph with the given transform
+    /// relative to the the given parent node.
     ///
     /// # Returns
     /// The ID of the created model instance node.
@@ -220,12 +222,14 @@ impl<F: Float> SceneGraph<F> {
         model_to_parent_transform: NodeTransform<F>,
         model_id: ModelID,
         bounding_sphere: Sphere<F>,
+        feature_ids: Vec<InstanceFeatureID>,
     ) -> ModelInstanceNodeID {
         let model_instance_node = ModelInstanceNode::new(
             parent_node_id,
             bounding_sphere,
             model_to_parent_transform,
             model_id,
+            feature_ids,
         );
         let model_instance_node_id = self.model_instance_nodes.add_node(model_instance_node);
         self.group_nodes
@@ -400,10 +404,10 @@ impl<F: Float> SceneGraph<F> {
 
     /// Computes the model-to-camera space transforms of all the model
     /// instances in the scene graph that are visible with the specified
-    /// camera and adds them in the given model instance pool. If no camera
-    /// is specified, the computed transforms will be model-to-root space
-    /// transforms instead, and view culling is performed for the identity
-    /// view projection transform.
+    /// camera and adds them to the given instance feature manager. If no
+    /// camera is specified, the computed transforms will be model-to-root
+    /// space transforms instead, and view culling is performed for the
+    /// identity view projection transform.
     ///
     /// # Errors
     /// Returns an error if the specified camera is not present in the
@@ -413,10 +417,13 @@ impl<F: Float> SceneGraph<F> {
     /// If the specified camera node does not exist.
     pub fn sync_transforms_of_visible_model_instances(
         &mut self,
-        instance_transform_pool: &mut ModelInstanceFeatureManager<F>,
+        instance_feature_manager: &mut InstanceFeatureManager,
         camera_repository: &CameraRepository<F>,
         camera_node_id: Option<CameraNodeID>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        ModelInstanceTransform<F>: InstanceFeature,
+    {
         let root_node_id = self.root_node_id();
 
         let (view_projection_transform, root_to_camera_transform) = match camera_node_id {
@@ -439,7 +446,7 @@ impl<F: Float> SceneGraph<F> {
         self.update_bounding_spheres(root_node_id);
 
         self.update_model_to_camera_transforms_for_model_instances_in_group(
-            instance_transform_pool,
+            instance_feature_manager,
             &camera_frustum,
             root_node_id,
             &root_to_camera_transform,
@@ -474,18 +481,20 @@ impl<F: Float> SceneGraph<F> {
     /// The given parent model-to-camera transform and the model-to-parent
     /// transform of the specified group node are prepended to the transforms
     /// of the children. For the children that are model instance
-    /// nodes, their final model-to-camera transforms are added in
-    /// the given model instance pool.
+    /// nodes, their final model-to-camera transforms are added to
+    /// the given instance feature manager.
     ///
     /// # Panics
     /// If the specified group node does not exist.
     fn update_model_to_camera_transforms_for_model_instances_in_group(
         &self,
-        instance_transform_pool: &mut ModelInstanceFeatureManager<F>,
+        instance_feature_manager: &mut InstanceFeatureManager,
         camera_frustum: &Frustum<F>,
         group_node_id: GroupNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
-    ) {
+    ) where
+        ModelInstanceTransform<F>: InstanceFeature,
+    {
         let group_node = self.group_nodes.node(group_node_id);
 
         let group_to_camera_transform =
@@ -498,7 +507,7 @@ impl<F: Float> SceneGraph<F> {
             if !camera_frustum.sphere_lies_outside(&bounding_sphere_world_space) {
                 for &group_node_id in group_node.child_group_node_ids() {
                     self.update_model_to_camera_transforms_for_model_instances_in_group(
-                        instance_transform_pool,
+                        instance_feature_manager,
                         camera_frustum,
                         group_node_id,
                         &group_to_camera_transform,
@@ -507,7 +516,7 @@ impl<F: Float> SceneGraph<F> {
 
                 for &model_instance_node_id in group_node.child_model_instance_node_ids() {
                     self.update_model_to_camera_transform_of_model_instance(
-                        instance_transform_pool,
+                        instance_feature_manager,
                         model_instance_node_id,
                         &group_to_camera_transform,
                     );
@@ -519,27 +528,31 @@ impl<F: Float> SceneGraph<F> {
     /// Prepends the given parent group-to-camera transform to the
     /// model-to-parent transform of the specified model instance node
     /// and adds an instance with the resulting transform
-    /// in the given model instance pool.
+    /// to the given instance feature manager.
     ///
     /// # Panics
     /// If the specified model instance node does not exist.
     fn update_model_to_camera_transform_of_model_instance(
         &self,
-        instance_transform_pool: &mut ModelInstanceFeatureManager<F>,
+        instance_feature_manager: &mut InstanceFeatureManager,
         model_instance_node_id: ModelInstanceNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
-    ) {
+    ) where
+        ModelInstanceTransform<F>: InstanceFeature,
+    {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-        if let Some(buffer) = instance_transform_pool.get_buffer_mut(model_instance_node.model_id())
-        {
-            let model_to_camera_transform =
-                parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
+        let model_to_camera_transform =
+            parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-            buffer.add_transform(ModelInstanceTransform::with_model_to_camera_transform(
-                model_to_camera_transform.to_homogeneous(),
-            ));
-        }
+        let transform = ModelInstanceTransform::with_model_to_camera_transform(
+            model_to_camera_transform.to_homogeneous(),
+        );
+        instance_feature_manager.buffer_instance(
+            model_instance_node.model_id(),
+            &transform,
+            model_instance_node.feature_ids(),
+        );
     }
 
     /// Updates the bounding sphere of the specified group node
@@ -817,12 +830,14 @@ impl<F: Float> ModelInstanceNode<F> {
         model_bounding_sphere: Sphere<F>,
         model_to_parent_transform: NodeTransform<F>,
         model_id: ModelID,
+        feature_ids: Vec<InstanceFeatureID>,
     ) -> Self {
         Self {
             parent_node_id,
             model_bounding_sphere,
             model_to_parent_transform,
             model_id,
+            feature_ids,
         }
     }
 
@@ -845,6 +860,11 @@ impl<F: Float> ModelInstanceNode<F> {
     /// instance of.
     pub fn model_id(&self) -> ModelID {
         self.model_id
+    }
+
+    /// Returns the IDs of the instance's features.
+    pub fn feature_ids(&self) -> &[InstanceFeatureID] {
+        &self.feature_ids
     }
 
     /// Returns the bounding sphere of the model instance.
@@ -960,6 +980,7 @@ mod test {
             Similarity3::identity(),
             create_dummy_model_id(""),
             Sphere::new(Point3::origin(), F::one()),
+            Vec::new(),
         )
     }
 
@@ -1360,6 +1381,7 @@ mod test {
             model_to_parent_transform,
             create_dummy_model_id(""),
             bounding_sphere.clone(),
+            Vec::new(),
         );
 
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
@@ -1386,12 +1408,14 @@ mod test {
             Similarity3::identity(),
             create_dummy_model_id("1"),
             bounding_sphere_1.clone(),
+            Vec::new(),
         );
         scene_graph.create_model_instance_node(
             root,
             Similarity3::identity(),
             create_dummy_model_id("2"),
             bounding_sphere_2.clone(),
+            Vec::new(),
         );
 
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
@@ -1431,6 +1455,7 @@ mod test {
             Similarity3::identity(),
             create_dummy_model_id("1"),
             bounding_sphere_1.clone(),
+            Vec::new(),
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_to_parent_transform);
         scene_graph.create_model_instance_node(
@@ -1438,6 +1463,7 @@ mod test {
             model_instance_2_to_parent_transform,
             create_dummy_model_id("2"),
             bounding_sphere_2.clone(),
+            Vec::new(),
         );
 
         let correct_group_2_bounding_sphere =

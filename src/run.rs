@@ -124,10 +124,11 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     let mut material_library = MaterialLibrary::new();
-    let material_spec = MaterialSpecification {
-        shader_id: ShaderID(hash!("Test shader")),
-        image_texture_ids: vec![TextureID(hash!("Tree texture"))],
-    };
+    let material_spec = MaterialSpecification::new(
+        ShaderID(hash!("Test shader")),
+        vec![TextureID(hash!("Tree texture"))],
+        Vec::new(),
+    );
     material_library.add_material_specification(MaterialID(hash!("Test material")), material_spec);
 
     let renderer = RenderingSystem::new(core_system, assets).await?;

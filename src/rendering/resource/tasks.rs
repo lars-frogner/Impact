@@ -4,7 +4,7 @@ use super::{DesynchronizedRenderResources, RenderResourceManager};
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::SyncVisibleModelInstanceTransforms,
+    scene::BufferVisibleModelInstances,
     world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
@@ -23,7 +23,7 @@ define_task!(
         SyncColorMeshBuffers,
         SyncTextureMeshBuffers,
         SyncMaterialRenderResources,
-        SyncModelInstanceTransformBuffers
+        SyncInstanceFeatureBuffers
     ],
     execute_on = [RenderingTag],
     |world: &World| {
@@ -44,7 +44,7 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncColorMeshBuffers)?;
         task_scheduler.register_task(SyncTextureMeshBuffers)?;
         task_scheduler.register_task(SyncMaterialRenderResources)?;
-        task_scheduler.register_task(SyncModelInstanceTransformBuffers)?;
+        task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
         task_scheduler.register_task(SyncRenderResources)
     }
 }
@@ -62,7 +62,7 @@ define_task!(
                     renderer.core_system(),
                     render_resource_manager
                         .desynchronized()
-                        .perspective_camera_buffers
+                        .perspective_camera_buffer_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
@@ -90,7 +90,7 @@ define_task!(
                     renderer.core_system(),
                     render_resource_manager
                         .desynchronized()
-                        .color_mesh_buffers
+                        .color_mesh_buffer_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
@@ -118,7 +118,7 @@ define_task!(
                     renderer.core_system(),
                     render_resource_manager
                         .desynchronized()
-                        .texture_mesh_buffers
+                        .texture_mesh_buffer_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
@@ -147,7 +147,7 @@ define_task!(
                     renderer.assets(),
                     render_resource_manager
                         .desynchronized()
-                        .material_resources
+                        .material_resource_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
@@ -163,25 +163,25 @@ define_task!(
 );
 
 define_task!(
-    SyncModelInstanceTransformBuffers,
-    depends_on = [SyncVisibleModelInstanceTransforms],
+    SyncInstanceFeatureBuffers,
+    depends_on = [BufferVisibleModelInstances],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing model instance render buffers"; {
+        with_debug_logging!("Synchronizing model instance feature render buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_model_instance_transform_buffers_with_instance_transform_pool(
+                DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
                     renderer.core_system(),
                     render_resource_manager
                         .desynchronized()
-                        .instance_transform_buffers
+                        .instance_feature_buffer_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
                     &world
                         .scene().read().unwrap()
-                        .model_instance_transform_pool().read().unwrap(),
+                        .instance_feature_manager().read().unwrap(),
                 );
             }
             Ok(())

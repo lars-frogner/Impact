@@ -15,10 +15,11 @@ use anyhow::Result;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
-    /// [`SceneGraph`](crate::scene::SceneGraph) to update the
-    /// model-to-camera space transforms of the model instances
-    /// that are visible with the active camera.
-    [pub] SyncVisibleModelInstanceTransforms,
+    /// [`SceneGraph`](crate::scene::SceneGraph) to determine which
+    /// model instances are visible with the active camera, update
+    /// their model-to-camera space transforms and buffer their
+    /// features for rendering.
+    [pub] BufferVisibleModelInstances,
     depends_on = [SyncSceneObjectTransformsWithPositions],
     execute_on = [RenderingTag],
     |world: &World| {
@@ -28,7 +29,7 @@ define_task!(
                 .write()
                 .unwrap()
                 .sync_transforms_of_visible_model_instances(
-                    &mut scene.model_instance_transform_pool().write().unwrap(),
+                    &mut scene.instance_feature_manager().write().unwrap(),
                     &scene.camera_repository().read().unwrap(),
                     scene.get_active_camera_node_id(),
                 );
@@ -53,7 +54,7 @@ impl Scene {
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
         task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
-        task_scheduler.register_task(SyncVisibleModelInstanceTransforms)
+        task_scheduler.register_task(BufferVisibleModelInstances)
     }
 
     /// Identifies scene-related errors that need special

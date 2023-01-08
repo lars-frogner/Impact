@@ -1,6 +1,9 @@
 //! Management of materials.
 
-use crate::rendering::{ShaderID, TextureID};
+use crate::{
+    geometry::InstanceFeatureTypeID,
+    rendering::{ShaderID, TextureID},
+};
 use std::collections::HashMap;
 
 stringhash_newtype!(
@@ -9,11 +12,13 @@ stringhash_newtype!(
     [pub] MaterialID
 );
 
-/// A material specified by textures and a shader.
+/// A material specified by a shader with associated
+/// textures and material properties.
 #[derive(Clone, Debug)]
 pub struct MaterialSpecification {
-    pub shader_id: ShaderID,
-    pub image_texture_ids: Vec<TextureID>,
+    shader_id: ShaderID,
+    image_texture_ids: Vec<TextureID>,
+    instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
 }
 
 /// Container for different material specifications.
@@ -24,14 +29,16 @@ pub struct MaterialLibrary {
 
 impl MaterialSpecification {
     /// Creates a new material specification with the
-    /// given shader and textures.
+    /// given shader, textures and material properties.
     pub fn new(
         shader_id: ShaderID,
         image_texture_ids: Vec<TextureID>,
+        instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     ) -> Self {
         Self {
             shader_id,
             image_texture_ids,
+            instance_feature_type_ids,
         }
     }
 
@@ -44,6 +51,12 @@ impl MaterialSpecification {
     /// material.
     pub fn image_texture_ids(&self) -> &[TextureID] {
         &self.image_texture_ids
+    }
+
+    /// Returns the IDs of the material property types used
+    /// for the material.
+    pub fn instance_feature_type_ids(&self) -> &[InstanceFeatureTypeID] {
+        &self.instance_feature_type_ids
     }
 }
 

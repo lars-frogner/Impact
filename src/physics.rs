@@ -6,7 +6,7 @@ mod time;
 
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularVelocity,
-    AngularVelocityComp, Orientation, OrientationComp, Position, PositionComp, Velocity,
+    AngularVelocityComp, Orientation, OrientationComp, Position, PositionComp, Static, Velocity,
     VelocityComp,
 };
 pub use tasks::PhysicsTag;
