@@ -204,6 +204,26 @@ impl AlignedByteVec {
         }
     }
 
+    /// Resizes the vector in-place so that `len` is equal to `new_len`.
+    ///
+    /// If `new_len` is greater than `len`, the vector is extended by the
+    /// difference, with each additional slot filled with `value`.
+    /// If `new_len` is less than `len`, the vector is simply truncated.
+    pub fn resize(&mut self, new_len: usize, value: u8) {
+        let len = self.bytes.len();
+
+        if new_len > len {
+            let n_additional = new_len - len;
+            self.reserve(n_additional);
+            unsafe {
+                ptr::write_bytes(self.bytes.as_mut_ptr().add(len), value, n_additional);
+                self.bytes.set_len(new_len);
+            };
+        } else {
+            self.truncate(new_len);
+        }
+    }
+
     fn reserve(&mut self, n_additional: usize) {
         let old_len = self.bytes.len();
         let old_layout = self.layout;
@@ -534,5 +554,29 @@ mod test {
 
         assert_eq!(vec.len(), new_len);
         assert_eq!(vec.as_slice(), &BYTES[..new_len]);
+    }
+
+    #[test]
+    fn resizing_nonempty_aligned_byte_vec_to_shorter_len_works() {
+        let alignment = Alignment::new(2);
+        let mut vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
+        let new_len = 28;
+        vec.resize(new_len, 0);
+
+        assert_eq!(vec.len(), new_len);
+        assert_eq!(vec.as_slice(), &BYTES[..new_len]);
+    }
+
+    #[test]
+    fn resizing_nonempty_aligned_byte_vec_to_longer_len_works() {
+        let alignment = Alignment::new(2);
+        let mut vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
+        let new_len = 46;
+        let value = 0;
+        vec.resize(new_len, value);
+
+        assert_eq!(vec.len(), new_len);
+        assert_eq!(&vec[..BYTES.len()], &BYTES);
+        assert!(vec[BYTES.len()..].iter().all(|&v| v == value));
     }
 }
