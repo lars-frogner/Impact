@@ -107,14 +107,19 @@ impl AlignedByteVec {
     /// # Panics
     /// If the length of `bytes` exceeds `isize::MAX`.
     pub fn copied_from_slice(alignment: Alignment, bytes: &[u8]) -> Self {
-        let (layout, ptr) = Self::allocate_memory_with_alignment_and_size(alignment, bytes.len());
-        let vec = unsafe {
-            ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
-            Vec::from_raw_parts(ptr, bytes.len(), layout.size())
-        };
-        Self {
-            layout,
-            bytes: ManuallyDrop::new(vec),
+        if bytes.is_empty() {
+            Self::new(alignment)
+        } else {
+            let (layout, ptr) =
+                Self::allocate_memory_with_alignment_and_size(alignment, bytes.len());
+            let vec = unsafe {
+                ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
+                Vec::from_raw_parts(ptr, bytes.len(), layout.size())
+            };
+            Self {
+                layout,
+                bytes: ManuallyDrop::new(vec),
+            }
         }
     }
 
@@ -164,20 +169,22 @@ impl AlignedByteVec {
         let added_len = other.len();
         let new_len = old_len.checked_add(added_len).unwrap();
 
-        self.reserve(added_len);
+        if added_len > 0 {
+            self.reserve(added_len);
 
-        unsafe {
-            // SAFETY:
-            // The memory blocks are guaranteed to be nonoverlapping since `self.bytes`
-            // is borrowed mutably (so `other` is not from the same memory)
-            ptr::copy_nonoverlapping(
-                other.as_ptr(),
-                self.bytes.as_mut_ptr().add(old_len),
-                added_len,
-            );
+            unsafe {
+                // SAFETY:
+                // The memory blocks are guaranteed to be nonoverlapping since `self.bytes`
+                // is borrowed mutably (so `other` is not from the same memory)
+                ptr::copy_nonoverlapping(
+                    other.as_ptr(),
+                    self.bytes.as_mut_ptr().add(old_len),
+                    added_len,
+                );
 
-            // Force new length for the vector to encompass new data
-            self.bytes.set_len(new_len);
+                // Force new length for the vector to encompass new data
+                self.bytes.set_len(new_len);
+            }
         }
     }
 
@@ -374,6 +381,17 @@ mod test {
     }
 
     #[test]
+    fn creating_aligned_byte_vec_copied_from_empty_slice_works() {
+        let alignment = Alignment::new(1);
+        let vec = AlignedByteVec::copied_from_slice(alignment, &[]);
+
+        assert_eq!(vec.alignment(), alignment);
+        assert_eq!(vec.capacity(), 0);
+        assert_eq!(vec.len(), 0);
+        assert!(vec.is_empty());
+    }
+
+    #[test]
     fn creating_aligned_byte_vec_copied_from_slice_works() {
         let alignment = Alignment::new(8);
         let vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
@@ -461,6 +479,20 @@ mod test {
         assert_eq!(&vec[..BYTES.len()], &BYTES);
         assert_eq!(&vec[BYTES.len()..(BYTES.len() + BYTES2.len())], &BYTES2);
         assert_eq!(&vec[(BYTES.len() + BYTES2.len())..], &BYTES);
+    }
+
+    #[test]
+    fn extending_nonempty_aligned_byte_vec_with_empty_slice_works() {
+        let alignment = Alignment::new(8);
+        let mut vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
+        vec.extend_from_slice(&[]);
+
+        assert!(has_alignment_of(&vec, alignment));
+        assert_eq!(vec.alignment(), alignment);
+        assert_eq!(vec.capacity(), BYTES.len());
+        assert_eq!(vec.len(), BYTES.len());
+        assert_eq!(&*vec, &BYTES);
+        assert_eq!(vec.as_slice(), &BYTES);
     }
 
     #[test]
