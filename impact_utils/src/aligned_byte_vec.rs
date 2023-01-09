@@ -118,6 +118,12 @@ impl AlignedByteVec {
         }
     }
 
+    /// Returns the alignment of the block of memory containing the data of
+    /// the vector.
+    pub fn alignment(&self) -> Alignment {
+        Alignment::of_layout(self.layout)
+    }
+
     /// Returns the number of elements the vector can hold without
     /// reallocating.
     pub fn capacity(&self) -> usize {
@@ -173,16 +179,6 @@ impl AlignedByteVec {
             // Force new length for the vector to encompass new data
             self.bytes.set_len(new_len);
         }
-    }
-
-    /// Returns the alignment of the block of memory containing the data of
-    /// the vector.
-    ///
-    /// # Warning
-    /// If the vector has no memory allocated, the returned alignment will
-    /// be 1 no matter what the specified alignment was.
-    fn alignment(&self) -> Alignment {
-        Alignment::of_layout(self.layout)
     }
 
     fn reserve(&mut self, n_additional: usize) {
@@ -355,6 +351,7 @@ mod test {
         let alignment = Alignment::new(4);
         let vec = AlignedByteVec::new(alignment);
 
+        assert_eq!(vec.alignment(), alignment);
         assert_eq!(vec.capacity(), 0);
         assert_eq!(vec.len(), 0);
         assert!(vec.is_empty());
