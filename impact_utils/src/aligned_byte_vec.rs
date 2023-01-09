@@ -19,7 +19,7 @@ pub struct Alignment(usize);
 /// # Warning
 /// The address of `AlignedByteVec`s data is only guaranteed to
 /// be aligned when the capacity is non-zero.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AlignedByteVec {
     layout: Layout,
     // It is important that the byte `Vec` is never dropped, as we
@@ -172,12 +172,28 @@ impl AlignedByteVec {
             // is borrowed mutably (so `other` is not from the same memory)
             ptr::copy_nonoverlapping(
                 other.as_ptr(),
-                self.bytes.as_mut_ptr().offset(old_len.try_into().unwrap()),
+                self.bytes.as_mut_ptr().add(old_len),
                 added_len,
             );
 
             // Force new length for the vector to encompass new data
             self.bytes.set_len(new_len);
+        }
+    }
+
+    /// Shortens the vector, keeping the first `len` elements and dropping
+    /// the rest.
+    ///
+    /// If `len` is greater than the vector's current length, this has no
+    /// effect.
+    ///
+    /// Note that this method has no effect on the allocated capacity
+    /// of the vector.
+    pub fn truncate(&mut self, len: usize) {
+        if len < self.bytes.len() {
+            unsafe {
+                self.bytes.set_len(len);
+            }
         }
     }
 
@@ -475,5 +491,16 @@ mod test {
         assert_eq!(cloned.len(), BYTES.len());
         assert_eq!(&*cloned, &BYTES);
         assert_eq!(cloned.as_slice(), &BYTES);
+    }
+
+    #[test]
+    fn truncating_nonempty_aligned_byte_vec_works() {
+        let alignment = Alignment::new(2);
+        let mut vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
+        let new_len = 28;
+        vec.truncate(new_len);
+
+        assert_eq!(vec.len(), new_len);
+        assert_eq!(vec.as_slice(), &BYTES[..new_len]);
     }
 }
