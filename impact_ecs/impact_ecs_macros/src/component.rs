@@ -15,6 +15,7 @@ pub(crate) fn impl_component(input: DeriveInput, crate_root: &Ident) -> TokenStr
                     #crate_root::component::ComponentByteView::new_for_single_instance(
                         Self::component_id(),
                         ::std::mem::size_of::<#type_name>(),
+                        impact_utils::Alignment::of::<#type_name>(),
                         bytemuck::bytes_of(self),
                     )
                 }
@@ -29,6 +30,7 @@ pub(crate) fn impl_component(input: DeriveInput, crate_root: &Ident) -> TokenStr
                     #crate_root::component::ComponentByteView::new_for_single_instance(
                         Self::component_id(),
                         ::std::mem::size_of::<#type_name #ty_generics>(),
+                        impact_utils::Alignment::of::<#type_name>(),
                         bytemuck::bytes_of(self),
                     )
                 }

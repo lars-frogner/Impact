@@ -1,6 +1,7 @@
 //! Representation and storage of ECS components.
 
 use bytemuck::Pod;
+use impact_utils::{AlignedByteVec, Alignment};
 use std::{any::TypeId, mem};
 
 /// Represents a component.
@@ -72,7 +73,7 @@ pub struct ComponentStorage {
     component_id: ComponentID,
     component_count: usize,
     component_size: usize,
-    bytes: Vec<u8>,
+    bytes: AlignedByteVec,
 }
 
 /// Container owning the bytes associated with one or more
@@ -83,17 +84,18 @@ pub struct ComponentBytes {
     component_id: ComponentID,
     component_count: usize,
     component_size: usize,
-    bytes: Vec<u8>,
+    bytes: AlignedByteVec,
 }
 
 /// Reference to the bytes of one or more components of the same
 /// type, which also includes the component ID, count and size
 /// required to safely reconstruct the components.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ComponentByteView<'a> {
     component_id: ComponentID,
     component_count: usize,
     component_size: usize,
+    component_align: Alignment,
     bytes: &'a [u8],
 }
 
@@ -106,6 +108,7 @@ impl ComponentStorage {
             component_id,
             component_count,
             component_size,
+            component_align,
             bytes,
         }: ComponentByteView<'_>,
     ) -> Self {
@@ -113,7 +116,7 @@ impl ComponentStorage {
             component_id,
             component_count,
             component_size,
-            bytes: bytes.to_vec(),
+            bytes: AlignedByteVec::copied_from_slice(component_align, bytes),
         }
     }
     /// Initializes a new storage for instances of the component
@@ -142,7 +145,7 @@ impl ComponentStorage {
             C::component_id(),
             0,
             component_size,
-            Vec::with_capacity(component_count * component_size),
+            AlignedByteVec::with_capacity(Alignment::of::<C>(), component_count * component_size),
         ))
     }
 
@@ -162,6 +165,7 @@ impl ComponentStorage {
             component_id: self.component_id,
             component_count: self.component_count,
             component_size: self.component_size,
+            component_align: self.bytes.alignment(),
             bytes: &self.bytes,
         }
     }
@@ -178,7 +182,13 @@ impl ComponentStorage {
             0,
             "Tried to obtain slice of zero-sized component values from storage"
         );
-        bytemuck::cast_slice(&self.bytes)
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        if self.bytes.is_empty() {
+            &[]
+        } else {
+            bytemuck::cast_slice(&self.bytes)
+        }
     }
 
     /// Returns a mutable slice of all stored components.
@@ -193,7 +203,13 @@ impl ComponentStorage {
             0,
             "Tried to obtain slice of zero-sized component values from storage"
         );
-        bytemuck::cast_slice_mut(&mut self.bytes)
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        if self.bytes.is_empty() {
+            &mut []
+        } else {
+            bytemuck::cast_slice_mut(&mut self.bytes)
+        }
     }
 
     /// Appends the given component to the end of the storage.
@@ -217,6 +233,7 @@ impl ComponentStorage {
             component_id,
             component_count,
             component_size: _,
+            component_align: _,
             bytes,
         }: ComponentByteView<'_>,
     ) {
@@ -290,9 +307,11 @@ impl ComponentStorage {
             let removed_component_data = ComponentBytes::new_for_single_instance(
                 self.component_id,
                 self.component_size,
-                self.bytes
-                    [component_to_remove_start..component_to_remove_start + self.component_size]
-                    .to_vec(),
+                AlignedByteVec::copied_from_slice(
+                    self.bytes.alignment(),
+                    &self.bytes[component_to_remove_start
+                        ..component_to_remove_start + self.component_size],
+                ),
             );
 
             // Copy over with last component unless the component to
@@ -343,7 +362,7 @@ impl ComponentBytes {
         component_id: ComponentID,
         component_count: usize,
         component_size: usize,
-        bytes: Vec<u8>,
+        bytes: AlignedByteVec,
     ) -> Self {
         assert_eq!(
             component_count.checked_mul(component_size).unwrap(),
@@ -362,7 +381,7 @@ impl ComponentBytes {
     pub(crate) fn new_for_single_instance(
         component_id: ComponentID,
         component_size: usize,
-        bytes: Vec<u8>,
+        bytes: AlignedByteVec,
     ) -> Self {
         Self::new(component_id, 1, component_size, bytes)
     }
@@ -370,7 +389,7 @@ impl ComponentBytes {
     /// Creates a new container for a single instance of a zero-sized
     /// component.
     pub(crate) fn new_for_single_zero_sized_instance(component_id: ComponentID) -> Self {
-        Self::new_for_single_instance(component_id, 0, Vec::new())
+        Self::new_for_single_instance(component_id, 0, AlignedByteVec::new(Alignment::new(1)))
     }
 
     /// Returns the ID of the component type these bytes represent.
@@ -395,6 +414,7 @@ impl ComponentBytes {
             component_id: self.component_id(),
             component_count: self.component_count(),
             component_size: self.component_size(),
+            component_align: self.bytes.alignment(),
             bytes: &self.bytes,
         }
     }
@@ -402,11 +422,12 @@ impl ComponentBytes {
 
 impl<'a> ComponentByteView<'a> {
     /// Creates a new view to the given bytes for a component
-    /// with the given ID, count and size.
+    /// with the given ID, count, size and alignment.
     pub fn new(
         component_id: ComponentID,
         component_count: usize,
         component_size: usize,
+        component_align: Alignment,
         bytes: &'a [u8],
     ) -> Self {
         assert_eq!(
@@ -417,6 +438,7 @@ impl<'a> ComponentByteView<'a> {
             component_id,
             component_count,
             component_size,
+            component_align,
             bytes,
         }
     }
@@ -426,9 +448,10 @@ impl<'a> ComponentByteView<'a> {
     pub fn new_for_single_instance(
         component_id: ComponentID,
         component_size: usize,
+        component_align: Alignment,
         bytes: &'a [u8],
     ) -> Self {
-        Self::new(component_id, 1, component_size, bytes)
+        Self::new(component_id, 1, component_size, component_align, bytes)
     }
 
     /// Returns the ID of the type of the components whose bytes
@@ -461,7 +484,13 @@ impl<'a> ComponentByteView<'a> {
             0,
             "Tried to obtain slice of zero-sized component values from component byte view"
         );
-        bytemuck::cast_slice(self.bytes)
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        if self.bytes.is_empty() {
+            &[]
+        } else {
+            bytemuck::cast_slice(self.bytes)
+        }
     }
 
     fn validate_component<C: Component>(&self) {
@@ -482,7 +511,7 @@ impl<'a> ComponentByteView<'a> {
             component_id: self.component_id(),
             component_count: self.component_count(),
             component_size: self.component_size(),
-            bytes: self.bytes.to_vec(),
+            bytes: AlignedByteVec::copied_from_slice(self.component_align, self.bytes),
         }
     }
 }
@@ -493,13 +522,25 @@ impl<'a, C: Component> ComponentInstances<'a, C> for &'a [C] {
     }
 
     fn component_bytes(&self) -> ComponentByteView<'a> {
+        let component_count = self.len();
         let component_size = mem::size_of::<C>();
-        let bytes = if component_size == 0 {
+        let component_align = Alignment::of::<C>();
+
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        let bytes = if component_size == 0 || component_count == 0 {
             &[]
         } else {
             bytemuck::cast_slice(self)
         };
-        ComponentByteView::new(Self::component_id(), self.len(), component_size, bytes)
+
+        ComponentByteView::new(
+            Self::component_id(),
+            component_count,
+            component_size,
+            component_align,
+            bytes,
+        )
     }
 }
 
@@ -509,14 +550,26 @@ impl<'a, const N: usize, C: Component> ComponentInstances<'a, C> for &'a [C; N] 
     }
 
     fn component_bytes(&self) -> ComponentByteView<'a> {
+        let component_count = self.len();
         let component_size = mem::size_of::<C>();
-        let bytes = if component_size == 0 {
+        let component_align = Alignment::of::<C>();
+
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        let bytes = if component_size == 0 || component_count == 0 {
             &[]
         } else {
             #[allow(clippy::explicit_auto_deref)]
             bytemuck::cast_slice(*self)
         };
-        ComponentByteView::new(Self::component_id(), self.len(), component_size, bytes)
+
+        ComponentByteView::new(
+            Self::component_id(),
+            component_count,
+            component_size,
+            component_align,
+            bytes,
+        )
     }
 }
 
