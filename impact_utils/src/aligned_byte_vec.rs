@@ -299,6 +299,28 @@ impl DerefMut for AlignedByteVec {
     }
 }
 
+impl Clone for AlignedByteVec {
+    fn clone(&self) -> Self {
+        if self.layout.size() == 0 {
+            Self {
+                layout: self.layout,
+                bytes: self.bytes.clone(),
+            }
+        } else {
+            let mut cloned = Self::with_capacity(self.alignment(), self.capacity());
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    self.bytes.as_ptr(),
+                    cloned.bytes.as_mut_ptr(),
+                    self.len(),
+                );
+                cloned.bytes.set_len(self.len());
+            };
+            cloned
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -426,5 +448,35 @@ mod test {
         assert_eq!(&vec[..BYTES.len()], &BYTES);
         assert_eq!(&vec[BYTES.len()..(BYTES.len() + BYTES2.len())], &BYTES2);
         assert_eq!(&vec[(BYTES.len() + BYTES2.len())..], &BYTES);
+    }
+
+    #[test]
+    fn cloning_empty_aligned_byte_vec_works() {
+        let alignment = Alignment::new(2);
+        let vec = AlignedByteVec::new(alignment);
+
+        #[allow(clippy::redundant_clone)]
+        let cloned = vec.clone();
+
+        assert_eq!(cloned.alignment(), alignment);
+        assert_eq!(cloned.capacity(), 0);
+        assert_eq!(cloned.len(), 0);
+        assert!(cloned.is_empty());
+    }
+
+    #[test]
+    fn cloning_nonempty_aligned_byte_vec_works() {
+        let alignment = Alignment::new(2);
+        let vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
+
+        #[allow(clippy::redundant_clone)]
+        let cloned = vec.clone();
+
+        assert!(has_alignment_of(&cloned, alignment));
+        assert_eq!(cloned.alignment(), alignment);
+        assert_eq!(cloned.capacity(), BYTES.len());
+        assert_eq!(cloned.len(), BYTES.len());
+        assert_eq!(&*cloned, &BYTES);
+        assert_eq!(cloned.as_slice(), &BYTES);
     }
 }
