@@ -58,6 +58,12 @@ impl Alignment {
     }
 }
 
+impl From<Alignment> for usize {
+    fn from(alignment: Alignment) -> Self {
+        alignment.0
+    }
+}
+
 impl AlignedByteVec {
     /// Constructs a new, empty [`AlignedByteVec`] with the given
     /// alignment.
@@ -68,7 +74,7 @@ impl AlignedByteVec {
             // SAFETY:
             // - `Alignment` is guaranteed to hold a valid alignment.
             // - The passed size of zero never overflows `isize`.
-            layout: unsafe { Layout::from_size_align_unchecked(0, alignment.0) },
+            layout: unsafe { Layout::from_size_align_unchecked(0, alignment.into()) },
             bytes: ManuallyDrop::new(Vec::new()),
         }
     }
@@ -231,7 +237,7 @@ impl AlignedByteVec {
         // Calling `alloc` with zero size is undefined behavior
         assert_ne!(minimum_size, 0);
 
-        let alignment = alignment.0;
+        let alignment: usize = alignment.into();
 
         // Round up the size to the nearest alignment (the expression
         // is only valid if alignement is a power of two, but if it is
@@ -302,8 +308,8 @@ mod test {
         45, 71, 89, 2, 173, 199, 237, 64, 22, 75, 199, 213, 37, 9, 85, 71,
     ];
 
-    fn has_alignment_of(bytes: &[u8], alignment: usize) -> bool {
-        (bytes.as_ptr() as usize) % alignment == 0
+    fn has_alignment_of(bytes: &[u8], alignment: Alignment) -> bool {
+        (bytes.as_ptr() as usize) % <Alignment as Into<usize>>::into(alignment) == 0
     }
 
     #[test]
@@ -320,10 +326,9 @@ mod test {
 
     #[test]
     fn creating_new_empty_aligned_byte_vec_works() {
-        let alignment = 4;
-        let vec = AlignedByteVec::new(Alignment::new(alignment));
+        let alignment = Alignment::new(4);
+        let vec = AlignedByteVec::new(alignment);
 
-        assert_eq!(vec.alignment(), alignment);
         assert_eq!(vec.capacity(), 0);
         assert_eq!(vec.len(), 0);
         assert!(vec.is_empty());
@@ -331,8 +336,11 @@ mod test {
 
     #[test]
     fn creating_aligned_byte_vec_copied_from_slice_works() {
-        let vec = AlignedByteVec::copied_from_slice(Alignment::new(8), &BYTES);
+        let alignment = Alignment::new(8);
+        let vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
 
+        assert!(has_alignment_of(&vec, alignment));
+        assert_eq!(vec.alignment(), alignment);
         assert_eq!(vec.capacity(), BYTES.len());
         assert_eq!(vec.len(), BYTES.len());
         assert_eq!(&*vec, &BYTES);
@@ -359,28 +367,33 @@ mod test {
     #[test]
     fn creating_aligned_byte_vec_with_nonzero_capacity_gives_specified_alignments() {
         for alignment in [1, 2, 4, 8, 16, 32, 64, 128] {
-            let vec = AlignedByteVec::with_capacity(Alignment::new(alignment), alignment);
+            let alignment = Alignment::new(alignment);
+            let vec = AlignedByteVec::with_capacity(alignment, alignment.into());
 
-            assert_eq!(vec.alignment(), alignment);
             assert!(has_alignment_of(&vec, alignment));
+            assert_eq!(vec.alignment(), alignment);
         }
     }
 
     #[test]
     fn creating_aligned_byte_vec_copied_from_slice_gives_specified_alignments() {
         for alignment in [1, 2, 4, 8, 16, 32, 64, 128] {
-            let vec = AlignedByteVec::copied_from_slice(Alignment::new(alignment), &BYTES);
+            let alignment = Alignment::new(alignment);
+            let vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
 
-            assert_eq!(vec.alignment(), alignment);
             assert!(has_alignment_of(&vec, alignment));
+            assert_eq!(vec.alignment(), alignment);
         }
     }
 
     #[test]
     fn extending_empty_aligned_byte_vec_with_slice_works() {
-        let mut vec = AlignedByteVec::new(Alignment::new(4));
+        let alignment = Alignment::new(4);
+        let mut vec = AlignedByteVec::new(alignment);
         vec.extend_from_slice(&BYTES);
 
+        assert!(has_alignment_of(&vec, alignment));
+        assert_eq!(vec.alignment(), alignment);
         assert!(vec.capacity() >= BYTES.len());
         assert_eq!(vec.len(), BYTES.len());
         assert_eq!(&*vec, &BYTES);
@@ -389,9 +402,12 @@ mod test {
 
     #[test]
     fn extending_nonempty_aligned_byte_vec_with_slice_works() {
-        let mut vec = AlignedByteVec::copied_from_slice(Alignment::new(8), &BYTES);
+        let alignment = Alignment::new(8);
+        let mut vec = AlignedByteVec::copied_from_slice(alignment, &BYTES);
         vec.extend_from_slice(&BYTES2);
 
+        assert!(has_alignment_of(&vec, alignment));
+        assert_eq!(vec.alignment(), alignment);
         assert!(vec.capacity() >= BYTES.len() + BYTES2.len());
         assert_eq!(vec.len(), BYTES.len() + BYTES2.len());
         assert_eq!(&vec[..BYTES.len()], &BYTES);
@@ -399,6 +415,8 @@ mod test {
 
         vec.extend_from_slice(&BYTES);
 
+        assert!(has_alignment_of(&vec, alignment));
+        assert_eq!(vec.alignment(), alignment);
         assert!(vec.capacity() >= 2 * BYTES.len() + BYTES2.len());
         assert_eq!(vec.len(), 2 * BYTES.len() + BYTES2.len());
         assert_eq!(&vec[..BYTES.len()], &BYTES);
