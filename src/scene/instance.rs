@@ -219,12 +219,60 @@ impl InstanceFeatureManager {
 mod test {
     use super::*;
     use crate::scene::{MaterialID, MeshID};
+    use bytemuck::{Pod, Zeroable};
     use impact_utils::hash;
+    use nalgebra::{Similarity3, Translation3, UnitQuaternion};
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
+    struct Feature(u8);
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    struct DifferentFeature(f64);
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
+    struct ZeroSizedFeature;
+
+    const DUMMY_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: 0,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[],
+    };
+
+    impl InstanceFeature for Feature {
+        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
+            DUMMY_LAYOUT
+        }
+    }
+
+    impl InstanceFeature for DifferentFeature {
+        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
+            DUMMY_LAYOUT
+        }
+    }
+    impl InstanceFeature for ZeroSizedFeature {
+        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
+            DUMMY_LAYOUT
+        }
+    }
 
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(
             MeshID(hash!(format!("Test mesh {}", tag.as_ref()))),
             MaterialID(hash!(format!("Test material {}", tag.as_ref()))),
+        )
+    }
+
+    fn create_dummy_transform() -> ModelInstanceTransform<f32> {
+        ModelInstanceTransform::with_model_to_camera_transform(
+            Similarity3::from_parts(
+                Translation3::new(2.1, -5.9, 0.01),
+                UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+                7.0,
+            )
+            .to_homogeneous(),
         )
     }
 
@@ -235,18 +283,99 @@ mod test {
     }
 
     #[test]
+    fn registering_feature_types_for_instance_feature_manager_works() {
+        let mut manager = InstanceFeatureManager::new();
+
+        assert!(manager.get_storage::<ZeroSizedFeature>().is_none());
+        assert!(manager.get_storage_mut::<ZeroSizedFeature>().is_none());
+
+        manager.register_feature_type::<ZeroSizedFeature>();
+
+        let storage_1 = manager.get_storage::<ZeroSizedFeature>().unwrap();
+        assert_eq!(
+            storage_1.feature_type_id(),
+            ZeroSizedFeature::feature_type_id()
+        );
+        assert_eq!(storage_1.feature_count(), 0);
+
+        assert!(manager.get_storage::<Feature>().is_none());
+        assert!(manager.get_storage_mut::<Feature>().is_none());
+
+        manager.register_feature_type::<Feature>();
+
+        let storage_2 = manager.get_storage::<Feature>().unwrap();
+        assert_eq!(storage_2.feature_type_id(), Feature::feature_type_id());
+        assert_eq!(storage_2.feature_count(), 0);
+    }
+
+    #[test]
     fn registering_one_instance_of_one_model_with_no_features_in_instance_feature_manager_works() {
         let mut manager = InstanceFeatureManager::new();
         let model_id = create_dummy_model_id("");
         manager.register_instance_with_feature_type_ids(model_id, &[]);
 
         let mut models_and_buffers = manager.model_ids_and_buffers();
-        assert_eq!(models_and_buffers.next().unwrap().0, model_id);
+        let (registered_model_id, buffers) = models_and_buffers.next().unwrap();
+        assert_eq!(registered_model_id, model_id);
+        assert_eq!(buffers.len(), 1);
+        assert_eq!(
+            buffers[0].feature_type_id(),
+            ModelInstanceTransform::feature_type_id()
+        );
+        assert_eq!(buffers[0].n_valid_bytes(), 0);
+
         assert!(models_and_buffers.next().is_none());
         drop(models_and_buffers);
 
         assert!(manager.has_model_id(model_id));
-        assert_eq!(manager.get_buffers(model_id).unwrap().len(), 1);
+        let buffers = manager.get_buffers(model_id).unwrap();
+        assert_eq!(buffers.len(), 1);
+        assert_eq!(
+            buffers[0].feature_type_id(),
+            ModelInstanceTransform::feature_type_id()
+        );
+        assert_eq!(buffers[0].n_valid_bytes(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn registering_instance_with_unregistered_features_in_instance_feature_manager_fails() {
+        let mut manager = InstanceFeatureManager::new();
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(model_id, &[Feature::feature_type_id()]);
+    }
+
+    #[test]
+    fn registering_one_instance_of_one_model_with_features_in_instance_feature_manager_works() {
+        let mut manager = InstanceFeatureManager::new();
+        manager.register_feature_type::<Feature>();
+        manager.register_feature_type::<ZeroSizedFeature>();
+
+        let model_id = create_dummy_model_id("");
+
+        manager.register_instance_with_feature_type_ids(
+            model_id,
+            &[
+                ZeroSizedFeature::feature_type_id(),
+                Feature::feature_type_id(),
+            ],
+        );
+
+        assert!(manager.has_model_id(model_id));
+        let buffers = manager.get_buffers(model_id).unwrap();
+        assert_eq!(buffers.len(), 3);
+        assert_eq!(
+            buffers[0].feature_type_id(),
+            ModelInstanceTransform::feature_type_id()
+        );
+        assert_eq!(buffers[0].n_valid_bytes(), 0);
+        assert_eq!(
+            buffers[1].feature_type_id(),
+            ZeroSizedFeature::feature_type_id()
+        );
+        assert_eq!(buffers[1].n_valid_bytes(), 0);
+        assert_eq!(buffers[2].feature_type_id(), Feature::feature_type_id());
+        assert_eq!(buffers[2].n_valid_bytes(), 0);
     }
 
     #[test]
@@ -329,5 +458,168 @@ mod test {
         let mut manager = InstanceFeatureManager::new();
         let model_id = create_dummy_model_id("");
         manager.unregister_instance(model_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn buffering_unregistered_instance_in_instance_feature_manager_fails() {
+        let mut manager = InstanceFeatureManager::new();
+        let model_id = create_dummy_model_id("");
+        manager.buffer_instance(model_id, &ModelInstanceTransform::identity(), &[]);
+    }
+
+    #[test]
+    fn buffering_instances_with_no_features_in_instance_feature_manager_works() {
+        let mut manager = InstanceFeatureManager::new();
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(model_id, &[]);
+
+        let transform_1 = create_dummy_transform();
+        let transform_2 = ModelInstanceTransform::<f32>::identity();
+
+        manager.buffer_instance(model_id, &transform_1, &[]);
+
+        let buffer = &manager.get_buffers(model_id).unwrap()[0];
+        assert_eq!(buffer.n_valid_features(), 1);
+        assert_eq!(
+            buffer.valid_features::<ModelInstanceTransform<_>>(),
+            &[transform_1]
+        );
+
+        manager.buffer_instance(model_id, &transform_2, &[]);
+
+        let buffer = &manager.get_buffers(model_id).unwrap()[0];
+        assert_eq!(buffer.n_valid_features(), 2);
+        assert_eq!(
+            buffer.valid_features::<ModelInstanceTransform<_>>(),
+            &[transform_1, transform_2]
+        );
+    }
+
+    #[test]
+    fn buffering_instance_with_features_in_instance_feature_manager_works() {
+        let mut manager = InstanceFeatureManager::new();
+
+        manager.register_feature_type::<Feature>();
+        manager.register_feature_type::<DifferentFeature>();
+
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(
+            model_id,
+            &[
+                Feature::feature_type_id(),
+                DifferentFeature::feature_type_id(),
+            ],
+        );
+
+        let transform_instance_1 = create_dummy_transform();
+        let transform_instance_2 = ModelInstanceTransform::<f32>::identity();
+        let feature_1_instance_1 = Feature(22);
+        let feature_1_instance_2 = Feature(43);
+        let feature_2_instance_1 = DifferentFeature(-73.1);
+        let feature_2_instance_2 = DifferentFeature(32.7);
+
+        let id_1_instance_1 = manager
+            .get_storage_mut::<Feature>()
+            .unwrap()
+            .add_feature(&feature_1_instance_1);
+        let id_2_instance_1 = manager
+            .get_storage_mut::<DifferentFeature>()
+            .unwrap()
+            .add_feature(&feature_2_instance_1);
+        let id_1_instance_2 = manager
+            .get_storage_mut::<Feature>()
+            .unwrap()
+            .add_feature(&feature_1_instance_2);
+        let id_2_instance_2 = manager
+            .get_storage_mut::<DifferentFeature>()
+            .unwrap()
+            .add_feature(&feature_2_instance_2);
+
+        manager.buffer_instance(
+            model_id,
+            &transform_instance_1,
+            &[id_1_instance_1, id_2_instance_1],
+        );
+
+        let buffers = manager.get_buffers(model_id).unwrap();
+        assert_eq!(buffers.len(), 3);
+        assert_eq!(buffers[0].n_valid_features(), 1);
+        assert_eq!(
+            buffers[0].valid_features::<ModelInstanceTransform<_>>(),
+            &[transform_instance_1]
+        );
+        assert_eq!(buffers[1].n_valid_features(), 1);
+        assert_eq!(
+            buffers[1].valid_features::<Feature>(),
+            &[feature_1_instance_1]
+        );
+        assert_eq!(buffers[2].n_valid_features(), 1);
+        assert_eq!(
+            buffers[2].valid_features::<DifferentFeature>(),
+            &[feature_2_instance_1]
+        );
+
+        manager.buffer_instance(
+            model_id,
+            &transform_instance_2,
+            &[id_1_instance_2, id_2_instance_2],
+        );
+
+        let buffers = manager.get_buffers(model_id).unwrap();
+        assert_eq!(buffers.len(), 3);
+        assert_eq!(buffers[0].n_valid_features(), 2);
+        assert_eq!(
+            buffers[0].valid_features::<ModelInstanceTransform<_>>(),
+            &[transform_instance_1, transform_instance_2]
+        );
+        assert_eq!(buffers[1].n_valid_features(), 2);
+        assert_eq!(
+            buffers[1].valid_features::<Feature>(),
+            &[feature_1_instance_1, feature_1_instance_2]
+        );
+        assert_eq!(buffers[2].n_valid_features(), 2);
+        assert_eq!(
+            buffers[2].valid_features::<DifferentFeature>(),
+            &[feature_2_instance_1, feature_2_instance_2]
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn buffering_instance_with_too_many_feature_ids_in_instance_feature_manager_fails() {
+        let mut manager = InstanceFeatureManager::new();
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(model_id, &[]);
+
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let id = storage.add_feature(&Feature(33));
+
+        manager.buffer_instance(model_id, &ModelInstanceTransform::identity(), &[id]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn buffering_instance_with_too_few_feature_ids_in_instance_feature_manager_fails() {
+        let mut manager = InstanceFeatureManager::new();
+        manager.register_feature_type::<Feature>();
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(model_id, &[Feature::feature_type_id()]);
+        manager.buffer_instance(model_id, &ModelInstanceTransform::identity(), &[]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn buffering_instance_with_invalid_feature_id_in_instance_feature_manager_fails() {
+        let mut manager = InstanceFeatureManager::new();
+        manager.register_feature_type::<Feature>();
+
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(model_id, &[Feature::feature_type_id()]);
+
+        let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
+        let id = storage.add_feature(&DifferentFeature(-0.2));
+
+        manager.buffer_instance(model_id, &ModelInstanceTransform::identity(), &[id]);
     }
 }
