@@ -152,6 +152,18 @@ impl InstanceFeatureStorage {
         self.index_map.len()
     }
 
+    /// Whether a feature with the given identifier exists in the
+    /// storage.
+    ///
+    /// # Panics
+    /// If the given feature ID was issued from a storage for a different
+    /// feature type.
+    pub fn has_feature(&self, feature_id: InstanceFeatureID) -> bool {
+        self.type_descriptor
+            .validate_feature_type_id(feature_id.feature_type_id);
+        self.index_map.contains_key(feature_id.idx)
+    }
+
     /// Returns a reference to the value of the feature stored under the
     /// given identifier.
     ///
