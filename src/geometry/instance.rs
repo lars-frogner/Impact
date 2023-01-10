@@ -2,12 +2,12 @@
 
 use crate::num::Float;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::KeyIndexMapper;
+use impact_utils::{AlignedByteVec, Alignment, KeyIndexMapper};
 use nalgebra::Matrix4;
 use std::{
     any::TypeId,
     fmt::Debug,
-    iter, mem,
+    mem,
     ops::Range,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -22,6 +22,11 @@ pub trait InstanceFeature: Pod {
     /// Returns the size of the feature type in bytes.
     fn feature_size() -> usize {
         mem::size_of::<Self>()
+    }
+
+    /// Returns the memory alignment of the feature type.
+    fn feature_alignment() -> Alignment {
+        Alignment::of::<Self>()
     }
 
     /// Returns a slice with the raw bytes representing the
@@ -58,7 +63,7 @@ pub struct InstanceFeatureID {
 pub struct InstanceFeatureStorage {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    bytes: Vec<u8>,
+    bytes: AlignedByteVec,
     index_map: KeyIndexMapper<usize>,
     feature_id_count: usize,
 }
@@ -80,7 +85,7 @@ pub struct InstanceFeatureStorage {
 pub struct DynamicInstanceFeatureBuffer {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    bytes: Vec<u8>,
+    bytes: AlignedByteVec,
     n_valid_bytes: AtomicUsize,
 }
 
@@ -95,6 +100,7 @@ pub struct ModelInstanceTransform<F: Float> {
 struct InstanceFeatureTypeDescriptor {
     id: InstanceFeatureTypeID,
     size: usize,
+    alignment: Alignment,
 }
 
 impl InstanceFeatureStorage {
@@ -103,7 +109,7 @@ impl InstanceFeatureStorage {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::vertex_buffer_layout(),
-            bytes: Vec::new(),
+            bytes: AlignedByteVec::new(Fe::feature_alignment()),
             index_map: KeyIndexMapper::new(),
             feature_id_count: 0,
         }
@@ -115,7 +121,10 @@ impl InstanceFeatureStorage {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::vertex_buffer_layout(),
-            bytes: Vec::with_capacity(feature_count * Fe::feature_size()),
+            bytes: AlignedByteVec::with_capacity(
+                Fe::feature_alignment(),
+                feature_count * Fe::feature_size(),
+            ),
             index_map: KeyIndexMapper::new(),
             feature_id_count: 0,
         }
@@ -273,7 +282,7 @@ impl DynamicInstanceFeatureBuffer {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::vertex_buffer_layout(),
-            bytes: Vec::new(),
+            bytes: AlignedByteVec::new(Fe::feature_alignment()),
             n_valid_bytes: AtomicUsize::new(0),
         }
     }
@@ -281,10 +290,11 @@ impl DynamicInstanceFeatureBuffer {
     /// Creates a new empty buffer for the same type of features
     /// as stored in the given storage.
     pub fn new_for_storage(storage: &InstanceFeatureStorage) -> Self {
+        let type_descriptor = storage.type_descriptor();
         Self {
-            type_descriptor: storage.type_descriptor(),
+            type_descriptor,
             vertex_buffer_layout: storage.vertex_buffer_layout().clone(),
-            bytes: Vec::new(),
+            bytes: AlignedByteVec::new(type_descriptor.alignment()),
             n_valid_bytes: AtomicUsize::new(0),
         }
     }
@@ -330,7 +340,14 @@ impl DynamicInstanceFeatureBuffer {
         self.type_descriptor.validate_feature::<Fe>();
         assert_ne!(self.feature_size(), 0);
         let valid_bytes = self.valid_bytes();
-        bytemuck::cast_slice(valid_bytes)
+
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        if valid_bytes.is_empty() {
+            &[]
+        } else {
+            bytemuck::cast_slice(valid_bytes)
+        }
     }
 
     /// Returns a slice with the currently valid bytes in the buffer.
@@ -414,19 +431,25 @@ impl DynamicInstanceFeatureBuffer {
             new_buffer_size = new_buffer_size.checked_mul(2).unwrap();
         }
 
-        let size_to_extend = new_buffer_size - old_buffer_size;
-
-        self.bytes.extend(iter::repeat(0).take(size_to_extend));
+        self.bytes.resize(new_buffer_size, 0);
     }
 }
 
 impl InstanceFeatureTypeDescriptor {
     fn for_type<Fe: InstanceFeature>() -> Self {
-        Self::new(Fe::feature_type_id(), Fe::feature_size())
+        Self::new(
+            Fe::feature_type_id(),
+            Fe::feature_size(),
+            Fe::feature_alignment(),
+        )
     }
 
-    fn new(id: InstanceFeatureTypeID, size: usize) -> Self {
-        Self { id, size }
+    fn new(id: InstanceFeatureTypeID, size: usize, alignment: Alignment) -> Self {
+        Self {
+            id,
+            size,
+            alignment,
+        }
     }
 
     fn type_id(&self) -> InstanceFeatureTypeID {
@@ -435,6 +458,10 @@ impl InstanceFeatureTypeDescriptor {
 
     fn size(&self) -> usize {
         self.size
+    }
+
+    fn alignment(&self) -> Alignment {
+        self.alignment
     }
 
     fn validate_feature<Fe: InstanceFeature>(&self) {
@@ -588,16 +615,9 @@ mod test {
     }
 
     #[test]
-    fn a() {
-        bytemuck::cast_slice::<u8, Feature>(&[]);
-    }
-
-    #[test]
     fn clearing_empty_instance_feature_buffer_works() {
         let buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
         buffer.clear();
-
-        let al = mem::align_of::<Feature>();
 
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
