@@ -44,7 +44,7 @@ pub trait InstanceFeature: Pod {
 pub type InstanceFeatureTypeID = TypeId;
 
 /// Identifier for an instance feature value.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct InstanceFeatureID {
     feature_type_id: InstanceFeatureTypeID,
     idx: usize,
@@ -565,6 +565,202 @@ mod test {
             )
             .to_homogeneous(),
         )
+    }
+
+    #[test]
+    fn creating_new_instance_feature_storage_works() {
+        let storage = InstanceFeatureStorage::new::<Feature>();
+
+        assert_eq!(storage.feature_type_id(), Feature::feature_type_id());
+        assert_eq!(storage.feature_size(), Feature::feature_size());
+        assert_eq!(storage.feature_count(), 0);
+    }
+
+    #[test]
+    fn adding_features_to_instance_feature_storage_works() {
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let feature_1 = create_dummy_feature();
+        let feature_2 = ModelInstanceTransform::<f32>::identity();
+
+        let id_1 = storage.add_feature(&feature_1);
+
+        assert_eq!(storage.feature_count(), 1);
+        assert!(storage.has_feature(id_1));
+        assert_eq!(storage.feature::<Feature>(id_1), &feature_1);
+
+        let id_2 = storage.add_feature(&feature_2);
+
+        assert_eq!(storage.feature_count(), 2);
+        assert!(storage.has_feature(id_1));
+        assert!(storage.has_feature(id_2));
+        assert_eq!(storage.feature::<Feature>(id_1), &feature_1);
+        assert_eq!(storage.feature::<Feature>(id_2), &feature_2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn adding_different_feature_type_to_instance_feature_storage_fails() {
+        let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
+        let feature = create_dummy_feature();
+        storage.add_feature(&feature);
+    }
+
+    #[test]
+    #[should_panic]
+    fn checking_existence_of_feature_with_invalid_id_in_instance_feature_storage_fails() {
+        let mut storage_1 = InstanceFeatureStorage::new::<Feature>();
+        let storage_2 = InstanceFeatureStorage::new::<DifferentFeature>();
+        let feature_1 = create_dummy_feature();
+        let id_1 = storage_1.add_feature(&feature_1);
+        storage_2.has_feature(id_1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn retrieving_feature_with_invalid_id_in_instance_feature_storage_fails() {
+        let mut storage_1 = InstanceFeatureStorage::new::<Feature>();
+        let storage_2 = InstanceFeatureStorage::new::<DifferentFeature>();
+        let feature_1 = create_dummy_feature();
+        let id_1 = storage_1.add_feature(&feature_1);
+        storage_2.feature::<Feature>(id_1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn retrieving_feature_mutably_with_invalid_id_in_instance_feature_storage_fails() {
+        let mut storage_1 = InstanceFeatureStorage::new::<Feature>();
+        let mut storage_2 = InstanceFeatureStorage::new::<DifferentFeature>();
+        let feature_1 = create_dummy_feature();
+        let id_1 = storage_1.add_feature(&feature_1);
+        storage_2.feature_mut::<Feature>(id_1);
+    }
+
+    #[test]
+    fn modifying_feature_in_instance_feature_storage_works() {
+        let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
+        let feature = DifferentFeature(7);
+        let id = storage.add_feature(&feature);
+        let stored_feature = storage.feature_mut::<DifferentFeature>(id);
+        assert_eq!(stored_feature.0, 7);
+        stored_feature.0 = 42;
+        assert_eq!(storage.feature::<DifferentFeature>(id).0, 42);
+    }
+
+    #[test]
+    fn removing_features_from_instance_feature_storage_works() {
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let feature_1 = create_dummy_feature();
+        let feature_2 = ModelInstanceTransform::<f32>::identity();
+
+        let id_1 = storage.add_feature(&feature_1);
+        let id_2 = storage.add_feature(&feature_2);
+
+        storage.remove_feature(id_1);
+
+        assert_eq!(storage.feature_count(), 1);
+        assert!(!storage.has_feature(id_1));
+        assert!(storage.has_feature(id_2));
+        assert_eq!(storage.feature::<Feature>(id_2), &feature_2);
+
+        storage.remove_feature(id_2);
+
+        assert_eq!(storage.feature_count(), 0);
+        assert!(!storage.has_feature(id_1));
+        assert!(!storage.has_feature(id_2));
+
+        let id_1 = storage.add_feature(&feature_1);
+        let id_2 = storage.add_feature(&feature_2);
+
+        storage.remove_feature(id_2);
+
+        assert_eq!(storage.feature_count(), 1);
+        assert!(!storage.has_feature(id_2));
+        assert!(storage.has_feature(id_1));
+        assert_eq!(storage.feature::<Feature>(id_1), &feature_1);
+
+        storage.remove_feature(id_1);
+
+        assert_eq!(storage.feature_count(), 0);
+        assert!(!storage.has_feature(id_1));
+        assert!(!storage.has_feature(id_2));
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_missing_feature_in_instance_feature_storage_fails() {
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let feature = create_dummy_feature();
+        let id = storage.add_feature(&feature);
+        storage.remove_feature(id);
+        storage.remove_feature(id);
+    }
+
+    #[test]
+    fn adding_zero_sized_features_to_instance_feature_storage_works() {
+        let mut storage = InstanceFeatureStorage::new::<ZeroSizedFeature>();
+
+        let id_1 = storage.add_feature(&ZeroSizedFeature);
+
+        assert_eq!(storage.feature_count(), 1);
+        assert!(storage.has_feature(id_1));
+
+        let id_2 = storage.add_feature(&ZeroSizedFeature);
+
+        assert_eq!(storage.feature_count(), 2);
+        assert!(storage.has_feature(id_1));
+        assert!(storage.has_feature(id_2));
+        assert_ne!(id_1, id_2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn retrieving_zero_sized_feature_in_instance_feature_storage_fails() {
+        let mut storage = InstanceFeatureStorage::new::<ZeroSizedFeature>();
+        let id_1 = storage.add_feature(&ZeroSizedFeature);
+        storage.feature::<ZeroSizedFeature>(id_1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn retrieving_zero_sized_feature_mutably_in_instance_feature_storage_fails() {
+        let mut storage = InstanceFeatureStorage::new::<ZeroSizedFeature>();
+        let id_1 = storage.add_feature(&ZeroSizedFeature);
+        storage.feature_mut::<ZeroSizedFeature>(id_1);
+    }
+
+    #[test]
+    fn removing_zero_sized_features_from_instance_feature_storage_works() {
+        let mut storage = InstanceFeatureStorage::new::<ZeroSizedFeature>();
+
+        let id_1 = storage.add_feature(&ZeroSizedFeature);
+        let id_2 = storage.add_feature(&ZeroSizedFeature);
+
+        storage.remove_feature(id_1);
+
+        assert_eq!(storage.feature_count(), 1);
+        assert!(!storage.has_feature(id_1));
+        assert!(storage.has_feature(id_2));
+
+        storage.remove_feature(id_2);
+
+        assert_eq!(storage.feature_count(), 0);
+        assert!(!storage.has_feature(id_1));
+        assert!(!storage.has_feature(id_2));
+
+        let id_1 = storage.add_feature(&ZeroSizedFeature);
+        let id_2 = storage.add_feature(&ZeroSizedFeature);
+
+        storage.remove_feature(id_2);
+
+        assert_eq!(storage.feature_count(), 1);
+        assert!(!storage.has_feature(id_2));
+        assert!(storage.has_feature(id_1));
+
+        storage.remove_feature(id_1);
+
+        assert_eq!(storage.feature_count(), 0);
+        assert!(!storage.has_feature(id_1));
+        assert!(!storage.has_feature(id_2));
     }
 
     #[test]
