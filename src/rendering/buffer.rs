@@ -2,7 +2,7 @@
 
 use crate::rendering::CoreRenderingSystem;
 use bytemuck::Pod;
-use impact_utils::ConstStringHash;
+use impact_utils::ConstStringHash64;
 use std::{
     mem,
     sync::atomic::{AtomicUsize, Ordering},
@@ -32,7 +32,7 @@ impl IndexBufferable for u32 {
 /// Represents types that can be written to a uniform buffer.
 pub trait UniformBufferable: Pod {
     /// ID for uniform type.
-    const ID: ConstStringHash;
+    const ID: ConstStringHash64;
 
     /// Creates the bind group layout entry for this uniform type,
     /// assigned to the given binding.

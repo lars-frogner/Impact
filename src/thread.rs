@@ -1,7 +1,7 @@
 //! Utilities for multithreading.
 
 use anyhow::Error;
-use impact_utils::ConstStringHash;
+use impact_utils::ConstStringHash64;
 use std::{
     collections::HashMap,
     fmt,
@@ -84,7 +84,7 @@ pub struct WorkerID(pub usize);
 
 /// Type of ID used for identifying tasks that can be performed
 /// by worker threads in a [`ThreadPool`].
-pub type TaskID = ConstStringHash;
+pub type TaskID = ConstStringHash64;
 
 /// [`Result`] produced by the task closure executed by worker
 /// threads in a [`ThreadPool`]. The [`Err`] variant contains

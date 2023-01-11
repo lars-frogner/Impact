@@ -10,10 +10,24 @@ use std::{
     sync::Mutex,
 };
 
+/// A 32-bit hash.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+pub struct Hash32(u32);
+
 /// A 64-bit hash.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct Hash64(u64);
+
+/// A 32-bit hash of a string.
+///
+/// This object stores the string in a global registry and can
+/// be formatted into it by means of the [`Display`](fmt::Display)
+/// trait.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+pub struct StringHash32(Hash32);
 
 /// A 64-bit hash of a string.
 ///
@@ -22,7 +36,7 @@ pub struct Hash64(u64);
 /// trait.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct StringHash(Hash64);
+pub struct StringHash64(Hash64);
 
 /// A 64-bit hash of a string literal. Can be constructed at
 /// compile time.
@@ -31,17 +45,57 @@ pub struct StringHash(Hash64);
 /// formatted into it by means of the [`Display`](fmt::Display)
 /// trait.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ConstStringHash {
+pub struct ConstStringHash64 {
     hash: Hash64,
     string: &'static str,
 }
 
 lazy_static! {
-    static ref STRING_HASH_REGISTRY: Mutex<HashMap<Hash64, String>> = Mutex::new(HashMap::new());
+    static ref STRING_HASH_32_REGISTRY: Mutex<HashMap<Hash32, String>> = Mutex::new(HashMap::new());
+    static ref STRING_HASH_64_REGISTRY: Mutex<HashMap<Hash64, String>> = Mutex::new(HashMap::new());
 }
 
-impl StringHash {
-    /// Creates a new [`StringHash`] for the given string.
+impl StringHash32 {
+    /// Creates a new [`StringHash32`] for the given string.
+    ///
+    /// The string and associated hash are inserted into a global
+    /// registry so that the string can be looked up.
+    ///
+    /// # Concurrency
+    /// The method has to temporarily acquire a lock on the global
+    /// string registry in order to record the hash and string pair.
+    pub fn new<S: ToString>(string: S) -> Self {
+        let string = string.to_string();
+        let hash = compute_hash_str_32(&string);
+        Self::new_with_hash(string, hash)
+    }
+
+    /// Creates a new [`StringHash32`] for the given string with the
+    /// given precomputed hash.
+    ///
+    /// The reference to the string literal is stored together
+    /// with the hash so that it can be retrieved.
+    ///
+    /// # Concurrency
+    /// The method has to temporarily acquire a lock on the global
+    /// string registry in order to record the hash and string pair.
+    pub fn new_with_hash<S: ToString>(string: S, hash: Hash32) -> Self {
+        STRING_HASH_32_REGISTRY
+            .lock()
+            .unwrap()
+            .entry(hash)
+            .or_insert_with(|| string.to_string());
+        Self(hash)
+    }
+
+    /// The 32-bit hash value.
+    pub fn hash(&self) -> Hash32 {
+        self.0
+    }
+}
+
+impl StringHash64 {
+    /// Creates a new [`StringHash64`] for the given string.
     ///
     /// The string and associated hash are inserted into a global
     /// registry so that the string can be looked up.
@@ -55,7 +109,7 @@ impl StringHash {
         Self::new_with_hash(string, hash)
     }
 
-    /// Creates a new [`StringHash`] for the given string with the
+    /// Creates a new [`StringHash64`] for the given string with the
     /// given precomputed hash.
     ///
     /// The reference to the string literal is stored together
@@ -65,7 +119,7 @@ impl StringHash {
     /// The method has to temporarily acquire a lock on the global
     /// string registry in order to record the hash and string pair.
     pub fn new_with_hash<S: ToString>(string: S, hash: Hash64) -> Self {
-        STRING_HASH_REGISTRY
+        STRING_HASH_64_REGISTRY
             .lock()
             .unwrap()
             .entry(hash)
@@ -79,7 +133,7 @@ impl StringHash {
     }
 }
 
-impl ConstStringHash {
+impl ConstStringHash64 {
     /// Creates a hash of the given string literal. This method
     /// is evaluated at compile time.
     ///
@@ -98,6 +152,11 @@ pub const fn compute_hash_str_64(string: &str) -> Hash64 {
     Hash64(const_fnv1a_hash::fnv1a_hash_str_64(string))
 }
 
+/// Computes a 32-bit hash of the given string literal.
+pub const fn compute_hash_str_32(string: &str) -> Hash32 {
+    Hash32(const_fnv1a_hash::fnv1a_hash_str_32(string))
+}
+
 /// Computes a 64-bit hash of the concatenated bytes of the
 /// given pair of 64-bit hashes.
 pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> Hash64 {
@@ -112,12 +171,12 @@ pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> H
     ))
 }
 
-impl fmt::Display for StringHash {
+impl fmt::Display for StringHash32 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}",
-            STRING_HASH_REGISTRY
+            STRING_HASH_32_REGISTRY
                 .lock()
                 .unwrap()
                 .get(&self.0)
@@ -126,25 +185,39 @@ impl fmt::Display for StringHash {
     }
 }
 
-impl fmt::Display for ConstStringHash {
+impl fmt::Display for StringHash64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            STRING_HASH_64_REGISTRY
+                .lock()
+                .unwrap()
+                .get(&self.0)
+                .expect("Missing entry for hash in global string hash registry")
+        )
+    }
+}
+
+impl fmt::Display for ConstStringHash64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.string)
     }
 }
 
-impl AsRef<str> for ConstStringHash {
+impl AsRef<str> for ConstStringHash64 {
     fn as_ref(&self) -> &str {
         self.string
     }
 }
 
-impl Ord for ConstStringHash {
+impl Ord for ConstStringHash64 {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.hash.cmp(&other.hash)
     }
 }
 
-impl PartialOrd for ConstStringHash {
+impl PartialOrd for ConstStringHash64 {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -154,7 +227,7 @@ impl PartialOrd for ConstStringHash {
 // `k1 == k2 -> hash(k1) == hash(k2)`, is still upheld
 // even though we only hash one of the fields
 #[allow(clippy::derive_hash_xor_eq)]
-impl Hash for ConstStringHash {
+impl Hash for ConstStringHash64 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state);
     }
@@ -167,28 +240,28 @@ mod test {
     #[test]
     fn string_hash_remembers_string() {
         let string = "Foo-bar";
-        let hash = StringHash::new(string);
+        let hash = StringHash64::new(string);
         assert_eq!(string, &hash.to_string());
     }
 
     #[test]
     fn const_string_hash_remembers_string() {
         let string = "Foo-bar";
-        let hash = ConstStringHash::new(string);
+        let hash = ConstStringHash64::new(string);
         assert_eq!(string, hash.to_string());
     }
 
     #[test]
     fn hash_macro_remembers_string() {
         let string = "Foo-bar".to_string();
-        let hash = hash!(&string);
+        let hash = hash64!(&string);
         assert_eq!(&string, &hash.to_string());
     }
 
     #[test]
     fn hash_macro_remembers_string_literal() {
         let string = "Foo-bar";
-        let hash = hash!(&string);
+        let hash = hash64!(&string);
         assert_eq!(&string, &hash.to_string());
     }
 }

@@ -4,7 +4,7 @@ use crate::thread::{
     TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };
 use anyhow::{anyhow, bail, Result};
-use impact_utils::ConstStringHash;
+use impact_utils::ConstStringHash64;
 use petgraph::{
     algo::{self, DfsSpace},
     graphmap::DiGraphMap,
@@ -71,7 +71,7 @@ pub struct TaskScheduler<S> {
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
-pub type ExecutionTag = ConstStringHash;
+pub type ExecutionTag = ConstStringHash64;
 
 /// A set of unique [`ExecutionTag`]s.
 pub type ExecutionTags = HashSet<ExecutionTag>;
@@ -212,7 +212,7 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: $crate::thread::TaskID = impact_utils::ConstStringHash::new(stringify!($name));
+            $($pub)? const TASK_ID: $crate::thread::TaskID = impact_utils::ConstStringHash64::new(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
             const DEPENDENCY_IDS: [$crate::thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
@@ -254,7 +254,7 @@ macro_rules! define_execution_tag {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = impact_utils::ConstStringHash::new(stringify!($name));
+            $($pub)? const EXECUTION_TAG: $crate::scheduling::ExecutionTag = impact_utils::ConstStringHash64::new(stringify!($name));
         }
     };
 }
@@ -846,7 +846,7 @@ impl<S> OrderedTask<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use impact_utils::ConstStringHash;
+    use impact_utils::ConstStringHash64;
     use std::{iter, sync::Mutex, thread, time::Duration};
 
     const EXEC_ALL: ExecutionTag = ExecutionTag::new("all");
@@ -896,9 +896,9 @@ mod test {
             struct $task;
 
             impl $task {
-                const ID: TaskID = ConstStringHash::new(stringify!($task));
+                const ID: TaskID = ConstStringHash64::new(stringify!($task));
                 #[allow(dead_code)]
-                const EXEC_TAG: ExecutionTag = ConstStringHash::new(stringify!($task));
+                const EXEC_TAG: ExecutionTag = ConstStringHash64::new(stringify!($task));
             }
 
             impl Task<TaskRecorder> for $task

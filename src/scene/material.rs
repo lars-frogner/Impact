@@ -4,12 +4,12 @@ use crate::{
     geometry::InstanceFeatureTypeID,
     rendering::{ShaderID, TextureID},
 };
-use impact_utils::stringhash_newtype;
+use impact_utils::stringhash64_newtype;
 use std::collections::HashMap;
 
-stringhash_newtype!(
+stringhash64_newtype!(
     /// Identifier for specific materials.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
     [pub] MaterialID
 );
 

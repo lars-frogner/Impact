@@ -962,7 +962,7 @@ mod test {
     use super::*;
     use crate::{scene::MaterialID, scene::MeshID};
     use approx::assert_abs_diff_eq;
-    use impact_utils::hash;
+    use impact_utils::hash64;
     use nalgebra::{point, Point3, Rotation3, Scale3, Translation3, Vector3};
 
     fn create_dummy_group_node<F: Float>(
@@ -992,14 +992,14 @@ mod test {
         scene_graph.create_camera_node(
             parent_node_id,
             Similarity3::identity(),
-            CameraID(hash!("Test camera")),
+            CameraID(hash64!("Test camera")),
         )
     }
 
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(
-            MeshID(hash!(format!("Test mesh {}", tag.as_ref()))),
-            MaterialID(hash!(format!("Test material {}", tag.as_ref()))),
+            MeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
+            MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
         )
     }
 
@@ -1291,7 +1291,7 @@ mod test {
         let camera = scene_graph.create_camera_node(
             root,
             camera_to_root_transform,
-            CameraID(hash!("Test camera")),
+            CameraID(hash64!("Test camera")),
         );
 
         let root_to_camera_transform =
@@ -1310,7 +1310,7 @@ mod test {
         let camera = scene_graph.create_camera_node(
             group_3,
             Similarity3::identity(),
-            CameraID(hash!("Test camera")),
+            CameraID(hash64!("Test camera")),
         );
 
         let transform =
@@ -1342,7 +1342,7 @@ mod test {
                 Rotation3::identity().into(),
                 scaling,
             ),
-            CameraID(hash!("Test camera")),
+            CameraID(hash64!("Test camera")),
         );
 
         let root_to_camera_transform =

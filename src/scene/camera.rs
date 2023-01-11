@@ -5,15 +5,15 @@ use crate::{
     num::Float,
 };
 use anyhow::{anyhow, Result};
-use impact_utils::stringhash_newtype;
+use impact_utils::stringhash64_newtype;
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
 };
 
-stringhash_newtype!(
+stringhash64_newtype!(
     /// Identifier for specific cameras.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
     [pub] CameraID
 );
 

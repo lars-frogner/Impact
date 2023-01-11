@@ -1,18 +1,18 @@
 //! Management of rendering assets.
 
 use crate::rendering::{ImageTexture, Shader};
-use impact_utils::stringhash_newtype;
+use impact_utils::{stringhash32_newtype, stringhash64_newtype};
 use std::{collections::HashMap, sync::Arc};
 
-stringhash_newtype!(
+stringhash64_newtype!(
     /// Identifier for specific shaders.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
     [pub] ShaderID
 );
 
-stringhash_newtype!(
+stringhash32_newtype!(
     /// Identifier for specific textures.
-    /// Wraps a [`StringHash`](crate::hash::StringHash).
+    /// Wraps a [`StringHash32`](impact_utils::StringHash32).
     [pub] TextureID
 );
 

@@ -7,14 +7,14 @@ use crate::{
         CoreRenderingSystem,
     },
 };
-use impact_utils::ConstStringHash;
+use impact_utils::ConstStringHash64;
 use std::{fmt::Debug, hash::Hash, mem};
 
 /// Owner and manager of a render buffer for uniforms.
 #[derive(Debug)]
 pub struct UniformRenderBufferManager {
     uniform_render_buffer: RenderBuffer,
-    uniform_id: ConstStringHash,
+    uniform_id: ConstStringHash64,
 }
 
 impl UniformRenderBufferManager {

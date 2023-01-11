@@ -20,7 +20,7 @@ use crate::{
     window::{KeyActionMap, Window},
     world::World,
 };
-use impact_utils::hash;
+use impact_utils::{hash32, hash64};
 use std::{f64::consts::PI, sync::Arc};
 
 use super::{
@@ -85,7 +85,7 @@ async fn init_world(window: Window) -> Result<World> {
     let mut camera_repository = CameraRepository::new();
 
     assets.shaders.insert(
-        ShaderID(hash!("Test shader")),
+        ShaderID(hash64!("Test shader")),
         Arc::new(Shader::from_source(
             &core_system,
             include_str!("texture_shader.wgsl"),
@@ -96,7 +96,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
     assets.image_textures.insert(
-        TextureID(hash!("Tree texture")),
+        TextureID(hash32!("Tree texture")),
         ImageTexture::from_bytes(
             &core_system,
             include_bytes!("../assets/happy-tree.png"),
@@ -106,7 +106,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     mesh_repository
         .add_texture_mesh(
-            MeshID(hash!("Test mesh")),
+            MeshID(hash64!("Test mesh")),
             TriangleMesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
         )
         .unwrap();
@@ -114,7 +114,7 @@ async fn init_world(window: Window) -> Result<World> {
     let vertical_field_of_view = Degrees(45.0);
     camera_repository
         .add_perspective_camera(
-            CameraID(hash!("Camera")),
+            CameraID(hash64!("Camera")),
             PerspectiveCamera::new(
                 CameraConfiguration::default(),
                 window.aspect_ratio(),
@@ -126,11 +126,12 @@ async fn init_world(window: Window) -> Result<World> {
 
     let mut material_library = MaterialLibrary::new();
     let material_spec = MaterialSpecification::new(
-        ShaderID(hash!("Test shader")),
-        vec![TextureID(hash!("Tree texture"))],
+        ShaderID(hash64!("Test shader")),
+        vec![TextureID(hash32!("Tree texture"))],
         Vec::new(),
     );
-    material_library.add_material_specification(MaterialID(hash!("Test material")), material_spec);
+    material_library
+        .add_material_specification(MaterialID(hash64!("Test material")), material_spec);
 
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
@@ -152,7 +153,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &CameraComp::new(CameraID(hash!("Camera"))),
+            &CameraComp::new(CameraID(hash64!("Camera"))),
             &PositionComp(Point3::new(0.0, 0.0, 0.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
             &VelocityComp(Vector3::zeros()),
@@ -163,8 +164,8 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash!("Test mesh"))),
-            &MaterialComp::new(MaterialID(hash!("Test material"))),
+            &MeshComp::new(MeshID(hash64!("Test mesh"))),
+            &MaterialComp::new(MaterialID(hash64!("Test material"))),
             &PositionComp(Point3::new(0.0, 0.0, 3.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
             &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.0))),

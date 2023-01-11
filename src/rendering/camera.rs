@@ -5,7 +5,7 @@ use crate::rendering::{
     buffer::{self, RenderBuffer, UniformBufferable},
     fre, CoreRenderingSystem,
 };
-use impact_utils::ConstStringHash;
+use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
 
 /// Owner and manager of a render buffer for a camera
@@ -135,7 +135,7 @@ impl CameraRenderBufferManager {
 }
 
 impl UniformBufferable for Projective3<fre> {
-    const ID: ConstStringHash = ConstStringHash::new("Camera projection");
+    const ID: ConstStringHash64 = ConstStringHash64::new("Camera projection");
 
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         buffer::create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::VERTEX)

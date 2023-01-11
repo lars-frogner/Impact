@@ -220,7 +220,7 @@ mod test {
     use super::*;
     use crate::scene::{MaterialID, MeshID};
     use bytemuck::{Pod, Zeroable};
-    use impact_utils::hash;
+    use impact_utils::hash64;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
     #[repr(transparent)]
@@ -260,8 +260,8 @@ mod test {
 
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(
-            MeshID(hash!(format!("Test mesh {}", tag.as_ref()))),
-            MaterialID(hash!(format!("Test material {}", tag.as_ref()))),
+            MeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
+            MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
         )
     }
 
