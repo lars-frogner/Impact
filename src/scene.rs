@@ -2,6 +2,7 @@
 
 mod camera;
 mod components;
+mod events;
 mod graph;
 mod instance;
 mod material;

@@ -2,12 +2,9 @@
 
 use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
-    physics::{OrientationComp, PhysicsSimulator, PositionComp},
-    rendering::{MaterialComp, RenderingSystem},
-    scene::{
-        self as sc, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
-        SceneGraphNodeComp,
-    },
+    physics::PhysicsSimulator,
+    rendering::RenderingSystem,
+    scene::Scene,
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
@@ -16,7 +13,6 @@ use crate::{
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeCompByteView, ComponentManager},
-    setup,
     world::{Entity, World as ECSWorld},
 };
 use std::{
@@ -108,77 +104,10 @@ impl World {
         let mut manager =
             ComponentManager::with_initial_components(components.try_into().map_err(E::into)?)?;
 
-        setup!(
-            {
-                let scene = self.scene().read().unwrap();
-                let mut scene_graph = scene.scene_graph().write().unwrap();
-                let root_node_id = scene_graph.root_node_id();
-            },
-            manager,
-            |camera: &CameraComp,
-             position: &PositionComp,
-             orientation: &OrientationComp|
-             -> SceneGraphNodeComp::<CameraNodeID> {
-                let camera_to_world_transform =
-                    sc::model_to_world_transform_from_position_and_orientation(
-                        position.0.cast(),
-                        orientation.0.cast(),
-                    );
-
-                let node_id = scene_graph.create_camera_node(
-                    root_node_id,
-                    camera_to_world_transform,
-                    camera.id,
-                );
-
-                scene.set_active_camera(Some((camera.id, node_id)));
-
-                SceneGraphNodeComp::new(node_id)
-            }
-        );
-
-        setup!(
-            {
-                let scene = self.scene().read().unwrap();
-                let mesh_repository = scene.mesh_repository().read().unwrap();
-                let material_library = scene.material_library().read().unwrap();
-                let mut instance_feature_manager =
-                    scene.instance_feature_manager().write().unwrap();
-                let mut scene_graph = scene.scene_graph().write().unwrap();
-                let root_node_id = scene_graph.root_node_id();
-            },
-            manager,
-            |mesh: &MeshComp,
-             material: &MaterialComp,
-             position: &PositionComp,
-             orientation: &OrientationComp|
-             -> SceneGraphNodeComp::<ModelInstanceNodeID> {
-                let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
-                instance_feature_manager.register_instance(&material_library, model_id);
-
-                let model_to_world_transform =
-                    sc::model_to_world_transform_from_position_and_orientation(
-                        position.0.cast(),
-                        orientation.0.cast(),
-                    );
-
-                // Panic on errors since returning an error could leave us
-                // in an inconsistent state
-                let bounding_sphere = mesh_repository
-                    .get_mesh(mesh.id)
-                    .expect("Tried to create renderable entity with mesh not present in mesh repository")
-                    .bounding_sphere()
-                    .expect("Tried to create renderable entity with empty mesh");
-
-                SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
-                    root_node_id,
-                    model_to_world_transform,
-                    model_id,
-                    bounding_sphere,
-                    Vec::new(),
-                ))
-            }
-        );
+        self.scene()
+            .read()
+            .unwrap()
+            .handle_entity_created(&mut manager);
 
         self.ecs_world.write().unwrap().create_entities(&manager)
     }
@@ -188,37 +117,7 @@ impl World {
 
         let entry = ecs_world.entity(entity);
 
-        if let Some(node) = entry.get_component::<SceneGraphNodeComp<CameraNodeID>>() {
-            let node_id = node.access().id;
-
-            let scene = self.scene().read().unwrap();
-
-            scene
-                .scene_graph()
-                .write()
-                .unwrap()
-                .remove_camera_node(node_id);
-
-            if let Some(active_camera_node_id) = scene.get_active_camera_node_id() {
-                if active_camera_node_id == node_id {
-                    scene.set_active_camera(None);
-                }
-            }
-        }
-
-        if let Some(node) = entry.get_component::<SceneGraphNodeComp<ModelInstanceNodeID>>() {
-            let scene = self.scene().read().unwrap();
-            let model_id = scene
-                .scene_graph()
-                .write()
-                .unwrap()
-                .remove_model_instance_node(node.access().id);
-            scene
-                .instance_feature_manager()
-                .write()
-                .unwrap()
-                .unregister_instance(model_id);
-        }
+        self.scene().read().unwrap().handle_entity_removed(&entry);
 
         drop(entry);
         ecs_world.remove_entity(entity)
