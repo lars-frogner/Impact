@@ -49,7 +49,7 @@ impl Alignment {
 
     /// Creates a new [`Alignment`] corresponding to the alignment of
     /// type `T`.
-    pub fn of<T>() -> Self {
+    pub const fn of<T>() -> Self {
         Self(mem::align_of::<T>())
     }
 
