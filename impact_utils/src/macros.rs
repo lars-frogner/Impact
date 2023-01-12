@@ -1,6 +1,6 @@
 /// Utility macros.
 
-/// Creates a [`StringHash32`](impact_utils::StringHash32) for
+/// Creates a [`StringHash32`](crate::StringHash32) for
 /// the given string.
 #[macro_export]
 macro_rules! hash32 {
@@ -12,7 +12,7 @@ macro_rules! hash32 {
     };
 }
 
-/// Creates a [`StringHash64`](impact_utils::StringHash64) for
+/// Creates a [`StringHash64`](crate::StringHash64) for
 /// the given string.
 #[macro_export]
 macro_rules! hash64 {
@@ -25,7 +25,7 @@ macro_rules! hash64 {
 }
 
 /// Defines a new type with the given name that is a wrapper
-/// around a [`StringHash32`](impact_utils::StringHash32).
+/// around a [`StringHash32`](crate::StringHash32).
 #[macro_export]
 macro_rules! stringhash32_newtype {
     (
@@ -46,7 +46,7 @@ macro_rules! stringhash32_newtype {
 }
 
 /// Defines a new type with the given name that is a wrapper
-/// around a [`StringHash64`](impact_utils::StringHash64).
+/// around a [`StringHash64`](crate::StringHash64).
 #[macro_export]
 macro_rules! stringhash64_newtype {
     (
@@ -63,5 +63,20 @@ macro_rules! stringhash64_newtype {
                 write!(f, "{}", self.0)
             }
         }
+    };
+}
+
+/// Defines a new type with the given name that is a wrapper
+/// around a [`Hash64`](crate::Hash64).
+#[macro_export]
+macro_rules! hash64_newtype {
+    (
+        $(#[$attributes:meta])*
+        $([$pub:ident])? $name:ident
+    ) => {
+        $(#[$attributes])*
+        #[repr(C)]
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Zeroable, bytemuck::Pod)]
+        $($pub)? struct $name($($pub)? $crate::Hash64);
     };
 }
