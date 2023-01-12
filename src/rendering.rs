@@ -3,7 +3,6 @@
 mod assets;
 mod buffer;
 mod camera;
-mod components;
 mod core;
 mod instance;
 mod light;
@@ -19,7 +18,7 @@ mod uniform;
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, ShaderID, TextureID};
 pub use buffer::{create_vertex_buffer_layout_for_vertex, VertexBufferable};
-pub use material::{Material, MaterialRenderResourceManager, RGBAColor, RGBColor};
+pub use material::MaterialRenderResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::Shader;

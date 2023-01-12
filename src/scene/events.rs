@@ -2,10 +2,10 @@
 
 use crate::{
     physics::{OrientationComp, PositionComp},
-    rendering::MaterialComp,
     scene::{
-        self, CameraComp, CameraNodeID, MeshComp, ModelID, ModelInstanceNodeID, Scene,
-        SceneGraphNodeComp,
+        self, BlinnPhongMaterial, CameraComp, CameraNodeID, DiffuseTexturedBlinnPhongMaterial,
+        FixedColorMaterial, InstanceFeatureManager, MaterialComp, MeshComp, ModelID,
+        ModelInstanceNodeID, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
     },
 };
 use impact_ecs::{archetype::ComponentManager, setup, world::EntityEntry};
@@ -15,8 +15,31 @@ impl Scene {
     /// new entity with components represented by the given component manager,
     /// and adds any additional components to the entity's components.
     pub fn handle_entity_created(&self, component_manager: &mut ComponentManager<'_>) {
-        self.add_camera_node_components(component_manager);
-        self.add_model_instance_node_components(component_manager);
+        let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
+        FixedColorMaterial::add_material_component_for_entity(
+            &mut instance_feature_manager,
+            component_manager,
+        );
+        BlinnPhongMaterial::add_material_component_for_entity(
+            &mut instance_feature_manager,
+            component_manager,
+        );
+        let mut material_library = self.material_library().write().unwrap();
+        DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
+            &mut instance_feature_manager,
+            &mut material_library,
+            component_manager,
+        );
+        TexturedBlinnPhongMaterial::add_material_component_for_entity(
+            &mut instance_feature_manager,
+            &mut material_library,
+            component_manager,
+        );
+        drop(material_library);
+        drop(instance_feature_manager);
+
+        self.add_camera_node_component_for_entity(component_manager);
+        self.add_model_instance_node_component_for_entity(component_manager);
     }
 
     /// Performs any modifications required to clean up the scene when
@@ -24,9 +47,13 @@ impl Scene {
     pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) {
         self.remove_camera_node_for_entity(entity);
         self.remove_model_instance_node_for_entity(entity);
+
+        let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
+        Self::remove_material_features_for_entity(&mut instance_feature_manager, entity);
+        drop(instance_feature_manager);
     }
 
-    fn add_camera_node_components(&self, component_manager: &mut ComponentManager<'_>) {
+    fn add_camera_node_component_for_entity(&self, component_manager: &mut ComponentManager<'_>) {
         setup!(
             {
                 let mut scene_graph = self.scene_graph().write().unwrap();
@@ -56,7 +83,10 @@ impl Scene {
         );
     }
 
-    fn add_model_instance_node_components(&self, component_manager: &mut ComponentManager<'_>) {
+    fn add_model_instance_node_component_for_entity(
+        &self,
+        component_manager: &mut ComponentManager<'_>,
+    ) {
         setup!(
             {
                 let mesh_repository = self.mesh_repository().read().unwrap();
@@ -80,6 +110,12 @@ impl Scene {
                         orientation.0.cast(),
                     );
 
+                let feature_ids = if material.feature_id.is_not_applicable() {
+                    Vec::new()
+                } else {
+                    vec![material.feature_id]
+                };
+
                 // Panic on errors since returning an error could leave us
                 // in an inconsistent state
                 let bounding_sphere = mesh_repository
@@ -93,10 +129,24 @@ impl Scene {
                     model_to_world_transform,
                     model_id,
                     bounding_sphere,
-                    Vec::new(),
+                    feature_ids,
                 ))
             }
         );
+    }
+
+    fn remove_material_features_for_entity(
+        instance_feature_manager: &mut InstanceFeatureManager,
+        entity: &EntityEntry<'_>,
+    ) {
+        if let Some(material) = entity.get_component::<MaterialComp>() {
+            let feature_id = material.access().feature_id;
+
+            instance_feature_manager
+                .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
+                .expect("Missing storage for material feature")
+                .remove_feature(feature_id);
+        }
     }
 
     fn remove_camera_node_for_entity(&self, entity: &EntityEntry<'_>) {

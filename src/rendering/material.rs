@@ -1,25 +1,11 @@
 //! Management of material data for rendering.
 
-mod color;
-mod components;
-
 use crate::{
     rendering::{fre, Assets, CoreRenderingSystem, ImageTexture, Shader, TextureID},
     scene::{MaterialLibrary, MaterialSpecification},
 };
 use anyhow::{anyhow, Result};
-use nalgebra::{Vector3, Vector4};
 use std::sync::Arc;
-
-/// A color with RGB components.
-pub type RGBColor = Vector3<fre>;
-
-/// A color with RGBA components.
-pub type RGBAColor = Vector4<fre>;
-
-pub trait Material {
-    fn register(assets: &mut Assets, material_library: &mut MaterialLibrary);
-}
 
 /// Owner and manager of a render resources for a material,
 /// including a bind group for the set of textures used for

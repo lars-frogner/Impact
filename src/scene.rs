@@ -18,7 +18,12 @@ pub use graph::{
     ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,
 };
 pub use instance::InstanceFeatureManager;
-pub use material::{MaterialID, MaterialLibrary, MaterialSpecification};
+pub use material::{
+    BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
+    DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, MaterialComp,
+    MaterialID, MaterialLibrary, MaterialSpecification, RGBAColor, RGBColor,
+    TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
+};
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
 pub use tasks::BufferVisibleModelInstances;

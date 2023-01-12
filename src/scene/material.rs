@@ -1,11 +1,31 @@
 //! Management of materials.
 
+mod blinn_phong;
+mod components;
+mod fixed_color;
+
 use crate::{
     geometry::InstanceFeatureTypeID,
-    rendering::{ShaderID, TextureID},
+    rendering::{fre, ShaderID, TextureID},
 };
 use impact_utils::stringhash64_newtype;
-use std::collections::HashMap;
+use nalgebra::{Vector3, Vector4};
+use std::collections::{hash_map::Entry, HashMap};
+
+pub use blinn_phong::{
+    BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, TexturedBlinnPhongMaterial,
+};
+pub use components::{
+    BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, MaterialComp,
+    TexturedBlinnPhongComp,
+};
+pub use fixed_color::FixedColorMaterial;
+
+/// A color with RGB components.
+pub type RGBColor = Vector3<fre>;
+
+/// A color with RGBA components.
+pub type RGBAColor = Vector4<fre>;
 
 stringhash64_newtype!(
     /// Identifier for specific materials.
@@ -75,13 +95,22 @@ impl MaterialLibrary {
         &self.material_specifications
     }
 
-    /// Returns the specification for the material with the
+    /// Returns the specification of the material with the
     /// given ID, or [`None`] if the material does not exist.
     pub fn get_material_specification(
         &self,
         material_id: MaterialID,
     ) -> Option<&MaterialSpecification> {
         self.material_specifications.get(&material_id)
+    }
+
+    /// Returns a hashmap entry for the specification of the
+    /// material with the given ID.
+    pub fn material_specification_entry(
+        &mut self,
+        material_id: MaterialID,
+    ) -> Entry<'_, MaterialID, MaterialSpecification> {
+        self.material_specifications.entry(material_id)
     }
 
     /// Includes the given material specification in the library
