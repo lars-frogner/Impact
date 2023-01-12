@@ -2,10 +2,9 @@
 
 use crate::num::Float;
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{AlignedByteVec, Alignment, KeyIndexMapper};
+use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::Matrix4;
 use std::{
-    any::TypeId,
     fmt::Debug,
     mem,
     ops::Range,
@@ -14,20 +13,14 @@ use std::{
 
 /// Represents a piece of data associated with a model instance.
 pub trait InstanceFeature: Pod {
-    /// Returns a unique ID representing the feature type.
-    fn feature_type_id() -> InstanceFeatureTypeID {
-        TypeId::of::<Self>()
-    }
+    /// A unique ID representing the feature type.
+    const FEATURE_TYPE_ID: InstanceFeatureTypeID;
 
-    /// Returns the size of the feature type in bytes.
-    fn feature_size() -> usize {
-        mem::size_of::<Self>()
-    }
+    /// The size of the feature type in bytes.
+    const FEATURE_SIZE: usize = mem::size_of::<Self>();
 
-    /// Returns the memory alignment of the feature type.
-    fn feature_alignment() -> Alignment {
-        Alignment::of::<Self>()
-    }
+    /// The memory alignment of the feature type.
+    const FEATURE_ALIGNMENT: Alignment = Alignment::of::<Self>();
 
     /// Returns a slice with the raw bytes representing the
     /// feature.
@@ -41,10 +34,11 @@ pub trait InstanceFeature: Pod {
 }
 
 /// Identifier for a type of instance feature.
-pub type InstanceFeatureTypeID = TypeId;
+pub type InstanceFeatureTypeID = Hash64;
 
 /// Identifier for an instance feature value.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
 pub struct InstanceFeatureID {
     feature_type_id: InstanceFeatureTypeID,
     idx: usize,
@@ -103,13 +97,31 @@ struct InstanceFeatureTypeDescriptor {
     alignment: Alignment,
 }
 
+impl InstanceFeatureID {
+    pub fn not_applicable() -> Self {
+        Self {
+            feature_type_id: Hash64::zeroed(),
+            idx: usize::MAX,
+        }
+    }
+
+    /// Returns the ID of the type of feature this ID identifies.
+    pub fn feature_type_id(&self) -> InstanceFeatureTypeID {
+        self.feature_type_id
+    }
+
+    pub fn is_not_applicable(&self) -> bool {
+        self.feature_type_id == Hash64::zeroed() && self.idx == usize::MAX
+    }
+}
+
 impl InstanceFeatureStorage {
     /// Creates a new empty storage for features of type `Fe`.
     pub fn new<Fe: InstanceFeature>() -> Self {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::vertex_buffer_layout(),
-            bytes: AlignedByteVec::new(Fe::feature_alignment()),
+            bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             index_map: KeyIndexMapper::new(),
             feature_id_count: 0,
         }
@@ -122,8 +134,8 @@ impl InstanceFeatureStorage {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::vertex_buffer_layout(),
             bytes: AlignedByteVec::with_capacity(
-                Fe::feature_alignment(),
-                feature_count * Fe::feature_size(),
+                Fe::FEATURE_ALIGNMENT,
+                feature_count * Fe::FEATURE_SIZE,
             ),
             index_map: KeyIndexMapper::new(),
             feature_id_count: 0,
@@ -175,7 +187,7 @@ impl InstanceFeatureStorage {
     pub fn feature<Fe: InstanceFeature>(&self, feature_id: InstanceFeatureID) -> &Fe {
         self.type_descriptor.validate_feature::<Fe>();
         assert_ne!(
-            Fe::feature_size(),
+            Fe::FEATURE_SIZE,
             0,
             "Tried to obtain zero-sized feature from storage"
         );
@@ -193,7 +205,7 @@ impl InstanceFeatureStorage {
     pub fn feature_mut<Fe: InstanceFeature>(&mut self, feature_id: InstanceFeatureID) -> &mut Fe {
         self.type_descriptor.validate_feature::<Fe>();
         assert_ne!(
-            Fe::feature_size(),
+            Fe::FEATURE_SIZE,
             0,
             "Tried to obtain zero-sized feature mutably from storage"
         );
@@ -294,7 +306,7 @@ impl DynamicInstanceFeatureBuffer {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::vertex_buffer_layout(),
-            bytes: AlignedByteVec::new(Fe::feature_alignment()),
+            bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             n_valid_bytes: AtomicUsize::new(0),
         }
     }
@@ -449,11 +461,7 @@ impl DynamicInstanceFeatureBuffer {
 
 impl InstanceFeatureTypeDescriptor {
     fn for_type<Fe: InstanceFeature>() -> Self {
-        Self::new(
-            Fe::feature_type_id(),
-            Fe::feature_size(),
-            Fe::feature_alignment(),
-        )
+        Self::new(Fe::FEATURE_TYPE_ID, Fe::FEATURE_SIZE, Fe::FEATURE_ALIGNMENT)
     }
 
     fn new(id: InstanceFeatureTypeID, size: usize, alignment: Alignment) -> Self {
@@ -477,7 +485,7 @@ impl InstanceFeatureTypeDescriptor {
     }
 
     fn validate_feature<Fe: InstanceFeature>(&self) {
-        self.validate_feature_type_id(Fe::feature_type_id());
+        self.validate_feature_type_id(Fe::FEATURE_TYPE_ID);
     }
 
     fn validate_feature_type_id(&self, feature_type_id: InstanceFeatureTypeID) {
@@ -526,6 +534,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use impact_utils::ConstStringHash64;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
     type Feature = ModelInstanceTransform<f32>;
@@ -545,12 +554,18 @@ mod test {
     };
 
     impl InstanceFeature for DifferentFeature {
+        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
+            ConstStringHash64::new(stringify!(DifferentFeature)).into_hash();
+
         fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
             DUMMY_LAYOUT
         }
     }
 
     impl InstanceFeature for ZeroSizedFeature {
+        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
+            ConstStringHash64::new(stringify!(ZeroSizedFeature)).into_hash();
+
         fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
             DUMMY_LAYOUT
         }
@@ -571,8 +586,8 @@ mod test {
     fn creating_new_instance_feature_storage_works() {
         let storage = InstanceFeatureStorage::new::<Feature>();
 
-        assert_eq!(storage.feature_type_id(), Feature::feature_type_id());
-        assert_eq!(storage.feature_size(), Feature::feature_size());
+        assert_eq!(storage.feature_type_id(), Feature::FEATURE_TYPE_ID);
+        assert_eq!(storage.feature_size(), Feature::FEATURE_SIZE);
         assert_eq!(storage.feature_count(), 0);
     }
 
@@ -767,8 +782,8 @@ mod test {
     fn creating_instance_feature_buffer_works() {
         let buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
 
-        assert_eq!(buffer.feature_type_id(), Feature::feature_type_id());
-        assert_eq!(buffer.feature_size(), Feature::feature_size());
+        assert_eq!(buffer.feature_type_id(), Feature::FEATURE_TYPE_ID);
+        assert_eq!(buffer.feature_size(), Feature::FEATURE_SIZE);
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
         assert_eq!(buffer.valid_bytes(), &[]);
@@ -935,11 +950,8 @@ mod test {
     fn creating_instance_feature_buffer_with_zero_sized_feature_works() {
         let buffer = DynamicInstanceFeatureBuffer::new::<ZeroSizedFeature>();
 
-        assert_eq!(
-            buffer.feature_type_id(),
-            ZeroSizedFeature::feature_type_id()
-        );
-        assert_eq!(buffer.feature_size(), ZeroSizedFeature::feature_size());
+        assert_eq!(buffer.feature_type_id(), ZeroSizedFeature::FEATURE_TYPE_ID);
+        assert_eq!(buffer.feature_size(), ZeroSizedFeature::FEATURE_SIZE);
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.valid_bytes(), &[]);
     }

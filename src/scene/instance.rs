@@ -87,7 +87,7 @@ impl InstanceFeatureManager {
     /// nothing happens.
     pub fn register_feature_type<Fe: InstanceFeature>(&mut self) {
         self.feature_storages
-            .entry(Fe::feature_type_id())
+            .entry(Fe::FEATURE_TYPE_ID)
             .or_insert_with(|| InstanceFeatureStorage::new::<Fe>());
     }
 
@@ -220,7 +220,7 @@ mod test {
     use super::*;
     use crate::scene::{MaterialID, MeshID};
     use bytemuck::{Pod, Zeroable};
-    use impact_utils::hash64;
+    use impact_utils::{hash64, ConstStringHash64};
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
     #[repr(transparent)]
@@ -242,17 +242,26 @@ mod test {
     };
 
     impl InstanceFeature for Feature {
+        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
+            ConstStringHash64::new(stringify!(Feature)).into_hash();
+
         fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
             DUMMY_LAYOUT
         }
     }
 
     impl InstanceFeature for DifferentFeature {
+        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
+            ConstStringHash64::new(stringify!(DifferentFeature)).into_hash();
+
         fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
             DUMMY_LAYOUT
         }
     }
     impl InstanceFeature for ZeroSizedFeature {
+        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
+            ConstStringHash64::new(stringify!(ZeroSizedFeature)).into_hash();
+
         fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
             DUMMY_LAYOUT
         }
@@ -294,7 +303,7 @@ mod test {
         let storage_1 = manager.get_storage::<ZeroSizedFeature>().unwrap();
         assert_eq!(
             storage_1.feature_type_id(),
-            ZeroSizedFeature::feature_type_id()
+            ZeroSizedFeature::FEATURE_TYPE_ID
         );
         assert_eq!(storage_1.feature_count(), 0);
 
@@ -304,7 +313,7 @@ mod test {
         manager.register_feature_type::<Feature>();
 
         let storage_2 = manager.get_storage::<Feature>().unwrap();
-        assert_eq!(storage_2.feature_type_id(), Feature::feature_type_id());
+        assert_eq!(storage_2.feature_type_id(), Feature::FEATURE_TYPE_ID);
         assert_eq!(storage_2.feature_count(), 0);
     }
 
@@ -320,7 +329,7 @@ mod test {
         assert_eq!(buffers.len(), 1);
         assert_eq!(
             buffers[0].feature_type_id(),
-            ModelInstanceTransform::feature_type_id()
+            ModelInstanceTransform::FEATURE_TYPE_ID
         );
         assert_eq!(buffers[0].n_valid_bytes(), 0);
 
@@ -332,7 +341,7 @@ mod test {
         assert_eq!(buffers.len(), 1);
         assert_eq!(
             buffers[0].feature_type_id(),
-            ModelInstanceTransform::feature_type_id()
+            ModelInstanceTransform::FEATURE_TYPE_ID
         );
         assert_eq!(buffers[0].n_valid_bytes(), 0);
     }
@@ -342,7 +351,7 @@ mod test {
     fn registering_instance_with_unregistered_features_in_instance_feature_manager_fails() {
         let mut manager = InstanceFeatureManager::new();
         let model_id = create_dummy_model_id("");
-        manager.register_instance_with_feature_type_ids(model_id, &[Feature::feature_type_id()]);
+        manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
     }
 
     #[test]
@@ -355,10 +364,7 @@ mod test {
 
         manager.register_instance_with_feature_type_ids(
             model_id,
-            &[
-                ZeroSizedFeature::feature_type_id(),
-                Feature::feature_type_id(),
-            ],
+            &[ZeroSizedFeature::FEATURE_TYPE_ID, Feature::FEATURE_TYPE_ID],
         );
 
         assert!(manager.has_model_id(model_id));
@@ -366,15 +372,15 @@ mod test {
         assert_eq!(buffers.len(), 3);
         assert_eq!(
             buffers[0].feature_type_id(),
-            ModelInstanceTransform::feature_type_id()
+            ModelInstanceTransform::FEATURE_TYPE_ID
         );
         assert_eq!(buffers[0].n_valid_bytes(), 0);
         assert_eq!(
             buffers[1].feature_type_id(),
-            ZeroSizedFeature::feature_type_id()
+            ZeroSizedFeature::FEATURE_TYPE_ID
         );
         assert_eq!(buffers[1].n_valid_bytes(), 0);
-        assert_eq!(buffers[2].feature_type_id(), Feature::feature_type_id());
+        assert_eq!(buffers[2].feature_type_id(), Feature::FEATURE_TYPE_ID);
         assert_eq!(buffers[2].n_valid_bytes(), 0);
     }
 
@@ -506,10 +512,7 @@ mod test {
         let model_id = create_dummy_model_id("");
         manager.register_instance_with_feature_type_ids(
             model_id,
-            &[
-                Feature::feature_type_id(),
-                DifferentFeature::feature_type_id(),
-            ],
+            &[Feature::FEATURE_TYPE_ID, DifferentFeature::FEATURE_TYPE_ID],
         );
 
         let transform_instance_1 = create_dummy_transform();
@@ -604,7 +607,7 @@ mod test {
         let mut manager = InstanceFeatureManager::new();
         manager.register_feature_type::<Feature>();
         let model_id = create_dummy_model_id("");
-        manager.register_instance_with_feature_type_ids(model_id, &[Feature::feature_type_id()]);
+        manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
         manager.buffer_instance(model_id, &ModelInstanceTransform::identity(), &[]);
     }
 
@@ -615,7 +618,7 @@ mod test {
         manager.register_feature_type::<Feature>();
 
         let model_id = create_dummy_model_id("");
-        manager.register_instance_with_feature_type_ids(model_id, &[Feature::feature_type_id()]);
+        manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
 
         let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
         let id = storage.add_feature(&DifferentFeature(-0.2));
