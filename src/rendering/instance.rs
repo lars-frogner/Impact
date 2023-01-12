@@ -1,10 +1,7 @@
 //! Management of model instance data for rendering.
 
 use crate::{
-    geometry::{
-        DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureTypeID,
-        ModelInstanceTransform,
-    },
+    geometry::{DynamicInstanceFeatureBuffer, InstanceFeatureTypeID, ModelInstanceTransform},
     rendering::{
         buffer::{self, RenderBuffer, RenderBufferType, VertexBufferable},
         fre, CoreRenderingSystem,
@@ -96,15 +93,6 @@ impl InstanceFeatureRenderBufferManager {
         }
 
         self.n_features = feature_buffer.n_valid_features();
-    }
-}
-
-impl<T> InstanceFeature for T
-where
-    T: VertexBufferable,
-{
-    fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-        Self::BUFFER_LAYOUT
     }
 }
 

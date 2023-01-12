@@ -1,6 +1,6 @@
 //! Model instances.
 
-use crate::num::Float;
+use crate::{impl_InstanceFeature_for_VertexBufferable, num::Float};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::Matrix4;
@@ -519,6 +519,8 @@ impl<F: Float> Default for ModelInstanceTransform<F> {
         Self::identity()
     }
 }
+
+impl_InstanceFeature_for_VertexBufferable!(ModelInstanceTransform<f32>);
 
 // Since `ModelInstanceTransform` is `#[repr(transparent)]`, it will be
 // `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
