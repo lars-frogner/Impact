@@ -19,9 +19,9 @@ pub(crate) fn archetype_of(input: ArchetypeOfInput, crate_root: &Ident) -> Resul
 
     querying_util::verify_comp_types_unique(&component_types)?;
 
-    let assertions = component_types
-        .iter()
-        .map(|ty| querying_util::create_assertion_that_type_impls_component_trait(ty, crate_root));
+    let assertions = component_types.iter().map(|ty| {
+        querying_util::create_assertion_that_type_impls_component_trait(ty, "required", crate_root)
+    });
 
     Ok(quote! {
         // Use local scope to avoid polluting surrounding code

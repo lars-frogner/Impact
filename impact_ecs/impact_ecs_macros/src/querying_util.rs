@@ -1,7 +1,7 @@
-//!
+//! Utilities useful for various macros using a querying pattern.
 
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{format_ident, quote, quote_spanned, IdentFragment, ToTokens};
 use syn::{
     bracketed,
     parse::{Parse, ParseStream},
@@ -148,14 +148,16 @@ pub(crate) fn generate_input_verification_code<'a>(
     impl_assertions.extend(
         required_comp_types
             .iter()
-            .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
+            .map(|ty| create_assertion_that_type_impls_component_trait(ty, "required", crate_root)),
     );
 
-    for comp_types in additional_comp_types.into_iter().flatten() {
+    for (i, comp_types) in additional_comp_types.into_iter().flatten().enumerate() {
+        // Use `i` as tag to avoid name clash if the same component
+        // is represented multiple times
         impl_assertions.extend(
             comp_types
                 .iter()
-                .map(|ty| create_assertion_that_type_impls_component_trait(ty, crate_root)),
+                .map(|ty| create_assertion_that_type_impls_component_trait(ty, i, crate_root)),
         );
     }
 
@@ -170,12 +172,14 @@ pub(crate) fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenSt
     }
 }
 
-pub(crate) fn create_assertion_that_type_impls_component_trait(
+pub(crate) fn create_assertion_that_type_impls_component_trait<T: IdentFragment>(
     ty: &Type,
+    tag: T,
     crate_root: &Ident,
 ) -> TokenStream {
     let dummy_struct_name = format_ident!(
-        "__assert_{}_impls_component",
+        "__{}_assert_{}_impls_component",
+        tag,
         type_to_valid_ident_string(ty)
     );
     quote_spanned! {ty.span()=>
