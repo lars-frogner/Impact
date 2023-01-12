@@ -60,13 +60,33 @@ impl InstanceFeatureManager {
     /// Returns a reference to the storage of instance features of
     /// type `Fe`, or [`None`] if no storage exists for that type.
     pub fn get_storage<Fe: InstanceFeature>(&self) -> Option<&InstanceFeatureStorage> {
-        self.feature_storages.get(&Fe::feature_type_id())
+        self.get_storage_for_feature_type_id(Fe::FEATURE_TYPE_ID)
     }
 
     /// Returns a mutable reference to the storage of instance features
     /// of type `Fe`, or [`None`] if no storage exists for that type.
     pub fn get_storage_mut<Fe: InstanceFeature>(&mut self) -> Option<&mut InstanceFeatureStorage> {
-        self.feature_storages.get_mut(&Fe::feature_type_id())
+        self.get_storage_mut_for_feature_type_id(Fe::FEATURE_TYPE_ID)
+    }
+
+    /// Returns a reference to the storage of instance features of
+    /// the type with the given ID, or [`None`] if no storage exists
+    /// for that type.
+    pub fn get_storage_for_feature_type_id(
+        &self,
+        feature_type_id: InstanceFeatureTypeID,
+    ) -> Option<&InstanceFeatureStorage> {
+        self.feature_storages.get(&feature_type_id)
+    }
+
+    /// Returns a mutable reference to the storage of instance features
+    /// of the type with the given ID, or [`None`] if no storage exists
+    /// for that type.
+    pub fn get_storage_mut_for_feature_type_id(
+        &mut self,
+        feature_type_id: InstanceFeatureTypeID,
+    ) -> Option<&mut InstanceFeatureStorage> {
+        self.feature_storages.get_mut(&feature_type_id)
     }
 
     /// Returns an iterator over the model IDs and their associated
