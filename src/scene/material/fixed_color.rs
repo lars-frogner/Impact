@@ -3,10 +3,10 @@
 use crate::{
     geometry::InstanceFeature,
     impl_InstanceFeature_for_VertexBufferable,
-    rendering::{self, Assets, ShaderID, VertexBufferable},
+    rendering::{self, VertexBufferable},
     scene::{
         FixedColorComp, InstanceFeatureManager, MaterialComp, MaterialID, MaterialLibrary,
-        MaterialSpecification, RGBAColor,
+        MaterialSpecification, RGBAColor, ShaderID, ShaderLibrary,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -39,7 +39,7 @@ impl FixedColorMaterial {
     /// the same material specification can be used for all
     /// instances using the material.
     pub fn register(
-        assets: &mut Assets,
+        shader_library: &mut ShaderLibrary,
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {

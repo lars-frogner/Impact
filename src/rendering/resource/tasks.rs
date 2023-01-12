@@ -142,18 +142,20 @@ define_task!(
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
+                let scene = world.scene().read().unwrap();
+                let shader_library = scene.shader_library().read().unwrap();
+                let material_library = scene.material_library().read().unwrap();
                 DesynchronizedRenderResources::sync_material_resources_with_material_specifications(
                     renderer.core_system(),
                     renderer.assets(),
+                    &shader_library,
                     render_resource_manager
                         .desynchronized()
                         .material_resource_managers
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    world
-                        .scene().read().unwrap().material_library().read().unwrap()
-                        .material_specifications(),
+                        material_library.material_specifications(),
                 )
             } else {
                 Ok(())

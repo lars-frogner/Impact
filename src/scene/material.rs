@@ -6,7 +6,8 @@ mod fixed_color;
 
 use crate::{
     geometry::InstanceFeatureTypeID,
-    rendering::{fre, ShaderID, TextureID},
+    rendering::{fre, TextureID},
+    scene::ShaderID,
 };
 use impact_utils::stringhash64_newtype;
 use nalgebra::{Vector3, Vector4};

@@ -1,5 +1,9 @@
 //! Running an event loop.
 
+use super::{
+    geometry::{CameraConfiguration, Degrees, PerspectiveCamera, UpperExclusiveBounds},
+    rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem},
+};
 use crate::{
     control::{
         CameraOrientationController, Controllable, RollFreeCameraOrientationController,
@@ -11,24 +15,16 @@ use crate::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{fre, Assets, MaterialComp, ShaderID, TextureID},
-    scene::{
-        CameraComp, CameraID, CameraRepository, MaterialID, MaterialLibrary, MaterialSpecification,
-        MeshComp, MeshID, MeshRepository, Scene,
-    },
+    rendering::{fre, Assets, TextureID},
+    scene::{CameraComp, CameraID, CameraRepository, MeshComp, MeshID, MeshRepository, Scene},
     window::InputHandler,
     window::{KeyActionMap, Window},
     world::World,
 };
-use impact_utils::{hash32, hash64};
-use std::{f64::consts::PI, sync::Arc};
-
-use super::{
-    geometry::{CameraConfiguration, Degrees, PerspectiveCamera, UpperExclusiveBounds},
-    rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem, Shader},
-};
 use anyhow::Result;
+use impact_utils::{hash32, hash64};
 use nalgebra::{point, vector, Point3, Vector3};
+use std::f64::consts::PI;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -84,16 +80,6 @@ async fn init_world(window: Window) -> Result<World> {
     let mut mesh_repository = MeshRepository::new();
     let mut camera_repository = CameraRepository::new();
 
-    assets.shaders.insert(
-        ShaderID(hash64!("Test shader")),
-        Arc::new(Shader::from_source(
-            &core_system,
-            include_str!("texture_shader.wgsl"),
-            // include_str!("shader.wgsl"),
-            "Test shader",
-        )),
-    );
-
     // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
     assets.image_textures.insert(
         TextureID(hash32!("Tree texture")),
@@ -123,16 +109,6 @@ async fn init_world(window: Window) -> Result<World> {
             ),
         )
         .unwrap();
-
-    let mut material_library = MaterialLibrary::new();
-    let material_spec = MaterialSpecification::new(
-        ShaderID(hash64!("Test shader")),
-        vec![TextureID(hash32!("Tree texture"))],
-        Vec::new(),
-    );
-    material_library
-        .add_material_specification(MaterialID(hash64!("Test material")), material_spec);
-
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
@@ -141,7 +117,7 @@ async fn init_world(window: Window) -> Result<World> {
     let orientation_controller =
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
-    let scene = Scene::new(camera_repository, mesh_repository, material_library);
+    let scene = Scene::new(camera_repository, mesh_repository);
     let world = World::new(
         window,
         scene,
@@ -165,7 +141,6 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Test mesh"))),
-            &MaterialComp::new(MaterialID(hash64!("Test material"))),
             &PositionComp(Point3::new(0.0, 0.0, 3.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
             &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.0))),

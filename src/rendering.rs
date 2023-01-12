@@ -16,7 +16,7 @@ mod texture;
 mod uniform;
 
 pub use self::core::CoreRenderingSystem;
-pub use assets::{Assets, ShaderID, TextureID};
+pub use assets::{Assets, TextureID};
 pub use buffer::{create_vertex_buffer_layout_for_vertex, VertexBufferable};
 pub use material::MaterialRenderResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};

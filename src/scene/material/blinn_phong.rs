@@ -3,10 +3,11 @@
 use crate::{
     geometry::InstanceFeature,
     impl_InstanceFeature_for_VertexBufferable,
-    rendering::{self, fre, Assets, ShaderID, TextureID, VertexBufferable},
+    rendering::{self, fre, TextureID, VertexBufferable},
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, InstanceFeatureManager, MaterialComp,
-        MaterialID, MaterialLibrary, MaterialSpecification, RGBColor, TexturedBlinnPhongComp,
+        MaterialID, MaterialLibrary, MaterialSpecification, RGBColor, ShaderID, ShaderLibrary,
+        TexturedBlinnPhongComp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -77,7 +78,7 @@ impl BlinnPhongMaterial {
     /// the same material specification can be used for all
     /// instances using the material.
     pub fn register(
-        assets: &mut Assets,
+        shader_library: &mut ShaderLibrary,
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {
@@ -134,7 +135,10 @@ impl DiffuseTexturedBlinnPhongMaterial {
     /// material. No material specification is created at this
     /// point, because a separate specification will be needed
     /// for every instance that uses a specific texture.
-    pub fn register(assets: &mut Assets, instance_feature_manager: &mut InstanceFeatureManager) {
+    pub fn register(
+        shader_library: &mut ShaderLibrary,
+        instance_feature_manager: &mut InstanceFeatureManager,
+    ) {
         instance_feature_manager.register_feature_type::<Self>();
 
         // Construct shader with correct features and get ID (create ShaderBuilder).
@@ -200,7 +204,10 @@ impl TexturedBlinnPhongMaterial {
     /// material. No material specification is created at this
     /// point, because a separate specification will be needed
     /// for every instance that uses a specific texture.
-    pub fn register(assets: &mut Assets, instance_feature_manager: &mut InstanceFeatureManager) {
+    pub fn register(
+        shader_library: &mut ShaderLibrary,
+        instance_feature_manager: &mut InstanceFeatureManager,
+    ) {
         instance_feature_manager.register_feature_type::<Self>();
 
         // Construct shader with correct features and get ID (create ShaderBuilder).

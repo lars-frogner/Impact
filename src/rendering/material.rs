@@ -1,8 +1,8 @@
 //! Management of material data for rendering.
 
 use crate::{
-    rendering::{fre, Assets, CoreRenderingSystem, ImageTexture, Shader, TextureID},
-    scene::{MaterialLibrary, MaterialSpecification},
+    rendering::{Assets, CoreRenderingSystem, ImageTexture, Shader, TextureID},
+    scene::{MaterialSpecification, ShaderLibrary},
 };
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
@@ -25,11 +25,12 @@ impl MaterialRenderResourceManager {
     pub fn for_material_specification(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
+        shader_library: &ShaderLibrary,
         material_specification: &MaterialSpecification,
         label: String,
     ) -> Result<Self> {
         let shader = Arc::clone(
-            assets
+            shader_library
                 .shaders
                 .get(&material_specification.shader_id())
                 .ok_or_else(|| {
