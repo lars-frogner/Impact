@@ -1,11 +1,11 @@
-//! A wrapper for [`Vec<u8>`] that ensures a specified alignment.
+//! A byte vector that ensures a specified alignment.
 
 use std::{
     alloc::{self, Layout},
     cmp, mem,
-    mem::ManuallyDrop,
     ops::{Deref, DerefMut},
-    ptr,
+    ptr::{self, NonNull},
+    slice,
 };
 
 /// A valid pointer address alignment, guaranteed to be non-zero
@@ -14,23 +14,18 @@ use std::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Alignment(usize);
 
-/// A wrapper for [`Vec<u8>`] that ensures a specified alignment.
+/// A container with similar functionality to [`Vec<u8>`], but
+/// that guarantees that the underlying memory block has a
+/// specified alignment.
 ///
 /// # Warning
 /// The address of `AlignedByteVec`s data is only guaranteed to
 /// be aligned when the capacity is non-zero.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct AlignedByteVec {
     layout: Layout,
-    // It is important that the byte `Vec` is never dropped, as we
-    // have to allocate and deallocate its memory for it. If `bytes`
-    // dropped after we had deallocated its memory, we would have a double
-    // free. Moreover, the `Vec` assumes that its memory was allocated with
-    // align_of::<u8>() = 1, and would thus potentially deallocate its memory
-    // with the wrong alignment, causing undefined behavior. For the same
-    // reason, it is unsafe for us to call any method on `bytes` that could
-    // cause it to re- or deallocate its memory.
-    bytes: ManuallyDrop<Vec<u8>>,
+    ptr: NonNull<u8>,
+    len: usize,
 }
 
 impl Alignment {
@@ -75,7 +70,8 @@ impl AlignedByteVec {
             // - `Alignment` is guaranteed to hold a valid alignment.
             // - The passed size of zero never overflows `isize`.
             layout: unsafe { Layout::from_size_align_unchecked(0, alignment.into()) },
-            bytes: ManuallyDrop::new(Vec::new()),
+            ptr: NonNull::dangling(),
+            len: 0,
         }
     }
 
@@ -93,10 +89,10 @@ impl AlignedByteVec {
             Self::new(alignment)
         } else {
             let (layout, ptr) = Self::allocate_memory_with_alignment_and_size(alignment, capacity);
-            let bytes = unsafe { Vec::from_raw_parts(ptr, 0, layout.size()) };
             Self {
                 layout,
-                bytes: ManuallyDrop::new(bytes),
+                ptr,
+                len: 0,
             }
         }
     }
@@ -110,16 +106,12 @@ impl AlignedByteVec {
         if bytes.is_empty() {
             Self::new(alignment)
         } else {
-            let (layout, ptr) =
-                Self::allocate_memory_with_alignment_and_size(alignment, bytes.len());
-            let vec = unsafe {
-                ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
-                Vec::from_raw_parts(ptr, bytes.len(), layout.size())
-            };
-            Self {
-                layout,
-                bytes: ManuallyDrop::new(vec),
+            let len = bytes.len();
+            let (layout, ptr) = Self::allocate_memory_with_alignment_and_size(alignment, len);
+            unsafe {
+                ptr::copy_nonoverlapping(bytes.as_ptr(), ptr.as_ptr(), len);
             }
+            Self { layout, ptr, len }
         }
     }
 
@@ -138,7 +130,7 @@ impl AlignedByteVec {
     /// Returns the number of elements in the vector, also referred to as
     /// its 'length'.
     pub fn len(&self) -> usize {
-        self.bytes.len()
+        self.len
     }
 
     /// Returns `true` if the vector contains no elements.
@@ -160,12 +152,42 @@ impl AlignedByteVec {
         self
     }
 
+    /// Returns a raw pointer to the vector's buffer, or a dangling raw pointer
+    /// valid for zero sized reads if the vector didn't allocate.
+    ///
+    /// The caller must ensure that the vector outlives the pointer this
+    /// function returns, or else it will end up pointing to garbage.
+    /// Modifying the vector may cause its buffer to be reallocated,
+    /// which would also make any pointers to it invalid.
+    ///
+    /// The caller must also ensure that the memory the pointer (non-transitively) points to
+    /// is never written to (except inside an `UnsafeCell`) using this pointer or any pointer
+    /// derived from it. If you need to mutate the contents of the slice, use [`as_mut_ptr`].
+    pub fn as_ptr(&self) -> *const u8 {
+        // We shadow the slice method of the same name to avoid going through
+        // `deref`, which creates an intermediate reference.
+        self.ptr.as_ptr()
+    }
+
+    /// Returns an unsafe mutable pointer to the vector's buffer, or a dangling
+    /// raw pointer valid for zero sized reads if the vector didn't allocate.
+    ///
+    /// The caller must ensure that the vector outlives the pointer this
+    /// function returns, or else it will end up pointing to garbage.
+    /// Modifying the vector may cause its buffer to be reallocated,
+    /// which would also make any pointers to it invalid.
+    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+        // We shadow the slice method of the same name to avoid going through
+        // `deref_mut`, which creates an intermediate reference.
+        self.ptr.as_ptr()
+    }
+
     /// Extends the vector with all the bytes in the given slice.
     ///
     /// # Panics
     /// If the new capacity of the vector exceeds `isize::MAX`.
     pub fn extend_from_slice(&mut self, other: &[u8]) {
-        let old_len = self.bytes.len();
+        let old_len = self.len();
         let added_len = other.len();
         let new_len = old_len.checked_add(added_len).unwrap();
 
@@ -174,16 +196,12 @@ impl AlignedByteVec {
 
             unsafe {
                 // SAFETY:
-                // The memory blocks are guaranteed to be nonoverlapping since `self.bytes`
+                // The memory blocks are guaranteed to be nonoverlapping since `self`
                 // is borrowed mutably (so `other` is not from the same memory)
-                ptr::copy_nonoverlapping(
-                    other.as_ptr(),
-                    self.bytes.as_mut_ptr().add(old_len),
-                    added_len,
-                );
+                ptr::copy_nonoverlapping(other.as_ptr(), self.ptr.as_ptr().add(old_len), added_len);
 
                 // Force new length for the vector to encompass new data
-                self.bytes.set_len(new_len);
+                self.set_len(new_len);
             }
         }
     }
@@ -197,9 +215,9 @@ impl AlignedByteVec {
     /// Note that this method has no effect on the allocated capacity
     /// of the vector.
     pub fn truncate(&mut self, len: usize) {
-        if len < self.bytes.len() {
+        if len < self.len() {
             unsafe {
-                self.bytes.set_len(len);
+                self.set_len(len);
             }
         }
     }
@@ -210,14 +228,14 @@ impl AlignedByteVec {
     /// difference, with each additional slot filled with `value`.
     /// If `new_len` is less than `len`, the vector is simply truncated.
     pub fn resize(&mut self, new_len: usize, value: u8) {
-        let len = self.bytes.len();
+        let len = self.len();
 
         if new_len > len {
             let n_additional = new_len - len;
             self.reserve(n_additional);
             unsafe {
-                ptr::write_bytes(self.bytes.as_mut_ptr().add(len), value, n_additional);
-                self.bytes.set_len(new_len);
+                ptr::write_bytes(self.ptr.as_ptr().add(len), value, n_additional);
+                self.set_len(new_len);
             };
         } else {
             self.truncate(new_len);
@@ -225,15 +243,13 @@ impl AlignedByteVec {
     }
 
     fn reserve(&mut self, n_additional: usize) {
-        let old_len = self.bytes.len();
+        let len = self.len();
         let old_layout = self.layout;
         let alignment = Alignment::of_layout(old_layout);
         let old_capacity = old_layout.size();
 
         // Calculate capacity required to hold the additional elements
-        let required_capacity = old_len
-            .checked_add(n_additional)
-            .expect("Capacity overflow");
+        let required_capacity = len.checked_add(n_additional).expect("Capacity overflow");
 
         // Only do something if the required capacity exceeds the current one
         if required_capacity > old_capacity {
@@ -251,26 +267,28 @@ impl AlignedByteVec {
             // If we already had some allocated memory, we copy it into the new
             // memory block and deallocate the old memory block
             if old_capacity != 0 {
-                let old_ptr = self.bytes.as_mut_ptr();
+                let old_ptr = self.ptr.as_ptr();
                 unsafe {
-                    // We only need to copy `old_len` values, as this is the only
+                    // We only need to copy `len` values, as this is the only
                     // accessible data
-                    ptr::copy_nonoverlapping(old_ptr, new_ptr, old_len);
+                    ptr::copy_nonoverlapping(old_ptr, new_ptr.as_ptr(), len);
                     alloc::dealloc(old_ptr, old_layout);
                 }
             }
 
-            let new_bytes = unsafe { Vec::from_raw_parts(new_ptr, old_len, new_layout.size()) };
-
             self.layout = new_layout;
-            self.bytes = ManuallyDrop::new(new_bytes);
+            self.ptr = new_ptr;
         }
+    }
+
+    unsafe fn set_len(&mut self, len: usize) {
+        self.len = len;
     }
 
     fn allocate_memory_with_alignment_and_size(
         alignment: Alignment,
         size: usize,
-    ) -> (Layout, *mut u8) {
+    ) -> (Layout, NonNull<u8>) {
         let layout = Self::create_layout_for_allocation(alignment, size);
         let ptr = unsafe { Self::allocate_with_layout(layout) };
         (layout, ptr)
@@ -298,29 +316,30 @@ impl AlignedByteVec {
         unsafe { Layout::from_size_align_unchecked(size, alignment) }
     }
 
-    unsafe fn allocate_with_layout(layout: Layout) -> *mut u8 {
+    unsafe fn allocate_with_layout(layout: Layout) -> NonNull<u8> {
         let ptr = unsafe { alloc::alloc(layout) };
 
         if ptr.is_null() {
             // Abort if the allocation failed
             alloc::handle_alloc_error(layout);
         } else {
-            ptr
+            unsafe { NonNull::new_unchecked(ptr) }
         }
     }
 }
 
+// SAFETY: The allocated memory is never aliased
+unsafe impl Send for AlignedByteVec {}
+unsafe impl Sync for AlignedByteVec {}
+
 impl Drop for AlignedByteVec {
     fn drop(&mut self) {
-        // If `self.bytes` has any allocated memory, we must deallocate it
-        // manually with the correct alignment
+        // If we have any allocated memory, we must deallocate it manually
         if self.layout.size() != 0 {
             unsafe {
-                alloc::dealloc(self.bytes.as_mut_ptr(), self.layout);
+                alloc::dealloc(self.ptr.as_ptr(), self.layout);
             }
         }
-        // `self.bytes` has heap memory at this point, and will just be
-        // popped off the stack
     }
 }
 
@@ -328,13 +347,13 @@ impl Deref for AlignedByteVec {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        &self.bytes
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 }
 
 impl DerefMut for AlignedByteVec {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.bytes
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
 
@@ -343,22 +362,27 @@ impl Clone for AlignedByteVec {
         if self.layout.size() == 0 {
             Self {
                 layout: self.layout,
-                bytes: self.bytes.clone(),
+                ptr: NonNull::dangling(),
+                len: 0,
             }
         } else {
             let mut cloned = Self::with_capacity(self.alignment(), self.capacity());
             unsafe {
-                ptr::copy_nonoverlapping(
-                    self.bytes.as_ptr(),
-                    cloned.bytes.as_mut_ptr(),
-                    self.len(),
-                );
-                cloned.bytes.set_len(self.len());
+                ptr::copy_nonoverlapping(self.ptr.as_ptr(), cloned.ptr.as_ptr(), self.len());
+                cloned.set_len(self.len());
             };
             cloned
         }
     }
 }
+
+impl PartialEq for AlignedByteVec {
+    fn eq(&self, other: &Self) -> bool {
+        self[..] == other[..]
+    }
+}
+
+impl Eq for AlignedByteVec {}
 
 #[cfg(test)]
 mod test {
