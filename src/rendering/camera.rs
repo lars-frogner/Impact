@@ -3,7 +3,7 @@
 use crate::geometry::Camera;
 use crate::rendering::{
     buffer::{self, RenderBuffer, UniformBufferable},
-    fre, CoreRenderingSystem,
+    fre, CameraShaderInput, CoreRenderingSystem,
 };
 use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
@@ -18,6 +18,11 @@ pub struct CameraRenderBufferManager {
 }
 
 impl CameraRenderBufferManager {
+    const BINDING: u32 = 0;
+    const SHADER_INPUT: CameraShaderInput = CameraShaderInput {
+        view_proj_matrix_binding: Self::BINDING,
+    };
+
     /// Creates a new manager with a render buffer initialized
     /// from the view projection transform of the given camera.
     pub fn for_camera(
@@ -45,6 +50,12 @@ impl CameraRenderBufferManager {
     /// may change.
     pub fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_group
+    }
+
+    /// Returns the input required for accessing the camera transform
+    /// in a shader.
+    pub fn shader_input(&self) -> &CameraShaderInput {
+        &Self::SHADER_INPUT
     }
 
     /// Ensures that the render buffer is in sync with the view
@@ -101,7 +112,7 @@ impl CameraRenderBufferManager {
 
     fn create_bind_group_layout(device: &wgpu::Device, label: &str) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[Self::create_bind_group_layout_entry(0)],
+            entries: &[Self::create_bind_group_layout_entry(Self::BINDING)],
             label: Some(&format!("{} bind group layout", label)),
         })
     }
@@ -115,7 +126,7 @@ impl CameraRenderBufferManager {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[buffer::create_uniform_buffer_bind_group_entry(
-                0,
+                Self::BINDING,
                 transform_render_buffer,
             )],
             label: Some(&format!("{} bind group", label)),

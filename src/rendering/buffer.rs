@@ -1,6 +1,6 @@
 //! Data buffers for rendering.
 
-use crate::rendering::CoreRenderingSystem;
+use crate::rendering::{CoreRenderingSystem, MeshShaderInput};
 use bytemuck::Pod;
 use impact_utils::ConstStringHash64;
 use std::{
@@ -13,6 +13,10 @@ use wgpu::util::DeviceExt;
 pub trait VertexBufferable: Pod {
     /// The layout of buffers made up of this vertex type.
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
+
+    /// The input required for accessing the vertex attributes
+    /// in a shader.
+    const SHADER_INPUT: MeshShaderInput;
 }
 
 /// Represents types that can be written to an index buffer.
@@ -217,10 +221,7 @@ impl RenderBuffer {
 /// vertex attributes.
 pub const fn create_vertex_buffer_layout_for_vertex<T>(
     attributes: &'static [wgpu::VertexAttribute],
-) -> wgpu::VertexBufferLayout<'static>
-where
-    T: VertexBufferable,
-{
+) -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Vertex,
@@ -233,10 +234,7 @@ where
 /// instance attributes.
 pub const fn create_vertex_buffer_layout_for_instance<T>(
     attributes: &'static [wgpu::VertexAttribute],
-) -> wgpu::VertexBufferLayout<'static>
-where
-    T: VertexBufferable,
-{
+) -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Instance,

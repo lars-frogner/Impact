@@ -238,9 +238,13 @@ impl InstanceFeatureManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::scene::{MaterialID, MeshID};
+    use crate::{
+        impl_InstanceFeature,
+        rendering::InstanceFeatureShaderInput,
+        scene::{MaterialID, MeshID},
+    };
     use bytemuck::{Pod, Zeroable};
-    use impact_utils::{hash64, ConstStringHash64};
+    use impact_utils::hash64;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
     #[repr(transparent)]
@@ -255,37 +259,9 @@ mod test {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
     struct ZeroSizedFeature;
 
-    const DUMMY_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: 0,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &[],
-    };
-
-    impl InstanceFeature for Feature {
-        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
-            ConstStringHash64::new(stringify!(Feature)).into_hash();
-
-        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-            DUMMY_LAYOUT
-        }
-    }
-
-    impl InstanceFeature for DifferentFeature {
-        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
-            ConstStringHash64::new(stringify!(DifferentFeature)).into_hash();
-
-        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-            DUMMY_LAYOUT
-        }
-    }
-    impl InstanceFeature for ZeroSizedFeature {
-        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
-            ConstStringHash64::new(stringify!(ZeroSizedFeature)).into_hash();
-
-        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-            DUMMY_LAYOUT
-        }
-    }
+    impl_InstanceFeature!(Feature, [], InstanceFeatureShaderInput::None);
+    impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
+    impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
 
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(

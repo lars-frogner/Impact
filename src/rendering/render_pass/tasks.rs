@@ -26,10 +26,13 @@ define_task!(
                     let renderer = world.renderer().read().unwrap();
                     let render_resource_manager = renderer.render_resource_manager().read().unwrap();
                     let mut render_pass_manager = renderer.render_pass_manager().write().unwrap();
+                    let scene = world.scene().read().unwrap();
+                    let mut shader_builder = scene.shader_manager().write().unwrap();
 
                     render_pass_manager.sync_with_render_resources(
                         renderer.core_system(),
                         render_resource_manager.synchronized(),
+                        &mut shader_builder,
                         camera_id
                     )
                 },

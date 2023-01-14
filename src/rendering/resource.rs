@@ -11,10 +11,7 @@ use crate::{
         instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager, Assets,
         CoreRenderingSystem, MaterialRenderResourceManager,
     },
-    scene::{
-        CameraID, InstanceFeatureManager, MaterialID, MaterialSpecification, MeshID, ModelID,
-        ShaderLibrary,
-    },
+    scene::{CameraID, InstanceFeatureManager, MaterialID, MaterialSpecification, MeshID, ModelID},
 };
 use anyhow::Result;
 use std::{
@@ -295,7 +292,6 @@ impl DesynchronizedRenderResources {
     fn sync_material_resources_with_material_specifications(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
-        shader_library: &ShaderLibrary,
         material_resources: &mut MaterialResourceManagerMap,
         material_specifications: &HashMap<MaterialID, MaterialSpecification>,
     ) -> Result<()> {
@@ -310,7 +306,6 @@ impl DesynchronizedRenderResources {
                     entry.insert(MaterialRenderResourceManager::for_material_specification(
                         core_system,
                         assets,
-                        shader_library,
                         material_specification,
                         material_id.to_string(),
                     )?);

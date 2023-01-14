@@ -1,21 +1,20 @@
 //! Management of material data for rendering.
 
 use crate::{
-    rendering::{Assets, CoreRenderingSystem, ImageTexture, Shader, TextureID},
-    scene::{MaterialSpecification, ShaderLibrary},
+    rendering::{Assets, CoreRenderingSystem, ImageTexture, MaterialTextureShaderInput, TextureID},
+    scene::MaterialSpecification,
 };
 use anyhow::{anyhow, Result};
-use std::sync::Arc;
 
 /// Owner and manager of a render resources for a material,
 /// including a bind group for the set of textures used for
 /// the material.
 #[derive(Debug)]
 pub struct MaterialRenderResourceManager {
-    shader: Arc<Shader>,
     image_texture_ids: Vec<TextureID>,
     texture_bind_group_layout: Option<wgpu::BindGroupLayout>,
     texture_bind_group: Option<wgpu::BindGroup>,
+    texture_shader_input: MaterialTextureShaderInput,
     label: String,
 }
 
@@ -25,22 +24,9 @@ impl MaterialRenderResourceManager {
     pub fn for_material_specification(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
-        shader_library: &ShaderLibrary,
         material_specification: &MaterialSpecification,
         label: String,
     ) -> Result<Self> {
-        let shader = Arc::clone(
-            shader_library
-                .shaders
-                .get(&material_specification.shader_id())
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Shader {} missing from assets",
-                        material_specification.shader_id()
-                    )
-                })?,
-        );
-
         let image_texture_ids = material_specification.image_texture_ids().to_vec();
 
         let (texture_bind_group_layout, texture_bind_group) = if image_texture_ids.is_empty() {
@@ -62,18 +48,20 @@ impl MaterialRenderResourceManager {
         };
 
         Ok(Self {
-            shader,
             image_texture_ids,
             texture_bind_group_layout,
             texture_bind_group,
+            texture_shader_input: material_specification.texture_shader_input().clone(),
             label,
         })
     }
 
-    /// Returns a reference to the compiled shader module used
-    /// for the material.
-    pub fn shader_module(&self) -> &wgpu::ShaderModule {
-        self.shader.module()
+    /// Returns the binding that will be used for the texture at
+    /// the given index and its sampler in the bind group.
+    pub const fn get_texture_and_sampler_bindings(texture_idx: usize) -> (u32, u32) {
+        let texture_binding = (2 * texture_idx) as u32;
+        let sampler_binding = texture_binding + 1;
+        (texture_binding, sampler_binding)
     }
 
     /// Returns a reference to the bind group layout for the
@@ -86,6 +74,12 @@ impl MaterialRenderResourceManager {
     /// textures used for the material.
     pub fn texture_bind_group(&self) -> Option<&wgpu::BindGroup> {
         self.texture_bind_group.as_ref()
+    }
+
+    /// Returns the input required for accessing the textures
+    /// in a shader.
+    pub fn shader_input(&self) -> &MaterialTextureShaderInput {
+        &self.texture_shader_input
     }
 
     /// Ensures that the render resources are in sync with the
@@ -126,12 +120,12 @@ impl MaterialRenderResourceManager {
         let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
 
         for idx in 0..n_textures {
-            let binding = (2 * idx).try_into().unwrap();
+            let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
             bind_group_layout_entries.push(ImageTexture::create_texture_bind_group_layout_entry(
-                binding,
+                texture_binding,
             ));
             bind_group_layout_entries.push(ImageTexture::create_sampler_bind_group_layout_entry(
-                binding + 1,
+                sampler_binding,
             ));
         }
 
@@ -157,9 +151,9 @@ impl MaterialRenderResourceManager {
                 .get(texture_id)
                 .ok_or_else(|| anyhow!("Texture {} missing from assets", texture_id))?;
 
-            let binding = (2 * idx).try_into().unwrap();
-            bind_group_entries.push(image_texture.create_texture_bind_group_entry(binding));
-            bind_group_entries.push(image_texture.create_sampler_bind_group_entry(binding + 1));
+            let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
+            bind_group_entries.push(image_texture.create_texture_bind_group_entry(texture_binding));
+            bind_group_entries.push(image_texture.create_sampler_bind_group_entry(sampler_binding));
         }
 
         Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {

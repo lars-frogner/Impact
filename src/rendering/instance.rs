@@ -1,10 +1,10 @@
 //! Management of model instance data for rendering.
 
 use crate::{
-    geometry::{DynamicInstanceFeatureBuffer, InstanceFeatureTypeID, ModelInstanceTransform},
+    geometry::{DynamicInstanceFeatureBuffer, InstanceFeatureTypeID},
     rendering::{
-        buffer::{self, RenderBuffer, RenderBufferType, VertexBufferable},
-        fre, CoreRenderingSystem,
+        buffer::{RenderBuffer, RenderBufferType},
+        CoreRenderingSystem, InstanceFeatureShaderInput,
     },
 };
 
@@ -14,6 +14,7 @@ use crate::{
 pub struct InstanceFeatureRenderBufferManager {
     feature_render_buffer: RenderBuffer,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    shader_input: InstanceFeatureShaderInput,
     feature_type_id: InstanceFeatureTypeID,
     n_features: usize,
     label: String,
@@ -38,6 +39,7 @@ impl InstanceFeatureRenderBufferManager {
         Self {
             feature_render_buffer,
             vertex_buffer_layout: feature_buffer.vertex_buffer_layout().clone(),
+            shader_input: feature_buffer.shader_input().clone(),
             feature_type_id: feature_buffer.feature_type_id(),
             n_features: feature_buffer.n_valid_features(),
             label,
@@ -52,6 +54,12 @@ impl InstanceFeatureRenderBufferManager {
     /// Returns the vertex render buffer of instance features.
     pub fn vertex_render_buffer(&self) -> &RenderBuffer {
         &self.feature_render_buffer
+    }
+
+    /// Returns the input required for accessing the features
+    /// in a shader.
+    pub fn shader_input(&self) -> &InstanceFeatureShaderInput {
+        &self.shader_input
     }
 
     /// Returns the number of features in the render buffer.
@@ -94,11 +102,4 @@ impl InstanceFeatureRenderBufferManager {
 
         self.n_features = feature_buffer.n_valid_features();
     }
-}
-
-impl VertexBufferable for ModelInstanceTransform<fre> {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_instance::<Self>(
-            &wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4],
-        );
 }

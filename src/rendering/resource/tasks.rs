@@ -143,12 +143,10 @@ define_task!(
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
                 let scene = world.scene().read().unwrap();
-                let shader_library = scene.shader_library().read().unwrap();
                 let material_library = scene.material_library().read().unwrap();
                 DesynchronizedRenderResources::sync_material_resources_with_material_specifications(
                     renderer.core_system(),
                     renderer.assets(),
-                    &shader_library,
                     render_resource_manager
                         .desynchronized()
                         .material_resource_managers

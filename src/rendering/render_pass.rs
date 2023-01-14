@@ -6,10 +6,12 @@ pub use tasks::SyncRenderPasses;
 
 use crate::{
     rendering::{
-        instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager,
-        resource::SynchronizedRenderResources, CoreRenderingSystem,
+        camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
+        mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
+        CoreRenderingSystem, InstanceFeatureShaderInput, MaterialRenderResourceManager,
+        MaterialTextureShaderInput, MeshShaderInput,
     },
-    scene::{CameraID, MeshID, ModelID},
+    scene::{CameraID, MaterialID, MeshID, ModelID, ShaderManager},
 };
 use anyhow::{anyhow, Result};
 use std::{
@@ -81,6 +83,7 @@ impl RenderPassManager {
         &mut self,
         core_system: &CoreRenderingSystem,
         render_resources: &SynchronizedRenderResources,
+        shader_manager: &mut ShaderManager,
         camera_id: CameraID,
     ) -> Result<()> {
         let feature_buffer_managers = render_resources.instance_feature_buffer_managers();
@@ -98,6 +101,7 @@ impl RenderPassManager {
                     entry.insert(Self::create_render_pass_recorder_for_model(
                         core_system,
                         render_resources,
+                        shader_manager,
                         camera_id,
                         model_id,
                         disable_pass,
@@ -120,12 +124,19 @@ impl RenderPassManager {
     fn create_render_pass_recorder_for_model(
         core_system: &CoreRenderingSystem,
         render_resources: &SynchronizedRenderResources,
+        shader_manager: &mut ShaderManager,
         camera_id: CameraID,
         model_id: ModelID,
         disabled: bool,
     ) -> Result<RenderPassRecorder> {
         let specification = RenderPassSpecification::for_model(camera_id, model_id)?;
-        RenderPassRecorder::new(core_system, render_resources, specification, disabled)
+        RenderPassRecorder::new(
+            core_system,
+            render_resources,
+            shader_manager,
+            specification,
+            disabled,
+        )
     }
 }
 
@@ -178,48 +189,84 @@ impl RenderPassSpecification {
         self.camera_id = camera_id;
     }
 
-    /// Obtains the shader module to use for the render pass.
-    fn get_shader_module<'a>(
+    /// Obtains the vertex buffer layouts for any mesh and
+    /// instance features involved in the render pass, as well
+    /// as the associated shader inputs.
+    ///
+    /// The order of the layouts is:
+    /// 1. Mesh vertex buffer.
+    /// 2. Instance feature buffers.
+    fn get_vertex_buffer_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
-    ) -> Result<&'a wgpu::ShaderModule> {
-        let material_id = self.model_id.unwrap().material_id();
-        Ok(render_resources
-            .get_material_resource_manager(material_id)
-            .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
-            .shader_module())
+    ) -> Result<(
+        Vec<wgpu::VertexBufferLayout<'static>>,
+        Option<&'a MeshShaderInput>,
+        Vec<&'a InstanceFeatureShaderInput>,
+    )> {
+        let mut layouts = Vec::with_capacity(2);
+        let mut mesh_shader_input = None;
+        let mut instance_feature_shader_inputs = Vec::with_capacity(1);
+
+        if let Some(mesh_id) = self.mesh_id {
+            let mesh_buffer_manager = Self::get_mesh_buffer_manager(render_resources, mesh_id)?;
+
+            layouts.push(mesh_buffer_manager.vertex_buffer_layout().clone());
+            mesh_shader_input = Some(mesh_buffer_manager.shader_input());
+
+            if let Some(model_id) = self.model_id {
+                if let Some(buffers) =
+                    render_resources.get_instance_feature_buffer_managers(model_id)
+                {
+                    for buffer in buffers {
+                        layouts.push(buffer.vertex_buffer_layout().clone());
+                        instance_feature_shader_inputs.push(buffer.shader_input());
+                    }
+                }
+            }
+        }
+
+        Ok((layouts, mesh_shader_input, instance_feature_shader_inputs))
     }
 
-    /// Obtains the layouts of all bind groups involved in the render
-    /// pass.
+    /// Obtains the bind group layouts for any camera and material
+    /// involved in the render pass, as well as the associated shader
+    /// inputs.
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
     /// 2. Material textures.
-    fn get_bind_group_layouts<'a>(
+    fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
-    ) -> Result<Vec<&'a wgpu::BindGroupLayout>> {
+    ) -> Result<(
+        Vec<&'a wgpu::BindGroupLayout>,
+        Option<&'a CameraShaderInput>,
+        Option<&'a MaterialTextureShaderInput>,
+    )> {
         let mut layouts = Vec::with_capacity(2);
+        let mut camera_shader_input = None;
+        let mut material_texture_shader_input = None;
+
         if let Some(camera_id) = self.camera_id {
-            layouts.push(
-                render_resources
-                    .get_camera_buffer_manager(camera_id)
-                    .ok_or_else(|| anyhow!("Missing render buffer for camera {}", camera_id))?
-                    .bind_group_layout(),
-            );
+            let camera_buffer_manager =
+                Self::get_camera_buffer_manager(render_resources, camera_id)?;
+
+            layouts.push(camera_buffer_manager.bind_group_layout());
+            camera_shader_input = Some(camera_buffer_manager.shader_input());
         }
+
         if let Some(model_id) = self.model_id {
-            let material_id = model_id.material_id();
-            if let Some(layout) = render_resources
-                .get_material_resource_manager(material_id)
-                .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
-                .texture_bind_group_layout()
-            {
+            let material_resource_manager =
+                Self::get_material_resource_manager(render_resources, model_id.material_id())?;
+
+            if let Some(layout) = material_resource_manager.texture_bind_group_layout() {
                 layouts.push(layout);
             }
+            material_texture_shader_input = Some(material_resource_manager.shader_input());
         }
-        Ok(layouts)
+
+        Ok((layouts, camera_shader_input, material_texture_shader_input))
     }
 
     /// Obtains all bind groups involved in the render pass.
@@ -233,57 +280,18 @@ impl RenderPassSpecification {
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
         let mut bind_groups = Vec::with_capacity(2);
         if let Some(camera_id) = self.camera_id {
-            bind_groups.push(
-                render_resources
-                    .get_camera_buffer_manager(camera_id)
-                    .ok_or_else(|| anyhow!("Missing render buffer for camera {}", camera_id))?
-                    .bind_group(),
-            );
+            bind_groups
+                .push(Self::get_camera_buffer_manager(render_resources, camera_id)?.bind_group());
         }
         if let Some(model_id) = self.model_id {
-            let material_id = model_id.material_id();
-            if let Some(bind_group) = render_resources
-                .get_material_resource_manager(material_id)
-                .ok_or_else(|| anyhow!("Missing render resources for material {}", material_id))?
-                .texture_bind_group()
+            if let Some(bind_group) =
+                Self::get_material_resource_manager(render_resources, model_id.material_id())?
+                    .texture_bind_group()
             {
                 bind_groups.push(bind_group);
             }
         }
         Ok(bind_groups)
-    }
-
-    /// Obtains the layout of all vertex buffers involved in the render pass.
-    ///
-    /// The order of the layouts is:
-    /// 1. Mesh vertex buffer.
-    /// 2. Mesh instance buffer.
-    fn get_vertex_buffer_layouts<'a>(
-        &self,
-        render_resources: &'a SynchronizedRenderResources,
-    ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
-        let mut layouts = Vec::with_capacity(4);
-        if let Some(mesh_id) = self.mesh_id {
-            layouts.push(
-                render_resources
-                    .get_mesh_buffer_manager(mesh_id)
-                    .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))?
-                    .vertex_buffer_layout()
-                    .clone(),
-            );
-            if let Some(model_id) = self.model_id {
-                if let Some(buffers) =
-                    render_resources.get_instance_feature_buffer_managers(model_id)
-                {
-                    layouts.extend(
-                        buffers
-                            .iter()
-                            .map(|buffer| buffer.vertex_buffer_layout().clone()),
-                    );
-                }
-            }
-        }
-        Ok(layouts)
     }
 
     fn determine_load_operation(&self) -> wgpu::LoadOp<wgpu::Color> {
@@ -311,24 +319,52 @@ impl RenderPassSpecification {
             .map(|buffers| buffers.iter())
             .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
     }
+
+    fn get_camera_buffer_manager(
+        render_resources: &SynchronizedRenderResources,
+        camera_id: CameraID,
+    ) -> Result<&CameraRenderBufferManager> {
+        render_resources
+            .get_camera_buffer_manager(camera_id)
+            .ok_or_else(|| anyhow!("Missing render buffer for camera {}", camera_id))
+    }
+
+    fn get_material_resource_manager(
+        render_resources: &SynchronizedRenderResources,
+        material_id: MaterialID,
+    ) -> Result<&MaterialRenderResourceManager> {
+        render_resources
+            .get_material_resource_manager(material_id)
+            .ok_or_else(|| anyhow!("Missing resource manager for material {}", material_id))
+    }
 }
 
 impl RenderPassRecorder {
     /// Creates a new recorder for the render pass defined by
     /// the given specification.
+    ///
+    /// Shader inputs extracted from the specification are used
+    /// to build or fetch the appropriate shader.
     pub fn new(
         core_system: &CoreRenderingSystem,
         render_resources: &SynchronizedRenderResources,
+        shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
         disabled: bool,
     ) -> Result<Self> {
         let pipeline = if specification.has_model() {
-            let vertex_buffer_layouts =
-                specification.get_vertex_buffer_layouts(render_resources)?;
+            let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
+                specification.get_vertex_buffer_layouts_and_shader_inputs(render_resources)?;
 
-            let bind_group_layouts = specification.get_bind_group_layouts(render_resources)?;
+            let (bind_group_layouts, camera_shader_input, material_texture_shader_input) =
+                specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
 
-            let shader_module = specification.get_shader_module(render_resources)?;
+            let shader = shader_manager.obtain_shader(
+                camera_shader_input,
+                mesh_shader_input,
+                &instance_feature_shader_inputs,
+                material_texture_shader_input,
+            )?;
 
             let pipeline_layout = Self::create_render_pipeline_layout(
                 core_system.device(),
@@ -339,7 +375,7 @@ impl RenderPassRecorder {
             Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
-                shader_module,
+                shader.module(),
                 &vertex_buffer_layouts,
                 core_system.surface_config().format,
                 &format!("{} render pipeline", &specification.label),

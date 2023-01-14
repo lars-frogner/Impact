@@ -27,7 +27,7 @@ pub use material::{
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
-pub use shader::{ShaderID, ShaderLibrary};
+pub use shader::{ShaderID, ShaderManager};
 pub use tasks::BufferVisibleModelInstances;
 
 use crate::rendering::fre;
@@ -38,10 +38,10 @@ use std::sync::RwLock;
 pub struct Scene {
     camera_repository: RwLock<CameraRepository<fre>>,
     mesh_repository: RwLock<MeshRepository<fre>>,
-    shader_library: RwLock<ShaderLibrary>,
     material_library: RwLock<MaterialLibrary>,
-    scene_graph: RwLock<SceneGraph<fre>>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
+    shader_manager: RwLock<ShaderManager>,
+    scene_graph: RwLock<SceneGraph<fre>>,
     active_camera: RwLock<Option<(CameraID, CameraNodeID)>>,
 }
 
@@ -54,9 +54,9 @@ impl Scene {
         let scene = Self {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),
-            shader_library: RwLock::new(ShaderLibrary::new()),
             material_library: RwLock::new(MaterialLibrary::new()),
             instance_feature_manager: RwLock::new(InstanceFeatureManager::new()),
+            shader_manager: RwLock::new(ShaderManager::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
             active_camera: RwLock::new(None),
         };
@@ -76,12 +76,6 @@ impl Scene {
         &self.mesh_repository
     }
 
-    /// Returns a reference to the [`ShaderLibrary`], guarded
-    /// by a [`RwLock`].
-    pub fn shader_library(&self) -> &RwLock<ShaderLibrary> {
-        &self.shader_library
-    }
-
     /// Returns a reference to the [`MaterialLibrary`], guarded
     /// by a [`RwLock`].
     pub fn material_library(&self) -> &RwLock<MaterialLibrary> {
@@ -92,6 +86,12 @@ impl Scene {
     /// by a [`RwLock`].
     pub fn instance_feature_manager(&self) -> &RwLock<InstanceFeatureManager> {
         &self.instance_feature_manager
+    }
+
+    /// Returns a reference to the [`ShaderManager`], guarded
+    /// by a [`RwLock`].
+    pub fn shader_manager(&self) -> &RwLock<ShaderManager> {
+        &self.shader_manager
     }
 
     /// Returns a reference to the [`SceneGraph`], guarded
@@ -130,24 +130,12 @@ impl Scene {
     }
 
     fn register_materials(&self) {
-        let mut shader_library = self.shader_library.write().unwrap();
         let mut material_library = self.material_library.write().unwrap();
         let mut instance_feature_manager = self.instance_feature_manager.write().unwrap();
 
-        FixedColorMaterial::register(
-            &mut shader_library,
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        BlinnPhongMaterial::register(
-            &mut shader_library,
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        DiffuseTexturedBlinnPhongMaterial::register(
-            &mut shader_library,
-            &mut instance_feature_manager,
-        );
-        TexturedBlinnPhongMaterial::register(&mut shader_library, &mut instance_feature_manager);
+        FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
+        BlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
+        DiffuseTexturedBlinnPhongMaterial::register(&mut instance_feature_manager);
+        TexturedBlinnPhongMaterial::register(&mut instance_feature_manager);
     }
 }

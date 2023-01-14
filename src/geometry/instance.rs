@@ -1,6 +1,10 @@
 //! Model instances.
 
-use crate::{impl_InstanceFeature_for_VertexBufferable, num::Float};
+use crate::{
+    impl_InstanceFeature,
+    num::Float,
+    rendering::{fre, InstanceFeatureShaderInput, ModelInstanceTransformShaderInput},
+};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::Matrix4;
@@ -22,15 +26,19 @@ pub trait InstanceFeature: Pod {
     /// The memory alignment of the feature type.
     const FEATURE_ALIGNMENT: Alignment = Alignment::of::<Self>();
 
+    /// The layout of the vertex render buffer that
+    /// can be used to pass the feature to the GPU.
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
+
+    /// The input required for a shader to access this
+    /// feature.
+    const SHADER_INPUT: InstanceFeatureShaderInput;
+
     /// Returns a slice with the raw bytes representing the
     /// feature.
     fn feature_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
-
-    /// Returns the layout of the vertex render buffer that
-    /// can be used to pass the feature to the GPU.
-    fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static>;
 }
 
 /// Identifier for a type of instance feature.
@@ -57,6 +65,7 @@ pub struct InstanceFeatureID {
 pub struct InstanceFeatureStorage {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
     index_map: KeyIndexMapper<usize>,
     feature_id_count: usize,
@@ -79,6 +88,7 @@ pub struct InstanceFeatureStorage {
 pub struct DynamicInstanceFeatureBuffer {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
     n_valid_bytes: AtomicUsize,
 }
@@ -120,7 +130,8 @@ impl InstanceFeatureStorage {
     pub fn new<Fe: InstanceFeature>() -> Self {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
-            vertex_buffer_layout: Fe::vertex_buffer_layout(),
+            vertex_buffer_layout: Fe::BUFFER_LAYOUT,
+            shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             index_map: KeyIndexMapper::new(),
             feature_id_count: 0,
@@ -132,7 +143,8 @@ impl InstanceFeatureStorage {
     pub fn with_capacity<Fe: InstanceFeature>(feature_count: usize) -> Self {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
-            vertex_buffer_layout: Fe::vertex_buffer_layout(),
+            vertex_buffer_layout: Fe::BUFFER_LAYOUT,
+            shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::with_capacity(
                 Fe::FEATURE_ALIGNMENT,
                 feature_count * Fe::FEATURE_SIZE,
@@ -157,6 +169,12 @@ impl InstanceFeatureStorage {
     /// for the stored features.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout
+    }
+
+    /// Returns the input required for accessing the features in a
+    /// shader.
+    pub fn shader_input(&self) -> &InstanceFeatureShaderInput {
+        &self.shader_input
     }
 
     /// Returns the number of stored features.
@@ -305,7 +323,8 @@ impl DynamicInstanceFeatureBuffer {
     pub fn new<Fe: InstanceFeature>() -> Self {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
-            vertex_buffer_layout: Fe::vertex_buffer_layout(),
+            vertex_buffer_layout: Fe::BUFFER_LAYOUT,
+            shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             n_valid_bytes: AtomicUsize::new(0),
         }
@@ -318,6 +337,7 @@ impl DynamicInstanceFeatureBuffer {
         Self {
             type_descriptor,
             vertex_buffer_layout: storage.vertex_buffer_layout().clone(),
+            shader_input: storage.shader_input().clone(),
             bytes: AlignedByteVec::new(type_descriptor.alignment()),
             n_valid_bytes: AtomicUsize::new(0),
         }
@@ -338,6 +358,12 @@ impl DynamicInstanceFeatureBuffer {
     /// for the stored features.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout
+    }
+
+    /// Returns the input required for accessing the features in a
+    /// shader.
+    pub fn shader_input(&self) -> &InstanceFeatureShaderInput {
+        &self.shader_input
     }
 
     /// Returns the current number of valid features in the buffer.
@@ -520,8 +546,6 @@ impl<F: Float> Default for ModelInstanceTransform<F> {
     }
 }
 
-impl_InstanceFeature_for_VertexBufferable!(ModelInstanceTransform<f32>);
-
 // Since `ModelInstanceTransform` is `#[repr(transparent)]`, it will be
 // `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
 unsafe impl<F: Float> Zeroable for ModelInstanceTransform<F> where Matrix4<F>: Zeroable {}
@@ -533,10 +557,37 @@ where
 {
 }
 
+impl_InstanceFeature!(
+    ModelInstanceTransform<fre>,
+    wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4],
+    InstanceFeatureShaderInput::ModelInstanceTransform(ModelInstanceTransformShaderInput {
+        model_matrix_locations: [5, 6, 7, 8],
+    })
+);
+
+/// Convenience macro for implementing the [`InstanceFeature`] trait.
+/// The feature type ID is created by hashing the name of the
+/// implementing type.
+#[macro_export]
+macro_rules! impl_InstanceFeature {
+    ($ty:ty, $vertex_attr_array:expr, $shader_input:expr) => {
+        impl $crate::geometry::InstanceFeature for $ty {
+            const FEATURE_TYPE_ID: $crate::geometry::InstanceFeatureTypeID =
+                impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
+
+            const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+                $crate::rendering::create_vertex_buffer_layout_for_instance::<Self>(
+                    &$vertex_attr_array,
+                );
+
+            const SHADER_INPUT: InstanceFeatureShaderInput = $shader_input;
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use impact_utils::ConstStringHash64;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
     type Feature = ModelInstanceTransform<f32>;
@@ -549,29 +600,8 @@ mod test {
     #[derive(Clone, Copy, Zeroable, Pod)]
     struct ZeroSizedFeature;
 
-    const DUMMY_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: 0,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &[],
-    };
-
-    impl InstanceFeature for DifferentFeature {
-        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
-            ConstStringHash64::new(stringify!(DifferentFeature)).into_hash();
-
-        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-            DUMMY_LAYOUT
-        }
-    }
-
-    impl InstanceFeature for ZeroSizedFeature {
-        const FEATURE_TYPE_ID: InstanceFeatureTypeID =
-            ConstStringHash64::new(stringify!(ZeroSizedFeature)).into_hash();
-
-        fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-            DUMMY_LAYOUT
-        }
-    }
+    impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
+    impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
 
     fn create_dummy_feature() -> ModelInstanceTransform<f32> {
         ModelInstanceTransform::with_model_to_camera_transform(

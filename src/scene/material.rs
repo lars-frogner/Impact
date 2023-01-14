@@ -6,8 +6,7 @@ mod fixed_color;
 
 use crate::{
     geometry::InstanceFeatureTypeID,
-    rendering::{fre, TextureID},
-    scene::ShaderID,
+    rendering::{fre, MaterialTextureShaderInput, TextureID},
 };
 use impact_utils::stringhash64_newtype;
 use nalgebra::{Vector3, Vector4};
@@ -38,9 +37,9 @@ stringhash64_newtype!(
 /// textures and material properties.
 #[derive(Clone, Debug)]
 pub struct MaterialSpecification {
-    shader_id: ShaderID,
     image_texture_ids: Vec<TextureID>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
+    texture_shader_input: MaterialTextureShaderInput,
 }
 
 /// Container for different material specifications.
@@ -51,22 +50,17 @@ pub struct MaterialLibrary {
 
 impl MaterialSpecification {
     /// Creates a new material specification with the
-    /// given shader, textures and material properties.
+    /// given textures and material properties.
     pub fn new(
-        shader_id: ShaderID,
         image_texture_ids: Vec<TextureID>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
+        texture_shader_input: MaterialTextureShaderInput,
     ) -> Self {
         Self {
-            shader_id,
             image_texture_ids,
             instance_feature_type_ids,
+            texture_shader_input,
         }
-    }
-
-    /// Returns the ID of the shader used for the material.
-    pub fn shader_id(&self) -> ShaderID {
-        self.shader_id
     }
 
     /// Returns the IDs of the image textures used for the
@@ -79,6 +73,12 @@ impl MaterialSpecification {
     /// for the material.
     pub fn instance_feature_type_ids(&self) -> &[InstanceFeatureTypeID] {
         &self.instance_feature_type_ids
+    }
+
+    /// Returns the input required for accessing the textures
+    /// in a shader.
+    pub fn texture_shader_input(&self) -> &MaterialTextureShaderInput {
+        &self.texture_shader_input
     }
 }
 

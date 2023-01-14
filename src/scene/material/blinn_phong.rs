@@ -2,12 +2,15 @@
 
 use crate::{
     geometry::InstanceFeature,
-    impl_InstanceFeature_for_VertexBufferable,
-    rendering::{self, fre, TextureID, VertexBufferable},
+    impl_InstanceFeature,
+    rendering::{
+        fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
+        InstanceFeatureShaderInput, MaterialRenderResourceManager, MaterialTextureShaderInput,
+        TextureID,
+    },
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, InstanceFeatureManager, MaterialComp,
-        MaterialID, MaterialLibrary, MaterialSpecification, RGBColor, ShaderID, ShaderLibrary,
-        TexturedBlinnPhongComp,
+        MaterialID, MaterialLibrary, MaterialSpecification, RGBColor, TexturedBlinnPhongComp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -71,26 +74,24 @@ lazy_static! {
 }
 
 impl BlinnPhongMaterial {
+    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
+        MaterialTextureShaderInput::None;
+
     /// Registers this material as a feature type in the given
-    /// instance feature manager, prepares a shader for the
-    /// material and adds the material specification to the given
-    /// material library. Because this material uses no textures,
-    /// the same material specification can be used for all
+    /// instance feature manager and adds the material specification
+    /// to the given material library. Because this material uses no
+    /// textures, the same material specification can be used for all
     /// instances using the material.
     pub fn register(
-        shader_library: &mut ShaderLibrary,
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {
         instance_feature_manager.register_feature_type::<Self>();
 
-        // Construct shader with correct features and get ID (create ShaderBuilder).
-        // Shader ID is added to assets if not present.
-
         let specification = MaterialSpecification::new(
-            ShaderID(hash64!("BlinnPhongMaterial")),
             Vec::new(),
             vec![Self::FEATURE_TYPE_ID],
+            Self::MATERIAL_TEXTURE_SHADER_INPUT,
         );
         material_library.add_material_specification(*BLINN_PHONG_MATERIAL_ID, specification);
     }
@@ -130,19 +131,20 @@ impl BlinnPhongMaterial {
 }
 
 impl DiffuseTexturedBlinnPhongMaterial {
-    /// Registers this material as a feature type in the given
-    /// instance feature manager and prepares a shader for the
-    /// material. No material specification is created at this
-    /// point, because a separate specification will be needed
-    /// for every instance that uses a specific texture.
-    pub fn register(
-        shader_library: &mut ShaderLibrary,
-        instance_feature_manager: &mut InstanceFeatureManager,
-    ) {
-        instance_feature_manager.register_feature_type::<Self>();
+    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
+        MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
+            diffuse_texture_and_sampler_bindings:
+                MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
+            specular_texture_and_sampler_bindings: None,
+        });
 
-        // Construct shader with correct features and get ID (create ShaderBuilder).
-        // Shader ID is added to assets if not present.
+    /// Registers this material as a feature type in the given
+    /// instance feature manager. No material specification is
+    /// created at this point, because a separate specification
+    /// will be needed for every instance that uses a specific
+    /// texture.
+    pub fn register(instance_feature_manager: &mut InstanceFeatureManager) {
+        instance_feature_manager.register_feature_type::<Self>();
     }
 
     /// Checks if the entity-to-be with components represented by the
@@ -170,9 +172,9 @@ impl DiffuseTexturedBlinnPhongMaterial {
                     .material_specification_entry(material_id)
                     .or_insert_with(|| {
                         MaterialSpecification::new(
-                            ShaderID(hash64!("DiffuseTexturedBlinnPhongComp")),
                             texture_ids.to_vec(),
                             vec![Self::FEATURE_TYPE_ID],
+                            Self::MATERIAL_TEXTURE_SHADER_INPUT,
                         )
                     });
 
@@ -199,19 +201,22 @@ impl DiffuseTexturedBlinnPhongMaterial {
 }
 
 impl TexturedBlinnPhongMaterial {
-    /// Registers this material as a feature type in the given
-    /// instance feature manager and prepares a shader for the
-    /// material. No material specification is created at this
-    /// point, because a separate specification will be needed
-    /// for every instance that uses a specific texture.
-    pub fn register(
-        shader_library: &mut ShaderLibrary,
-        instance_feature_manager: &mut InstanceFeatureManager,
-    ) {
-        instance_feature_manager.register_feature_type::<Self>();
+    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
+        MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
+            diffuse_texture_and_sampler_bindings:
+                MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
+            specular_texture_and_sampler_bindings: Some(
+                MaterialRenderResourceManager::get_texture_and_sampler_bindings(1),
+            ),
+        });
 
-        // Construct shader with correct features and get ID (create ShaderBuilder).
-        // Shader ID is added to assets if not present.
+    /// Registers this material as a feature type in the given
+    /// instance feature manager. No material specification is
+    /// created at this point, because a separate specification
+    /// will be needed for every instance that uses a specific
+    /// texture.
+    pub fn register(instance_feature_manager: &mut InstanceFeatureManager) {
+        instance_feature_manager.register_feature_type::<Self>();
     }
 
     /// Checks if the entity-to-be with components represented by the
@@ -238,9 +243,9 @@ impl TexturedBlinnPhongMaterial {
                     .material_specification_entry(material_id)
                     .or_insert_with(|| {
                         MaterialSpecification::new(
-                            ShaderID(hash64!("TexturedBlinnPhongMaterial")),
                             texture_ids.to_vec(),
                             vec![Self::FEATURE_TYPE_ID],
+                            Self::MATERIAL_TEXTURE_SHADER_INPUT,
                         )
                     });
 
@@ -265,30 +270,41 @@ impl TexturedBlinnPhongMaterial {
     }
 }
 
-impl VertexBufferable for BlinnPhongMaterial {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        rendering::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3, 3 => Float32, 4 => Float32],
-        );
-}
+impl_InstanceFeature!(
+    BlinnPhongMaterial,
+    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3, 3 => Float32, 4 => Float32],
+    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+        ambient_color_location: 0,
+        diffuse_color_location: Some(1),
+        specular_color_location: Some(2),
+        shininess_location: 3,
+        alpha_location: 4,
+    })
+);
 
-impl VertexBufferable for DiffuseTexturedBlinnPhongMaterial {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        rendering::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32, 3 => Float32],
-        );
-}
+impl_InstanceFeature!(
+    DiffuseTexturedBlinnPhongMaterial,
+    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32, 3 => Float32],
+    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+        ambient_color_location: 0,
+        diffuse_color_location: None,
+        specular_color_location: Some(1),
+        shininess_location: 2,
+        alpha_location: 3,
+    })
+);
 
-impl VertexBufferable for TexturedBlinnPhongMaterial {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        rendering::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32, 2 => Float32],
-        );
-}
-
-impl_InstanceFeature_for_VertexBufferable!(BlinnPhongMaterial);
-impl_InstanceFeature_for_VertexBufferable!(DiffuseTexturedBlinnPhongMaterial);
-impl_InstanceFeature_for_VertexBufferable!(TexturedBlinnPhongMaterial);
+impl_InstanceFeature!(
+    TexturedBlinnPhongMaterial,
+    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32, 2 => Float32],
+    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+        ambient_color_location: 0,
+        diffuse_color_location: None,
+        specular_color_location: None,
+        shininess_location: 1,
+        alpha_location: 2,
+    })
+);
 
 /// Generates a material ID that will always be the same
 /// for a specific base string and set of texture IDs.

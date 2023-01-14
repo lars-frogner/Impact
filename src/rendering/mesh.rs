@@ -4,7 +4,7 @@ use crate::{
     geometry::{CollectionChange, ColorVertex, TextureVertex, TriangleMesh},
     rendering::{
         buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
-        fre, CoreRenderingSystem,
+        fre, CoreRenderingSystem, MeshShaderInput,
     },
 };
 
@@ -15,6 +15,7 @@ pub struct MeshRenderBufferManager {
     index_buffer: RenderBuffer,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     index_format: wgpu::IndexFormat,
+    shader_input: MeshShaderInput,
     n_indices: usize,
     label: String,
 }
@@ -61,6 +62,12 @@ impl MeshRenderBufferManager {
         &self.index_buffer
     }
 
+    /// The input required for accessing the vertex attributes
+    /// in a shader.
+    pub fn shader_input(&self) -> &MeshShaderInput {
+        &self.shader_input
+    }
+
     /// Returns the number of indices in the index buffer.
     pub fn n_indices(&self) -> usize {
         self.n_indices
@@ -85,6 +92,7 @@ impl MeshRenderBufferManager {
             index_buffer,
             vertex_buffer_layout: V::BUFFER_LAYOUT,
             index_format: I::INDEX_FORMAT,
+            shader_input: V::SHADER_INPUT,
             n_indices: indices.len(),
             label,
         }
@@ -148,6 +156,12 @@ impl VertexBufferable for ColorVertex<fre> {
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(
             &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
         );
+
+    const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
+        position_location: 0,
+        vertex_normal_location: None,
+        texture_coord_location: None,
+    };
 }
 
 impl VertexBufferable for TextureVertex<fre> {
@@ -155,4 +169,10 @@ impl VertexBufferable for TextureVertex<fre> {
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(
             &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
         );
+
+    const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
+        position_location: 0,
+        vertex_normal_location: None,
+        texture_coord_location: Some(1),
+    };
 }

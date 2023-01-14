@@ -2,11 +2,13 @@
 
 use crate::{
     geometry::InstanceFeature,
-    impl_InstanceFeature_for_VertexBufferable,
-    rendering::{self, VertexBufferable},
+    impl_InstanceFeature,
+    rendering::{
+        FixedColorFeatureShaderInput, InstanceFeatureShaderInput, MaterialTextureShaderInput,
+    },
     scene::{
         FixedColorComp, InstanceFeatureManager, MaterialComp, MaterialID, MaterialLibrary,
-        MaterialSpecification, RGBAColor, ShaderID, ShaderLibrary,
+        MaterialSpecification, RGBAColor,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -32,26 +34,24 @@ lazy_static! {
 }
 
 impl FixedColorMaterial {
+    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
+        MaterialTextureShaderInput::None;
+
     /// Registers this material as a feature type in the given
-    /// instance feature manager, prepares a shader for the
-    /// material and adds the material specification to the given
-    /// material library. Because this material uses no textures,
-    /// the same material specification can be used for all
+    /// instance feature manager and adds the material specification
+    /// to the given material library. Because this material uses no
+    /// textures, the same material specification can be used for all
     /// instances using the material.
     pub fn register(
-        shader_library: &mut ShaderLibrary,
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {
         instance_feature_manager.register_feature_type::<Self>();
 
-        // Construct shader with correct features and get ID (create ShaderBuilder).
-        // Shader ID is added to assets if not present.
-
         let specification = MaterialSpecification::new(
-            ShaderID(hash64!("FixedColorMaterial")),
             Vec::new(),
             vec![Self::FEATURE_TYPE_ID],
+            Self::MATERIAL_TEXTURE_SHADER_INPUT,
         );
         material_library.add_material_specification(*FIXED_COLOR_MATERIAL_ID, specification);
     }
@@ -86,11 +86,10 @@ impl FixedColorMaterial {
     }
 }
 
-impl VertexBufferable for FixedColorMaterial {
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        rendering::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x4],
-        );
-}
-
-impl_InstanceFeature_for_VertexBufferable!(FixedColorMaterial);
+impl_InstanceFeature!(
+    FixedColorMaterial,
+    wgpu::vertex_attr_array![0 => Float32x4],
+    InstanceFeatureShaderInput::FixedColorMaterial(FixedColorFeatureShaderInput {
+        color_location: 0,
+    })
+);

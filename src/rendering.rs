@@ -17,11 +17,18 @@ mod uniform;
 
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, TextureID};
-pub use buffer::{create_vertex_buffer_layout_for_vertex, VertexBufferable};
+pub use buffer::{
+    create_vertex_buffer_layout_for_instance, create_vertex_buffer_layout_for_vertex,
+    VertexBufferable,
+};
 pub use material::MaterialRenderResourceManager;
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
-pub use shader::Shader;
+pub use shader::{
+    BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
+    FixedColorFeatureShaderInput, InstanceFeatureShaderInput, MaterialTextureShaderInput,
+    MeshShaderInput, ModelInstanceTransformShaderInput, Shader, UniformShaderInput,
+};
 pub use tasks::{Render, RenderingTag};
 pub use texture::ImageTexture;
 
@@ -147,21 +154,4 @@ impl RenderingSystem {
             label: Some("Render encoder"),
         })
     }
-}
-
-#[macro_export]
-macro_rules! impl_InstanceFeature_for_VertexBufferable {
-    ($ty:ty) => {
-        impl $crate::geometry::InstanceFeature for $ty
-        where
-            $ty: $crate::rendering::VertexBufferable,
-        {
-            const FEATURE_TYPE_ID: $crate::geometry::InstanceFeatureTypeID =
-                impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
-
-            fn vertex_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-                <Self as $crate::rendering::VertexBufferable>::BUFFER_LAYOUT
-            }
-        }
-    };
 }
