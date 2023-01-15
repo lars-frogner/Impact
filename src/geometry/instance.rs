@@ -561,7 +561,7 @@ impl_InstanceFeature!(
     ModelInstanceTransform<fre>,
     wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4],
     InstanceFeatureShaderInput::ModelInstanceTransform(ModelInstanceTransformShaderInput {
-        model_matrix_locations: [5, 6, 7, 8],
+        model_matrix_locations: (5, 6, 7, 8),
     })
 );
 

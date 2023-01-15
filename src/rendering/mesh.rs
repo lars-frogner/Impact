@@ -159,7 +159,7 @@ impl VertexBufferable for ColorVertex<fre> {
 
     const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
         position_location: 0,
-        vertex_normal_location: None,
+        normal_vector_location: None,
         texture_coord_location: None,
     };
 }
@@ -172,7 +172,7 @@ impl VertexBufferable for TextureVertex<fre> {
 
     const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
         position_location: 0,
-        vertex_normal_location: None,
+        normal_vector_location: None,
         texture_coord_location: Some(1),
     };
 }
