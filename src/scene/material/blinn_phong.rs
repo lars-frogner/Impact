@@ -6,7 +6,6 @@ use crate::{
     rendering::{
         fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
         InstanceFeatureShaderInput, MaterialRenderResourceManager, MaterialTextureShaderInput,
-        TextureID,
     },
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, InstanceFeatureManager, MaterialComp,
@@ -164,7 +163,7 @@ impl DiffuseTexturedBlinnPhongMaterial {
                 let texture_ids = [blinn_phong.diffuse];
 
                 let material_id =
-                    generate_material_id("DiffuseTexturedBlinnPhongComp", &texture_ids);
+                    super::generate_material_id("DiffuseTexturedBlinnPhongComp", &texture_ids);
 
                 // Add a new specification if none with the same material
                 // type and textures already exist
@@ -235,7 +234,8 @@ impl TexturedBlinnPhongMaterial {
             |blinn_phong: &TexturedBlinnPhongComp| -> MaterialComp {
                 let texture_ids = [blinn_phong.diffuse, blinn_phong.specular];
 
-                let material_id = generate_material_id("TexturedBlinnPhongMaterial", &texture_ids);
+                let material_id =
+                    super::generate_material_id("TexturedBlinnPhongMaterial", &texture_ids);
 
                 // Add a new specification if none with the same material
                 // type and textures already exist
@@ -305,17 +305,3 @@ impl_InstanceFeature!(
         alpha_location: 2,
     })
 );
-
-/// Generates a material ID that will always be the same
-/// for a specific base string and set of texture IDs.
-fn generate_material_id<S: AsRef<str>>(base_string: S, texture_ids: &[TextureID]) -> MaterialID {
-    MaterialID(hash64!(format!(
-        "{} [{}]",
-        base_string.as_ref(),
-        texture_ids
-            .iter()
-            .map(|id| id.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    )))
-}

@@ -2,13 +2,13 @@
 
 mod blinn_phong;
 mod components;
-mod fixed_color;
+mod fixed;
 
 use crate::{
     geometry::InstanceFeatureTypeID,
     rendering::{fre, MaterialTextureShaderInput, TextureID},
 };
-use impact_utils::stringhash64_newtype;
+use impact_utils::{hash64, stringhash64_newtype};
 use nalgebra::{Vector3, Vector4};
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -16,10 +16,10 @@ pub use blinn_phong::{
     BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, TexturedBlinnPhongMaterial,
 };
 pub use components::{
-    BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, MaterialComp,
+    BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, FixedTextureComp, MaterialComp,
     TexturedBlinnPhongComp,
 };
-pub use fixed_color::FixedColorMaterial;
+pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
 
 /// A color with RGB components.
 pub type RGBColor = Vector3<fre>;
@@ -125,4 +125,18 @@ impl MaterialLibrary {
         self.material_specifications
             .insert(material_id, material_spec);
     }
+}
+
+/// Generates a material ID that will always be the same
+/// for a specific base string and set of texture IDs.
+fn generate_material_id<S: AsRef<str>>(base_string: S, texture_ids: &[TextureID]) -> MaterialID {
+    MaterialID(hash64!(format!(
+        "{} [{}]",
+        base_string.as_ref(),
+        texture_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )))
 }

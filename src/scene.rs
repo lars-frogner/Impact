@@ -21,9 +21,9 @@ pub use graph::{
 pub use instance::InstanceFeatureManager;
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
-    DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, MaterialComp,
-    MaterialID, MaterialLibrary, MaterialSpecification, RGBAColor, RGBColor,
-    TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
+    DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedTextureComp,
+    FixedTextureMaterial, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
+    RGBAColor, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;

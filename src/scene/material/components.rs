@@ -26,6 +26,12 @@ pub struct MaterialComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct FixedColorComp(pub RGBAColor);
 
+/// [`Component`](impact_ecs::component::Component) for entities that
+/// have a fixed, textured color that is independent of lighting.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct FixedTextureComp(pub TextureID);
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct BlinnPhongComp {

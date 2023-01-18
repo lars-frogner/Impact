@@ -26,8 +26,7 @@ pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
-    FixedColorFeatureShaderInput, InstanceFeatureShaderInput, MaterialTextureShaderInput,
-    MeshShaderInput, ModelInstanceTransformShaderInput, Shader, UniformShaderInput,
+    FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::ImageTexture;

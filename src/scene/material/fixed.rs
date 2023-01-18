@@ -1,14 +1,15 @@
-//! Material with a fixed color.
+//! Materials with a fixed color or texture.
 
 use crate::{
-    geometry::InstanceFeature,
+    geometry::{InstanceFeature, InstanceFeatureID},
     impl_InstanceFeature,
     rendering::{
-        FixedColorFeatureShaderInput, InstanceFeatureShaderInput, MaterialTextureShaderInput,
+        FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
+        MaterialRenderResourceManager, MaterialTextureShaderInput,
     },
     scene::{
-        FixedColorComp, InstanceFeatureManager, MaterialComp, MaterialID, MaterialLibrary,
-        MaterialSpecification, RGBAColor,
+        FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
+        MaterialLibrary, MaterialSpecification, RGBAColor,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -28,6 +29,12 @@ use lazy_static::lazy_static;
 pub struct FixedColorMaterial {
     color: RGBAColor,
 }
+
+/// Marker type for a material with a fixed, textured color that
+/// is independent of lighting.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
+pub struct FixedTextureMaterial;
 
 lazy_static! {
     static ref FIXED_COLOR_MATERIAL_ID: MaterialID = MaterialID(hash64!("FixedColorMaterial"));
@@ -79,6 +86,51 @@ impl FixedColorMaterial {
                 MaterialComp {
                     id: *FIXED_COLOR_MATERIAL_ID,
                     feature_id,
+                }
+            },
+            ![MaterialComp]
+        );
+    }
+}
+
+impl FixedTextureMaterial {
+    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
+        MaterialTextureShaderInput::FixedMaterial(FixedTextureShaderInput {
+            color_texture_and_sampler_bindings:
+                MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
+        });
+
+    /// Checks if the entity-to-be with components represented by the
+    /// given component manager has the component for this material, and
+    /// if so, adds the appropriate material specification to the material
+    /// library if not present and adds the appropriate material component
+    /// to the entity.
+    pub fn add_material_component_for_entity(
+        material_library: &mut MaterialLibrary,
+        component_manager: &mut ComponentManager<'_>,
+    ) {
+        setup!(
+            component_manager,
+            |fixed_texture: &FixedTextureComp| -> MaterialComp {
+                let texture_ids = [fixed_texture.0];
+
+                let material_id = super::generate_material_id("FixedTextureMaterial", &texture_ids);
+
+                // Add a new specification if none with the same material
+                // type and textures already exist
+                material_library
+                    .material_specification_entry(material_id)
+                    .or_insert_with(|| {
+                        MaterialSpecification::new(
+                            texture_ids.to_vec(),
+                            Vec::new(),
+                            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+                        )
+                    });
+
+                MaterialComp {
+                    id: material_id,
+                    feature_id: InstanceFeatureID::not_applicable(),
                 }
             },
             ![MaterialComp]
