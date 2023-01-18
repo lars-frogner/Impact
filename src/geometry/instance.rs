@@ -108,6 +108,7 @@ struct InstanceFeatureTypeDescriptor {
 }
 
 impl InstanceFeatureID {
+    /// Creates an ID that does not represent a valid feature.
     pub fn not_applicable() -> Self {
         Self {
             feature_type_id: Hash64::zeroed(),
@@ -120,6 +121,7 @@ impl InstanceFeatureID {
         self.feature_type_id
     }
 
+    /// Returns `true` if this ID does not represent a valid feature.
     pub fn is_not_applicable(&self) -> bool {
         self.feature_type_id == Hash64::zeroed() && self.idx == usize::MAX
     }
