@@ -27,6 +27,8 @@ pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
     FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
+    MaterialTextureShaderInput, MeshShaderInput, ModelInstanceTransformShaderInput, Shader,
+    ShaderBuilder, UniformShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::ImageTexture;
