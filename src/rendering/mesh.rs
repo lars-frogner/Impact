@@ -154,11 +154,12 @@ impl MeshRenderBufferManager {
 impl VertexBufferable for ColorVertex<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
+            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
         );
 
     const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
         position_location: 0,
+        color_location: Some(1),
         normal_vector_location: None,
         texture_coord_location: None,
     };
@@ -172,6 +173,7 @@ impl VertexBufferable for TextureVertex<fre> {
 
     const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
         position_location: 0,
+        color_location: None,
         normal_vector_location: None,
         texture_coord_location: Some(1),
     };

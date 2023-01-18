@@ -5,7 +5,7 @@ use crate::{
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{point, Point3, Vector2, Vector3};
+use nalgebra::{point, Point3, Vector2, Vector3, Vector4};
 use std::fmt::Debug;
 
 /// Represents a 3D polygonial mesh.
@@ -41,7 +41,7 @@ pub struct TriangleMesh<V> {
 #[derive(Copy, Clone, Debug)]
 pub struct ColorVertex<F: Float> {
     pub position: Point3<F>,
-    pub color: Vector3<F>,
+    pub color: Vector4<F>,
 }
 
 /// Vertices that have a associated texture coordinates.
