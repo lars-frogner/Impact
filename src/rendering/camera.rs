@@ -20,7 +20,7 @@ pub struct CameraRenderBufferManager {
 impl CameraRenderBufferManager {
     const BINDING: u32 = 0;
     const SHADER_INPUT: CameraShaderInput = CameraShaderInput {
-        view_proj_matrix_binding: Self::BINDING,
+        projection_matrix_binding: Self::BINDING,
     };
 
     /// Creates a new manager with a render buffer initialized
