@@ -36,12 +36,13 @@ pub struct Shader {
     module: wgpu::ShaderModule,
 }
 
+/// Generator for shader programs.
 #[derive(Clone, Debug)]
 pub struct ShaderGenerator;
 
 /// Input description specifying the uniform binding of the
 /// projection matrix of the camera to use in the shader.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CameraShaderInput {
     /// Bind group binding of the uniform buffer holding the
     /// camera projection matrix.
@@ -51,7 +52,7 @@ pub struct CameraShaderInput {
 /// Input description specifying the locations of the vertex
 /// properties of the mesh to use in the shader. Only properties
 /// required for the specific shader will actually be included.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MeshShaderInput {
     /// Vertex attribute location for vertex positions.
     pub position_location: u32,
@@ -69,7 +70,7 @@ pub struct MeshShaderInput {
 }
 
 /// Input description for any kind of per-instance feature.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum InstanceFeatureShaderInput {
     ModelInstanceTransform(ModelInstanceTransformShaderInput),
     FixedColorMaterial(FixedColorFeatureShaderInput),
@@ -82,7 +83,7 @@ pub enum InstanceFeatureShaderInput {
 /// Input description specifying the vertex attribute
 /// locations of the columns of the model view matrix to
 /// use for transforming the mesh in the shader.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModelInstanceTransformShaderInput {
     /// Vertex attribute locations for the four columns of
     /// the model view matrix.
@@ -91,7 +92,7 @@ pub struct ModelInstanceTransformShaderInput {
 
 /// Input description for any kind of material that may
 /// require a texture.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum MaterialTextureShaderInput {
     FixedMaterial(FixedTextureShaderInput),
     BlinnPhongMaterial(BlinnPhongTextureShaderInput),
@@ -259,22 +260,37 @@ impl Shader {
     /// # Errors
     /// Returns an error if the shader file can not be found or read.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_path(
+    pub fn from_wgsl_path(
         core_system: &CoreRenderingSystem,
         shader_path: impl AsRef<Path>,
     ) -> Result<Self> {
         let shader_path = shader_path.as_ref();
         let label = shader_path.to_string_lossy();
         let source = fs::read_to_string(shader_path)?;
-        Ok(Self::from_source(core_system, &source, label.as_ref()))
+        Ok(Self::from_wgsl_source(core_system, &source, label.as_ref()))
     }
 
     /// Creates a new shader from the given source code.
-    pub fn from_source(core_system: &CoreRenderingSystem, source: &str, label: &str) -> Self {
+    pub fn from_wgsl_source(core_system: &CoreRenderingSystem, source: &str, label: &str) -> Self {
         let module = core_system
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(source)),
+                label: Some(label),
+            });
+        Self { module }
+    }
+
+    /// Creates a new shader from the given [`Module`].
+    pub fn from_naga_module(
+        core_system: &CoreRenderingSystem,
+        module: Module,
+        label: &str,
+    ) -> Self {
+        let module = core_system
+            .device()
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                source: wgpu::ShaderSource::Naga(Cow::Owned(module)),
                 label: Some(label),
             });
         Self { module }
@@ -289,6 +305,9 @@ impl ShaderGenerator {
     /// Uses the given camera, mesh, model and material input
     /// descriptions to generate an appropriate shader [`Module`],
     /// containing both a vertex and fragment entry point.
+    ///
+    /// # Returns
+    /// The generated shader [`Module`].
     ///
     /// # Errors
     /// Returns an error if:

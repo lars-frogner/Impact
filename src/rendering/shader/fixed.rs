@@ -13,7 +13,7 @@ use naga::{
 /// Input description specifying the vertex attribute location
 /// reqired for generating a shader for a
 /// [`FixedColorMaterial`](crate::scene::FixedColorMaterial).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FixedColorFeatureShaderInput {
     /// Vertex attribute location for the instance feature
     /// representing color.
@@ -23,7 +23,7 @@ pub struct FixedColorFeatureShaderInput {
 /// Input description specifying the texture bindings required
 /// for generating a shader for a
 /// [`FixedTextureMaterial`](crate::scene::FixedTextureMaterial).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FixedTextureShaderInput {
     /// Bind group bindings of the color texture and its sampler.
     pub color_texture_and_sampler_bindings: (u32, u32),

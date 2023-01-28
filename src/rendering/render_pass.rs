@@ -360,6 +360,7 @@ impl RenderPassRecorder {
                 specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
 
             let shader = shader_manager.obtain_shader(
+                core_system,
                 camera_shader_input,
                 mesh_shader_input,
                 &instance_feature_shader_inputs,

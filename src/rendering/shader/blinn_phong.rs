@@ -12,7 +12,7 @@ use naga::{Arena, Expression, Function, GlobalVariable, Handle, Type, UniqueAren
 /// shader for a [`BlinnPhongMaterial`](crate::scene::BlinnPhongMaterial),
 /// [`DiffuseTexturedBlinnPhongMaterial`](crate::scene::DiffuseTexturedBlinnPhongMaterial)
 /// or a [`TexturedBlinnPhongMaterial`](crate::scene::TexturedBlinnPhongMaterial).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlinnPhongFeatureShaderInput {
     /// Vertex attribute location for the instance feature
     /// representing ambient color.
@@ -38,7 +38,7 @@ pub struct BlinnPhongFeatureShaderInput {
 /// shader for a
 /// [`DiffuseTexturedBlinnPhongMaterial`](crate::scene::DiffuseTexturedBlinnPhongMaterial)
 /// or a [`TexturedBlinnPhongMaterial`](crate::scene::TexturedBlinnPhongMaterial).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlinnPhongTextureShaderInput {
     /// Bind group bindings of the diffuse color texture and
     /// its sampler.
