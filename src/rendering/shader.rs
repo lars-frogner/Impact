@@ -273,7 +273,7 @@ impl Shader {
     pub fn from_source(core_system: &CoreRenderingSystem, source: &str, label: &str) -> Self {
         let module = core_system
             .device()
-            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(source)),
                 label: Some(label),
             });

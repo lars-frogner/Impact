@@ -444,14 +444,14 @@ impl RenderPassRecorder {
 
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             // A `[[location(i)]]` directive in the fragment shader output targets color attachment `i` here
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: self.load_operation,
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
             label: Some(&self.specification.label),
         });
@@ -561,11 +561,11 @@ impl RenderPassRecorder {
             fragment: Some(wgpu::FragmentState {
                 module: shader_module,
                 entry_point: "fs_main", // Fragment shader function in shader file
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: texture_format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,

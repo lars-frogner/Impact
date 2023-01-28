@@ -2,7 +2,7 @@
 
 use crate::window::Window;
 use anyhow::{anyhow, Result};
-use raw_window_handle::HasRawWindowHandle;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::num::NonZeroU32;
 
 /// Represents the graphics device and the basic
@@ -77,11 +77,11 @@ impl CoreRenderingSystem {
     }
 
     async fn new_from_raw_window_handle(
-        window: &impl HasRawWindowHandle,
+        window: &(impl HasRawWindowHandle + HasRawDisplayHandle),
         window_size: (NonZeroU32, NonZeroU32),
     ) -> Result<Self> {
         let wgpu_instance = Self::create_wgpu_instance();
-        let surface = unsafe { wgpu_instance.create_surface(window) };
+        let surface = unsafe { wgpu_instance.create_surface(window)? };
         let adapter = Self::create_adapter(&wgpu_instance, &surface).await?;
         let (device, queue) = Self::connect_to_device(&adapter).await?;
         let surface_config = Self::create_surface_config(&surface, &adapter, window_size);
@@ -96,7 +96,10 @@ impl CoreRenderingSystem {
 
     fn create_wgpu_instance() -> wgpu::Instance {
         // Allow all backends
-        wgpu::Instance::new(wgpu::Backends::all())
+        wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+        })
     }
 
     /// Creates a handle to a graphics device.
@@ -146,14 +149,15 @@ impl CoreRenderingSystem {
         adapter: &wgpu::Adapter,
         (width, height): (NonZeroU32, NonZeroU32),
     ) -> wgpu::SurfaceConfiguration {
+        let caps = surface.get_capabilities(adapter);
         wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface
-                .get_preferred_format(adapter)
-                .expect("Surface and adaptor not compatible"), // If this fails there is a bug
+            format: caps.formats[0],
             width: u32::from(width),
             height: u32::from(height),
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: Vec::new(),
         }
     }
 }
