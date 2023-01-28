@@ -570,6 +570,7 @@ impl_InstanceFeature!(
 /// Convenience macro for implementing the [`InstanceFeature`] trait.
 /// The feature type ID is created by hashing the name of the
 /// implementing type.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! impl_InstanceFeature {
     ($ty:ty, $vertex_attr_array:expr, $shader_input:expr) => {
