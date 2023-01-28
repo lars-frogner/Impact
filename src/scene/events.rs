@@ -6,6 +6,7 @@ use crate::{
         self, BlinnPhongMaterial, CameraComp, CameraNodeID, DiffuseTexturedBlinnPhongMaterial,
         FixedColorMaterial, InstanceFeatureManager, MaterialComp, MeshComp, ModelID,
         ModelInstanceNodeID, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
+        VertexColorMaterial,
     },
 };
 use impact_ecs::{archetype::ComponentManager, setup, world::EntityEntry};
@@ -16,25 +17,32 @@ impl Scene {
     /// and adds any additional components to the entity's components.
     pub fn handle_entity_created(&self, component_manager: &mut ComponentManager<'_>) {
         let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
+        let mut material_library = self.material_library().write().unwrap();
+
+        VertexColorMaterial::add_material_component_for_entity(component_manager);
+
         FixedColorMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
             component_manager,
         );
+
         BlinnPhongMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
             component_manager,
         );
-        let mut material_library = self.material_library().write().unwrap();
+
         DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
             &mut material_library,
             component_manager,
         );
+
         TexturedBlinnPhongMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
             &mut material_library,
             component_manager,
         );
+
         drop(material_library);
         drop(instance_feature_manager);
 
@@ -142,10 +150,12 @@ impl Scene {
         if let Some(material) = entity.get_component::<MaterialComp>() {
             let feature_id = material.access().feature_id;
 
-            instance_feature_manager
-                .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
-                .expect("Missing storage for material feature")
-                .remove_feature(feature_id);
+            if !feature_id.is_not_applicable() {
+                instance_feature_manager
+                    .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
+                    .expect("Missing storage for material feature")
+                    .remove_feature(feature_id);
+            }
         }
     }
 

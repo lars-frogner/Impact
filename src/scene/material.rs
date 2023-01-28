@@ -3,6 +3,7 @@
 mod blinn_phong;
 mod components;
 mod fixed;
+mod vertex_color;
 
 use crate::{
     geometry::InstanceFeatureTypeID,
@@ -17,9 +18,10 @@ pub use blinn_phong::{
 };
 pub use components::{
     BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, FixedTextureComp, MaterialComp,
-    TexturedBlinnPhongComp,
+    TexturedBlinnPhongComp, VertexColorComp,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
+pub use vertex_color::VertexColorMaterial;
 
 /// A color with RGB components.
 pub type RGBColor = Vector3<fre>;

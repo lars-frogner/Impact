@@ -20,6 +20,12 @@ pub struct MaterialComp {
     pub feature_id: InstanceFeatureID,
 }
 
+/// Marker [`Component`](impact_ecs::component::Component) for entities
+/// using the colors of the mesh vertices.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VertexColorComp;
+
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a fixed, uniform color that is independent of lighting.
 #[repr(C)]

@@ -2,6 +2,7 @@
 
 mod blinn_phong;
 mod fixed;
+mod vertex_color;
 
 use crate::rendering::CoreRenderingSystem;
 use anyhow::{anyhow, Result};
@@ -18,6 +19,7 @@ use naga::{
     StructMember, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
 };
 use std::{borrow::Cow, hash::Hash, mem, vec};
+use vertex_color::VertexColorShaderGenerator;
 
 pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
@@ -120,17 +122,11 @@ pub enum MaterialShaderGenerator<'a> {
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
 }
 
-/// Shader generator for the case when vertex colors
-/// included in the mesh are used to obtain the fragment
-/// color.
-#[derive(Copy, Clone, Debug)]
-pub struct VertexColorShaderGenerator;
-
 /// Indices of the fields holding the various mesh vertex
 /// properties in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct MeshVertexOutputFieldIndices {
-    clip_position: usize,
+    _clip_position: usize,
     position: Option<usize>,
     color: Option<usize>,
     normal_vector: Option<usize>,
@@ -477,7 +473,9 @@ impl ShaderGenerator {
                     texture_input,
                 ))
             }
-            (None, None, None) => MaterialShaderGenerator::VertexColor,
+            (None, None, Some(MaterialTextureShaderInput::None)) => {
+                MaterialShaderGenerator::VertexColor
+            }
             _ => {
                 return Err(anyhow!("Tried to build shader with invalid material"));
             }
@@ -849,7 +847,7 @@ impl ShaderGenerator {
         );
 
         let mut output_field_indices = MeshVertexOutputFieldIndices {
-            clip_position: output_clip_position_field_idx,
+            _clip_position: output_clip_position_field_idx,
             position: None,
             color: None,
             normal_vector: None,
@@ -1072,46 +1070,6 @@ impl<'a> MaterialShaderGenerator<'a> {
             ),
             _ => panic!("Mismatched material shader builder and output field indices type"),
         }
-    }
-}
-
-impl VertexColorShaderGenerator {
-    /// Returns a bitflag encoding the vertex properties required
-    /// by the material.
-    const fn vertex_property_requirements() -> VertexPropertyRequirements {
-        VertexPropertyRequirements::COLOR
-    }
-
-    /// Generates the fragment shader code specific to this material
-    /// by adding code representation to the given [`naga`] objects.
-    ///
-    /// The interpolated vertex color passed from the main vertex shader
-    /// function is simply returned from the main fragment shader function
-    /// in an output struct.
-    fn generate_fragment_code(
-        types: &mut UniqueArena<Type>,
-        fragment_function: &mut Function,
-        fragment_input_struct: &InputStruct,
-        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    ) {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
-
-        let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
-
-        output_struct_builder.add_field(
-            "color",
-            vec4_type_handle,
-            None,
-            None,
-            VECTOR_4_SIZE,
-            fragment_input_struct.get_field_expr_handle(
-                mesh_input_field_indices
-                    .color
-                    .expect("No `color` passed to vertex color fragment shader"),
-            ),
-        );
-
-        output_struct_builder.generate_output_code(types, fragment_function);
     }
 }
 
@@ -1806,7 +1764,7 @@ mod test {
                 texture_coord_location: None,
             }),
             &[&MODEL_TRANSFORM_INPUT],
-            None,
+            Some(&MaterialTextureShaderInput::None),
         )
         .unwrap();
 

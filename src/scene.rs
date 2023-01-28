@@ -23,7 +23,8 @@ pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
     DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedTextureComp,
     FixedTextureMaterial, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
-    RGBAColor, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
+    RGBAColor, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial, VertexColorComp,
+    VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
@@ -133,6 +134,7 @@ impl Scene {
         let mut material_library = self.material_library.write().unwrap();
         let mut instance_feature_manager = self.instance_feature_manager.write().unwrap();
 
+        VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         BlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
         DiffuseTexturedBlinnPhongMaterial::register(&mut instance_feature_manager);
