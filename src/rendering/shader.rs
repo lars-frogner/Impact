@@ -1,8 +1,15 @@
-//! Graphics shaders.
+//! Generation of graphics shaders.
+
+mod blinn_phong;
+mod fixed;
 
 use crate::rendering::CoreRenderingSystem;
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
+use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
+use fixed::{
+    FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
+};
 use naga::{
     AddressSpace, Arena, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant, ConstantInner,
     EntryPoint, Expression, Function, FunctionArgument, FunctionResult, GlobalVariable, Handle,
@@ -11,6 +18,9 @@ use naga::{
     StructMember, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
 };
 use std::{borrow::Cow, hash::Hash, mem, vec};
+
+pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
+pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
 
 cfg_if::cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
@@ -25,49 +35,60 @@ pub struct Shader {
 }
 
 #[derive(Clone, Debug)]
-pub struct ShaderBuilder;
+pub struct ShaderGenerator;
 
+/// Input description specifying the uniform binding of the
+/// projection matrix of the camera to use in the shader.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CameraShaderInput {
+    /// Bind group binding of the uniform buffer holding the
+    /// camera projection matrix.
     pub projection_matrix_binding: u32,
 }
 
+/// Input description specifying the locations of the vertex
+/// properties of the mesh to use in the shader. Only properties
+/// required for the specific shader will actually be included.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MeshShaderInput {
+    /// Vertex attribute location for vertex positions.
     pub position_location: u32,
+    /// Vertex attribute location for vertex colors, or
+    /// [`None`] if the mesh does not include colors.
     pub color_location: Option<u32>,
+    /// Vertex attribute location for vertex normal vectors,
+    /// or [`None`] if the mesh does not include normal
+    /// vectors.
     pub normal_vector_location: Option<u32>,
+    /// Vertex attribute location for vertex texture coordinates,
+    /// or [`None`] if the mesh does not include texture
+    /// coordinates.
     pub texture_coord_location: Option<u32>,
 }
 
+/// Input description for any kind of per-instance feature.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InstanceFeatureShaderInput {
     ModelInstanceTransform(ModelInstanceTransformShaderInput),
     FixedColorMaterial(FixedColorFeatureShaderInput),
     BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
+    /// For convenice in unit tests.
     #[cfg(test)]
     None,
 }
 
+/// Input description specifying the vertex attribute
+/// locations of the columns of the model view matrix to
+/// use for transforming the mesh in the shader.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelInstanceTransformShaderInput {
+    /// Vertex attribute locations for the four columns of
+    /// the model view matrix.
     pub model_matrix_locations: (u32, u32, u32, u32),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FixedColorFeatureShaderInput {
-    pub color_location: u32,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BlinnPhongFeatureShaderInput {
-    pub ambient_color_location: u32,
-    pub diffuse_color_location: Option<u32>,
-    pub specular_color_location: Option<u32>,
-    pub shininess_location: u32,
-    pub alpha_location: u32,
-}
-
+/// Input description for any kind of material that may
+/// require a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaterialTextureShaderInput {
     FixedMaterial(FixedTextureShaderInput),
@@ -76,18 +97,98 @@ pub enum MaterialTextureShaderInput {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FixedTextureShaderInput {
-    pub color_texture_and_sampler_bindings: (u32, u32),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BlinnPhongTextureShaderInput {
-    pub diffuse_texture_and_sampler_bindings: (u32, u32),
-    pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UniformShaderInput {}
+
+bitflags! {
+    /// Bitflag encoding a set of vertex properties required
+    /// by a material.
+    pub struct VertexPropertyRequirements: u32 {
+        const POSITION = 0b00000001;
+        const COLOR = 0b00000010;
+        const NORMAL_VECTOR = 0b00000100;
+        const TEXTURE_COORDS = 0b00001000;
+    }
+}
+
+/// Shader generator for any kind of material.
+#[derive(Clone, Debug)]
+pub enum MaterialShaderGenerator<'a> {
+    /// Use vertex colors included in the mesh.
+    VertexColor,
+    FixedColor(FixedColorShaderGenerator<'a>),
+    FixedTexture(FixedTextureShaderGenerator<'a>),
+    BlinnPhong(BlinnPhongShaderGenerator<'a>),
+}
+
+/// Shader generator for the case when vertex colors
+/// included in the mesh are used to obtain the fragment
+/// color.
+#[derive(Copy, Clone, Debug)]
+pub struct VertexColorShaderGenerator;
+
+/// Indices of the fields holding the various mesh vertex
+/// properties in the vertex shader output struct.
+#[derive(Clone, Debug)]
+pub struct MeshVertexOutputFieldIndices {
+    clip_position: usize,
+    position: Option<usize>,
+    color: Option<usize>,
+    normal_vector: Option<usize>,
+    texture_coords: Option<usize>,
+}
+
+/// Indices of any fields holding the properties of a
+/// specific material in the vertex shader output struct.
+#[derive(Clone, Debug)]
+pub enum MaterialVertexOutputFieldIndices {
+    FixedColor(FixedColorVertexOutputFieldIdx),
+    BlinnPhong(BlinnPhongVertexOutputFieldIndices),
+    None,
+}
+
+/// Represents a struct passed as an argument to a shader
+/// entry point. Holds the handles for the expressions
+/// accessing each field of the struct.
+#[derive(Clone, Debug)]
+pub struct InputStruct {
+    input_field_expr_handles: Vec<Handle<Expression>>,
+}
+
+/// Helper for constructing a struct [`Type`] for an
+/// argument to a shader entry point and generating
+/// the code for accessing its fields.
+#[derive(Clone, Debug)]
+pub struct InputStructBuilder {
+    builder: StructBuilder,
+    input_arg_name: String,
+}
+
+/// Helper for constructing a struct [`Type`] for a
+/// shader entry point return value and generating
+/// the code for assigning to its fields and returning
+/// its value.
+#[derive(Clone, Debug)]
+pub struct OutputStructBuilder {
+    builder: StructBuilder,
+    input_expr_handles: Vec<Handle<Expression>>,
+    location: u32,
+}
+
+/// Helper for constructing a struct [`Type`].
+#[derive(Clone, Debug)]
+pub struct StructBuilder {
+    type_name: String,
+    fields: Vec<StructMember>,
+    offset: u32,
+}
+
+/// Helper for declaring global variables for a texture
+/// with an associated sampler and generating a sampling
+/// expression.
+pub struct SampledTexture {
+    texture_var_handle: Handle<GlobalVariable>,
+    sampler_var_handle: Handle<GlobalVariable>,
+}
 
 const FLOAT32_WIDTH: u32 = mem::size_of::<f32>() as u32;
 
@@ -156,101 +257,6 @@ const IMAGE_TEXTURE_SAMPLER_TYPE: Type = Type {
     inner: TypeInner::Sampler { comparison: false },
 };
 
-bitflags! {
-    struct VertexPropertyRequirements: u32 {
-        const POSITION = 0b00000001;
-        const COLOR = 0b00000010;
-        const NORMAL_VECTOR = 0b00000100;
-        const TEXTURE_COORDS = 0b00001000;
-    }
-}
-
-#[derive(Clone, Debug)]
-enum MaterialShaderBuilder<'a> {
-    VertexColor,
-    FixedColor(FixedColorShaderBuilder<'a>),
-    FixedTexture(FixedTextureShaderBuilder<'a>),
-    BlinnPhong(BlinnPhongShaderBuilder<'a>),
-}
-
-#[derive(Copy, Clone, Debug)]
-struct VertexColorShaderBuilder;
-
-#[derive(Clone, Debug)]
-struct FixedColorShaderBuilder<'a> {
-    feature_input: &'a FixedColorFeatureShaderInput,
-}
-
-#[derive(Clone, Debug)]
-struct FixedTextureShaderBuilder<'a> {
-    texture_input: &'a FixedTextureShaderInput,
-}
-
-#[derive(Clone, Debug)]
-struct BlinnPhongShaderBuilder<'a> {
-    feature_input: &'a BlinnPhongFeatureShaderInput,
-    texture_input: Option<&'a BlinnPhongTextureShaderInput>,
-}
-
-#[derive(Clone, Debug)]
-struct MeshVertexOutputFieldIndices {
-    clip_position: usize,
-    position: Option<usize>,
-    color: Option<usize>,
-    normal_vector: Option<usize>,
-    texture_coords: Option<usize>,
-}
-
-#[derive(Clone, Debug)]
-enum MaterialVertexOutputFieldIndices {
-    FixedColor(FixedColorVertexOutputFieldIdx),
-    BlinnPhong(BlinnPhongVertexOutputFieldIndices),
-    None,
-}
-
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug)]
-struct FixedColorVertexOutputFieldIdx(usize);
-
-#[derive(Clone, Debug)]
-struct BlinnPhongVertexOutputFieldIndices {
-    ambient_color: usize,
-    diffuse_color: Option<usize>,
-    specular_color: Option<usize>,
-    shininess: usize,
-    alpha: usize,
-}
-
-#[derive(Clone, Debug)]
-struct InputStruct {
-    input_field_expr_handles: Vec<Handle<Expression>>,
-}
-
-#[derive(Clone, Debug)]
-struct InputStructBuilder {
-    builder: StructBuilder,
-    input_arg_name: String,
-}
-
-#[derive(Clone, Debug)]
-struct OutputStructBuilder {
-    builder: StructBuilder,
-    input_expr_handles: Vec<Handle<Expression>>,
-    location: u32,
-}
-
-#[derive(Clone, Debug)]
-struct StructBuilder {
-    name: String,
-    fields: Vec<StructMember>,
-    offset: u32,
-}
-
-struct SampledTexture {
-    texture_var_handle: Handle<GlobalVariable>,
-    sampler_var_handle: Handle<GlobalVariable>,
-}
-
 impl Shader {
     /// Creates a new shader by reading the source from the given file.
     ///
@@ -283,8 +289,23 @@ impl Shader {
     }
 }
 
-impl ShaderBuilder {
-    pub fn build_shader_source(
+impl ShaderGenerator {
+    /// Uses the given camera, mesh, model and material input
+    /// descriptions to generate an appropriate shader [`Module`],
+    /// containing both a vertex and fragment entry point.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - There is no camera input (no shaders witout camera supported).
+    /// - There is no mesh input (no shaders witout a mesh supported).
+    /// - `instance_feature_shader_inputs` does not contain a
+    ///   [`ModelInstanceTransformShaderInput`] (no shaders without a model
+    ///   view transform supported).
+    /// - `instance_feature_shader_inputs` and `material_texture_shader_input`
+    ///   do not provide a consistent and supproted material description.
+    /// - Not all vertex properties required by the material are available in
+    ///   the input mesh.
+    pub fn generate_shader_module(
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
@@ -373,12 +394,27 @@ impl ShaderBuilder {
         Ok(module)
     }
 
+    /// Interprets the set of instance feature and texture inputs
+    /// to gather them groups of inputs that belong together, most
+    /// notably gathering the inputs representing the material into
+    /// a [`MaterialShaderGenerator`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - `instance_feature_shader_inputs` does not contain a
+    ///   [`ModelInstanceTransformShaderInput`].
+    /// - `instance_feature_shader_inputs` and `material_texture_shader_input`
+    ///   do not provide a consistent and supproted material description.
+    ///
+    /// # Panics
+    /// If `instance_feature_shader_inputs` contain multiple
+    /// inputs of the same type.
     fn interpret_inputs<'a>(
         instance_feature_shader_inputs: &'a [&'a InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&'a MaterialTextureShaderInput>,
     ) -> Result<(
         &'a ModelInstanceTransformShaderInput,
-        MaterialShaderBuilder<'a>,
+        MaterialShaderGenerator<'a>,
     )> {
         let mut model_instance_transform_shader_input = None;
         let mut fixed_color_feature_shader_input = None;
@@ -388,6 +424,8 @@ impl ShaderBuilder {
             match instance_feature_shader_input {
                 InstanceFeatureShaderInput::ModelInstanceTransform(shader_input) => {
                     let old = model_instance_transform_shader_input.replace(shader_input);
+                    // There should not be multiple instance feature inputs of
+                    // the same type
                     assert!(old.is_none());
                 }
                 InstanceFeatureShaderInput::FixedColorMaterial(shader_input) => {
@@ -414,10 +452,12 @@ impl ShaderBuilder {
             material_texture_shader_input,
         ) {
             (Some(feature_input), None, Some(MaterialTextureShaderInput::None)) => {
-                MaterialShaderBuilder::FixedColor(FixedColorShaderBuilder { feature_input })
+                MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input))
             }
             (None, None, Some(MaterialTextureShaderInput::FixedMaterial(texture_input))) => {
-                MaterialShaderBuilder::FixedTexture(FixedTextureShaderBuilder { texture_input })
+                MaterialShaderGenerator::FixedTexture(FixedTextureShaderGenerator::new(
+                    texture_input,
+                ))
             }
             (None, Some(feature_input), Some(texture_input)) => {
                 #[allow(clippy::match_wildcard_for_single_variants)]
@@ -432,12 +472,12 @@ impl ShaderBuilder {
                         ));
                     }
                 };
-                MaterialShaderBuilder::BlinnPhong(BlinnPhongShaderBuilder {
+                MaterialShaderGenerator::BlinnPhong(BlinnPhongShaderGenerator::new(
                     feature_input,
                     texture_input,
-                })
+                ))
             }
-            (None, None, None) => MaterialShaderBuilder::VertexColor,
+            (None, None, None) => MaterialShaderGenerator::VertexColor,
             _ => {
                 return Err(anyhow!("Tried to build shader with invalid material"));
             }
@@ -449,6 +489,14 @@ impl ShaderBuilder {
         ))
     }
 
+    /// Generates the declaration of the model view transform type,
+    /// adds it as an argument to the main vertex shader function and
+    /// generates the code for constructing the matrix from its columns
+    /// in the body of the function.
+    ///
+    /// # Returns
+    /// Handle to the expression for the model view matrix in the main
+    /// vertex shader function.
     fn generate_vertex_code_for_model_matrix(
         model_instance_transform_shader_input: &ModelInstanceTransformShaderInput,
         types: &mut UniqueArena<Type>,
@@ -499,6 +547,8 @@ impl ShaderBuilder {
             Expression::FunctionArgument(model_transform_arg_idx),
         );
 
+        // Create expression constructing a 4x4 matrix from the columns
+        // (each a field in the input struct)
         let model_matrix_expr_handle = emit(
             &mut vertex_function.body,
             &mut vertex_function.expressions,
@@ -559,6 +609,12 @@ impl ShaderBuilder {
         model_matrix_var_expr_handle
     }
 
+    /// Generates the declaration of the global uniform variable for the
+    /// camera projection matrix.
+    ///
+    /// # Returns
+    /// Handle to the expression for the the projection matrix in the main
+    /// vertex shader function.
     fn generate_vertex_code_for_projection_matrix(
         camera_shader_input: &CameraShaderInput,
         types: &mut UniqueArena<Type>,
@@ -603,6 +659,33 @@ impl ShaderBuilder {
         projection_matrix_expr_handle
     }
 
+    /// Generates the declaration of the struct of mesh vertex properties,
+    /// adds it as an argument to the main vertex shader function and
+    /// begins generating the struct of output to pass from the vertex
+    /// entry point to the fragment entry point.
+    ///
+    /// Only vertex properties required by the material are included in
+    /// the input struct.
+    ///
+    /// The output struct always includes the clip space position, and
+    /// the expression computing this by transforming the vertex position
+    /// with the model view matrix and projection matrix is generated
+    /// here. Other vertex properties are included in the output struct
+    /// as required by the material. If the vertex position or normal
+    /// vector is required, this is transformed to camera space before
+    /// assigned to the output struct.
+    ///
+    /// # Returns
+    /// Because the output struct may have to include additional material
+    /// properties, its code can not be fully generated at this point.
+    /// Instead, the [`OutputStructBuilder`] is returned so that the
+    /// material shader genrator can complete it. The indices of the
+    /// included vertex property fields are also returned for access in
+    /// the fragment shader.
+    ///
+    /// # Errors
+    /// Returns an error if not all vertex properties required by the material
+    /// are available in the input mesh.
     fn generate_vertex_code_for_vertex_properties(
         mesh_shader_input: &MeshShaderInput,
         requirements: VertexPropertyRequirements,
@@ -679,6 +762,9 @@ impl ShaderBuilder {
             Expression::Constant(append_to_arena(constants, float32_constant(1.0))),
         );
 
+        // Create expression converting the xyz vertex position to an
+        // xyzw homogeneous coordinate (with w = 1.0) and transforming
+        // it to camera space with the model view matrix
         let position_expr_handle = emit(
             &mut vertex_function.body,
             &mut vertex_function.expressions,
@@ -738,6 +824,9 @@ impl ShaderBuilder {
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
+        // Create expression multiplying the camera space homogeneous
+        // vertex position with the projection matrix, yielding the
+        // clip space position
         let clip_position_expr_handle = emit(
             &mut vertex_function.body,
             &mut vertex_function.expressions,
@@ -802,6 +891,9 @@ impl ShaderBuilder {
                 Expression::Constant(append_to_arena(constants, float32_constant(0.0))),
             );
 
+            // Create expression converting the xyz normal vector to an xyzw
+            // homogeneous vector (with w = 0.0) and transforming it to camera
+            // space with the inverse transpose of the model view matrix
             emit(
                 &mut vertex_function.body,
                 &mut vertex_function.expressions,
@@ -882,16 +974,27 @@ impl ShaderBuilder {
     }
 }
 
-impl<'a> MaterialShaderBuilder<'a> {
+impl<'a> MaterialShaderGenerator<'a> {
+    /// Returns a bitflag encoding the vertex properties required
+    /// by the material.
     fn vertex_property_requirements(&self) -> VertexPropertyRequirements {
         match self {
-            Self::VertexColor => VertexColorShaderBuilder::vertex_property_requirements(),
-            Self::FixedColor(_) => FixedColorShaderBuilder::vertex_property_requirements(),
-            Self::FixedTexture(_) => FixedTextureShaderBuilder::vertex_property_requirements(),
+            Self::VertexColor => VertexColorShaderGenerator::vertex_property_requirements(),
+            Self::FixedColor(_) => FixedColorShaderGenerator::vertex_property_requirements(),
+            Self::FixedTexture(_) => FixedTextureShaderGenerator::vertex_property_requirements(),
             Self::BlinnPhong(builder) => builder.vertex_property_requirements(),
         }
     }
 
+    /// Generates the vertex shader code specific to the relevant material
+    /// by adding code representation to the given [`naga`] objects.
+    ///
+    /// Any per-instance material properties to return from the vertex entry
+    /// point are included in an input argument and assigned to dedicated
+    /// fields in the [`OutputStructBuilder`].
+    ///
+    /// # Returns
+    /// Any indices of material property fields added to the output struct.
     fn generate_vertex_code(
         &self,
         types: &mut UniqueArena<Type>,
@@ -909,6 +1012,18 @@ impl<'a> MaterialShaderBuilder<'a> {
         }
     }
 
+    /// Generates the fragment shader code specific to the relevant
+    /// material by adding code representation to the given [`naga`]
+    /// objects.
+    ///
+    /// The generated code will involve accessing vertex and material
+    /// properties in the input struct passed from the vertex entry point,
+    /// declaring and sampling any required textures and creating and
+    /// returning an output struct with the computed fragment color.
+    ///
+    /// # Panics
+    /// If `material_input_field_indices` does not represent the same
+    /// material as this enum.
     fn generate_fragment_code(
         &self,
         types: &mut UniqueArena<Type>,
@@ -920,7 +1035,7 @@ impl<'a> MaterialShaderBuilder<'a> {
     ) {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
-                VertexColorShaderBuilder::generate_fragment_code(
+                VertexColorShaderGenerator::generate_fragment_code(
                     types,
                     fragment_function,
                     fragment_input_struct,
@@ -930,7 +1045,7 @@ impl<'a> MaterialShaderBuilder<'a> {
             (
                 Self::FixedColor(_),
                 MaterialVertexOutputFieldIndices::FixedColor(color_input_field_idx),
-            ) => FixedColorShaderBuilder::generate_fragment_code(
+            ) => FixedColorShaderGenerator::generate_fragment_code(
                 types,
                 fragment_function,
                 fragment_input_struct,
@@ -960,11 +1075,19 @@ impl<'a> MaterialShaderBuilder<'a> {
     }
 }
 
-impl VertexColorShaderBuilder {
+impl VertexColorShaderGenerator {
+    /// Returns a bitflag encoding the vertex properties required
+    /// by the material.
     const fn vertex_property_requirements() -> VertexPropertyRequirements {
         VertexPropertyRequirements::COLOR
     }
 
+    /// Generates the fragment shader code specific to this material
+    /// by adding code representation to the given [`naga`] objects.
+    ///
+    /// The interpolated vertex color passed from the main vertex shader
+    /// function is simply returned from the main fragment shader function
+    /// in an output struct.
     fn generate_fragment_code(
         types: &mut UniqueArena<Type>,
         fragment_function: &mut Function,
@@ -992,402 +1115,21 @@ impl VertexColorShaderBuilder {
     }
 }
 
-impl<'a> FixedColorShaderBuilder<'a> {
-    const fn vertex_property_requirements() -> VertexPropertyRequirements {
-        VertexPropertyRequirements::empty()
-    }
-
-    fn generate_vertex_code(
-        &self,
-        types: &mut UniqueArena<Type>,
-        vertex_function: &mut Function,
-        vertex_output_struct_builder: &mut OutputStructBuilder,
-    ) -> FixedColorVertexOutputFieldIdx {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
-
-        let color_arg_idx = u32::try_from(vertex_function.arguments.len()).unwrap();
-
-        vertex_function.arguments.push(FunctionArgument {
-            name: new_name("color"),
-            ty: vec4_type_handle,
-            binding: Some(Binding::Location {
-                location: self.feature_input.color_location,
-                interpolation: None,
-                sampling: None,
-            }),
-        });
-
-        let vertex_color_arg_ptr_expr_handle = append_to_arena(
-            &mut vertex_function.expressions,
-            Expression::FunctionArgument(color_arg_idx),
-        );
-
-        // let vertex_color_arg_expr_handle = emit(
-        //     &mut vertex_function.body,
-        //     &mut vertex_function.expressions,
-        //     |expressions| {
-        //         append_to_arena(
-        //             expressions,
-        //             Expression::Load {
-        //                 pointer: vertex_color_arg_ptr_expr_handle,
-        //             },
-        //         )
-        //     },
-        // );
-
-        let output_color_field_idx = vertex_output_struct_builder.add_field(
-            "color",
-            vec4_type_handle,
-            Some(Interpolation::Flat),
-            Some(Sampling::Center),
-            VECTOR_4_SIZE,
-            vertex_color_arg_ptr_expr_handle,
-        );
-
-        FixedColorVertexOutputFieldIdx(output_color_field_idx)
-    }
-
-    fn generate_fragment_code(
-        types: &mut UniqueArena<Type>,
-        fragment_function: &mut Function,
-        fragment_input_struct: &InputStruct,
-        color_input_field_idx: &FixedColorVertexOutputFieldIdx,
-    ) {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
-
-        let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
-
-        output_struct_builder.add_field(
-            "color",
-            vec4_type_handle,
-            None,
-            None,
-            VECTOR_4_SIZE,
-            fragment_input_struct.get_field_expr_handle(color_input_field_idx.0),
-        );
-
-        output_struct_builder.generate_output_code(types, fragment_function);
-    }
-}
-
-impl<'a> FixedTextureShaderBuilder<'a> {
-    const fn vertex_property_requirements() -> VertexPropertyRequirements {
-        VertexPropertyRequirements::TEXTURE_COORDS
-    }
-
-    fn generate_fragment_code(
-        &self,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
-        fragment_function: &mut Function,
-        fragment_input_struct: &InputStruct,
-        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    ) {
-        let (color_texture_binding, color_sampler_binding) =
-            self.texture_input.color_texture_and_sampler_bindings;
-
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
-
-        let color_texture = SampledTexture::declare(
-            types,
-            global_variables,
-            "color",
-            1,
-            color_texture_binding,
-            color_sampler_binding,
-        );
-
-        let color_sampling_expr_handle = color_texture.generate_sampling_expr(
-            fragment_function,
-            fragment_input_struct.get_field_expr_handle(
-                mesh_input_field_indices
-                    .texture_coords
-                    .expect("No `texture_coords` passed to fixed texture fragment shader"),
-            ),
-        );
-
-        let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
-
-        output_struct_builder.add_field(
-            "color",
-            vec4_type_handle,
-            None,
-            None,
-            VECTOR_4_SIZE,
-            color_sampling_expr_handle,
-        );
-
-        output_struct_builder.generate_output_code(types, fragment_function);
-    }
-}
-
-impl<'a> BlinnPhongShaderBuilder<'a> {
-    fn vertex_property_requirements(&self) -> VertexPropertyRequirements {
-        if self.texture_input.is_some() {
-            VertexPropertyRequirements::POSITION
-                | VertexPropertyRequirements::NORMAL_VECTOR
-                | VertexPropertyRequirements::TEXTURE_COORDS
-        } else {
-            VertexPropertyRequirements::POSITION | VertexPropertyRequirements::NORMAL_VECTOR
-        }
-    }
-
-    fn generate_vertex_code(
-        &self,
-        types: &mut UniqueArena<Type>,
-        vertex_function: &mut Function,
-        vertex_output_struct_builder: &mut OutputStructBuilder,
-    ) -> BlinnPhongVertexOutputFieldIndices {
-        let float_type_handle = insert_in_arena(types, FLOAT_TYPE);
-        let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
-
-        let mut input_struct_builder = InputStructBuilder::new("MaterialProperties", "material");
-
-        let input_ambient_color_field_idx = input_struct_builder.add_field(
-            "ambientColor",
-            vec3_type_handle,
-            self.feature_input.ambient_color_location,
-            VECTOR_3_SIZE,
-        );
-
-        let input_diffuse_color_field_idx =
-            self.feature_input.diffuse_color_location.map(|location| {
-                input_struct_builder.add_field(
-                    "diffuseColor",
-                    vec3_type_handle,
-                    location,
-                    VECTOR_3_SIZE,
-                )
-            });
-
-        let input_specular_color_field_idx =
-            self.feature_input.specular_color_location.map(|location| {
-                input_struct_builder.add_field(
-                    "specularColor",
-                    vec3_type_handle,
-                    location,
-                    VECTOR_3_SIZE,
-                )
-            });
-
-        let input_shininess_field_idx = input_struct_builder.add_field(
-            "shininess",
-            float_type_handle,
-            self.feature_input.shininess_location,
-            FLOAT32_WIDTH,
-        );
-
-        let input_alpha_field_idx = input_struct_builder.add_field(
-            "alpha",
-            float_type_handle,
-            self.feature_input.alpha_location,
-            FLOAT32_WIDTH,
-        );
-
-        let input_struct = input_struct_builder.generate_input_code(types, vertex_function);
-
-        let output_ambient_color_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "ambientColor",
-                vec3_type_handle,
-                VECTOR_3_SIZE,
-                input_struct.get_field_expr_handle(input_ambient_color_field_idx),
-            );
-
-        let output_shininess_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "shininess",
-                float_type_handle,
-                FLOAT32_WIDTH,
-                input_struct.get_field_expr_handle(input_shininess_field_idx),
-            );
-
-        let output_alpha_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "alpha",
-                float_type_handle,
-                FLOAT32_WIDTH,
-                input_struct.get_field_expr_handle(input_alpha_field_idx),
-            );
-
-        let mut indices = BlinnPhongVertexOutputFieldIndices {
-            ambient_color: output_ambient_color_field_idx,
-            diffuse_color: None,
-            specular_color: None,
-            shininess: output_shininess_field_idx,
-            alpha: output_alpha_field_idx,
-        };
-
-        if let Some(idx) = input_diffuse_color_field_idx {
-            indices.diffuse_color = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "diffuseColor",
-                    vec3_type_handle,
-                    VECTOR_3_SIZE,
-                    input_struct.get_field_expr_handle(idx),
-                ),
-            );
-        }
-
-        if let Some(idx) = input_specular_color_field_idx {
-            indices.specular_color = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "specularColor",
-                    vec3_type_handle,
-                    VECTOR_3_SIZE,
-                    input_struct.get_field_expr_handle(idx),
-                ),
-            );
-        }
-
-        indices
-    }
-
-    fn generate_fragment_code(
-        &self,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
-        fragment_function: &mut Function,
-        fragment_input_struct: &InputStruct,
-        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-        material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
-    ) {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
-
-        let ambient_color_expr_handle =
-            fragment_input_struct.get_field_expr_handle(material_input_field_indices.ambient_color);
-
-        let shininess_expr_handle =
-            fragment_input_struct.get_field_expr_handle(material_input_field_indices.shininess);
-
-        let alpha_expr_handle =
-            fragment_input_struct.get_field_expr_handle(material_input_field_indices.alpha);
-
-        let (diffuse_color_expr_handle, specular_color_expr_handle) =
-            if let Some(texture_input) = self.texture_input {
-                let (diffuse_color_expr_handle, specular_color_expr_handle) =
-                    Self::generate_texture_fragment_code(
-                        texture_input,
-                        types,
-                        global_variables,
-                        fragment_function,
-                        fragment_input_struct,
-                        mesh_input_field_indices,
-                    );
-                (
-                    diffuse_color_expr_handle,
-                    specular_color_expr_handle.unwrap_or_else(|| {
-                        fragment_input_struct.get_field_expr_handle(
-                            material_input_field_indices.specular_color.expect(
-                                "Missing `specular_color` feature for Blinn-Phong material",
-                            ),
-                        )
-                    }),
-                )
-            } else {
-                (
-                    fragment_input_struct.get_field_expr_handle(
-                        material_input_field_indices
-                            .diffuse_color
-                            .expect("Missing `diffuse_color` feature for Blinn-Phong material"),
-                    ),
-                    fragment_input_struct.get_field_expr_handle(
-                        material_input_field_indices
-                            .specular_color
-                            .expect("Missing `specular_color` feature for Blinn-Phong material"),
-                    ),
-                )
-            };
-
-        let color_expr_handle = ambient_color_expr_handle;
-
-        let output_color_expr_handle = emit(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Compose {
-                        ty: vec4_type_handle,
-                        components: vec![color_expr_handle, alpha_expr_handle],
-                    },
-                )
-            },
-        );
-
-        let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
-
-        output_struct_builder.add_field(
-            "color",
-            vec4_type_handle,
-            None,
-            None,
-            VECTOR_4_SIZE,
-            output_color_expr_handle,
-        );
-
-        output_struct_builder.generate_output_code(types, fragment_function);
-    }
-
-    fn generate_texture_fragment_code(
-        texture_input: &BlinnPhongTextureShaderInput,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
-        fragment_function: &mut Function,
-        fragment_input_struct: &InputStruct,
-        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    ) -> (Handle<Expression>, Option<Handle<Expression>>) {
-        let (diffuse_texture_binding, diffuse_sampler_binding) =
-            texture_input.diffuse_texture_and_sampler_bindings;
-
-        let diffuse_color_texture = SampledTexture::declare(
-            types,
-            global_variables,
-            "diffuseColor",
-            1,
-            diffuse_texture_binding,
-            diffuse_sampler_binding,
-        );
-
-        let texture_coord_expr_handle = fragment_input_struct.get_field_expr_handle(
-            mesh_input_field_indices
-                .texture_coords
-                .expect("No `texture_coords` passed to fixed texture fragment shader"),
-        );
-
-        let diffuse_color_sampling_expr_handle = diffuse_color_texture
-            .generate_sampling_expr(fragment_function, texture_coord_expr_handle);
-
-        let specular_color_sampling_expr_handle = texture_input
-            .specular_texture_and_sampler_bindings
-            .map(|(specular_texture_binding, specular_sampler_binding)| {
-                let specular_color_texture = SampledTexture::declare(
-                    types,
-                    global_variables,
-                    "specularColor",
-                    1,
-                    specular_texture_binding,
-                    specular_sampler_binding,
-                );
-
-                specular_color_texture
-                    .generate_sampling_expr(fragment_function, texture_coord_expr_handle)
-            });
-
-        (
-            diffuse_color_sampling_expr_handle,
-            specular_color_sampling_expr_handle,
-        )
-    }
-}
-
 impl InputStruct {
+    /// Returns the handle to the expression for the struct
+    /// field with the given index.
+    ///
+    /// # Panics
+    /// If the index is out of bounds.
     fn get_field_expr_handle(&self, idx: usize) -> Handle<Expression> {
         self.input_field_expr_handles[idx]
     }
 }
 
 impl InputStructBuilder {
+    /// Creates a builder for an input struct with the given
+    /// type name and name to use when including the struct
+    /// as an input argument.
     fn new<S: ToString, T: ToString>(type_name: S, input_arg_name: T) -> Self {
         Self {
             builder: StructBuilder::new(type_name),
@@ -1399,6 +1141,14 @@ impl InputStructBuilder {
         self.builder.n_fields()
     }
 
+    /// Adds a new struct field.
+    ///
+    /// This method is intended for constructing an input struct
+    /// to the vertex entry point. Thus, the field requires a
+    /// location binding.
+    ///
+    /// # Returns
+    /// The index of the added field.
     fn add_field<S: ToString>(
         &mut self,
         name: S,
@@ -1418,6 +1168,12 @@ impl InputStructBuilder {
         )
     }
 
+    /// Generates code declaring the struct type and adds the
+    /// struct as an input argument to the given [`Function`].
+    ///
+    /// # Returns
+    /// An [`InputStruct`] holding the expression for accessing
+    /// each field in the body of the function.
     fn generate_input_code(
         self,
         types: &mut UniqueArena<Type>,
@@ -1466,14 +1222,27 @@ impl InputStructBuilder {
 }
 
 impl OutputStructBuilder {
-    fn new<S: ToString>(name: S) -> Self {
+    /// Creates a builder for an output struct with the given
+    /// type name.
+    fn new<S: ToString>(type_name: S) -> Self {
         Self {
-            builder: StructBuilder::new(name),
+            builder: StructBuilder::new(type_name),
             input_expr_handles: Vec::new(),
             location: 0,
         }
     }
 
+    /// Adds a new struct field.
+    ///
+    /// The field is given an automatically incremented location
+    /// binding.
+    ///
+    /// The given input expression handle specifies the expression
+    /// whose value should be assigned to the field when
+    /// [`generate_output_code`] is called.
+    ///
+    /// # Returns
+    /// The index of the added field.
     fn add_field<S: ToString>(
         &mut self,
         name: S,
@@ -1501,6 +1270,19 @@ impl OutputStructBuilder {
         idx
     }
 
+    /// Adds a new struct field that will use perspective-correct
+    /// interpolation and center sampling when passed to the fragment
+    /// entry point.
+    ///
+    /// The field is given an automatically incremented location
+    /// binding.
+    ///
+    /// The given input expression handle specifies the expression
+    /// whose value should be assigned to the field when
+    /// [`generate_output_code`] is called.
+    ///
+    /// # Returns
+    /// The index of the added field.
     fn add_field_with_perspective_interpolation<S: ToString>(
         &mut self,
         name: S,
@@ -1518,6 +1300,14 @@ impl OutputStructBuilder {
         )
     }
 
+    /// Adds a new struct field with the built-in position binding
+    /// rather than a location binding.
+    ///
+    /// The field is given an automatically incremented location
+    /// binding.
+    ///
+    /// # Returns
+    /// The index of the added field.
     fn add_builtin_position_field<S: ToString>(
         &mut self,
         name: S,
@@ -1535,18 +1325,12 @@ impl OutputStructBuilder {
         )
     }
 
-    fn generate_input_code(
-        self,
-        types: &mut UniqueArena<Type>,
-        function: &mut Function,
-    ) -> InputStruct {
-        InputStructBuilder {
-            builder: self.builder,
-            input_arg_name: "input".to_string(),
-        }
-        .generate_input_code(types, function)
-    }
-
+    /// Generates code declaring the struct type and adds the
+    /// struct as the return type of the given [`Function`].
+    /// Also initializes the struct in the body of the function
+    /// and generates statements assigning a value to each field
+    /// using the expression provided when the field was added,
+    /// followed by a return statement.
     fn generate_output_code(self, types: &mut UniqueArena<Type>, function: &mut Function) {
         let output_type_handle = insert_in_arena(types, self.builder.into_type());
 
@@ -1610,12 +1394,33 @@ impl OutputStructBuilder {
             },
         );
     }
+
+    /// Generates code declaring the struct type (only if not
+    /// already declared) and adds the struct as an input argument
+    /// to the given [`Function`].
+    ///
+    /// # Returns
+    /// An [`InputStruct`] holding the expression for accessing
+    /// each field in the body of the function.
+    fn generate_input_code(
+        self,
+        types: &mut UniqueArena<Type>,
+        function: &mut Function,
+    ) -> InputStruct {
+        InputStructBuilder {
+            builder: self.builder,
+            input_arg_name: "input".to_string(),
+        }
+        .generate_input_code(types, function)
+    }
 }
 
 impl StructBuilder {
-    fn new<S: ToString>(name: S) -> Self {
+    /// Creates a new builder for a struct with the given type
+    /// name.
+    fn new<S: ToString>(type_name: S) -> Self {
         Self {
-            name: name.to_string(),
+            type_name: type_name.to_string(),
             fields: Vec::new(),
             offset: 0,
         }
@@ -1625,6 +1430,10 @@ impl StructBuilder {
         self.fields.len()
     }
 
+    /// Adds a new struct field.
+    ///
+    /// # Returns
+    /// The index of the added field.
     fn add_field<S: ToString>(
         &mut self,
         name: S,
@@ -1646,9 +1455,10 @@ impl StructBuilder {
         idx
     }
 
+    /// Creates a struct [`Type`] from the builder.
     fn into_type(self) -> Type {
         Type {
-            name: Some(self.name),
+            name: Some(self.type_name),
             inner: TypeInner::Struct {
                 members: self.fields,
                 span: self.offset,
@@ -1658,6 +1468,12 @@ impl StructBuilder {
 }
 
 impl SampledTexture {
+    /// Generates code declaring global variables for a texture
+    /// and sampler with the given name root, group and bindings.
+    ///
+    /// # Returns
+    /// A new [`SampledTexture`] with handles to the declared
+    /// variables.
     fn declare(
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
@@ -1703,6 +1519,8 @@ impl SampledTexture {
         }
     }
 
+    /// Generates and returns an expression sampling the texture at
+    /// the texture coordinates specified by the given expression.
     fn generate_sampling_expr(
         &self,
         function: &mut Function,
@@ -1771,6 +1589,11 @@ fn swizzle_xyz_expr(expr_handle: Handle<Expression>) -> Expression {
     }
 }
 
+/// Inserts the given value in the given [`UniqueArena`]
+/// if it is not already present.
+///
+/// # Returns
+/// A handle to the unique value.
 fn insert_in_arena<T>(arena: &mut UniqueArena<T>, value: T) -> Handle<T>
 where
     T: Eq + Hash,
@@ -1778,14 +1601,23 @@ where
     arena.insert(value, Span::UNDEFINED)
 }
 
+/// Appends the given value to the given [`Arena`].
+///
+/// # Returns
+/// A handle to the appended value.
 fn append_to_arena<T>(arena: &mut Arena<T>, value: T) -> Handle<T> {
     arena.append(value, Span::UNDEFINED)
 }
 
+/// Pushes the given [`Statement`] to the given [`Block`]
+/// of statements.
 fn push_to_block(block: &mut Block, statement: Statement) {
     block.push(statement, Span::UNDEFINED);
 }
 
+/// Executes the given closure that adds [`Expression`]s to
+/// the given [`Arena`] before pushing to the given [`Block`]
+/// a [`Statement::Emit`] emitting the range of added expressions.
 fn emit<T>(
     block: &mut Block,
     arena: &mut Arena<Expression>,
@@ -1930,19 +1762,19 @@ mod test {
     #[test]
     #[should_panic]
     fn building_shader_with_no_inputs_fails() {
-        ShaderBuilder::build_shader_source(None, None, &[], None).unwrap();
+        ShaderGenerator::generate_shader_module(None, None, &[], None).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn building_shader_with_only_camera_input_fails() {
-        ShaderBuilder::build_shader_source(Some(&CAMERA_INPUT), None, &[], None).unwrap();
+        ShaderGenerator::generate_shader_module(Some(&CAMERA_INPUT), None, &[], None).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn building_shader_with_only_camera_and_mesh_input_fails() {
-        ShaderBuilder::build_shader_source(
+        ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             &[],
@@ -1954,7 +1786,7 @@ mod test {
     #[test]
     #[should_panic]
     fn building_shader_without_material_and_no_color_in_mesh_fails() {
-        ShaderBuilder::build_shader_source(
+        ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             &[&MODEL_TRANSFORM_INPUT],
@@ -1965,7 +1797,7 @@ mod test {
 
     #[test]
     fn building_vertex_color_shader_works() {
-        let module = ShaderBuilder::build_shader_source(
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 position_location: VERTEX_POSITION_BINDING,
@@ -1988,7 +1820,7 @@ mod test {
 
     #[test]
     fn building_fixed_color_shader_works() {
-        let module = ShaderBuilder::build_shader_source(
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             &[&MODEL_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
@@ -2006,7 +1838,7 @@ mod test {
 
     #[test]
     fn building_fixed_texture_shader_works() {
-        let module = ShaderBuilder::build_shader_source(
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 position_location: VERTEX_POSITION_BINDING,
@@ -2029,7 +1861,7 @@ mod test {
 
     #[test]
     fn building_blinn_phong_shader_works() {
-        let module = ShaderBuilder::build_shader_source(
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 position_location: VERTEX_POSITION_BINDING,
@@ -2052,7 +1884,7 @@ mod test {
 
     #[test]
     fn building_diffuse_textured_blinn_phong_shader_works() {
-        let module = ShaderBuilder::build_shader_source(
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 position_location: VERTEX_POSITION_BINDING,
@@ -2078,7 +1910,7 @@ mod test {
 
     #[test]
     fn building_textured_blinn_phong_shader_works() {
-        let module = ShaderBuilder::build_shader_source(
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 position_location: VERTEX_POSITION_BINDING,

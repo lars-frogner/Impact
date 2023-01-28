@@ -28,7 +28,7 @@ pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
     FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
     MaterialTextureShaderInput, MeshShaderInput, ModelInstanceTransformShaderInput, Shader,
-    ShaderBuilder, UniformShaderInput,
+    ShaderGenerator, UniformShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::ImageTexture;
