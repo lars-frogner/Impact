@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0"
 bytemuck = { version = "1.13", features = ["derive"] }
 const-fnv1a-hash = "1.0"
 lazy_static = "1.4"

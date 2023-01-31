@@ -1,6 +1,8 @@
 //! Map for keeping track of which [`HashMap`] key
 //! corresponds to which index in an underlying [`Vec`].
 
+use anyhow::{anyhow, Result};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -101,9 +103,25 @@ where
     ///
     /// # Panics
     /// If the index is outside the bounds of the [`Vec`].
-    #[allow(dead_code)]
     pub fn key_at_idx(&self, idx: usize) -> K {
         self.keys_at_indices[idx]
+    }
+
+    /// Adds the given key and maps it to the next index.
+    ///
+    /// # Errors
+    /// Returns an error with the index of the key if the
+    /// key already exists.
+    pub fn try_push_key(&mut self, key: K) -> Result<(), usize> {
+        match self.indices_for_keys.entry(key) {
+            Entry::Vacant(entry) => {
+                let idx_of_new_key = self.keys_at_indices.len();
+                entry.insert(idx_of_new_key);
+                self.keys_at_indices.push(key);
+                Ok(())
+            }
+            Entry::Occupied(entry) => Err(*entry.get()),
+        }
     }
 
     /// Adds the given key and maps it to the next index.
@@ -111,10 +129,8 @@ where
     /// # Panics
     /// If the key already exists.
     pub fn push_key(&mut self, key: K) {
-        let idx_of_new_key = self.keys_at_indices.len();
-        self.keys_at_indices.push(key);
-        let existing_entry = self.indices_for_keys.insert(key, idx_of_new_key);
-        assert!(existing_entry.is_none(), "Tried to add an existing key");
+        self.try_push_key(key)
+            .expect("Tried to add an existing key");
     }
 
     /// Pushes each of the keys in the given iterator into the map
@@ -134,16 +150,35 @@ where
     /// # Returns
     /// The index of the removed key.
     ///
-    /// # Panics
-    /// If the key to remove does not exist.
-    pub fn swap_remove_key(&mut self, key: K) -> usize {
-        let idx_of_removed_key = self.indices_for_keys.remove(&key).unwrap();
+    /// # Errors
+    /// Returns an error if the key to remove does not exist.
+    pub fn try_swap_remove_key(&mut self, key: K) -> Result<usize> {
+        let idx_of_removed_key = self
+            .indices_for_keys
+            .remove(&key)
+            .ok_or_else(|| anyhow!("Tried to remove key that does not exist"))?;
+
         let last_key = self.keys_at_indices.pop().unwrap();
         if key != last_key {
             self.keys_at_indices[idx_of_removed_key] = last_key;
             *self.indices_for_keys.get_mut(&last_key).unwrap() = idx_of_removed_key;
         }
-        idx_of_removed_key
+        Ok(idx_of_removed_key)
+    }
+
+    /// Removes the given key and assigns the key at the last
+    /// index to the index of the removed key (unless the key
+    /// to remove was at the last index) before popping the end
+    /// of the [`Vec`].
+    ///
+    /// # Returns
+    /// The index of the removed key.
+    ///
+    /// # Panics
+    /// If the key to remove does not exist.
+    pub fn swap_remove_key(&mut self, key: K) -> usize {
+        self.try_swap_remove_key(key)
+            .expect("Tried to remove key that does not exist")
     }
 
     /// Removes the key corresponding to the given index and
@@ -255,6 +290,17 @@ mod test {
         let mut mapper = KeyIndexMapper::<i32>::new();
         mapper.push_key(4);
         mapper.push_key(4);
+    }
+
+    #[test]
+    fn key_index_mapper_try_push_key_err_contains_existing_idx() {
+        let mut mapper = KeyIndexMapper::<i32>::new();
+        mapper.push_key(4);
+        assert_eq!(mapper.try_push_key(4).unwrap_err(), 0);
+
+        mapper.push_key(7);
+        assert_eq!(mapper.try_push_key(7).unwrap_err(), 1);
+        assert_eq!(mapper.try_push_key(4).unwrap_err(), 0);
     }
 
     #[test]
