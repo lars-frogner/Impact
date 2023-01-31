@@ -1,4 +1,4 @@
-//!
+//! Tests for the [`query`] macro.
 
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{
