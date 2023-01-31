@@ -1,11 +1,16 @@
 //! Overarching container and coordinator for ECS.
 
+use crate::{
+    archetype::ArchetypeComponentStorage,
+    component::{ComponentArray, ComponentStorage},
+};
+
 use super::{
     archetype::{
-        Archetype, ArchetypeCompByteView, ArchetypeCompBytes, ArchetypeID, ArchetypeTable,
-        ComponentStorageEntry, ComponentStorageEntryMut,
+        Archetype, ArchetypeComponents, ArchetypeID, ArchetypeTable, ComponentStorageEntry,
+        ComponentStorageEntryMut,
     },
-    component::{Component, ComponentByteView, ComponentID},
+    component::{Component, ComponentID},
 };
 use anyhow::{anyhow, Result};
 use impact_utils::KeyIndexMapper;
@@ -87,33 +92,33 @@ impl World {
 
     /// Creates a new [`Entity`] with the given set of components.
     /// The given set of components must be provided as a type
-    /// that can be converted to an [`ArchetypeCompByteView`].
+    /// that can be converted to an [`ArchetypeComponents`] object.
     /// Typically, this will be a tuple of references to [`Component`]
-    /// instances.
+    /// instances, which can be converted into an
+    /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
     ///
     /// # Errors
     /// Returns an error if:
     /// - The given set of components does not have a valid
-    /// [`Archetype`], which happens if there are multiple
-    /// components of the same type.
+    ///   [`Archetype`], which happens if there are multiple
+    ///   components of the same type.
     /// - More than one instance of each component type is
-    /// provided (use [`World::create_entities`] for that).
+    ///   provided (use [`World::create_entities`] for that).
     ///
     /// # Examples
     /// ```
     /// # use impact_ecs::{
-    /// #    archetype::ArchetypeCompByteView,
     /// #    world::World,
     /// # };
-    /// # use impact_ecs_macros::ComponentDoctest;
+    /// # use impact_ecs_macros::ComponentDoctest as Component;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Distance(f32);
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Speed(f32);
     /// #
     /// let mut world = World::new();
@@ -125,11 +130,12 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
-    pub fn create_entity<'a, E>(
+    pub fn create_entity<A, E>(
         &mut self,
-        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
     ) -> Result<Entity>
     where
+        A: ComponentArray,
         E: Into<anyhow::Error>,
     {
         self.create_entities(components).and_then(|mut entities| {
@@ -143,33 +149,33 @@ impl World {
 
     /// Creates multiple new entities with the given set of components.
     /// The given set of components must be provided as a type
-    /// that can be converted to an [`ArchetypeCompByteView`].
+    /// that can be converted to an [`ArchetypeComponents`] object.
     /// Typically, this will be a tuple of slices with [`Component`]
-    /// instances.
+    /// instances, which can be converted into an
+    /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
     ///
     /// # Errors
     /// Returns an error if:
     /// - The given set of components does not have a valid
-    /// [`Archetype`], which happens if there are multiple
-    /// components of the same type.
+    ///   [`Archetype`], which happens if there are multiple
+    ///   components of the same type.
     /// - If the number of component instances provided for each
-    /// component type is not the same.
+    ///   component type is not the same.
     ///
     /// # Examples
     /// ```
     /// # use impact_ecs::{
-    /// #    archetype::ArchetypeCompByteView,
     /// #    world::World,
     /// # };
-    /// # use impact_ecs_macros::ComponentDoctest;
+    /// # use impact_ecs_macros::ComponentDoctest as Component;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Distance(f32);
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
+    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Speed(f32);
     /// #
     /// let mut world = World::new();
@@ -184,14 +190,15 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
-    pub fn create_entities<'a, E>(
+    pub fn create_entities<A, E>(
         &mut self,
-        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
     ) -> Result<Vec<Entity>>
     where
+        A: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        Ok(self.create_entities_with_component_bytes(components.try_into().map_err(E::into)?))
+        Ok(self.create_entities_with_archetype_components(components.try_into().map_err(E::into)?))
     }
 
     /// Returns the current number of entities in the world.
@@ -236,15 +243,14 @@ impl World {
     /// # Examples
     /// ```
     /// # use impact_ecs::{
-    /// #    archetype::ArchetypeCompByteView,
     /// #    world::World,
     /// # };
-    /// # use impact_ecs_macros::ComponentDoctest;
+    /// # use impact_ecs_macros::ComponentDoctest as Component;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #
     /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, ComponentDoctest)]
+    /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     /// # struct Level(u32);
     /// #
     /// let mut world = World::new();
@@ -284,7 +290,7 @@ impl World {
         entity: &mut Entity,
         component: &impl Component,
     ) -> Result<()> {
-        self.add_component_data_for_entity(entity, component.component_bytes())
+        self.add_component_storage_for_entity(entity, component.into_storage())
     }
 
     /// Removes the given [`Component`] from the given [`Entity`].
@@ -345,44 +351,43 @@ impl World {
             .ok_or_else(|| anyhow!("Archetype not present"))
     }
 
-    fn create_entities_with_component_bytes(
+    fn create_entities_with_archetype_components(
         &mut self,
-        archetype_data: ArchetypeCompByteView<'_>,
+        components: ArchetypeComponents<impl ComponentArray>,
     ) -> Vec<Entity> {
-        let archetype_id = archetype_data.archetype().id();
-        let entities: Vec<_> = (0..archetype_data.component_count())
+        let archetype_id = components.archetype().id();
+        let entities: Vec<_> = (0..components.component_count())
             .map(|_| self.create_next_entity(archetype_id))
             .collect();
-        self.add_entities_to_table(entities.iter().map(Entity::id), archetype_data);
+        self.add_entities_to_table(entities.iter().map(Entity::id), components);
         entities
     }
 
     fn add_entities_to_table(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
-        archetype_data: ArchetypeCompByteView<'_>,
+        components: ArchetypeComponents<impl ComponentArray>,
     ) {
-        let archetype_id = archetype_data.archetype().id();
+        let archetype_id = components.archetype().id();
         if let Some(idx) = self.archetype_index_mapper.get(archetype_id) {
             // If we already have a table for the archetype, we add
             // the entity to it
             self.archetype_tables[idx]
                 .write()
                 .unwrap()
-                .add_entities(entity_ids, archetype_data);
+                .add_entities(entity_ids, components);
         } else {
             // If we don't have the table, initialize it with the entity
             // as the first entry
             self.archetype_index_mapper.push_key(archetype_id);
             self.archetype_tables
                 .push(RwLock::new(ArchetypeTable::new_with_entities(
-                    entity_ids,
-                    archetype_data,
+                    entity_ids, components,
                 )));
         }
     }
 
-    fn remove_entity_data(&mut self, entity: &Entity) -> Result<ArchetypeCompBytes> {
+    fn remove_entity_data(&mut self, entity: &Entity) -> Result<ArchetypeComponentStorage> {
         let idx = self.get_table_idx(entity.archetype_id())?;
         let mut table = self.archetype_tables[idx].write().unwrap();
 
@@ -403,24 +408,23 @@ impl World {
         self.archetype_tables.swap_remove(idx);
     }
 
-    fn add_component_data_for_entity(
+    fn add_component_storage_for_entity(
         &mut self,
         entity: &mut Entity,
-        component_data: ComponentByteView<'_>,
+        component_storage: ComponentStorage,
     ) -> Result<()> {
         // Since the archetype of the entity changes when adding a
         // component, we need to first remove it from the old table
-        let existing_archetype_data = self.remove_entity_data(entity)?;
+        let mut components = self.remove_entity_data(entity)?;
 
         // We then add the component to the entity's data
-        let mut updated_archetype_data = existing_archetype_data.as_ref();
-        updated_archetype_data.add_new_component(component_data)?;
+        components.add_new_component_type(component_storage)?;
 
         // Set new archetype for the entity
-        entity.archetype_id = updated_archetype_data.archetype().id();
+        entity.archetype_id = components.archetype().id();
 
         // Finally we insert the modified entity into the appropriate table
-        self.add_entities_to_table([entity.id()], updated_archetype_data);
+        self.add_entities_to_table([entity.id()], components);
         Ok(())
     }
 
@@ -431,17 +435,16 @@ impl World {
     ) -> Result<()> {
         // Since the archetype of the entity changes when removing a
         // component, we need to first remove it from the old table
-        let existing_archetype_data = self.remove_entity_data(entity)?;
+        let mut components = self.remove_entity_data(entity)?;
 
         // We then remove the component from the entity's data
-        let mut updated_archetype_data = existing_archetype_data.as_ref();
-        updated_archetype_data.remove_component_with_id(component_id)?;
+        components.remove_component_type_with_id(component_id)?;
 
         // Set new archetype for the entity
-        entity.archetype_id = updated_archetype_data.archetype().id();
+        entity.archetype_id = components.archetype().id();
 
         // Finally we insert the modified entity into the appropriate table
-        self.add_entities_to_table([entity.id()], updated_archetype_data);
+        self.add_entities_to_table([entity.id()], components);
         Ok(())
     }
 

@@ -34,26 +34,60 @@ pub trait Component: Pod {
     fn component_id() -> ComponentID {
         TypeId::of::<Self>()
     }
-
-    /// Returns the [`ComponentByteView`] containing a reference
-    /// to the raw data of the component.
-    fn component_bytes(&self) -> ComponentByteView<'_>;
 }
 
 /// Represents a collection of instances of the same component
 /// type.
-pub trait ComponentInstances<'a, C: Component> {
+pub trait ComponentArray: Clone {
     /// Returns a unique ID representing the component type.
-    fn component_id() -> ComponentID {
-        C::component_id()
-    }
+    fn component_id(&self) -> ComponentID;
 
     /// Returns the number of component instances.
     fn component_count(&self) -> usize;
 
-    /// Returns the [`ComponentByteView`] containing a reference
-    /// to the raw data of the collection of components.
-    fn component_bytes(&self) -> ComponentByteView<'a>;
+    /// Returns the size of a single component instance in bytes.
+    fn component_size(&self) -> usize;
+
+    /// Returns the alignement of the component type.
+    fn component_align(&self) -> Alignment;
+
+    /// Returns a type erased view of the component instances.
+    fn view(&self) -> ComponentView<'_>;
+
+    /// Turns the array into a [`ComponentStorage`] storing the
+    /// same data.
+    fn into_storage(self) -> ComponentStorage;
+}
+
+/// Represents a view into a collection of instances of the same
+/// component type, with the lifetime of the view decoupled from
+/// the lifetime of the referenced data.
+pub trait ComponentSlice<'a>: ComponentArray {
+    /// Returns the slice of bytes representing all the component
+    /// instances.
+    fn component_bytes(&self) -> &'a [u8];
+
+    /// Returns a slice of all the component instances.
+    ///
+    /// # Panics
+    /// - If `C` is not the stored component type.
+    /// - If `C` is a zero-sized type.
+    fn component_instances<C: Component>(&self) -> &'a [C];
+
+    /// Returns a type erased view of the component instances.
+    ///
+    /// This method differs from [`ComponentArray::view`] in
+    /// that the [`ComponentView`] returned here may outlive the
+    /// called object.
+    fn persistent_view(&self) -> ComponentView<'a> {
+        ComponentView::new(
+            self.component_id(),
+            self.component_count(),
+            self.component_size(),
+            self.component_align(),
+            self.component_bytes(),
+        )
+    }
 }
 
 /// A unique ID identifying a type implementing [`Component`].
@@ -76,22 +110,11 @@ pub struct ComponentStorage {
     bytes: AlignedByteVec,
 }
 
-/// Container owning the bytes associated with one or more
-/// components of the same type, along with the component ID,
-/// count and size required to safely reconstruct the components.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ComponentBytes {
-    component_id: ComponentID,
-    component_count: usize,
-    component_size: usize,
-    bytes: AlignedByteVec,
-}
-
 /// Reference to the bytes of one or more components of the same
-/// type, which also includes the component ID, count and size
-/// required to safely reconstruct the components.
+/// type, which also includes the component ID, count, size and
+/// alignment required to safely reconstruct the components.
 #[derive(Clone, Debug)]
-pub struct ComponentByteView<'a> {
+pub struct ComponentView<'a> {
     component_id: ComponentID,
     component_count: usize,
     component_size: usize,
@@ -99,37 +122,63 @@ pub struct ComponentByteView<'a> {
     bytes: &'a [u8],
 }
 
+// We can treat a reference to a component as a component array
+// and slice with a single instance
+impl<'a, C: Component> ComponentArray for &'a C {
+    fn component_id(&self) -> ComponentID {
+        C::component_id()
+    }
+
+    fn component_count(&self) -> usize {
+        1
+    }
+
+    fn component_size(&self) -> usize {
+        mem::size_of::<C>()
+    }
+
+    fn component_align(&self) -> Alignment {
+        Alignment::of::<C>()
+    }
+
+    fn view(&self) -> ComponentView<'_> {
+        ComponentView::new_for_single_instance(
+            C::component_id(),
+            ::std::mem::size_of::<C>(),
+            Alignment::of::<C>(),
+            self.component_bytes(),
+        )
+    }
+
+    fn into_storage(self) -> ComponentStorage {
+        ComponentStorage::from_view(self.view())
+    }
+}
+
+impl<'a, C: Component> ComponentSlice<'a> for &'a C {
+    fn component_bytes(&self) -> &'a [u8] {
+        bytemuck::bytes_of(*self)
+    }
+
+    fn component_instances<C2: Component>(&self) -> &'a [C2] {
+        self.persistent_view().component_instances()
+    }
+}
+
 impl ComponentStorage {
-    /// Initializes a new storage for instances of the component
-    /// type that the given component bytes are associated with,
-    /// and stores a copy of the given bytes there.
-    pub(crate) fn new_from_byte_view(
-        ComponentByteView {
-            component_id,
-            component_count,
-            component_size,
-            component_align,
-            bytes,
-        }: ComponentByteView<'_>,
+    /// Initializes a new storage for component instances with
+    /// the given ID and size, and stores the given bytes representing
+    /// a set of component instances with the given count.
+    fn new(
+        component_id: ComponentID,
+        component_count: usize,
+        component_size: usize,
+        bytes: AlignedByteVec,
     ) -> Self {
-        Self {
-            component_id,
-            component_count,
-            component_size,
-            bytes: AlignedByteVec::copied_from_slice(component_align, bytes),
-        }
-    }
-    /// Initializes a new storage for instances of the component
-    /// type that the given component bytes are associated with,
-    /// and stores a the given bytes there.
-    pub(crate) fn new_from_bytes(
-        ComponentBytes {
-            component_id,
-            component_count,
-            component_size,
-            bytes,
-        }: ComponentBytes,
-    ) -> Self {
+        assert_eq!(
+            component_count.checked_mul(component_size).unwrap(),
+            bytes.len()
+        );
         Self {
             component_id,
             component_count,
@@ -137,37 +186,51 @@ impl ComponentStorage {
             bytes,
         }
     }
+
+    /// Initializes a new storage for component instances with
+    /// the given ID and size, and stores the given bytes representing
+    /// a single component instance.
+    fn new_for_single_instance(
+        component_id: ComponentID,
+        component_size: usize,
+        bytes: AlignedByteVec,
+    ) -> Self {
+        Self::new(component_id, 1, component_size, bytes)
+    }
+
+    /// Initializes a new storage for a single instance of a zero-sized
+    /// component with the given ID.
+    fn new_for_single_zero_sized_instance(component_id: ComponentID) -> Self {
+        Self::new_for_single_instance(component_id, 0, AlignedByteVec::new(Alignment::new(1)))
+    }
+
     /// Initializes an empty storage with preallocated capacity for
-    /// the given number of components of type `C`.
+    /// the given number of component instances of type `C`.
     pub(crate) fn with_capacity<C: Component>(component_count: usize) -> Self {
         let component_size = mem::size_of::<C>();
-        Self::new_from_bytes(ComponentBytes::new(
+        Self::new(
             C::component_id(),
             0,
             component_size,
             AlignedByteVec::with_capacity(Alignment::of::<C>(), component_count * component_size),
-        ))
+        )
+    }
+
+    /// Copies the bytes in the given view into a new storage.
+    pub(crate) fn from_view<'a>(slice: impl ComponentSlice<'a>) -> Self {
+        let view = slice.persistent_view();
+
+        ComponentStorage {
+            component_id: view.component_id(),
+            component_count: view.component_count(),
+            component_size: view.component_size(),
+            bytes: AlignedByteVec::copied_from_slice(view.component_align, view.bytes),
+        }
     }
 
     /// Returns the size of the storage in bytes.
     pub fn size(&self) -> usize {
         self.bytes.len()
-    }
-
-    /// Returns the number of stored components.
-    pub fn component_count(&self) -> usize {
-        self.component_count
-    }
-
-    /// Returns a [`ComponentByteView`] of all the components in the storage.
-    pub(crate) fn byte_view(&self) -> ComponentByteView<'_> {
-        ComponentByteView {
-            component_id: self.component_id,
-            component_count: self.component_count,
-            component_size: self.component_size,
-            component_align: self.bytes.alignment(),
-            bytes: &self.bytes,
-        }
     }
 
     /// Returns a slice of all stored components.
@@ -222,21 +285,20 @@ impl ComponentStorage {
         self.component_count += 1;
     }
 
-    /// Adds the given component bytes to the end of the storage.
+    /// Adds the bytes in the given component array to the end of the
+    /// storage.
     ///
     /// # Panics
-    /// If the component ID associated with the given bytes does not
+    /// If the component ID associated with the given array does not
     /// correspond to the type the storage was initialized with.
-    pub fn push_bytes(
-        &mut self,
-        ComponentByteView {
+    pub fn push_array(&mut self, array: &impl ComponentArray) {
+        let ComponentView {
             component_id,
             component_count,
             component_size: _,
             component_align: _,
             bytes,
-        }: ComponentByteView<'_>,
-    ) {
+        } = array.view();
         self.validate_component_id(component_id);
         self.bytes.extend_from_slice(bytes);
         self.component_count += component_count;
@@ -246,55 +308,15 @@ impl ComponentStorage {
     /// last component take its place (unless the one to remove
     /// is the last one).
     ///
-    /// # Returns
-    ///  The removed component.
-    ///
-    /// # Panics
-    /// - If `C` is not the component type the storage was initialized with.
-    /// - If `idx` is outside the bounds of the storage.
-    pub fn swap_remove<C: Component>(&mut self, idx: usize) -> C {
-        self.validate_component::<C>();
-
-        let removed_component = if self.component_size > 0 {
-            let components = self.slice_mut::<C>();
-            let n_components = components.len();
-            assert!(idx < n_components, "Index for component out of bounds");
-
-            let removed_component = components[idx];
-
-            // Swap with last component unless the component to
-            // remove is the last one
-            let last_component_idx = n_components - 1;
-            if idx < last_component_idx {
-                components.swap(idx, last_component_idx);
-            }
-
-            // Remove last component (this must be done on the raw byte `Vec`)
-            self.bytes.truncate(self.bytes.len() - mem::size_of::<C>());
-
-            removed_component
-        } else {
-            // If the component is zero-sized, return the only possible "value"
-            // (calling `zeroed` is just a way of getting a value instead of a type)
-            C::zeroed()
-        };
-
-        self.component_count = self.component_count.checked_sub(1).unwrap();
-
-        removed_component
-    }
-
-    /// Type erased version of [`Self::swap_remove`].
-    ///
     /// # Note
-    /// `idx` still refers to the whole component, not its byte boundary.
+    /// `idx` refers to the whole component, not its byte boundary.
     ///
     /// # Returns
-    ///  The removed component bytes.
+    /// A [`ComponentStorage`] with only the removed component.
     ///
     /// # Panics
     /// If `idx` is outside the bounds of the storage.
-    pub fn swap_remove_bytes(&mut self, idx: usize) -> ComponentBytes {
+    pub fn swap_remove(&mut self, idx: usize) -> Self {
         assert!(
             idx < self.component_count(),
             "Index for component out of bounds"
@@ -304,7 +326,7 @@ impl ComponentStorage {
             let component_to_remove_start = idx.checked_mul(self.component_size).unwrap();
             let data_size = self.bytes.len();
 
-            let removed_component_data = ComponentBytes::new_for_single_instance(
+            let removed_component_data = Self::new_for_single_instance(
                 self.component_id,
                 self.component_size,
                 AlignedByteVec::copied_from_slice(
@@ -335,7 +357,7 @@ impl ComponentStorage {
 
             removed_component_data
         } else {
-            ComponentBytes::new_for_single_zero_sized_instance(self.component_id)
+            Self::new_for_single_zero_sized_instance(self.component_id)
         };
 
         self.component_count = self.component_count.checked_sub(1).unwrap();
@@ -355,75 +377,42 @@ impl ComponentStorage {
     }
 }
 
-impl ComponentBytes {
-    /// Creates a new container for the given bytes for a component
-    /// with the given ID, count and size.
-    pub(crate) fn new(
-        component_id: ComponentID,
-        component_count: usize,
-        component_size: usize,
-        bytes: AlignedByteVec,
-    ) -> Self {
-        assert_eq!(
-            component_count.checked_mul(component_size).unwrap(),
-            bytes.len()
-        );
-        Self {
-            component_id,
-            component_count,
-            component_size,
-            bytes,
-        }
-    }
-
-    /// Creates a new container for the given bytes for a single
-    /// instance of the component with the given ID, count and size.
-    pub(crate) fn new_for_single_instance(
-        component_id: ComponentID,
-        component_size: usize,
-        bytes: AlignedByteVec,
-    ) -> Self {
-        Self::new(component_id, 1, component_size, bytes)
-    }
-
-    /// Creates a new container for a single instance of a zero-sized
-    /// component.
-    pub(crate) fn new_for_single_zero_sized_instance(component_id: ComponentID) -> Self {
-        Self::new_for_single_instance(component_id, 0, AlignedByteVec::new(Alignment::new(1)))
-    }
-
-    /// Returns the ID of the component type these bytes represent.
-    pub fn component_id(&self) -> ComponentID {
+impl ComponentArray for ComponentStorage {
+    fn component_id(&self) -> ComponentID {
         self.component_id
     }
 
-    /// Returns the size of the component type these bytes represent.
-    pub fn component_size(&self) -> usize {
-        self.component_size
-    }
-
-    /// Returns the number of component instances these bytes represent.
-    pub fn component_count(&self) -> usize {
+    fn component_count(&self) -> usize {
         self.component_count
     }
 
-    /// Returns a [`ComponentByteView`] referencing the component
-    /// bytes.
-    pub fn as_ref(&self) -> ComponentByteView<'_> {
-        ComponentByteView {
-            component_id: self.component_id(),
-            component_count: self.component_count(),
-            component_size: self.component_size(),
-            component_align: self.bytes.alignment(),
-            bytes: &self.bytes,
-        }
+    fn component_size(&self) -> usize {
+        self.component_size
+    }
+
+    fn component_align(&self) -> Alignment {
+        self.bytes.alignment()
+    }
+
+    fn view(&self) -> ComponentView<'_> {
+        ComponentView::new(
+            self.component_id,
+            self.component_count,
+            self.component_size,
+            self.bytes.alignment(),
+            self.bytes.as_slice(),
+        )
+    }
+
+    fn into_storage(self) -> ComponentStorage {
+        self
     }
 }
 
-impl<'a> ComponentByteView<'a> {
+impl<'a> ComponentView<'a> {
     /// Creates a new view to the given bytes for a component
     /// with the given ID, count, size and alignment.
-    pub fn new(
+    fn new(
         component_id: ComponentID,
         component_count: usize,
         component_size: usize,
@@ -445,52 +434,13 @@ impl<'a> ComponentByteView<'a> {
 
     /// Creates a new view to the given bytes for a single instance
     /// of the component with the given ID, count and size.
-    pub fn new_for_single_instance(
+    fn new_for_single_instance(
         component_id: ComponentID,
         component_size: usize,
         component_align: Alignment,
         bytes: &'a [u8],
     ) -> Self {
         Self::new(component_id, 1, component_size, component_align, bytes)
-    }
-
-    /// Returns the ID of the type of the components whose bytes
-    /// this reference points to.
-    pub fn component_id(&self) -> ComponentID {
-        self.component_id
-    }
-
-    /// Returns the size of the type of the components whose bytes
-    /// this reference points to.
-    pub fn component_size(&self) -> usize {
-        self.component_size
-    }
-
-    /// Returns the number of component instances this reference points to.
-    pub fn component_count(&self) -> usize {
-        self.component_count
-    }
-
-    /// Returns a slice of all the components whose bytes this reference
-    /// points to.
-    ///
-    /// # Panics
-    /// - If `C` is not the component type this reference points to.
-    /// - If `C` is a zero-sized type.
-    pub(crate) fn slice<C: Component>(&self) -> &[C] {
-        self.validate_component::<C>();
-        assert_ne!(
-            mem::size_of::<C>(),
-            0,
-            "Tried to obtain slice of zero-sized component values from component byte view"
-        );
-        // Make sure not to call `cast_slice` on an empty slice, as
-        // an empty slice is not guaranteed to have the correct alignment
-        if self.bytes.is_empty() {
-            &[]
-        } else {
-            bytemuck::cast_slice(self.bytes)
-        }
     }
 
     fn validate_component<C: Component>(&self) {
@@ -503,73 +453,134 @@ impl<'a> ComponentByteView<'a> {
             "Tried to use component byte view with invalid component type"
         );
     }
+}
 
-    /// Creates a [`ComponentBytes`] holding a copy of the referenced
-    /// component bytes.
-    pub fn to_owned(&self) -> ComponentBytes {
-        ComponentBytes {
-            component_id: self.component_id(),
-            component_count: self.component_count(),
-            component_size: self.component_size(),
-            bytes: AlignedByteVec::copied_from_slice(self.component_align, self.bytes),
+impl<'a> ComponentArray for ComponentView<'a> {
+    fn component_id(&self) -> ComponentID {
+        self.component_id
+    }
+
+    fn component_count(&self) -> usize {
+        self.component_count
+    }
+
+    fn component_size(&self) -> usize {
+        self.component_size
+    }
+
+    fn component_align(&self) -> Alignment {
+        self.component_align
+    }
+
+    fn view(&self) -> ComponentView<'_> {
+        self.clone()
+    }
+
+    fn into_storage(self) -> ComponentStorage {
+        ComponentStorage::from_view(self)
+    }
+}
+
+impl<'a> ComponentSlice<'a> for ComponentView<'a> {
+    fn component_bytes(&self) -> &'a [u8] {
+        self.bytes
+    }
+
+    fn component_instances<C: Component>(&self) -> &'a [C] {
+        self.validate_component::<C>();
+        assert_ne!(
+            mem::size_of::<C>(),
+            0,
+            "Tried to obtain slice of zero-sized component values from component view"
+        );
+        // Make sure not to call `cast_slice` on an empty slice, as
+        // an empty slice is not guaranteed to have the correct alignment
+        if self.bytes.is_empty() {
+            &[]
+        } else {
+            bytemuck::cast_slice(self.bytes)
         }
     }
 }
 
-impl<'a, C: Component> ComponentInstances<'a, C> for &'a [C] {
+impl<'a, C: Component> ComponentArray for &'a [C] {
+    fn component_id(&self) -> ComponentID {
+        C::component_id()
+    }
+
     fn component_count(&self) -> usize {
         self.len()
     }
 
-    fn component_bytes(&self) -> ComponentByteView<'a> {
-        let component_count = self.len();
-        let component_size = mem::size_of::<C>();
-        let component_align = Alignment::of::<C>();
+    fn component_size(&self) -> usize {
+        mem::size_of::<C>()
+    }
 
-        // Make sure not to call `cast_slice` on an empty slice, as
-        // an empty slice is not guaranteed to have the correct alignment
-        let bytes = if component_size == 0 || component_count == 0 {
-            &[]
-        } else {
-            bytemuck::cast_slice(self)
-        };
+    fn component_align(&self) -> Alignment {
+        Alignment::of::<C>()
+    }
 
-        ComponentByteView::new(
-            Self::component_id(),
-            component_count,
-            component_size,
-            component_align,
-            bytes,
-        )
+    fn view(&self) -> ComponentView<'_> {
+        self.persistent_view()
+    }
+
+    fn into_storage(self) -> ComponentStorage {
+        ComponentStorage::from_view(self)
     }
 }
 
-impl<'a, const N: usize, C: Component> ComponentInstances<'a, C> for &'a [C; N] {
+impl<'a, C: Component> ComponentSlice<'a> for &'a [C] {
+    fn component_bytes(&self) -> &'a [u8] {
+        if self.component_size() == 0 || self.component_count() == 0 {
+            &[]
+        } else {
+            bytemuck::cast_slice(self)
+        }
+    }
+
+    fn component_instances<C2: Component>(&self) -> &'a [C2] {
+        self.persistent_view().component_instances()
+    }
+}
+
+impl<'a, const N: usize, C: Component> ComponentArray for &'a [C; N] {
+    fn component_id(&self) -> ComponentID {
+        C::component_id()
+    }
+
     fn component_count(&self) -> usize {
         self.len()
     }
 
-    fn component_bytes(&self) -> ComponentByteView<'a> {
-        let component_count = self.len();
-        let component_size = mem::size_of::<C>();
-        let component_align = Alignment::of::<C>();
+    fn component_size(&self) -> usize {
+        mem::size_of::<C>()
+    }
 
-        // Make sure not to call `cast_slice` on an empty slice, as
-        // an empty slice is not guaranteed to have the correct alignment
-        let bytes = if component_size == 0 || component_count == 0 {
+    fn component_align(&self) -> Alignment {
+        Alignment::of::<C>()
+    }
+
+    fn view(&self) -> ComponentView<'_> {
+        self.persistent_view()
+    }
+
+    fn into_storage(self) -> ComponentStorage {
+        ComponentStorage::from_view(self)
+    }
+}
+
+impl<'a, const N: usize, C: Component> ComponentSlice<'a> for &'a [C; N] {
+    fn component_bytes(&self) -> &'a [u8] {
+        if self.component_size() == 0 || self.component_count() == 0 {
             &[]
         } else {
             #[allow(clippy::explicit_auto_deref)]
             bytemuck::cast_slice(*self)
-        };
+        }
+    }
 
-        ComponentByteView::new(
-            Self::component_id(),
-            component_count,
-            component_size,
-            component_align,
-            bytes,
-        )
+    fn component_instances<C2: Component>(&self) -> &'a [C2] {
+        self.persistent_view().component_instances()
     }
 }
 
@@ -578,11 +589,11 @@ mod test {
     use super::{super::Component, *};
     use bytemuck::Zeroable;
 
-    #[repr(C)]
+    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Marked;
 
-    #[repr(C)]
+    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Byte(u8);
 
@@ -609,51 +620,133 @@ mod test {
     };
 
     #[test]
-    fn referencing_component_data_works() {
+    fn creating_view_to_single_component_works() {
         let component = Byte(42);
-        let data = component.component_bytes();
-        assert_eq!(data.component_count(), 1);
-        assert_eq!(data.component_size(), mem::size_of::<Byte>());
-        assert_eq!(data.bytes.len(), 1);
-        assert_eq!(data.bytes[0], 42);
-        assert_eq!(data.slice::<Byte>()[0], component);
+        let reference = &component;
+        let view = reference.view();
+        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.component_size(), mem::size_of::<Byte>());
+        assert_eq!(view.bytes.len(), 1);
+        assert_eq!(view.bytes[0], 42);
+        assert_eq!(view.component_instances::<Byte>()[0], component);
+    }
+
+    #[test]
+    fn creating_persistent_view_to_single_component_works() {
+        let component = Byte(42);
+        let view = (&component).persistent_view();
+        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.component_size(), mem::size_of::<Byte>());
+        assert_eq!(view.bytes.len(), 1);
+        assert_eq!(view.bytes[0], 42);
+        assert_eq!(view.component_instances::<Byte>()[0], component);
+    }
+
+    #[test]
+    fn creating_view_to_single_zero_sized_component_works() {
+        let reference = &Marked;
+        let view = reference.view();
+        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.component_size(), 0);
+        assert_eq!(view.bytes.len(), 0);
+    }
+
+    #[test]
+    fn creating_persistent_view_to_single_zero_sized_component_works() {
+        let view = (&Marked).persistent_view();
+        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.component_size(), 0);
+        assert_eq!(view.bytes.len(), 0);
+    }
+
+    #[test]
+    fn creating_view_to_array_of_component_works() {
+        let components = &[Byte(42), Byte(24)];
+        let view = components.view();
+        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.component_size(), mem::size_of::<Byte>());
+        assert_eq!(view.bytes.len(), 2);
+        assert_eq!(view.bytes, &[42, 24]);
+        assert_eq!(view.component_instances::<Byte>(), components);
+    }
+
+    #[test]
+    fn creating_persistent_view_to_array_of_component_works() {
+        let components = &[Byte(42), Byte(24)];
+        let view = components.persistent_view();
+        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.component_size(), mem::size_of::<Byte>());
+        assert_eq!(view.bytes.len(), 2);
+        assert_eq!(view.bytes, &[42, 24]);
+        assert_eq!(view.component_instances::<Byte>(), components);
+    }
+
+    #[test]
+    fn creating_view_to_array_of_zero_sized_component_works() {
+        let components = &[Marked, Marked];
+        let view = components.view();
+        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.component_size(), 0);
+        assert_eq!(view.bytes.len(), 0);
+    }
+
+    #[test]
+    fn creating_persistent_view_to_array_of_zero_sized_component_works() {
+        let components = &[Marked, Marked];
+        let view = components.persistent_view();
+        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.component_size(), 0);
+        assert_eq!(view.bytes.len(), 0);
+    }
+
+    #[test]
+    fn creating_view_to_slice_of_component_works() {
+        let components = [Byte(42), Byte(24)].as_slice();
+        let view = components.view();
+        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.component_size(), mem::size_of::<Byte>());
+        assert_eq!(view.bytes.len(), 2);
+        assert_eq!(view.bytes, &[42, 24]);
+        assert_eq!(view.component_instances::<Byte>(), components);
+    }
+
+    #[test]
+    fn creating_persistent_view_to_slice_of_component_works() {
+        let components = [Byte(42), Byte(24)].as_slice();
+        let view = components.persistent_view();
+        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.component_size(), mem::size_of::<Byte>());
+        assert_eq!(view.bytes.len(), 2);
+        assert_eq!(view.bytes, &[42, 24]);
+        assert_eq!(view.component_instances::<Byte>(), components);
     }
 
     #[test]
     #[should_panic]
-    fn requesting_slice_of_wrong_component_from_byte_view_fails() {
+    fn requesting_instances_of_wrong_component_from_component_view_fails() {
         let component = Byte(42);
-        let data = component.component_bytes();
-        data.slice::<Rectangle>();
+        let view = (&component).persistent_view();
+        view.component_instances::<Rectangle>();
     }
 
     #[test]
     #[should_panic]
-    fn requesting_slice_of_zero_size_component_from_byte_view_fails() {
+    fn requesting_instances_of_zero_size_component_from_component_view_fails() {
         let component = Marked;
-        let data = component.component_bytes();
-        data.slice::<Marked>();
+        let view = (&component).persistent_view();
+        view.component_instances::<Marked>();
     }
 
     #[test]
-    fn creating_component_data_for_zero_sized_component_works() {
-        let component = Marked;
-        let data = component.component_bytes();
-        assert_eq!(data.component_count(), 1);
-        assert_eq!(data.component_size(), 0);
-        assert_eq!(data.bytes.len(), 0);
-    }
-
-    #[test]
-    fn storage_initialization_works() {
-        let storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
+    fn creating_storage_from_view_works() {
+        let storage = ComponentStorage::from_view(&RECT_1);
         assert_eq!(storage.component_count(), 1);
         assert_eq!(storage.size(), mem::size_of::<Rectangle>());
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_1]);
     }
 
     #[test]
-    fn empty_storage_creation_works() {
+    fn creating_empty_storage_works() {
         let storage = ComponentStorage::with_capacity::<Rectangle>(10);
         assert_eq!(storage.component_count(), 0);
         assert_eq!(storage.size(), 0);
@@ -663,34 +756,34 @@ mod test {
     #[test]
     #[should_panic]
     fn requesting_slice_of_wrong_component_from_storage_fails() {
-        let storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
+        let storage = ComponentStorage::from_view(&RECT_1);
         storage.slice::<Byte>();
     }
 
     #[test]
     #[should_panic]
     fn requesting_mutable_slice_of_wrong_component_from_storage_fails() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::from_view(&RECT_1);
         storage.slice_mut::<Byte>();
     }
 
     #[test]
     #[should_panic]
     fn requesting_slice_of_zero_sized_component_from_storage_fails() {
-        let storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
+        let storage = ComponentStorage::from_view(&Marked);
         storage.slice::<Marked>();
     }
 
     #[test]
     #[should_panic]
     fn requesting_mutable_slice_of_zero_sized_component_from_storage_fails() {
-        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
+        let mut storage = ComponentStorage::from_view(&Marked);
         storage.slice_mut::<Marked>();
     }
 
     #[test]
     fn modifying_stored_component_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::from_view(&RECT_1);
         storage.slice_mut::<Rectangle>()[0] = RECT_2;
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
     }
@@ -698,13 +791,13 @@ mod test {
     #[test]
     #[should_panic]
     fn pushing_different_component_to_storage_fails() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::from_view(&RECT_1);
         storage.push(&Byte(42));
     }
 
     #[test]
     fn pushing_component_to_storage_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
+        let mut storage = ComponentStorage::from_view(&RECT_1);
         storage.push(&RECT_2);
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.size(), 2 * mem::size_of::<Rectangle>());
@@ -713,7 +806,7 @@ mod test {
 
     #[test]
     fn pushing_zero_sized_component_to_storage_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
+        let mut storage = ComponentStorage::from_view(&Marked);
         storage.push(&Marked);
         assert_eq!(storage.component_count(), 2);
         assert_eq!(storage.size(), 0);
@@ -721,144 +814,87 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn pushing_different_component_bytes_to_storage_fails() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
-        storage.push_bytes(Byte(42).component_bytes());
+    fn pushing_component_array_of_different_type_to_storage_fails() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.push_array(&&Byte(42));
     }
 
     #[test]
-    fn pushing_component_bytes_to_storage_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
-        storage.push_bytes(RECT_2.component_bytes());
-        assert_eq!(storage.component_count(), 2);
-        assert_eq!(storage.size(), 2 * mem::size_of::<Rectangle>());
-        assert_eq!(storage.slice::<Rectangle>(), &[RECT_1, RECT_2]);
+    fn pushing_component_array_to_storage_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_2);
+        storage.push_array(&&[RECT_1, RECT_2]);
+        assert_eq!(storage.component_count(), 3);
+        assert_eq!(storage.size(), 3 * mem::size_of::<Rectangle>());
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_2, RECT_1, RECT_2]);
     }
 
     #[test]
-    fn pushing_zero_sized_component_bytes_to_storage_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
-        storage.push_bytes(Marked.component_bytes());
-        assert_eq!(storage.component_count(), 2);
+    fn pushing_zero_sized_component_array_to_storage_works() {
+        let mut storage = ComponentStorage::from_view(&Marked);
+        storage.push_array(&&[Marked, Marked]);
+        assert_eq!(storage.component_count(), 3);
         assert_eq!(storage.size(), 0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn removing_different_component_from_storage_fails() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
-        storage.swap_remove::<Byte>(0);
     }
 
     #[test]
     #[should_panic]
     fn removing_component_from_storage_with_invalid_idx_fails() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
-        storage.swap_remove::<Rectangle>(1);
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.swap_remove(1);
     }
 
     #[test]
     fn swap_removing_component_from_storage_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
-        assert_eq!(storage.swap_remove::<Rectangle>(0), RECT_1);
+        let rect_1_storage = ComponentStorage::from_view(&RECT_1);
+        let rect_2_storage = ComponentStorage::from_view(&RECT_2);
+
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        assert_eq!(storage.swap_remove(0), rect_1_storage);
         assert_eq!(storage.slice::<Rectangle>(), &[]);
 
         storage.push(&RECT_1);
         storage.push(&RECT_2);
-        assert_eq!(storage.swap_remove::<Rectangle>(0), RECT_1);
+        assert_eq!(storage.swap_remove(0), rect_1_storage);
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
-        assert_eq!(storage.swap_remove::<Rectangle>(0), RECT_2);
+        assert_eq!(storage.swap_remove(0), rect_2_storage);
         assert_eq!(storage.slice::<Rectangle>(), &[]);
 
         storage.push(&RECT_1);
         storage.push(&RECT_2);
-        assert_eq!(storage.swap_remove::<Rectangle>(1), RECT_2);
+        assert_eq!(storage.swap_remove(1), rect_2_storage);
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_1]);
 
         storage.push(&RECT_2);
         storage.push(&RECT_3);
-        assert_eq!(storage.swap_remove::<Rectangle>(1), RECT_2);
+        assert_eq!(storage.swap_remove(1), rect_2_storage);
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_1, RECT_3]);
 
         storage.push(&RECT_2);
-        assert_eq!(storage.swap_remove::<Rectangle>(0), RECT_1);
+        assert_eq!(storage.swap_remove(0), rect_1_storage);
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_2, RECT_3]);
     }
 
     #[test]
     fn swap_removing_zero_sized_component_from_storage_works() {
-        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
+        let marked_storage = ComponentStorage::from_view(&Marked);
+
+        let mut storage = ComponentStorage::from_view(&Marked);
         storage.push(&Marked);
         assert_eq!(storage.component_count(), 2);
-        assert_eq!(storage.swap_remove::<Marked>(0), Marked);
+        assert_eq!(storage.swap_remove(0), marked_storage);
         assert_eq!(storage.component_count(), 1);
-        assert_eq!(storage.swap_remove::<Marked>(0), Marked);
+        assert_eq!(storage.swap_remove(0), marked_storage);
         assert_eq!(storage.component_count(), 0);
 
         storage.push(&Marked);
         storage.push(&Marked);
         storage.push(&Marked);
         assert_eq!(storage.component_count(), 3);
-        assert_eq!(storage.swap_remove::<Marked>(1), Marked);
+        assert_eq!(storage.swap_remove(1), marked_storage);
         assert_eq!(storage.component_count(), 2);
-        assert_eq!(storage.swap_remove::<Marked>(1), Marked);
+        assert_eq!(storage.swap_remove(1), marked_storage);
         assert_eq!(storage.component_count(), 1);
-        assert_eq!(storage.swap_remove::<Marked>(0), Marked);
-        assert_eq!(storage.component_count(), 0);
-    }
-
-    #[test]
-    fn swap_removing_component_bytes_from_storage_works() {
-        let rect_1_bytes = RECT_1.component_bytes().to_owned();
-        let rect_2_bytes = RECT_2.component_bytes().to_owned();
-
-        let mut storage = ComponentStorage::new_from_byte_view(RECT_1.component_bytes());
-        assert_eq!(storage.swap_remove_bytes(0), rect_1_bytes);
-        assert_eq!(storage.slice::<Rectangle>(), &[]);
-
-        storage.push(&RECT_1);
-        storage.push(&RECT_2);
-        assert_eq!(storage.swap_remove_bytes(0), rect_1_bytes);
-        assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
-        assert_eq!(storage.swap_remove_bytes(0), rect_2_bytes);
-        assert_eq!(storage.slice::<Rectangle>(), &[]);
-
-        storage.push(&RECT_1);
-        storage.push(&RECT_2);
-        assert_eq!(storage.swap_remove_bytes(1), rect_2_bytes);
-        assert_eq!(storage.slice::<Rectangle>(), &[RECT_1]);
-
-        storage.push(&RECT_2);
-        storage.push(&RECT_3);
-        assert_eq!(storage.swap_remove_bytes(1), rect_2_bytes);
-        assert_eq!(storage.slice::<Rectangle>(), &[RECT_1, RECT_3]);
-
-        storage.push(&RECT_2);
-        assert_eq!(storage.swap_remove_bytes(0), rect_1_bytes);
-        assert_eq!(storage.slice::<Rectangle>(), &[RECT_2, RECT_3]);
-    }
-
-    #[test]
-    fn swap_removing_zero_sized_component_bytes_from_storage_works() {
-        let marked_bytes = Marked.component_bytes().to_owned();
-
-        let mut storage = ComponentStorage::new_from_byte_view(Marked.component_bytes());
-        storage.push(&Marked);
-        assert_eq!(storage.component_count(), 2);
-        assert_eq!(storage.swap_remove_bytes(0), marked_bytes);
-        assert_eq!(storage.component_count(), 1);
-        assert_eq!(storage.swap_remove_bytes(0), marked_bytes);
-        assert_eq!(storage.component_count(), 0);
-
-        storage.push(&Marked);
-        storage.push(&Marked);
-        storage.push(&Marked);
-        assert_eq!(storage.component_count(), 3);
-        assert_eq!(storage.swap_remove_bytes(1), marked_bytes);
-        assert_eq!(storage.component_count(), 2);
-        assert_eq!(storage.swap_remove_bytes(1), marked_bytes);
-        assert_eq!(storage.component_count(), 1);
-        assert_eq!(storage.swap_remove_bytes(0), marked_bytes);
+        assert_eq!(storage.swap_remove(0), marked_storage);
         assert_eq!(storage.component_count(), 0);
     }
 }

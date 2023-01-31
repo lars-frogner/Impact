@@ -105,58 +105,60 @@ pub use impact_ecs_macros::archetype_of;
 ///         // Setup to run once if criteria are matched (optional)
 ///         // ....
 ///     },
-///     // Identifier for the `ComponentManager` to match on
-///     manager,
-///     // Call closure for each component instance if `manager` has both
+///     // Identifier for the `ArchetypeComponentStorage` to match on
+///     components,
+///     // Call closure for each component instance if `components` has both
 ///     // `Comp1` and `Comp2`
 ///     |comp_1: &Comp1, comp_2: &mut Comp2| -> (Comp3, Comp4) {
 ///         // Do something with `entity`, `comp_1` and `comp_2`
 ///         // ...
-///         // Return instances of `comp_3` and `comp_4` to add to `manager`
+///         // Return instances of `comp_3` and `comp_4` to add to `components`
 ///         (comp_3, comp_4)
 ///     },
-///     // Require additionaly that `manager` has `MarkerComp1` and
+///     // Require additionaly that `components` has `MarkerComp1` and
 ///     // `MarkerComp2` (optional)
 ///     [MarkerComp1, MarkerComp2]
-///     // Do not call the closure if `manager` has `Comp3` or `Comp4`
+///     // Do not call the closure if `components` has `Comp3` or `Comp4`
 ///     // (optional)
 ///     ![Comp3, Comp4]
 /// );
 /// ```
 ///
-/// The macro takes as input a [`ComponentManager`](archetype::ComponentManager)
-/// wrapping an initial set of component instances, followed by a closure
+/// The macro takes as input an
+/// [`ArchetypeComponentStorage`](archetype::ArchetypeComponentStorage)
+/// wrapping a set of component instances, followed by a closure
 /// definition whose type signature specifies the set of
-/// [`Component`](component::Component) types to look for in the set of initial
+/// [`Component`](component::Component) types to look for in the set of existing
 /// components as well as the component types the closure will return instances
-/// of for inclusion as extra components in the `ComponentManager`. The type of
+/// of for inclusion in the `ArchetypeComponentStorage`. The type of
 /// each closure argument must be annotated, and has to be an immutable reference
 /// to a type implementing the `Component` trait. If the closure returns anything,
 /// it must be a single value or a tuple of values implementing the `Component`
 /// trait, and the return type has to be annotated in the closure signature.
 ///
-/// The body of the closure specifies what to do with each set of matching initial
-/// component instances present in the `ComponentManager`. The closure will only
-/// be called if the `ComponentManager` has the requested initial component types
+/// The body of the closure specifies what to do with each set of matching
+/// component instances present in the `ArchetypeComponentStorage`. The closure will only
+/// be called if the `ArchetypeComponentStorage` has the requested component types
 /// and if so it will be called once with each set of requested component instances.
-/// Any new component instances that the closure returns will be included as extra
-/// components in the `ComponentManager`.
+/// Any instances of a new component type that the closure returns will be added under a new
+/// component type in the `ArchetypeComponentStorage`. Any returned instances of an already existing
+/// component type will overwrite the existing instances for that component type.
 ///
 /// Optionally, an array of additionaly required component types can be
 /// included as an argument to the macro. The closure will only be called
-/// if the `ComponentManager` also has these initial component types.
+/// if the `ArchetypeComponentStorage` also has these component types.
 /// The primary use of specifying a required component here instead of in
 /// the closure signature is for zero-sized marker components, which are
 /// not allowed in the closure signature.
 ///
 /// Another option is to include an array of disallowed component types
 /// as an argument to the macro. The array must be prefixed with `!`.
-/// If the `ComponentManager` has all of the required initial components, but
-/// also has an initial component type specified in the dissalowed component
+/// If the `ArchetypeComponentStorage` has all of the required components, but
+/// also has a component type specified in the dissalowed component
 /// list, the closure will not be called.
 ///
-/// Finally, arbitrary code to run once if (and only if) the `ComponentManager`
-/// has all of the required initial components can be specified inside curly
+/// Finally, arbitrary code to run once if (and only if) the `ArchetypeComponentStorage`
+/// has all of the required components can be specified inside curly
 /// braces as the first argument to the macro. This code will be included in the
 /// parent scope of the closure, and will go out of scope when all closure calls
 /// have been executed.
@@ -164,7 +166,7 @@ pub use impact_ecs_macros::archetype_of;
 /// # Examples
 /// ```
 /// # use impact_ecs::{
-/// #     archetype::ComponentManager,
+/// #     archetype::ArchetypeComponentStorage,
 /// #     world::{World, Entity}
 /// # };
 /// # use impact_ecs_macros::{
@@ -191,12 +193,12 @@ pub use impact_ecs_macros::archetype_of;
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Disabled;
 /// #
-/// fn setup_area_lights(manager: &mut ComponentManager, contains_area_lights: &mut bool) {
+/// fn setup_area_lights(components: &mut ArchetypeComponentStorage, contains_area_lights: &mut bool) {
 ///     setup!(
 ///         {
 ///             *contains_area_lights = true;
 ///         },
-///         manager,
+///         components,
 ///         |flux: &Flux, area: &Area| -> Luminosity {
 ///             Luminosity(flux.0 * area.0)
 ///         },
@@ -206,14 +208,14 @@ pub use impact_ecs_macros::archetype_of;
 /// }
 ///
 /// let mut world = World::new();
-/// let mut manager = ComponentManager::with_initial_components(
+/// let mut components = ArchetypeComponentStorage::try_from_view(
 ///     (&[Light, Light], &[Flux(1.0), Flux(5.0)], &[Area(2.0), Area(2.0)])
 /// )?;
 /// let mut contains_area_lights = false;
 ///
-/// setup_area_lights(&mut manager, &mut contains_area_lights);
+/// setup_area_lights(&mut components, &mut contains_area_lights);
 ///
-/// let entities = world.create_entities(manager.all_components()?)?;
+/// let entities = world.create_entities(components)?;
 ///
 /// assert!(contains_area_lights);
 /// assert_eq!(

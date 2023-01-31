@@ -6,7 +6,7 @@ use crate::{
     scene::{MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, VertexColorComp},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{archetype::ComponentManager, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
 
@@ -34,12 +34,12 @@ impl VertexColorMaterial {
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);
     }
 
-    /// Checks if the entity-to-be with components represented by the
-    /// given component manager has the component for this material, and
-    /// if so, adds the appropriate material component to the entity.
-    pub fn add_material_component_for_entity(component_manager: &mut ComponentManager<'_>) {
+    /// Checks if the entity-to-be with the given components has the
+    /// component for this material, and if so, adds the appropriate
+    /// material component to the entity.
+    pub fn add_material_component_for_entity(components: &mut ArchetypeComponentStorage) {
         setup!(
-            component_manager,
+            components,
             || -> MaterialComp {
                 MaterialComp {
                     id: *VERTEX_COLOR_MATERIAL_ID,

@@ -4,50 +4,52 @@ use crate::{
     physics::{OrientationComp, PositionComp},
     scene::{
         self, BlinnPhongMaterial, CameraComp, CameraNodeID, DiffuseTexturedBlinnPhongMaterial,
-        FixedColorMaterial, InstanceFeatureManager, MaterialComp, MeshComp, ModelID,
-        ModelInstanceNodeID, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
+        FixedColorMaterial, FixedTextureMaterial, InstanceFeatureManager, MaterialComp, MeshComp,
+        ModelID, ModelInstanceNodeID, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
         VertexColorMaterial,
     },
 };
-use impact_ecs::{archetype::ComponentManager, setup, world::EntityEntry};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 
 impl Scene {
     /// Performs any modifications to the scene required to accommodate a
     /// new entity with components represented by the given component manager,
     /// and adds any additional components to the entity's components.
-    pub fn handle_entity_created(&self, component_manager: &mut ComponentManager<'_>) {
+    pub fn handle_entity_created(&self, components: &mut ArchetypeComponentStorage) {
         let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
         let mut material_library = self.material_library().write().unwrap();
 
-        VertexColorMaterial::add_material_component_for_entity(component_manager);
+        VertexColorMaterial::add_material_component_for_entity(components);
 
         FixedColorMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
-            component_manager,
+            components,
         );
+
+        FixedTextureMaterial::add_material_component_for_entity(&mut material_library, components);
 
         BlinnPhongMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
-            component_manager,
+            components,
         );
 
         DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
             &mut material_library,
-            component_manager,
+            components,
         );
 
         TexturedBlinnPhongMaterial::add_material_component_for_entity(
             &mut instance_feature_manager,
             &mut material_library,
-            component_manager,
+            components,
         );
 
         drop(material_library);
         drop(instance_feature_manager);
 
-        self.add_camera_node_component_for_entity(component_manager);
-        self.add_model_instance_node_component_for_entity(component_manager);
+        self.add_camera_node_component_for_entity(components);
+        self.add_model_instance_node_component_for_entity(components);
     }
 
     /// Performs any modifications required to clean up the scene when
@@ -61,13 +63,13 @@ impl Scene {
         drop(instance_feature_manager);
     }
 
-    fn add_camera_node_component_for_entity(&self, component_manager: &mut ComponentManager<'_>) {
+    fn add_camera_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
         setup!(
             {
                 let mut scene_graph = self.scene_graph().write().unwrap();
                 let root_node_id = scene_graph.root_node_id();
             },
-            component_manager,
+            components,
             |camera: &CameraComp,
              position: &PositionComp,
              orientation: &OrientationComp|
@@ -87,13 +89,14 @@ impl Scene {
                 self.set_active_camera(Some((camera.id, node_id)));
 
                 SceneGraphNodeComp::new(node_id)
-            }
+            },
+            ![SceneGraphNodeComp::<CameraNodeID>]
         );
     }
 
     fn add_model_instance_node_component_for_entity(
         &self,
-        component_manager: &mut ComponentManager<'_>,
+        components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
             {
@@ -103,7 +106,7 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
                 let root_node_id = scene_graph.root_node_id();
             },
-            component_manager,
+            components,
             |mesh: &MeshComp,
              material: &MaterialComp,
              position: &PositionComp,
@@ -139,7 +142,8 @@ impl Scene {
                     bounding_sphere,
                     feature_ids,
                 ))
-            }
+            },
+            ![SceneGraphNodeComp::<ModelInstanceNodeID>]
         );
     }
 

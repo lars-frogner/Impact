@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{archetype::ComponentManager, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
 
@@ -95,16 +95,16 @@ impl BlinnPhongMaterial {
         material_library.add_material_specification(*BLINN_PHONG_MATERIAL_ID, specification);
     }
 
-    /// Checks if the entity-to-be with components represented by the
-    /// given component manager has the component for this material, and
-    /// if so, registers the material in the given instance feature
-    /// manager and adds the appropriate material component to the entity.
+    /// Checks if the entity-to-be with the given components has the component
+    /// for this material, and if so, registers the material in the given
+    /// instance feature manager and adds the appropriate material component
+    /// to the entity.
     pub fn add_material_component_for_entity(
         instance_feature_manager: &mut InstanceFeatureManager,
-        component_manager: &mut ComponentManager<'_>,
+        components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
-            component_manager,
+            components,
             |blinn_phong: &BlinnPhongComp| -> MaterialComp {
                 let material = Self {
                     ambient_color: blinn_phong.ambient,
@@ -146,19 +146,18 @@ impl DiffuseTexturedBlinnPhongMaterial {
         instance_feature_manager.register_feature_type::<Self>();
     }
 
-    /// Checks if the entity-to-be with components represented by the
-    /// given component manager has the component for this material, and
-    /// if so, adds the appropriate material specification to the material
-    /// library if not present, registers the material in the given instance
-    /// feature manager and adds the appropriate material component to the
-    /// entity.
+    /// Checks if the entity-to-be with the given components has the component
+    /// for this material, and if so, adds the appropriate material
+    /// specification to the material library if not present, registers the
+    /// material in the given instance feature manager and adds the appropriate
+    /// material component to the entity.
     pub fn add_material_component_for_entity(
         instance_feature_manager: &mut InstanceFeatureManager,
         material_library: &mut MaterialLibrary,
-        component_manager: &mut ComponentManager<'_>,
+        components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
-            component_manager,
+            components,
             |blinn_phong: &DiffuseTexturedBlinnPhongComp| -> MaterialComp {
                 let texture_ids = [blinn_phong.diffuse];
 
@@ -218,19 +217,18 @@ impl TexturedBlinnPhongMaterial {
         instance_feature_manager.register_feature_type::<Self>();
     }
 
-    /// Checks if the entity-to-be with components represented by the
-    /// given component manager has the component for this material, and
-    /// if so, adds the appropriate material specification to the material
-    /// library if not present, registers the material in the given instance
-    /// feature manager and adds the appropriate material component to the
+    /// Checks if the entity-to-be with the given components has the component
+    /// for this material, and if so, adds the appropriate material specification
+    /// to the material library if not present, registers the material in the given
+    /// instance feature manager and adds the appropriate material component to the
     /// entity.
     pub fn add_material_component_for_entity(
         instance_feature_manager: &mut InstanceFeatureManager,
         material_library: &mut MaterialLibrary,
-        component_manager: &mut ComponentManager<'_>,
+        components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
-            component_manager,
+            components,
             |blinn_phong: &TexturedBlinnPhongComp| -> MaterialComp {
                 let texture_ids = [blinn_phong.diffuse, blinn_phong.specular];
 

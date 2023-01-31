@@ -12,7 +12,8 @@ use crate::{
 };
 use anyhow::Result;
 use impact_ecs::{
-    archetype::{ArchetypeCompByteView, ComponentManager},
+    archetype::ArchetypeComponents,
+    component::ComponentArray,
     world::{Entity, World as ECSWorld},
 };
 use std::{
@@ -94,22 +95,22 @@ impl World {
         &self.simulator
     }
 
-    pub fn create_entities<'a, E>(
+    pub fn create_entities<A, E>(
         &self,
-        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
     ) -> Result<Vec<Entity>>
     where
+        A: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        let mut manager =
-            ComponentManager::with_initial_components(components.try_into().map_err(E::into)?)?;
+        let mut components = components.try_into().map_err(E::into)?.into_storage();
 
         self.scene()
             .read()
             .unwrap()
-            .handle_entity_created(&mut manager);
+            .handle_entity_created(&mut components);
 
-        self.ecs_world.write().unwrap().create_entities(&manager)
+        self.ecs_world.write().unwrap().create_entities(components)
     }
 
     pub fn remove_entity(&self, entity: &Entity) -> Result<()> {

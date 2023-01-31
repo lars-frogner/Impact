@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{archetype::ComponentManager, setup};
+use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
 
@@ -63,16 +63,16 @@ impl FixedColorMaterial {
         material_library.add_material_specification(*FIXED_COLOR_MATERIAL_ID, specification);
     }
 
-    /// Checks if the entity-to-be with components represented by the
-    /// given component manager has the component for this material, and
-    /// if so, registers the material in the given instance feature
-    /// manager and adds the appropriate material component to the entity.
+    /// Checks if the entity-to-be with the given components has the component
+    /// for this material, and if so, registers the material in the given
+    /// instance feature manager and adds the appropriate material component
+    /// to the entity.
     pub fn add_material_component_for_entity(
         instance_feature_manager: &mut InstanceFeatureManager,
-        component_manager: &mut ComponentManager<'_>,
+        components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
-            component_manager,
+            components,
             |fixed_color: &FixedColorComp| -> MaterialComp {
                 let material = Self {
                     color: fixed_color.0,
@@ -100,17 +100,16 @@ impl FixedTextureMaterial {
                 MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
         });
 
-    /// Checks if the entity-to-be with components represented by the
-    /// given component manager has the component for this material, and
-    /// if so, adds the appropriate material specification to the material
-    /// library if not present and adds the appropriate material component
-    /// to the entity.
+    /// Checks if the entity-to-be with the given components has the component
+    /// for this material, and if so, adds the appropriate material specification
+    /// to the material library if not present and adds the appropriate material
+    /// component to the entity.
     pub fn add_material_component_for_entity(
         material_library: &mut MaterialLibrary,
-        component_manager: &mut ComponentManager<'_>,
+        components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
-            component_manager,
+            components,
             |fixed_texture: &FixedTextureComp| -> MaterialComp {
                 let texture_ids = [fixed_texture.0];
 

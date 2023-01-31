@@ -2,12 +2,12 @@
 
 use super::{
     component::{
-        Component, ComponentByteView, ComponentBytes, ComponentID, ComponentInstances,
-        ComponentStorage,
+        Component, ComponentArray, ComponentID, ComponentSlice, ComponentStorage, ComponentView,
     },
     world::{Entity, EntityID},
 };
 use anyhow::{anyhow, bail, Result};
+use impact_ecs_macros::archetype_of;
 use impact_utils::KeyIndexMapper;
 use paste::paste;
 use std::{
@@ -33,6 +33,103 @@ pub struct Archetype {
 /// the sorted list of component IDs defining the archetype.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ArchetypeID(u64);
+
+/// Container holding [`ComponentArray`]s for a set
+/// of components making up a specific [`Archetype`].
+///
+/// See also the type instantiations [`ArchetypeComponentView`]
+/// and [`ArchetypeComponentStorage`].
+#[derive(Debug)]
+pub struct ArchetypeComponents<A> {
+    archetype: Archetype,
+    component_index_map: KeyIndexMapper<ComponentID>,
+    component_arrays: Vec<A>,
+    component_count: usize,
+}
+
+/// Container holding [`ComponentView`]s referencing a set
+/// of components making up a specific [`Archetype`].
+///
+/// Instances of this type can be constructed conveniently
+/// by converting from a single reference or a tuple of
+/// references to anything that implements [`Component`],
+/// as shown in the example below.
+///
+/// # Example 1
+/// ```
+/// # use impact_ecs::{
+/// #    component::{Component, ComponentSlice},
+/// #    archetype::ArchetypeComponentView
+/// # };
+/// # use impact_ecs_macros::ComponentDoctest as Component;
+/// # use bytemuck::{Zeroable, Pod};
+/// # use anyhow::Error;
+/// #
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Position(f32, f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Mass(f32);
+/// #
+/// // Create instances of two components
+/// let position = Position(0.0, 0.0);
+/// let mass = Mass(5.0);
+///
+/// // We can convert from a single component..
+/// let mass_view: ArchetypeComponentView<'_> = (&mass).into();
+/// assert_eq!(mass_view.n_component_types(), 1);
+///
+/// // .. or from a tuple of multiple components..
+/// let pos_mass_view: ArchetypeComponentView<'_> = (&position, &mass).try_into()?;
+/// assert_eq!(pos_mass_view.n_component_types(), 2);
+///
+/// // .. or from an array if we first convert into `ComponentView`s
+/// let pos_mass_view: ArchetypeComponentView<'_> = [
+///     (&position).persistent_view(), (&mass).persistent_view()
+/// ].try_into()?;
+/// assert_eq!(pos_mass_view.n_component_types(), 2);
+/// #
+/// # Ok::<(), Error>(())
+/// ```
+///
+/// An `ArchetypeComponentView` may also be constructed with
+/// multiple instances of each component type, by using slices
+/// of component instances instead of references to single
+/// instances. The following example illustrates this.
+///
+/// # Example 2
+/// ```
+/// # use impact_ecs::{
+/// #    component::Component,
+/// #    archetype::ArchetypeComponentView
+/// # };
+/// # use impact_ecs_macros::ComponentDoctest as Component;
+/// # use bytemuck::{Zeroable, Pod};
+/// # use anyhow::Error;
+/// #
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Position(f32, f32);
+/// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Mass(f32);
+/// #
+/// // Create multiple instances of each of the two components
+/// let positions = [Position(0.0, 0.0), Position(2.0, 1.0), Position(6.0, 5.0)];
+/// let masses = [Mass(5.0), Mass(2.0), Mass(7.5)];
+///
+/// let pos_mass_view: ArchetypeComponentView<'_> = (&positions, &masses).try_into()?;
+/// assert_eq!(pos_mass_view.n_component_types(), 2);
+/// assert_eq!(pos_mass_view.component_count(), 3);
+/// #
+/// # Ok::<(), Error>(())
+/// ```
+pub type ArchetypeComponentView<'a> = ArchetypeComponents<ComponentView<'a>>;
+
+/// Container holding [`ComponentStorage`]s for a set
+/// of components making up a specific [`Archetype`].
+pub type ArchetypeComponentStorage = ArchetypeComponents<ComponentStorage>;
 
 /// A table holding the component data belonging to all entities
 /// with a specific archetype.
@@ -65,100 +162,6 @@ pub struct ArchetypeTable {
     component_storages: Vec<RwLock<ComponentStorage>>,
 }
 
-/// Container holding the [`ComponentBytes`] for a set of
-/// components making up a specific [`Archetype`].
-#[derive(Clone, Debug)]
-pub struct ArchetypeCompBytes {
-    archetype: Archetype,
-    component_bytes: Vec<ComponentBytes>,
-    component_count: usize,
-}
-
-/// Container holding the [`ComponentByteView`] for a set
-/// of components making up a specific [`Archetype`].
-///
-/// Instances of this type can be constructed conveniently
-/// by converting from a single reference or a tuple of
-/// references to anything that implements [`Component`],
-/// as shown in the example below.
-///
-/// # Example 1
-/// ```
-/// # use impact_ecs::{
-/// #    component::Component,
-/// #    archetype::ArchetypeCompByteView
-/// # };
-/// # use impact_ecs_macros::ComponentDoctest;
-/// # use bytemuck::{Zeroable, Pod};
-/// # use anyhow::Error;
-/// #
-/// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
-/// # struct Position(f32, f32);
-/// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
-/// # struct Mass(f32);
-/// #
-/// // Create instances of two components
-/// let position = Position(0.0, 0.0);
-/// let mass = Mass(5.0);
-///
-/// // We can convert from a single component..
-/// let mass_bytes: ArchetypeCompByteView = (&mass).into();
-/// assert_eq!(mass_bytes.n_component_types(), 1);
-///
-/// // .. or from a tuple of multiple components..
-/// let pos_mass_bytes: ArchetypeCompByteView = (&position, &mass).try_into()?;
-/// assert_eq!(pos_mass_bytes.n_component_types(), 2);
-///
-/// // .. or from an array if we use views to the raw bytes
-/// let pos_mass_bytes: ArchetypeCompByteView = [
-///     position.component_bytes(), mass.component_bytes()
-/// ].try_into()?;
-/// assert_eq!(pos_mass_bytes.n_component_types(), 2);
-/// #
-/// # Ok::<(), Error>(())
-/// ```
-///
-/// An `ArchetypeCompByteView` may also be constructed with
-/// multiple instances of each component type, by using slices
-/// of component instances instead of references to single
-/// instances. The following example illustrates this.
-///
-/// # Example 2
-/// ```
-/// # use impact_ecs::{
-/// #    component::Component,
-/// #    archetype::ArchetypeCompByteView
-/// # };
-/// # use impact_ecs_macros::ComponentDoctest;
-/// # use bytemuck::{Zeroable, Pod};
-/// # use anyhow::Error;
-/// #
-/// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
-/// # struct Position(f32, f32);
-/// # #[repr(C)]
-/// # #[derive(Clone, Copy, Zeroable, Pod, ComponentDoctest)]
-/// # struct Mass(f32);
-/// #
-/// // Create multiple instances of each of the two components
-/// let positions = [Position(0.0, 0.0), Position(2.0, 1.0), Position(6.0, 5.0)];
-/// let masses = [Mass(5.0), Mass(2.0), Mass(7.5)];
-///
-/// let pos_mass_bytes: ArchetypeCompByteView = (&positions, &masses).try_into()?;
-/// assert_eq!(pos_mass_bytes.n_component_types(), 2);
-/// assert_eq!(pos_mass_bytes.component_count(), 3);
-/// #
-/// # Ok::<(), Error>(())
-/// ```
-#[derive(Clone, Debug)]
-pub struct ArchetypeCompByteView<'a> {
-    archetype: Archetype,
-    component_bytes: Vec<ComponentByteView<'a>>,
-    component_count: usize,
-}
-
 /// An immutable reference into the entry for an
 /// [`Entity`](crate::world::Entity) in an [`ArchetypeTable`].
 #[derive(Debug)]
@@ -185,14 +188,28 @@ struct TableEntityEntryInfo<'a> {
     component_index_map: &'a HashMap<ComponentID, usize>,
 }
 
-/// Wrapper enabling an initial [`ArchetypeCompByteView`] to be
-/// queried for components and extended with additional component
-/// types.
-#[derive(Clone, Debug)]
-pub struct ComponentManager<'a> {
-    initial_components: ArchetypeCompByteView<'a>,
-    component_index_map: HashMap<ComponentID, usize>,
-    extra_components: Vec<ComponentStorage>,
+/// Immutable reference to the entry for a specific component
+/// instance in a [`ComponentStorage`]
+#[derive(Debug)]
+pub struct ComponentStorageEntry<'a, C> {
+    entity_idx: usize,
+    storage: RwLockReadGuard<'a, ComponentStorage>,
+    _phantom: PhantomData<C>,
+}
+
+/// Mutable reference to the entry for a specific component
+/// instance in a [`ComponentStorage`]
+#[derive(Debug)]
+pub struct ComponentStorageEntryMut<'a, C> {
+    entity_idx: usize,
+    storage: RwLockWriteGuard<'a, ComponentStorage>,
+    _phantom: PhantomData<C>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum InclusionResult {
+    Added,
+    Overwritten,
 }
 
 impl Archetype {
@@ -283,37 +300,286 @@ impl PartialEq for Archetype {
     }
 }
 
-/// Immutable reference to the entry for a specific component
-/// instance in a [`ComponentStorage`]
-#[derive(Debug)]
-pub struct ComponentStorageEntry<'a, C> {
-    entity_idx: usize,
-    storage: RwLockReadGuard<'a, ComponentStorage>,
-    _phantom: PhantomData<C>,
+impl<A> ArchetypeComponents<A>
+where
+    A: ComponentArray,
+{
+    fn new(archetype: Archetype, component_arrays: Vec<A>, component_count: usize) -> Self {
+        let component_index_map =
+            KeyIndexMapper::new_with_keys(component_arrays.iter().map(A::component_id));
+
+        Self {
+            archetype,
+            component_index_map,
+            component_arrays,
+            component_count,
+        }
+    }
+
+    /// Creates a new empty [`ArchetypeComponents`] value.
+    pub fn empty() -> Self {
+        Self {
+            archetype: archetype_of!(),
+            component_index_map: KeyIndexMapper::new(),
+            component_arrays: Vec::new(),
+            component_count: 0,
+        }
+    }
+
+    /// Returns the archetype corresponding to the set of
+    /// contained component types.
+    pub fn archetype(&self) -> &Archetype {
+        &self.archetype
+    }
+
+    /// Returns the number of contained component types.
+    pub fn n_component_types(&self) -> usize {
+        self.archetype.n_components()
+    }
+
+    /// Whether there is a contained component of type `C`.
+    pub fn has_component_type<C: Component>(&self) -> bool {
+        self.component_index_map.contains_key(C::component_id())
+    }
+
+    /// Returns the number of instances of each contained
+    /// component type.
+    pub fn component_count(&self) -> usize {
+        self.component_count
+    }
+
+    /// Returns a slice with all the contained instances of
+    /// component type `C`.
+    ///
+    /// # Panics
+    /// If none of the contained components are of type `C`.
+    pub fn components_of_type<C: Component>(&self) -> &[C] {
+        let component_idx = self
+            .component_index_map
+            .get(C::component_id())
+            .expect("Requested invalid component");
+
+        self.component_arrays[component_idx]
+            .view()
+            .component_instances()
+    }
+
+    /// Includes the given array of component instances of a new
+    /// type in the set of contained components. Note that this
+    /// changes the corresponding archetype.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The type of the given component instances is already
+    ///   present.
+    /// - The number of component instances differs between
+    ///   the new and the existing component types.
+    pub fn add_new_component_type(&mut self, component_array: A) -> Result<()> {
+        self.add_new_component_type_without_updating_archetype(component_array)?;
+        self.archetype = Self::find_archetype(&self.component_arrays);
+        Ok(())
+    }
+
+    /// Includes each given array of component instance in the
+    /// set of contained components, overwriting the existing
+    /// instances if the same component type is already present.
+    /// Note that the corresponding archetype will change if any
+    /// new component types are added.
+    ///
+    /// # Errors
+    /// Returns an error if the number of component instances
+    /// differs between the new and the existing component types.
+    ///
+    /// Even if including some of the component arrays fails, all
+    /// the other component arrays will still be included.
+    pub fn add_or_overwrite_component_types(
+        &mut self,
+        component_arrays: impl IntoIterator<Item = A>,
+    ) -> Result<()> {
+        let mut must_update_archetype = false;
+        let mut result = Ok(());
+
+        for component_array in component_arrays {
+            match self.add_or_overwrite_component_type_without_updating_archetype(component_array) {
+                Ok(InclusionResult::Added) => {
+                    must_update_archetype = true;
+                }
+                Ok(InclusionResult::Overwritten) => {}
+                Err(error) => {
+                    result = Err(error);
+                }
+            }
+        }
+
+        if must_update_archetype {
+            self.archetype = Self::find_archetype(&self.component_arrays);
+        }
+
+        result
+    }
+
+    /// Removes all the instances for the component type with
+    /// the given ID. Note that this changes the corresponding
+    /// archetype.
+    ///
+    /// # Errors
+    /// Returns an error if the component type to remove is
+    /// not present.
+    pub fn remove_component_type_with_id(&mut self, component_id: ComponentID) -> Result<()> {
+        let idx = self
+            .component_index_map
+            .try_swap_remove_key(component_id)
+            .map_err(|_err| anyhow!("Tried to remove missing component type"))?;
+
+        self.component_arrays.swap_remove(idx);
+
+        // Update archetype
+        self.archetype = Self::find_archetype(&self.component_arrays);
+
+        Ok(())
+    }
+
+    /// Consumes this container and returns an iterator over
+    /// all the contained [`ComponentArray`]s.
+    pub fn into_component_arrays(self) -> impl IntoIterator<Item = A> {
+        self.component_arrays.into_iter()
+    }
+
+    /// Converts all the contained component arrays into
+    /// [`ComponentStorage`]s and returns them in a new
+    /// [`ArchetypeComponentStorage`].
+    pub fn into_storage(self) -> ArchetypeComponentStorage {
+        let Self {
+            archetype,
+            component_index_map,
+            component_arrays,
+            component_count,
+        } = self;
+
+        ArchetypeComponents {
+            archetype,
+            component_index_map,
+            component_arrays: component_arrays
+                .into_iter()
+                .map(ComponentArray::into_storage)
+                .collect(),
+            component_count,
+        }
+    }
+
+    fn add_new_component_type_without_updating_archetype(
+        &mut self,
+        component_array: A,
+    ) -> Result<()> {
+        let component_count = component_array.component_count();
+
+        if !self.component_arrays.is_empty() && (component_count != self.component_count()) {
+            bail!("Inconsistent number of component instances in added component data");
+        }
+
+        self.component_index_map
+            .try_push_key(component_array.component_id())
+            .map_err(|_err| anyhow!("Tried to add component type that already exists"))?;
+
+        self.component_arrays.push(component_array);
+
+        self.component_count = component_count;
+
+        Ok(())
+    }
+
+    fn add_or_overwrite_component_type_without_updating_archetype(
+        &mut self,
+        component_array: A,
+    ) -> Result<InclusionResult> {
+        let component_count = component_array.component_count();
+
+        if !self.component_arrays.is_empty() && (component_count != self.component_count()) {
+            bail!("Inconsistent number of component instances in added component data");
+        }
+
+        match self
+            .component_index_map
+            .try_push_key(component_array.component_id())
+        {
+            Ok(_) => {
+                self.component_arrays.push(component_array);
+                self.component_count = component_count;
+                Ok(InclusionResult::Added)
+            }
+            Err(idx) => {
+                self.component_arrays[idx] = component_array;
+                Ok(InclusionResult::Overwritten)
+            }
+        }
+    }
+
+    fn find_archetype(component_arrays: &[A]) -> Archetype {
+        let mut component_ids: Vec<_> = component_arrays.iter().map(A::component_id).collect();
+        component_ids.sort();
+        Archetype::new_from_sorted_component_ids_unchecked(&component_ids)
+    }
 }
 
-/// Mutable reference to the entry for a specific component
-/// instance in a [`ComponentStorage`]
-#[derive(Debug)]
-pub struct ComponentStorageEntryMut<'a, C> {
-    entity_idx: usize,
-    storage: RwLockWriteGuard<'a, ComponentStorage>,
-    _phantom: PhantomData<C>,
+impl ArchetypeComponentStorage {
+    /// Creates a new [`ArchetypeComponentStorage`] storing the data
+    /// of the given value that may be convertible into an
+    /// [`ArchetypeComponentView`].
+    ///
+    /// # Errors
+    /// Returns an error if the conversion of the input value into
+    /// [`ArchetypeComponentView`] fails.
+    pub fn try_from_view<'a, E>(
+        view: impl TryInto<ArchetypeComponentView<'a>, Error = E>,
+    ) -> Result<Self>
+    where
+        E: Into<anyhow::Error>,
+    {
+        view.try_into()
+            .map(|view| view.into_storage())
+            .map_err(E::into)
+    }
+
+    /// Creates a new [`ArchetypeComponentStorage`] storing the data
+    /// of the given value that is convertible into an
+    /// [`ArchetypeComponentView`].
+    pub fn from_view<'a, V>(view: V) -> Self
+    where
+        V: Into<ArchetypeComponentView<'a>>,
+    {
+        view.into().into_storage()
+    }
+
+    /// Creates an empty [`ComponentStorage`] for components
+    /// of type `C`, with preallocated capacity for the same
+    /// number of component instances as contained here.
+    ///
+    /// This is a useful starting point when we want to add a
+    /// storage for a new component type.
+    pub fn new_storage_with_capacity<C: Component>(&self) -> ComponentStorage {
+        ComponentStorage::with_capacity::<C>(self.component_count)
+    }
+}
+
+impl<'a> From<ArchetypeComponentView<'a>> for ArchetypeComponentStorage {
+    fn from(view: ArchetypeComponentView<'a>) -> Self {
+        view.into_storage()
+    }
 }
 
 impl ArchetypeTable {
-    /// Takes an iterable of [`EntityID`]s and references to all the
-    /// associated component data (as an [`ArchetypeCompByteView`]),
-    /// initializes a table for the corresponding [`Archetype`] and
-    /// inserts the given data, one row per entity.
+    /// Takes an iterable of [`EntityID`]s and all the associated
+    /// component data (as an [`ArchetypeComponents`]), initializes
+    /// a table for the corresponding [`Archetype`] and inserts the
+    /// given data, one row per entity.
     ///
     /// # Panics
     /// - If the number of entities differs from the number of instances
-    /// of each component type.
+    ///   of each component type.
     /// - If any of the entity IDs are equal.
     pub(crate) fn new_with_entities(
         entity_ids: impl IntoIterator<Item = EntityID>,
-        components: ArchetypeCompByteView<'_>,
+        components: ArchetypeComponents<impl ComponentArray>,
     ) -> Self {
         // Initialize mapper between entity ID and index in component storages
         let entity_index_mapper = KeyIndexMapper::new_with_keys(entity_ids);
@@ -344,19 +610,19 @@ impl ArchetypeTable {
             .map(|entity_id| Entity::new(entity_id, self.archetype().id()))
     }
 
-    /// Takes an iterable of [`EntityID`]s and references to all the
-    /// associated component data (as an [`ArchetypeCompByteView`])
-    /// and appends the given data to the table, one row per entity.
+    /// Takes an iterable of [`EntityID`]s and all the associated
+    /// component data (as an [`ArchetypeComponents`]) and appends
+    /// the given data to the table, one row per entity.
     ///
     /// # Panics
     /// - If the number of entities differs from the number of instances
-    /// of each component type.
+    ///   of each component type.
     /// - If any of the given entity IDs are equal to a new or existing
-    /// entity ID.
+    ///   entity ID.
     pub(crate) fn add_entities(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
-        components: ArchetypeCompByteView<'_>,
+        components: ArchetypeComponents<impl ComponentArray>,
     ) {
         let original_entity_count = self.entity_index_mapper.len();
         self.entity_index_mapper.push_keys(entity_ids);
@@ -366,21 +632,27 @@ impl ArchetypeTable {
             "Number of components per component type differs from number of entities"
         );
 
-        self.component_storages
-            .iter()
-            .zip(components.component_bytes.into_iter())
-            .for_each(|(storage, data)| storage.write().unwrap().push_bytes(data));
+        for array in components.into_component_arrays() {
+            let storage_idx = self.component_index_map[&array.component_id()];
+            self.component_storages[storage_idx]
+                .write()
+                .unwrap()
+                .push_array(&array);
+        }
     }
 
     /// Removes the entity with the given [`EntityID`] and all its
     /// data from the table.
     ///
     /// # Returns
-    /// The removed component data.
+    /// The removed component data in an [`ArchetypeComponentStorage`].
     ///
     /// # Errors
     /// Returns an error if the entity is not present in the table.
-    pub(crate) fn remove_entity(&mut self, entity_id: EntityID) -> Result<ArchetypeCompBytes> {
+    pub(crate) fn remove_entity(
+        &mut self,
+        entity_id: EntityID,
+    ) -> Result<ArchetypeComponentStorage> {
         if !self.has_entity(entity_id) {
             bail!("Entity to remove not present in archetype table");
         }
@@ -391,17 +663,17 @@ impl ArchetypeTable {
         let idx = self.entity_index_mapper.swap_remove_key(entity_id);
 
         // Perform an equivalent swap remove of the data at the index we found
-        let removed_component_bytes = self
+        let removed_component_arrays = self
             .component_storages
             .iter()
-            .map(|storage| storage.write().unwrap().swap_remove_bytes(idx))
+            .map(|storage| storage.write().unwrap().swap_remove(idx))
             .collect();
 
-        Ok(ArchetypeCompBytes {
-            archetype: self.archetype.clone(),
-            component_bytes: removed_component_bytes,
-            component_count: 1,
-        })
+        Ok(ArchetypeComponents::new(
+            self.archetype.clone(),
+            removed_component_arrays,
+            1,
+        ))
     }
 
     /// Returns a reference to the component of the type specified
@@ -557,13 +829,12 @@ impl ArchetypeTable {
 
     fn new_with_entity_index_mapper(
         entity_index_mapper: KeyIndexMapper<EntityID>,
-        components: ArchetypeCompByteView<'_>,
+        components: ArchetypeComponents<impl ComponentArray>,
     ) -> Self {
-        let component_index_map = components.create_component_index_map();
-
-        let ArchetypeCompByteView {
+        let ArchetypeComponents {
             archetype,
-            component_bytes,
+            component_index_map,
+            component_arrays,
             component_count,
         } = components;
 
@@ -575,11 +846,11 @@ impl ArchetypeTable {
         Self {
             archetype,
             entity_index_mapper,
-            component_index_map,
-            // Initialize storages with component data for the provided entity
-            component_storages: component_bytes
+            component_index_map: component_index_map.into_map(),
+            // Create storages with component data for the provided entity
+            component_storages: component_arrays
                 .into_iter()
-                .map(|bytes| RwLock::new(ComponentStorage::new_from_byte_view(bytes)))
+                .map(|array| RwLock::new(array.into_storage()))
                 .collect(),
         }
     }
@@ -738,244 +1009,22 @@ where
     }
 }
 
-impl ArchetypeCompBytes {
-    /// Returns the unique ID for the archetype corresponding
-    /// to the set of components whose bytes are stored here.
-    pub fn archetype_id(&self) -> ArchetypeID {
-        self.archetype.id()
-    }
-
-    /// Returns the number of component types present in the bytes
-    /// stored here.
-    pub fn n_component_types(&self) -> usize {
-        self.archetype.n_components()
-    }
-
-    /// Returns the number of instances of each component type
-    /// present in the bytes stored here.
-    pub fn component_count(&self) -> usize {
-        self.component_count
-    }
-
-    /// Returns an [`ArchetypeCompByteView`] referencing the component
-    /// bytes.
-    pub fn as_ref(&self) -> ArchetypeCompByteView<'_> {
-        ArchetypeCompByteView {
-            archetype: self.archetype.clone(),
-            component_bytes: self
-                .component_bytes
-                .iter()
-                .map(ComponentBytes::as_ref)
-                .collect(),
-            component_count: self.component_count(),
-        }
-    }
-}
-
-impl<'a> ArchetypeCompByteView<'a> {
-    /// Returns the archetype corresponding to the set of
-    /// components whose bytes are referenced here.
-    pub fn archetype(&self) -> &Archetype {
-        &self.archetype
-    }
-
-    /// Returns the number of component types present in the bytes
-    /// referenced here.
-    pub fn n_component_types(&self) -> usize {
-        self.archetype.n_components()
-    }
-
-    /// Returns the number of instances of each component type
-    /// present in the bytes referenced here.
-    pub fn component_count(&self) -> usize {
-        self.component_count
-    }
-
-    /// Returns a slice of the [`ComponentByteView`]s referencing
-    /// the component data.
-    pub(crate) fn bytes(&self) -> &[ComponentByteView<'_>] {
-        &self.component_bytes
-    }
-
-    /// Includes the given component in the set of components
-    /// whose bytes are referenced here. Note that this changes
-    /// the corresponding archetype.
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - The type of the given component is already present.
-    /// - The number of component instances differs between
-    /// the new and the existing component types.
-    pub(crate) fn add_new_component(
-        &mut self,
-        component_bytes: ComponentByteView<'a>,
-    ) -> Result<()> {
-        if self.component_bytes.is_empty() {
-            self.component_count = component_bytes.component_count();
-        } else if component_bytes.component_count() != self.component_count() {
-            bail!("Inconsistent number of component instances in added component data");
-        }
-
-        // Find where to insert the given component to keep
-        // the components sorted by ID
-        match self.component_bytes.binary_search_by_key(
-            &component_bytes.component_id(),
-            ComponentByteView::component_id,
-        ) {
-            // Panic if the component is already present, otherwise insert
-            // at the correct position
-            Ok(_) => {
-                bail!("Component already exists for archetype")
-            }
-            Err(idx) => self.component_bytes.insert(idx, component_bytes),
-        }
-
-        // Update archetype
-        self.archetype = Self::find_archetype_from_sorted_components(&self.component_bytes);
-
-        Ok(())
-    }
-
-    /// Removes the component with the given ID from the set
-    /// of components whose bytes are referenced here. Note
-    /// that this changes the corresponding archetype.
-    ///
-    /// # Errors
-    /// Returns an error if the component type to remove is
-    /// not present.
-    pub(crate) fn remove_component_with_id(&mut self, component_id: ComponentID) -> Result<()> {
-        let idx = self
-            .component_bytes
-            .binary_search_by_key(&component_id, ComponentByteView::component_id)
-            .map_err(|_idx| anyhow!("Tried to remove missing component"))?;
-
-        self.component_bytes.remove(idx);
-
-        // Update archetype
-        self.archetype = Self::find_archetype_from_sorted_components(&self.component_bytes);
-
-        Ok(())
-    }
-
-    pub(crate) fn create_component_index_map(&self) -> HashMap<ComponentID, usize> {
-        // For component IDs we don't need a full `KeyIndexMapper`, so we just
-        // unwrap to the underlying `HashMap`
-        KeyIndexMapper::new_with_keys(
-            self.component_bytes
-                .iter()
-                .map(ComponentByteView::component_id),
-        )
-        .into_map()
-    }
-
-    fn find_archetype_from_sorted_components(
-        component_data: &[ComponentByteView<'a>],
-    ) -> Archetype {
-        let component_ids: Vec<_> = component_data
-            .iter()
-            .map(ComponentByteView::component_id)
-            .collect();
-        Archetype::new_from_sorted_component_ids_unchecked(&component_ids)
-    }
-}
-
-impl<'a> ComponentManager<'a> {
-    /// Creates a new [`ComponentManager`] with the given initial components.
-    pub fn with_initial_components<E>(
-        components: impl TryInto<ArchetypeCompByteView<'a>, Error = E>,
-    ) -> Result<Self>
-    where
-        E: Into<anyhow::Error>,
-    {
-        let components = components.try_into().map_err(E::into)?;
-        let component_index_map = components.create_component_index_map();
-        Ok(Self {
-            initial_components: components,
-            component_index_map,
-            extra_components: Vec::new(),
-        })
-    }
-
-    /// Returns the archetype for the initial set of component types.
-    pub fn initial_archetype(&self) -> &Archetype {
-        self.initial_components.archetype()
-    }
-
-    /// Returns a slice of all the instances of the initial
-    /// component of type `C`.
-    ///
-    /// # Panics
-    /// If `C` is not one of the initial components.
-    pub fn initial_components<C: Component>(&self) -> &[C] {
-        let component_idx = *self
-            .component_index_map
-            .get(&C::component_id())
-            .expect("Requested invalid component");
-        self.initial_components.bytes()[component_idx].slice()
-    }
-
-    /// Returns the number of instances of each initial component
-    /// type present.
-    pub fn initial_component_count(&self) -> usize {
-        self.initial_components.component_count()
-    }
-
-    /// Creates an empty [`ComponentStorage`] for components
-    /// of type `C`, with preallocated capacity for the same
-    /// number of component instances as the initial components.
-    pub fn new_storage<C: Component>(&self) -> ComponentStorage {
-        ComponentStorage::with_capacity::<C>(self.initial_components.component_count())
-    }
-
-    /// Creates a new [`ArchetypeCompByteView`] referencing both the
-    /// initial components and the extra components added with [`extend`].
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - Any of the extra and initial component types occurs
-    /// multiple times.
-    /// - The number of component instances differs between
-    /// any of the extra and initial component types.
-    pub fn all_components(&'a self) -> Result<ArchetypeCompByteView<'a>> {
-        let mut components = self.initial_components.clone();
-        for storage in &self.extra_components {
-            components.add_new_component(storage.byte_view())?;
-        }
-        Ok(components)
-    }
-
-    /// Includes the given [`ComponentStorage`]s as extra components.
-    pub fn add_extra_components(&mut self, components: impl IntoIterator<Item = ComponentStorage>) {
-        self.extra_components.extend(components);
-    }
-}
-
-impl<'a> TryFrom<&'a ComponentManager<'a>> for ArchetypeCompByteView<'a> {
+// Implement `TryFrom` so that an array of `ComponentArray`s can
+// be converted into an `ArchetypeComponents`.
+impl<A, const N: usize> TryFrom<[A; N]> for ArchetypeComponents<A>
+where
+    A: ComponentArray,
+{
     type Error = anyhow::Error;
 
-    fn try_from(accumulator: &'a ComponentManager<'a>) -> Result<Self> {
-        accumulator.all_components()
-    }
-}
-
-// Implement `TryFrom` so that an array of `ComponentByteView`s can
-// be converted into an `ArchetypeCompByteView`.
-impl<'a, const N: usize> TryFrom<[ComponentByteView<'a>; N]> for ArchetypeCompByteView<'a> {
-    type Error = anyhow::Error;
-
-    fn try_from(mut component_data: [ComponentByteView<'a>; N]) -> Result<Self> {
+    fn try_from(component_arrays: [A; N]) -> Result<Self> {
         // Find the number of component instances and check that this is the
         // same for all the component types
-        let mut component_iter = component_data.iter();
-        let component_count = component_iter
-            .next()
-            .map_or(0, ComponentByteView::component_count);
-        if component_iter.any(|view| view.component_count() != component_count) {
+        let mut component_iter = component_arrays.iter();
+        let component_count = component_iter.next().map_or(0, A::component_count);
+        if component_iter.any(|array| array.component_count() != component_count) {
             bail!("The number of component instances differs between component types");
         }
-
-        // Make sure components are sorted by id
-        component_data.sort_by_key(|data| data.component_id());
 
         // Use arbitrary type ID to initialize array for component IDs
         // (will be overwritten)
@@ -985,84 +1034,87 @@ impl<'a, const N: usize> TryFrom<[ComponentByteView<'a>; N]> for ArchetypeCompBy
         // Populate array of component IDs
         component_ids
             .iter_mut()
-            .zip(component_data.iter())
-            .for_each(|(id, data)| *id = data.component_id());
+            .zip(component_arrays.iter())
+            .for_each(|(id, array)| *id = array.component_id());
+
+        // Make sure components IDs are sorted before determining archetype
+        component_ids.sort();
 
         let archetype = Archetype::new_from_sorted_component_id_arr(component_ids)?;
 
-        Ok(Self {
+        Ok(Self::new(
             archetype,
-            component_bytes: component_data.to_vec(),
+            component_arrays.to_vec(),
             component_count,
-        })
+        ))
     }
 }
 
 /// Macro for implementing [`From<C>`] or [`TryFrom<C>`] for
-/// [`ArchetypeCompByteView`], where `C` respectively is a single
+/// [`ArchetypeComponentView`], where `C` respectively is a single
 /// [`Component`] reference/slice or tuple of references/slices.
 macro_rules! impl_archetype_conversion {
     ($c:ident) => {
         // For a single instance of a single component type
-        impl<'a, $c> From<&'a $c> for ArchetypeCompByteView<'a>
+        impl<'a, $c> From<&'a $c> for ArchetypeComponentView<'a>
         where
             $c: 'a + Component,
         {
             fn from(component: &'a $c) -> Self {
-                [component.component_bytes()].try_into().unwrap()
+                [component.persistent_view()].try_into().unwrap()
             }
         }
         // For a a slice of instances of a single component type
-        impl<'a, $c> From<&'a [$c]> for ArchetypeCompByteView<'a>
+        impl<'a, $c> From<&'a [$c]> for ArchetypeComponentView<'a>
         where
             $c: 'a + Component,
         {
             fn from(component_slice: &'a [$c]) -> Self {
-                [component_slice.component_bytes()].try_into().unwrap()
+                [component_slice.persistent_view()].try_into().unwrap()
             }
         }
         // For a fixed length slice of instances of a single component type
-        impl<'a, const N: usize, $c> From<&'a [$c; N]> for ArchetypeCompByteView<'a>
+        impl<'a, const N: usize, $c> From<&'a [$c; N]> for ArchetypeComponentView<'a>
         where
             $c: 'a + Component,
         {
             fn from(component_slice: &'a [$c; N]) -> Self {
-                [component_slice.component_bytes()].try_into().unwrap()
+                [component_slice.persistent_view()].try_into().unwrap()
             }
         }
     };
     (($($c:ident),*)) => {
         // For single instances of multiple component types
-        impl<'a, $($c),*> TryFrom<($(&'a $c),*)> for ArchetypeCompByteView<'a>
+        impl<'a, $($c),*> TryFrom<($(&'a $c),*)> for ArchetypeComponentView<'a>
         where
         $($c: 'a + Component,)*
         {
             type Error = anyhow::Error;
             #[allow(non_snake_case)]
             fn try_from(($(paste! { [<component_ $c>] }),*): ($(&'a $c),*)) -> Result<Self> {
-                [$(paste! { [<component_ $c>] }.component_bytes()),*].try_into()
+                [$(paste! { [<component_ $c>] }.persistent_view()),*].try_into()
             }
         }
         // For slices of instances of multiple component types
-        impl<'a, $($c),*> TryFrom<($(&'a [$c]),*)> for ArchetypeCompByteView<'a>
+        impl<'a, $($c),*> TryFrom<($(&'a [$c]),*)> for ArchetypeComponentView<'a>
         where
         $($c: 'a + Component,)*
         {
             type Error = anyhow::Error;
             #[allow(non_snake_case)]
             fn try_from(($(paste! { [<component_slice_ $c>] }),*): ($(&'a [$c]),*)) -> Result<Self> {
-                [$(paste! { [<component_slice_ $c>] }.component_bytes()),*].try_into()
+                [$(paste! { [<component_slice_ $c>] }.persistent_view()),*].try_into()
             }
         }
         // For fixed size slices of instances of multiple component types
-        impl<'a, const N: usize, $($c),*> TryFrom<($(&'a [$c; N]),*)> for ArchetypeCompByteView<'a>
+        impl<'a, const N: usize, $($c),*> TryFrom<($(&'a [$c; N]),*)> for ArchetypeComponentView<'a>
         where
         $($c: 'a + Component,)*
         {
             type Error = anyhow::Error;
             #[allow(non_snake_case)]
             fn try_from(($(paste! { [<component_slice_ $c>] }),*): ($(&'a [$c; N]),*)) -> Result<Self> {
-                [$(paste! { [<component_slice_ $c>] }.component_bytes()),*].try_into()
+                [$(paste! { [<component_slice_ $c>] }.persistent_view()),*].try_into()
             }
         }
     };
@@ -1085,11 +1137,11 @@ mod test {
     };
     use bytemuck::{Pod, Zeroable};
 
-    #[repr(C)]
+    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Marked;
 
-    #[repr(C)]
+    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     struct Byte(u8);
 
@@ -1105,7 +1157,9 @@ mod test {
     }
 
     const BYTE: Byte = Byte(42);
+    const BYTE2: Byte = Byte(11);
     const POS: Position = Position(-9.8, 12.5, 7.3);
+    const POS2: Position = Position(-0.01, 6.6, 22.3);
     const RECT: Rectangle = Rectangle {
         center: [2.5, 2.0],
         dimensions: [12.3, 8.9],
@@ -1163,346 +1217,600 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn conversion_of_two_comp_array_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView<'_> = [BYTE.component_bytes(), BYTE.component_bytes()]
+    fn conversion_of_two_comp_array_with_two_equal_comps_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = [(&BYTE).view(), (&BYTE).view()].try_into().unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn conversion_of_two_comp_array_with_two_equal_comp_slices_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = [(&[BYTE, BYTE]).view(), (&[BYTE, BYTE]).view()]
             .try_into()
             .unwrap();
     }
 
     #[test]
     #[should_panic]
-    fn conversion_of_three_comp_array_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView<'_> = [
-            BYTE.component_bytes(),
-            POS.component_bytes(),
-            BYTE.component_bytes(),
-        ]
-        .try_into()
-        .unwrap();
-    }
-
-    #[test]
-    fn valid_conversion_of_comp_byte_arrays_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!());
-
-        let view: ArchetypeCompByteView<'_> = [Marked.component_bytes()].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Marked));
-
-        let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes()].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte));
-
-        let view: ArchetypeCompByteView<'_> = [BYTE.component_bytes(), POS.component_bytes()]
+    fn conversion_of_three_comp_array_with_two_equal_comps_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = [(&BYTE).view(), (&POS).view(), (&BYTE).view()]
             .try_into()
             .unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
-
-        let view: ArchetypeCompByteView<'_> = [
-            BYTE.component_bytes(),
-            POS.component_bytes(),
-            RECT.component_bytes(),
-        ]
-        .try_into()
-        .unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position, Rectangle));
     }
 
     #[test]
-    fn valid_conversion_of_comp_slice_byte_arrays_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView<'_> = [(&[Marked]).component_bytes()].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Marked));
-
-        let view: ArchetypeCompByteView<'_> =
-            [(&[Marked, Marked]).component_bytes()].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Marked));
-
-        let view: ArchetypeCompByteView<'_> = [(&[BYTE]).component_bytes()].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte));
-
-        let view: ArchetypeCompByteView<'_> =
-            [(&[BYTE, BYTE]).component_bytes()].try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte));
-
-        let view: ArchetypeCompByteView<'_> =
-            [(&[BYTE]).component_bytes(), (&[POS]).component_bytes()]
-                .try_into()
-                .unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
-
-        let view: ArchetypeCompByteView<'_> = [
-            (&[BYTE, BYTE]).component_bytes(),
-            (&[POS, POS]).component_bytes(),
+    #[should_panic]
+    fn conversion_of_three_comp_array_with_two_equal_comp_slices_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = [
+            (&[BYTE, BYTE]).view(),
+            (&[POS, POS]).view(),
+            (&[BYTE, BYTE]).view(),
         ]
         .try_into()
         .unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
     }
 
     #[test]
-    fn order_of_comps_for_byte_view_does_not_matter() {
-        let view_1: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
-        let view_2: ArchetypeCompByteView<'_> = (&POS, &BYTE, &RECT).try_into().unwrap();
-        let view_3: ArchetypeCompByteView<'_> = (&RECT, &BYTE, &POS).try_into().unwrap();
+    fn creating_empty_archetype_view_works() {
+        let view = ArchetypeComponentView::empty();
+        assert_eq!(view.archetype(), &archetype_of!());
+        assert_eq!(view.n_component_types(), 0);
+        assert_eq!(view.component_count(), 0);
+    }
+
+    #[test]
+    fn valid_conversions_of_comp_view_arrays_to_archetype_views_succeed() {
+        let view: ArchetypeComponentView<'_> = [].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!());
+        assert_eq!(view.n_component_types(), 0);
+        assert_eq!(view.component_count(), 0);
+
+        let view: ArchetypeComponentView<'_> = [(&Marked).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Marked>());
+
+        let view: ArchetypeComponentView<'_> = [(&BYTE).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+
+        let view: ArchetypeComponentView<'_> = [(&BYTE).view(), (&POS).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
+        let view: ArchetypeComponentView<'_> = [(&BYTE).view(), (&POS).view(), (&RECT).view()]
+            .try_into()
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn valid_conversions_of_comp_slice_view_arrays_to_archetype_views_succeed() {
+        let view: ArchetypeComponentView<'_> = [(&[Marked]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Marked>());
+
+        let view: ArchetypeComponentView<'_> = [(&[Marked, Marked]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Marked>());
+
+        let view: ArchetypeComponentView<'_> = [(&[BYTE]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+
+        let view: ArchetypeComponentView<'_> = [(&[BYTE, BYTE2]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+
+        let view: ArchetypeComponentView<'_> =
+            [(&[BYTE]).view(), (&[POS]).view()].try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
+        let view: ArchetypeComponentView<'_> = [(&[BYTE, BYTE2]).view(), (&[POS, POS2]).view()]
+            .try_into()
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+    }
+
+    #[test]
+    fn order_of_comps_for_archetype_view_does_not_matter() {
+        let view_1: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        let view_2: ArchetypeComponentView<'_> = (&POS, &BYTE, &RECT).try_into().unwrap();
+        let view_3: ArchetypeComponentView<'_> = (&RECT, &BYTE, &POS).try_into().unwrap();
         assert_eq!(view_2.archetype, view_1.archetype);
         assert_eq!(view_3.archetype, view_1.archetype);
     }
 
     #[test]
     #[should_panic]
-    fn conversion_of_two_comp_tuple_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView<'_> = (&POS, &POS).try_into().unwrap();
+    fn conversion_of_two_comp_tuple_with_two_equal_comps_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = (&POS, &POS).try_into().unwrap();
     }
 
     #[test]
     #[should_panic]
-    fn conversion_of_three_comp_tuple_with_two_equal_comps_to_byte_view_fails() {
-        let _: ArchetypeCompByteView<'_> = (&POS, &BYTE, &POS).try_into().unwrap();
+    fn conversion_of_two_comp_tuple_with_two_equal_comp_slices_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = (&[POS, POS], &[POS, POS]).try_into().unwrap();
     }
 
     #[test]
-    fn valid_conversion_of_comp_tuples_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView<'_> = (&Marked).into();
-        assert_eq!(view.archetype, archetype_of!(Marked));
-
-        let view: ArchetypeCompByteView<'_> = (&BYTE).into();
-        assert_eq!(view.archetype, archetype_of!(Byte));
-
-        let view: ArchetypeCompByteView<'_> = (&BYTE, &POS).try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
-
-        let view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position, Rectangle));
+    #[should_panic]
+    fn conversion_of_three_comp_tuple_with_two_equal_comps_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = (&POS, &BYTE, &POS).try_into().unwrap();
     }
 
     #[test]
-    fn valid_conversion_of_comp_slice_tuples_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView<'_> = (&[Marked]).into();
-        assert_eq!(view.archetype, archetype_of!(Marked));
-
-        let view: ArchetypeCompByteView<'_> = (&[Marked, Marked]).into();
-        assert_eq!(view.archetype, archetype_of!(Marked));
-
-        let view: ArchetypeCompByteView<'_> = (&[BYTE]).into();
-        assert_eq!(view.archetype, archetype_of!(Byte));
-
-        let view: ArchetypeCompByteView<'_> = (&[BYTE, BYTE]).into();
-        assert_eq!(view.archetype, archetype_of!(Byte));
-
-        let view: ArchetypeCompByteView<'_> = (&[BYTE], &[POS]).try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
-
-        let view: ArchetypeCompByteView<'_> = (&[BYTE, BYTE], &[POS, POS]).try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
-
-        let view: ArchetypeCompByteView<'_> = (&[BYTE], &[POS], &[RECT]).try_into().unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position, Rectangle));
-
-        let view: ArchetypeCompByteView<'_> = (&[BYTE, BYTE], &[POS, POS], &[RECT, RECT])
+    #[should_panic]
+    fn conversion_of_three_comp_tuple_with_two_equal_comp_slices_to_archetype_view_fails() {
+        let _: ArchetypeComponentView<'_> = (&[POS, POS], &[BYTE, BYTE], &[POS, POS])
             .try_into()
             .unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position, Rectangle));
     }
 
     #[test]
-    fn valid_conversion_of_comp_slices_to_byte_views_succeed() {
-        let view: ArchetypeCompByteView<'_> = (&[Marked]).into();
-        assert_eq!(view.archetype, archetype_of!(Marked));
+    fn valid_conversions_of_comp_tuples_to_archetype_views_succeed() {
+        let view: ArchetypeComponentView<'_> = (&Marked).into();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Marked>());
 
-        let view: ArchetypeCompByteView<'_> = (&[BYTE]).into();
-        assert_eq!(view.archetype, archetype_of!(Byte));
+        let view: ArchetypeComponentView<'_> = (&BYTE).into();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+
+        let view: ArchetypeComponentView<'_> = (&BYTE, &POS).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
+        let view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
     }
 
     #[test]
-    fn adding_components_to_archetype_byte_view_works() {
-        let mut view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
-        view.add_new_component(BYTE.component_bytes()).unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte));
+    fn valid_conversions_of_comp_slice_tuples_to_archetype_views_succeed() {
+        let view: ArchetypeComponentView<'_> = (&[Marked]).into();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Marked>());
 
-        view.add_new_component(POS.component_bytes()).unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position));
+        let view: ArchetypeComponentView<'_> = (&[Marked, Marked]).into();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Marked>());
 
-        view.add_new_component(RECT.component_bytes()).unwrap();
-        assert_eq!(view.archetype, archetype_of!(Byte, Position, Rectangle));
-    }
+        let view: ArchetypeComponentView<'_> = (&[BYTE]).into();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
-    #[test]
-    #[should_panic]
-    fn adding_existing_component_to_archetype_byte_view_fails() {
-        let mut view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
-        view.add_new_component(POS.component_bytes()).unwrap();
-    }
+        let view: ArchetypeComponentView<'_> = (&[BYTE, BYTE2]).into();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
 
-    #[test]
-    fn removing_components_from_archetype_byte_view_works() {
-        let mut view: ArchetypeCompByteView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
-        view.remove_component_with_id(Byte::component_id()).unwrap();
-        assert_eq!(view.archetype, archetype_of!(Position, Rectangle));
+        let view: ArchetypeComponentView<'_> = (&[BYTE], &[POS]).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
 
-        view.remove_component_with_id(Rectangle::component_id())
+        let view: ArchetypeComponentView<'_> = (&[BYTE, BYTE2], &[POS, POS2]).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+
+        let view: ArchetypeComponentView<'_> = (&[BYTE], &[POS], &[RECT]).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+
+        let view: ArchetypeComponentView<'_> = (&[BYTE, BYTE2], &[POS, POS2], &[RECT, RECT])
+            .try_into()
             .unwrap();
-        assert_eq!(view.archetype, archetype_of!(Position));
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT, RECT]);
+    }
 
-        view.remove_component_with_id(Position::component_id())
+    #[test]
+    #[should_panic]
+    fn adding_existing_comp_array_to_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        view.add_new_component_type((&POS).view()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn adding_comp_array_with_different_count_to_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &POS).try_into().unwrap();
+        view.add_new_component_type((&[RECT, RECT]).view()).unwrap();
+    }
+
+    #[test]
+    fn adding_individual_single_comp_arrays_to_archetype_view_works() {
+        let mut view = ArchetypeComponentView::empty();
+        view.add_new_component_type((&BYTE).view()).unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+
+        view.add_new_component_type((&POS).view()).unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
+        view.add_new_component_type((&RECT).view()).unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn adding_individual_multi_comp_arrays_to_archetype_view_works() {
+        let mut view = ArchetypeComponentView::empty();
+        view.add_new_component_type((&[BYTE, BYTE2]).view())
             .unwrap();
-        assert_eq!(view.archetype, archetype_of!());
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+
+        view.add_new_component_type((&[POS, POS2]).view()).unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+
+        view.add_new_component_type((&[RECT, RECT]).view()).unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT, RECT]);
     }
 
     #[test]
     #[should_panic]
-    fn removing_missing_component_from_archetype_byte_view_fails() {
-        let mut view: ArchetypeCompByteView<'_> = (&BYTE, &RECT).try_into().unwrap();
-        view.remove_component_with_id(Position::component_id())
+    fn adding_and_not_overwriting_comp_array_with_different_count_in_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &POS).try_into().unwrap();
+        view.add_or_overwrite_component_types([(&[RECT, RECT]).view()])
             .unwrap();
     }
 
     #[test]
     #[should_panic]
-    fn removing_component_from_empty_archetype_byte_view_fails() {
-        let mut view: ArchetypeCompByteView<'_> = [].try_into().unwrap();
-        view.remove_component_with_id(Position::component_id())
+    fn overwriting_comp_array_with_different_count_in_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &RECT).try_into().unwrap();
+        view.add_or_overwrite_component_types([(&[RECT, RECT]).view()])
             .unwrap();
     }
 
     #[test]
-    fn creating_component_manager_with_no_initial_components_works() {
-        let manager = ComponentManager::with_initial_components([]).unwrap();
-        assert_eq!(manager.initial_archetype(), &archetype_of!());
-        assert_eq!(manager.initial_component_count(), 0);
-        let all_components = manager.all_components().unwrap();
-        assert_eq!(all_components.n_component_types(), 0);
-        assert_eq!(all_components.component_count(), 0);
-        assert_eq!(all_components.archetype(), &archetype_of!());
+    #[should_panic]
+    fn including_multiple_comp_arrays_with_different_counts_in_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE).try_into().unwrap();
+        view.add_or_overwrite_component_types([(&[RECT, RECT]).view(), (&POS).view()])
+            .unwrap();
     }
 
     #[test]
-    fn creating_component_manager_with_initial_components_works() {
-        let manager = ComponentManager::with_initial_components((&BYTE, &POS, &RECT)).unwrap();
-        assert_eq!(
-            manager.initial_archetype(),
-            &archetype_of!(Byte, Position, Rectangle)
-        );
-        assert_eq!(manager.initial_component_count(), 1);
-        assert_eq!(manager.initial_components::<Byte>(), &[BYTE]);
-        assert_eq!(manager.initial_components::<Rectangle>(), &[RECT]);
-        assert_eq!(manager.initial_components::<Position>(), &[POS]);
+    fn adding_and_not_overwriting_individual_single_comp_arrays_in_archetype_view_works() {
+        let mut view = ArchetypeComponentView::empty();
+        view.add_or_overwrite_component_types([(&BYTE).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
-        let all_components = manager.all_components().unwrap();
-        assert_eq!(all_components.n_component_types(), 3);
-        assert_eq!(all_components.component_count(), 1);
-        assert_eq!(
-            all_components.archetype(),
-            &archetype_of!(Byte, Position, Rectangle)
-        );
+        view.add_or_overwrite_component_types([(&POS).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
+        view.add_or_overwrite_component_types([(&RECT).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn adding_and_not_overwriting_individual_two_comp_arrays_in_archetype_view_works() {
+        let mut view = ArchetypeComponentView::empty();
+        view.add_or_overwrite_component_types([(&[BYTE, BYTE2]).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+
+        view.add_or_overwrite_component_types([(&[POS, POS2]).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+    }
+
+    #[test]
+    fn adding_and_not_overwriting_multiple_single_comp_arrays_in_archetype_view_works() {
+        let mut view = ArchetypeComponentView::empty();
+        view.add_or_overwrite_component_types([(&POS).view(), (&BYTE).view(), (&RECT).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn overwriting_individual_single_comp_array_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> = (&POS, &BYTE).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&BYTE2).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+    }
+
+    #[test]
+    fn overwriting_individual_two_comp_array_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> =
+            (&[BYTE, BYTE2], &[POS, POS2]).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&[BYTE2, BYTE]).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE2, BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS, POS2]);
+    }
+
+    #[test]
+    fn overwriting_multiple_single_comp_arrays_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> = (&POS, &BYTE).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&BYTE2).view(), (&POS2).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS2]);
+    }
+
+    #[test]
+    fn overwriting_multiple_two_comp_arrays_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> =
+            (&[POS, POS2], &[BYTE, BYTE2]).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&[BYTE2, BYTE]).view(), (&[POS2, POS]).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE2, BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS2, POS]);
+    }
+
+    #[test]
+    fn adding_and_overwriting_multiple_single_comp_arrays_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> = (&POS, &RECT).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&BYTE).view(), (&POS2).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS2]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn adding_and_overwriting_multiple_two_comp_arrays_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> =
+            (&[POS, POS2], &[RECT, RECT]).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&[BYTE, BYTE2]).view(), (&[POS2, POS]).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 2);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS2, POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT, RECT]);
+    }
+
+    #[test]
+    fn overwriting_multiple_single_comp_arrays_of_same_type_in_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE).try_into().unwrap();
+
+        view.add_or_overwrite_component_types([(&BYTE2).view(), (&BYTE).view()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
     }
 
     #[test]
     #[should_panic]
-    fn requesting_missing_initial_component_from_component_manager_fails() {
-        let manager = ComponentManager::with_initial_components((&BYTE, &RECT)).unwrap();
-        manager.initial_components::<Position>();
-    }
-
-    #[test]
-    fn adding_extra_component_to_empty_component_manager_works() {
-        let mut manager = ComponentManager::with_initial_components([]).unwrap();
-
-        let mut pos_storage = manager.new_storage::<Position>();
-        pos_storage.push(&POS);
-        manager.add_extra_components([pos_storage]);
-
-        let extended_components = manager.all_components().unwrap();
-
-        assert_eq!(manager.initial_component_count(), 0);
-        assert_eq!(extended_components.n_component_types(), 1);
-        assert_eq!(extended_components.component_count(), 1);
-        assert_eq!(extended_components.archetype(), &archetype_of!(Position));
-    }
-
-    #[test]
-    fn adding_extra_component_to_component_manager_works() {
-        let mut manager = ComponentManager::with_initial_components(&RECT).unwrap();
-
-        let mut pos_storage = manager.new_storage::<Position>();
-        pos_storage.push(&POS);
-        manager.add_extra_components([pos_storage]);
-
-        let extended_components = manager.all_components().unwrap();
-
-        assert_eq!(manager.initial_component_count(), 1);
-        assert_eq!(extended_components.n_component_types(), 2);
-        assert_eq!(extended_components.component_count(), 1);
-        assert_eq!(
-            extended_components.archetype(),
-            &archetype_of!(Rectangle, Position)
-        );
-
-        let mut byte_storage = manager.new_storage::<Byte>();
-        byte_storage.push(&BYTE);
-        manager.add_extra_components([byte_storage]);
-
-        let extended_components = manager.all_components().unwrap();
-
-        assert_eq!(manager.initial_component_count(), 1);
-        assert_eq!(extended_components.n_component_types(), 3);
-        assert_eq!(extended_components.component_count(), 1);
-        assert_eq!(
-            extended_components.archetype(),
-            &archetype_of!(Rectangle, Position, Byte)
-        );
-    }
-
-    #[test]
-    fn adding_extra_components_to_component_manager_works() {
-        let mut manager = ComponentManager::with_initial_components(&[RECT, RECT]).unwrap();
-
-        let mut pos_storage = manager.new_storage::<Position>();
-        let mut byte_storage = manager.new_storage::<Byte>();
-        pos_storage.push(&POS);
-        pos_storage.push(&POS);
-        byte_storage.push(&BYTE);
-        byte_storage.push(&BYTE);
-        manager.add_extra_components([pos_storage, byte_storage]);
-
-        let extended_components = manager.all_components().unwrap();
-
-        assert_eq!(manager.initial_component_count(), 2);
-        assert_eq!(extended_components.n_component_types(), 3);
-        assert_eq!(extended_components.component_count(), 2);
-        assert_eq!(
-            extended_components.archetype(),
-            &archetype_of!(Rectangle, Position, Byte)
-        );
+    fn removing_missing_component_from_archetype_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &RECT).try_into().unwrap();
+        view.remove_component_type_with_id(Position::component_id())
+            .unwrap();
     }
 
     #[test]
     #[should_panic]
-    fn adding_extra_component_of_existing_type_to_component_manager_fails() {
-        let mut manager = ComponentManager::with_initial_components(&POS).unwrap();
-
-        let mut pos_storage = manager.new_storage::<Position>();
-        pos_storage.push(&POS);
-        manager.add_extra_components([pos_storage]);
-
-        manager.all_components().unwrap();
+    fn removing_component_from_empty_archetype_archetype_view_fails() {
+        let mut view = ArchetypeComponentView::empty();
+        view.remove_component_type_with_id(Position::component_id())
+            .unwrap();
     }
 
     #[test]
-    #[should_panic]
-    fn adding_extra_component_with_wrong_count_to_component_manager_fails() {
-        let mut manager =
-            ComponentManager::with_initial_components((&[RECT, RECT], &[POS, POS])).unwrap();
+    fn removing_components_from_archetype_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        view.remove_component_type_with_id(Byte::component_id())
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Position, Rectangle));
+        assert_eq!(view.n_component_types(), 2);
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
 
-        let mut byte_storage = manager.new_storage::<Byte>();
-        byte_storage.push(&BYTE);
-        manager.add_extra_components([byte_storage]);
+        view.remove_component_type_with_id(Rectangle::component_id())
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Position));
+        assert_eq!(view.n_component_types(), 1);
+        assert!(view.has_component_type::<Position>());
 
-        manager.all_components().unwrap();
-    }
-
-    #[test]
-    fn converting_from_component_manager_to_archetype_comp_byte_view_works() {
-        let manager = ComponentManager::with_initial_components([]).unwrap();
-        let _: ArchetypeCompByteView<'_> = (&manager).try_into().unwrap();
+        view.remove_component_type_with_id(Position::component_id())
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!());
+        assert_eq!(view.n_component_types(), 0);
     }
 
     #[test]
@@ -1581,6 +1889,17 @@ mod test {
         let entity = table.entity(entity_7);
         assert_eq!(entity.component::<Position>(), &POS);
         assert_eq!(entity.component::<Rectangle>(), &RECT);
+    }
+
+    #[test]
+    fn adding_entities_with_components_in_different_orders_to_table_works() {
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap());
+
+        table.add_entities([entity_1], (&POS, &BYTE).try_into().unwrap());
     }
 
     #[test]
