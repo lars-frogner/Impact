@@ -2,12 +2,11 @@
 
 use crate::{
     impl_InstanceFeature,
-    num::Float,
     rendering::{fre, InstanceFeatureShaderInput, ModelViewTransformShaderInput},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, Similarity3};
 use std::{
     fmt::Debug,
     mem,
@@ -94,10 +93,11 @@ pub struct DynamicInstanceFeatureBuffer {
 }
 
 /// A model-to-camera transform for a specific instance of a model.
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct InstanceModelViewTransform<F: Float> {
-    model_view_matrix: Matrix4<F>,
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct InstanceModelViewTransform {
+    model_view_matrix: Matrix4<fre>,
+    model_view_matrix_for_normals: Matrix4<fre>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -526,48 +526,59 @@ impl InstanceFeatureTypeDescriptor {
     }
 }
 
-impl<F: Float> InstanceModelViewTransform<F> {
+impl InstanceModelViewTransform {
     /// Creates a new identity model-to-camera transform.
     pub fn identity() -> Self {
-        Self::with_model_view_matrix(Matrix4::identity())
+        Self {
+            model_view_matrix: Matrix4::identity(),
+            model_view_matrix_for_normals: Matrix4::identity(),
+        }
     }
 
-    /// Creates a new model-to-camera transform with the given
-    /// transform matrix.
-    pub fn with_model_view_matrix(model_view_matrix: Matrix4<F>) -> Self {
-        Self { model_view_matrix }
+    /// Creates a new model-to-camera transform corresponding
+    /// to the given similarity transform.
+    pub fn with_model_view_transform(transform: Similarity3<fre>) -> Self {
+        let model_view_matrix = transform.to_homogeneous();
+
+        // Normal vectors must be transformed with the inverse transpose matrix
+        let mut model_view_matrix_for_normals = transform.inverse().to_homogeneous();
+        model_view_matrix_for_normals.transpose_mut();
+
+        Self {
+            model_view_matrix,
+            model_view_matrix_for_normals,
+        }
     }
 
     /// Returns the matrix for the model-to-camera transform.
-    pub fn model_view_matrix(&self) -> &Matrix4<F> {
+    pub fn model_view_matrix(&self) -> &Matrix4<fre> {
         &self.model_view_matrix
+    }
+
+    /// Returns the matrix for transforming normal vectors with
+    /// the model-to-camera transform.
+    pub fn model_view_matrix_for_normals(&self) -> &Matrix4<fre> {
+        &self.model_view_matrix_for_normals
     }
 }
 
-impl<F: Float> Default for InstanceModelViewTransform<F> {
+impl Default for InstanceModelViewTransform {
     fn default() -> Self {
         Self::identity()
     }
 }
 
-// Since `ModelInstanceTransform` is `#[repr(transparent)]`, it will be
-// `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
-unsafe impl<F: Float> Zeroable for InstanceModelViewTransform<F> where Matrix4<F>: Zeroable {}
-
-unsafe impl<F> Pod for InstanceModelViewTransform<F>
-where
-    F: Float,
-    Matrix4<F>: Pod,
-{
-}
-
 impl_InstanceFeature!(
-    InstanceModelViewTransform<fre>,
+    InstanceModelViewTransform,
     wgpu::vertex_attr_array![
         INSTANCE_VERTEX_BINDING_START => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 3 => Float32x4
+        INSTANCE_VERTEX_BINDING_START + 3 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 4 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 5 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 6 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 7 => Float32x4,
     ],
     InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
         model_view_matrix_column_locations: (
@@ -575,6 +586,12 @@ impl_InstanceFeature!(
             INSTANCE_VERTEX_BINDING_START + 1,
             INSTANCE_VERTEX_BINDING_START + 2,
             INSTANCE_VERTEX_BINDING_START + 3
+        ),
+        normal_model_view_matrix_column_locations: (
+            INSTANCE_VERTEX_BINDING_START + 4,
+            INSTANCE_VERTEX_BINDING_START + 5,
+            INSTANCE_VERTEX_BINDING_START + 6,
+            INSTANCE_VERTEX_BINDING_START + 7
         ),
     })
 );
@@ -605,7 +622,7 @@ mod test {
     use super::*;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
-    type Feature = InstanceModelViewTransform<f32>;
+    type Feature = InstanceModelViewTransform;
 
     #[repr(transparent)]
     #[derive(Clone, Copy, Zeroable, Pod)]
@@ -618,15 +635,12 @@ mod test {
     impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
     impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
 
-    fn create_dummy_feature() -> InstanceModelViewTransform<f32> {
-        InstanceModelViewTransform::with_model_view_matrix(
-            Similarity3::from_parts(
-                Translation3::new(2.1, -5.9, 0.01),
-                UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
-                7.0,
-            )
-            .to_homogeneous(),
-        )
+    fn create_dummy_feature() -> InstanceModelViewTransform {
+        InstanceModelViewTransform::with_model_view_transform(Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+            7.0,
+        ))
     }
 
     #[test]
@@ -642,7 +656,7 @@ mod test {
     fn adding_features_to_instance_feature_storage_works() {
         let mut storage = InstanceFeatureStorage::new::<Feature>();
         let feature_1 = create_dummy_feature();
-        let feature_2 = InstanceModelViewTransform::<f32>::identity();
+        let feature_2 = InstanceModelViewTransform::identity();
 
         let id_1 = storage.add_feature(&feature_1);
 
@@ -712,7 +726,7 @@ mod test {
     fn removing_features_from_instance_feature_storage_works() {
         let mut storage = InstanceFeatureStorage::new::<Feature>();
         let feature_1 = create_dummy_feature();
-        let feature_2 = InstanceModelViewTransform::<f32>::identity();
+        let feature_2 = InstanceModelViewTransform::identity();
 
         let id_1 = storage.add_feature(&feature_1);
         let id_2 = storage.add_feature(&feature_2);

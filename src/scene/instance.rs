@@ -5,7 +5,6 @@ use crate::{
         DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,
         InstanceFeatureTypeID, InstanceModelViewTransform,
     },
-    num::Float,
     scene::{MaterialLibrary, ModelID},
 };
 use std::{collections::HashMap, fmt::Debug};
@@ -121,10 +120,9 @@ impl InstanceFeatureManager {
     ///   library.
     /// - If any of the model's feature types have not been registered
     ///   with [`register_feature_type`].
-    pub fn register_instance<F>(&mut self, material_library: &MaterialLibrary, model_id: ModelID)
+    pub fn register_instance(&mut self, material_library: &MaterialLibrary, model_id: ModelID)
     where
-        F: Float,
-        InstanceModelViewTransform<F>: InstanceFeature,
+        InstanceModelViewTransform: InstanceFeature,
     {
         let feature_type_ids = material_library
             .get_material_specification(model_id.material_id())
@@ -170,14 +168,13 @@ impl InstanceFeatureManager {
     ///   feature IDs has to be the same as in the
     ///   [`MaterialSpecification`](crate::scene::MaterialSpecification)
     ///   of the model, which was used to initialize the buffers.
-    pub fn buffer_instance<F>(
+    pub fn buffer_instance(
         &mut self,
         model_id: ModelID,
-        transform: &InstanceModelViewTransform<F>,
+        transform: &InstanceModelViewTransform,
         feature_ids: &[InstanceFeatureID],
     ) where
-        F: Float,
-        InstanceModelViewTransform<F>: InstanceFeature,
+        InstanceModelViewTransform: InstanceFeature,
     {
         let feature_buffers = &mut self
             .instance_feature_buffers
@@ -206,13 +203,12 @@ impl InstanceFeatureManager {
         }
     }
 
-    fn register_instance_with_feature_type_ids<F>(
+    fn register_instance_with_feature_type_ids(
         &mut self,
         model_id: ModelID,
         feature_type_ids: &[InstanceFeatureTypeID],
     ) where
-        F: Float,
-        InstanceModelViewTransform<F>: InstanceFeature,
+        InstanceModelViewTransform: InstanceFeature,
     {
         self.instance_feature_buffers
             .entry(model_id)
@@ -223,7 +219,7 @@ impl InstanceFeatureManager {
             .or_insert_with(|| {
                 let mut buffers = Vec::with_capacity(feature_type_ids.len() + 1);
                 buffers.push(DynamicInstanceFeatureBuffer::new::<
-                    InstanceModelViewTransform<F>,
+                    InstanceModelViewTransform,
                 >());
                 buffers.extend(feature_type_ids.iter().map(|feature_type_id| {
                     let storage = self.feature_storages.get(feature_type_id).expect(
@@ -272,15 +268,12 @@ mod test {
         )
     }
 
-    fn create_dummy_transform() -> InstanceModelViewTransform<f32> {
-        InstanceModelViewTransform::with_model_view_matrix(
-            Similarity3::from_parts(
-                Translation3::new(2.1, -5.9, 0.01),
-                UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
-                7.0,
-            )
-            .to_homogeneous(),
-        )
+    fn create_dummy_transform() -> InstanceModelViewTransform {
+        InstanceModelViewTransform::with_model_view_transform(Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+            7.0,
+        ))
     }
 
     #[test]
@@ -479,14 +472,14 @@ mod test {
         manager.register_instance_with_feature_type_ids(model_id, &[]);
 
         let transform_1 = create_dummy_transform();
-        let transform_2 = InstanceModelViewTransform::<f32>::identity();
+        let transform_2 = InstanceModelViewTransform::identity();
 
         manager.buffer_instance(model_id, &transform_1, &[]);
 
         let buffer = &manager.get_buffers(model_id).unwrap()[0];
         assert_eq!(buffer.n_valid_features(), 1);
         assert_eq!(
-            buffer.valid_features::<InstanceModelViewTransform<_>>(),
+            buffer.valid_features::<InstanceModelViewTransform>(),
             &[transform_1]
         );
 
@@ -495,7 +488,7 @@ mod test {
         let buffer = &manager.get_buffers(model_id).unwrap()[0];
         assert_eq!(buffer.n_valid_features(), 2);
         assert_eq!(
-            buffer.valid_features::<InstanceModelViewTransform<_>>(),
+            buffer.valid_features::<InstanceModelViewTransform>(),
             &[transform_1, transform_2]
         );
     }
@@ -514,7 +507,7 @@ mod test {
         );
 
         let transform_instance_1 = create_dummy_transform();
-        let transform_instance_2 = InstanceModelViewTransform::<f32>::identity();
+        let transform_instance_2 = InstanceModelViewTransform::identity();
         let feature_1_instance_1 = Feature(22);
         let feature_1_instance_2 = Feature(43);
         let feature_2_instance_1 = DifferentFeature(-73.1);
@@ -547,7 +540,7 @@ mod test {
         assert_eq!(buffers.len(), 3);
         assert_eq!(buffers[0].n_valid_features(), 1);
         assert_eq!(
-            buffers[0].valid_features::<InstanceModelViewTransform<_>>(),
+            buffers[0].valid_features::<InstanceModelViewTransform>(),
             &[transform_instance_1]
         );
         assert_eq!(buffers[1].n_valid_features(), 1);
@@ -571,7 +564,7 @@ mod test {
         assert_eq!(buffers.len(), 3);
         assert_eq!(buffers[0].n_valid_features(), 2);
         assert_eq!(
-            buffers[0].valid_features::<InstanceModelViewTransform<_>>(),
+            buffers[0].valid_features::<InstanceModelViewTransform>(),
             &[transform_instance_1, transform_instance_2]
         );
         assert_eq!(buffers[1].n_valid_features(), 2);

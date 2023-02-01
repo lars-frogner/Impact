@@ -3,6 +3,7 @@
 use crate::{
     geometry::{Frustum, InstanceFeature, InstanceFeatureID, InstanceModelViewTransform, Sphere},
     num::Float,
+    rendering::fre,
     scene::{CameraID, CameraRepository, InstanceFeatureManager, ModelID},
 };
 use anyhow::{anyhow, Result};
@@ -422,7 +423,8 @@ impl<F: Float> SceneGraph<F> {
         camera_node_id: Option<CameraNodeID>,
     ) -> Result<()>
     where
-        InstanceModelViewTransform<F>: InstanceFeature,
+        InstanceModelViewTransform: InstanceFeature,
+        F: simba::scalar::SubsetOf<fre>,
     {
         let root_node_id = self.root_node_id();
 
@@ -493,7 +495,8 @@ impl<F: Float> SceneGraph<F> {
         group_node_id: GroupNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) where
-        InstanceModelViewTransform<F>: InstanceFeature,
+        InstanceModelViewTransform: InstanceFeature,
+        F: simba::scalar::SubsetOf<fre>,
     {
         let group_node = self.group_nodes.node(group_node_id);
 
@@ -538,16 +541,17 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node_id: ModelInstanceNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) where
-        InstanceModelViewTransform<F>: InstanceFeature,
+        InstanceModelViewTransform: InstanceFeature,
+        F: simba::scalar::SubsetOf<fre>,
     {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
         let model_view_transform =
             parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-        let instance_model_view_transform = InstanceModelViewTransform::with_model_view_matrix(
-            model_view_transform.to_homogeneous(),
-        );
+        let instance_model_view_transform =
+            InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
+
         instance_feature_manager.buffer_instance(
             model_instance_node.model_id(),
             &instance_model_view_transform,

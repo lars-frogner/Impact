@@ -14,9 +14,9 @@ use fixed::{
 use naga::{
     AddressSpace, Arena, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant, ConstantInner,
     EntryPoint, Expression, Function, FunctionArgument, FunctionResult, GlobalVariable, Handle,
-    ImageClass, ImageDimension, Interpolation, LocalVariable, MathFunction, Module,
-    ResourceBinding, SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Span, Statement,
-    StructMember, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
+    ImageClass, ImageDimension, Interpolation, LocalVariable, Module, ResourceBinding, SampleLevel,
+    Sampling, ScalarKind, ScalarValue, ShaderStage, Span, Statement, StructMember,
+    SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
 };
 use std::{borrow::Cow, hash::Hash, mem, vec};
 use vertex_color::VertexColorShaderGenerator;
@@ -98,6 +98,9 @@ pub struct ModelViewTransformShaderInput {
     /// Vertex attribute locations for the four columns of
     /// the model view matrix.
     pub model_view_matrix_column_locations: (u32, u32, u32, u32),
+    /// Vertex attribute locations for the four columns of
+    /// the model view matrix for transforming normal vectors.
+    pub normal_model_view_matrix_column_locations: (u32, u32, u32, u32),
 }
 
 /// Input description for any kind of material that may
@@ -131,6 +134,15 @@ pub enum MaterialShaderGenerator<'a> {
     FixedColor(FixedColorShaderGenerator<'a>),
     FixedTexture(FixedTextureShaderGenerator<'a>),
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
+}
+
+/// Handles to expressions for accessing the model view matrix
+/// variable, and optionally the model view matrix for normals
+/// variable, in the main vertex shader function.
+#[derive(Clone, Debug)]
+pub struct ModelViewTransformExpressions {
+    model_view_matrix: Handle<Expression>,
+    normal_model_view_matrix: Option<Handle<Expression>>,
 }
 
 /// Indices of the fields holding the various mesh vertex
@@ -436,8 +448,9 @@ impl ShaderGenerator {
             &mut vertex_function,
         );
 
-        let model_matrix_var_expr_handle = Self::generate_vertex_code_for_model_view_transform(
+        let model_view_transform_expressions = Self::generate_vertex_code_for_model_view_transform(
             model_view_transform_shader_input,
+            vertex_property_requirements,
             &mut module.types,
             &mut vertex_function,
         );
@@ -449,7 +462,7 @@ impl ShaderGenerator {
                 &mut module.types,
                 &mut module.constants,
                 &mut vertex_function,
-                model_matrix_var_expr_handle,
+                &model_view_transform_expressions,
                 projection_matrix_var_expr_handle,
             )?;
 
@@ -596,19 +609,19 @@ impl ShaderGenerator {
     /// Generates the declaration of the model view transform type,
     /// adds it as an argument to the main vertex shader function and
     /// generates the code for constructing the matrix from its columns
-    /// in the body of the function.
+    /// in the body of the function. If the material requires normal
+    /// vectors, corresponding code for the model view transform for
+    /// normals will also be generated.
     ///
     /// # Returns
-    /// Handle to the expression for the model view matrix in the main
-    /// vertex shader function.
+    /// A [`ModelViewTransformExpressions`] with handles to expressions
+    /// for the generated matrix variables.
     fn generate_vertex_code_for_model_view_transform(
         model_view_transform_shader_input: &ModelViewTransformShaderInput,
+        vertex_property_requirements: VertexPropertyRequirements,
         types: &mut UniqueArena<Type>,
         vertex_function: &mut Function,
-    ) -> Handle<Expression> {
-        let (loc_0, loc_1, loc_2, loc_3) =
-            model_view_transform_shader_input.model_view_matrix_column_locations;
-
+    ) -> ModelViewTransformExpressions {
         let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
         let mat4x4_type_handle = insert_in_arena(types, MATRIX_4X4_TYPE);
 
@@ -623,16 +636,40 @@ impl ShaderGenerator {
             offset,
         };
 
-        let model_view_transform_type = Type {
-            name: new_name("ModelViewTransform"),
-            inner: TypeInner::Struct {
-                members: vec![
+        let (loc_0, loc_1, loc_2, loc_3) =
+            model_view_transform_shader_input.model_view_matrix_column_locations;
+
+        let column_fields =
+            if vertex_property_requirements.contains(VertexPropertyRequirements::NORMAL_VECTOR) {
+                let (loc_4, loc_5, loc_6, loc_7) =
+                    model_view_transform_shader_input.normal_model_view_matrix_column_locations;
+
+                vec![
                     new_struct_field("col0", loc_0, 0),
                     new_struct_field("col1", loc_1, VECTOR_4_SIZE),
                     new_struct_field("col2", loc_2, 2 * VECTOR_4_SIZE),
                     new_struct_field("col3", loc_3, 3 * VECTOR_4_SIZE),
-                ],
-                span: MATRIX_4X4_SIZE,
+                    new_struct_field("col4", loc_4, 4 * VECTOR_4_SIZE),
+                    new_struct_field("col5", loc_5, 5 * VECTOR_4_SIZE),
+                    new_struct_field("col6", loc_6, 6 * VECTOR_4_SIZE),
+                    new_struct_field("col7", loc_7, 7 * VECTOR_4_SIZE),
+                ]
+            } else {
+                vec![
+                    new_struct_field("col0", loc_0, 0),
+                    new_struct_field("col1", loc_1, VECTOR_4_SIZE),
+                    new_struct_field("col2", loc_2, 2 * VECTOR_4_SIZE),
+                    new_struct_field("col3", loc_3, 3 * VECTOR_4_SIZE),
+                ]
+            };
+
+        let struct_size = VECTOR_4_SIZE * column_fields.len() as u32;
+
+        let model_view_transform_type = Type {
+            name: new_name("ModelViewTransform"),
+            inner: TypeInner::Struct {
+                members: column_fields,
+                span: struct_size,
             },
         };
 
@@ -651,66 +688,82 @@ impl ShaderGenerator {
             Expression::FunctionArgument(model_view_transform_arg_idx),
         );
 
-        // Create expression constructing a 4x4 matrix from the columns
-        // (each a field in the input struct)
-        let model_matrix_expr_handle = emit(
-            &mut vertex_function.body,
-            &mut vertex_function.expressions,
-            |expressions| {
-                let compose_expr = Expression::Compose {
-                    ty: mat4x4_type_handle,
-                    components: (0..4_u32)
-                        .into_iter()
-                        .map(|index| {
-                            append_to_arena(
-                                expressions,
-                                Expression::AccessIndex {
-                                    base: model_view_transform_arg_ptr_expr_handle,
-                                    index,
-                                },
-                            )
-                        })
-                        .collect(),
-                };
-                append_to_arena(expressions, compose_expr)
-            },
-        );
-
-        let model_matrix_var_ptr_expr_handle = append_to_arena(
-            &mut vertex_function.expressions,
-            Expression::LocalVariable(append_to_arena(
-                &mut vertex_function.local_variables,
-                LocalVariable {
-                    name: new_name("modelViewMatrix"),
-                    ty: mat4x4_type_handle,
-                    init: None,
+        let mut define_matrix = |name: &str, start_field_idx: u32| {
+            // Create expression constructing a 4x4 matrix from the columns
+            // (each a field in the input struct)
+            let matrix_expr_handle = emit(
+                &mut vertex_function.body,
+                &mut vertex_function.expressions,
+                |expressions| {
+                    let compose_expr = Expression::Compose {
+                        ty: mat4x4_type_handle,
+                        components: (start_field_idx..(start_field_idx + 4))
+                            .into_iter()
+                            .map(|index| {
+                                append_to_arena(
+                                    expressions,
+                                    Expression::AccessIndex {
+                                        base: model_view_transform_arg_ptr_expr_handle,
+                                        index,
+                                    },
+                                )
+                            })
+                            .collect(),
+                    };
+                    append_to_arena(expressions, compose_expr)
                 },
-            )),
-        );
+            );
 
-        push_to_block(
-            &mut vertex_function.body,
-            Statement::Store {
-                pointer: model_matrix_var_ptr_expr_handle,
-                value: model_matrix_expr_handle,
-            },
-        );
-
-        let model_matrix_var_expr_handle = emit(
-            &mut vertex_function.body,
-            &mut vertex_function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: model_matrix_var_ptr_expr_handle,
+            let matrix_var_ptr_expr_handle = append_to_arena(
+                &mut vertex_function.expressions,
+                Expression::LocalVariable(append_to_arena(
+                    &mut vertex_function.local_variables,
+                    LocalVariable {
+                        name: new_name(name),
+                        ty: mat4x4_type_handle,
+                        init: None,
                     },
-                )
-            },
-        );
+                )),
+            );
 
-        #[allow(clippy::let_and_return)]
-        model_matrix_var_expr_handle
+            push_to_block(
+                &mut vertex_function.body,
+                Statement::Store {
+                    pointer: matrix_var_ptr_expr_handle,
+                    value: matrix_expr_handle,
+                },
+            );
+
+            let matrix_var_expr_handle = emit(
+                &mut vertex_function.body,
+                &mut vertex_function.expressions,
+                |expressions| {
+                    append_to_arena(
+                        expressions,
+                        Expression::Load {
+                            pointer: matrix_var_ptr_expr_handle,
+                        },
+                    )
+                },
+            );
+
+            #[allow(clippy::let_and_return)]
+            matrix_var_expr_handle
+        };
+
+        let model_view_matrix_var_expr_handle = define_matrix("modelViewMatrix", 0);
+
+        let normal_model_view_matrix_var_expr_handle =
+            if vertex_property_requirements.contains(VertexPropertyRequirements::NORMAL_VECTOR) {
+                Some(define_matrix("normalModelViewMatrix", 4))
+            } else {
+                None
+            };
+
+        ModelViewTransformExpressions {
+            model_view_matrix: model_view_matrix_var_expr_handle,
+            normal_model_view_matrix: normal_model_view_matrix_var_expr_handle,
+        }
     }
 
     /// Generates the declaration of the global uniform variable for the
@@ -796,7 +849,7 @@ impl ShaderGenerator {
         types: &mut UniqueArena<Type>,
         constants: &mut Arena<Constant>,
         vertex_function: &mut Function,
-        model_matrix_var_expr_handle: Handle<Expression>,
+        model_view_transform_expressions: &ModelViewTransformExpressions,
         projection_matrix_var_expr_handle: Handle<Expression>,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
         let vec2_type_handle = insert_in_arena(types, VECTOR_2_TYPE);
@@ -886,7 +939,7 @@ impl ShaderGenerator {
                     expressions,
                     Expression::Binary {
                         op: BinaryOperator::Multiply,
-                        left: model_matrix_var_expr_handle,
+                        left: model_view_transform_expressions.model_view_matrix,
                         right: homogeneous_position_expr_handle,
                     },
                 )
@@ -1002,31 +1055,6 @@ impl ShaderGenerator {
                 &mut vertex_function.body,
                 &mut vertex_function.expressions,
                 |expressions| {
-                    // Inverse not supported by WGSL, should be precalculated
-                    // and included in vertex buffer instead
-                    // let inverse_model_matrix_expr_handle = append_to_arena(
-                    //     expressions,
-                    //     Expression::Math {
-                    //         fun: MathFunction::Inverse,
-                    //         arg: model_matrix_var_expr_handle,
-                    //         arg1: None,
-                    //         arg2: None,
-                    //         arg3: None,
-                    //     },
-                    // );
-
-                    let inverse_transpose_model_matrix_expr_handle = append_to_arena(
-                        expressions,
-                        Expression::Math {
-                            fun: MathFunction::Transpose,
-                            // arg: inverse_model_matrix_expr_handle,
-                            arg: model_matrix_var_expr_handle,
-                            arg1: None,
-                            arg2: None,
-                            arg3: None,
-                        },
-                    );
-
                     let compose_expr = Expression::Compose {
                         ty: vec4_type_handle,
                         components: vec![
@@ -1041,7 +1069,9 @@ impl ShaderGenerator {
                         expressions,
                         Expression::Binary {
                             op: BinaryOperator::Multiply,
-                            left: inverse_transpose_model_matrix_expr_handle,
+                            left: model_view_transform_expressions
+                                .normal_model_view_matrix
+                                .expect("Missing normal model view transform"),
                             right: homogeneous_model_space_normal_vector_expr_handle,
                         },
                     );
@@ -1702,7 +1732,9 @@ mod test {
         valid::{Capabilities, ModuleInfo, ValidationFlags, Validator},
     };
 
-    const VERTEX_POSITION_BINDING: u32 = 4;
+    const INSTANCE_VERTEX_BINDING_START: u32 = 0;
+    const MESH_VERTEX_BINDING_START: u32 = 10;
+    const MATERIAL_VERTEX_BINDING_START: u32 = 20;
 
     const CAMERA_INPUT: CameraShaderInput = CameraShaderInput {
         projection_matrix_binding: 0,
@@ -1710,11 +1742,22 @@ mod test {
 
     const MODEL_VIEW_TRANSFORM_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-            model_view_matrix_column_locations: (0, 1, 2, 3),
+            model_view_matrix_column_locations: (
+                INSTANCE_VERTEX_BINDING_START,
+                INSTANCE_VERTEX_BINDING_START + 1,
+                INSTANCE_VERTEX_BINDING_START + 2,
+                INSTANCE_VERTEX_BINDING_START + 3,
+            ),
+            normal_model_view_matrix_column_locations: (
+                INSTANCE_VERTEX_BINDING_START + 4,
+                INSTANCE_VERTEX_BINDING_START + 5,
+                INSTANCE_VERTEX_BINDING_START + 6,
+                INSTANCE_VERTEX_BINDING_START + 7,
+            ),
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: VERTEX_POSITION_BINDING,
+        position_location: MESH_VERTEX_BINDING_START,
         color_location: None,
         normal_vector_location: None,
         texture_coord_location: None,
@@ -1722,7 +1765,7 @@ mod test {
 
     const FIXED_COLOR_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::FixedColorMaterial(FixedColorFeatureShaderInput {
-            color_location: 8,
+            color_location: MATERIAL_VERTEX_BINDING_START,
         });
 
     const FIXED_TEXTURE_INPUT: MaterialTextureShaderInput =
@@ -1732,20 +1775,20 @@ mod test {
 
     const BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            ambient_color_location: 8,
-            diffuse_color_location: Some(9),
-            specular_color_location: Some(10),
-            shininess_location: 11,
-            alpha_location: 12,
+            ambient_color_location: MATERIAL_VERTEX_BINDING_START,
+            diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+            shininess_location: MATERIAL_VERTEX_BINDING_START + 3,
+            alpha_location: MATERIAL_VERTEX_BINDING_START + 4,
         });
 
     const DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            ambient_color_location: 8,
+            ambient_color_location: MATERIAL_VERTEX_BINDING_START,
             diffuse_color_location: None,
-            specular_color_location: Some(9),
-            shininess_location: 10,
-            alpha_location: 11,
+            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+            shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+            alpha_location: MATERIAL_VERTEX_BINDING_START + 3,
         });
 
     const DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialTextureShaderInput =
@@ -1756,11 +1799,11 @@ mod test {
 
     const TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            ambient_color_location: 8,
+            ambient_color_location: MATERIAL_VERTEX_BINDING_START,
             diffuse_color_location: None,
             specular_color_location: None,
-            shininess_location: 9,
-            alpha_location: 10,
+            shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+            alpha_location: MATERIAL_VERTEX_BINDING_START + 2,
         });
 
     const TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialTextureShaderInput =
@@ -1864,8 +1907,8 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: VERTEX_POSITION_BINDING,
-                color_location: Some(VERTEX_POSITION_BINDING + 1),
+                position_location: MESH_VERTEX_BINDING_START,
+                color_location: Some(MESH_VERTEX_BINDING_START + 1),
                 normal_vector_location: None,
                 texture_coord_location: None,
             }),
@@ -1907,10 +1950,10 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: VERTEX_POSITION_BINDING,
+                position_location: MESH_VERTEX_BINDING_START,
                 color_location: None,
                 normal_vector_location: None,
-                texture_coord_location: Some(VERTEX_POSITION_BINDING + 1),
+                texture_coord_location: Some(MESH_VERTEX_BINDING_START + 1),
             }),
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
@@ -1931,9 +1974,9 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: VERTEX_POSITION_BINDING,
+                position_location: MESH_VERTEX_BINDING_START,
                 color_location: None,
-                normal_vector_location: Some(VERTEX_POSITION_BINDING + 1),
+                normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
                 texture_coord_location: None,
             }),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
@@ -1955,10 +1998,10 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: VERTEX_POSITION_BINDING,
+                position_location: MESH_VERTEX_BINDING_START,
                 color_location: None,
-                normal_vector_location: Some(VERTEX_POSITION_BINDING + 1),
-                texture_coord_location: Some(VERTEX_POSITION_BINDING + 2),
+                normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
+                texture_coord_location: Some(MESH_VERTEX_BINDING_START + 2),
             }),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
@@ -1982,10 +2025,10 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: VERTEX_POSITION_BINDING,
+                position_location: MESH_VERTEX_BINDING_START,
                 color_location: None,
-                normal_vector_location: Some(VERTEX_POSITION_BINDING + 1),
-                texture_coord_location: Some(VERTEX_POSITION_BINDING + 2),
+                normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
+                texture_coord_location: Some(MESH_VERTEX_BINDING_START + 2),
             }),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
