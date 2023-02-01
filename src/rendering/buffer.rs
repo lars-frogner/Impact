@@ -262,8 +262,8 @@ pub const fn create_uniform_buffer_bind_group_layout_entry(
 }
 
 /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
-/// binding for the given uniform buffer,
-pub fn create_uniform_buffer_bind_group_entry(
+/// binding for the given uniform buffer representing a single uniform.
+pub fn create_single_uniform_bind_group_entry(
     binding: u32,
     render_buffer: &RenderBuffer,
 ) -> wgpu::BindGroupEntry<'_> {

@@ -104,12 +104,6 @@ impl CameraRenderBufferManager {
         Projective3::create_bind_group_layout_entry(binding)
     }
 
-    /// Creates the bind group entry for the camera transform
-    /// uniform buffer, assigned to the given binding.
-    fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        buffer::create_uniform_buffer_bind_group_entry(binding, &self.transform_render_buffer)
-    }
-
     fn create_bind_group_layout(device: &wgpu::Device, label: &str) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[Self::create_bind_group_layout_entry(Self::BINDING)],
@@ -125,7 +119,7 @@ impl CameraRenderBufferManager {
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            entries: &[buffer::create_uniform_buffer_bind_group_entry(
+            entries: &[buffer::create_single_uniform_bind_group_entry(
                 Self::BINDING,
                 transform_render_buffer,
             )],
