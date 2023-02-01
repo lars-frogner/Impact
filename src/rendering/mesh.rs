@@ -20,6 +20,8 @@ pub struct MeshRenderBufferManager {
     label: String,
 }
 
+const MESH_VERTEX_BINDING_START: u32 = 10;
+
 impl MeshRenderBufferManager {
     /// Creates a new manager with render buffers initialized
     /// from the given mesh.
@@ -153,13 +155,14 @@ impl MeshRenderBufferManager {
 
 impl VertexBufferable for ColorVertex<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4],
-        );
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+            MESH_VERTEX_BINDING_START => Float32x3,
+            MESH_VERTEX_BINDING_START + 1 => Float32x4
+        ]);
 
     const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: 0,
-        color_location: Some(1),
+        position_location: MESH_VERTEX_BINDING_START,
+        color_location: Some(MESH_VERTEX_BINDING_START + 1),
         normal_vector_location: None,
         texture_coord_location: None,
     };
@@ -167,14 +170,15 @@ impl VertexBufferable for ColorVertex<fre> {
 
 impl VertexBufferable for TextureVertex<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(
-            &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2],
-        );
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+            MESH_VERTEX_BINDING_START => Float32x3,
+            MESH_VERTEX_BINDING_START + 1 => Float32x2
+        ]);
 
     const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: 0,
+        position_location: MESH_VERTEX_BINDING_START,
         color_location: None,
         normal_vector_location: None,
-        texture_coord_location: Some(1),
+        texture_coord_location: Some(MESH_VERTEX_BINDING_START + 1),
     };
 }

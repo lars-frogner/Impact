@@ -50,6 +50,8 @@ pub struct MaterialLibrary {
     material_specifications: HashMap<MaterialID, MaterialSpecification>,
 }
 
+const MATERIAL_VERTEX_BINDING_START: u32 = 20;
+
 impl MaterialSpecification {
     /// Creates a new material specification with the
     /// given textures and material properties.

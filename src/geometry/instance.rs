@@ -107,6 +107,8 @@ struct InstanceFeatureTypeDescriptor {
     alignment: Alignment,
 }
 
+const INSTANCE_VERTEX_BINDING_START: u32 = 0;
+
 impl InstanceFeatureID {
     /// Creates an ID that does not represent a valid feature.
     pub fn not_applicable() -> Self {
@@ -561,9 +563,19 @@ where
 
 impl_InstanceFeature!(
     ModelInstanceTransform<fre>,
-    wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4],
+    wgpu::vertex_attr_array![
+        INSTANCE_VERTEX_BINDING_START => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 3 => Float32x4
+    ],
     InstanceFeatureShaderInput::ModelInstanceTransform(ModelInstanceTransformShaderInput {
-        model_matrix_locations: (5, 6, 7, 8),
+        model_matrix_locations: (
+            INSTANCE_VERTEX_BINDING_START,
+            INSTANCE_VERTEX_BINDING_START + 1,
+            INSTANCE_VERTEX_BINDING_START + 2,
+            INSTANCE_VERTEX_BINDING_START + 3
+        ),
     })
 );
 

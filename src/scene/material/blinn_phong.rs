@@ -1,5 +1,6 @@
 //! Materials using the Blinn-Phong reflection model.
 
+use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
     geometry::InstanceFeature,
     impl_InstanceFeature,
@@ -270,36 +271,51 @@ impl TexturedBlinnPhongMaterial {
 
 impl_InstanceFeature!(
     BlinnPhongMaterial,
-    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3, 3 => Float32, 4 => Float32],
+    wgpu::vertex_attr_array![
+        MATERIAL_VERTEX_BINDING_START => Float32x3,
+        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
+        MATERIAL_VERTEX_BINDING_START + 2 => Float32x3,
+        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
+        MATERIAL_VERTEX_BINDING_START + 4 => Float32
+    ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        ambient_color_location: 0,
-        diffuse_color_location: Some(1),
-        specular_color_location: Some(2),
-        shininess_location: 3,
-        alpha_location: 4,
+        ambient_color_location: MATERIAL_VERTEX_BINDING_START,
+        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+        shininess_location: MATERIAL_VERTEX_BINDING_START + 3,
+        alpha_location: MATERIAL_VERTEX_BINDING_START + 4,
     })
 );
 
 impl_InstanceFeature!(
     DiffuseTexturedBlinnPhongMaterial,
-    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32, 3 => Float32],
+    wgpu::vertex_attr_array![
+        MATERIAL_VERTEX_BINDING_START => Float32x3,
+        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
+        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
+        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
+    ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        ambient_color_location: 0,
+        ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: None,
-        specular_color_location: Some(1),
-        shininess_location: 2,
-        alpha_location: 3,
+        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+        shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+        alpha_location: MATERIAL_VERTEX_BINDING_START + 3,
     })
 );
 
 impl_InstanceFeature!(
     TexturedBlinnPhongMaterial,
-    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32, 2 => Float32],
+    wgpu::vertex_attr_array![
+        MATERIAL_VERTEX_BINDING_START => Float32x3,
+        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
+        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
+    ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        ambient_color_location: 0,
+        ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: None,
         specular_color_location: None,
-        shininess_location: 1,
-        alpha_location: 2,
+        shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+        alpha_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );

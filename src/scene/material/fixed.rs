@@ -1,5 +1,6 @@
 //! Materials with a fixed color or texture.
 
+use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
     geometry::{InstanceFeature, InstanceFeatureID},
     impl_InstanceFeature,
@@ -139,8 +140,8 @@ impl FixedTextureMaterial {
 
 impl_InstanceFeature!(
     FixedColorMaterial,
-    wgpu::vertex_attr_array![0 => Float32x4],
+    wgpu::vertex_attr_array![MATERIAL_VERTEX_BINDING_START => Float32x4],
     InstanceFeatureShaderInput::FixedColorMaterial(FixedColorFeatureShaderInput {
-        color_location: 0,
+        color_location: MATERIAL_VERTEX_BINDING_START,
     })
 );
