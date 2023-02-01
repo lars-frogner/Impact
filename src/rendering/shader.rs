@@ -34,6 +34,14 @@ cfg_if::cfg_if! {
 #[derive(Debug)]
 pub struct Shader {
     module: wgpu::ShaderModule,
+    entry_point_names: EntryPointNames,
+}
+
+/// Names of the different shader entry point functions.
+#[derive(Clone, Debug)]
+pub struct EntryPointNames {
+    pub vertex: Cow<'static, str>,
+    pub fragment: Cow<'static, str>,
 }
 
 /// Generator for shader programs.
@@ -263,28 +271,43 @@ impl Shader {
     pub fn from_wgsl_path(
         core_system: &CoreRenderingSystem,
         shader_path: impl AsRef<Path>,
+        entry_point_names: EntryPointNames,
     ) -> Result<Self> {
         let shader_path = shader_path.as_ref();
         let label = shader_path.to_string_lossy();
         let source = fs::read_to_string(shader_path)?;
-        Ok(Self::from_wgsl_source(core_system, &source, label.as_ref()))
+        Ok(Self::from_wgsl_source(
+            core_system,
+            &source,
+            entry_point_names,
+            label.as_ref(),
+        ))
     }
 
     /// Creates a new shader from the given source code.
-    pub fn from_wgsl_source(core_system: &CoreRenderingSystem, source: &str, label: &str) -> Self {
+    pub fn from_wgsl_source(
+        core_system: &CoreRenderingSystem,
+        source: &str,
+        entry_point_names: EntryPointNames,
+        label: &str,
+    ) -> Self {
         let module = core_system
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(source)),
                 label: Some(label),
             });
-        Self { module }
+        Self {
+            module,
+            entry_point_names,
+        }
     }
 
     /// Creates a new shader from the given [`Module`].
     pub fn from_naga_module(
         core_system: &CoreRenderingSystem,
         module: Module,
+        entry_point_names: EntryPointNames,
         label: &str,
     ) -> Self {
         let module = core_system
@@ -293,11 +316,32 @@ impl Shader {
                 source: wgpu::ShaderSource::Naga(Cow::Owned(module)),
                 label: Some(label),
             });
-        Self { module }
+        Self {
+            module,
+            entry_point_names,
+        }
     }
 
-    pub fn module(&self) -> &wgpu::ShaderModule {
+    /// Returns a reference to the compiled shader module
+    /// containing the vertex stage entry point.
+    pub fn vertex_module(&self) -> &wgpu::ShaderModule {
         &self.module
+    }
+
+    /// Returns a reference to the compiled shader module
+    /// containing the fragment stage entry point.
+    pub fn fragment_module(&self) -> &wgpu::ShaderModule {
+        &self.module
+    }
+
+    /// Returns the name of the vertex entry point function.
+    pub fn vertex_entry_point_name(&self) -> &str {
+        &self.entry_point_names.vertex
+    }
+
+    /// Returns the name of the fragment entry point function.
+    pub fn fragment_entry_point_name(&self) -> &str {
+        &self.entry_point_names.fragment
     }
 }
 
@@ -307,7 +351,7 @@ impl ShaderGenerator {
     /// containing both a vertex and fragment entry point.
     ///
     /// # Returns
-    /// The generated shader [`Module`].
+    /// The generated shader [`Module`] and its [`ShaderEntryPointNames`].
     ///
     /// # Errors
     /// Returns an error if:
@@ -325,7 +369,7 @@ impl ShaderGenerator {
         mesh_shader_input: Option<&MeshShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
-    ) -> Result<Module> {
+    ) -> Result<(Module, EntryPointNames)> {
         let camera_shader_input = camera_shader_input
             .ok_or_else(|| anyhow!("Tried to build shader with no camera input"))?;
 
@@ -390,8 +434,13 @@ impl ShaderGenerator {
             &material_vertex_output_field_indices,
         );
 
+        let entry_point_names = EntryPointNames {
+            vertex: Cow::Borrowed("mainVS"),
+            fragment: Cow::Borrowed("mainFS"),
+        };
+
         module.entry_points.push(EntryPoint {
-            name: "mainVS".to_string(),
+            name: entry_point_names.vertex.to_string(),
             stage: ShaderStage::Vertex,
             early_depth_test: None,
             workgroup_size: [0, 0, 0],
@@ -399,14 +448,14 @@ impl ShaderGenerator {
         });
 
         module.entry_points.push(EntryPoint {
-            name: "mainFS".to_string(),
+            name: entry_point_names.fragment.to_string(),
             stage: ShaderStage::Fragment,
             early_depth_test: None,
             workgroup_size: [0, 0, 0],
             function: fragment_function,
         });
 
-        Ok(module)
+        Ok((module, entry_point_names))
     }
 
     /// Interprets the set of instance feature and texture inputs
@@ -1785,7 +1834,8 @@ mod test {
             &[&MODEL_TRANSFORM_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         let module_info = validate_module(&module);
 
@@ -1803,7 +1853,8 @@ mod test {
             &[&MODEL_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         let module_info = validate_module(&module);
 
@@ -1826,7 +1877,8 @@ mod test {
             &[&MODEL_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         let module_info = validate_module(&module);
 
@@ -1849,7 +1901,8 @@ mod test {
             &[&MODEL_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         let module_info = validate_module(&module);
 
@@ -1875,7 +1928,8 @@ mod test {
             ],
             Some(&DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         let module_info = validate_module(&module);
 
@@ -1898,7 +1952,8 @@ mod test {
             &[&MODEL_TRANSFORM_INPUT, &TEXTURED_BLINN_PHONG_FEATURE_INPUT],
             Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
         let module_info = validate_module(&module);
 

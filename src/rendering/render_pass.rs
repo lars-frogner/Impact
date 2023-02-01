@@ -9,7 +9,7 @@ use crate::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
         CoreRenderingSystem, InstanceFeatureShaderInput, MaterialRenderResourceManager,
-        MaterialTextureShaderInput, MeshShaderInput,
+        MaterialTextureShaderInput, MeshShaderInput, Shader,
     },
     scene::{CameraID, MaterialID, MeshID, ModelID, ShaderManager},
 };
@@ -376,7 +376,7 @@ impl RenderPassRecorder {
             Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
-                shader.module(),
+                shader,
                 &vertex_buffer_layouts,
                 core_system.surface_config().format,
                 &format!("{} render pipeline", &specification.label),
@@ -547,7 +547,7 @@ impl RenderPassRecorder {
     fn create_render_pipeline(
         device: &wgpu::Device,
         layout: &wgpu::PipelineLayout,
-        shader_module: &wgpu::ShaderModule,
+        shader: &Shader,
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
         texture_format: wgpu::TextureFormat,
         label: &str,
@@ -555,13 +555,13 @@ impl RenderPassRecorder {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: Some(layout),
             vertex: wgpu::VertexState {
-                module: shader_module,
-                entry_point: "vs_main", // Vertex shader function in shader file
+                module: shader.vertex_module(),
+                entry_point: shader.vertex_entry_point_name(), // Vertex shader function in shader file
                 buffers: vertex_buffer_layouts,
             },
             fragment: Some(wgpu::FragmentState {
-                module: shader_module,
-                entry_point: "fs_main", // Fragment shader function in shader file
+                module: shader.fragment_module(),
+                entry_point: shader.fragment_entry_point_name(), // Fragment shader function in shader file
                 targets: &[Some(wgpu::ColorTargetState {
                     format: texture_format,
                     blend: Some(wgpu::BlendState::REPLACE),

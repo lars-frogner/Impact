@@ -60,7 +60,7 @@ impl ShaderManager {
         match self.shaders.entry(shader_id) {
             Entry::Occupied(entry) => Ok(entry.into_mut()),
             Entry::Vacant(entry) => {
-                let module = ShaderGenerator::generate_shader_module(
+                let (module, entry_point_names) = ShaderGenerator::generate_shader_module(
                     camera_shader_input,
                     mesh_shader_input,
                     instance_feature_shader_inputs,
@@ -69,6 +69,7 @@ impl ShaderManager {
                 Ok(entry.insert(Shader::from_naga_module(
                     core_system,
                     module,
+                    entry_point_names,
                     format!("Generated shader (hash {})", shader_id.0).as_str(),
                 )))
             }
