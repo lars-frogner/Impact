@@ -586,7 +586,7 @@ impl ShaderGenerator {
         };
 
         let model_transform_type = Type {
-            name: new_name("ModelTransform"),
+            name: new_name("ModelViewTransform"),
             inner: TypeInner::Struct {
                 members: vec![
                     new_struct_field("col0", loc_0, 0),
@@ -603,7 +603,7 @@ impl ShaderGenerator {
         let model_transform_arg_idx = u32::try_from(vertex_function.arguments.len()).unwrap();
 
         vertex_function.arguments.push(FunctionArgument {
-            name: new_name("modelTransform"),
+            name: new_name("modelViewTransform"),
             ty: model_transform_type_handle,
             binding: None,
         });
@@ -643,7 +643,7 @@ impl ShaderGenerator {
             Expression::LocalVariable(append_to_arena(
                 &mut vertex_function.local_variables,
                 LocalVariable {
-                    name: new_name("modelMatrix"),
+                    name: new_name("modelViewMatrix"),
                     ty: mat4x4_type_handle,
                     init: None,
                 },
@@ -860,11 +860,19 @@ impl ShaderGenerator {
             Expression::LocalVariable(append_to_arena(
                 &mut vertex_function.local_variables,
                 LocalVariable {
-                    name: new_name("position"),
+                    name: new_name("cameraSpacePosition"),
                     ty: vec4_type_handle,
                     init: None,
                 },
             )),
+        );
+
+        push_to_block(
+            &mut vertex_function.body,
+            Statement::Store {
+                pointer: position_var_ptr_expr_handle,
+                value: position_expr_handle,
+            },
         );
 
         let position_var_expr_handle = emit(
@@ -877,14 +885,6 @@ impl ShaderGenerator {
                         pointer: position_var_ptr_expr_handle,
                     },
                 )
-            },
-        );
-
-        push_to_block(
-            &mut vertex_function.body,
-            Statement::Store {
-                pointer: position_var_ptr_expr_handle,
-                value: position_expr_handle,
             },
         );
 
