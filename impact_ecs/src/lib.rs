@@ -125,43 +125,45 @@ pub use impact_ecs_macros::archetype_of;
 /// ```
 ///
 /// The macro takes as input an
-/// [`ArchetypeComponentStorage`](archetype::ArchetypeComponentStorage)
-/// wrapping a set of component instances, followed by a closure
-/// definition whose type signature specifies the set of
-/// [`Component`](component::Component) types to look for in the set of existing
-/// components as well as the component types the closure will return instances
-/// of for inclusion in the `ArchetypeComponentStorage`. The type of
-/// each closure argument must be annotated, and has to be an immutable reference
-/// to a type implementing the `Component` trait. If the closure returns anything,
-/// it must be a single value or a tuple of values implementing the `Component`
-/// trait, and the return type has to be annotated in the closure signature.
+/// [`ArchetypeComponentStorage`](archetype::ArchetypeComponentStorage) wrapping
+/// a set of component instances, followed by a closure definition whose type
+/// signature specifies the set of [`Component`](component::Component) types to
+/// look for in the set of existing components as well as the component types
+/// the closure will return instances of for inclusion in the
+/// `ArchetypeComponentStorage`. The type of each closure argument must be
+/// annotated, and has to be an immutable reference to a type implementing the
+/// `Component` trait. If the closure returns anything, it must be a single
+/// value or a tuple of values implementing the `Component` trait, and the
+/// return type has to be annotated in the closure signature.
 ///
 /// The body of the closure specifies what to do with each set of matching
-/// component instances present in the `ArchetypeComponentStorage`. The closure will only
-/// be called if the `ArchetypeComponentStorage` has the requested component types
-/// and if so it will be called once with each set of requested component instances.
-/// Any instances of a new component type that the closure returns will be added under a new
-/// component type in the `ArchetypeComponentStorage`. Any returned instances of an already existing
-/// component type will overwrite the existing instances for that component type.
+/// component instances present in the `ArchetypeComponentStorage`. The closure
+/// will only be called if the `ArchetypeComponentStorage` has the requested
+/// component types and if so it will be called once with each set of requested
+/// component instances. Any instances of a new component type that the closure
+/// returns will be added under a new component type in the
+/// `ArchetypeComponentStorage`. Any returned instances of an already existing
+/// component type will overwrite the existing instances for that component
+/// type.
 ///
-/// Optionally, an array of additionaly required component types can be
-/// included as an argument to the macro. The closure will only be called
-/// if the `ArchetypeComponentStorage` also has these component types.
-/// The primary use of specifying a required component here instead of in
-/// the closure signature is for zero-sized marker components, which are
-/// not allowed in the closure signature.
+/// Optionally, an array of additionaly required component types can be included
+/// as an argument to the macro. The closure will only be called if the
+/// `ArchetypeComponentStorage` also has these component types. The primary use
+/// of specifying a required component here instead of in the closure signature
+/// is for zero-sized marker components, which are not allowed in the closure
+/// signature.
 ///
-/// Another option is to include an array of disallowed component types
-/// as an argument to the macro. The array must be prefixed with `!`.
-/// If the `ArchetypeComponentStorage` has all of the required components, but
-/// also has a component type specified in the dissalowed component
-/// list, the closure will not be called.
+/// Another option is to include an array of disallowed component types as an
+/// argument to the macro. The array must be prefixed with `!`. If the
+/// `ArchetypeComponentStorage` has all of the required components, but also has
+/// a component type specified in the dissalowed component list, the closure
+/// will not be called.
 ///
-/// Finally, arbitrary code to run once if (and only if) the `ArchetypeComponentStorage`
-/// has all of the required components can be specified inside curly
-/// braces as the first argument to the macro. This code will be included in the
-/// parent scope of the closure, and will go out of scope when all closure calls
-/// have been executed.
+/// Finally, arbitrary code to run once if (and only if) the
+/// `ArchetypeComponentStorage` has all of the required components can be
+/// specified inside curly braces as the first argument to the macro. This code
+/// will be included in the parent scope of the closure, and will go out of
+/// scope when all closure calls have been executed.
 ///
 /// # Examples
 /// ```
