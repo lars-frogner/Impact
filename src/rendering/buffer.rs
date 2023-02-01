@@ -5,6 +5,7 @@ use bytemuck::Pod;
 use impact_utils::ConstStringHash64;
 use std::{
     mem,
+    num::NonZeroU64,
     sync::atomic::{AtomicUsize, Ordering},
 };
 use wgpu::util::DeviceExt;
@@ -50,6 +51,20 @@ pub struct RenderBuffer {
     buffer_size: usize,
     n_valid_bytes: AtomicUsize,
 }
+
+/// A buffer containing bytes that can be passed to the GPU,
+/// with an embedded count at the beginning of the buffer
+/// representing the number of valid elements contained in
+/// the buffer.
+#[derive(Debug)]
+pub struct CountedRenderBuffer {
+    buffer: wgpu::Buffer,
+    buffer_size: usize,
+    n_valid_bytes: AtomicUsize,
+}
+
+/// Type of the count embedded in the beginning of a [`CountedRenderBuffer`].
+pub type Count = u32;
 
 /// The type of information contained in a render buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -139,7 +154,7 @@ impl RenderBuffer {
         assert!(n_valid_bytes <= buffer_size);
 
         let buffer_label = format!("{} render buffer", label);
-        let buffer = create_initialized_buffer_of_type(
+        let buffer = Self::create_initialized_buffer_of_type(
             core_system.device(),
             buffer_type,
             bytes,
@@ -214,6 +229,256 @@ impl RenderBuffer {
     fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
+
+    fn create_initialized_buffer_of_type(
+        device: &wgpu::Device,
+        buffer_type: RenderBufferType,
+        bytes: &[u8],
+        label: &str,
+    ) -> wgpu::Buffer {
+        let usage = buffer_type.usage() | wgpu::BufferUsages::COPY_DST;
+        Self::create_initialized_buffer(device, bytes, usage, label)
+    }
+
+    fn create_initialized_buffer(
+        device: &wgpu::Device,
+        bytes: &[u8],
+        usage: wgpu::BufferUsages,
+        label: &str,
+    ) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            contents: bytes,
+            usage,
+            label: Some(label),
+        })
+    }
+}
+
+impl CountedRenderBuffer {
+    /// Creates a counted uniform render buffer initialized with
+    /// the given uniform data, with the first `n_valid_uniforms`
+    /// considered valid data.
+    pub fn new_uniform_buffer<U>(
+        core_system: &CoreRenderingSystem,
+        uniforms: &[U],
+        n_valid_uniforms: usize,
+        label: &str,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        let count = Count::try_from(n_valid_uniforms).unwrap();
+
+        let n_valid_bytes = mem::size_of::<Count>()
+            .checked_add(mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap())
+            .unwrap();
+
+        let bytes = bytemuck::cast_slice(uniforms);
+
+        Self::new(
+            core_system,
+            RenderBufferType::Uniform,
+            count,
+            bytes,
+            n_valid_bytes,
+            &format!("{} uniform", label),
+        )
+    }
+
+    /// Creates a render buffer of the given type from the given slice of
+    /// bytes, and embed a count at the beginning of the buffer. Only the
+    /// first `n_valid_bytes` in the buffer (including the count) are considered
+    /// to actually represent valid data, the rest is just buffer filling
+    /// that gives room for writing a larger number of bytes than `n_valid_bytes`
+    /// into the buffer at a later point without reallocating.
+    ///
+    /// # Panics
+    /// - If `n_valid_bytes` exceeds the combined size of the count and the
+    ///   `bytes` slice.
+    fn new(
+        core_system: &CoreRenderingSystem,
+        buffer_type: RenderBufferType,
+        count: Count,
+        bytes: &[u8],
+        n_valid_bytes: usize,
+        label: &str,
+    ) -> Self {
+        let buffer_size = Self::compute_size_including_count(bytes);
+        assert!(n_valid_bytes <= buffer_size);
+
+        let buffer_label = format!("{} render buffer", label);
+        let buffer = Self::create_initialized_counted_buffer_of_type(
+            core_system.device(),
+            buffer_type,
+            count,
+            bytes,
+            &buffer_label,
+        );
+
+        Self {
+            buffer,
+            buffer_size,
+            n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+        }
+    }
+
+    /// Returns a slice of the underlying [`wgpu::Buffer`]
+    /// containing only valid bytes.
+    pub fn valid_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
+        let upper_address = self.n_valid_bytes() as wgpu::BufferAddress;
+        self.buffer.slice(..upper_address)
+    }
+
+    /// Returns the number of bytes, starting from the beginning
+    /// of the buffer, that is considered to contain valid data
+    /// (this includes the count at the beginning of the buffer).
+    pub fn n_valid_bytes(&self) -> usize {
+        self.n_valid_bytes.load(Ordering::Acquire)
+    }
+
+    /// Whether the buffer is empty, meaning that it does not
+    /// contain any valid data apart from the count.
+    pub fn is_empty(&self) -> bool {
+        self.n_valid_bytes() == mem::size_of::<Count>()
+    }
+
+    /// Whether the given number of bytes would exceed the capacity of
+    /// the buffer (when the count at the beginning of the buffer is
+    /// taken into account).
+    pub fn bytes_exceed_capacity(&self, n_bytes: usize) -> bool {
+        mem::size_of::<Count>().checked_add(n_bytes).unwrap() > self.buffer_size
+    }
+
+    /// Queues a write of the given slice of bytes to the existing buffer,
+    /// starting just after the count at the beginning of the buffer. Any
+    /// existing bytes in the buffer that are not overwritten are from then on
+    /// considered invalid. If `new_count` is [`Some`], the count at the
+    /// beginning of the buffer will be updated to the specified value.
+    ///
+    /// # Panics
+    /// If the combined size of the count and the slice of updated bytes exceeds
+    /// the total size of the buffer.
+    pub fn update_valid_bytes(
+        &self,
+        core_system: &CoreRenderingSystem,
+        updated_bytes: &[u8],
+        new_count: Option<Count>,
+    ) {
+        self.n_valid_bytes.store(
+            Self::compute_size_including_count(updated_bytes),
+            Ordering::Release,
+        );
+
+        Self::queue_writes_to_counted_buffer(
+            core_system.queue(),
+            self.buffer(),
+            new_count,
+            updated_bytes,
+            self.buffer_size,
+        );
+    }
+
+    /// Queues a write of the given slice of bytes to the existing buffer,
+    /// starting just after the count at the beginning of the buffer. The slice
+    /// must have the same size as the part of the buffer after the count. If
+    /// `new_count` is [`Some`], the count at the beginning of the buffer will
+    /// be updated to the specified value.
+    ///
+    /// # Panics
+    /// If the combined size of the count and the slice of updated bytes is not
+    /// the same as the total size of the buffer.
+    pub fn update_all_bytes(
+        &self,
+        core_system: &CoreRenderingSystem,
+        updated_bytes: &[u8],
+        new_count: Option<Count>,
+    ) {
+        assert_eq!(
+            Self::compute_size_including_count(updated_bytes),
+            self.buffer_size
+        );
+        self.update_valid_bytes(core_system, updated_bytes, new_count);
+    }
+
+    /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
+    /// binding for the valid part of this counted uniform buffer.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: self.buffer(),
+                offset: 0,
+                size: Some(NonZeroU64::new(self.n_valid_bytes() as u64).unwrap()),
+            }),
+        }
+    }
+
+    /// Returns the underlying [`wgpu::Buffer`].
+    fn buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
+    }
+
+    fn compute_size_including_count(bytes: &[u8]) -> usize {
+        mem::size_of::<Count>().checked_add(bytes.len()).unwrap()
+    }
+
+    fn create_initialized_counted_buffer_of_type(
+        device: &wgpu::Device,
+        buffer_type: RenderBufferType,
+        count: Count,
+        bytes: &[u8],
+        label: &str,
+    ) -> wgpu::Buffer {
+        let usage = buffer_type.usage() | wgpu::BufferUsages::COPY_DST;
+        Self::create_initialized_counted_buffer(device, count, bytes, usage, label)
+    }
+
+    fn create_initialized_counted_buffer(
+        device: &wgpu::Device,
+        count: Count,
+        bytes: &[u8],
+        usage: wgpu::BufferUsages,
+        label: &str,
+    ) -> wgpu::Buffer {
+        let buffer_size = mem::size_of::<Count>().checked_add(bytes.len()).unwrap();
+
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            size: buffer_size as u64,
+            usage,
+            mapped_at_creation: true,
+            label: Some(label),
+        });
+
+        // Block to make `buffer_slice` and `mapped_memory` drop after we are done with them
+        {
+            let buffer_slice = buffer.slice(..);
+            let mut mapped_memory = buffer_slice.get_mapped_range_mut();
+
+            // Write count to beginning, followed by actual data
+            mapped_memory[0..mem::size_of::<Count>()].copy_from_slice(bytemuck::bytes_of(&count));
+            mapped_memory[mem::size_of::<Count>()..].copy_from_slice(bytes);
+        }
+
+        buffer.unmap();
+
+        buffer
+    }
+
+    fn queue_writes_to_counted_buffer(
+        queue: &wgpu::Queue,
+        buffer: &wgpu::Buffer,
+        count: Option<Count>,
+        bytes: &[u8],
+        buffer_size: usize,
+    ) {
+        // Write actual data starting just after the count
+        queue_write_to_buffer(queue, buffer, mem::size_of::<Count>(), bytes, buffer_size);
+
+        // Update the count if needed
+        if let Some(count) = count {
+            queue_write_to_buffer(queue, buffer, 0, bytemuck::bytes_of(&count), buffer_size);
+        }
+    }
 }
 
 /// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
@@ -273,32 +538,14 @@ pub fn create_single_uniform_bind_group_entry(
     }
 }
 
-fn create_initialized_buffer_of_type(
-    device: &wgpu::Device,
-    buffer_type: RenderBufferType,
-    bytes: &[u8],
-    label: &str,
-) -> wgpu::Buffer {
-    let usage = match buffer_type {
-        RenderBufferType::Vertex => wgpu::BufferUsages::VERTEX,
-        RenderBufferType::Index => wgpu::BufferUsages::INDEX,
-        RenderBufferType::Uniform => wgpu::BufferUsages::UNIFORM,
-    } | wgpu::BufferUsages::COPY_DST;
-
-    create_initialized_buffer(device, bytes, usage, label)
-}
-
-fn create_initialized_buffer(
-    device: &wgpu::Device,
-    bytes: &[u8],
-    usage: wgpu::BufferUsages,
-    label: &str,
-) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        contents: bytes,
-        usage,
-        label: Some(label),
-    })
+impl RenderBufferType {
+    fn usage(&self) -> wgpu::BufferUsages {
+        match self {
+            Self::Vertex => wgpu::BufferUsages::VERTEX,
+            Self::Index => wgpu::BufferUsages::INDEX,
+            Self::Uniform => wgpu::BufferUsages::UNIFORM,
+        }
+    }
 }
 
 fn queue_write_to_buffer(
