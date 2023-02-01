@@ -3,7 +3,7 @@
 use crate::{
     impl_InstanceFeature,
     num::Float,
-    rendering::{fre, InstanceFeatureShaderInput, ModelInstanceTransformShaderInput},
+    rendering::{fre, InstanceFeatureShaderInput, ModelViewTransformShaderInput},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
@@ -96,8 +96,8 @@ pub struct DynamicInstanceFeatureBuffer {
 /// A model-to-camera transform for a specific instance of a model.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct ModelInstanceTransform<F: Float> {
-    transform_matrix: Matrix4<F>,
+pub struct InstanceModelViewTransform<F: Float> {
+    model_view_matrix: Matrix4<F>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -526,25 +526,25 @@ impl InstanceFeatureTypeDescriptor {
     }
 }
 
-impl<F: Float> ModelInstanceTransform<F> {
+impl<F: Float> InstanceModelViewTransform<F> {
     /// Creates a new identity model-to-camera transform.
     pub fn identity() -> Self {
-        Self::with_model_to_camera_transform(Matrix4::identity())
+        Self::with_model_view_matrix(Matrix4::identity())
     }
 
     /// Creates a new model-to-camera transform with the given
     /// transform matrix.
-    pub fn with_model_to_camera_transform(transform_matrix: Matrix4<F>) -> Self {
-        Self { transform_matrix }
+    pub fn with_model_view_matrix(model_view_matrix: Matrix4<F>) -> Self {
+        Self { model_view_matrix }
     }
 
     /// Returns the matrix for the model-to-camera transform.
-    pub fn transform_matrix(&self) -> &Matrix4<F> {
-        &self.transform_matrix
+    pub fn model_view_matrix(&self) -> &Matrix4<F> {
+        &self.model_view_matrix
     }
 }
 
-impl<F: Float> Default for ModelInstanceTransform<F> {
+impl<F: Float> Default for InstanceModelViewTransform<F> {
     fn default() -> Self {
         Self::identity()
     }
@@ -552,9 +552,9 @@ impl<F: Float> Default for ModelInstanceTransform<F> {
 
 // Since `ModelInstanceTransform` is `#[repr(transparent)]`, it will be
 // `Zeroable` and `Pod` as long as its field, `Matrix4`, is so.
-unsafe impl<F: Float> Zeroable for ModelInstanceTransform<F> where Matrix4<F>: Zeroable {}
+unsafe impl<F: Float> Zeroable for InstanceModelViewTransform<F> where Matrix4<F>: Zeroable {}
 
-unsafe impl<F> Pod for ModelInstanceTransform<F>
+unsafe impl<F> Pod for InstanceModelViewTransform<F>
 where
     F: Float,
     Matrix4<F>: Pod,
@@ -562,15 +562,15 @@ where
 }
 
 impl_InstanceFeature!(
-    ModelInstanceTransform<fre>,
+    InstanceModelViewTransform<fre>,
     wgpu::vertex_attr_array![
         INSTANCE_VERTEX_BINDING_START => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 3 => Float32x4
     ],
-    InstanceFeatureShaderInput::ModelInstanceTransform(ModelInstanceTransformShaderInput {
-        model_matrix_locations: (
+    InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
+        model_view_matrix_column_locations: (
             INSTANCE_VERTEX_BINDING_START,
             INSTANCE_VERTEX_BINDING_START + 1,
             INSTANCE_VERTEX_BINDING_START + 2,
@@ -605,7 +605,7 @@ mod test {
     use super::*;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
-    type Feature = ModelInstanceTransform<f32>;
+    type Feature = InstanceModelViewTransform<f32>;
 
     #[repr(transparent)]
     #[derive(Clone, Copy, Zeroable, Pod)]
@@ -618,8 +618,8 @@ mod test {
     impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
     impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
 
-    fn create_dummy_feature() -> ModelInstanceTransform<f32> {
-        ModelInstanceTransform::with_model_to_camera_transform(
+    fn create_dummy_feature() -> InstanceModelViewTransform<f32> {
+        InstanceModelViewTransform::with_model_view_matrix(
             Similarity3::from_parts(
                 Translation3::new(2.1, -5.9, 0.01),
                 UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
@@ -642,7 +642,7 @@ mod test {
     fn adding_features_to_instance_feature_storage_works() {
         let mut storage = InstanceFeatureStorage::new::<Feature>();
         let feature_1 = create_dummy_feature();
-        let feature_2 = ModelInstanceTransform::<f32>::identity();
+        let feature_2 = InstanceModelViewTransform::<f32>::identity();
 
         let id_1 = storage.add_feature(&feature_1);
 
@@ -712,7 +712,7 @@ mod test {
     fn removing_features_from_instance_feature_storage_works() {
         let mut storage = InstanceFeatureStorage::new::<Feature>();
         let feature_1 = create_dummy_feature();
-        let feature_2 = ModelInstanceTransform::<f32>::identity();
+        let feature_2 = InstanceModelViewTransform::<f32>::identity();
 
         let id_1 = storage.add_feature(&feature_1);
         let id_2 = storage.add_feature(&feature_2);
@@ -850,7 +850,7 @@ mod test {
     #[test]
     fn adding_two_features_to_instance_feature_buffer_works() {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-        let feature_1 = ModelInstanceTransform::identity();
+        let feature_1 = InstanceModelViewTransform::identity();
         let feature_2 = create_dummy_feature();
         buffer.add_feature(&feature_1);
         buffer.add_feature(&feature_2);
@@ -868,7 +868,7 @@ mod test {
     fn adding_three_features_to_instance_feature_buffer_works() {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
         let feature_1 = create_dummy_feature();
-        let feature_2 = ModelInstanceTransform::identity();
+        let feature_2 = InstanceModelViewTransform::identity();
         let feature_3 = create_dummy_feature();
 
         buffer.add_feature(&feature_1);
@@ -898,7 +898,7 @@ mod test {
     #[test]
     fn clearing_one_feature_from_instance_feature_buffer_works() {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-        let feature_1 = ModelInstanceTransform::identity();
+        let feature_1 = InstanceModelViewTransform::identity();
         let feature_2 = create_dummy_feature();
 
         buffer.add_feature(&feature_1);
@@ -924,7 +924,7 @@ mod test {
     #[test]
     fn clearing_two_features_from_instance_feature_buffer_works() {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-        let feature_1 = ModelInstanceTransform::identity();
+        let feature_1 = InstanceModelViewTransform::identity();
         let feature_2 = create_dummy_feature();
 
         buffer.add_feature(&feature_1);
@@ -952,7 +952,7 @@ mod test {
     fn clearing_three_features_from_instance_feature_buffer_works() {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
         let feature_1 = create_dummy_feature();
-        let feature_2 = ModelInstanceTransform::identity();
+        let feature_2 = InstanceModelViewTransform::identity();
         let feature_3 = create_dummy_feature();
 
         buffer.add_feature(&feature_1);

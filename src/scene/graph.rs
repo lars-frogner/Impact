@@ -1,7 +1,7 @@
 //! Scene graph implementation.
 
 use crate::{
-    geometry::{Frustum, InstanceFeature, InstanceFeatureID, ModelInstanceTransform, Sphere},
+    geometry::{Frustum, InstanceFeature, InstanceFeatureID, InstanceModelViewTransform, Sphere},
     num::Float,
     scene::{CameraID, CameraRepository, InstanceFeatureManager, ModelID},
 };
@@ -422,7 +422,7 @@ impl<F: Float> SceneGraph<F> {
         camera_node_id: Option<CameraNodeID>,
     ) -> Result<()>
     where
-        ModelInstanceTransform<F>: InstanceFeature,
+        InstanceModelViewTransform<F>: InstanceFeature,
     {
         let root_node_id = self.root_node_id();
 
@@ -493,7 +493,7 @@ impl<F: Float> SceneGraph<F> {
         group_node_id: GroupNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) where
-        ModelInstanceTransform<F>: InstanceFeature,
+        InstanceModelViewTransform<F>: InstanceFeature,
     {
         let group_node = self.group_nodes.node(group_node_id);
 
@@ -538,19 +538,19 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node_id: ModelInstanceNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) where
-        ModelInstanceTransform<F>: InstanceFeature,
+        InstanceModelViewTransform<F>: InstanceFeature,
     {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-        let model_to_camera_transform =
+        let model_view_transform =
             parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-        let transform = ModelInstanceTransform::with_model_to_camera_transform(
-            model_to_camera_transform.to_homogeneous(),
+        let instance_model_view_transform = InstanceModelViewTransform::with_model_view_matrix(
+            model_view_transform.to_homogeneous(),
         );
         instance_feature_manager.buffer_instance(
             model_instance_node.model_id(),
-            &transform,
+            &instance_model_view_transform,
             model_instance_node.feature_ids(),
         );
     }

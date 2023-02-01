@@ -18,7 +18,7 @@ pub use camera::{Camera, CameraConfiguration, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use instance::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,
-    InstanceFeatureTypeID, ModelInstanceTransform,
+    InstanceFeatureTypeID, InstanceModelViewTransform,
 };
 pub use light::PointLight;
 pub use mesh::{ColorVertex, Mesh, TextureVertex, TriangleMesh};

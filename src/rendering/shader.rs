@@ -82,7 +82,7 @@ pub struct MeshShaderInput {
 /// Input description for any kind of per-instance feature.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum InstanceFeatureShaderInput {
-    ModelInstanceTransform(ModelInstanceTransformShaderInput),
+    ModelViewTransform(ModelViewTransformShaderInput),
     FixedColorMaterial(FixedColorFeatureShaderInput),
     BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
     /// For convenice in unit tests.
@@ -94,10 +94,10 @@ pub enum InstanceFeatureShaderInput {
 /// locations of the columns of the model view matrix to
 /// use for transforming the mesh in the shader.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ModelInstanceTransformShaderInput {
+pub struct ModelViewTransformShaderInput {
     /// Vertex attribute locations for the four columns of
     /// the model view matrix.
-    pub model_matrix_locations: (u32, u32, u32, u32),
+    pub model_view_matrix_column_locations: (u32, u32, u32, u32),
 }
 
 /// Input description for any kind of material that may
@@ -418,11 +418,10 @@ impl ShaderGenerator {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
 
-        let (model_instance_transform_shader_input, material_shader_builder) =
-            Self::interpret_inputs(
-                instance_feature_shader_inputs,
-                material_texture_shader_input,
-            )?;
+        let (model_view_transform_shader_input, material_shader_builder) = Self::interpret_inputs(
+            instance_feature_shader_inputs,
+            material_texture_shader_input,
+        )?;
 
         let vertex_property_requirements = material_shader_builder.vertex_property_requirements();
 
@@ -437,8 +436,8 @@ impl ShaderGenerator {
             &mut vertex_function,
         );
 
-        let model_matrix_var_expr_handle = Self::generate_vertex_code_for_model_matrix(
-            model_instance_transform_shader_input,
+        let model_matrix_var_expr_handle = Self::generate_vertex_code_for_model_view_transform(
+            model_view_transform_shader_input,
             &mut module.types,
             &mut vertex_function,
         );
@@ -519,17 +518,17 @@ impl ShaderGenerator {
         instance_feature_shader_inputs: &'a [&'a InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&'a MaterialTextureShaderInput>,
     ) -> Result<(
-        &'a ModelInstanceTransformShaderInput,
+        &'a ModelViewTransformShaderInput,
         MaterialShaderGenerator<'a>,
     )> {
-        let mut model_instance_transform_shader_input = None;
+        let mut model_view_transform_shader_input = None;
         let mut fixed_color_feature_shader_input = None;
         let mut blinn_phong_feature_shader_input = None;
 
         for &instance_feature_shader_input in instance_feature_shader_inputs {
             match instance_feature_shader_input {
-                InstanceFeatureShaderInput::ModelInstanceTransform(shader_input) => {
-                    let old = model_instance_transform_shader_input.replace(shader_input);
+                InstanceFeatureShaderInput::ModelViewTransform(shader_input) => {
+                    let old = model_view_transform_shader_input.replace(shader_input);
                     // There should not be multiple instance feature inputs of
                     // the same type
                     assert!(old.is_none());
@@ -547,9 +546,9 @@ impl ShaderGenerator {
             }
         }
 
-        let model_instance_transform_shader_input = model_instance_transform_shader_input
-            .ok_or_else(|| {
-                anyhow!("Tried to build shader with no model instance transform input")
+        let model_view_transform_shader_input =
+            model_view_transform_shader_input.ok_or_else(|| {
+                anyhow!("Tried to build shader with no instance model view transform input")
             })?;
 
         let material_shader_builder = match (
@@ -591,10 +590,7 @@ impl ShaderGenerator {
             }
         };
 
-        Ok((
-            model_instance_transform_shader_input,
-            material_shader_builder,
-        ))
+        Ok((model_view_transform_shader_input, material_shader_builder))
     }
 
     /// Generates the declaration of the model view transform type,
@@ -605,13 +601,13 @@ impl ShaderGenerator {
     /// # Returns
     /// Handle to the expression for the model view matrix in the main
     /// vertex shader function.
-    fn generate_vertex_code_for_model_matrix(
-        model_instance_transform_shader_input: &ModelInstanceTransformShaderInput,
+    fn generate_vertex_code_for_model_view_transform(
+        model_view_transform_shader_input: &ModelViewTransformShaderInput,
         types: &mut UniqueArena<Type>,
         vertex_function: &mut Function,
     ) -> Handle<Expression> {
         let (loc_0, loc_1, loc_2, loc_3) =
-            model_instance_transform_shader_input.model_matrix_locations;
+            model_view_transform_shader_input.model_view_matrix_column_locations;
 
         let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
         let mat4x4_type_handle = insert_in_arena(types, MATRIX_4X4_TYPE);
@@ -627,7 +623,7 @@ impl ShaderGenerator {
             offset,
         };
 
-        let model_transform_type = Type {
+        let model_view_transform_type = Type {
             name: new_name("ModelViewTransform"),
             inner: TypeInner::Struct {
                 members: vec![
@@ -640,19 +636,19 @@ impl ShaderGenerator {
             },
         };
 
-        let model_transform_type_handle = insert_in_arena(types, model_transform_type);
+        let model_view_transform_type_handle = insert_in_arena(types, model_view_transform_type);
 
-        let model_transform_arg_idx = u32::try_from(vertex_function.arguments.len()).unwrap();
+        let model_view_transform_arg_idx = u32::try_from(vertex_function.arguments.len()).unwrap();
 
         vertex_function.arguments.push(FunctionArgument {
             name: new_name("modelViewTransform"),
-            ty: model_transform_type_handle,
+            ty: model_view_transform_type_handle,
             binding: None,
         });
 
-        let model_transform_arg_ptr_expr_handle = append_to_arena(
+        let model_view_transform_arg_ptr_expr_handle = append_to_arena(
             &mut vertex_function.expressions,
-            Expression::FunctionArgument(model_transform_arg_idx),
+            Expression::FunctionArgument(model_view_transform_arg_idx),
         );
 
         // Create expression constructing a 4x4 matrix from the columns
@@ -669,7 +665,7 @@ impl ShaderGenerator {
                             append_to_arena(
                                 expressions,
                                 Expression::AccessIndex {
-                                    base: model_transform_arg_ptr_expr_handle,
+                                    base: model_view_transform_arg_ptr_expr_handle,
                                     index,
                                 },
                             )
@@ -1712,9 +1708,9 @@ mod test {
         projection_matrix_binding: 0,
     };
 
-    const MODEL_TRANSFORM_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::ModelInstanceTransform(ModelInstanceTransformShaderInput {
-            model_matrix_locations: (0, 1, 2, 3),
+    const MODEL_VIEW_TRANSFORM_INPUT: InstanceFeatureShaderInput =
+        InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
+            model_view_matrix_column_locations: (0, 1, 2, 3),
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {
@@ -1857,7 +1853,7 @@ mod test {
         ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
-            &[&MODEL_TRANSFORM_INPUT],
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
         )
         .unwrap();
@@ -1873,7 +1869,7 @@ mod test {
                 normal_vector_location: None,
                 texture_coord_location: None,
             }),
-            &[&MODEL_TRANSFORM_INPUT],
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
         .unwrap()
@@ -1892,7 +1888,7 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
-            &[&MODEL_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
+            &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
         .unwrap()
@@ -1916,7 +1912,7 @@ mod test {
                 normal_vector_location: None,
                 texture_coord_location: Some(VERTEX_POSITION_BINDING + 1),
             }),
-            &[&MODEL_TRANSFORM_INPUT],
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
         )
         .unwrap()
@@ -1940,7 +1936,7 @@ mod test {
                 normal_vector_location: Some(VERTEX_POSITION_BINDING + 1),
                 texture_coord_location: None,
             }),
-            &[&MODEL_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
+            &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
         .unwrap()
@@ -1965,7 +1961,7 @@ mod test {
                 texture_coord_location: Some(VERTEX_POSITION_BINDING + 2),
             }),
             &[
-                &MODEL_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
             Some(&DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
@@ -1991,7 +1987,10 @@ mod test {
                 normal_vector_location: Some(VERTEX_POSITION_BINDING + 1),
                 texture_coord_location: Some(VERTEX_POSITION_BINDING + 2),
             }),
-            &[&MODEL_TRANSFORM_INPUT, &TEXTURED_BLINN_PHONG_FEATURE_INPUT],
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+            ],
             Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
         )
         .unwrap()
