@@ -35,6 +35,8 @@ cfg_if::cfg_if! {
 pub struct Shader {
     module: wgpu::ShaderModule,
     entry_point_names: EntryPointNames,
+    #[cfg(debug_assertions)]
+    source_code: String,
 }
 
 /// Names of the different shader entry point functions.
@@ -300,25 +302,33 @@ impl Shader {
         Self {
             module,
             entry_point_names,
+            #[cfg(debug_assertions)]
+            source_code: source.to_string(),
         }
     }
 
     /// Creates a new shader from the given [`Module`].
     pub fn from_naga_module(
         core_system: &CoreRenderingSystem,
-        module: Module,
+        naga_module: Module,
         entry_point_names: EntryPointNames,
         label: &str,
     ) -> Self {
+        #[cfg(debug_assertions)]
+        let source_code = Self::generate_wgsl_from_naga_module(&naga_module);
+
         let module = core_system
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                source: wgpu::ShaderSource::Naga(Cow::Owned(module)),
+                source: wgpu::ShaderSource::Naga(Cow::Owned(naga_module)),
                 label: Some(label),
             });
+
         Self {
             module,
             entry_point_names,
+            #[cfg(debug_assertions)]
+            source_code,
         }
     }
 
@@ -342,6 +352,38 @@ impl Shader {
     /// Returns the name of the fragment entry point function.
     pub fn fragment_entry_point_name(&self) -> &str {
         &self.entry_point_names.fragment
+    }
+
+    #[cfg(debug_assertions)]
+    fn generate_wgsl_from_naga_module(module: &Module) -> String {
+        Self::generate_wgsl_from_validated_naga_module(module, &Self::validate_naga_module(module))
+    }
+
+    #[cfg(debug_assertions)]
+    fn validate_naga_module(module: &Module) -> naga::valid::ModuleInfo {
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        );
+        validator
+            .validate(module)
+            .expect("Shader validation failed")
+    }
+
+    #[cfg(debug_assertions)]
+    fn generate_wgsl_from_validated_naga_module(
+        module: &Module,
+        module_info: &naga::valid::ModuleInfo,
+    ) -> String {
+        naga::back::wgsl::write_string(module, module_info, naga::back::wgsl::WriterFlags::all())
+            .unwrap()
+    }
+}
+
+#[cfg(debug_assertions)]
+impl std::fmt::Display for Shader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.source_code)
     }
 }
 
