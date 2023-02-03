@@ -15,47 +15,11 @@ impl Scene {
     /// Performs any modifications to the scene required to accommodate a
     /// new entity with components represented by the given component manager,
     /// and adds any additional components to the entity's components.
-    pub fn handle_entity_created(&self, components: &mut ArchetypeComponentStorage) {
-        let mut light_storage = self.light_storage().write().unwrap();
-
-        PointLight::add_point_light_component_for_entity(&mut light_storage, components);
-
-        drop(light_storage);
-
-        let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
-        let mut material_library = self.material_library().write().unwrap();
-
-        VertexColorMaterial::add_material_component_for_entity(components);
-
-        FixedColorMaterial::add_material_component_for_entity(
-            &mut instance_feature_manager,
-            components,
-        );
-
-        FixedTextureMaterial::add_material_component_for_entity(&mut material_library, components);
-
-        BlinnPhongMaterial::add_material_component_for_entity(
-            &mut instance_feature_manager,
-            components,
-        );
-
-        DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
-            &mut instance_feature_manager,
-            &mut material_library,
-            components,
-        );
-
-        TexturedBlinnPhongMaterial::add_material_component_for_entity(
-            &mut instance_feature_manager,
-            &mut material_library,
-            components,
-        );
-
-        drop(material_library);
-        drop(instance_feature_manager);
-
+        self.add_light_component_for_entity(components);
+        self.add_material_component_for_entity(components);
         self.add_camera_node_component_for_entity(components);
         self.add_model_instance_node_component_for_entity(components);
+        Ok(())
     }
 
     /// Performs any modifications required to clean up the scene when
@@ -63,10 +27,45 @@ impl Scene {
     pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) {
         self.remove_camera_node_for_entity(entity);
         self.remove_model_instance_node_for_entity(entity);
-
-        self.remove_lights_for_entity(entity);
-
         self.remove_material_features_for_entity(entity);
+        self.remove_light_for_entity(entity);
+    }
+
+        drop(light_storage);
+
+    fn add_light_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
+        PointLight::add_point_light_component_for_entity(self.light_storage(), components);
+    }
+
+    fn add_material_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
+        VertexColorMaterial::add_material_component_for_entity(components);
+
+        FixedColorMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            components,
+        );
+
+        FixedTextureMaterial::add_material_component_for_entity(
+            self.material_library(),
+            components,
+        );
+
+        BlinnPhongMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            components,
+        );
+
+        DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            self.material_library(),
+            components,
+        );
+
+        TexturedBlinnPhongMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            self.material_library(),
+            components,
+        );
     }
 
     fn add_camera_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
@@ -153,7 +152,8 @@ impl Scene {
         );
     }
 
-    fn remove_lights_for_entity(&self, entity: &EntityEntry<'_>) {
+
+    fn remove_light_for_entity(&self, entity: &EntityEntry<'_>) {
         PointLight::remove_light_from_storage(self.light_storage(), entity);
     }
 

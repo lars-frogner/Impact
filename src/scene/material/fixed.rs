@@ -17,6 +17,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
+use std::sync::RwLock;
 
 /// Material with a fixed, uniform color that is independent
 /// of lighting.
@@ -69,10 +70,13 @@ impl FixedColorMaterial {
     /// instance feature manager and adds the appropriate material component
     /// to the entity.
     pub fn add_material_component_for_entity(
-        instance_feature_manager: &mut InstanceFeatureManager,
+        instance_feature_manager: &RwLock<InstanceFeatureManager>,
         components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
+            {
+                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+            },
             components,
             |fixed_color: &FixedColorComp| -> MaterialComp {
                 let material = Self {
@@ -106,10 +110,13 @@ impl FixedTextureMaterial {
     /// to the material library if not present and adds the appropriate material
     /// component to the entity.
     pub fn add_material_component_for_entity(
-        material_library: &mut MaterialLibrary,
+        material_library: &RwLock<MaterialLibrary>,
         components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
+            {
+                let mut material_library = material_library.write().unwrap();
+            },
             components,
             |fixed_texture: &FixedTextureComp| -> MaterialComp {
                 let texture_ids = [fixed_texture.0];

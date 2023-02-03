@@ -43,10 +43,13 @@ impl PointLight {
     /// [`PointLight`] to the light storage and adds a [`PointLightComp`] with
     /// the light's ID to the entity.
     pub fn add_point_light_component_for_entity(
-        light_storage: &mut LightStorage,
+        light_storage: &RwLock<LightStorage>,
         components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
+            {
+                let mut light_storage = light_storage.write().unwrap();
+            },
             components,
             |position: &PositionComp, radiance: &RadianceComp| -> PointLightComp {
                 let point_light = Self::new(position.0.cast(), radiance.0);

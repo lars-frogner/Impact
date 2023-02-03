@@ -17,6 +17,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
+use std::sync::RwLock;
 
 /// Material using the Blinn-Phong reflection model, with
 /// fixed ambient, diffuse and specular colors and fixed
@@ -101,10 +102,13 @@ impl BlinnPhongMaterial {
     /// instance feature manager and adds the appropriate material component
     /// to the entity.
     pub fn add_material_component_for_entity(
-        instance_feature_manager: &mut InstanceFeatureManager,
+        instance_feature_manager: &RwLock<InstanceFeatureManager>,
         components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
+            {
+                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+            },
             components,
             |blinn_phong: &BlinnPhongComp| -> MaterialComp {
                 let material = Self {
@@ -153,11 +157,15 @@ impl DiffuseTexturedBlinnPhongMaterial {
     /// material in the given instance feature manager and adds the appropriate
     /// material component to the entity.
     pub fn add_material_component_for_entity(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        material_library: &mut MaterialLibrary,
+        instance_feature_manager: &RwLock<InstanceFeatureManager>,
+        material_library: &RwLock<MaterialLibrary>,
         components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
+            {
+                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+                let mut material_library = material_library.write().unwrap();
+            },
             components,
             |blinn_phong: &DiffuseTexturedBlinnPhongComp| -> MaterialComp {
                 let texture_ids = [blinn_phong.diffuse];
@@ -224,11 +232,15 @@ impl TexturedBlinnPhongMaterial {
     /// instance feature manager and adds the appropriate material component to the
     /// entity.
     pub fn add_material_component_for_entity(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        material_library: &mut MaterialLibrary,
+        instance_feature_manager: &RwLock<InstanceFeatureManager>,
+        material_library: &RwLock<MaterialLibrary>,
         components: &mut ArchetypeComponentStorage,
     ) {
         setup!(
+            {
+                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+                let mut material_library = material_library.write().unwrap();
+            },
             components,
             |blinn_phong: &TexturedBlinnPhongComp| -> MaterialComp {
                 let texture_ids = [blinn_phong.diffuse, blinn_phong.specular];
