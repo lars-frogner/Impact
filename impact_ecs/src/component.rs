@@ -48,7 +48,7 @@ pub trait ComponentArray: Clone {
     /// Returns the size of a single component instance in bytes.
     fn component_size(&self) -> usize;
 
-    /// Returns the alignement of the component type.
+    /// Returns the alignment of the component type.
     fn component_align(&self) -> Alignment;
 
     /// Returns a type erased view of the component instances.
