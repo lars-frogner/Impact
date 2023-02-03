@@ -17,10 +17,19 @@ pub struct UniformRenderBufferManager {
     uniform_id: ConstStringHash64,
 }
 
+/// Indicates whether a new render buffer had to be created in order to hold all
+/// the transferred uniform data.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum UniformTransferResult {
+    CreatedNewBuffer,
+    UpdatedExistingBuffer,
+    NothingToTransfer,
+}
+
 impl UniformRenderBufferManager {
     /// Creates a new manager with a render buffer initialized
     /// from the given uniform buffer.
-    pub fn new<ID, U>(
+    pub fn for_uniform_buffer<ID, U>(
         core_system: &CoreRenderingSystem,
         uniform_buffer: &UniformBuffer<ID, U>,
     ) -> Self
@@ -43,6 +52,12 @@ impl UniformRenderBufferManager {
         }
     }
 
+    /// Returns the maximum number of uniforms that can fit in the
+    /// buffer.
+    pub fn max_uniform_count(&self) -> usize {
+        self.uniform_render_buffer.max_item_count()
+    }
+
     /// Creates the bind group entry for the currently valid part
     /// of the uniform buffer, assigned to the given binding.
     ///
@@ -59,19 +74,23 @@ impl UniformRenderBufferManager {
         &self.uniform_render_buffer
     }
 
-    /// Writes the valid uniforms in the given uniform
-    /// buffer into the uniform render buffer if the uniform
-    /// buffer has changed (reallocating the render buffer
-    /// if required).
+    /// Writes the valid uniforms in the given uniform buffer into the uniform
+    /// render buffer if the uniform buffer has changed (reallocating the render
+    /// buffer if required).
+    ///
+    /// # Returns
+    /// A [`UniformTransferResult`] indicating whether the render buffer had to
+    /// be reallocated, in which case its bind group should also be recreated.
     ///
     /// # Panics
-    /// If the given uniform buffer stores a different type
-    /// of uniform than the render buffer.
+    /// If the given uniform buffer stores a different type of uniform than the
+    /// render buffer.
     pub fn transfer_uniforms_to_render_buffer<ID, U>(
         &mut self,
         core_system: &CoreRenderingSystem,
         uniform_buffer: &UniformBuffer<ID, U>,
-    ) where
+    ) -> UniformTransferResult
+    where
         ID: Copy + Hash + Eq + Debug,
         U: UniformBufferable,
     {
@@ -79,13 +98,11 @@ impl UniformRenderBufferManager {
 
         let change = uniform_buffer.change();
 
-        if change != CollectionChange::None {
+        let result = if change != CollectionChange::None {
             let valid_uniforms = uniform_buffer.valid_uniforms();
             let n_valid_uniforms = valid_uniforms.len();
 
-            let n_valid_uniform_bytes = mem::size_of::<U>()
-                .checked_mul(valid_uniforms.len())
-                .unwrap();
+            let n_valid_uniform_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
 
             if self
                 .uniform_render_buffer
@@ -100,6 +117,8 @@ impl UniformRenderBufferManager {
                     n_valid_uniforms,
                     self.uniform_id.as_ref(),
                 );
+
+                UniformTransferResult::CreatedNewBuffer
             } else {
                 // We need to update the count of valid uniforms in the render buffer if it
                 // has changed
@@ -114,8 +133,15 @@ impl UniformRenderBufferManager {
                     bytemuck::cast_slice(valid_uniforms),
                     new_count,
                 );
+
+                UniformTransferResult::UpdatedExistingBuffer
             }
-        }
+        } else {
+            UniformTransferResult::NothingToTransfer
+        };
+
         uniform_buffer.reset_change_tracking();
+
+        result
     }
 }

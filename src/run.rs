@@ -16,7 +16,10 @@ use crate::{
         PositionComp, SimulatorConfig, VelocityComp,
     },
     rendering::{fre, Assets, TextureID},
-    scene::{CameraComp, CameraID, CameraRepository, MeshComp, MeshID, MeshRepository, Scene},
+    scene::{
+        BlinnPhongComp, CameraComp, CameraID, CameraRepository, FixedColorComp, FixedTextureComp,
+        MeshComp, MeshID, MeshRepository, Omnidirectional, RadianceComp, Scene, VertexColorComp,
+    },
     window::InputHandler,
     window::{KeyActionMap, Window},
     world::World,
@@ -92,8 +95,14 @@ async fn init_world(window: Window) -> Result<World> {
 
     mesh_repository
         .add_texture_mesh(
-            MeshID(hash64!("Test mesh")),
+            MeshID(hash64!("Texture mesh")),
             TriangleMesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
+        )
+        .unwrap();
+    mesh_repository
+        .add_color_mesh(
+            MeshID(hash64!("Color mesh")),
+            TriangleMesh::new(VERTICES_WITH_COLOR.to_vec(), INDICES.to_vec()),
         )
         .unwrap();
 
@@ -140,17 +149,36 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Test mesh"))),
+            // &MeshComp::new(MeshID(hash64!("Texture mesh"))),
+            &MeshComp::new(MeshID(hash64!("Color mesh"))),
             &PositionComp(Point3::new(0.0, 0.0, 3.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
             &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.0))),
+            // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
+            // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
+            &VertexColorComp,
+            // &BlinnPhongComp {
+            //     ambient: vector![1.0, 1.0, 1.0],
+            //     diffuse: vector![1.0, 1.0, 1.0],
+            //     specular: vector![1.0, 1.0, 1.0],
+            //     shininess: 1.0,
+            //     alpha: 1.0,
+            // },
         ))
         .unwrap();
+
+    // world
+    //     .create_entities((
+    //         &PositionComp(Point3::new(0.0, 0.0, 3.0)),
+    //         &RadianceComp(vector![1.0, 1.0, 1.0]),
+    //         &Omnidirectional,
+    //     ))
+    //     .unwrap();
 
     Ok(world)
 }
 
-const VERTICES: &[ColorVertex<fre>] = &[
+const VERTICES_WITH_COLOR: &[ColorVertex<fre>] = &[
     ColorVertex {
         position: point![-0.0868241, 0.49240386, 0.0],
         color: vector![1.0, 0.0, 0.0, 1.0],

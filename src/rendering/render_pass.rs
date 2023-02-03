@@ -8,8 +8,8 @@ use crate::{
     rendering::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
-        CoreRenderingSystem, InstanceFeatureShaderInput, MaterialRenderResourceManager,
-        MaterialTextureShaderInput, MeshShaderInput, Shader,
+        CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
+        MaterialRenderResourceManager, MaterialTextureShaderInput, MeshShaderInput, Shader,
     },
     scene::{CameraID, MaterialID, MeshID, ModelID, ShaderManager},
 };
@@ -229,23 +229,27 @@ impl RenderPassSpecification {
         Ok((layouts, mesh_shader_input, instance_feature_shader_inputs))
     }
 
-    /// Obtains the bind group layouts for any camera and material
+    /// Obtains the bind group layouts for any camera, material or lights
     /// involved in the render pass, as well as the associated shader
     /// inputs.
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
-    /// 2. Material textures.
+    /// 2. Lights.
+    /// 3. Material textures.
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<(
         Vec<&'a wgpu::BindGroupLayout>,
         Option<&'a CameraShaderInput>,
+        Option<&'a LightShaderInput>,
         Option<&'a MaterialTextureShaderInput>,
     )> {
-        let mut layouts = Vec::with_capacity(2);
+        let mut layouts = Vec::with_capacity(3);
+
         let mut camera_shader_input = None;
+        let mut light_shader_input = None;
         let mut material_texture_shader_input = None;
 
         if let Some(camera_id) = self.camera_id {
@@ -254,6 +258,11 @@ impl RenderPassSpecification {
 
             layouts.push(camera_buffer_manager.bind_group_layout());
             camera_shader_input = Some(camera_buffer_manager.shader_input());
+        }
+
+        if let Some(light_buffer_manager) = render_resources.get_light_buffer_manager() {
+            layouts.push(light_buffer_manager.bind_group_layout());
+            light_shader_input = Some(light_buffer_manager.shader_input());
         }
 
         if let Some(model_id) = self.model_id {
@@ -266,23 +275,35 @@ impl RenderPassSpecification {
             material_texture_shader_input = Some(material_resource_manager.shader_input());
         }
 
-        Ok((layouts, camera_shader_input, material_texture_shader_input))
+        Ok((
+            layouts,
+            camera_shader_input,
+            light_shader_input,
+            material_texture_shader_input,
+        ))
     }
 
     /// Obtains all bind groups involved in the render pass.
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
-    /// 2. Material textures.
+    /// 2. Lights.
+    /// 3. Material textures.
     fn get_bind_groups<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
-        let mut bind_groups = Vec::with_capacity(2);
+        let mut bind_groups = Vec::with_capacity(3);
+
         if let Some(camera_id) = self.camera_id {
             bind_groups
                 .push(Self::get_camera_buffer_manager(render_resources, camera_id)?.bind_group());
         }
+
+        if let Some(light_buffer_manager) = render_resources.get_light_buffer_manager() {
+            bind_groups.push(light_buffer_manager.bind_group());
+        }
+
         if let Some(model_id) = self.model_id {
             if let Some(bind_group) =
                 Self::get_material_resource_manager(render_resources, model_id.material_id())?
@@ -291,6 +312,7 @@ impl RenderPassSpecification {
                 bind_groups.push(bind_group);
             }
         }
+
         Ok(bind_groups)
     }
 
@@ -356,13 +378,18 @@ impl RenderPassRecorder {
             let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
                 specification.get_vertex_buffer_layouts_and_shader_inputs(render_resources)?;
 
-            let (bind_group_layouts, camera_shader_input, material_texture_shader_input) =
-                specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
+            let (
+                bind_group_layouts,
+                camera_shader_input,
+                light_shader_input,
+                material_texture_shader_input,
+            ) = specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
 
             let shader = shader_manager.obtain_shader(
                 core_system,
                 camera_shader_input,
                 mesh_shader_input,
+                light_shader_input,
                 &instance_feature_shader_inputs,
                 material_texture_shader_input,
             )?;

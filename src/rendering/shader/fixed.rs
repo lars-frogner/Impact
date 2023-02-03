@@ -56,6 +56,11 @@ impl<'a> FixedColorShaderGenerator<'a> {
         VertexPropertyRequirements::empty()
     }
 
+    /// Whether the material requires light sources.
+    pub const fn requires_lights() -> bool {
+        false
+    }
+
     /// Creates a new shader generator using the given input
     /// description.
     pub fn new(feature_input: &'a FixedColorFeatureShaderInput) -> Self {
@@ -145,6 +150,11 @@ impl<'a> FixedTextureShaderGenerator<'a> {
     /// by the material.
     pub const fn vertex_property_requirements() -> VertexPropertyRequirements {
         VertexPropertyRequirements::TEXTURE_COORDS
+    }
+
+    /// Whether the material requires light sources.
+    pub const fn requires_lights() -> bool {
+        false
     }
 
     /// Creates a new shader generator using the given input

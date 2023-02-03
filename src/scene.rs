@@ -5,6 +5,7 @@ mod components;
 mod events;
 mod graph;
 mod instance;
+mod light;
 mod material;
 mod mesh;
 mod model;
@@ -19,6 +20,9 @@ pub use graph::{
     ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,
 };
 pub use instance::InstanceFeatureManager;
+pub use light::{
+    LightID, LightStorage, Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp,
+};
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
     DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedTextureComp,
@@ -40,6 +44,7 @@ pub struct Scene {
     camera_repository: RwLock<CameraRepository<fre>>,
     mesh_repository: RwLock<MeshRepository<fre>>,
     material_library: RwLock<MaterialLibrary>,
+    light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
     shader_manager: RwLock<ShaderManager>,
     scene_graph: RwLock<SceneGraph<fre>>,
@@ -56,6 +61,7 @@ impl Scene {
             camera_repository: RwLock::new(camera_repository),
             mesh_repository: RwLock::new(mesh_repository),
             material_library: RwLock::new(MaterialLibrary::new()),
+            light_storage: RwLock::new(LightStorage::new()),
             instance_feature_manager: RwLock::new(InstanceFeatureManager::new()),
             shader_manager: RwLock::new(ShaderManager::new()),
             scene_graph: RwLock::new(SceneGraph::new()),
@@ -81,6 +87,12 @@ impl Scene {
     /// by a [`RwLock`].
     pub fn material_library(&self) -> &RwLock<MaterialLibrary> {
         &self.material_library
+    }
+
+    /// Returns a reference to the [`LightStorage`], guarded
+    /// by a [`RwLock`].
+    pub fn light_storage(&self) -> &RwLock<LightStorage> {
+        &self.light_storage
     }
 
     /// Returns a reference to the [`InstanceFeatureManager`], guarded

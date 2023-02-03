@@ -4,8 +4,8 @@ use crate::{
     physics::{OrientationComp, PositionComp},
     scene::{
         self, BlinnPhongMaterial, CameraComp, CameraNodeID, DiffuseTexturedBlinnPhongMaterial,
-        FixedColorMaterial, FixedTextureMaterial, InstanceFeatureManager, MaterialComp, MeshComp,
-        ModelID, ModelInstanceNodeID, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
+        FixedColorMaterial, FixedTextureMaterial, MaterialComp, MeshComp, ModelID,
+        ModelInstanceNodeID, PointLight, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
         VertexColorMaterial,
     },
 };
@@ -16,6 +16,12 @@ impl Scene {
     /// new entity with components represented by the given component manager,
     /// and adds any additional components to the entity's components.
     pub fn handle_entity_created(&self, components: &mut ArchetypeComponentStorage) {
+        let mut light_storage = self.light_storage().write().unwrap();
+
+        PointLight::add_point_light_component_for_entity(&mut light_storage, components);
+
+        drop(light_storage);
+
         let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
         let mut material_library = self.material_library().write().unwrap();
 
@@ -58,9 +64,9 @@ impl Scene {
         self.remove_camera_node_for_entity(entity);
         self.remove_model_instance_node_for_entity(entity);
 
-        let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
-        Self::remove_material_features_for_entity(&mut instance_feature_manager, entity);
-        drop(instance_feature_manager);
+        self.remove_lights_for_entity(entity);
+
+        self.remove_material_features_for_entity(entity);
     }
 
     fn add_camera_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
@@ -147,15 +153,18 @@ impl Scene {
         );
     }
 
-    fn remove_material_features_for_entity(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        entity: &EntityEntry<'_>,
-    ) {
+    fn remove_lights_for_entity(&self, entity: &EntityEntry<'_>) {
+        PointLight::remove_light_from_storage(self.light_storage(), entity);
+    }
+
+    fn remove_material_features_for_entity(&self, entity: &EntityEntry<'_>) {
         if let Some(material) = entity.get_component::<MaterialComp>() {
             let feature_id = material.access().feature_id;
 
             if !feature_id.is_not_applicable() {
-                instance_feature_manager
+                self.instance_feature_manager()
+                    .write()
+                    .unwrap()
                     .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
                     .expect("Missing storage for material feature")
                     .remove_feature(feature_id);

@@ -20,6 +20,11 @@ impl VertexColorShaderGenerator {
         VertexPropertyRequirements::COLOR
     }
 
+    /// Whether the material requires light sources.
+    pub const fn requires_lights() -> bool {
+        false
+    }
+
     /// Generates the fragment shader code specific to this material
     /// by adding code representation to the given [`naga`] objects.
     ///

@@ -83,6 +83,11 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         }
     }
 
+    /// Whether the material requires light sources.
+    pub const fn requires_lights() -> bool {
+        true
+    }
+
     /// Creates a new shader generator using the given input
     /// description.
     pub fn new(

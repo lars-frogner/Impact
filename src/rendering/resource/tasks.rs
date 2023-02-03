@@ -22,6 +22,7 @@ define_task!(
         SyncPerspectiveCameraBuffers,
         SyncColorMeshBuffers,
         SyncTextureMeshBuffers,
+        SyncLightRenderBuffers,
         SyncMaterialRenderResources,
         SyncInstanceFeatureBuffers
     ],
@@ -43,6 +44,7 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncPerspectiveCameraBuffers)?;
         task_scheduler.register_task(SyncColorMeshBuffers)?;
         task_scheduler.register_task(SyncTextureMeshBuffers)?;
+        task_scheduler.register_task(SyncLightRenderBuffers)?;
         task_scheduler.register_task(SyncMaterialRenderResources)?;
         task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
         task_scheduler.register_task(SyncRenderResources)
@@ -126,6 +128,33 @@ define_task!(
                         .scene().read().unwrap()
                         .mesh_repository().read().unwrap()
                         .texture_meshes(),
+                );
+            }
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    SyncLightRenderBuffers,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing light render buffers"; {
+            let renderer = world.renderer().read().unwrap();
+            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+            if render_resource_manager.is_desynchronized() {
+                let scene = world.scene().read().unwrap();
+                let light_storage = scene.light_storage().read().unwrap();
+                DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
+                    renderer.core_system(),
+                    render_resource_manager
+                        .desynchronized()
+                        .light_buffer_manager
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                        &light_storage,
                 );
             }
             Ok(())

@@ -5,7 +5,6 @@ mod bounds;
 mod camera;
 mod frustum;
 mod instance;
-mod light;
 mod mesh;
 mod plane;
 mod sphere;
@@ -20,7 +19,6 @@ pub use instance::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,
     InstanceFeatureTypeID, InstanceModelViewTransform,
 };
-pub use light::PointLight;
 pub use mesh::{ColorVertex, Mesh, TextureVertex, TriangleMesh};
 pub use plane::Plane;
 pub use sphere::Sphere;

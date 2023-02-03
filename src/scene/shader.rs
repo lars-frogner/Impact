@@ -1,8 +1,8 @@
 //! Management of shaders.
 
 use crate::rendering::{
-    CameraShaderInput, CoreRenderingSystem, InstanceFeatureShaderInput, MaterialTextureShaderInput,
-    MeshShaderInput, Shader, ShaderGenerator,
+    CameraShaderInput, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
+    MaterialTextureShaderInput, MeshShaderInput, Shader, ShaderGenerator,
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -47,12 +47,14 @@ impl ShaderManager {
         core_system: &CoreRenderingSystem,
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
+        light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
     ) -> Result<&Shader> {
         let shader_id = ShaderID::from_input(
             camera_shader_input,
             mesh_shader_input,
+            light_shader_input,
             instance_feature_shader_inputs,
             material_texture_shader_input,
         );
@@ -63,6 +65,7 @@ impl ShaderManager {
                 let (module, entry_point_names) = ShaderGenerator::generate_shader_module(
                     camera_shader_input,
                     mesh_shader_input,
+                    light_shader_input,
                     instance_feature_shader_inputs,
                     material_texture_shader_input,
                 )?;
@@ -87,12 +90,14 @@ impl ShaderID {
     fn from_input(
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
+        light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
     ) -> Self {
         let mut hasher = DefaultHasher::new();
         camera_shader_input.hash(&mut hasher);
         mesh_shader_input.hash(&mut hasher);
+        light_shader_input.hash(&mut hasher);
         instance_feature_shader_inputs.hash(&mut hasher);
         material_texture_shader_input.hash(&mut hasher);
         Self(hasher.finish())

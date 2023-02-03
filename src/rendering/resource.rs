@@ -8,10 +8,13 @@ use crate::{
     geometry::{Camera, TriangleMesh},
     rendering::{
         buffer::VertexBufferable, camera::CameraRenderBufferManager, fre,
-        instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager, Assets,
-        CoreRenderingSystem, MaterialRenderResourceManager,
+        instance::InstanceFeatureRenderBufferManager, light::LightRenderBufferManager,
+        mesh::MeshRenderBufferManager, Assets, CoreRenderingSystem, MaterialRenderResourceManager,
     },
-    scene::{CameraID, InstanceFeatureManager, MaterialID, MaterialSpecification, MeshID, ModelID},
+    scene::{
+        CameraID, InstanceFeatureManager, LightStorage, MaterialID, MaterialSpecification, MeshID,
+        ModelID,
+    },
 };
 use anyhow::Result;
 use std::{
@@ -49,6 +52,7 @@ pub struct SynchronizedRenderResources {
     perspective_camera_buffer_managers: Box<CameraRenderBufferManagerMap>,
     color_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     texture_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
+    light_buffer_manager: Box<Option<LightRenderBufferManager>>,
     material_resource_managers: Box<MaterialResourceManagerMap>,
     instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
 }
@@ -61,6 +65,7 @@ struct DesynchronizedRenderResources {
     perspective_camera_buffer_managers: Mutex<Box<CameraRenderBufferManagerMap>>,
     color_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     texture_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
+    light_buffer_manager: Mutex<Box<Option<LightRenderBufferManager>>>,
     material_resource_managers: Mutex<Box<MaterialResourceManagerMap>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
 }
@@ -163,6 +168,10 @@ impl SynchronizedRenderResources {
             .or_else(|| self.texture_mesh_buffer_managers.get(&mesh_id))
     }
 
+    pub fn get_light_buffer_manager(&self) -> Option<&LightRenderBufferManager> {
+        self.light_buffer_manager.as_ref().as_ref()
+    }
+
     /// Returns the render resource manager for the given material identifier
     /// if the material exists, otherwise returns [`None`].
     pub fn get_material_resource_manager(
@@ -194,41 +203,50 @@ impl DesynchronizedRenderResources {
             color_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
             texture_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
             material_resource_managers: Mutex::new(Box::new(HashMap::new())),
+            light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::new(HashMap::new())),
         }
     }
 
     fn from_synchronized(render_resources: SynchronizedRenderResources) -> Self {
         let SynchronizedRenderResources {
-            perspective_camera_buffer_managers: perspective_camera_buffers,
-            color_mesh_buffer_managers: color_mesh_buffers,
-            texture_mesh_buffer_managers: texture_mesh_buffers,
-            material_resource_managers: material_resources,
-            instance_feature_buffer_managers: instance_feature_buffers,
+            perspective_camera_buffer_managers,
+            color_mesh_buffer_managers,
+            texture_mesh_buffer_managers,
+            light_buffer_manager,
+            material_resource_managers,
+            instance_feature_buffer_managers,
         } = render_resources;
         Self {
-            perspective_camera_buffer_managers: Mutex::new(perspective_camera_buffers),
-            color_mesh_buffer_managers: Mutex::new(color_mesh_buffers),
-            texture_mesh_buffer_managers: Mutex::new(texture_mesh_buffers),
-            material_resource_managers: Mutex::new(material_resources),
-            instance_feature_buffer_managers: Mutex::new(instance_feature_buffers),
+            perspective_camera_buffer_managers: Mutex::new(perspective_camera_buffer_managers),
+            color_mesh_buffer_managers: Mutex::new(color_mesh_buffer_managers),
+            texture_mesh_buffer_managers: Mutex::new(texture_mesh_buffer_managers),
+            light_buffer_manager: Mutex::new(light_buffer_manager),
+            material_resource_managers: Mutex::new(material_resource_managers),
+            instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
         }
     }
 
     fn into_synchronized(self) -> SynchronizedRenderResources {
         let DesynchronizedRenderResources {
-            perspective_camera_buffer_managers: perspective_camera_buffers,
-            color_mesh_buffer_managers: color_mesh_buffers,
-            texture_mesh_buffer_managers: texture_mesh_buffers,
-            material_resource_managers: material_resources,
-            instance_feature_buffer_managers: instance_feature_buffers,
+            perspective_camera_buffer_managers,
+            color_mesh_buffer_managers,
+            texture_mesh_buffer_managers,
+            light_buffer_manager,
+            material_resource_managers,
+            instance_feature_buffer_managers,
         } = self;
         SynchronizedRenderResources {
-            perspective_camera_buffer_managers: perspective_camera_buffers.into_inner().unwrap(),
-            color_mesh_buffer_managers: color_mesh_buffers.into_inner().unwrap(),
-            texture_mesh_buffer_managers: texture_mesh_buffers.into_inner().unwrap(),
-            material_resource_managers: material_resources.into_inner().unwrap(),
-            instance_feature_buffer_managers: instance_feature_buffers.into_inner().unwrap(),
+            perspective_camera_buffer_managers: perspective_camera_buffer_managers
+                .into_inner()
+                .unwrap(),
+            color_mesh_buffer_managers: color_mesh_buffer_managers.into_inner().unwrap(),
+            texture_mesh_buffer_managers: texture_mesh_buffer_managers.into_inner().unwrap(),
+            light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
+            material_resource_managers: material_resource_managers.into_inner().unwrap(),
+            instance_feature_buffer_managers: instance_feature_buffer_managers
+                .into_inner()
+                .unwrap(),
         }
     }
 
@@ -280,6 +298,25 @@ impl DesynchronizedRenderResources {
                 });
         }
         Self::remove_unmatched_render_resources(mesh_render_buffers, meshes);
+    }
+
+    /// Performs any required updates for keeping the lights in the given render
+    /// buffer manager in sync with the lights in the given light storage.
+    fn sync_light_buffers_with_light_storage(
+        core_system: &CoreRenderingSystem,
+        light_buffer_manager: &mut Option<LightRenderBufferManager>,
+        light_storage: &LightStorage,
+    ) {
+        if let Some(light_buffer_manager) = light_buffer_manager {
+            light_buffer_manager.sync_with_light_storage(core_system, light_storage);
+        } else {
+            // We initialize the light render buffer manager the first time this
+            // method is called
+            *light_buffer_manager = Some(LightRenderBufferManager::for_light_storage(
+                core_system,
+                light_storage,
+            ));
+        }
     }
 
     /// Performs any required updates for keeping the given map

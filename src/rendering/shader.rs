@@ -12,11 +12,11 @@ use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
 };
 use naga::{
-    AddressSpace, Arena, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant, ConstantInner,
-    EntryPoint, Expression, Function, FunctionArgument, FunctionResult, GlobalVariable, Handle,
-    ImageClass, ImageDimension, Interpolation, LocalVariable, Module, ResourceBinding, SampleLevel,
-    Sampling, ScalarKind, ScalarValue, ShaderStage, Span, Statement, StructMember,
-    SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
+    AddressSpace, Arena, ArraySize, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant,
+    ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
+    GlobalVariable, Handle, ImageClass, ImageDimension, Interpolation, LocalVariable, Module,
+    ResourceBinding, SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Span, Statement,
+    StructMember, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
 };
 use std::{borrow::Cow, hash::Hash, mem, vec};
 use vertex_color::VertexColorShaderGenerator;
@@ -112,8 +112,15 @@ pub enum MaterialTextureShaderInput {
     None,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum UniformShaderInput {}
+/// Input description specifying the bind group binding and the total size of
+/// each light source uniform buffer.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LightShaderInput {
+    /// Bind group binding of the uniform buffer for point lights.
+    pub point_light_binding: u32,
+    /// Maximum number of lights in the point light uniform buffer.
+    pub max_point_light_count: u64,
+}
 
 bitflags! {
     /// Bitflag encoding a set of vertex properties required
@@ -209,6 +216,16 @@ pub struct SampledTexture {
     sampler_var_handle: Handle<GlobalVariable>,
 }
 
+const U32_WIDTH: u32 = mem::size_of::<u32>() as u32;
+
+const U32_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Scalar {
+        kind: ScalarKind::Uint,
+        width: U32_WIDTH as Bytes,
+    },
+};
+
 const FLOAT32_WIDTH: u32 = mem::size_of::<f32>() as u32;
 
 const FLOAT_TYPE: Type = Type {
@@ -257,7 +274,6 @@ const MATRIX_4X4_TYPE: Type = Type {
         width: FLOAT32_WIDTH as Bytes,
     },
 };
-const MATRIX_4X4_SIZE: u32 = 4 * VECTOR_4_SIZE;
 
 const IMAGE_TEXTURE_TYPE: Type = Type {
     name: None,
@@ -421,6 +437,7 @@ impl ShaderGenerator {
     pub fn generate_shader_module(
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
+        light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
     ) -> Result<(Module, EntryPointNames)> {
@@ -436,11 +453,18 @@ impl ShaderGenerator {
         )?;
 
         let vertex_property_requirements = material_shader_builder.vertex_property_requirements();
+        let material_requires_lights = material_shader_builder.requires_lights();
 
         let mut module = Module::default();
         let mut vertex_function = Function::default();
         let mut fragment_function = Function::default();
 
+        // Caution: The order in which the shader generators use and increment
+        // the bind group index must match the order in which the bind groups
+        // are set in `RenderPassRecorder::record_render_pass`, that is:
+        // 1. Camera.
+        // 2. Lights.
+        // 3. Material textures.
         let mut bind_group_idx = 0;
 
         let projection_matrix_var_expr_handle = Self::generate_vertex_code_for_projection_matrix(
@@ -481,6 +505,20 @@ impl ShaderGenerator {
 
         let fragment_input_struct = vertex_output_struct_builder
             .generate_input_code(&mut module.types, &mut fragment_function);
+
+        if material_requires_lights {
+            let light_shader_input =
+                light_shader_input.ok_or_else(|| anyhow!("Missing lights for material"))?;
+
+            Self::generate_fragment_code_for_lights(
+                light_shader_input,
+                &mut module.types,
+                &mut module.global_variables,
+                &mut module.constants,
+                &mut fragment_function,
+                &mut bind_group_idx,
+            );
+        }
 
         material_shader_builder.generate_fragment_code(
             &mut module.types,
@@ -744,9 +782,9 @@ impl ShaderGenerator {
                 |expressions| {
                     append_to_arena(
                         expressions,
-                Expression::Load {
-                    pointer: matrix_var_ptr_expr_handle,
-                },
+                        Expression::Load {
+                            pointer: matrix_var_ptr_expr_handle,
+                        },
                     )
                 },
             );
@@ -813,8 +851,8 @@ impl ShaderGenerator {
             |expressions| {
                 append_to_arena(
                     expressions,
-            Expression::Load {
-                pointer: projection_matrix_ptr_expr_handle,
+                    Expression::Load {
+                        pointer: projection_matrix_ptr_expr_handle,
                     },
                 )
             },
@@ -980,9 +1018,9 @@ impl ShaderGenerator {
             |expressions| {
                 append_to_arena(
                     expressions,
-            Expression::Load {
-                pointer: position_var_ptr_expr_handle,
-            },
+                    Expression::Load {
+                        pointer: position_var_ptr_expr_handle,
+                    },
                 )
             },
         );
@@ -1114,6 +1152,138 @@ impl ShaderGenerator {
 
         Ok((output_field_indices, output_struct_builder))
     }
+
+    /// Generates declarations for the light source uniform types, the types the
+    /// light uniform buffers will be mapped to and the global variables these
+    /// are bound to.
+    ///
+    /// # Returns
+    /// Handle to the expression for accessing the point light uniform variable
+    /// in the main fragment function.
+    fn generate_fragment_code_for_lights(
+        light_shader_input: &LightShaderInput,
+        types: &mut UniqueArena<Type>,
+        global_variables: &mut Arena<GlobalVariable>,
+        constants: &mut Arena<Constant>,
+        fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
+    ) -> Handle<Expression> {
+        let u32_type_handle = insert_in_arena(types, U32_TYPE);
+        let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
+
+        // The struct is padded to 16 byte alignment as required for uniforms
+        let point_light_struct_size = 2 * (VECTOR_3_SIZE + FLOAT32_WIDTH);
+
+        // The count at the beginning of the uniform buffer is padded to 16 bytes
+        let light_count_size = 16;
+
+        let point_light_struct_type_handle = insert_in_arena(
+            types,
+            Type {
+                name: new_name("PointLight"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("position"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("radiance"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: VECTOR_3_SIZE + FLOAT32_WIDTH,
+                        },
+                    ],
+                    span: point_light_struct_size,
+                },
+            },
+        );
+
+        let max_point_light_count_constant_handle = append_to_arena(
+            constants,
+            u32_constant(light_shader_input.max_point_light_count),
+        );
+
+        let point_lights_array_type_handle = insert_in_arena(
+            types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: point_light_struct_type_handle,
+                    size: ArraySize::Constant(max_point_light_count_constant_handle),
+                    stride: point_light_struct_size,
+                },
+            },
+        );
+
+        let point_lights_struct_type_handle = insert_in_arena(
+            types,
+            Type {
+                name: new_name("PointLights"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("numLights"),
+                            ty: u32_type_handle,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("lights"),
+                            ty: point_lights_array_type_handle,
+                            binding: None,
+                            offset: light_count_size,
+                        },
+                    ],
+                    span: point_light_struct_size
+                        .checked_mul(
+                            u32::try_from(light_shader_input.max_point_light_count).unwrap(),
+                        )
+                        .unwrap()
+                        .checked_add(light_count_size)
+                        .unwrap(),
+                },
+            },
+        );
+
+        let point_lights_var_handle = append_to_arena(
+            global_variables,
+            GlobalVariable {
+                name: new_name("pointLights"),
+                space: AddressSpace::Uniform,
+                binding: Some(ResourceBinding {
+                    group: *bind_group_idx,
+                    binding: light_shader_input.point_light_binding,
+                }),
+                ty: point_lights_struct_type_handle,
+                init: None,
+            },
+        );
+        *bind_group_idx += 1;
+
+        let point_lights_ptr_expr_handle = append_to_arena(
+            &mut fragment_function.expressions,
+            Expression::GlobalVariable(point_lights_var_handle),
+        );
+
+        let point_lights_expr_handle = emit(
+            &mut fragment_function.body,
+            &mut fragment_function.expressions,
+            |expressions| {
+                append_to_arena(
+                    expressions,
+                    Expression::Load {
+                        pointer: point_lights_ptr_expr_handle,
+                    },
+                )
+            },
+        );
+
+        #[allow(clippy::let_and_return)]
+        point_lights_expr_handle
+    }
 }
 
 impl<'a> MaterialShaderGenerator<'a> {
@@ -1125,6 +1295,16 @@ impl<'a> MaterialShaderGenerator<'a> {
             Self::FixedColor(_) => FixedColorShaderGenerator::vertex_property_requirements(),
             Self::FixedTexture(_) => FixedTextureShaderGenerator::vertex_property_requirements(),
             Self::BlinnPhong(builder) => builder.vertex_property_requirements(),
+        }
+    }
+
+    /// Whether the material requires light sources.
+    fn requires_lights(&self) -> bool {
+        match self {
+            Self::VertexColor => VertexColorShaderGenerator::requires_lights(),
+            Self::FixedColor(_) => FixedColorShaderGenerator::requires_lights(),
+            Self::FixedTexture(_) => FixedTextureShaderGenerator::requires_lights(),
+            Self::BlinnPhong(_) => BlinnPhongShaderGenerator::requires_lights(),
         }
     }
 
@@ -1670,6 +1850,17 @@ fn new_name<S: ToString>(name_str: S) -> Option<String> {
     Some(name_str.to_string())
 }
 
+fn u32_constant(value: u64) -> Constant {
+    Constant {
+        name: None,
+        specialization: None,
+        inner: ConstantInner::Scalar {
+            width: U32_WIDTH as Bytes,
+            value: ScalarValue::Uint(value),
+        },
+    }
+}
+
 fn float32_constant(value: f64) -> Constant {
     Constant {
         name: None,
@@ -1823,6 +2014,11 @@ mod test {
             specular_texture_and_sampler_bindings: Some((2, 3)),
         });
 
+    const LIGHT_INPUT: LightShaderInput = LightShaderInput {
+        point_light_binding: 0,
+        max_point_light_count: 20,
+    };
+
     fn validate_module(module: &Module) -> ModuleInfo {
         let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
         match validator.validate(module) {
@@ -1855,6 +2051,19 @@ mod test {
                 view_proj: mat4x4<f32>,
             }
 
+            struct PointLight {
+                position: vec3<f32>,
+                radiance: vec3<f32>,
+            }
+
+            struct PointLights {
+                numLights: u32,
+                lights: array<PointLight, 10>
+            }
+
+            @group(2) @binding(0)
+            var<uniform> pointLights: PointLights;
+
             @group(0) @binding(0)
             var<uniform> camera: CameraUniform;
             
@@ -1873,6 +2082,7 @@ mod test {
             }
             Err(err) => {
                 println!("{}", err);
+                panic!()
             }
         }
     }
@@ -1880,13 +2090,14 @@ mod test {
     #[test]
     #[should_panic]
     fn building_shader_with_no_inputs_fails() {
-        ShaderGenerator::generate_shader_module(None, None, &[], None).unwrap();
+        ShaderGenerator::generate_shader_module(None, None, None, &[], None).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn building_shader_with_only_camera_input_fails() {
-        ShaderGenerator::generate_shader_module(Some(&CAMERA_INPUT), None, &[], None).unwrap();
+        ShaderGenerator::generate_shader_module(Some(&CAMERA_INPUT), None, None, &[], None)
+            .unwrap();
     }
 
     #[test]
@@ -1895,6 +2106,7 @@ mod test {
         ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
+            None,
             &[],
             None,
         )
@@ -1907,6 +2119,7 @@ mod test {
         ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
+            None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
         )
@@ -1923,6 +2136,7 @@ mod test {
                 normal_vector_location: None,
                 texture_coord_location: None,
             }),
+            None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
@@ -1942,6 +2156,7 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
+            None,
             &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
@@ -1966,6 +2181,7 @@ mod test {
                 normal_vector_location: None,
                 texture_coord_location: Some(MESH_VERTEX_BINDING_START + 1),
             }),
+            None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
         )
@@ -1990,6 +2206,7 @@ mod test {
                 normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
                 texture_coord_location: None,
             }),
+            Some(&LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
         )
@@ -2014,6 +2231,7 @@ mod test {
                 normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
                 texture_coord_location: Some(MESH_VERTEX_BINDING_START + 2),
             }),
+            Some(&LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
@@ -2041,6 +2259,7 @@ mod test {
                 normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
                 texture_coord_location: Some(MESH_VERTEX_BINDING_START + 2),
             }),
+            Some(&LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
