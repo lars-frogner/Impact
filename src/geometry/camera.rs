@@ -83,10 +83,12 @@ impl<F: Float> PerspectiveCamera<F> {
         Radians(self.perspective_transform.fovy())
     }
 
+    /// Returns the near distance of the camera.
     pub fn near_distance(&self) -> F {
         self.perspective_transform.znear()
     }
 
+    /// Returns the far distance of the camera.
     pub fn far_distance(&self) -> F {
         self.perspective_transform.zfar()
     }
