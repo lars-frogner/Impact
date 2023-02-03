@@ -408,7 +408,7 @@ impl<F: Float> SceneGraph<F> {
     /// camera and adds them to the given instance feature manager. If no
     /// camera is specified, the computed transforms will be model-to-root
     /// space transforms instead, and view culling is performed for the
-    /// identity view projection transform.
+    /// identity projection transform.
     ///
     /// # Errors
     /// Returns an error if the specified camera is not present in the
@@ -428,7 +428,7 @@ impl<F: Float> SceneGraph<F> {
     {
         let root_node_id = self.root_node_id();
 
-        let (view_projection_transform, root_to_camera_transform) = match camera_node_id {
+        let (camera_space_view_frustum, view_transform) = match camera_node_id {
             Some(camera_node_id) => {
                 let camera_node = self.camera_nodes.node(camera_node_id);
                 let camera_id = camera_node.camera_id();
@@ -436,22 +436,23 @@ impl<F: Float> SceneGraph<F> {
                     .get_camera(camera_id)
                     .ok_or_else(|| anyhow!("Camera {} not found", camera_id))?;
                 (
-                    camera.compute_view_projection_transform(),
-                    self.compute_root_to_camera_transform(camera_node),
+                    Frustum::from_transform(camera.projection_transform()),
+                    self.compute_view_transform(camera_node),
                 )
             }
-            None => (Projective3::identity(), Similarity3::identity()),
+            None => (
+                Frustum::from_transform(&Projective3::identity()),
+                Similarity3::identity(),
+            ),
         };
-
-        let camera_frustum = Frustum::from_transform(&view_projection_transform);
 
         self.update_bounding_spheres(root_node_id);
 
-        self.update_model_to_camera_transforms_for_model_instances_in_group(
+        self.update_model_view_transforms_for_model_instances_in_group(
             instance_feature_manager,
-            &camera_frustum,
+            &camera_space_view_frustum,
             root_node_id,
-            &root_to_camera_transform,
+            &view_transform,
         );
 
         Ok(())
@@ -459,13 +460,13 @@ impl<F: Float> SceneGraph<F> {
 
     /// Computes the transform from the scene graph's root node space
     /// to the space of the given camera node.
-    fn compute_root_to_camera_transform(&self, camera_node: &CameraNode<F>) -> NodeTransform<F> {
-        let mut root_to_camera_transform = camera_node.parent_to_camera_transform();
+    fn compute_view_transform(&self, camera_node: &CameraNode<F>) -> NodeTransform<F> {
+        let mut view_transform = camera_node.parent_to_camera_transform();
         let mut parent_node = self.group_nodes.node(camera_node.parent_node_id());
 
         // Walk up the tree and append transforms until reaching the root
         loop {
-            root_to_camera_transform *= parent_node.parent_to_group_transform();
+            view_transform *= parent_node.parent_to_group_transform();
 
             if parent_node.is_root() {
                 break;
@@ -474,7 +475,7 @@ impl<F: Float> SceneGraph<F> {
             }
         }
 
-        root_to_camera_transform
+        view_transform
     }
 
     /// Determines the model-to-camera transforms of the group and model
@@ -488,10 +489,10 @@ impl<F: Float> SceneGraph<F> {
     ///
     /// # Panics
     /// If the specified group node does not exist.
-    fn update_model_to_camera_transforms_for_model_instances_in_group(
+    fn update_model_view_transforms_for_model_instances_in_group(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        camera_frustum: &Frustum<F>,
+        camera_space_view_frustum: &Frustum<F>,
         group_node_id: GroupNodeID,
         parent_group_to_camera_transform: &NodeTransform<F>,
     ) where
@@ -504,21 +505,21 @@ impl<F: Float> SceneGraph<F> {
             parent_group_to_camera_transform * group_node.group_to_parent_transform();
 
         if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
-            let bounding_sphere_world_space =
+            let bounding_sphere_camera_space =
                 bounding_sphere.transformed(&group_to_camera_transform);
 
-            if !camera_frustum.sphere_lies_outside(&bounding_sphere_world_space) {
+            if !camera_space_view_frustum.sphere_lies_outside(&bounding_sphere_camera_space) {
                 for &group_node_id in group_node.child_group_node_ids() {
-                    self.update_model_to_camera_transforms_for_model_instances_in_group(
+                    self.update_model_view_transforms_for_model_instances_in_group(
                         instance_feature_manager,
-                        camera_frustum,
+                        camera_space_view_frustum,
                         group_node_id,
                         &group_to_camera_transform,
                     );
                 }
 
                 for &model_instance_node_id in group_node.child_model_instance_node_ids() {
-                    self.update_model_to_camera_transform_of_model_instance(
+                    self.update_model_view_transform_of_model_instance(
                         instance_feature_manager,
                         model_instance_node_id,
                         &group_to_camera_transform,
@@ -535,7 +536,7 @@ impl<F: Float> SceneGraph<F> {
     ///
     /// # Panics
     /// If the specified model instance node does not exist.
-    fn update_model_to_camera_transform_of_model_instance(
+    fn update_model_view_transform_of_model_instance(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
         model_instance_node_id: ModelInstanceNodeID,
@@ -1299,7 +1300,7 @@ mod test {
         );
 
         let root_to_camera_transform =
-            scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
+            scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
         assert_abs_diff_eq!(root_to_camera_transform, camera_to_root_transform.inverse());
     }
@@ -1317,8 +1318,7 @@ mod test {
             CameraID(hash64!("Test camera")),
         );
 
-        let transform =
-            scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
+        let transform = scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
         assert_abs_diff_eq!(transform, Similarity3::identity());
     }
@@ -1350,7 +1350,7 @@ mod test {
         );
 
         let root_to_camera_transform =
-            scene_graph.compute_root_to_camera_transform(scene_graph.camera_nodes.node(camera));
+            scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
         assert_abs_diff_eq!(
             root_to_camera_transform.to_homogeneous(),

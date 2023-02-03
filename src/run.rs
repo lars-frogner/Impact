@@ -1,7 +1,7 @@
 //! Running an event loop.
 
 use super::{
-    geometry::{CameraConfiguration, Degrees, PerspectiveCamera, UpperExclusiveBounds},
+    geometry::{Degrees, PerspectiveCamera, UpperExclusiveBounds},
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem},
 };
 use crate::{
@@ -111,7 +111,6 @@ async fn init_world(window: Window) -> Result<World> {
         .add_perspective_camera(
             CameraID(hash64!("Camera")),
             PerspectiveCamera::new(
-                CameraConfiguration::default(),
                 window.aspect_ratio(),
                 vertical_field_of_view,
                 UpperExclusiveBounds::new(0.1, 100.0),

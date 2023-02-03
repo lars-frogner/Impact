@@ -8,8 +8,7 @@ use crate::rendering::{
 use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
 
-/// Owner and manager of a render buffer for a camera
-/// transformation.
+/// Owner and manager of a render buffer for a camera projection transformation.
 #[derive(Debug)]
 pub struct CameraRenderBufferManager {
     transform_render_buffer: RenderBuffer,
@@ -23,67 +22,60 @@ impl CameraRenderBufferManager {
         projection_matrix_binding: Self::BINDING,
     };
 
-    /// Creates a new manager with a render buffer initialized
-    /// from the view projection transform of the given camera.
+    /// Creates a new manager with a render buffer initialized from the
+    /// projection transform of the given camera.
     pub fn for_camera(
         core_system: &CoreRenderingSystem,
         camera: &impl Camera<fre>,
         label: &str,
     ) -> Self {
-        let view_projection_transform = camera.compute_view_projection_transform();
-        Self::new(core_system, view_projection_transform, label)
+        Self::new(core_system, *camera.projection_transform(), label)
     }
 
-    /// Returns the layout of the bind group to which the
-    /// camera transform uniform bufffer is bound.
+    /// Returns the layout of the bind group to which the projection transform
+    /// uniform bufffer is bound.
     ///
-    /// The layout will remain valid even though the transform
-    /// may change.
+    /// The layout will remain valid even though the transform may change.
     pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
     }
 
-    /// Returns the bind group to which the camera transform
-    /// uniform bufffer is bound.
+    /// Returns the bind group to which the projection transform uniform bufffer
+    /// is bound.
     ///
-    /// The bind group will remain valid even though the transform
-    /// may change.
+    /// The bind group will remain valid even though the transform may change.
     pub fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_group
     }
 
-    /// Returns the input required for accessing the camera transform
-    /// in a shader.
+    /// Returns the input required for accessing the projection transform in a
+    /// shader.
     pub fn shader_input(&self) -> &CameraShaderInput {
         &Self::SHADER_INPUT
     }
 
-    /// Ensures that the render buffer is in sync with the view
-    /// projection transform of the given camera.
+    /// Ensures that the render buffer is in sync with the projection transform
+    /// of the given camera.
     pub fn sync_with_camera(
         &mut self,
         core_system: &CoreRenderingSystem,
         camera: &impl Camera<fre>,
     ) {
-        if camera.view_projection_transform_changed() {
-            let view_projection_transform = camera.compute_view_projection_transform();
-            self.sync_render_buffer(core_system, view_projection_transform);
-            camera.reset_view_projection_change_tracking();
+        if camera.projection_transform_changed() {
+            self.sync_render_buffer(core_system, camera.projection_transform());
+            camera.reset_projection_change_tracking();
         }
     }
 
     /// Creates a new manager with a render buffer initialized
-    /// from the given view projection transform.
+    /// from the given projection transform.
     fn new(
         core_system: &CoreRenderingSystem,
-        view_projection_transform: Projective3<fre>,
+        projection_transform: Projective3<fre>,
         label: &str,
     ) -> Self {
-        let transform_render_buffer = RenderBuffer::new_buffer_for_single_uniform(
-            core_system,
-            &view_projection_transform,
-            label,
-        );
+        let transform_render_buffer =
+            RenderBuffer::new_buffer_for_single_uniform(core_system, &projection_transform, label);
 
         let bind_group_layout = Self::create_bind_group_layout(core_system.device(), label);
 
@@ -133,12 +125,10 @@ impl CameraRenderBufferManager {
     fn sync_render_buffer(
         &mut self,
         core_system: &CoreRenderingSystem,
-        view_projection_transform: Projective3<fre>,
+        projection_transform: &Projective3<fre>,
     ) {
-        self.transform_render_buffer.update_all_bytes(
-            core_system,
-            bytemuck::cast_slice(&[view_projection_transform]),
-        );
+        self.transform_render_buffer
+            .update_all_bytes(core_system, bytemuck::bytes_of(projection_transform));
     }
 }
 
