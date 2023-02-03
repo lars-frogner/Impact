@@ -436,7 +436,7 @@ impl<F: Float> SceneGraph<F> {
                     .get_camera(camera_id)
                     .ok_or_else(|| anyhow!("Camera {} not found", camera_id))?;
                 (
-                    Frustum::from_transform(camera.projection_transform()),
+                    camera.view_frustum().clone(),
                     self.compute_view_transform(camera_node),
                 )
             }

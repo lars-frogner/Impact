@@ -1,7 +1,7 @@
 //! Camera types.
 
 use crate::{
-    geometry::{Angle, Bounds, EntityChangeTracker, Radians, UpperExclusiveBounds},
+    geometry::{Angle, Bounds, EntityChangeTracker, Frustum, Radians, UpperExclusiveBounds},
     num::Float,
 };
 use approx::assert_abs_diff_ne;
@@ -12,6 +12,7 @@ use std::fmt::Debug;
 #[derive(Debug)]
 pub struct PerspectiveCamera<F: Float> {
     perspective_transform: Perspective3<F>,
+    view_frustum: Frustum<F>,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
 }
@@ -26,6 +27,10 @@ pub trait Camera<F: Float> {
     /// frustum is a cube enclosing all coordinates ranging
     /// from -1.0 to 1.0 in all three dimensions.
     fn projection_transform(&self) -> &Projective3<F>;
+
+    /// Returns the frustum representing the view volume of the
+    /// camera.
+    fn view_frustum(&self) -> &Frustum<F>;
 
     /// Whether the projection transform has changed since the
     /// last reset of change tracing.
@@ -59,8 +64,11 @@ impl<F: Float> PerspectiveCamera<F> {
             &near_and_far_distance,
         );
 
+        let view_frustum = Self::compute_view_frustum(&perspective_transform);
+
         Self {
             perspective_transform,
+            view_frustum,
             projection_transform_change_tracker: EntityChangeTracker::default(),
         }
     }
@@ -90,6 +98,7 @@ impl<F: Float> PerspectiveCamera<F> {
     pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
         assert_abs_diff_ne!(aspect_ratio, F::zero());
         self.perspective_transform.set_aspect(aspect_ratio);
+        self.view_frustum = Self::compute_view_frustum(&self.perspective_transform);
         self.projection_transform_change_tracker.notify_change();
     }
 
@@ -101,6 +110,7 @@ impl<F: Float> PerspectiveCamera<F> {
         let fov = fov.as_radians();
         assert_abs_diff_ne!(fov, Radians::zero());
         self.perspective_transform.set_fovy(fov.radians());
+        self.view_frustum = Self::compute_view_frustum(&self.perspective_transform);
         self.projection_transform_change_tracker.notify_change();
     }
 
@@ -108,7 +118,12 @@ impl<F: Float> PerspectiveCamera<F> {
         let (near_distance, far_distance) = near_and_far_distance.bounds();
         self.perspective_transform
             .set_znear_and_zfar(near_distance, far_distance);
+        self.view_frustum = Self::compute_view_frustum(&self.perspective_transform);
         self.projection_transform_change_tracker.notify_change();
+    }
+
+    fn compute_view_frustum(perspective_transform: &Perspective3<F>) -> Frustum<F> {
+        Frustum::from_transform(perspective_transform.as_projective())
     }
 
     fn create_perspective_transform(
@@ -128,6 +143,10 @@ impl<F: Float> PerspectiveCamera<F> {
 impl<F: Float> Camera<F> for PerspectiveCamera<F> {
     fn projection_transform(&self) -> &Projective3<F> {
         self.perspective_transform.as_projective()
+    }
+
+    fn view_frustum(&self) -> &Frustum<F> {
+        &self.view_frustum
     }
 
     fn projection_transform_changed(&self) -> bool {
