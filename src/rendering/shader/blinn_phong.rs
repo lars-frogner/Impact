@@ -232,6 +232,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
         fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
@@ -255,6 +256,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                         types,
                         global_variables,
                         fragment_function,
+                        bind_group_idx,
                         fragment_input_struct,
                         mesh_input_field_indices,
                     );
@@ -318,9 +320,13 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
         fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) -> (Handle<Expression>, Option<Handle<Expression>>) {
+        let bind_group = *bind_group_idx;
+        *bind_group_idx += 1;
+
         let (diffuse_texture_binding, diffuse_sampler_binding) =
             texture_input.diffuse_texture_and_sampler_bindings;
 
@@ -328,7 +334,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             types,
             global_variables,
             "diffuseColor",
-            1,
+            bind_group,
             diffuse_texture_binding,
             diffuse_sampler_binding,
         );
@@ -349,7 +355,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     types,
                     global_variables,
                     "specularColor",
-                    1,
+                    bind_group,
                     specular_texture_binding,
                     specular_sampler_binding,
                 );

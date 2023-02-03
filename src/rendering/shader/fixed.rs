@@ -165,9 +165,13 @@ impl<'a> FixedTextureShaderGenerator<'a> {
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
         fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
+        let bind_group = *bind_group_idx;
+        *bind_group_idx += 1;
+
         let (color_texture_binding, color_sampler_binding) =
             self.texture_input.color_texture_and_sampler_bindings;
 
@@ -177,7 +181,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
             types,
             global_variables,
             "color",
-            1,
+            bind_group,
             color_texture_binding,
             color_sampler_binding,
         );

@@ -441,11 +441,14 @@ impl ShaderGenerator {
         let mut vertex_function = Function::default();
         let mut fragment_function = Function::default();
 
+        let mut bind_group_idx = 0;
+
         let projection_matrix_var_expr_handle = Self::generate_vertex_code_for_projection_matrix(
             camera_shader_input,
             &mut module.types,
             &mut module.global_variables,
             &mut vertex_function,
+            &mut bind_group_idx,
         );
 
         let model_view_transform_expressions = Self::generate_vertex_code_for_model_view_transform(
@@ -483,6 +486,7 @@ impl ShaderGenerator {
             &mut module.types,
             &mut module.global_variables,
             &mut fragment_function,
+            &mut bind_group_idx,
             &fragment_input_struct,
             &mesh_vertex_output_field_indices,
             &material_vertex_output_field_indices,
@@ -771,7 +775,11 @@ impl ShaderGenerator {
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
         vertex_function: &mut Function,
+        bind_group_idx: &mut u32,
     ) -> Handle<Expression> {
+        let bind_group = *bind_group_idx;
+        *bind_group_idx += 1;
+
         let mat4x4_type_handle = insert_in_arena(types, MATRIX_4X4_TYPE);
 
         let projection_matrix_var_handle = append_to_arena(
@@ -780,7 +788,7 @@ impl ShaderGenerator {
                 name: new_name("projectionMatrix"),
                 space: AddressSpace::Uniform,
                 binding: Some(ResourceBinding {
-                    group: 0,
+                    group: bind_group,
                     binding: camera_shader_input.projection_matrix_binding,
                 }),
                 ty: mat4x4_type_handle,
@@ -1145,6 +1153,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
         fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
@@ -1172,6 +1181,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                     types,
                     global_variables,
                     fragment_function,
+                    bind_group_idx,
                     fragment_input_struct,
                     mesh_input_field_indices,
                 ),
@@ -1182,6 +1192,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 types,
                 global_variables,
                 fragment_function,
+                bind_group_idx,
                 fragment_input_struct,
                 mesh_input_field_indices,
                 material_input_field_indices,
