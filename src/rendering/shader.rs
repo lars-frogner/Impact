@@ -738,10 +738,16 @@ impl ShaderGenerator {
                 },
             );
 
-            let matrix_var_expr_handle = append_to_arena(
+            let matrix_var_expr_handle = emit(
+                &mut vertex_function.body,
                 &mut vertex_function.expressions,
+                |expressions| {
+                    append_to_arena(
+                        expressions,
                 Expression::Load {
                     pointer: matrix_var_ptr_expr_handle,
+                },
+                    )
                 },
             );
 
@@ -801,10 +807,16 @@ impl ShaderGenerator {
             Expression::GlobalVariable(projection_matrix_var_handle),
         );
 
-        let projection_matrix_expr_handle = append_to_arena(
+        let projection_matrix_expr_handle = emit(
+            &mut vertex_function.body,
             &mut vertex_function.expressions,
+            |expressions| {
+                append_to_arena(
+                    expressions,
             Expression::Load {
                 pointer: projection_matrix_ptr_expr_handle,
+                    },
+                )
             },
         );
 
@@ -962,10 +974,16 @@ impl ShaderGenerator {
             },
         );
 
-        let position_var_expr_handle = append_to_arena(
+        let position_var_expr_handle = emit(
+            &mut vertex_function.body,
             &mut vertex_function.expressions,
+            |expressions| {
+                append_to_arena(
+                    expressions,
             Expression::Load {
                 pointer: position_var_ptr_expr_handle,
+            },
+                )
             },
         );
 
