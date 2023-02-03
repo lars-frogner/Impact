@@ -29,6 +29,12 @@ pub struct AlignedByteVec {
 }
 
 impl Alignment {
+    pub const ONE: Self = Self(1);
+    pub const TWO: Self = Self(2);
+    pub const FOUR: Self = Self(4);
+    pub const EIGHT: Self = Self(8);
+    pub const SIXTEEN: Self = Self(16);
+
     /// Wraps the given alignment in an [`Alignment`], returning an
     /// error if the alignment is invalid.
     ///
@@ -46,6 +52,16 @@ impl Alignment {
     /// type `T`.
     pub const fn of<T>() -> Self {
         Self(mem::align_of::<T>())
+    }
+
+    /// Returns the alignment as a [`usize`].
+    pub const fn get(&self) -> usize {
+        self.0
+    }
+
+    /// Whether the given number is a multiple of this alignment.
+    pub const fn is_aligned(&self, number: usize) -> bool {
+        number & (self.0 - 1) == 0
     }
 
     fn of_layout(layout: Layout) -> Self {
@@ -301,7 +317,7 @@ impl AlignedByteVec {
         let alignment: usize = alignment.into();
 
         // Round up the size to the nearest alignment (the expression
-        // is only valid if alignement is a power of two, but if it is
+        // is only valid if alignment is a power of two, but if it is
         // not, `from_size_align` will return an error regardless of
         // the size)
         let size = (minimum_size + alignment - 1) & !(alignment - 1);
@@ -403,13 +419,13 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn creating_alignement_with_zero_alignment_fails() {
+    fn creating_alignment_with_zero_alignment_fails() {
         Alignment::new(0);
     }
 
     #[test]
     #[should_panic]
-    fn creating_alignement_with_non_power_of_two_alignment_fails() {
+    fn creating_alignment_with_non_power_of_two_alignment_fails() {
         Alignment::new(3);
     }
 
