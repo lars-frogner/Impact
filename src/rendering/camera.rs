@@ -79,8 +79,11 @@ impl CameraRenderBufferManager {
         view_projection_transform: Projective3<fre>,
         label: &str,
     ) -> Self {
-        let transform_render_buffer =
-            RenderBuffer::new_full_uniform_buffer(core_system, &[view_projection_transform], label);
+        let transform_render_buffer = RenderBuffer::new_buffer_for_single_uniform(
+            core_system,
+            &view_projection_transform,
+            label,
+        );
 
         let bind_group_layout = Self::create_bind_group_layout(core_system.device(), label);
 

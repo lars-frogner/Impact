@@ -5,7 +5,6 @@ use bytemuck::Pod;
 use impact_utils::{Alignment, ConstStringHash64};
 use std::{
     mem,
-    num::NonZeroU64,
     sync::atomic::{AtomicUsize, Ordering},
 };
 use wgpu::util::DeviceExt;
@@ -70,15 +69,47 @@ pub type Count = u32;
 
 /// The type of information contained in a render buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RenderBufferType {
+enum RenderBufferType {
     Vertex,
     Index,
     Uniform,
 }
 
 impl RenderBuffer {
+    /// Creates a vertex render buffer initialized with the given vertex data,
+    /// with the first `n_valid_vertices` considered valid data.
+    ///
+    /// # Panics
+    /// - If `vertices` is empty.
+    /// - If `n_valid_vertices` exceeds the number of items in the `vertices`
+    ///   slice.
+    pub fn new_vertex_buffer<V>(
+        core_system: &CoreRenderingSystem,
+        vertices: &[V],
+        n_valid_vertices: usize,
+        label: &str,
+    ) -> Self
+    where
+        V: VertexBufferable,
+    {
+        let n_valid_bytes = mem::size_of::<V>().checked_mul(n_valid_vertices).unwrap();
+
+        let bytes = bytemuck::cast_slice(vertices);
+
+        Self::new(
+            core_system,
+            RenderBufferType::Vertex,
+            bytes,
+            n_valid_bytes,
+            &format!("{} vertex", label),
+        )
+    }
+
     /// Creates a vertex render buffer initialized with the given vertex
     /// data.
+    ///
+    /// # Panics
+    /// If `vertices` is empty.
     pub fn new_full_vertex_buffer<V>(
         core_system: &CoreRenderingSystem,
         vertices: &[V],
@@ -87,18 +118,65 @@ impl RenderBuffer {
     where
         V: VertexBufferable,
     {
-        let bytes = bytemuck::cast_slice(vertices);
+        Self::new_vertex_buffer(core_system, vertices, vertices.len(), label)
+    }
+
+    /// Creates a vertex render buffer initialized with the given bytes
+    /// representing vertex data, with the first `n_valid_bytes` considered
+    /// valid data.
+    ///
+    /// # Panics
+    /// - If `bytes` is empty.
+    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
+    pub fn new_vertex_buffer_with_bytes(
+        core_system: &CoreRenderingSystem,
+        bytes: &[u8],
+        n_valid_bytes: usize,
+        label: &str,
+    ) -> Self {
         Self::new(
             core_system,
             RenderBufferType::Vertex,
             bytes,
-            bytes.len(),
+            n_valid_bytes,
             &format!("{} vertex", label),
         )
     }
 
     /// Creates an index render buffer initialized with the given index
+    /// data, with the first `n_valid_indices` considered valid data.
+    ///
+    /// # Panics
+    /// - If `indices` is empty.
+    /// - If `n_valid_indices` exceeds the number of items in the `indices`
+    ///   slice.
+    pub fn new_index_buffer<I>(
+        core_system: &CoreRenderingSystem,
+        indices: &[I],
+        n_valid_indices: usize,
+        label: &str,
+    ) -> Self
+    where
+        I: IndexBufferable,
+    {
+        let n_valid_bytes = mem::size_of::<I>().checked_mul(n_valid_indices).unwrap();
+
+        let bytes = bytemuck::cast_slice(indices);
+
+        Self::new(
+            core_system,
+            RenderBufferType::Index,
+            bytes,
+            n_valid_bytes,
+            &format!("{} index", label),
+        )
+    }
+
+    /// Creates an index render buffer initialized with the given index
     /// data.
+    ///
+    /// # Panics
+    /// If `indices` is empty.
     pub fn new_full_index_buffer<I>(
         core_system: &CoreRenderingSystem,
         indices: &[I],
@@ -107,18 +185,54 @@ impl RenderBuffer {
     where
         I: IndexBufferable,
     {
-        let bytes = bytemuck::cast_slice(indices);
+        Self::new_index_buffer(core_system, indices, indices.len(), label)
+    }
+
+    /// Creates a uniform render buffer initialized with the given uniform data,
+    /// with the first `n_valid_uniforms` considered valid data.
+    ///
+    /// # Panics
+    /// - If `uniforms` is empty.
+    /// - If the size of a single uniform is not a multiple of 16 (the minimum
+    ///   required uniform alignment).
+    /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
+    ///   slice.
+    pub fn new_uniform_buffer<U>(
+        core_system: &CoreRenderingSystem,
+        uniforms: &[U],
+        n_valid_uniforms: usize,
+        label: &str,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        assert!(
+            Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
+            "Tried to create uniform buffer with uniform size that \
+             causes invalid alignment (uniform buffer item stride \
+             must be a multiple of 16)"
+        );
+
+        let n_valid_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
+
+        let bytes = bytemuck::cast_slice(uniforms);
+
         Self::new(
             core_system,
-            RenderBufferType::Index,
+            RenderBufferType::Uniform,
             bytes,
-            bytes.len(),
-            &format!("{} index", label),
+            n_valid_bytes,
+            &format!("{} uniform", label),
         )
     }
 
     /// Creates a uniform render buffer initialized with the given uniform
     /// data.
+    ///
+    /// # Panics
+    /// - If `uniforms` is empty.
+    /// - If the size of a single uniform is not a multiple of 16
+    ///   (the minimum required uniform alignment).
     pub fn new_full_uniform_buffer<U>(
         core_system: &CoreRenderingSystem,
         uniforms: &[U],
@@ -127,7 +241,30 @@ impl RenderBuffer {
     where
         U: UniformBufferable,
     {
-        let bytes = bytemuck::cast_slice(uniforms);
+        Self::new_uniform_buffer(core_system, uniforms, uniforms.len(), label)
+    }
+
+    /// Creates a render buffer containing the data of the given uniform.
+    ///
+    /// # Panics
+    /// If the size of the uniform is not a multiple of 16 (the minimum
+    /// required uniform alignment).
+    pub fn new_buffer_for_single_uniform<U>(
+        core_system: &CoreRenderingSystem,
+        uniform: &U,
+        label: &str,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        assert!(
+            Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
+            "Tried to create uniform buffer with invalid uniform size \
+            (must be a multiple of 16)"
+        );
+
+        let bytes = bytemuck::bytes_of(uniform);
+
         Self::new(
             core_system,
             RenderBufferType::Uniform,
@@ -144,14 +281,17 @@ impl RenderBuffer {
     /// into the buffer at a later point without reallocating.
     ///
     /// # Panics
+    /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
-    pub fn new(
+    fn new(
         core_system: &CoreRenderingSystem,
         buffer_type: RenderBufferType,
         bytes: &[u8],
         n_valid_bytes: usize,
         label: &str,
     ) -> Self {
+        assert!(!bytes.is_empty(), "Tried to create empty render buffer");
+
         let buffer_size = bytes.len();
         assert!(n_valid_bytes <= buffer_size);
 

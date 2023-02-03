@@ -2,10 +2,7 @@
 
 use crate::{
     geometry::{DynamicInstanceFeatureBuffer, InstanceFeatureTypeID},
-    rendering::{
-        buffer::{RenderBuffer, RenderBufferType},
-        CoreRenderingSystem, InstanceFeatureShaderInput,
-    },
+    rendering::{buffer::RenderBuffer, CoreRenderingSystem, InstanceFeatureShaderInput},
 };
 
 /// Owner and manager of a vertex render buffer for model instance
@@ -28,9 +25,8 @@ impl InstanceFeatureRenderBufferManager {
         feature_buffer: &DynamicInstanceFeatureBuffer,
         label: String,
     ) -> Self {
-        let feature_render_buffer = RenderBuffer::new(
+        let feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
             core_system,
-            RenderBufferType::Vertex,
             feature_buffer.raw_buffer(),
             feature_buffer.n_valid_bytes(),
             &label,
@@ -88,9 +84,8 @@ impl InstanceFeatureRenderBufferManager {
             // If the number of valid features exceeds the capacity of the existing buffer,
             // we create a new one that is large enough for all the features (also the ones
             // not currently valid)
-            self.feature_render_buffer = RenderBuffer::new(
+            self.feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
                 core_system,
-                RenderBufferType::Vertex,
                 bytemuck::cast_slice(feature_buffer.raw_buffer()),
                 n_valid_bytes,
                 &self.label,
