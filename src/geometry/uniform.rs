@@ -40,6 +40,17 @@ where
         }
     }
 
+    /// Creates a new empty buffer with allocated space for the
+    /// given number of uniforms.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            raw_buffer: vec![U::zeroed(); capacity],
+            index_map: KeyIndexMapper::new(),
+            n_valid_uniforms: AtomicUsize::new(0),
+            change_tracker: CollectionChangeTracker::default(),
+        }
+    }
+
     /// Returns the kind of change that has been made to the uniform
     /// buffer since the last reset of change tracing.
     pub fn change(&self) -> CollectionChange {
@@ -165,5 +176,160 @@ where
 {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use bytemuck::Zeroable;
+
+    type Id = usize;
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable)]
+    struct ByteUniform(u8);
+
+    type ByteUniformBuffer = UniformBuffer<Id, ByteUniform>;
+
+    #[test]
+    fn creating_empty_uniform_buffer_works() {
+        let buffer = ByteUniformBuffer::new();
+
+        assert_eq!(buffer.n_valid_uniforms(), 0);
+        assert!(buffer.raw_buffer().is_empty());
+        assert!(buffer.valid_uniforms().is_empty());
+    }
+
+    #[test]
+    fn creating_uniform_buffer_with_capacity_works() {
+        let buffer = ByteUniformBuffer::with_capacity(4);
+
+        assert_eq!(buffer.n_valid_uniforms(), 0);
+        assert_eq!(buffer.raw_buffer().len(), 4);
+        assert!(buffer.valid_uniforms().is_empty());
+    }
+
+    #[test]
+    #[should_panic]
+    fn requesting_uniform_from_empty_uniform_buffer_fails() {
+        let buffer = ByteUniformBuffer::new();
+        buffer.uniform(5);
+    }
+
+    #[test]
+    #[should_panic]
+    fn requesting_uniform_mutably_from_empty_uniform_buffer_fails() {
+        let mut buffer = ByteUniformBuffer::new();
+        buffer.uniform_mut(5);
+    }
+
+    #[test]
+    fn adding_one_uniform_to_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        let id = 3;
+        let uniform = ByteUniform(7);
+
+        buffer.add_uniform(id, uniform);
+
+        assert_eq!(buffer.n_valid_uniforms(), 1);
+        assert_eq!(buffer.uniform(id), &uniform);
+        assert_eq!(buffer.uniform_mut(id), &uniform);
+        assert_eq!(buffer.valid_uniforms(), &[uniform]);
+    }
+
+    #[test]
+    fn adding_two_uniforms_to_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        let id_1 = 3;
+        let id_2 = 13;
+        let uniform_1 = ByteUniform(7);
+        let uniform_2 = ByteUniform(42);
+
+        buffer.add_uniform(id_1, uniform_1);
+        buffer.add_uniform(id_2, uniform_2);
+
+        assert_eq!(buffer.uniform(id_1), &uniform_1);
+        assert_eq!(buffer.uniform_mut(id_1), &uniform_1);
+        assert_eq!(buffer.uniform(id_2), &uniform_2);
+        assert_eq!(buffer.uniform_mut(id_2), &uniform_2);
+
+        assert_eq!(buffer.n_valid_uniforms(), 2);
+        assert_eq!(buffer.valid_uniforms().len(), 2);
+        assert!(buffer.valid_uniforms().contains(&uniform_1));
+        assert!(buffer.valid_uniforms().contains(&uniform_2));
+    }
+
+    #[test]
+    #[should_panic]
+    fn requesting_missing_uniform_from_uniform_buffer_fails() {
+        let mut buffer = ByteUniformBuffer::new();
+        buffer.add_uniform(8, ByteUniform(1));
+        buffer.uniform(5);
+    }
+
+    #[test]
+    #[should_panic]
+    fn requesting_missing_uniform_mutably_from_uniform_buffer_fails() {
+        let mut buffer = ByteUniformBuffer::new();
+        buffer.add_uniform(8, ByteUniform(1));
+        buffer.uniform_mut(5);
+    }
+
+    #[test]
+    fn removing_only_uniform_from_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        let id = 8;
+        buffer.add_uniform(id, ByteUniform(1));
+
+        buffer.remove_uniform(id);
+
+        assert!(buffer.get_uniform(id).is_none());
+        assert_eq!(buffer.n_valid_uniforms(), 0);
+        assert!(buffer.valid_uniforms().is_empty());
+    }
+
+    #[test]
+    fn removing_second_uniform_from_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        let id_1 = 8;
+        let id_2 = 0;
+        let uniform_1 = ByteUniform(0);
+        let uniform_2 = ByteUniform(23);
+
+        buffer.add_uniform(id_1, uniform_1);
+        buffer.add_uniform(id_2, uniform_2);
+
+        buffer.remove_uniform(id_2);
+
+        assert_eq!(buffer.n_valid_uniforms(), 1);
+        assert_eq!(buffer.uniform(id_1), &uniform_1);
+        assert_eq!(buffer.valid_uniforms(), &[uniform_1]);
+    }
+
+    #[test]
+    fn change_tracking_in_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        assert_eq!(buffer.change(), CollectionChange::None);
+
+        let id = 4;
+        let uniform = ByteUniform(99);
+
+        buffer.add_uniform(id, uniform);
+        assert_eq!(buffer.change(), CollectionChange::Count);
+
+        buffer.uniform_mut(id);
+        assert_eq!(buffer.change(), CollectionChange::Count);
+
+        buffer.reset_change_tracking();
+        assert_eq!(buffer.change(), CollectionChange::None);
+
+        buffer.uniform(id);
+        assert_eq!(buffer.change(), CollectionChange::None);
+
+        buffer.uniform_mut(id);
+        assert_eq!(buffer.change(), CollectionChange::Contents);
+
+        buffer.remove_uniform(id);
+        assert_eq!(buffer.change(), CollectionChange::Count);
     }
 }
