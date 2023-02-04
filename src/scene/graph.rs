@@ -428,10 +428,7 @@ impl<F: Float> SceneGraph<F> {
             let view_transform = *scene_camera.view_transform();
             (camera_space_view_frustum, view_transform)
         } else {
-            (
-                Frustum::from_transform(&Projective3::identity()),
-                Similarity3::identity(),
-            )
+            (Frustum::for_identity_transform(), Similarity3::identity())
         };
 
         self.update_bounding_spheres(root_node_id);

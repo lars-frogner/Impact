@@ -7,7 +7,7 @@ use crate::{
     },
     num::Float,
 };
-use nalgebra::{self as na, vector, Matrix4, Point3, Projective3, UnitVector3};
+use nalgebra::{self as na, vector, Matrix4, Point3, Projective3, UnitVector3, Vector3};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -34,6 +34,23 @@ impl<F: Float> Frustum<F> {
             planes: Self::planes_from_transform_matrix(transform.matrix()),
             transform_matrix: transform.to_homogeneous(),
             inverse_transform_matrix: transform.inverse().to_homogeneous(),
+        }
+    }
+
+    /// Creates the frustum representing the clip space of the identity
+    /// transform, which is the cube spanning from -1 to 1 in each dimension.
+    pub fn for_identity_transform() -> Self {
+        Self {
+            planes: [
+                Plane::new(Vector3::x_axis(), F::ONE),
+                Plane::new(-Vector3::x_axis(), F::ONE),
+                Plane::new(Vector3::y_axis(), F::ONE),
+                Plane::new(-Vector3::y_axis(), F::ONE),
+                Plane::new(Vector3::z_axis(), F::ONE),
+                Plane::new(-Vector3::z_axis(), F::ONE),
+            ],
+            transform_matrix: Matrix4::identity(),
+            inverse_transform_matrix: Matrix4::identity(),
         }
     }
 
