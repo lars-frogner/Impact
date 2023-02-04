@@ -4,7 +4,9 @@ use super::{DesynchronizedRenderResources, RenderResourceManager};
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::BufferVisibleModelInstances,
+    scene::{
+        BufferVisibleModelInstances, SyncLightPositionsInStorage, SyncSceneCameraViewTransform,
+    },
     world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
@@ -53,7 +55,7 @@ impl RenderResourceManager {
 
 define_task!(
     SyncCameraBuffer,
-    depends_on = [],
+    depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing camera render buffer"; {
@@ -137,7 +139,7 @@ define_task!(
 
 define_task!(
     SyncLightRenderBuffers,
-    depends_on = [],
+    depends_on = [SyncLightPositionsInStorage],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing light render buffers"; {

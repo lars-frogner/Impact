@@ -4,11 +4,14 @@ use crate::{
     define_task,
     physics::{AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp, Static},
     rendering::RenderingTag,
-    scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeComp},
+    scene::{
+        CameraNodeID, GroupNodeID, ModelInstanceNodeID, PointLightComp, SceneGraphNodeComp,
+        SyncSceneCameraViewTransform,
+    },
     world::World,
 };
 use impact_ecs::query;
-use nalgebra::Translation3;
+use nalgebra::{Similarity3, Translation3};
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform
@@ -80,6 +83,43 @@ define_task!(
                 },
                 ![Static]
             );
+
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the camera space position
+    /// of every applicable light source in the
+    /// [`LightStorage`](crate::scene::LightStorage).
+    [pub] SyncLightPositionsInStorage,
+    depends_on = [SyncSceneCameraViewTransform],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing camera space positions of light in storage"; {
+            let scene = world.scene().read().unwrap();
+
+            let ecs_world = world.ecs_world().read().unwrap();
+            let mut light_storage = scene.light_storage().write().unwrap();
+
+            let view_transform = scene.scene_camera()
+                .read()
+                .unwrap()
+                .as_ref()
+                .map_or_else(Similarity3::identity, |scene_camera| {
+                    *scene_camera.view_transform()
+                });
+
+            query!(
+                ecs_world, |point_light: &PointLightComp, position: &PositionComp| {
+                    let light_id = point_light.id;
+                    light_storage
+                        .point_light_mut(light_id)
+                        .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
+                }
+            );
+
 
             Ok(())
         })

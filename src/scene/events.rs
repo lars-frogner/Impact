@@ -87,6 +87,7 @@ impl Scene {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         PointLight::add_point_light_component_for_entity(
+            self.scene_camera(),
             self.light_storage(),
             components,
             desynchronized,

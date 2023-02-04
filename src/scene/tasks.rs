@@ -5,7 +5,8 @@ use crate::{
     define_task,
     rendering::RenderingTag,
     scene::systems::{
-        SyncSceneObjectTransformsWithOrientations, SyncSceneObjectTransformsWithPositions,
+        SyncLightPositionsInStorage, SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransformsWithPositions,
     },
     thread::ThreadPoolTaskErrors,
     window::ControlFlow,
@@ -85,6 +86,7 @@ impl Scene {
         task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
         task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
         task_scheduler.register_task(SyncSceneCameraViewTransform)?;
+        task_scheduler.register_task(SyncLightPositionsInStorage)?;
         task_scheduler.register_task(BufferVisibleModelInstances)
     }
 

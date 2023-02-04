@@ -34,7 +34,8 @@ pub use material::{
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
-pub use tasks::BufferVisibleModelInstances;
+pub use systems::SyncLightPositionsInStorage;
+pub use tasks::{BufferVisibleModelInstances, SyncSceneCameraViewTransform};
 
 use crate::rendering::fre;
 use std::sync::RwLock;

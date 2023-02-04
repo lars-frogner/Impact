@@ -67,6 +67,16 @@ impl LightStorage {
         self.point_light_buffer.remove_uniform(light_id);
     }
 
+    /// Returns a mutable reference to the [`PointLight`] with the given ID.
+    ///
+    /// # Panics
+    /// If no point light with the given ID exists.
+    pub fn point_light_mut(&mut self, light_id: LightID) -> &mut PointLight {
+        self.point_light_buffer
+            .get_uniform_mut(light_id)
+            .expect("Requested missing point light")
+    }
+
     fn create_new_light_id(&mut self) -> LightID {
         let light_id = LightID(self.light_id_counter);
         self.light_id_counter = self.light_id_counter.checked_add(1).unwrap();

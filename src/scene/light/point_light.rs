@@ -5,15 +5,16 @@ use crate::{
     rendering::fre,
     scene::{
         LightStorage, Omnidirectional, PointLightComp, Radiance, RadianceComp,
-        RenderResourcesDesynchronized,
+        RenderResourcesDesynchronized, SceneCamera,
     },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
-use nalgebra::Point3;
+use nalgebra::{Point3, Similarity3};
 use std::sync::RwLock;
 
-/// An point light source represented by a position and an RGB radiance.
+/// An point light source represented by a camera space position and an RGB
+/// radiance.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Since the size of a
@@ -25,20 +26,25 @@ use std::sync::RwLock;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct PointLight {
-    position: Point3<fre>,
+    camera_space_position: Point3<fre>,
     _padding_1: fre,
     radiance: Radiance,
     _padding_2: fre,
 }
 
 impl PointLight {
-    fn new(position: Point3<fre>, radiance: Radiance) -> Self {
+    fn new(camera_space_position: Point3<fre>, radiance: Radiance) -> Self {
         Self {
-            position,
+            camera_space_position,
             _padding_1: 0.0,
             radiance,
             _padding_2: 0.0,
         }
+    }
+
+    /// Sets the camera space position of the light to the given position.
+    pub fn set_camera_space_position(&mut self, camera_space_position: Point3<fre>) {
+        self.camera_space_position = camera_space_position;
     }
 
     /// Checks if the entity-to-be with the given components has the right
@@ -46,6 +52,7 @@ impl PointLight {
     /// [`PointLight`] to the light storage and adds a [`PointLightComp`] with
     /// the light's ID to the entity.
     pub fn add_point_light_component_for_entity(
+        scene_camera: &RwLock<Option<SceneCamera<fre>>>,
         light_storage: &RwLock<LightStorage>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
@@ -53,11 +60,23 @@ impl PointLight {
         setup!(
             {
                 desynchronized.set_yes();
+
+                let view_transform = scene_camera
+                    .read()
+                    .unwrap()
+                    .as_ref()
+                    .map_or_else(Similarity3::identity, |scene_camera| {
+                        *scene_camera.view_transform()
+                    });
+
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
             |position: &PositionComp, radiance: &RadianceComp| -> PointLightComp {
-                let point_light = Self::new(position.0.cast(), radiance.0);
+                let point_light = Self::new(
+                    view_transform.transform_point(&position.0.cast()),
+                    radiance.0,
+                );
                 let id = light_storage.add_point_light(point_light);
 
                 PointLightComp { id }
