@@ -8,7 +8,7 @@ use crate::{
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
-    window::{self, ControlFlow, Window},
+    window::{ControlFlow, Window},
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -105,10 +105,18 @@ impl World {
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
 
-        self.scene()
+        let render_resources_desynchronized = self
+            .scene()
             .read()
             .unwrap()
-            .handle_entity_created(&mut components);
+            .handle_entity_created(self.window(), &mut components)?;
+
+        if render_resources_desynchronized.is_yes() {
+            self.renderer()
+                .read()
+                .unwrap()
+                .declare_render_resources_desynchronized();
+        }
 
         self.ecs_world.write().unwrap().create_entities(components)
     }
@@ -118,9 +126,18 @@ impl World {
 
         let entry = ecs_world.entity(entity);
 
-        self.scene().read().unwrap().handle_entity_removed(&entry);
+        let render_resources_desynchronized =
+            self.scene().read().unwrap().handle_entity_removed(&entry);
 
         drop(entry);
+
+        if render_resources_desynchronized.is_yes() {
+            self.renderer()
+                .read()
+                .unwrap()
+                .declare_render_resources_desynchronized();
+        }
+
         ecs_world.remove_entity(entity)
     }
 
@@ -129,21 +146,15 @@ impl World {
     pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
         self.renderer().write().unwrap().resize_surface(new_size);
 
-        self.scene()
-            .read()
-            .unwrap()
-            .camera_repository()
-            .write()
-            .unwrap()
-            .set_aspect_ratios(window::calculate_aspect_ratio(new_size.0, new_size.1));
+        let render_resources_desynchronized =
+            self.scene().read().unwrap().handle_window_resized(new_size);
 
-        self.renderer()
-            .read()
-            .unwrap()
-            .render_resource_manager()
-            .write()
-            .unwrap()
-            .declare_desynchronized();
+        if render_resources_desynchronized.is_yes() {
+            self.renderer()
+                .read()
+                .unwrap()
+                .declare_render_resources_desynchronized();
+        }
     }
 
     pub fn toggle_interaction_mode(&self) {

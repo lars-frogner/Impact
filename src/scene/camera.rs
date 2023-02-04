@@ -71,15 +71,12 @@ pub fn remove_camera_from_scene(
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     entity: &EntityEntry<'_>,
-    /// Updates all cameras to have the given aspect ratio.
-    pub fn set_aspect_ratios(&mut self, aspect_ratio: F) {
-        for camera in self.perspective_cameras.values_mut() {
-            camera.set_aspect_ratio(aspect_ratio);
-        }
+    desynchronized: &mut RenderResourcesDesynchronized,
 ) {
     if let Some(node) = entity.get_component::<SceneGraphCameraNodeComp>() {
         let node_id = node.access().id;
         scene_graph.write().unwrap().remove_camera_node(node_id);
         scene_camera.write().unwrap().take();
+        desynchronized.set_yes();
     }
 }

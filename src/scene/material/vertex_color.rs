@@ -3,7 +3,10 @@
 use crate::{
     geometry::InstanceFeatureID,
     rendering::MaterialTextureShaderInput,
-    scene::{MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification, VertexColorComp},
+    scene::{
+        MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
+        RenderResourcesDesynchronized, VertexColorComp,
+    },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -37,7 +40,10 @@ impl VertexColorMaterial {
     /// Checks if the entity-to-be with the given components has the
     /// component for this material, and if so, adds the appropriate
     /// material component to the entity.
-    pub fn add_material_component_for_entity(components: &mut ArchetypeComponentStorage) {
+    pub fn add_material_component_for_entity(
+        components: &mut ArchetypeComponentStorage,
+        _desynchronized: &mut RenderResourcesDesynchronized,
+    ) {
         setup!(
             components,
             || -> MaterialComp {

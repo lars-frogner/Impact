@@ -29,6 +29,7 @@ impl PerspectiveCamera<fre> {
         scene_graph: &RwLock<SceneGraph<fre>>,
         scene_camera: &RwLock<Option<SceneCamera<fre>>>,
         components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
         setup!(
             {
@@ -37,6 +38,7 @@ impl PerspectiveCamera<fre> {
                     bail!("Tried to add camera for entity while another entity still has one")
                 }
 
+                desynchronized.set_yes();
 
                 let mut scene_graph = scene_graph.write().unwrap();
                 let root_node_id = scene_graph.root_node_id();

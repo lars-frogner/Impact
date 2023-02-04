@@ -125,6 +125,14 @@ impl RenderingSystem {
         self.core_system.resize_surface(new_size);
     }
 
+    /// Marks the render resources as being out of sync with the source data.
+    pub fn declare_render_resources_desynchronized(&self) {
+        self.render_resource_manager
+            .write()
+            .unwrap()
+            .declare_desynchronized();
+    }
+
     /// Initializes the surface for presentation using the
     /// current surface configuration.
     fn initialize_surface(&self) {

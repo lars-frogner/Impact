@@ -3,7 +3,10 @@
 use crate::{
     physics::PositionComp,
     rendering::fre,
-    scene::{LightStorage, Omnidirectional, PointLightComp, Radiance, RadianceComp},
+    scene::{
+        LightStorage, Omnidirectional, PointLightComp, Radiance, RadianceComp,
+        RenderResourcesDesynchronized,
+    },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
@@ -45,9 +48,11 @@ impl PointLight {
     pub fn add_point_light_component_for_entity(
         light_storage: &RwLock<LightStorage>,
         components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         setup!(
             {
+                desynchronized.set_yes();
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
@@ -67,10 +72,12 @@ impl PointLight {
     pub fn remove_light_from_storage(
         light_storage: &RwLock<LightStorage>,
         entity: &EntityEntry<'_>,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         if let Some(point_light) = entity.get_component::<PointLightComp>() {
             let light_id = point_light.access().id;
             light_storage.write().unwrap().remove_point_light(light_id);
+            desynchronized.set_yes();
         }
     }
 }

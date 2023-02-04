@@ -13,6 +13,24 @@ use crate::{
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 
+/// Indicates whether an event caused the render resources to go out of sync
+/// with its source scene data.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RenderResourcesDesynchronized {
+    Yes,
+    No,
+}
+
+impl RenderResourcesDesynchronized {
+    pub fn is_yes(&self) -> bool {
+        *self == Self::Yes
+    }
+
+    pub fn set_yes(&mut self) {
+        *self = Self::Yes;
+    }
+}
+
 impl Scene {
     /// Performs any modifications to the scene required to accommodate a
     /// new entity with components represented by the given component manager,
@@ -21,73 +39,104 @@ impl Scene {
         &self,
         window: &Window,
         components: &mut ArchetypeComponentStorage,
-    ) {
-        self.add_camera_component_for_entity(window, components)?;
-        self.add_light_component_for_entity(components);
-        self.add_material_component_for_entity(components);
-        self.add_model_instance_node_component_for_entity(components);
+    ) -> Result<RenderResourcesDesynchronized> {
+        let mut desynchronized = RenderResourcesDesynchronized::No;
+        self.add_camera_component_for_entity(window, components, &mut desynchronized)?;
+        self.add_light_component_for_entity(components, &mut desynchronized);
+        self.add_material_component_for_entity(components, &mut desynchronized);
+        self.add_model_instance_node_component_for_entity(components, &mut desynchronized);
+        Ok(desynchronized)
     }
 
     /// Performs any modifications required to clean up the scene when
     /// the given entity is removed.
-    pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) {
-        self.remove_camera_node_for_entity(entity);
-        self.remove_model_instance_node_for_entity(entity);
-        self.remove_material_features_for_entity(entity);
-        self.remove_light_for_entity(entity);
+    pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) -> RenderResourcesDesynchronized {
+        let mut desynchronized = RenderResourcesDesynchronized::No;
+        self.remove_model_instance_node_for_entity(entity, &mut desynchronized);
+        self.remove_material_features_for_entity(entity, &mut desynchronized);
+        self.remove_light_for_entity(entity, &mut desynchronized);
+        self.remove_camera_for_entity(entity, &mut desynchronized);
+        desynchronized
+    }
+
+    pub fn handle_window_resized(&self, new_size: (u32, u32)) -> RenderResourcesDesynchronized {
+        if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
+            scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_size.0, new_size.1));
+        }
+        RenderResourcesDesynchronized::Yes
     }
 
     fn add_camera_component_for_entity(
         &self,
         window: &Window,
         components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
         PerspectiveCamera::add_camera_to_scene_for_entity(
             window,
             self.scene_graph(),
             self.scene_camera(),
             components,
+            desynchronized,
         )
     }
 
-    fn add_light_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
-        PointLight::add_point_light_component_for_entity(self.light_storage(), components);
+    fn add_light_component_for_entity(
+        &self,
+        components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) {
+        PointLight::add_point_light_component_for_entity(
+            self.light_storage(),
+            components,
+            desynchronized,
+        );
     }
 
-    fn add_material_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
-        VertexColorMaterial::add_material_component_for_entity(components);
+    fn add_material_component_for_entity(
+        &self,
+        components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) {
+        VertexColorMaterial::add_material_component_for_entity(components, desynchronized);
 
         FixedColorMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             components,
+            desynchronized,
         );
 
         FixedTextureMaterial::add_material_component_for_entity(
             self.material_library(),
             components,
+            desynchronized,
         );
 
         BlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             components,
+            desynchronized,
         );
 
         DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
             components,
+            desynchronized,
         );
 
         TexturedBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
             components,
+            desynchronized,
         );
     }
 
     fn add_model_instance_node_component_for_entity(
         &self,
         components: &mut ArchetypeComponentStorage,
+        _desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         setup!(
             {
@@ -141,19 +190,29 @@ impl Scene {
     fn remove_camera_for_entity(
         &self,
         entity: &EntityEntry<'_>,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         scene::camera::remove_camera_from_scene(
             self.scene_graph(),
             self.scene_camera(),
             entity,
+            desynchronized,
         );
     }
 
-    fn remove_light_for_entity(&self, entity: &EntityEntry<'_>) {
-        PointLight::remove_light_from_storage(self.light_storage(), entity);
+    fn remove_light_for_entity(
+        &self,
+        entity: &EntityEntry<'_>,
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) {
+        PointLight::remove_light_from_storage(self.light_storage(), entity, desynchronized);
     }
 
-    fn remove_material_features_for_entity(&self, entity: &EntityEntry<'_>) {
+    fn remove_material_features_for_entity(
+        &self,
+        entity: &EntityEntry<'_>,
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) {
         if let Some(material) = entity.get_component::<MaterialComp>() {
             let feature_id = material.access().feature_id;
 
@@ -164,10 +223,15 @@ impl Scene {
                     .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
                     .expect("Missing storage for material feature")
                     .remove_feature(feature_id);
+                desynchronized.set_yes();
             }
         }
     }
 
+    fn remove_model_instance_node_for_entity(
+        &self,
+        entity: &EntityEntry<'_>,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         if let Some(node) = entity.get_component::<SceneGraphNodeComp<ModelInstanceNodeID>>() {
             let model_id = self
@@ -179,6 +243,7 @@ impl Scene {
                 .write()
                 .unwrap()
                 .unregister_instance(model_id);
+            desynchronized.set_yes();
         }
     }
 }

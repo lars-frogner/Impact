@@ -15,6 +15,7 @@ mod tasks;
 
 pub use camera::{PerspectiveCameraComp, SceneCamera};
 pub use components::{MeshComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
+pub use events::RenderResourcesDesynchronized;
 pub use graph::{
     model_to_world_transform_from_position_and_orientation, CameraNodeID, GroupNodeID,
     ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,

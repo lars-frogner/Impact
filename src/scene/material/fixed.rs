@@ -10,7 +10,7 @@ use crate::{
     },
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
-        MaterialLibrary, MaterialSpecification, RGBAColor,
+        MaterialLibrary, MaterialSpecification, RGBAColor, RenderResourcesDesynchronized,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -72,9 +72,11 @@ impl FixedColorMaterial {
     pub fn add_material_component_for_entity(
         instance_feature_manager: &RwLock<InstanceFeatureManager>,
         components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         setup!(
             {
+                desynchronized.set_yes();
                 let mut instance_feature_manager = instance_feature_manager.write().unwrap();
             },
             components,
@@ -112,9 +114,11 @@ impl FixedTextureMaterial {
     pub fn add_material_component_for_entity(
         material_library: &RwLock<MaterialLibrary>,
         components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         setup!(
             {
+                desynchronized.set_yes();
                 let mut material_library = material_library.write().unwrap();
             },
             components,
