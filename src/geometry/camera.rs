@@ -18,7 +18,7 @@ pub struct PerspectiveCamera<F: Float> {
 }
 
 /// Represents a 3D camera.
-pub trait Camera<F: Float> {
+pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
     /// Returns the projection transform used by the camera.
     ///
     /// When the projection transform is applied to a point,
@@ -31,6 +31,15 @@ pub trait Camera<F: Float> {
     /// Returns the frustum representing the view volume of the
     /// camera.
     fn view_frustum(&self) -> &Frustum<F>;
+
+    /// Returns the ratio of width to height of the camera's view plane.
+    fn aspect_ratio(&self) -> F;
+
+    /// Sets the ratio of width to height of the camera's view plane.
+    ///
+    /// # Panics
+    /// If `aspect_ratio` is zero.
+    fn set_aspect_ratio(&mut self, aspect_ratio: F);
 
     /// Whether the projection transform has changed since the
     /// last reset of change tracing.
@@ -73,11 +82,6 @@ impl<F: Float> PerspectiveCamera<F> {
         }
     }
 
-    /// Returns the ratio of width to height of the view plane.
-    pub fn aspect_ratio(&self) -> F {
-        self.perspective_transform.aspect()
-    }
-
     /// Returns the vertical field of view angle in radians.
     pub fn vertical_field_of_view(&self) -> Radians<F> {
         Radians(self.perspective_transform.fovy())
@@ -91,17 +95,6 @@ impl<F: Float> PerspectiveCamera<F> {
     /// Returns the far distance of the camera.
     pub fn far_distance(&self) -> F {
         self.perspective_transform.zfar()
-    }
-
-    /// Sets the ratio of width to height of the view plane.
-    ///
-    /// # Panics
-    /// If `aspect_ratio` is zero.
-    pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
-        self.perspective_transform.set_aspect(aspect_ratio);
-        self.view_frustum = Self::compute_view_frustum(&self.perspective_transform);
-        self.projection_transform_change_tracker.notify_change();
     }
 
     /// Sets the vertical field of view angle.
@@ -149,6 +142,17 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
 
     fn view_frustum(&self) -> &Frustum<F> {
         &self.view_frustum
+    }
+
+    fn aspect_ratio(&self) -> F {
+        self.perspective_transform.aspect()
+    }
+
+    fn set_aspect_ratio(&mut self, aspect_ratio: F) {
+        assert_abs_diff_ne!(aspect_ratio, F::zero());
+        self.perspective_transform.set_aspect(aspect_ratio);
+        self.view_frustum = Self::compute_view_frustum(&self.perspective_transform);
+        self.projection_transform_change_tracker.notify_change();
     }
 
     fn projection_transform_changed(&self) -> bool {
