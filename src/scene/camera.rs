@@ -1,83 +1,85 @@
 //! Management of cameras.
 
+mod components;
+mod perspective;
+
+pub use components::PerspectiveCameraComp;
+
 use crate::{
-    geometry::{Camera, PerspectiveCamera},
+    geometry::Camera,
     num::Float,
+    rendering::fre,
+    scene::{CameraNodeID, RenderResourcesDesynchronized, SceneGraph, SceneGraphCameraNodeComp},
 };
-use anyhow::{anyhow, Result};
-use impact_utils::stringhash64_newtype;
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    fmt::Debug,
-};
+use impact_ecs::world::EntityEntry;
+use nalgebra::Similarity3;
+use std::{fmt::Debug, sync::RwLock};
 
-stringhash64_newtype!(
-    /// Identifier for specific cameras.
-    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
-    [pub] CameraID
-);
-
-/// Repository where [`Camera`]s are stored under a
-/// unique [`CameraID`].
-#[derive(Debug, Default)]
-pub struct CameraRepository<F: Float> {
-    /// Cameras using perspective transformations.
-    perspective_cameras: HashMap<CameraID, PerspectiveCamera<F>>,
+/// Represents a [`Camera`] that has a camera node in a [`SceneGraph`].
+#[derive(Debug)]
+pub struct SceneCamera<F: Float> {
+    camera: Box<dyn Camera<F>>,
+    view_transform: Similarity3<F>,
+    scene_graph_node_id: CameraNodeID,
 }
 
-impl<F: Float> CameraRepository<F> {
-    /// Creates a new empty camera repository.
-    pub fn new() -> Self {
+impl<F: Float> SceneCamera<F> {
+    /// Creates a new [`SceneCamera`] representing the given [`Camera`] in the
+    /// camera node with the given ID in the [`SceneGraph`].
+    pub fn new(camera: impl Camera<F>, scene_graph_node_id: CameraNodeID) -> Self {
         Self {
-            perspective_cameras: HashMap::new(),
+            camera: Box::new(camera),
+            view_transform: Similarity3::identity(),
+            scene_graph_node_id,
         }
     }
 
-    /// Returns a trait object representing the [`Camera`] with
-    /// the given ID, or [`None`] if the camera is not present.
-    pub fn get_camera(&self, camera_id: CameraID) -> Option<&dyn Camera<F>> {
-        Some(self.perspective_cameras.get(&camera_id).unwrap())
+    /// Returns a reference to the underlying [`Camera`].
+    pub fn camera(&self) -> &dyn Camera<F> {
+        self.camera.as_ref()
     }
 
-    /// Returns a mutable trait object representing the [`Camera`]
-    /// with the given ID, or [`None`] if the camera is not present.
-    pub fn get_camera_mut(&mut self, camera_id: CameraID) -> Option<&mut dyn Camera<F>> {
-        Some(self.perspective_cameras.get_mut(&camera_id).unwrap())
+    /// Returns a reference to the camera's view transform.
+    pub fn view_transform(&self) -> &Similarity3<F> {
+        &self.view_transform
     }
 
-    /// Returns a reference to the [`HashMap`] storing all
-    /// [`PerspectiveCamera`]s.
-    pub fn perspective_cameras(&self) -> &HashMap<CameraID, PerspectiveCamera<F>> {
-        &self.perspective_cameras
+    /// Returns the ID of the [`CameraNode`](crate::scene::graph::CameraNode)
+    /// for the camera in the [`SceneGraph`](crate::scene::SceneGraph).
+    pub fn scene_graph_node_id(&self) -> CameraNodeID {
+        self.scene_graph_node_id
     }
 
-    /// Includes the given [`PerspectiveCamera`] in the repository
-    /// under the given ID.
+    /// Sets the transform from world space to camera space.
+    pub fn set_view_transform(&mut self, view_transform: Similarity3<F>) {
+        self.view_transform = view_transform;
+    }
+
+    /// Sets the ratio of width to height of the camera's view plane.
     ///
-    /// # Errors
-    /// Returns an error if a camera with the given ID already
-    /// exists. The repository will remain unchanged.
-    pub fn add_perspective_camera(
-        &mut self,
-        camera_id: CameraID,
-        camera: PerspectiveCamera<F>,
-    ) -> Result<()> {
-        match self.perspective_cameras.entry(camera_id) {
-            Entry::Vacant(entry) => {
-                entry.insert(camera);
-                Ok(())
-            }
-            Entry::Occupied(_) => Err(anyhow!(
-                "Camera {} already present in repository",
-                camera_id
-            )),
-        }
+    /// # Panics
+    /// If `aspect_ratio` is zero.
+    pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
+        self.camera.set_aspect_ratio(aspect_ratio);
     }
+}
 
+/// Checks if the given entity has a [`SceneGraphCameraNodeComp`], and if
+/// so, removes the corresponding camera node from the given [`SceneGraph`]
+/// and sets the content of `scene_camera` to [`None`].
+pub fn remove_camera_from_scene(
+    scene_graph: &RwLock<SceneGraph<fre>>,
+    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    entity: &EntityEntry<'_>,
     /// Updates all cameras to have the given aspect ratio.
     pub fn set_aspect_ratios(&mut self, aspect_ratio: F) {
         for camera in self.perspective_cameras.values_mut() {
             camera.set_aspect_ratio(aspect_ratio);
         }
+) {
+    if let Some(node) = entity.get_component::<SceneGraphCameraNodeComp>() {
+        let node_id = node.access().id;
+        scene_graph.write().unwrap().remove_camera_node(node_id);
+        scene_camera.write().unwrap().take();
     }
 }

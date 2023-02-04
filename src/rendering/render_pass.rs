@@ -6,12 +6,12 @@ pub use tasks::SyncRenderPasses;
 
 use crate::{
     rendering::{
-        camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
-        mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
-        CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialRenderResourceManager, MaterialTextureShaderInput, MeshShaderInput, Shader,
+        instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager,
+        resource::SynchronizedRenderResources, CameraShaderInput, CoreRenderingSystem,
+        InstanceFeatureShaderInput, LightShaderInput, MaterialRenderResourceManager,
+        MaterialTextureShaderInput, MeshShaderInput, Shader,
     },
-    scene::{CameraID, MaterialID, MeshID, ModelID, ShaderManager},
+    scene::{MaterialID, MeshID, ModelID, ShaderManager},
 };
 use anyhow::{anyhow, Result};
 use std::{
@@ -34,7 +34,6 @@ pub struct RenderPassManager {
 /// including identifiers to the data it involves.
 #[derive(Clone, Debug)]
 pub struct RenderPassSpecification {
-    camera_id: Option<CameraID>,
     model_id: Option<ModelID>,
     mesh_id: Option<MeshID>,
     clear_color: Option<wgpu::Color>,
@@ -84,7 +83,6 @@ impl RenderPassManager {
         core_system: &CoreRenderingSystem,
         render_resources: &SynchronizedRenderResources,
         shader_manager: &mut ShaderManager,
-        camera_id: CameraID,
     ) -> Result<()> {
         let feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
@@ -102,14 +100,12 @@ impl RenderPassManager {
                         core_system,
                         render_resources,
                         shader_manager,
-                        camera_id,
                         model_id,
                         disable_pass,
                     )?);
                 }
                 Entry::Occupied(mut entry) => {
                     let recorder = entry.get_mut();
-                    recorder.change_camera_to(camera_id);
                     recorder.set_disabled(disable_pass);
                 }
             }
@@ -125,11 +121,10 @@ impl RenderPassManager {
         core_system: &CoreRenderingSystem,
         render_resources: &SynchronizedRenderResources,
         shader_manager: &mut ShaderManager,
-        camera_id: CameraID,
         model_id: ModelID,
         disabled: bool,
     ) -> Result<RenderPassRecorder> {
-        let specification = RenderPassSpecification::for_model(camera_id, model_id)?;
+        let specification = RenderPassSpecification::for_model(model_id)?;
         RenderPassRecorder::new(
             core_system,
             render_resources,
@@ -144,7 +139,6 @@ impl RenderPassSpecification {
     /// Creates a new empty render pass specification.
     pub fn new(label: String) -> Self {
         Self {
-            camera_id: None,
             model_id: None,
             mesh_id: None,
             clear_color: None,
@@ -153,11 +147,9 @@ impl RenderPassSpecification {
     }
 
     /// Creates the specification for the render pass that
-    /// will render the model with the given ID, using the
-    /// camera with the given ID.
-    pub fn for_model(camera_id: CameraID, model_id: ModelID) -> Result<Self> {
+    /// will render the model with the given ID.
+    pub fn for_model(model_id: ModelID) -> Result<Self> {
         Ok(Self {
-            camera_id: Some(camera_id),
             model_id: Some(model_id),
             mesh_id: Some(model_id.mesh_id()),
             clear_color: None,
@@ -169,7 +161,6 @@ impl RenderPassSpecification {
     /// clear the rendering surface with the given color.
     pub fn clearing_pass(clear_color: wgpu::Color) -> Self {
         Self {
-            camera_id: None,
             model_id: None,
             mesh_id: None,
             clear_color: Some(clear_color),
@@ -177,16 +168,8 @@ impl RenderPassSpecification {
         }
     }
 
-    fn has_camera(&self) -> bool {
-        self.camera_id.is_some()
-    }
-
     fn has_model(&self) -> bool {
         self.model_id.is_some()
-    }
-
-    fn set_camera_id(&mut self, camera_id: Option<CameraID>) {
-        self.camera_id = camera_id;
     }
 
     /// Obtains the vertex buffer layouts for any mesh and
@@ -252,10 +235,7 @@ impl RenderPassSpecification {
         let mut light_shader_input = None;
         let mut material_texture_shader_input = None;
 
-        if let Some(camera_id) = self.camera_id {
-            let camera_buffer_manager =
-                Self::get_camera_buffer_manager(render_resources, camera_id)?;
-
+        if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
             layouts.push(camera_buffer_manager.bind_group_layout());
             camera_shader_input = Some(camera_buffer_manager.shader_input());
         }
@@ -295,9 +275,8 @@ impl RenderPassSpecification {
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
         let mut bind_groups = Vec::with_capacity(3);
 
-        if let Some(camera_id) = self.camera_id {
-            bind_groups
-                .push(Self::get_camera_buffer_manager(render_resources, camera_id)?.bind_group());
+        if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
+            bind_groups.push(camera_buffer_manager.bind_group());
         }
 
         if let Some(light_buffer_manager) = render_resources.get_light_buffer_manager() {
@@ -340,15 +319,6 @@ impl RenderPassSpecification {
             .get_instance_feature_buffer_managers(model_id)
             .map(|buffers| buffers.iter())
             .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
-    }
-
-    fn get_camera_buffer_manager(
-        render_resources: &SynchronizedRenderResources,
-        camera_id: CameraID,
-    ) -> Result<&CameraRenderBufferManager> {
-        render_resources
-            .get_camera_buffer_manager(camera_id)
-            .ok_or_else(|| anyhow!("Missing render buffer for camera {}", camera_id))
     }
 
     fn get_material_resource_manager(
@@ -541,22 +511,6 @@ impl RenderPassRecorder {
     /// Set whether the render pass should be skipped.
     pub fn set_disabled(&mut self, disabled: bool) {
         self.disabled = disabled;
-    }
-
-    /// The render pass will use the camera with the given ID.
-    ///
-    /// # Panics
-    /// If the render pass does not already use a camera.
-    ///
-    /// Adding (or removing) a camera changes the set of bind
-    /// group layouts, which changes the render pipeline,
-    /// in which case a whole new render pass recorder should
-    /// be created instead. Changing which camera to use
-    /// is fine, since only the bind group (which is fetched
-    /// at render time) changes, not the bind group layout.
-    fn change_camera_to(&mut self, camera_id: CameraID) {
-        assert!(self.specification.has_camera());
-        self.specification.set_camera_id(Some(camera_id));
     }
 
     fn create_render_pipeline_layout(

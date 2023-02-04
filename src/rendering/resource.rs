@@ -5,15 +5,15 @@ mod tasks;
 pub use tasks::SyncRenderResources;
 
 use crate::{
-    geometry::{Camera, TriangleMesh},
+    geometry::TriangleMesh,
     rendering::{
         buffer::VertexBufferable, camera::CameraRenderBufferManager, fre,
         instance::InstanceFeatureRenderBufferManager, light::LightRenderBufferManager,
         mesh::MeshRenderBufferManager, Assets, CoreRenderingSystem, MaterialRenderResourceManager,
     },
     scene::{
-        CameraID, InstanceFeatureManager, LightStorage, MaterialID, MaterialSpecification, MeshID,
-        ModelID,
+        InstanceFeatureManager, LightStorage, MaterialID, MaterialSpecification, MeshID, ModelID,
+        SceneCamera,
     },
 };
 use anyhow::Result;
@@ -49,7 +49,7 @@ pub struct RenderResourceManager {
 /// are assumed to be in sync with the source data.
 #[derive(Debug)]
 pub struct SynchronizedRenderResources {
-    perspective_camera_buffer_managers: Box<CameraRenderBufferManagerMap>,
+    camera_buffer_manager: Box<Option<CameraRenderBufferManager>>,
     color_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     texture_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     light_buffer_manager: Box<Option<LightRenderBufferManager>>,
@@ -62,7 +62,7 @@ pub struct SynchronizedRenderResources {
 /// enabling concurrent re-synchronization of the resources.
 #[derive(Debug)]
 struct DesynchronizedRenderResources {
-    perspective_camera_buffer_managers: Mutex<Box<CameraRenderBufferManagerMap>>,
+    camera_buffer_manager: Mutex<Box<Option<CameraRenderBufferManager>>>,
     color_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     texture_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     light_buffer_manager: Mutex<Box<Option<LightRenderBufferManager>>>,
@@ -70,7 +70,6 @@ struct DesynchronizedRenderResources {
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
 }
 
-type CameraRenderBufferManagerMap = HashMap<CameraID, CameraRenderBufferManager>;
 type MeshRenderBufferManagerMap = HashMap<MeshID, MeshRenderBufferManager>;
 type MaterialResourceManagerMap = HashMap<MaterialID, MaterialRenderResourceManager>;
 type InstanceFeatureRenderBufferManagerMap =
@@ -151,13 +150,10 @@ impl Default for RenderResourceManager {
 }
 
 impl SynchronizedRenderResources {
-    /// Returns the render buffer manager for the given camera identifier
-    /// if the camera exists, otherwise returns [`None`].
-    pub fn get_camera_buffer_manager(
-        &self,
-        camera_id: CameraID,
-    ) -> Option<&CameraRenderBufferManager> {
-        self.perspective_camera_buffer_managers.get(&camera_id)
+    /// Returns the render buffer manager for camera data, or [`None`] if it has
+    /// not been created.
+    pub fn get_camera_buffer_manager(&self) -> Option<&CameraRenderBufferManager> {
+        self.camera_buffer_manager.as_ref().as_ref()
     }
 
     /// Returns the render buffer manager for the given mesh identifier
@@ -168,6 +164,8 @@ impl SynchronizedRenderResources {
             .or_else(|| self.texture_mesh_buffer_managers.get(&mesh_id))
     }
 
+    /// Returns the render buffer manager for light data, or [`None`] if it has
+    /// not been created.
     pub fn get_light_buffer_manager(&self) -> Option<&LightRenderBufferManager> {
         self.light_buffer_manager.as_ref().as_ref()
     }
@@ -199,7 +197,7 @@ impl SynchronizedRenderResources {
 impl DesynchronizedRenderResources {
     fn new() -> Self {
         Self {
-            perspective_camera_buffer_managers: Mutex::new(Box::new(HashMap::new())),
+            camera_buffer_manager: Mutex::new(Box::new(None)),
             color_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
             texture_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
             material_resource_managers: Mutex::new(Box::new(HashMap::new())),
@@ -210,7 +208,7 @@ impl DesynchronizedRenderResources {
 
     fn from_synchronized(render_resources: SynchronizedRenderResources) -> Self {
         let SynchronizedRenderResources {
-            perspective_camera_buffer_managers,
+            camera_buffer_manager,
             color_mesh_buffer_managers,
             texture_mesh_buffer_managers,
             light_buffer_manager,
@@ -218,7 +216,7 @@ impl DesynchronizedRenderResources {
             instance_feature_buffer_managers,
         } = render_resources;
         Self {
-            perspective_camera_buffer_managers: Mutex::new(perspective_camera_buffer_managers),
+            camera_buffer_manager: Mutex::new(camera_buffer_manager),
             color_mesh_buffer_managers: Mutex::new(color_mesh_buffer_managers),
             texture_mesh_buffer_managers: Mutex::new(texture_mesh_buffer_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
@@ -229,7 +227,7 @@ impl DesynchronizedRenderResources {
 
     fn into_synchronized(self) -> SynchronizedRenderResources {
         let DesynchronizedRenderResources {
-            perspective_camera_buffer_managers,
+            camera_buffer_manager,
             color_mesh_buffer_managers,
             texture_mesh_buffer_managers,
             light_buffer_manager,
@@ -237,9 +235,7 @@ impl DesynchronizedRenderResources {
             instance_feature_buffer_managers,
         } = self;
         SynchronizedRenderResources {
-            perspective_camera_buffer_managers: perspective_camera_buffer_managers
-                .into_inner()
-                .unwrap(),
+            camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
             color_mesh_buffer_managers: color_mesh_buffer_managers.into_inner().unwrap(),
             texture_mesh_buffer_managers: texture_mesh_buffer_managers.into_inner().unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
@@ -250,31 +246,23 @@ impl DesynchronizedRenderResources {
         }
     }
 
-    /// Performs any required updates for keeping the given map
-    /// of camera render buffers in sync with the given map of
-    /// cameras.
-    ///
-    /// Render buffers whose source data no longer
-    /// exists will be removed, and missing render buffers
-    /// for new source data will be created.
-    fn sync_camera_buffers_with_cameras(
+    /// Performs any required updates for keeping the camera data in the given
+    /// render buffer manager in sync with the given scene camera.
+    fn sync_camera_buffer_with_scene_camera(
         core_system: &CoreRenderingSystem,
-        camera_render_buffers: &mut CameraRenderBufferManagerMap,
-        cameras: &HashMap<CameraID, impl Camera<fre>>,
+        camera_buffer_manager: &mut Option<CameraRenderBufferManager>,
+        scene_camera: &SceneCamera<fre>,
     ) {
-        for (&camera_id, camera) in cameras {
-            camera_render_buffers
-                .entry(camera_id)
-                .and_modify(|camera_buffer| camera_buffer.sync_with_camera(core_system, camera))
-                .or_insert_with(|| {
-                    CameraRenderBufferManager::for_camera(
-                        core_system,
-                        camera,
-                        &camera_id.to_string(),
-                    )
-                });
+        if let Some(camera_buffer_manager) = camera_buffer_manager {
+            camera_buffer_manager.sync_with_camera(core_system, scene_camera.camera());
+        } else {
+            // We initialize the camera render buffer manager the first time this
+            // method is called
+            *camera_buffer_manager = Some(CameraRenderBufferManager::for_camera(
+                core_system,
+                scene_camera.camera(),
+            ));
         }
-        Self::remove_unmatched_render_resources(camera_render_buffers, cameras);
     }
 
     /// Performs any required updates for keeping the given map

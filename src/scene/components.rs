@@ -1,17 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to renderable scenes.
 
-use crate::scene::{CameraID, MeshID, SceneGraphNodeID};
+use crate::scene::{CameraNodeID, MeshID, SceneGraphNodeID};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a [`Camera`](crate::geometry::Camera).
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct CameraComp {
-    /// The ID of the entity's [`Camera`](crate::geometry::Camera).
-    pub id: CameraID,
-}
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a [`Mesh`](crate::geometry::Mesh).
@@ -32,13 +23,9 @@ pub struct SceneGraphNodeComp<ID: SceneGraphNodeID> {
     pub id: ID,
 }
 
-impl CameraComp {
-    /// Creates a new component representing a [`Camera`](crate::geometry::Camera)
-    /// with the given ID.
-    pub fn new(camera_id: CameraID) -> Self {
-        Self { id: camera_id }
-    }
-}
+/// [`Component`](impact_ecs::component::Component) for entities that
+/// have a camera node in the [`SceneGraph`](crate::scene::SceneGraph).
+pub type SceneGraphCameraNodeComp = SceneGraphNodeComp<CameraNodeID>;
 
 impl MeshComp {
     /// Creates a new component representing a [`Mesh`](crate::geometry::Mesh)

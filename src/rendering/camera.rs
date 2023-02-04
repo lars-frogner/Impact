@@ -26,10 +26,9 @@ impl CameraRenderBufferManager {
     /// projection transform of the given camera.
     pub fn for_camera(
         core_system: &CoreRenderingSystem,
-        camera: &impl Camera<fre>,
-        label: &str,
+        camera: &(impl Camera<fre> + ?Sized),
     ) -> Self {
-        Self::new(core_system, *camera.projection_transform(), label)
+        Self::new(core_system, *camera.projection_transform(), "Camera")
     }
 
     /// Returns the layout of the bind group to which the projection transform
@@ -59,7 +58,7 @@ impl CameraRenderBufferManager {
     pub fn sync_with_camera(
         &mut self,
         core_system: &CoreRenderingSystem,
-        camera: &impl Camera<fre>,
+        camera: &(impl Camera<fre> + ?Sized),
     ) {
         if camera.projection_transform_changed() {
             self.sync_render_buffer(core_system, camera.projection_transform());

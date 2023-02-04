@@ -1,7 +1,7 @@
 //! Running an event loop.
 
 use super::{
-    geometry::{Degrees, PerspectiveCamera, UpperExclusiveBounds},
+    geometry::{Degrees, UpperExclusiveBounds},
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem},
 };
 use crate::{
@@ -17,8 +17,8 @@ use crate::{
     },
     rendering::{fre, Assets, TextureID},
     scene::{
-        BlinnPhongComp, CameraComp, CameraID, CameraRepository, FixedColorComp, FixedTextureComp,
-        MeshComp, MeshID, MeshRepository, Omnidirectional, RadianceComp, Scene, VertexColorComp,
+        BlinnPhongComp, FixedColorComp, FixedTextureComp, MeshComp, MeshID, MeshRepository,
+        Omnidirectional, PerspectiveCameraComp, RadianceComp, Scene, VertexColorComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -81,7 +81,6 @@ async fn init_world(window: Window) -> Result<World> {
 
     let mut assets = Assets::new();
     let mut mesh_repository = MeshRepository::new();
-    let mut camera_repository = CameraRepository::new();
 
     // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
     assets.image_textures.insert(
@@ -107,16 +106,6 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     let vertical_field_of_view = Degrees(45.0);
-    camera_repository
-        .add_perspective_camera(
-            CameraID(hash64!("Camera")),
-            PerspectiveCamera::new(
-                window.aspect_ratio(),
-                vertical_field_of_view,
-                UpperExclusiveBounds::new(0.1, 100.0),
-            ),
-        )
-        .unwrap();
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
@@ -125,7 +114,7 @@ async fn init_world(window: Window) -> Result<World> {
     let orientation_controller =
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
-    let scene = Scene::new(camera_repository, mesh_repository);
+    let scene = Scene::new(mesh_repository);
     let world = World::new(
         window,
         scene,
@@ -137,7 +126,10 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &CameraComp::new(CameraID(hash64!("Camera"))),
+            &PerspectiveCameraComp::new(
+                vertical_field_of_view,
+                UpperExclusiveBounds::new(0.1, 100.0),
+            ),
             &PositionComp(Point3::new(0.0, 0.0, 0.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
             &VelocityComp(Vector3::zeros()),
