@@ -161,7 +161,6 @@ impl SynchronizedRenderResources {
     /// Returns the render buffer manager for the given mesh identifier
     /// if the mesh exists, otherwise returns [`None`].
     pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshRenderBufferManager> {
-        
         self.texture_mesh_buffer_managers.get(&mesh_id).or_else(|| {
             self.normal_vector_mesh_buffer_managers
                 .get(&mesh_id)
@@ -367,9 +366,10 @@ impl DesynchronizedRenderResources {
     ) {
         for (model_id, instance_feature_buffers) in instance_feature_manager.model_ids_and_buffers()
         {
-            feature_render_buffer_managers
-                .entry(model_id)
-                .and_modify(|feature_render_buffer_managers| {
+            match feature_render_buffer_managers.entry(model_id) {
+                Entry::Occupied(mut occupied_entry) => {
+                    let feature_render_buffer_managers = occupied_entry.get_mut();
+
                     for (feature_buffer, render_buffer_manager) in instance_feature_buffers
                         .iter()
                         .zip(feature_render_buffer_managers.iter_mut())
@@ -378,21 +378,29 @@ impl DesynchronizedRenderResources {
                             .copy_instance_features_to_render_buffer(core_system, feature_buffer);
                         feature_buffer.clear();
                     }
-                })
-                .or_insert_with(|| {
-                    instance_feature_buffers
-                        .iter()
-                        .map(|feature_buffer| {
-                            let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
-                                core_system,
-                                feature_buffer,
-                                model_id.to_string(),
-                            );
-                            feature_buffer.clear();
-                            render_buffer_manager
-                        })
-                        .collect()
-                });
+                }
+                Entry::Vacant(vacant_entry) => {
+                    // The first buffer is for model instance transforms and always present.
+                    // If it currently has no valid features, we don't have any data to create
+                    // render buffers for, so we defer creation until there is valid data.
+                    if instance_feature_buffers[0].n_valid_features() > 0 {
+                        let feature_render_buffer_managers = instance_feature_buffers
+                            .iter()
+                            .map(|feature_buffer| {
+                                let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
+                                    core_system,
+                                    feature_buffer,
+                                    model_id.to_string(),
+                                );
+                                feature_buffer.clear();
+                                render_buffer_manager
+                            })
+                            .collect();
+
+                        vacant_entry.insert(feature_render_buffer_managers);
+                    }
+                }
+            }
         }
         feature_render_buffer_managers
             .retain(|model_id, _| instance_feature_manager.has_model_id(*model_id));
