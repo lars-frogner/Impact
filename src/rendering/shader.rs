@@ -152,6 +152,13 @@ pub struct ModelViewTransformExpressions {
     normal_model_view_matrix: Option<Handle<Expression>>,
 }
 
+/// Handles to expressions for accessing the light uniform variables in the main
+/// fragment shader function.
+#[derive(Clone, Debug)]
+pub struct LightExpressions {
+    point_lights: Handle<Expression>,
+}
+
 /// Indices of the fields holding the various mesh vertex
 /// properties in the vertex shader output struct.
 #[derive(Clone, Debug)]
@@ -216,6 +223,18 @@ pub struct SampledTexture {
     sampler_var_handle: Handle<GlobalVariable>,
 }
 
+/// Helper for generating code for a for-loop.
+pub struct ForLoop {
+    /// Expression for the index in the for-loop body.
+    pub idx_expr_handle: Handle<Expression>,
+    /// Set of statements making up the for-loop body.
+    pub body: Block,
+    continuing: Block,
+    break_if: Option<Handle<Expression>>,
+    n_iterations_expr_handle: Handle<Expression>,
+    zero_constant_handle: Handle<Constant>,
+}
+
 const U32_WIDTH: u32 = mem::size_of::<u32>() as u32;
 
 const U32_TYPE: Type = Type {
@@ -226,13 +245,13 @@ const U32_TYPE: Type = Type {
     },
 };
 
-const FLOAT32_WIDTH: u32 = mem::size_of::<f32>() as u32;
+const F32_WIDTH: u32 = mem::size_of::<f32>() as u32;
 
-const FLOAT_TYPE: Type = Type {
+const F32_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Scalar {
         kind: ScalarKind::Float,
-        width: FLOAT32_WIDTH as Bytes,
+        width: F32_WIDTH as Bytes,
     },
 };
 
@@ -241,37 +260,37 @@ const VECTOR_2_TYPE: Type = Type {
     inner: TypeInner::Vector {
         size: VectorSize::Bi,
         kind: ScalarKind::Float,
-        width: FLOAT32_WIDTH as Bytes,
+        width: F32_WIDTH as Bytes,
     },
 };
-const VECTOR_2_SIZE: u32 = 2 * FLOAT32_WIDTH;
+const VECTOR_2_SIZE: u32 = 2 * F32_WIDTH;
 
 const VECTOR_3_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Vector {
         size: VectorSize::Tri,
         kind: ScalarKind::Float,
-        width: FLOAT32_WIDTH as Bytes,
+        width: F32_WIDTH as Bytes,
     },
 };
-const VECTOR_3_SIZE: u32 = 3 * FLOAT32_WIDTH;
+const VECTOR_3_SIZE: u32 = 3 * F32_WIDTH;
 
 const VECTOR_4_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Vector {
         size: VectorSize::Quad,
         kind: ScalarKind::Float,
-        width: FLOAT32_WIDTH as Bytes,
+        width: F32_WIDTH as Bytes,
     },
 };
-const VECTOR_4_SIZE: u32 = 4 * FLOAT32_WIDTH;
+const VECTOR_4_SIZE: u32 = 4 * F32_WIDTH;
 
 const MATRIX_4X4_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Matrix {
         columns: VectorSize::Quad,
         rows: VectorSize::Quad,
-        width: FLOAT32_WIDTH as Bytes,
+        width: F32_WIDTH as Bytes,
     },
 };
 
@@ -506,28 +525,33 @@ impl ShaderGenerator {
         let fragment_input_struct = vertex_output_struct_builder
             .generate_input_code(&mut module.types, &mut fragment_function);
 
-        if material_requires_lights {
+        let light_expressions = if material_requires_lights {
             let light_shader_input =
                 light_shader_input.ok_or_else(|| anyhow!("Missing lights for material"))?;
 
-            Self::generate_fragment_code_for_lights(
+            Some(Self::generate_fragment_code_for_lights(
                 light_shader_input,
                 &mut module.types,
                 &mut module.global_variables,
                 &mut module.constants,
                 &mut fragment_function,
                 &mut bind_group_idx,
-            );
-        }
+            ))
+        } else {
+            None
+        };
 
         material_shader_builder.generate_fragment_code(
             &mut module.types,
+            &mut module.constants,
+            &mut module.functions,
             &mut module.global_variables,
             &mut fragment_function,
             &mut bind_group_idx,
             &fragment_input_struct,
             &mesh_vertex_output_field_indices,
             &material_vertex_output_field_indices,
+            light_expressions.as_ref(),
         );
 
         let entry_point_names = EntryPointNames {
@@ -1167,12 +1191,12 @@ impl ShaderGenerator {
         constants: &mut Arena<Constant>,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> Handle<Expression> {
+    ) -> LightExpressions {
         let u32_type_handle = insert_in_arena(types, U32_TYPE);
         let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
 
         // The struct is padded to 16 byte alignment as required for uniforms
-        let point_light_struct_size = 2 * (VECTOR_3_SIZE + FLOAT32_WIDTH);
+        let point_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
 
         // The count at the beginning of the uniform buffer is padded to 16 bytes
         let light_count_size = 16;
@@ -1193,7 +1217,7 @@ impl ShaderGenerator {
                             name: new_name("radiance"),
                             ty: vec3_type_handle,
                             binding: None,
-                            offset: VECTOR_3_SIZE + FLOAT32_WIDTH,
+                            offset: VECTOR_3_SIZE + F32_WIDTH,
                         },
                     ],
                     span: point_light_struct_size,
@@ -1268,21 +1292,108 @@ impl ShaderGenerator {
             Expression::GlobalVariable(point_lights_var_handle),
         );
 
-        let point_lights_expr_handle = emit(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: point_lights_ptr_expr_handle,
-                    },
-                )
-            },
-        );
+        LightExpressions {
+            point_lights: point_lights_ptr_expr_handle,
+        }
+    }
+}
 
-        #[allow(clippy::let_and_return)]
-        point_lights_expr_handle
+impl LightExpressions {
+    /// Generates the expression for the number of active point lights.
+    pub fn generate_point_light_count_expr(&self, function: &mut Function) -> Handle<Expression> {
+        Self::generate_light_count_expr(function, self.point_lights)
+    }
+
+    /// Takes an index expression and generates expressions for the position and
+    /// radiance, respectively, of the point light at that index.
+    pub fn generate_point_light_field_expressions(
+        &self,
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        light_idx_expr_handle: Handle<Expression>,
+    ) -> (Handle<Expression>, Handle<Expression>) {
+        let point_light_ptr_expr = Self::generate_light_ptr_expr(
+            block,
+            expressions,
+            self.point_lights,
+            light_idx_expr_handle,
+        );
+        let position_expr_handle =
+            Self::generate_field_access_expr(block, expressions, point_light_ptr_expr, 0);
+        let radiance_expr_handle =
+            Self::generate_field_access_expr(block, expressions, point_light_ptr_expr, 1);
+        (position_expr_handle, radiance_expr_handle)
+    }
+
+    fn generate_light_count_expr(
+        function: &mut Function,
+        struct_ptr_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        Self::generate_field_access_expr(
+            &mut function.body,
+            &mut function.expressions,
+            struct_ptr_expr_handle,
+            0,
+        )
+    }
+
+    fn generate_light_ptr_expr(
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        struct_ptr_expr_handle: Handle<Expression>,
+        light_idx_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let lights_field_ptr_handle =
+            Self::generate_field_access_ptr_expr(block, expressions, struct_ptr_expr_handle, 1);
+
+        emit(block, expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::Access {
+                    base: lights_field_ptr_handle,
+                    index: light_idx_expr_handle,
+                },
+            )
+        })
+    }
+
+    fn generate_field_access_expr(
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        struct_ptr_expr_handle: Handle<Expression>,
+        field_idx: u32,
+    ) -> Handle<Expression> {
+        let field_ptr_handle = Self::generate_field_access_ptr_expr(
+            block,
+            expressions,
+            struct_ptr_expr_handle,
+            field_idx,
+        );
+        emit(block, expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::Load {
+                    pointer: field_ptr_handle,
+                },
+            )
+        })
+    }
+
+    fn generate_field_access_ptr_expr(
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        struct_ptr_expr_handle: Handle<Expression>,
+        field_idx: u32,
+    ) -> Handle<Expression> {
+        emit(block, expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::AccessIndex {
+                    base: struct_ptr_expr_handle,
+                    index: field_idx,
+                },
+            )
+        })
     }
 }
 
@@ -1349,12 +1460,15 @@ impl<'a> MaterialShaderGenerator<'a> {
     fn generate_fragment_code(
         &self,
         types: &mut UniqueArena<Type>,
+        constants: &mut Arena<Constant>,
+        functions: &mut Arena<Function>,
         global_variables: &mut Arena<GlobalVariable>,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
+        light_expressions: Option<&LightExpressions>,
     ) {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
@@ -1388,12 +1502,15 @@ impl<'a> MaterialShaderGenerator<'a> {
                 MaterialVertexOutputFieldIndices::BlinnPhong(material_input_field_indices),
             ) => builder.generate_fragment_code(
                 types,
+                constants,
+                functions,
                 global_variables,
                 fragment_function,
                 bind_group_idx,
                 fragment_input_struct,
                 mesh_input_field_indices,
                 material_input_field_indices,
+                light_expressions,
             ),
             _ => panic!("Mismatched material shader builder and output field indices type"),
         }
@@ -1844,6 +1961,164 @@ impl SampledTexture {
         #[allow(clippy::let_and_return)]
         image_sampling_expr_handle
     }
+
+    /// Generates and returns an expression sampling the texture at
+    /// the texture coordinates specified by the given expression,
+    /// and extracting the RGB values of the sampled RGBA color.
+    fn generate_rgb_sampling_expr(
+        &self,
+        function: &mut Function,
+        texture_coord_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let sampling_expr_handle = self.generate_sampling_expr(function, texture_coord_expr_handle);
+
+        emit(
+            &mut function.body,
+            &mut function.expressions,
+            |expressions| append_to_arena(expressions, swizzle_xyz_expr(sampling_expr_handle)),
+        )
+    }
+}
+
+impl ForLoop {
+    /// Generates code for a new for-loop with the number of iterations given by
+    /// `n_iterations_expr_handle` and returns a new [`ForLoop`]. The loop index
+    /// starts at zero, and is available as the `idx_expr_handle` field of the
+    /// returned `ForLoop` struct. The main body of the loop is empty, and
+    /// statements can be added to it by pushing to the `body` field of the
+    /// returned `ForLoop`.
+    pub fn new(
+        types: &mut UniqueArena<Type>,
+        constants: &mut Arena<Constant>,
+        function: &mut Function,
+        name: &str,
+        n_iterations_expr_handle: Handle<Expression>,
+    ) -> Self {
+        let u32_type_handle = insert_in_arena(types, U32_TYPE);
+
+        let zero_constant_handle = append_to_arena(constants, u32_constant(0));
+
+        let idx_ptr_expr_handle = append_to_arena(
+            &mut function.expressions,
+            Expression::LocalVariable(append_to_arena(
+                &mut function.local_variables,
+                LocalVariable {
+                    name: Some(format!("{}_idx", name)),
+                    ty: u32_type_handle,
+                    init: Some(zero_constant_handle),
+                },
+            )),
+        );
+
+        let mut body_block = Block::new();
+
+        let idx_expr_handle = emit(&mut body_block, &mut function.expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::Load {
+                    pointer: idx_ptr_expr_handle,
+                },
+            )
+        });
+
+        let mut continuing_block = Block::new();
+
+        let unity_constant_expr_handle = append_to_arena(
+            &mut function.expressions,
+            Expression::Constant(append_to_arena(constants, u32_constant(1))),
+        );
+
+        let incremented_idx_expr = emit(
+            &mut continuing_block,
+            &mut function.expressions,
+            |expressions| {
+                append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: idx_expr_handle,
+                        right: unity_constant_expr_handle,
+                    },
+                )
+            },
+        );
+
+        push_to_block(
+            &mut continuing_block,
+            Statement::Store {
+                pointer: idx_ptr_expr_handle,
+                value: incremented_idx_expr,
+            },
+        );
+
+        let break_if_expr_handle = emit(
+            &mut continuing_block,
+            &mut function.expressions,
+            |expressions| {
+                let idx_expr_handle = append_to_arena(
+                    expressions,
+                    Expression::Load {
+                        pointer: idx_ptr_expr_handle,
+                    },
+                );
+                append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::GreaterEqual,
+                        left: idx_expr_handle,
+                        right: n_iterations_expr_handle,
+                    },
+                )
+            },
+        );
+
+        Self {
+            body: body_block,
+            continuing: continuing_block,
+            break_if: Some(break_if_expr_handle),
+            idx_expr_handle,
+            n_iterations_expr_handle,
+            zero_constant_handle,
+        }
+    }
+
+    /// Generates the actual loop statement. Call this when the `body` field has
+    /// been filled with all required statements.
+    pub fn generate_code(self, block: &mut Block, expressions: &mut Arena<Expression>) {
+        let mut loop_block = Block::new();
+
+        push_to_block(
+            &mut loop_block,
+            Statement::Loop {
+                body: self.body,
+                continuing: self.continuing,
+                break_if: self.break_if,
+            },
+        );
+
+        let zero_constant_expr_handle =
+            append_to_arena(expressions, Expression::Constant(self.zero_constant_handle));
+
+        let n_iter_above_zero_expr_handle = emit(block, expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::Binary {
+                    op: BinaryOperator::Greater,
+                    left: self.n_iterations_expr_handle,
+                    right: zero_constant_expr_handle,
+                },
+            )
+        });
+
+        push_to_block(
+            block,
+            Statement::If {
+                condition: n_iter_above_zero_expr_handle,
+                accept: loop_block,
+                reject: Block::new(),
+            },
+        );
+    }
 }
 
 fn new_name<S: ToString>(name_str: S) -> Option<String> {
@@ -1866,7 +2141,7 @@ fn float32_constant(value: f64) -> Constant {
         name: None,
         specialization: None,
         inner: ConstantInner::Scalar {
-            width: FLOAT32_WIDTH as Bytes,
+            width: F32_WIDTH as Bytes,
             value: ScalarValue::Float(value),
         },
     }
@@ -2069,7 +2344,12 @@ mod test {
             
             @vertex
             fn main(vertex: VertexProperties) -> VertexOutput {
+                var color: vec3<f32>;
                 var out: VertexOutput;
+
+                color = vertex.position.xyz;
+                color += vertex.position.xyz;
+
                 out.clip_position = camera.view_proj * vec4<f32>(vertex.position, 1.0);
                 out.position = vertex.position.xyz;
                 out.texture_coords = vertex.texture_coords;

@@ -170,30 +170,30 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             // &MeshComp::new(MeshID(hash64!("Texture mesh"))),
-            &MeshComp::new(MeshID(hash64!("Color mesh"))),
+            &MeshComp::new(MeshID(hash64!("Normal vector mesh"))),
             &PositionComp(Point3::new(0.0, 0.0, 3.0)),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::z_axis(), Degrees(0.0))),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(2.0))),
             // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
             // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
-            &VertexColorComp,
-            // &BlinnPhongComp {
-            //     ambient: vector![1.0, 1.0, 1.0],
-            //     diffuse: vector![1.0, 1.0, 1.0],
-            //     specular: vector![1.0, 1.0, 1.0],
-            //     shininess: 1.0,
-            //     alpha: 1.0,
-            // },
+            // &VertexColorComp,
+            &BlinnPhongComp {
+                ambient: vector![0.1, 0.2, 0.05],
+                diffuse: vector![0.3, 0.3, 0.3],
+                specular: vector![0.5, 0.5, 0.5],
+                shininess: 20.0,
+                alpha: 1.0,
+            },
         ))
         .unwrap();
 
-    // world
-    //     .create_entities((
-    //         &PositionComp(Point3::new(0.0, 0.0, 3.0)),
-    //         &RadianceComp(vector![1.0, 1.0, 1.0]),
-    //         &Omnidirectional,
-    //     ))
-    //     .unwrap();
+    world
+        .create_entities((
+            &PositionComp(Point3::new(0.0, 0.0, 0.0)),
+            &RadianceComp(vector![1.0, 1.0, 1.0]),
+            &Omnidirectional,
+        ))
+        .unwrap();
 
     Ok(world)
 }
