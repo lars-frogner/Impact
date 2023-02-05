@@ -5,7 +5,7 @@ use crate::{
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{point, Point3, Vector2, Vector3, Vector4};
+use nalgebra::{point, Point3, UnitVector3, Vector2, Vector3, Vector4};
 use std::fmt::Debug;
 
 /// Represents a 3D polygonial mesh.
@@ -44,12 +44,20 @@ pub struct ColorVertex<F: Float> {
     pub color: Vector4<F>,
 }
 
-/// Vertices that have a associated texture coordinates.
+/// Vertices that have associated texture coordinates.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct TextureVertex<F: Float> {
     pub position: Point3<F>,
     pub texture_coords: Vector2<F>,
+}
+
+/// Vertices that have an associated normal vector.
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct NormalVectorVertex<F: Float> {
+    pub position: Point3<F>,
+    pub normal_vector: UnitVector3<F>,
 }
 
 impl<V> TriangleMesh<V> {
@@ -147,10 +155,16 @@ impl<F: Float> Vertex<F> for TextureVertex<F> {
     }
 }
 
-// Since `ColorVertex` is `#[repr(C)]`, it will be `Zeroable`
-// and `Pod` as long as its fields, `Point3` and `Vector2`, are so
-// and there is no padding. We know there will be no padding since
-// both fields will have the same alignment (the alignment of `F`).
+impl<F: Float> Vertex<F> for NormalVectorVertex<F> {
+    fn position(&self) -> &Point3<F> {
+        &self.position
+    }
+}
+
+// Since `ColorVertex` is `#[repr(C)]`, it will be `Zeroable` and `Pod` as long
+// as its fields, `Point3` and `Vector2`, are so and there is no padding. We
+// know there will be no padding since both fields will have the same alignment
+// (the alignment of `F`).
 unsafe impl<F> Zeroable for ColorVertex<F>
 where
     F: Float,
@@ -167,10 +181,10 @@ where
 {
 }
 
-// Since `TextureVertex` is `#[repr(C)]`, it will be `Zeroable`
-// and `Pod` as long as its fields, `Point3` and `Vector3`, are so
-// and there is no padding. We know there will be no padding since
-// both fields will have the same alignment (the alignment of `F`).
+// Since `TextureVertex` is `#[repr(C)]`, it will be `Zeroable` and `Pod` as
+// long as its fields, `Point3` and `Vector3`, are so and there is no padding.
+// We know there will be no padding since both fields will have the same
+// alignment (the alignment of `F`).
 unsafe impl<F> Zeroable for TextureVertex<F>
 where
     F: Float,
@@ -184,5 +198,25 @@ where
     F: Float,
     Point3<F>: Pod,
     Vector2<F>: Pod,
+{
+}
+
+// Since `ColorVertex` is `#[repr(C)]`, it will be `Zeroable` and `Pod` as long
+// as its fields, `Point3` and `UnitVector3`, are so and there is no padding. We
+// know there will be no padding since both fields will have the same alignment
+// (the alignment of `F`).
+unsafe impl<F> Zeroable for NormalVectorVertex<F>
+where
+    F: Float,
+    Point3<F>: Zeroable,
+    UnitVector3<F>: Zeroable,
+{
+}
+
+unsafe impl<F> Pod for NormalVectorVertex<F>
+where
+    F: Float,
+    Point3<F>: Pod,
+    UnitVector3<F>: Pod,
 {
 }

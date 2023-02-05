@@ -1,7 +1,7 @@
 //! Management of meshes.
 
 use crate::{
-    geometry::{ColorVertex, Mesh, TextureVertex, TriangleMesh},
+    geometry::{ColorVertex, Mesh, NormalVectorVertex, TextureVertex, TriangleMesh},
     num::Float,
 };
 use anyhow::{anyhow, bail, Result};
@@ -25,6 +25,8 @@ pub struct MeshRepository<F: Float> {
     color_meshes: HashMap<MeshID, TriangleMesh<ColorVertex<F>>>,
     /// Meshes with vertices that hold texture coordinates.
     texture_meshes: HashMap<MeshID, TriangleMesh<TextureVertex<F>>>,
+    /// Meshes with vertices that hold normal vectors.
+    normal_vector_meshes: HashMap<MeshID, TriangleMesh<NormalVectorVertex<F>>>,
 }
 
 impl<F: Float> MeshRepository<F> {
@@ -33,6 +35,7 @@ impl<F: Float> MeshRepository<F> {
         Self {
             color_meshes: HashMap::new(),
             texture_meshes: HashMap::new(),
+            normal_vector_meshes: HashMap::new(),
         }
     }
 
@@ -41,9 +44,12 @@ impl<F: Float> MeshRepository<F> {
     pub fn get_mesh(&self, mesh_id: MeshID) -> Option<&dyn Mesh<F>> {
         match self.texture_meshes.get(&mesh_id) {
             Some(mesh) => Some(mesh),
-            None => match self.color_meshes.get(&mesh_id) {
+            None => match self.normal_vector_meshes.get(&mesh_id) {
                 Some(mesh) => Some(mesh),
-                None => None,
+                None => match self.color_meshes.get(&mesh_id) {
+                    Some(mesh) => Some(mesh),
+                    None => None,
+                },
             },
         }
     }
@@ -60,6 +66,12 @@ impl<F: Float> MeshRepository<F> {
         &self.texture_meshes
     }
 
+    /// Returns a reference to the [`HashMap`] storing all
+    /// normal vector meshes.
+    pub fn normal_vector_meshes(&self) -> &HashMap<MeshID, TriangleMesh<NormalVectorVertex<F>>> {
+        &self.normal_vector_meshes
+    }
+
     /// Includes the given color mesh in the repository
     /// under the given ID.
     ///
@@ -74,6 +86,12 @@ impl<F: Float> MeshRepository<F> {
         if self.texture_meshes().contains_key(&mesh_id) {
             bail!(
                 "Mesh {} already present in repository as a texture mesh",
+                mesh_id
+            )
+        }
+        if self.normal_vector_meshes().contains_key(&mesh_id) {
+            bail!(
+                "Mesh {} already present in repository as a normal vector mesh",
                 mesh_id
             )
         }
@@ -107,6 +125,12 @@ impl<F: Float> MeshRepository<F> {
                 mesh_id
             )
         }
+        if self.normal_vector_meshes().contains_key(&mesh_id) {
+            bail!(
+                "Mesh {} already present in repository as a normal vector mesh",
+                mesh_id
+            )
+        }
 
         match self.texture_meshes.entry(mesh_id) {
             Entry::Vacant(entry) => {
@@ -115,6 +139,42 @@ impl<F: Float> MeshRepository<F> {
             }
             Entry::Occupied(_) => Err(anyhow!(
                 "Mesh {} already present in repository as a texture mesh",
+                mesh_id
+            )),
+        }
+    }
+
+    /// Includes the given normal vector mesh in the repository
+    /// under the given ID.
+    ///
+    /// # Errors
+    /// Returns an error if a mesh with the given ID already
+    /// exists. The repository will remain unchanged.
+    pub fn add_normal_vector_mesh(
+        &mut self,
+        mesh_id: MeshID,
+        mesh: TriangleMesh<NormalVectorVertex<F>>,
+    ) -> Result<()> {
+        if self.color_meshes().contains_key(&mesh_id) {
+            bail!(
+                "Mesh {} already present in repository as a color mesh",
+                mesh_id
+            )
+        }
+        if self.texture_meshes().contains_key(&mesh_id) {
+            bail!(
+                "Mesh {} already present in repository as a texture mesh",
+                mesh_id
+            )
+        }
+
+        match self.normal_vector_meshes.entry(mesh_id) {
+            Entry::Vacant(entry) => {
+                entry.insert(mesh);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(anyhow!(
+                "Mesh {} already present in repository as a normal vector mesh",
                 mesh_id
             )),
         }

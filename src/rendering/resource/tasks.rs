@@ -24,6 +24,7 @@ define_task!(
         SyncCameraBuffer,
         SyncColorMeshBuffers,
         SyncTextureMeshBuffers,
+        SyncNormalVectorMeshBuffers,
         SyncLightRenderBuffers,
         SyncMaterialRenderResources,
         SyncInstanceFeatureBuffers
@@ -46,6 +47,7 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncCameraBuffer)?;
         task_scheduler.register_task(SyncColorMeshBuffers)?;
         task_scheduler.register_task(SyncTextureMeshBuffers)?;
+        task_scheduler.register_task(SyncNormalVectorMeshBuffers)?;
         task_scheduler.register_task(SyncLightRenderBuffers)?;
         task_scheduler.register_task(SyncMaterialRenderResources)?;
         task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
@@ -130,6 +132,34 @@ define_task!(
                         .scene().read().unwrap()
                         .mesh_repository().read().unwrap()
                         .texture_meshes(),
+                );
+            }
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    SyncNormalVectorMeshBuffers,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing normal vector mesh render buffers"; {
+            let renderer = world.renderer().read().unwrap();
+            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+            if render_resource_manager.is_desynchronized() {
+                DesynchronizedRenderResources::sync_mesh_buffers_with_meshes(
+                    renderer.core_system(),
+                    render_resource_manager
+                        .desynchronized()
+                        .normal_vector_mesh_buffer_managers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    world
+                        .scene().read().unwrap()
+                        .mesh_repository().read().unwrap()
+                        .normal_vector_meshes(),
                 );
             }
             Ok(())

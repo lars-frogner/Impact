@@ -19,7 +19,7 @@ pub use instance::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,
     InstanceFeatureTypeID, InstanceModelViewTransform,
 };
-pub use mesh::{ColorVertex, Mesh, TextureVertex, TriangleMesh};
+pub use mesh::{ColorVertex, Mesh, NormalVectorVertex, TextureVertex, TriangleMesh};
 pub use plane::Plane;
 pub use sphere::Sphere;
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};

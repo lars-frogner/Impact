@@ -1,7 +1,7 @@
 //! Management of mesh data for rendering.
 
 use crate::{
-    geometry::{CollectionChange, ColorVertex, TextureVertex, TriangleMesh},
+    geometry::{CollectionChange, ColorVertex, NormalVectorVertex, TextureVertex, TriangleMesh},
     rendering::{
         buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
         fre, CoreRenderingSystem, MeshShaderInput,
@@ -180,5 +180,20 @@ impl VertexBufferable for TextureVertex<fre> {
         color_location: None,
         normal_vector_location: None,
         texture_coord_location: Some(MESH_VERTEX_BINDING_START + 1),
+    };
+}
+
+impl VertexBufferable for NormalVectorVertex<fre> {
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+            MESH_VERTEX_BINDING_START => Float32x3,
+            MESH_VERTEX_BINDING_START + 1 => Float32x3
+        ]);
+
+    const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
+        position_location: MESH_VERTEX_BINDING_START,
+        color_location: None,
+        normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
+        texture_coord_location: None,
     };
 }

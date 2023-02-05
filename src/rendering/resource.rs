@@ -52,6 +52,7 @@ pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraRenderBufferManager>>,
     color_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     texture_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
+    normal_vector_mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     light_buffer_manager: Box<Option<LightRenderBufferManager>>,
     material_resource_managers: Box<MaterialResourceManagerMap>,
     instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
@@ -65,6 +66,7 @@ struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraRenderBufferManager>>>,
     color_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     texture_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
+    normal_vector_mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     light_buffer_manager: Mutex<Box<Option<LightRenderBufferManager>>>,
     material_resource_managers: Mutex<Box<MaterialResourceManagerMap>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
@@ -159,9 +161,12 @@ impl SynchronizedRenderResources {
     /// Returns the render buffer manager for the given mesh identifier
     /// if the mesh exists, otherwise returns [`None`].
     pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshRenderBufferManager> {
-        self.color_mesh_buffer_managers
-            .get(&mesh_id)
-            .or_else(|| self.texture_mesh_buffer_managers.get(&mesh_id))
+        
+        self.texture_mesh_buffer_managers.get(&mesh_id).or_else(|| {
+            self.normal_vector_mesh_buffer_managers
+                .get(&mesh_id)
+                .or_else(|| self.color_mesh_buffer_managers.get(&mesh_id))
+        })
     }
 
     /// Returns the render buffer manager for light data, or [`None`] if it has
@@ -200,6 +205,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(Box::new(None)),
             color_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
             texture_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
+            normal_vector_mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
             material_resource_managers: Mutex::new(Box::new(HashMap::new())),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::new(HashMap::new())),
@@ -211,6 +217,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             color_mesh_buffer_managers,
             texture_mesh_buffer_managers,
+            normal_vector_mesh_buffer_managers,
             light_buffer_manager,
             material_resource_managers,
             instance_feature_buffer_managers,
@@ -219,6 +226,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             color_mesh_buffer_managers: Mutex::new(color_mesh_buffer_managers),
             texture_mesh_buffer_managers: Mutex::new(texture_mesh_buffer_managers),
+            normal_vector_mesh_buffer_managers: Mutex::new(normal_vector_mesh_buffer_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
             material_resource_managers: Mutex::new(material_resource_managers),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
@@ -230,6 +238,7 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             color_mesh_buffer_managers,
             texture_mesh_buffer_managers,
+            normal_vector_mesh_buffer_managers,
             light_buffer_manager,
             material_resource_managers,
             instance_feature_buffer_managers,
@@ -238,6 +247,9 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
             color_mesh_buffer_managers: color_mesh_buffer_managers.into_inner().unwrap(),
             texture_mesh_buffer_managers: texture_mesh_buffer_managers.into_inner().unwrap(),
+            normal_vector_mesh_buffer_managers: normal_vector_mesh_buffer_managers
+                .into_inner()
+                .unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
             material_resource_managers: material_resource_managers.into_inner().unwrap(),
             instance_feature_buffer_managers: instance_feature_buffer_managers
