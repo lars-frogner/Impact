@@ -51,7 +51,7 @@ impl Window {
     pub fn new_window_and_event_loop() -> Result<(Self, EventLoop)> {
         let event_loop = WinitEventLoop::new();
         let window = WindowBuilder::new()
-            .with_inner_size(PhysicalSize::new(800, 600))
+            .with_inner_size(PhysicalSize::new(1600, 1200))
             .build(&event_loop)?;
 
         #[cfg(target_arch = "wasm32")]
