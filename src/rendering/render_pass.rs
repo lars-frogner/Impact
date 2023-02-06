@@ -8,7 +8,7 @@ use crate::{
     rendering::{
         instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager,
         resource::SynchronizedRenderResources, CameraShaderInput, CoreRenderingSystem,
-        InstanceFeatureShaderInput, LightShaderInput, MaterialRenderResourceManager,
+        DepthTexture, InstanceFeatureShaderInput, LightShaderInput, MaterialRenderResourceManager,
         MaterialTextureShaderInput, MeshShaderInput, Shader,
     },
     scene::{MaterialID, MeshID, ModelID, ShaderManager},
@@ -36,7 +36,9 @@ pub struct RenderPassManager {
 pub struct RenderPassSpecification {
     model_id: Option<ModelID>,
     mesh_id: Option<MeshID>,
+    depth_test: bool,
     clear_color: Option<wgpu::Color>,
+    clear_depth: Option<f32>,
     label: String,
 }
 
@@ -45,16 +47,17 @@ pub struct RenderPassSpecification {
 pub struct RenderPassRecorder {
     specification: RenderPassSpecification,
     pipeline: Option<wgpu::RenderPipeline>,
-    load_operation: wgpu::LoadOp<wgpu::Color>,
+    color_load_operation: wgpu::LoadOp<wgpu::Color>,
+    depth_operations: wgpu::Operations<f32>,
     disabled: bool,
 }
 
 impl RenderPassManager {
     /// Creates a new manager with a pass that clears the
     /// surface with the given color.
-    pub fn new(clear_color: wgpu::Color) -> Self {
+    pub fn new(clear_color: wgpu::Color, clear_depth: f32) -> Self {
         Self {
-            clearing_pass_recorder: RenderPassRecorder::clearing_pass(clear_color),
+            clearing_pass_recorder: RenderPassRecorder::clearing_pass(clear_color, clear_depth),
             model_render_pass_recorders: HashMap::new(),
         }
     }
@@ -136,34 +139,28 @@ impl RenderPassManager {
 }
 
 impl RenderPassSpecification {
-    /// Creates a new empty render pass specification.
-    pub fn new(label: String) -> Self {
-        Self {
-            model_id: None,
-            mesh_id: None,
-            clear_color: None,
-            label,
-        }
-    }
-
     /// Creates the specification for the render pass that
     /// will render the model with the given ID.
     pub fn for_model(model_id: ModelID) -> Result<Self> {
         Ok(Self {
             model_id: Some(model_id),
             mesh_id: Some(model_id.mesh_id()),
+            depth_test: true,
             clear_color: None,
+            clear_depth: None,
             label: model_id.to_string(),
         })
     }
 
     /// Creates the specification for the render pass that will
     /// clear the rendering surface with the given color.
-    pub fn clearing_pass(clear_color: wgpu::Color) -> Self {
+    pub fn clearing_pass(clear_color: wgpu::Color, clear_depth: f32) -> Self {
         Self {
             model_id: None,
             mesh_id: None,
+            depth_test: true,
             clear_color: Some(clear_color),
+            clear_depth: Some(clear_depth),
             label: "Clearing pass".to_string(),
         }
     }
@@ -295,10 +292,24 @@ impl RenderPassSpecification {
         Ok(bind_groups)
     }
 
-    fn determine_load_operation(&self) -> wgpu::LoadOp<wgpu::Color> {
+    fn determine_color_load_operation(&self) -> wgpu::LoadOp<wgpu::Color> {
         match self.clear_color {
             Some(clear_color) => wgpu::LoadOp::Clear(clear_color),
             None => wgpu::LoadOp::Load,
+        }
+    }
+
+    fn determine_depth_loperations(&self) -> wgpu::Operations<f32> {
+        if let Some(clear_depth) = self.clear_depth {
+            wgpu::Operations {
+                load: wgpu::LoadOp::Clear(clear_depth),
+                store: true,
+            }
+        } else {
+            wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: true,
+            }
         }
     }
 
@@ -370,12 +381,19 @@ impl RenderPassRecorder {
                 &format!("{} render pipeline layout", &specification.label),
             );
 
+            let depth_texture_format = if specification.depth_test {
+                Some(DepthTexture::FORMAT)
+            } else {
+                None
+            };
+
             Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
                 shader,
                 &vertex_buffer_layouts,
                 core_system.surface_config().format,
+                depth_texture_format,
                 &format!("{} render pipeline", &specification.label),
             ))
         } else {
@@ -383,23 +401,27 @@ impl RenderPassRecorder {
             None
         };
 
-        let load_operation = specification.determine_load_operation();
+        let color_load_operation = specification.determine_color_load_operation();
+        let depth_operations = specification.determine_depth_loperations();
 
         Ok(Self {
             specification,
             pipeline,
-            load_operation,
+            color_load_operation,
+            depth_operations,
             disabled,
         })
     }
 
-    pub fn clearing_pass(clear_color: wgpu::Color) -> Self {
-        let specification = RenderPassSpecification::clearing_pass(clear_color);
-        let load_operation = specification.determine_load_operation();
+    pub fn clearing_pass(clear_color: wgpu::Color, clear_depth: f32) -> Self {
+        let specification = RenderPassSpecification::clearing_pass(clear_color, clear_depth);
+        let color_load_operation = specification.determine_color_load_operation();
+        let depth_operations = specification.determine_depth_loperations();
         Self {
             specification,
             pipeline: None,
-            load_operation,
+            color_load_operation,
+            depth_operations,
             disabled: false,
         }
     }
@@ -412,7 +434,8 @@ impl RenderPassRecorder {
     pub fn record_render_pass(
         &self,
         render_resources: &SynchronizedRenderResources,
-        view: &wgpu::TextureView,
+        surface_texture_view: &wgpu::TextureView,
+        depth_texture: &DepthTexture,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         if self.disabled() {
@@ -440,17 +463,29 @@ impl RenderPassRecorder {
             _ => None,
         };
 
+        let depth_texure_view = if self.specification.depth_test {
+            Some(depth_texture.view())
+        } else {
+            None
+        };
+
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             // A `[[location(i)]]` directive in the fragment shader output targets color attachment `i` here
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
+                view: surface_texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: self.load_operation,
+                    load: self.color_load_operation,
                     store: true,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: depth_texure_view.map(|depth_texure_view| {
+                wgpu::RenderPassDepthStencilAttachment {
+                    view: depth_texure_view,
+                    depth_ops: Some(self.depth_operations),
+                    stencil_ops: None,
+                }
+            }),
             label: Some(&self.specification.label),
         });
 
@@ -530,7 +565,8 @@ impl RenderPassRecorder {
         layout: &wgpu::PipelineLayout,
         shader: &Shader,
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
-        texture_format: wgpu::TextureFormat,
+        surface_texture_format: wgpu::TextureFormat,
+        depth_texture_format: Option<wgpu::TextureFormat>,
         label: &str,
     ) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -544,7 +580,7 @@ impl RenderPassRecorder {
                 module: shader.fragment_module(),
                 entry_point: shader.fragment_entry_point_name(), // Fragment shader function in shader file
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: texture_format,
+                    format: surface_texture_format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -558,7 +594,15 @@ impl RenderPassRecorder {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: depth_texture_format.map(|depth_texture_format| {
+                wgpu::DepthStencilState {
+                    format: depth_texture_format,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,

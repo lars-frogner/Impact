@@ -31,7 +31,7 @@ pub use shader::{
     Shader, ShaderGenerator,
 };
 pub use tasks::{Render, RenderingTag};
-pub use texture::ImageTexture;
+pub use texture::{DepthTexture, ImageTexture};
 
 use self::resource::RenderResourceManager;
 use crate::window::ControlFlow;
@@ -53,17 +53,21 @@ pub struct RenderingSystem {
     assets: Assets,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
+    depth_texture: DepthTexture,
 }
 
 impl RenderingSystem {
     /// Creates a new rendering system consisting of the given
     /// core system and rendering pipelines.
     pub async fn new(core_system: CoreRenderingSystem, assets: Assets) -> Result<Self> {
+        let depth_texture = DepthTexture::new(&core_system, "Depth texture");
+
         Ok(Self {
             core_system,
             assets,
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
+            render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK, 1.0)),
+            depth_texture,
         })
     }
 
@@ -89,6 +93,11 @@ impl RenderingSystem {
         &self.render_pass_manager
     }
 
+    /// Returns a reference to the [`DepthTexture`].
+    pub fn depth_texture(&self) -> &DepthTexture {
+        &self.depth_texture
+    }
+
     /// Creates and presents a rendering of the current data in the pipelines.
     ///
     /// # Errors
@@ -107,6 +116,7 @@ impl RenderingSystem {
                 render_pass_recorder.record_render_pass(
                     render_resources_guard.synchronized(),
                     &view,
+                    &self.depth_texture,
                     &mut command_encoder,
                 )?;
             }
@@ -123,6 +133,7 @@ impl RenderingSystem {
     /// Sets a new size for the rendering surface.
     pub fn resize_surface(&mut self, new_size: (u32, u32)) {
         self.core_system.resize_surface(new_size);
+        self.depth_texture = DepthTexture::new(&self.core_system, "Depth texture");
     }
 
     /// Marks the render resources as being out of sync with the source data.
