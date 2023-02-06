@@ -3,7 +3,7 @@
 
 use super::{
     insert_in_arena, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    VertexPropertyRequirements, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    VertexPropertySet, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{Function, Type, UniqueArena};
 
@@ -16,8 +16,8 @@ pub struct VertexColorShaderGenerator;
 impl VertexColorShaderGenerator {
     /// Returns a bitflag encoding the vertex properties required
     /// by the material.
-    pub const fn vertex_property_requirements() -> VertexPropertyRequirements {
-        VertexPropertyRequirements::COLOR
+    pub const fn vertex_property_requirements() -> VertexPropertySet {
+        VertexPropertySet::COLOR
     }
 
     /// Whether the material requires light sources.

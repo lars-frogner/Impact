@@ -123,9 +123,8 @@ pub struct LightShaderInput {
 }
 
 bitflags! {
-    /// Bitflag encoding a set of vertex properties required
-    /// by a material.
-    pub struct VertexPropertyRequirements: u32 {
+    /// Bitflag encoding a set of vertex properties.
+    pub struct VertexPropertySet: u32 {
         const POSITION = 0b00000001;
         const COLOR = 0b00000010;
         const NORMAL_VECTOR = 0b00000100;
@@ -684,7 +683,7 @@ impl ShaderGenerator {
     /// for the generated matrix variables.
     fn generate_vertex_code_for_model_view_transform(
         model_view_transform_shader_input: &ModelViewTransformShaderInput,
-        vertex_property_requirements: VertexPropertyRequirements,
+        vertex_property_requirements: VertexPropertySet,
         types: &mut UniqueArena<Type>,
         vertex_function: &mut Function,
     ) -> ModelViewTransformExpressions {
@@ -706,7 +705,7 @@ impl ShaderGenerator {
             model_view_transform_shader_input.model_view_matrix_column_locations;
 
         let column_fields =
-            if vertex_property_requirements.contains(VertexPropertyRequirements::NORMAL_VECTOR) {
+            if vertex_property_requirements.contains(VertexPropertySet::NORMAL_VECTOR) {
                 let (loc_4, loc_5, loc_6, loc_7) =
                     model_view_transform_shader_input.normal_model_view_matrix_column_locations;
 
@@ -741,17 +740,11 @@ impl ShaderGenerator {
 
         let model_view_transform_type_handle = insert_in_arena(types, model_view_transform_type);
 
-        let model_view_transform_arg_idx = u32::try_from(vertex_function.arguments.len()).unwrap();
-
-        vertex_function.arguments.push(FunctionArgument {
-            name: new_name("modelViewTransform"),
-            ty: model_view_transform_type_handle,
-            binding: None,
-        });
-
-        let model_view_transform_arg_ptr_expr_handle = append_to_arena(
-            &mut vertex_function.expressions,
-            Expression::FunctionArgument(model_view_transform_arg_idx),
+        let model_view_transform_arg_ptr_expr_handle = generate_input_argument(
+            vertex_function,
+            new_name("modelViewTransform"),
+            model_view_transform_type_handle,
+            None,
         );
 
         let mut define_matrix = |name: &str, start_field_idx: u32| {
@@ -820,7 +813,7 @@ impl ShaderGenerator {
         let model_view_matrix_var_expr_handle = define_matrix("modelViewMatrix", 0);
 
         let normal_model_view_matrix_var_expr_handle =
-            if vertex_property_requirements.contains(VertexPropertyRequirements::NORMAL_VECTOR) {
+            if vertex_property_requirements.contains(VertexPropertySet::NORMAL_VECTOR) {
                 Some(define_matrix("normalModelViewMatrix", 4))
             } else {
                 None
@@ -915,7 +908,7 @@ impl ShaderGenerator {
     /// are available in the input mesh.
     fn generate_vertex_code_for_vertex_properties(
         mesh_shader_input: &MeshShaderInput,
-        requirements: VertexPropertyRequirements,
+        requirements: VertexPropertySet,
         types: &mut UniqueArena<Type>,
         constants: &mut Arena<Constant>,
         vertex_function: &mut Function,
@@ -926,22 +919,20 @@ impl ShaderGenerator {
         let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
         let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
 
-        let mut input_struct_builder = InputStructBuilder::new("VertexAttributes", "vertex");
-
-        let input_model_position_field_idx = input_struct_builder.add_field(
-            "modelSpacePosition",
+        let input_model_position_expr_handle = generate_location_bound_input_argument(
+            vertex_function,
+            new_name("modelSpacePosition"),
             vec3_type_handle,
             mesh_shader_input.position_location,
-            VECTOR_3_SIZE,
         );
 
-        let input_color_field_idx = if requirements.contains(VertexPropertyRequirements::COLOR) {
+        let input_color_expr_handle = if requirements.contains(VertexPropertySet::COLOR) {
             if let Some(location) = mesh_shader_input.color_location {
-                Some(input_struct_builder.add_field(
-                    "color",
+                Some(generate_location_bound_input_argument(
+                    vertex_function,
+                    new_name("color"),
                     vec4_type_handle,
                     location,
-                    VECTOR_4_SIZE,
                 ))
             } else {
                 return Err(anyhow!("Missing required vertex property `color`"));
@@ -950,14 +941,14 @@ impl ShaderGenerator {
             None
         };
 
-        let input_model_normal_vector_field_idx =
-            if requirements.contains(VertexPropertyRequirements::NORMAL_VECTOR) {
+        let input_model_normal_vector_expr_handle =
+            if requirements.contains(VertexPropertySet::NORMAL_VECTOR) {
                 if let Some(location) = mesh_shader_input.normal_vector_location {
-                    Some(input_struct_builder.add_field(
-                        "modelSpaceNormalVector",
+                    Some(generate_location_bound_input_argument(
+                        vertex_function,
+                        new_name("modelSpaceNormalVector"),
                         vec3_type_handle,
                         location,
-                        VECTOR_3_SIZE,
                     ))
                 } else {
                     return Err(anyhow!("Missing required vertex property `normal_vector`"));
@@ -966,14 +957,14 @@ impl ShaderGenerator {
                 None
             };
 
-        let input_texture_coord_field_idx =
-            if requirements.contains(VertexPropertyRequirements::TEXTURE_COORDS) {
+        let input_texture_coord_expr_handle =
+            if requirements.contains(VertexPropertySet::TEXTURE_COORDS) {
                 if let Some(location) = mesh_shader_input.texture_coord_location {
-                    Some(input_struct_builder.add_field(
-                        "textureCoords",
+                    Some(generate_location_bound_input_argument(
+                        vertex_function,
+                        new_name("textureCoords"),
                         vec2_type_handle,
                         location,
-                        VECTOR_2_SIZE,
                     ))
                 } else {
                     return Err(anyhow!("Missing required vertex property `texture_coords`"));
@@ -981,8 +972,6 @@ impl ShaderGenerator {
             } else {
                 None
             };
-
-        let input_struct = input_struct_builder.generate_input_code(types, vertex_function);
 
         let unity_constant_expr = append_to_arena(
             &mut vertex_function.expressions,
@@ -998,10 +987,7 @@ impl ShaderGenerator {
             |expressions| {
                 let compose_expr = Expression::Compose {
                     ty: vec4_type_handle,
-                    components: vec![
-                        input_struct.get_field_expr_handle(input_model_position_field_idx),
-                        unity_constant_expr,
-                    ],
+                    components: vec![input_model_position_expr_handle, unity_constant_expr],
                 };
                 let homogeneous_position_expr_handle = append_to_arena(expressions, compose_expr);
 
@@ -1083,7 +1069,7 @@ impl ShaderGenerator {
             texture_coords: None,
         };
 
-        if requirements.contains(VertexPropertyRequirements::POSITION) {
+        if requirements.contains(VertexPropertySet::POSITION) {
             let output_position_expr_handle = emit(
                 &mut vertex_function.body,
                 &mut vertex_function.expressions,
@@ -1101,18 +1087,18 @@ impl ShaderGenerator {
             );
         }
 
-        if let Some(idx) = input_color_field_idx {
+        if let Some(input_color_expr_handle) = input_color_expr_handle {
             output_field_indices.color = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "color",
                     vec4_type_handle,
                     VECTOR_4_SIZE,
-                    input_struct.get_field_expr_handle(idx),
+                    input_color_expr_handle,
                 ),
             );
         }
 
-        if let Some(idx) = input_model_normal_vector_field_idx {
+        if let Some(input_model_normal_vector_expr_handle) = input_model_normal_vector_expr_handle {
             let zero_constant_expr = append_to_arena(
                 &mut vertex_function.expressions,
                 Expression::Constant(append_to_arena(constants, float32_constant(0.0))),
@@ -1127,10 +1113,7 @@ impl ShaderGenerator {
                 |expressions| {
                     let compose_expr = Expression::Compose {
                         ty: vec4_type_handle,
-                        components: vec![
-                            input_struct.get_field_expr_handle(idx),
-                            zero_constant_expr,
-                        ],
+                        components: vec![input_model_normal_vector_expr_handle, zero_constant_expr],
                     };
                     let homogeneous_model_space_normal_vector_expr_handle =
                         append_to_arena(expressions, compose_expr);
@@ -1163,13 +1146,13 @@ impl ShaderGenerator {
             );
         }
 
-        if let Some(idx) = input_texture_coord_field_idx {
+        if let Some(input_texture_coord_expr_handle) = input_texture_coord_expr_handle {
             output_field_indices.texture_coords = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "textureCoords",
                     vec2_type_handle,
                     VECTOR_2_SIZE,
-                    input_struct.get_field_expr_handle(idx),
+                    input_texture_coord_expr_handle,
                 ),
             );
         }
@@ -1400,7 +1383,7 @@ impl LightExpressions {
 impl<'a> MaterialShaderGenerator<'a> {
     /// Returns a bitflag encoding the vertex properties required
     /// by the material.
-    fn vertex_property_requirements(&self) -> VertexPropertyRequirements {
+    fn vertex_property_requirements(&self) -> VertexPropertySet {
         match self {
             Self::VertexColor => VertexColorShaderGenerator::vertex_property_requirements(),
             Self::FixedColor(_) => FixedColorShaderGenerator::vertex_property_requirements(),
@@ -1585,18 +1568,8 @@ impl InputStructBuilder {
 
         let input_type_handle = insert_in_arena(types, self.builder.into_type());
 
-        let input_arg_idx = u32::try_from(function.arguments.len()).unwrap();
-
-        function.arguments.push(FunctionArgument {
-            name: Some(self.input_arg_name),
-            ty: input_type_handle,
-            binding: None,
-        });
-
-        let input_arg_ptr_expr_handle = append_to_arena(
-            &mut function.expressions,
-            Expression::FunctionArgument(input_arg_idx),
-        );
+        let input_arg_ptr_expr_handle =
+            generate_input_argument(function, Some(self.input_arg_name), input_type_handle, None);
 
         let input_field_expr_handles = emit(
             &mut function.body,
@@ -2119,6 +2092,55 @@ impl ForLoop {
             },
         );
     }
+}
+
+/// Adds an input argument with the given name, type and binding location to the
+/// given function. The location binding is assumed to use no interpolation or
+/// sampling.
+///
+/// # Returns
+/// An expression in the function body referring to the input argument.
+pub fn generate_location_bound_input_argument(
+    function: &mut Function,
+    input_arg_name: Option<String>,
+    input_type_handle: Handle<Type>,
+    location: u32,
+) -> Handle<Expression> {
+    generate_input_argument(
+        function,
+        input_arg_name,
+        input_type_handle,
+        Some(Binding::Location {
+            location,
+            interpolation: None,
+            sampling: None,
+        }),
+    )
+}
+
+/// Adds an input argument with the given name, type and binding to the given
+/// function.
+///
+/// # Returns
+/// An expression in the function body referring to the input argument.
+pub fn generate_input_argument(
+    function: &mut Function,
+    input_arg_name: Option<String>,
+    input_type_handle: Handle<Type>,
+    binding: Option<Binding>,
+) -> Handle<Expression> {
+    let input_arg_idx = u32::try_from(function.arguments.len()).unwrap();
+
+    function.arguments.push(FunctionArgument {
+        name: input_arg_name,
+        ty: input_type_handle,
+        binding,
+    });
+
+    append_to_arena(
+        &mut function.expressions,
+        Expression::FunctionArgument(input_arg_idx),
+    )
 }
 
 fn new_name<S: ToString>(name_str: S) -> Option<String> {

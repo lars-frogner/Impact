@@ -2,13 +2,10 @@
 //! or texture.
 
 use super::{
-    append_to_arena, insert_in_arena, new_name, InputStruct, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, VertexPropertyRequirements, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    insert_in_arena, new_name, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
+    SampledTexture, VertexPropertySet, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use naga::{
-    Arena, Binding, Expression, Function, FunctionArgument, GlobalVariable, Interpolation,
-    Sampling, Type, UniqueArena,
-};
+use naga::{Arena, Function, GlobalVariable, Interpolation, Sampling, Type, UniqueArena};
 
 /// Input description specifying the vertex attribute location
 /// reqired for generating a shader for a
@@ -52,8 +49,8 @@ pub struct FixedColorVertexOutputFieldIdx(usize);
 impl<'a> FixedColorShaderGenerator<'a> {
     /// Returns a bitflag encoding the vertex properties required
     /// by the material.
-    pub const fn vertex_property_requirements() -> VertexPropertyRequirements {
-        VertexPropertyRequirements::empty()
+    pub const fn vertex_property_requirements() -> VertexPropertySet {
+        VertexPropertySet::empty()
     }
 
     /// Whether the material requires light sources.
@@ -85,21 +82,11 @@ impl<'a> FixedColorShaderGenerator<'a> {
     ) -> FixedColorVertexOutputFieldIdx {
         let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
 
-        let color_arg_idx = u32::try_from(vertex_function.arguments.len()).unwrap();
-
-        vertex_function.arguments.push(FunctionArgument {
-            name: new_name("color"),
-            ty: vec4_type_handle,
-            binding: Some(Binding::Location {
-                location: self.feature_input.color_location,
-                interpolation: None,
-                sampling: None,
-            }),
-        });
-
-        let vertex_color_arg_ptr_expr_handle = append_to_arena(
-            &mut vertex_function.expressions,
-            Expression::FunctionArgument(color_arg_idx),
+        let vertex_color_arg_ptr_expr_handle = super::generate_location_bound_input_argument(
+            vertex_function,
+            new_name("color"),
+            vec4_type_handle,
+            self.feature_input.color_location,
         );
 
         // Since the color is the same for every vertex, we don't need
@@ -148,8 +135,8 @@ impl<'a> FixedColorShaderGenerator<'a> {
 impl<'a> FixedTextureShaderGenerator<'a> {
     /// Returns a bitflag encoding the vertex properties required
     /// by the material.
-    pub const fn vertex_property_requirements() -> VertexPropertyRequirements {
-        VertexPropertyRequirements::TEXTURE_COORDS
+    pub const fn vertex_property_requirements() -> VertexPropertySet {
+        VertexPropertySet::TEXTURE_COORDS
     }
 
     /// Whether the material requires light sources.

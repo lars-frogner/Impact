@@ -3,8 +3,8 @@
 use super::{
     append_to_arena, emit, float32_constant, insert_in_arena, new_name, push_to_block, ForLoop,
     InputStruct, InputStructBuilder, LightExpressions, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, VertexPropertyRequirements, F32_TYPE, F32_WIDTH,
-    VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    OutputStructBuilder, SampledTexture, VertexPropertySet, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE,
+    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{
     Arena, BinaryOperator, Constant, Expression, Function, FunctionArgument, FunctionResult,
@@ -78,13 +78,13 @@ pub struct BlinnPhongVertexOutputFieldIndices {
 impl<'a> BlinnPhongShaderGenerator<'a> {
     /// Returns a bitflag encoding the vertex properties required
     /// by the material.
-    pub fn vertex_property_requirements(&self) -> VertexPropertyRequirements {
+    pub fn vertex_property_requirements(&self) -> VertexPropertySet {
         if self.texture_input.is_some() {
-            VertexPropertyRequirements::POSITION
-                | VertexPropertyRequirements::NORMAL_VECTOR
-                | VertexPropertyRequirements::TEXTURE_COORDS
+            VertexPropertySet::POSITION
+                | VertexPropertySet::NORMAL_VECTOR
+                | VertexPropertySet::TEXTURE_COORDS
         } else {
-            VertexPropertyRequirements::POSITION | VertexPropertyRequirements::NORMAL_VECTOR
+            VertexPropertySet::POSITION | VertexPropertySet::NORMAL_VECTOR
         }
     }
 
