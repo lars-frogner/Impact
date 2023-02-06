@@ -378,7 +378,12 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 point_light_loop.idx_expr_handle,
             );
 
-        let light_dir_expr_handle = emit(
+        let unity_constant_expr = append_to_arena(
+            &mut fragment_function.expressions,
+            Expression::Constant(append_to_arena(constants, float32_constant(1.0))),
+        );
+
+        let (light_dir_expr_handle, attenuated_light_radiance_expr_handle) = emit(
             &mut point_light_loop.body,
             &mut fragment_function.expressions,
             |expressions| {
@@ -390,16 +395,51 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                         right: position_expr_handle,
                     },
                 );
-                append_to_arena(
+                let squared_light_dist_expr_handle = append_to_arena(
                     expressions,
                     Expression::Math {
-                        fun: MathFunction::Normalize,
+                        fun: MathFunction::Dot,
                         arg: light_vector_expr_handle,
+                        arg1: Some(light_vector_expr_handle),
+                        arg2: None,
+                        arg3: None,
+                    },
+                );
+                let one_over_squared_light_dist_expr_handle = append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Divide,
+                        left: unity_constant_expr,
+                        right: squared_light_dist_expr_handle,
+                    },
+                );
+                let one_over_light_dist_expr_handle = append_to_arena(
+                    expressions,
+                    Expression::Math {
+                        fun: MathFunction::Sqrt,
+                        arg: one_over_squared_light_dist_expr_handle,
                         arg1: None,
                         arg2: None,
                         arg3: None,
                     },
-                )
+                );
+                let light_dir_expr_handle = append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: light_vector_expr_handle,
+                        right: one_over_light_dist_expr_handle,
+                    },
+                );
+                let attenuated_light_radiance_expr_handle = append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: light_radiance_expr_handle,
+                        right: one_over_squared_light_dist_expr_handle,
+                    },
+                );
+                (light_dir_expr_handle, attenuated_light_radiance_expr_handle)
             },
         );
 
@@ -419,7 +459,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     specular_color_expr_handle,
                     shininess_expr_handle,
                     light_dir_expr_handle,
-                    light_radiance_expr_handle,
+                    attenuated_light_radiance_expr_handle,
                 ],
                 result: Some(returned_reflection_model_color_expr_handle),
             },
