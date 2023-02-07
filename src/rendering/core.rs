@@ -133,7 +133,10 @@ impl CoreRenderingSystem {
                         // Use looser limits for wasm
                         wgpu::Limits::downlevel_webgl2_defaults()
                     } else {
-                        wgpu::Limits::default()
+                        wgpu::Limits {
+                            max_vertex_attributes: 18,
+                            ..wgpu::Limits::default()
+                        }
                     },
                     label: None,
                 },
