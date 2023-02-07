@@ -146,6 +146,11 @@ impl ConstStringHash64 {
         }
     }
 
+    /// Returns the string literal.
+    pub const fn string(&self) -> &'static str {
+        self.string
+    }
+
     /// Unwraps the string hash to obtain the underlying [`Hash64`].
     pub const fn into_hash(self) -> Hash64 {
         let Self { hash, string: _ } = self;
