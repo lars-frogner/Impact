@@ -4,6 +4,7 @@ use crate::{
     geometry::{DynamicInstanceFeatureBuffer, InstanceFeatureTypeID},
     rendering::{buffer::RenderBuffer, CoreRenderingSystem, InstanceFeatureShaderInput},
 };
+use std::borrow::Cow;
 
 /// Owner and manager of a vertex render buffer for model instance
 /// features.
@@ -14,7 +15,6 @@ pub struct InstanceFeatureRenderBufferManager {
     shader_input: InstanceFeatureShaderInput,
     feature_type_id: InstanceFeatureTypeID,
     n_features: usize,
-    label: String,
 }
 
 impl InstanceFeatureRenderBufferManager {
@@ -23,13 +23,13 @@ impl InstanceFeatureRenderBufferManager {
     pub fn new(
         core_system: &CoreRenderingSystem,
         feature_buffer: &DynamicInstanceFeatureBuffer,
-        label: String,
+        label: Cow<'static, str>,
     ) -> Self {
         let feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
             core_system,
             feature_buffer.raw_buffer(),
             feature_buffer.n_valid_bytes(),
-            &label,
+            label,
         );
 
         Self {
@@ -38,7 +38,6 @@ impl InstanceFeatureRenderBufferManager {
             shader_input: feature_buffer.shader_input().clone(),
             feature_type_id: feature_buffer.feature_type_id(),
             n_features: feature_buffer.n_valid_features(),
-            label,
         }
     }
 
@@ -88,7 +87,7 @@ impl InstanceFeatureRenderBufferManager {
                 core_system,
                 bytemuck::cast_slice(feature_buffer.raw_buffer()),
                 n_valid_bytes,
-                &self.label,
+                self.feature_render_buffer.label().clone(),
             );
         } else {
             self.feature_render_buffer

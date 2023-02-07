@@ -7,6 +7,7 @@ use crate::rendering::{
 };
 use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
+use std::borrow::Cow;
 
 /// Owner and manager of a render buffer for a camera projection transformation.
 #[derive(Debug)]
@@ -28,7 +29,11 @@ impl CameraRenderBufferManager {
         core_system: &CoreRenderingSystem,
         camera: &(impl Camera<fre> + ?Sized),
     ) -> Self {
-        Self::new(core_system, *camera.projection_transform(), "Camera")
+        Self::new(
+            core_system,
+            *camera.projection_transform(),
+            Cow::Borrowed("Camera"),
+        )
     }
 
     /// Returns the layout of the bind group to which the projection transform
@@ -71,18 +76,21 @@ impl CameraRenderBufferManager {
     fn new(
         core_system: &CoreRenderingSystem,
         projection_transform: Projective3<fre>,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self {
-        let transform_render_buffer =
-            RenderBuffer::new_buffer_for_single_uniform(core_system, &projection_transform, label);
+        let transform_render_buffer = RenderBuffer::new_buffer_for_single_uniform(
+            core_system,
+            &projection_transform,
+            label.clone(),
+        );
 
-        let bind_group_layout = Self::create_bind_group_layout(core_system.device(), label);
+        let bind_group_layout = Self::create_bind_group_layout(core_system.device(), &label);
 
         let bind_group = Self::create_bind_group(
             core_system.device(),
             &transform_render_buffer,
             &bind_group_layout,
-            label,
+            &label,
         );
 
         Self {

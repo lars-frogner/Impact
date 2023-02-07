@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use impact_utils::ConstStringHash64;
-use std::{fmt::Debug, hash::Hash, mem};
+use std::{borrow::Cow, fmt::Debug, hash::Hash, mem};
 
 /// Owner and manager of a render buffer for uniforms.
 #[derive(Debug)]
@@ -43,7 +43,7 @@ impl UniformRenderBufferManager {
             core_system,
             uniform_buffer.raw_buffer(),
             uniform_buffer.n_valid_uniforms(),
-            uniform_id.as_ref(),
+            Cow::Borrowed(uniform_id.string()),
         );
 
         Self {
@@ -115,7 +115,7 @@ impl UniformRenderBufferManager {
                     core_system,
                     uniform_buffer.raw_buffer(),
                     n_valid_uniforms,
-                    self.uniform_id.as_ref(),
+                    self.uniform_render_buffer.label().clone(),
                 );
 
                 UniformTransferResult::CreatedNewBuffer

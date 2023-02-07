@@ -4,6 +4,8 @@ use crate::rendering::{CoreRenderingSystem, MeshShaderInput};
 use bytemuck::Pod;
 use impact_utils::{Alignment, ConstStringHash64};
 use std::{
+    borrow::Cow,
+    fmt::Display,
     mem,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -49,6 +51,7 @@ pub struct RenderBuffer {
     buffer: wgpu::Buffer,
     buffer_size: usize,
     n_valid_bytes: AtomicUsize,
+    label: Cow<'static, str>,
 }
 
 /// A buffer containing bytes that can be passed to the GPU,
@@ -62,6 +65,7 @@ pub struct CountedRenderBuffer {
     padded_count_size: usize,
     item_size: usize,
     n_valid_bytes: AtomicUsize,
+    label: Cow<'static, str>,
 }
 
 /// Type of the count embedded in the beginning of a [`CountedRenderBuffer`].
@@ -87,7 +91,7 @@ impl RenderBuffer {
         core_system: &CoreRenderingSystem,
         vertices: &[V],
         n_valid_vertices: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         V: VertexBufferable,
@@ -101,7 +105,7 @@ impl RenderBuffer {
             RenderBufferType::Vertex,
             bytes,
             n_valid_bytes,
-            &format!("{} vertex", label),
+            label,
         )
     }
 
@@ -113,7 +117,7 @@ impl RenderBuffer {
     pub fn new_full_vertex_buffer<V>(
         core_system: &CoreRenderingSystem,
         vertices: &[V],
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         V: VertexBufferable,
@@ -132,14 +136,14 @@ impl RenderBuffer {
         core_system: &CoreRenderingSystem,
         bytes: &[u8],
         n_valid_bytes: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self {
         Self::new(
             core_system,
             RenderBufferType::Vertex,
             bytes,
             n_valid_bytes,
-            &format!("{} vertex", label),
+            label,
         )
     }
 
@@ -154,7 +158,7 @@ impl RenderBuffer {
         core_system: &CoreRenderingSystem,
         indices: &[I],
         n_valid_indices: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         I: IndexBufferable,
@@ -168,7 +172,7 @@ impl RenderBuffer {
             RenderBufferType::Index,
             bytes,
             n_valid_bytes,
-            &format!("{} index", label),
+            label,
         )
     }
 
@@ -180,7 +184,7 @@ impl RenderBuffer {
     pub fn new_full_index_buffer<I>(
         core_system: &CoreRenderingSystem,
         indices: &[I],
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         I: IndexBufferable,
@@ -201,7 +205,7 @@ impl RenderBuffer {
         core_system: &CoreRenderingSystem,
         uniforms: &[U],
         n_valid_uniforms: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
@@ -222,7 +226,7 @@ impl RenderBuffer {
             RenderBufferType::Uniform,
             bytes,
             n_valid_bytes,
-            &format!("{} uniform", label),
+            label,
         )
     }
 
@@ -236,7 +240,7 @@ impl RenderBuffer {
     pub fn new_full_uniform_buffer<U>(
         core_system: &CoreRenderingSystem,
         uniforms: &[U],
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
@@ -252,7 +256,7 @@ impl RenderBuffer {
     pub fn new_buffer_for_single_uniform<U>(
         core_system: &CoreRenderingSystem,
         uniform: &U,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
@@ -270,7 +274,7 @@ impl RenderBuffer {
             RenderBufferType::Uniform,
             bytes,
             bytes.len(),
-            &format!("{} uniform", label),
+            label,
         )
     }
 
@@ -288,14 +292,14 @@ impl RenderBuffer {
         buffer_type: RenderBufferType,
         bytes: &[u8],
         n_valid_bytes: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self {
         assert!(!bytes.is_empty(), "Tried to create empty render buffer");
 
         let buffer_size = bytes.len();
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} render buffer", label);
+        let buffer_label = format!("{} {} render buffer", label, &buffer_type);
         let buffer = Self::create_initialized_buffer_of_type(
             core_system.device(),
             buffer_type,
@@ -307,7 +311,13 @@ impl RenderBuffer {
             buffer,
             buffer_size,
             n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+            label,
         }
+    }
+
+    /// Returns a reference to the buffer label.
+    pub fn label(&self) -> &Cow<'static, str> {
+        &self.label
     }
 
     /// Returns a slice of the underlying [`wgpu::Buffer`]
@@ -410,7 +420,7 @@ impl CountedRenderBuffer {
         core_system: &CoreRenderingSystem,
         uniforms: &[U],
         n_valid_uniforms: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
@@ -444,7 +454,7 @@ impl CountedRenderBuffer {
             padded_count_size,
             item_size,
             n_valid_bytes,
-            &format!("{} uniform", label),
+            label,
         )
     }
 
@@ -467,7 +477,7 @@ impl CountedRenderBuffer {
         padded_count_size: usize,
         item_size: usize,
         n_valid_bytes: usize,
-        label: &str,
+        label: Cow<'static, str>,
     ) -> Self {
         assert!(
             !bytes.is_empty(),
@@ -477,7 +487,7 @@ impl CountedRenderBuffer {
         let buffer_size = Self::compute_size_including_count(padded_count_size, bytes.len());
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} render buffer", label);
+        let buffer_label = format!("{} {} render buffer", label, &buffer_type);
         let buffer = Self::create_initialized_counted_buffer_of_type(
             core_system.device(),
             buffer_type,
@@ -493,7 +503,13 @@ impl CountedRenderBuffer {
             padded_count_size,
             item_size,
             n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+            label,
         }
+    }
+
+    /// Returns a reference to the buffer label.
+    pub fn label(&self) -> &Cow<'static, str> {
+        &self.label
     }
 
     /// Returns the maximum number of items that can fit in the buffer (not
@@ -736,6 +752,20 @@ impl RenderBufferType {
             Self::Index => wgpu::BufferUsages::INDEX,
             Self::Uniform => wgpu::BufferUsages::UNIFORM,
         }
+    }
+}
+
+impl Display for RenderBufferType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Vertex => "vertex",
+                Self::Index => "index",
+                Self::Uniform => "uniform",
+            }
+        )
     }
 }
 
