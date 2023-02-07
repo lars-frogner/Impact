@@ -173,7 +173,7 @@ impl Scene {
                 let bounding_sphere = mesh_repository
                     .get_mesh(mesh.id)
                     .expect("Tried to create renderable entity with mesh not present in mesh repository")
-                    .bounding_sphere()
+                    .compute_bounding_sphere()
                     .expect("Tried to create renderable entity with empty mesh");
 
                 SceneGraphNodeComp::new(scene_graph.create_model_instance_node(

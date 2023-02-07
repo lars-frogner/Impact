@@ -2,7 +2,7 @@
 
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
-    geometry::{InstanceFeature, InstanceFeatureID},
+    geometry::{InstanceFeature, InstanceFeatureID, VertexAttributeSet},
     impl_InstanceFeature,
     rendering::{
         FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
@@ -43,6 +43,8 @@ lazy_static! {
 }
 
 impl FixedColorMaterial {
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::empty();
+
     const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
         MaterialTextureShaderInput::None;
 
@@ -58,6 +60,7 @@ impl FixedColorMaterial {
         instance_feature_manager.register_feature_type::<Self>();
 
         let specification = MaterialSpecification::new(
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
             vec![Self::FEATURE_TYPE_ID],
             Self::MATERIAL_TEXTURE_SHADER_INPUT,
@@ -101,6 +104,9 @@ impl FixedColorMaterial {
 }
 
 impl FixedTextureMaterial {
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet =
+        VertexAttributeSet::TEXTURE_COORDS;
+
     const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
         MaterialTextureShaderInput::FixedMaterial(FixedTextureShaderInput {
             color_texture_and_sampler_bindings:
@@ -133,6 +139,7 @@ impl FixedTextureMaterial {
                     .material_specification_entry(material_id)
                     .or_insert_with(|| {
                         MaterialSpecification::new(
+                            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
                             texture_ids.to_vec(),
                             Vec::new(),
                             Self::MATERIAL_TEXTURE_SHADER_INPUT,

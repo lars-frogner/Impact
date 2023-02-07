@@ -1,8 +1,11 @@
 //! Management of shaders.
 
-use crate::rendering::{
-    CameraShaderInput, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
-    MaterialTextureShaderInput, MeshShaderInput, Shader, ShaderGenerator,
+use crate::{
+    geometry::VertexAttributeSet,
+    rendering::{
+        CameraShaderInput, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
+        MaterialTextureShaderInput, MeshShaderInput, Shader, ShaderGenerator,
+    },
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -50,6 +53,7 @@ impl ShaderManager {
         light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
+        vertex_attribute_requirements: VertexAttributeSet,
     ) -> Result<&Shader> {
         let shader_id = ShaderID::from_input(
             camera_shader_input,
@@ -57,6 +61,7 @@ impl ShaderManager {
             light_shader_input,
             instance_feature_shader_inputs,
             material_texture_shader_input,
+            vertex_attribute_requirements,
         );
 
         match self.shaders.entry(shader_id) {
@@ -68,6 +73,7 @@ impl ShaderManager {
                     light_shader_input,
                     instance_feature_shader_inputs,
                     material_texture_shader_input,
+                    vertex_attribute_requirements,
                 )?;
                 Ok(entry.insert(Shader::from_naga_module(
                     core_system,
@@ -93,6 +99,7 @@ impl ShaderID {
         light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
+        vertex_attribute_requirements: VertexAttributeSet,
     ) -> Self {
         let mut hasher = DefaultHasher::new();
         camera_shader_input.hash(&mut hasher);
@@ -100,6 +107,7 @@ impl ShaderID {
         light_shader_input.hash(&mut hasher);
         instance_feature_shader_inputs.hash(&mut hasher);
         material_texture_shader_input.hash(&mut hasher);
+        vertex_attribute_requirements.hash(&mut hasher);
         Self(hasher.finish())
     }
 }

@@ -2,7 +2,7 @@
 
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
-    geometry::InstanceFeature,
+    geometry::{InstanceFeature, VertexAttributeSet},
     impl_InstanceFeature,
     rendering::{
         fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
@@ -76,6 +76,9 @@ lazy_static! {
 }
 
 impl BlinnPhongMaterial {
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet =
+        VertexAttributeSet::POSITION.union(VertexAttributeSet::NORMAL_VECTOR);
+
     const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
         MaterialTextureShaderInput::None;
 
@@ -91,6 +94,7 @@ impl BlinnPhongMaterial {
         instance_feature_manager.register_feature_type::<Self>();
 
         let specification = MaterialSpecification::new(
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
             vec![Self::FEATURE_TYPE_ID],
             Self::MATERIAL_TEXTURE_SHADER_INPUT,
@@ -138,6 +142,10 @@ impl BlinnPhongMaterial {
 }
 
 impl DiffuseTexturedBlinnPhongMaterial {
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::POSITION
+        .union(VertexAttributeSet::NORMAL_VECTOR)
+        .union(VertexAttributeSet::TEXTURE_COORDS);
+
     const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
         MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings:
@@ -184,6 +192,7 @@ impl DiffuseTexturedBlinnPhongMaterial {
                     .material_specification_entry(material_id)
                     .or_insert_with(|| {
                         MaterialSpecification::new(
+                            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
                             texture_ids.to_vec(),
                             vec![Self::FEATURE_TYPE_ID],
                             Self::MATERIAL_TEXTURE_SHADER_INPUT,
@@ -213,6 +222,10 @@ impl DiffuseTexturedBlinnPhongMaterial {
 }
 
 impl TexturedBlinnPhongMaterial {
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::POSITION
+        .union(VertexAttributeSet::NORMAL_VECTOR)
+        .union(VertexAttributeSet::TEXTURE_COORDS);
+
     const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
         MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings:
@@ -261,6 +274,7 @@ impl TexturedBlinnPhongMaterial {
                     .material_specification_entry(material_id)
                     .or_insert_with(|| {
                         MaterialSpecification::new(
+                            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
                             texture_ids.to_vec(),
                             vec![Self::FEATURE_TYPE_ID],
                             Self::MATERIAL_TEXTURE_SHADER_INPUT,

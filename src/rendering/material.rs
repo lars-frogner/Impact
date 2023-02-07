@@ -1,6 +1,7 @@
 //! Management of material data for rendering.
 
 use crate::{
+    geometry::VertexAttributeSet,
     rendering::{Assets, CoreRenderingSystem, ImageTexture, MaterialTextureShaderInput, TextureID},
     scene::MaterialSpecification,
 };
@@ -14,6 +15,7 @@ pub struct MaterialRenderResourceManager {
     image_texture_ids: Vec<TextureID>,
     texture_bind_group_layout: Option<wgpu::BindGroupLayout>,
     texture_bind_group: Option<wgpu::BindGroup>,
+    vertex_attribute_requirements: VertexAttributeSet,
     texture_shader_input: MaterialTextureShaderInput,
     label: String,
 }
@@ -51,6 +53,7 @@ impl MaterialRenderResourceManager {
             image_texture_ids,
             texture_bind_group_layout,
             texture_bind_group,
+            vertex_attribute_requirements: material_specification.vertex_attribute_requirements(),
             texture_shader_input: material_specification.texture_shader_input().clone(),
             label,
         })
@@ -74,6 +77,12 @@ impl MaterialRenderResourceManager {
     /// textures used for the material.
     pub fn texture_bind_group(&self) -> Option<&wgpu::BindGroup> {
         self.texture_bind_group.as_ref()
+    }
+
+    /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
+    /// for rendering the material.
+    pub fn vertex_attribute_requirements(&self) -> VertexAttributeSet {
+        self.vertex_attribute_requirements
     }
 
     /// Returns the input required for accessing the textures

@@ -1,6 +1,6 @@
 //! Data buffers for rendering.
 
-use crate::rendering::{CoreRenderingSystem, MeshShaderInput};
+use crate::rendering::CoreRenderingSystem;
 use bytemuck::Pod;
 use impact_utils::{Alignment, ConstStringHash64};
 use std::{
@@ -13,12 +13,11 @@ use wgpu::util::DeviceExt;
 
 /// Represents types that can be written to a vertex buffer.
 pub trait VertexBufferable: Pod {
+    /// The location index of the vertex attribute binding.
+    const BINDING_LOCATION: u32;
+
     /// The layout of buffers made up of this vertex type.
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
-
-    /// The input required for accessing the vertex attributes
-    /// in a shader.
-    const SHADER_INPUT: MeshShaderInput;
 }
 
 /// Represents types that can be written to an index buffer.

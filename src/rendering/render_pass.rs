@@ -5,6 +5,7 @@ mod tasks;
 pub use tasks::SyncRenderPasses;
 
 use crate::{
+    geometry::VertexAttributeSet,
     rendering::{
         instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager,
         resource::SynchronizedRenderResources, CameraShaderInput, CoreRenderingSystem,
@@ -46,6 +47,7 @@ pub struct RenderPassSpecification {
 #[derive(Debug)]
 pub struct RenderPassRecorder {
     specification: RenderPassSpecification,
+    vertex_attribute_requirements: VertexAttributeSet,
     pipeline: Option<wgpu::RenderPipeline>,
     color_load_operation: wgpu::LoadOp<wgpu::Color>,
     depth_operations: wgpu::Operations<f32>,
@@ -169,16 +171,17 @@ impl RenderPassSpecification {
         self.model_id.is_some()
     }
 
-    /// Obtains the vertex buffer layouts for any mesh and
-    /// instance features involved in the render pass, as well
-    /// as the associated shader inputs.
+    /// Obtains the vertex buffer layouts for the required mesh vertex
+    /// attributes and instance features involved in the render pass, as well as
+    /// the associated shader inputs.
     ///
     /// The order of the layouts is:
-    /// 1. Mesh vertex buffer.
+    /// 1. Mesh vertex attribute buffers.
     /// 2. Instance feature buffers.
     fn get_vertex_buffer_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
+        vertex_attribute_requirements: VertexAttributeSet,
     ) -> Result<(
         Vec<wgpu::VertexBufferLayout<'static>>,
         Option<&'a MeshShaderInput>,
@@ -191,7 +194,9 @@ impl RenderPassSpecification {
         if let Some(mesh_id) = self.mesh_id {
             let mesh_buffer_manager = Self::get_mesh_buffer_manager(render_resources, mesh_id)?;
 
-            layouts.push(mesh_buffer_manager.vertex_buffer_layout().clone());
+            layouts.extend(
+                mesh_buffer_manager.request_vertex_buffer_layouts(vertex_attribute_requirements)?,
+            );
             mesh_shader_input = Some(mesh_buffer_manager.shader_input());
 
             if let Some(model_id) = self.model_id {
@@ -211,7 +216,7 @@ impl RenderPassSpecification {
 
     /// Obtains the bind group layouts for any camera, material or lights
     /// involved in the render pass, as well as the associated shader
-    /// inputs.
+    /// inputs and the vertex attribute requirements of the material.
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
@@ -225,12 +230,14 @@ impl RenderPassSpecification {
         Option<&'a CameraShaderInput>,
         Option<&'a LightShaderInput>,
         Option<&'a MaterialTextureShaderInput>,
+        VertexAttributeSet,
     )> {
         let mut layouts = Vec::with_capacity(3);
 
         let mut camera_shader_input = None;
         let mut light_shader_input = None;
         let mut material_texture_shader_input = None;
+        let mut vertex_attribute_requirements = VertexAttributeSet::empty();
 
         if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
             layouts.push(camera_buffer_manager.bind_group_layout());
@@ -250,6 +257,9 @@ impl RenderPassSpecification {
                 layouts.push(layout);
             }
             material_texture_shader_input = Some(material_resource_manager.shader_input());
+
+            vertex_attribute_requirements =
+                material_resource_manager.vertex_attribute_requirements();
         }
 
         Ok((
@@ -257,6 +267,7 @@ impl RenderPassSpecification {
             camera_shader_input,
             light_shader_input,
             material_texture_shader_input,
+            vertex_attribute_requirements,
         ))
     }
 
@@ -355,16 +366,20 @@ impl RenderPassRecorder {
         specification: RenderPassSpecification,
         disabled: bool,
     ) -> Result<Self> {
-        let pipeline = if specification.has_model() {
-            let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
-                specification.get_vertex_buffer_layouts_and_shader_inputs(render_resources)?;
-
+        let (pipeline, vertex_attribute_requirements) = if specification.has_model() {
             let (
                 bind_group_layouts,
                 camera_shader_input,
                 light_shader_input,
                 material_texture_shader_input,
+                vertex_attribute_requirements,
             ) = specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
+
+            let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
+                specification.get_vertex_buffer_layouts_and_shader_inputs(
+                    render_resources,
+                    vertex_attribute_requirements,
+                )?;
 
             let shader = shader_manager.obtain_shader(
                 core_system,
@@ -373,6 +388,7 @@ impl RenderPassRecorder {
                 light_shader_input,
                 &instance_feature_shader_inputs,
                 material_texture_shader_input,
+                vertex_attribute_requirements,
             )?;
 
             let pipeline_layout = Self::create_render_pipeline_layout(
@@ -387,7 +403,7 @@ impl RenderPassRecorder {
                 None
             };
 
-            Some(Self::create_render_pipeline(
+            let pipeline = Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
                 shader,
@@ -395,10 +411,12 @@ impl RenderPassRecorder {
                 core_system.surface_config().format,
                 depth_texture_format,
                 &format!("{} render pipeline", &specification.label),
-            ))
+            ));
+
+            (pipeline, vertex_attribute_requirements)
         } else {
             // If we don't have vertices and a material we don't need a pipeline
-            None
+            (None, VertexAttributeSet::empty())
         };
 
         let color_load_operation = specification.determine_color_load_operation();
@@ -406,6 +424,7 @@ impl RenderPassRecorder {
 
         Ok(Self {
             specification,
+            vertex_attribute_requirements,
             pipeline,
             color_load_operation,
             depth_operations,
@@ -419,6 +438,7 @@ impl RenderPassRecorder {
         let depth_operations = specification.determine_depth_loperations();
         Self {
             specification,
+            vertex_attribute_requirements: VertexAttributeSet::empty(),
             pipeline: None,
             color_load_operation,
             depth_operations,
@@ -498,23 +518,31 @@ impl RenderPassRecorder {
                 render_pass.set_bind_group(u32::try_from(index).unwrap(), bind_group, &[]);
             }
 
-            render_pass.set_vertex_buffer(
-                0,
-                mesh_buffer_manager
-                    .vertex_render_buffer()
-                    .valid_buffer_slice(),
-            );
+            let mut vertex_buffer_slot = 0;
+
+            for vertex_buffer in mesh_buffer_manager
+                .request_vertex_render_buffers(self.vertex_attribute_requirements)?
+            {
+                render_pass
+                    .set_vertex_buffer(vertex_buffer_slot, vertex_buffer.valid_buffer_slice());
+
+                vertex_buffer_slot += 1;
+            }
 
             let n_instances = if let Some(feature_buffer_managers) = feature_buffer_managers {
                 let mut n_instances = 0;
-                for (index, feature_buffer_manager) in feature_buffer_managers.enumerate() {
+
+                for feature_buffer_manager in feature_buffer_managers {
                     render_pass.set_vertex_buffer(
-                        u32::try_from(index + 1).unwrap(),
+                        vertex_buffer_slot,
                         feature_buffer_manager
                             .vertex_render_buffer()
                             .valid_buffer_slice(),
                     );
+
                     n_instances = feature_buffer_manager.n_features();
+
+                    vertex_buffer_slot += 1;
                 }
                 n_instances
             } else {

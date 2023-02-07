@@ -6,7 +6,7 @@ mod fixed;
 mod vertex_color;
 
 use crate::{
-    geometry::InstanceFeatureTypeID,
+    geometry::{InstanceFeatureTypeID, VertexAttributeSet},
     rendering::{fre, MaterialTextureShaderInput, TextureID},
 };
 use impact_utils::{hash64, stringhash64_newtype};
@@ -35,10 +35,11 @@ stringhash64_newtype!(
     [pub] MaterialID
 );
 
-/// A material specified by a shader with associated
-/// textures and material properties.
+/// A material specified by a set of per-material properties (as instance
+/// features) and associated textures.
 #[derive(Clone, Debug)]
 pub struct MaterialSpecification {
+    vertex_attribute_requirements: VertexAttributeSet,
     image_texture_ids: Vec<TextureID>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     texture_shader_input: MaterialTextureShaderInput,
@@ -56,15 +57,23 @@ impl MaterialSpecification {
     /// Creates a new material specification with the
     /// given textures and material properties.
     pub fn new(
+        vertex_attribute_requirements: VertexAttributeSet,
         image_texture_ids: Vec<TextureID>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
         texture_shader_input: MaterialTextureShaderInput,
     ) -> Self {
         Self {
+            vertex_attribute_requirements,
             image_texture_ids,
             instance_feature_type_ids,
             texture_shader_input,
         }
+    }
+
+    /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
+    /// for rendering the material.
+    pub fn vertex_attribute_requirements(&self) -> VertexAttributeSet {
+        self.vertex_attribute_requirements
     }
 
     /// Returns the IDs of the image textures used for the

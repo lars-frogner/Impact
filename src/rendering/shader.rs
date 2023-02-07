@@ -4,9 +4,14 @@ mod blinn_phong;
 mod fixed;
 mod vertex_color;
 
-use crate::rendering::CoreRenderingSystem;
+use crate::{
+    geometry::{
+        VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
+        VertexTextureCoords, N_VERTEX_ATTRIBUTES,
+    },
+    rendering::{fre, CoreRenderingSystem},
+};
 use anyhow::{anyhow, Result};
-use bitflags::bitflags;
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
@@ -59,24 +64,11 @@ pub struct CameraShaderInput {
     pub projection_matrix_binding: u32,
 }
 
-/// Input description specifying the locations of the vertex
-/// properties of the mesh to use in the shader. Only properties
-/// required for the specific shader will actually be included.
+/// Input description specifying the locations of the available vertex
+/// attributes of the mesh to use in the shader.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MeshShaderInput {
-    /// Vertex attribute location for vertex positions.
-    pub position_location: u32,
-    /// Vertex attribute location for vertex colors, or
-    /// [`None`] if the mesh does not include colors.
-    pub color_location: Option<u32>,
-    /// Vertex attribute location for vertex normal vectors,
-    /// or [`None`] if the mesh does not include normal
-    /// vectors.
-    pub normal_vector_location: Option<u32>,
-    /// Vertex attribute location for vertex texture coordinates,
-    /// or [`None`] if the mesh does not include texture
-    /// coordinates.
-    pub texture_coord_location: Option<u32>,
+    pub locations: [Option<u32>; N_VERTEX_ATTRIBUTES],
 }
 
 /// Input description for any kind of per-instance feature.
@@ -122,16 +114,6 @@ pub struct LightShaderInput {
     pub max_point_light_count: u64,
 }
 
-bitflags! {
-    /// Bitflag encoding a set of vertex properties.
-    pub struct VertexPropertySet: u32 {
-        const POSITION = 0b00000001;
-        const COLOR = 0b00000010;
-        const NORMAL_VECTOR = 0b00000100;
-        const TEXTURE_COORDS = 0b00001000;
-    }
-}
-
 /// Shader generator for any kind of material.
 #[derive(Clone, Debug)]
 pub enum MaterialShaderGenerator<'a> {
@@ -159,7 +141,7 @@ pub struct LightExpressions {
 }
 
 /// Indices of the fields holding the various mesh vertex
-/// properties in the vertex shader output struct.
+/// attributes in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct MeshVertexOutputFieldIndices {
     _clip_position: usize,
@@ -450,7 +432,7 @@ impl ShaderGenerator {
     ///   view transform supported).
     /// - `instance_feature_shader_inputs` and `material_texture_shader_input`
     ///   do not provide a consistent and supproted material description.
-    /// - Not all vertex properties required by the material are available in
+    /// - Not all vertex attributes required by the material are available in
     ///   the input mesh.
     pub fn generate_shader_module(
         camera_shader_input: Option<&CameraShaderInput>,
@@ -458,6 +440,7 @@ impl ShaderGenerator {
         light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_texture_shader_input: Option<&MaterialTextureShaderInput>,
+        vertex_attribute_requirements: VertexAttributeSet,
     ) -> Result<(Module, EntryPointNames)> {
         let camera_shader_input = camera_shader_input
             .ok_or_else(|| anyhow!("Tried to build shader with no camera input"))?;
@@ -470,7 +453,6 @@ impl ShaderGenerator {
             material_texture_shader_input,
         )?;
 
-        let vertex_property_requirements = material_shader_builder.vertex_property_requirements();
         let material_requires_lights = material_shader_builder.requires_lights();
 
         let mut module = Module::default();
@@ -495,15 +477,15 @@ impl ShaderGenerator {
 
         let model_view_transform_expressions = Self::generate_vertex_code_for_model_view_transform(
             model_view_transform_shader_input,
-            vertex_property_requirements,
+            vertex_attribute_requirements,
             &mut module.types,
             &mut vertex_function,
         );
 
         let (mesh_vertex_output_field_indices, mut vertex_output_struct_builder) =
-            Self::generate_vertex_code_for_vertex_properties(
+            Self::generate_vertex_code_for_vertex_attributes(
                 mesh_shader_input,
-                vertex_property_requirements,
+                vertex_attribute_requirements,
                 &mut module.types,
                 &mut module.constants,
                 &mut vertex_function,
@@ -683,7 +665,7 @@ impl ShaderGenerator {
     /// for the generated matrix variables.
     fn generate_vertex_code_for_model_view_transform(
         model_view_transform_shader_input: &ModelViewTransformShaderInput,
-        vertex_property_requirements: VertexPropertySet,
+        vertex_attribute_requirements: VertexAttributeSet,
         types: &mut UniqueArena<Type>,
         vertex_function: &mut Function,
     ) -> ModelViewTransformExpressions {
@@ -705,7 +687,7 @@ impl ShaderGenerator {
             model_view_transform_shader_input.model_view_matrix_column_locations;
 
         let column_fields =
-            if vertex_property_requirements.contains(VertexPropertySet::NORMAL_VECTOR) {
+            if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
                 let (loc_4, loc_5, loc_6, loc_7) =
                     model_view_transform_shader_input.normal_model_view_matrix_column_locations;
 
@@ -813,7 +795,7 @@ impl ShaderGenerator {
         let model_view_matrix_var_expr_handle = define_matrix("modelViewMatrix", 0);
 
         let normal_model_view_matrix_var_expr_handle =
-            if vertex_property_requirements.contains(VertexPropertySet::NORMAL_VECTOR) {
+            if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
                 Some(define_matrix("normalModelViewMatrix", 4))
             } else {
                 None
@@ -879,36 +861,33 @@ impl ShaderGenerator {
         projection_matrix_expr_handle
     }
 
-    /// Generates the declaration of the struct of mesh vertex properties,
-    /// adds it as an argument to the main vertex shader function and
-    /// begins generating the struct of output to pass from the vertex
-    /// entry point to the fragment entry point.
+    /// Generates the arguments for the required mesh vertex attributes in the
+    /// main vertex shader function and begins generating the struct of output
+    /// to pass from the vertex entry point to the fragment entry point.
     ///
-    /// Only vertex properties required by the material are included in
-    /// the input struct.
+    /// Only vertex attributes required by the material are included as input
+    /// arguments.
     ///
-    /// The output struct always includes the clip space position, and
-    /// the expression computing this by transforming the vertex position
-    /// with the model view matrix and projection matrix is generated
-    /// here. Other vertex properties are included in the output struct
-    /// as required by the material. If the vertex position or normal
-    /// vector is required, this is transformed to camera space before
-    /// assigned to the output struct.
+    /// The output struct always includes the clip space position, and the
+    /// expression computing this by transforming the vertex position with the
+    /// model view matrix and projection matrix is generated here. Other vertex
+    /// attributes are included in the output struct as required by the
+    /// material. If the vertex position or normal vector is required, this is
+    /// transformed to camera space before assigned to the output struct.
     ///
     /// # Returns
-    /// Because the output struct may have to include additional material
-    /// properties, its code can not be fully generated at this point.
-    /// Instead, the [`OutputStructBuilder`] is returned so that the
-    /// material shader genrator can complete it. The indices of the
-    /// included vertex property fields are also returned for access in
-    /// the fragment shader.
+    /// Because the output struct may have to include material properties, its
+    /// code can not be fully generated at this point. Instead, the
+    /// [`OutputStructBuilder`] is returned so that the material shader
+    /// generator can complete it. The indices of the included vertex attribute
+    /// fields are also returned for access in the fragment shader.
     ///
     /// # Errors
-    /// Returns an error if not all vertex properties required by the material
+    /// Returns an error if not all vertex attributes required by the material
     /// are available in the input mesh.
-    fn generate_vertex_code_for_vertex_properties(
+    fn generate_vertex_code_for_vertex_attributes(
         mesh_shader_input: &MeshShaderInput,
-        requirements: VertexPropertySet,
+        requirements: VertexAttributeSet,
         types: &mut UniqueArena<Type>,
         constants: &mut Arena<Constant>,
         vertex_function: &mut Function,
@@ -919,56 +898,51 @@ impl ShaderGenerator {
         let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
         let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
 
-        let input_model_position_expr_handle = generate_location_bound_input_argument(
-            vertex_function,
-            new_name("modelSpacePosition"),
-            vec3_type_handle,
-            mesh_shader_input.position_location,
-        );
+        let input_model_position_expr_handle =
+            Self::add_vertex_attribute_input_argument::<VertexPosition<fre>>(
+                vertex_function,
+                mesh_shader_input,
+                new_name("modelSpacePosition"),
+                vec3_type_handle,
+            )?;
 
-        let input_color_expr_handle = if requirements.contains(VertexPropertySet::COLOR) {
-            if let Some(location) = mesh_shader_input.color_location {
-                Some(generate_location_bound_input_argument(
+        let input_color_expr_handle = if requirements.contains(VertexAttributeSet::COLOR) {
+            Some(
+                Self::add_vertex_attribute_input_argument::<VertexColor<fre>>(
                     vertex_function,
+                    mesh_shader_input,
                     new_name("color"),
                     vec4_type_handle,
-                    location,
-                ))
-            } else {
-                return Err(anyhow!("Missing required vertex property `color`"));
-            }
+                )?,
+            )
         } else {
             None
         };
 
         let input_model_normal_vector_expr_handle =
-            if requirements.contains(VertexPropertySet::NORMAL_VECTOR) {
-                if let Some(location) = mesh_shader_input.normal_vector_location {
-                    Some(generate_location_bound_input_argument(
-                        vertex_function,
-                        new_name("modelSpaceNormalVector"),
-                        vec3_type_handle,
-                        location,
-                    ))
-                } else {
-                    return Err(anyhow!("Missing required vertex property `normal_vector`"));
-                }
+            if requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
+                Some(Self::add_vertex_attribute_input_argument::<
+                    VertexNormalVector<fre>,
+                >(
+                    vertex_function,
+                    mesh_shader_input,
+                    new_name("modelSpaceNormalVector"),
+                    vec3_type_handle,
+                )?)
             } else {
                 None
             };
 
         let input_texture_coord_expr_handle =
-            if requirements.contains(VertexPropertySet::TEXTURE_COORDS) {
-                if let Some(location) = mesh_shader_input.texture_coord_location {
-                    Some(generate_location_bound_input_argument(
-                        vertex_function,
-                        new_name("textureCoords"),
-                        vec2_type_handle,
-                        location,
-                    ))
-                } else {
-                    return Err(anyhow!("Missing required vertex property `texture_coords`"));
-                }
+            if requirements.contains(VertexAttributeSet::TEXTURE_COORDS) {
+                Some(Self::add_vertex_attribute_input_argument::<
+                    VertexTextureCoords<fre>,
+                >(
+                    vertex_function,
+                    mesh_shader_input,
+                    new_name("textureCoords"),
+                    vec2_type_handle,
+                )?)
             } else {
                 None
             };
@@ -1069,7 +1043,7 @@ impl ShaderGenerator {
             texture_coords: None,
         };
 
-        if requirements.contains(VertexPropertySet::POSITION) {
+        if requirements.contains(VertexAttributeSet::POSITION) {
             let output_position_expr_handle = emit(
                 &mut vertex_function.body,
                 &mut vertex_function.expressions,
@@ -1158,6 +1132,27 @@ impl ShaderGenerator {
         }
 
         Ok((output_field_indices, output_struct_builder))
+    }
+
+    fn add_vertex_attribute_input_argument<V>(
+        function: &mut Function,
+        mesh_shader_input: &MeshShaderInput,
+        arg_name: Option<String>,
+        type_handle: Handle<Type>,
+    ) -> Result<Handle<Expression>>
+    where
+        V: VertexAttribute,
+    {
+        if let Some(location) = mesh_shader_input.locations[V::GLOBAL_INDEX] {
+            Ok(generate_location_bound_input_argument(
+                function,
+                arg_name,
+                type_handle,
+                location,
+            ))
+        } else {
+            Err(anyhow!("Missing required vertex attribute: {}", V::NAME))
+        }
     }
 
     /// Generates declarations for the light source uniform types, the types the
@@ -1381,17 +1376,6 @@ impl LightExpressions {
 }
 
 impl<'a> MaterialShaderGenerator<'a> {
-    /// Returns a bitflag encoding the vertex properties required
-    /// by the material.
-    fn vertex_property_requirements(&self) -> VertexPropertySet {
-        match self {
-            Self::VertexColor => VertexColorShaderGenerator::vertex_property_requirements(),
-            Self::FixedColor(_) => FixedColorShaderGenerator::vertex_property_requirements(),
-            Self::FixedTexture(_) => FixedTextureShaderGenerator::vertex_property_requirements(),
-            Self::BlinnPhong(builder) => builder.vertex_property_requirements(),
-        }
-    }
-
     /// Whether the material requires light sources.
     fn requires_lights(&self) -> bool {
         match self {
@@ -2224,6 +2208,11 @@ fn emit<T>(
 
 #[cfg(test)]
 mod test {
+    use crate::scene::{
+        BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
+        FixedTextureMaterial, TexturedBlinnPhongMaterial, VertexColorMaterial,
+    };
+
     use super::*;
     use naga::{
         back::wgsl::{self as wgsl_out, WriterFlags},
@@ -2256,10 +2245,7 @@ mod test {
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: MESH_VERTEX_BINDING_START,
-        color_location: None,
-        normal_vector_location: None,
-        texture_coord_location: None,
+        locations: [Some(MESH_VERTEX_BINDING_START), None, None, None],
     };
 
     const FIXED_COLOR_FEATURE_INPUT: InstanceFeatureShaderInput =
@@ -2392,14 +2378,29 @@ mod test {
     #[test]
     #[should_panic]
     fn building_shader_with_no_inputs_fails() {
-        ShaderGenerator::generate_shader_module(None, None, None, &[], None).unwrap();
+        ShaderGenerator::generate_shader_module(
+            None,
+            None,
+            None,
+            &[],
+            None,
+            VertexAttributeSet::empty(),
+        )
+        .unwrap();
     }
 
     #[test]
     #[should_panic]
     fn building_shader_with_only_camera_input_fails() {
-        ShaderGenerator::generate_shader_module(Some(&CAMERA_INPUT), None, None, &[], None)
-            .unwrap();
+        ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            None,
+            None,
+            &[],
+            None,
+            VertexAttributeSet::empty(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -2411,6 +2412,7 @@ mod test {
             None,
             &[],
             None,
+            VertexAttributeSet::empty(),
         )
         .unwrap();
     }
@@ -2424,6 +2426,7 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
+            VertexAttributeSet::empty(),
         )
         .unwrap();
     }
@@ -2433,14 +2436,17 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: MESH_VERTEX_BINDING_START,
-                color_location: Some(MESH_VERTEX_BINDING_START + 1),
-                normal_vector_location: None,
-                texture_coord_location: None,
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
             }),
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&MaterialTextureShaderInput::None),
+            VertexColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;
@@ -2461,6 +2467,7 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
+            FixedColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;
@@ -2478,14 +2485,17 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: MESH_VERTEX_BINDING_START,
-                color_location: None,
-                normal_vector_location: None,
-                texture_coord_location: Some(MESH_VERTEX_BINDING_START + 1),
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                ],
             }),
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
+            FixedTextureMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;
@@ -2503,14 +2513,17 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: MESH_VERTEX_BINDING_START,
-                color_location: None,
-                normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
-                texture_coord_location: None,
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                ],
             }),
             Some(&LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialTextureShaderInput::None),
+            BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;
@@ -2528,10 +2541,12 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: MESH_VERTEX_BINDING_START,
-                color_location: None,
-                normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
-                texture_coord_location: Some(MESH_VERTEX_BINDING_START + 2),
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
             }),
             Some(&LIGHT_INPUT),
             &[
@@ -2539,6 +2554,7 @@ mod test {
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
             Some(&DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            DiffuseTexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;
@@ -2556,10 +2572,12 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                position_location: MESH_VERTEX_BINDING_START,
-                color_location: None,
-                normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
-                texture_coord_location: Some(MESH_VERTEX_BINDING_START + 2),
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
             }),
             Some(&LIGHT_INPUT),
             &[
@@ -2567,6 +2585,7 @@ mod test {
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
             Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;

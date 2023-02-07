@@ -3,8 +3,8 @@
 use super::{
     append_to_arena, emit, float32_constant, insert_in_arena, new_name, push_to_block, ForLoop,
     InputStruct, InputStructBuilder, LightExpressions, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, VertexPropertySet, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE,
-    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    OutputStructBuilder, SampledTexture, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{
     Arena, BinaryOperator, Constant, Expression, Function, FunctionArgument, FunctionResult,
@@ -76,18 +76,6 @@ pub struct BlinnPhongVertexOutputFieldIndices {
 }
 
 impl<'a> BlinnPhongShaderGenerator<'a> {
-    /// Returns a bitflag encoding the vertex properties required
-    /// by the material.
-    pub fn vertex_property_requirements(&self) -> VertexPropertySet {
-        if self.texture_input.is_some() {
-            VertexPropertySet::POSITION
-                | VertexPropertySet::NORMAL_VECTOR
-                | VertexPropertySet::TEXTURE_COORDS
-        } else {
-            VertexPropertySet::POSITION | VertexPropertySet::NORMAL_VECTOR
-        }
-    }
-
     /// Whether the material requires light sources.
     pub const fn requires_lights() -> bool {
         true

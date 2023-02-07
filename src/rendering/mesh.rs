@@ -1,23 +1,31 @@
 //! Management of mesh data for rendering.
 
 use crate::{
-    geometry::{CollectionChange, ColorVertex, NormalVectorVertex, TextureVertex, TriangleMesh},
+    geometry::{
+        CollectionChange, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor,
+        VertexNormalVector, VertexPosition, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
+        VERTEX_ATTRIBUTE_FLAGS,
+    },
     rendering::{
         buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
         fre, CoreRenderingSystem, MeshShaderInput,
     },
+    scene::MeshID,
 };
+use anyhow::{anyhow, Result};
+use std::borrow::Cow;
 
 /// Owner and manager of render buffers for mesh geometry.
 #[derive(Debug)]
 pub struct MeshRenderBufferManager {
-    vertex_buffer: RenderBuffer,
-    index_buffer: RenderBuffer,
-    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    index_format: wgpu::IndexFormat,
+    available_attributes: VertexAttributeSet,
+    vertex_buffers: [Option<RenderBuffer>; N_VERTEX_ATTRIBUTES],
+    vertex_buffer_layouts: [Option<wgpu::VertexBufferLayout<'static>>; N_VERTEX_ATTRIBUTES],
     shader_input: MeshShaderInput,
+    index_buffer: RenderBuffer,
+    index_format: wgpu::IndexFormat,
     n_indices: usize,
-    label: String,
+    mesh_id: MeshID,
 }
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
@@ -27,41 +35,145 @@ impl MeshRenderBufferManager {
     /// from the given mesh.
     pub fn for_mesh(
         core_system: &CoreRenderingSystem,
-        mesh: &TriangleMesh<impl VertexBufferable>,
-        label: String,
+        mesh_id: MeshID,
+        mesh: &TriangleMesh<fre>,
     ) -> Self {
-        Self::new(core_system, mesh.vertices(), mesh.indices(), label)
+        let mut available_attributes = VertexAttributeSet::empty();
+        let mut vertex_buffers = [None, None, None, None];
+        let mut vertex_buffer_layouts = [None, None, None, None];
+        let mut shader_input = MeshShaderInput {
+            locations: [None, None, None, None],
+        };
+
+        Self::add_vertex_attribute_if_available(
+            core_system,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            &mut shader_input,
+            mesh_id,
+            mesh.positions(),
+        );
+        Self::add_vertex_attribute_if_available(
+            core_system,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            &mut shader_input,
+            mesh_id,
+            mesh.colors(),
+        );
+        Self::add_vertex_attribute_if_available(
+            core_system,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            &mut shader_input,
+            mesh_id,
+            mesh.normal_vectors(),
+        );
+        Self::add_vertex_attribute_if_available(
+            core_system,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            &mut shader_input,
+            mesh_id,
+            mesh.texture_coords(),
+        );
+
+        let indices = mesh.indices();
+        let n_indices = indices.len();
+        let (index_format, index_buffer) = Self::create_index_buffer(core_system, mesh_id, indices);
+
+        Self {
+            available_attributes,
+            vertex_buffers,
+            vertex_buffer_layouts,
+            shader_input,
+            index_buffer,
+            index_format,
+            n_indices,
+            mesh_id,
+        }
     }
 
     /// Ensures that the render buffers are in sync with the given mesh.
-    pub fn sync_with_mesh(
-        &mut self,
-        core_system: &CoreRenderingSystem,
-        mesh: &TriangleMesh<impl VertexBufferable>,
-    ) {
-        self.sync_vertex_buffer(core_system, mesh.vertices(), mesh.vertex_change());
+    pub fn sync_with_mesh(&mut self, core_system: &CoreRenderingSystem, mesh: &TriangleMesh<fre>) {
+        self.sync_vertex_buffer(core_system, mesh.positions(), mesh.position_change());
+        self.sync_vertex_buffer(core_system, mesh.colors(), mesh.color_change());
+        self.sync_vertex_buffer(
+            core_system,
+            mesh.normal_vectors(),
+            mesh.normal_vector_change(),
+        );
+        self.sync_vertex_buffer(
+            core_system,
+            mesh.texture_coords(),
+            mesh.texture_coord_change(),
+        );
+
         self.sync_index_buffer(core_system, mesh.indices(), mesh.index_change());
-        mesh.reset_vertex_index_change_tracking();
+
+        mesh.reset_change_tracking();
     }
 
-    /// Returns the layout of the vertex buffer.
-    pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
-        &self.vertex_buffer_layout
+    /// Returns an iterator over the layouts of the render buffers for the
+    /// requested set of vertex attributes.
+    ///
+    /// # Errors
+    /// Returns an error if any of the requested vertex attributes are missing.
+    pub fn request_vertex_buffer_layouts(
+        &self,
+        requested_attributes: VertexAttributeSet,
+    ) -> Result<impl Iterator<Item = wgpu::VertexBufferLayout<'static>> + '_> {
+        if self.available_attributes.contains(requested_attributes) {
+            Ok(VERTEX_ATTRIBUTE_FLAGS
+                .iter()
+                .zip(self.vertex_buffer_layouts.iter())
+                .filter_map(|(&attribute, layout)| {
+                    if self.available_attributes.contains(attribute) {
+                        Some(layout.as_ref().unwrap().clone())
+                    } else {
+                        None
+                    }
+                }))
+        } else {
+            Err(anyhow!(
+                "Mesh `{}` missing requested vertex attributes: {}",
+                self.mesh_id,
+                requested_attributes.difference(self.available_attributes)
+            ))
+        }
     }
 
-    /// Returns the format of the indices in the index buffer.
-    pub fn index_format(&self) -> wgpu::IndexFormat {
-        self.index_format
-    }
-
-    /// Returns the render buffer of vertices.
-    pub fn vertex_render_buffer(&self) -> &RenderBuffer {
-        &self.vertex_buffer
-    }
-
-    /// Returns the render buffer of indices.
-    pub fn index_render_buffer(&self) -> &RenderBuffer {
-        &self.index_buffer
+    /// Returns an iterator over the render buffers for the requested set of
+    /// vertex attributes.
+    ///
+    /// # Errors
+    /// Returns an error if any of the requested vertex attributes are missing.
+    pub fn request_vertex_render_buffers(
+        &self,
+        requested_attributes: VertexAttributeSet,
+    ) -> Result<impl Iterator<Item = &RenderBuffer>> {
+        if self.available_attributes.contains(requested_attributes) {
+            Ok(VERTEX_ATTRIBUTE_FLAGS
+                .iter()
+                .zip(self.vertex_buffers.iter())
+                .filter_map(|(&attribute, buffer)| {
+                    if self.available_attributes.contains(attribute) {
+                        Some(buffer.as_ref().unwrap())
+                    } else {
+                        None
+                    }
+                }))
+        } else {
+            Err(anyhow!(
+                "Mesh `{}` missing requested vertex attributes: {}",
+                self.mesh_id,
+                requested_attributes.difference(self.available_attributes)
+            ))
+        }
     }
 
     /// The input required for accessing the vertex attributes
@@ -70,57 +182,115 @@ impl MeshRenderBufferManager {
         &self.shader_input
     }
 
+    /// Returns the render buffer of indices.
+    pub fn index_render_buffer(&self) -> &RenderBuffer {
+        &self.index_buffer
+    }
+
+    /// Returns the format of the indices in the index buffer.
+    pub fn index_format(&self) -> wgpu::IndexFormat {
+        self.index_format
+    }
+
     /// Returns the number of indices in the index buffer.
     pub fn n_indices(&self) -> usize {
         self.n_indices
     }
 
-    /// Creates a new manager with a render buffer initialized
-    /// from the given slices of vertices and indices.
-    fn new<V, I>(
+    fn add_vertex_attribute_if_available<V>(
         core_system: &CoreRenderingSystem,
-        vertices: &[V],
-        indices: &[I],
-        label: String,
-    ) -> Self
+        available_attributes: &mut VertexAttributeSet,
+        vertex_buffers: &mut [Option<RenderBuffer>; N_VERTEX_ATTRIBUTES],
+        vertex_buffer_layouts: &mut [Option<wgpu::VertexBufferLayout<'static>>;
+                 N_VERTEX_ATTRIBUTES],
+        shader_input: &mut MeshShaderInput,
+        mesh_id: MeshID,
+        data: &[V],
+    ) where
+        V: VertexAttribute + VertexBufferable,
+    {
+        if !data.is_empty() {
+            *available_attributes |= V::FLAG;
+
+            vertex_buffers[V::GLOBAL_INDEX] = Some(RenderBuffer::new_full_vertex_buffer(
+                core_system,
+                data,
+                Cow::Owned(format!("{} {}", mesh_id, V::NAME)),
+            ));
+
+            vertex_buffer_layouts[V::GLOBAL_INDEX] = Some(V::BUFFER_LAYOUT);
+
+            shader_input.locations[V::GLOBAL_INDEX] = Some(V::BINDING_LOCATION);
+        }
+    }
+
+    fn remove_vertex_attribute<V>(&mut self)
     where
-        V: VertexBufferable,
+        V: VertexAttribute,
+    {
+        self.available_attributes -= V::FLAG;
+        self.vertex_buffers[V::GLOBAL_INDEX] = None;
+        self.vertex_buffer_layouts[V::GLOBAL_INDEX] = None;
+        self.shader_input.locations[V::GLOBAL_INDEX] = None;
+    }
+
+    fn create_index_buffer<I>(
+        core_system: &CoreRenderingSystem,
+        mesh_id: MeshID,
+        indices: &[I],
+    ) -> (wgpu::IndexFormat, RenderBuffer)
+    where
         I: IndexBufferable,
     {
-        let vertex_buffer = RenderBuffer::new_full_vertex_buffer(core_system, vertices, &label);
-        let index_buffer = RenderBuffer::new_full_index_buffer(core_system, indices, &label);
-        Self {
-            vertex_buffer,
-            index_buffer,
-            vertex_buffer_layout: V::BUFFER_LAYOUT,
-            index_format: I::INDEX_FORMAT,
-            shader_input: V::SHADER_INPUT,
-            n_indices: indices.len(),
-            label,
-        }
+        (
+            I::INDEX_FORMAT,
+            RenderBuffer::new_full_index_buffer(
+                core_system,
+                indices,
+                Cow::Owned(format!("{} index", mesh_id)),
+            ),
+        )
     }
 
     fn sync_vertex_buffer<V>(
         &mut self,
         core_system: &CoreRenderingSystem,
-        vertices: &[V],
-        vertex_change: CollectionChange,
+        data: &[V],
+        attribute_change: CollectionChange,
     ) where
-        V: VertexBufferable,
+        V: VertexAttribute + VertexBufferable,
     {
-        assert_eq!(V::BUFFER_LAYOUT, self.vertex_buffer_layout);
+        if attribute_change != CollectionChange::None {
+            let vertex_buffer = self.vertex_buffers[V::GLOBAL_INDEX].as_mut();
 
-        if vertex_change != CollectionChange::None {
-            let vertex_bytes = bytemuck::cast_slice(vertices);
+            if let Some(vertex_buffer) = vertex_buffer {
+                if data.is_empty() {
+                    self.remove_vertex_attribute::<V>();
+                } else {
+                    let vertex_bytes = bytemuck::cast_slice(data);
 
-            if vertex_bytes.len() > self.vertex_buffer.buffer_size() {
-                // If the new number of vertices exceeds the size of the existing buffer,
-                // we create a new one that is large enough
-                self.vertex_buffer =
-                    RenderBuffer::new_full_vertex_buffer(core_system, vertices, &self.label);
+                    if vertex_bytes.len() > vertex_buffer.buffer_size() {
+                        // If the new number of vertices exceeds the size of the existing buffer,
+                        // we create a new one that is large enough
+                        *vertex_buffer = RenderBuffer::new_full_vertex_buffer(
+                            core_system,
+                            data,
+                            vertex_buffer.label().clone(),
+                        );
+                    } else {
+                        vertex_buffer.update_valid_bytes(core_system, vertex_bytes);
+                    }
+                }
             } else {
-                self.vertex_buffer
-                    .update_valid_bytes(core_system, vertex_bytes);
+                Self::add_vertex_attribute_if_available(
+                    core_system,
+                    &mut self.available_attributes,
+                    &mut self.vertex_buffers,
+                    &mut self.vertex_buffer_layouts,
+                    &mut self.shader_input,
+                    self.mesh_id,
+                    data,
+                );
             }
         }
     }
@@ -133,16 +303,17 @@ impl MeshRenderBufferManager {
     ) where
         I: IndexBufferable,
     {
-        assert_eq!(I::INDEX_FORMAT, self.index_format);
-
         if index_change != CollectionChange::None {
             let index_bytes = bytemuck::cast_slice(indices);
 
             if index_bytes.len() > self.index_buffer.buffer_size() {
                 // If the new number of indices exceeds the size of the existing buffer,
                 // we create a new one that is large enough
-                self.index_buffer =
-                    RenderBuffer::new_full_index_buffer(core_system, indices, &self.label);
+                self.index_buffer = RenderBuffer::new_full_index_buffer(
+                    core_system,
+                    indices,
+                    self.index_buffer.label().clone(),
+                );
             } else {
                 self.index_buffer
                     .update_valid_bytes(core_system, index_bytes);
@@ -153,47 +324,38 @@ impl MeshRenderBufferManager {
     }
 }
 
-impl VertexBufferable for ColorVertex<fre> {
+impl VertexBufferable for VertexPosition<fre> {
+    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START;
+
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MESH_VERTEX_BINDING_START => Float32x3,
-            MESH_VERTEX_BINDING_START + 1 => Float32x4
+            Self::BINDING_LOCATION => Float32x3,
         ]);
-
-    const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: MESH_VERTEX_BINDING_START,
-        color_location: Some(MESH_VERTEX_BINDING_START + 1),
-        normal_vector_location: None,
-        texture_coord_location: None,
-    };
 }
 
-impl VertexBufferable for TextureVertex<fre> {
+impl VertexBufferable for VertexColor<fre> {
+    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 1;
+
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MESH_VERTEX_BINDING_START => Float32x3,
-            MESH_VERTEX_BINDING_START + 1 => Float32x2
+            Self::BINDING_LOCATION => Float32x4,
         ]);
-
-    const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: MESH_VERTEX_BINDING_START,
-        color_location: None,
-        normal_vector_location: None,
-        texture_coord_location: Some(MESH_VERTEX_BINDING_START + 1),
-    };
 }
 
-impl VertexBufferable for NormalVectorVertex<fre> {
+impl VertexBufferable for VertexNormalVector<fre> {
+    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 2;
+
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            MESH_VERTEX_BINDING_START => Float32x3,
-            MESH_VERTEX_BINDING_START + 1 => Float32x3
+            Self::BINDING_LOCATION => Float32x3,
         ]);
+}
 
-    const SHADER_INPUT: MeshShaderInput = MeshShaderInput {
-        position_location: MESH_VERTEX_BINDING_START,
-        color_location: None,
-        normal_vector_location: Some(MESH_VERTEX_BINDING_START + 1),
-        texture_coord_location: None,
-    };
+impl VertexBufferable for VertexTextureCoords<fre> {
+    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 3;
+
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+            Self::BINDING_LOCATION => Float32x2,
+        ]);
 }

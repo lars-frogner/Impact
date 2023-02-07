@@ -10,7 +10,9 @@ use crate::{
         SemiDirectionalMotionController,
     },
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{ColorVertex, NormalVectorVertex, TextureVertex, TriangleMesh},
+    geometry::{
+        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
+    },
     physics::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
@@ -26,7 +28,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_utils::{hash32, hash64};
-use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
+use nalgebra::{point, vector, Point3, Vector3};
 use std::f64::consts::PI;
 
 #[cfg(target_arch = "wasm32")]
@@ -93,45 +95,7 @@ async fn init_world(window: Window) -> Result<World> {
     );
 
     mesh_repository
-        .add_texture_mesh(
-            MeshID(hash64!("Texture mesh")),
-            TriangleMesh::new(VERTICES_WITH_TEXTURE.to_vec(), INDICES.to_vec()),
-        )
-        .unwrap();
-    mesh_repository
-        .add_color_mesh(
-            MeshID(hash64!("Color mesh")),
-            TriangleMesh::new(VERTICES_WITH_COLOR.to_vec(), INDICES.to_vec()),
-        )
-        .unwrap();
-
-    let VERTICES_WITH_NORMAL_VECTORS = &[
-        NormalVectorVertex {
-            position: point![-0.0868241, 0.49240386, 0.0],
-            normal_vector: Vector3::z_axis(),
-        },
-        NormalVectorVertex {
-            position: point![-0.49513406, 0.06958647, 0.0],
-            normal_vector: Vector3::z_axis(),
-        },
-        NormalVectorVertex {
-            position: point![-0.21918549, -0.44939706, 0.0],
-            normal_vector: Vector3::z_axis(),
-        },
-        NormalVectorVertex {
-            position: point![0.35966998, -0.3473291, 0.0],
-            normal_vector: Vector3::z_axis(),
-        },
-        NormalVectorVertex {
-            position: point![0.44147372, 0.2347359, 0.0],
-            normal_vector: Vector3::z_axis(),
-        },
-    ];
-    mesh_repository
-        .add_normal_vector_mesh(
-            MeshID(hash64!("Normal vector mesh")),
-            TriangleMesh::new(VERTICES_WITH_NORMAL_VECTORS.to_vec(), INDICES.to_vec()),
-        )
+        .add_mesh(MeshID(hash64!("Pentagon mesh")), create_pentagon_mesh())
         .unwrap();
 
     let vertical_field_of_view = Degrees(45.0);
@@ -167,81 +131,78 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
-    world
-        .create_entities((
-            // &MeshComp::new(MeshID(hash64!("Texture mesh"))),
-            &MeshComp::new(MeshID(hash64!("Normal vector mesh"))),
-            &PositionComp(Point3::new(0.0, 0.0, 3.0)),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(2.0))),
-            // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
-            // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
-            // &VertexColorComp,
-            &BlinnPhongComp {
-                ambient: vector![0.1, 0.2, 0.05],
-                diffuse: vector![0.3, 0.3, 0.3],
-                specular: vector![0.5, 0.5, 0.5],
-                shininess: 20.0,
-                alpha: 1.0,
-            },
-        ))
-        .unwrap();
+    // world
+    //     .create_entities((
+    //         &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
+    //         &PositionComp(Point3::new(0.0, -1.0, 0.0)),
+    //         &OrientationComp(Orientation::from_axis_angle(
+    //             &Vector3::x_axis(),
+    //             3.0 * PI / 2.0,
+    //         )),
+    //         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+    //         // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
+    //         // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
+    //         &BlinnPhongComp {
+    //             ambient: vector![0.1, 0.1, 0.1],
+    //             diffuse: vector![0.4, 0.4, 0.4],
+    //             specular: vector![0.3, 0.3, 0.3],
+    //             shininess: 6.0,
+    //             alpha: 1.0,
+    //         },
+    //     ))
+    //     .unwrap();
 
     world
         .create_entities((
-            &PositionComp(Point3::new(0.0, 0.0, 0.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0]),
-            &Omnidirectional,
+            &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
+            &PositionComp(Point3::new(0.0, 0.0, 4.0)),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(2.0))),
+            &VertexColorComp,
         ))
         .unwrap();
+
+    // world
+    //     .create_entities((
+    //         &PositionComp(Point3::new(5.0, 10.0, 10.0)),
+    //         &RadianceComp(vector![1.0, 1.0, 1.0] * 200.0),
+    //         &Omnidirectional,
+    //     ))
+    //     .unwrap();
 
     Ok(world)
 }
 
-const VERTICES_WITH_COLOR: &[ColorVertex<fre>] = &[
-    ColorVertex {
-        position: point![-0.0868241, 0.49240386, 0.0],
-        color: vector![1.0, 0.0, 0.0, 1.0],
-    },
-    ColorVertex {
-        position: point![-0.49513406, 0.06958647, 0.0],
-        color: vector![0.0, 1.0, 0.0, 1.0],
-    },
-    ColorVertex {
-        position: point![-0.21918549, -0.44939706, 0.0],
-        color: vector![0.0, 0.0, 1.0, 1.0],
-    },
-    ColorVertex {
-        position: point![0.35966998, -0.3473291, 0.0],
-        color: vector![0.0, 1.0, 1.0, 1.0],
-    },
-    ColorVertex {
-        position: point![0.44147372, 0.2347359, 0.0],
-        color: vector![1.0, 1.0, 0.0, 1.0],
-    },
-];
+fn create_pentagon_mesh() -> TriangleMesh<fre> {
+    let positions = [
+        VertexPosition(point![-0.0868241, 0.49240386, 0.0]),
+        VertexPosition(point![-0.49513406, 0.06958647, 0.0]),
+        VertexPosition(point![-0.21918549, -0.44939706, 0.0]),
+        VertexPosition(point![0.35966998, -0.3473291, 0.0]),
+        VertexPosition(point![0.44147372, 0.2347359, 0.0]),
+    ];
+    let colors = [
+        VertexColor(vector![1.0, 0.0, 0.0, 1.0]),
+        VertexColor(vector![0.0, 1.0, 0.0, 1.0]),
+        VertexColor(vector![0.0, 0.0, 1.0, 1.0]),
+        VertexColor(vector![0.0, 1.0, 1.0, 1.0]),
+        VertexColor(vector![1.0, 1.0, 0.0, 1.0]),
+    ];
+    let normal_vectors = [VertexNormalVector(Vector3::z_axis()); 5];
+    let texture_coords = [
+        VertexTextureCoords(vector![0.4131759, 1.0 - 0.99240386]),
+        VertexTextureCoords(vector![0.0048659444, 1.0 - 0.56958647]),
+        VertexTextureCoords(vector![0.28081453, 1.0 - 0.05060294]),
+        VertexTextureCoords(vector![0.85967, 1.0 - 0.1526709]),
+        VertexTextureCoords(vector![0.9414737, 1.0 - 0.7347359]),
+    ];
+    let indices = [0, 1, 4, 1, 2, 4, 2, 3, 4];
 
-const VERTICES_WITH_TEXTURE: &[TextureVertex<fre>] = &[
-    TextureVertex {
-        position: point![-0.0868241, 0.49240386, 0.0],
-        texture_coords: vector![0.4131759, 1.0 - 0.99240386],
-    },
-    TextureVertex {
-        position: point![-0.49513406, 0.06958647, 0.0],
-        texture_coords: vector![0.0048659444, 1.0 - 0.56958647],
-    },
-    TextureVertex {
-        position: point![-0.21918549, -0.44939706, 0.0],
-        texture_coords: vector![0.28081453, 1.0 - 0.05060294],
-    },
-    TextureVertex {
-        position: point![0.35966998, -0.3473291, 0.0],
-        texture_coords: vector![0.85967, 1.0 - 0.1526709],
-    },
-    TextureVertex {
-        position: point![0.44147372, 0.2347359, 0.0],
-        texture_coords: vector![0.9414737, 1.0 - 0.7347359],
-    },
-];
-
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+    TriangleMesh::new(
+        positions.to_vec(),
+        colors.to_vec(),
+        normal_vectors.to_vec(),
+        texture_coords.to_vec(),
+        indices.to_vec(),
+    )
+}

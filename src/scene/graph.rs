@@ -9,7 +9,7 @@ use crate::{
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
-use nalgebra::{Point3, Projective3, Similarity3, Translation3, UnitQuaternion};
+use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion};
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of

@@ -3,7 +3,7 @@
 
 use super::{
     insert_in_arena, new_name, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    SampledTexture, VertexPropertySet, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    SampledTexture, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{Arena, Function, GlobalVariable, Interpolation, Sampling, Type, UniqueArena};
 
@@ -47,12 +47,6 @@ pub struct FixedTextureShaderGenerator<'a> {
 pub struct FixedColorVertexOutputFieldIdx(usize);
 
 impl<'a> FixedColorShaderGenerator<'a> {
-    /// Returns a bitflag encoding the vertex properties required
-    /// by the material.
-    pub const fn vertex_property_requirements() -> VertexPropertySet {
-        VertexPropertySet::empty()
-    }
-
     /// Whether the material requires light sources.
     pub const fn requires_lights() -> bool {
         false
@@ -133,12 +127,6 @@ impl<'a> FixedColorShaderGenerator<'a> {
 }
 
 impl<'a> FixedTextureShaderGenerator<'a> {
-    /// Returns a bitflag encoding the vertex properties required
-    /// by the material.
-    pub const fn vertex_property_requirements() -> VertexPropertySet {
-        VertexPropertySet::TEXTURE_COORDS
-    }
-
     /// Whether the material requires light sources.
     pub const fn requires_lights() -> bool {
         false
