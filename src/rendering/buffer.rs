@@ -521,26 +521,6 @@ impl CountedRenderBuffer {
             .unwrap()
     }
 
-    /// Returns a slice of the underlying [`wgpu::Buffer`] containing only valid
-    /// bytes.
-    pub fn valid_buffer_slice(&self) -> wgpu::BufferSlice<'_> {
-        let upper_address = self.n_valid_bytes() as wgpu::BufferAddress;
-        self.buffer.slice(..upper_address)
-    }
-
-    /// Returns the number of bytes, starting from the beginning of the buffer,
-    /// that is considered to contain valid data (this includes the padded count
-    /// at the beginning of the buffer).
-    pub fn n_valid_bytes(&self) -> usize {
-        self.n_valid_bytes.load(Ordering::Acquire)
-    }
-
-    /// Whether the buffer is empty, meaning that it does not contain any valid
-    /// data apart from the count.
-    pub fn is_empty(&self) -> bool {
-        self.n_valid_bytes() == self.padded_count_size
-    }
-
     /// Whether the given number of bytes would exceed the capacity of
     /// the buffer (when the padded count at the beginning of the buffer is
     /// taken into account).
@@ -576,28 +556,6 @@ impl CountedRenderBuffer {
             self.buffer_size,
             self.padded_count_size,
         );
-    }
-
-    /// Queues a write of the given slice of bytes to the existing buffer,
-    /// starting just after the padded count at the beginning of the buffer. The
-    /// slice must have the same size as the part of the buffer after the padded
-    /// count. If `new_count` is [`Some`], the count at the beginning of the
-    /// buffer will be updated to the specified value.
-    ///
-    /// # Panics
-    /// If the combined size of the padded count and the slice of updated bytes
-    /// is not the same as the total size of the buffer.
-    pub fn update_all_bytes(
-        &self,
-        core_system: &CoreRenderingSystem,
-        updated_bytes: &[u8],
-        new_count: Option<Count>,
-    ) {
-        assert_eq!(
-            Self::compute_size_including_count(self.padded_count_size, updated_bytes.len()),
-            self.buffer_size
-        );
-        self.update_valid_bytes(core_system, updated_bytes, new_count);
     }
 
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given

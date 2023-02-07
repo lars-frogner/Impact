@@ -788,7 +788,6 @@ impl ShaderGenerator {
                 },
             );
 
-            #[allow(clippy::let_and_return)]
             matrix_var_expr_handle
         };
 
@@ -857,7 +856,6 @@ impl ShaderGenerator {
             },
         );
 
-        #[allow(clippy::let_and_return)]
         projection_matrix_expr_handle
     }
 
@@ -1915,7 +1913,6 @@ impl SampledTexture {
             },
         );
 
-        #[allow(clippy::let_and_return)]
         image_sampling_expr_handle
     }
 
@@ -2208,6 +2205,8 @@ fn emit<T>(
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::dbg_macro)]
+
     use crate::scene::{
         BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
         FixedTextureMaterial, TexturedBlinnPhongMaterial, VertexColorMaterial,

@@ -54,7 +54,7 @@ impl CameraRenderBufferManager {
 
     /// Returns the input required for accessing the projection transform in a
     /// shader.
-    pub fn shader_input(&self) -> &CameraShaderInput {
+    pub const fn shader_input() -> &'static CameraShaderInput {
         &Self::SHADER_INPUT
     }
 

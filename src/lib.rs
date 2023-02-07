@@ -75,6 +75,7 @@
     nonstandard_style,
     rust_2018_idioms
 )]
+#![allow(clippy::too_many_arguments, clippy::let_and_return)]
 
 #[macro_use]
 mod macros;

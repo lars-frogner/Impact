@@ -35,7 +35,6 @@ where
     }
 
     /// Creates a new mapper with the given key.
-    #[allow(dead_code)]
     pub fn new_with_key(key: K) -> Self {
         Self {
             indices_for_keys: [(key, 0)].into_iter().collect(),

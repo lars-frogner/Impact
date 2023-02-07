@@ -733,7 +733,7 @@ impl<F: Float> GroupNode<F> {
         &self.child_model_instance_node_ids
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn child_camera_node_ids(&self) -> &HashSet<CameraNodeID> {
         &self.child_camera_node_ids
     }

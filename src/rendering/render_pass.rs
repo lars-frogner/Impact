@@ -7,10 +7,10 @@ pub use tasks::SyncRenderPasses;
 use crate::{
     geometry::VertexAttributeSet,
     rendering::{
-        instance::InstanceFeatureRenderBufferManager, mesh::MeshRenderBufferManager,
-        resource::SynchronizedRenderResources, CameraShaderInput, CoreRenderingSystem,
-        DepthTexture, InstanceFeatureShaderInput, LightShaderInput, MaterialRenderResourceManager,
-        MaterialTextureShaderInput, MeshShaderInput, Shader,
+        camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
+        mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
+        CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput, LightShaderInput,
+        MaterialRenderResourceManager, MaterialTextureShaderInput, MeshShaderInput, Shader,
     },
     scene::{MaterialID, MeshID, ModelID, ShaderManager},
 };
@@ -52,6 +52,12 @@ pub struct RenderPassRecorder {
     color_load_operation: wgpu::LoadOp<wgpu::Color>,
     depth_operations: wgpu::Operations<f32>,
     disabled: bool,
+}
+
+struct BindGroupShaderInput<'a> {
+    camera: Option<&'a CameraShaderInput>,
+    light: Option<&'a LightShaderInput>,
+    material_texture: Option<&'a MaterialTextureShaderInput>,
 }
 
 impl RenderPassManager {
@@ -227,26 +233,26 @@ impl RenderPassSpecification {
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<(
         Vec<&'a wgpu::BindGroupLayout>,
-        Option<&'a CameraShaderInput>,
-        Option<&'a LightShaderInput>,
-        Option<&'a MaterialTextureShaderInput>,
+        BindGroupShaderInput<'a>,
         VertexAttributeSet,
     )> {
         let mut layouts = Vec::with_capacity(3);
 
-        let mut camera_shader_input = None;
-        let mut light_shader_input = None;
-        let mut material_texture_shader_input = None;
+        let mut shader_input = BindGroupShaderInput {
+            camera: None,
+            light: None,
+            material_texture: None,
+        };
         let mut vertex_attribute_requirements = VertexAttributeSet::empty();
 
         if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
             layouts.push(camera_buffer_manager.bind_group_layout());
-            camera_shader_input = Some(camera_buffer_manager.shader_input());
+            shader_input.camera = Some(CameraRenderBufferManager::shader_input());
         }
 
         if let Some(light_buffer_manager) = render_resources.get_light_buffer_manager() {
             layouts.push(light_buffer_manager.bind_group_layout());
-            light_shader_input = Some(light_buffer_manager.shader_input());
+            shader_input.light = Some(light_buffer_manager.shader_input());
         }
 
         if let Some(model_id) = self.model_id {
@@ -256,19 +262,13 @@ impl RenderPassSpecification {
             if let Some(layout) = material_resource_manager.texture_bind_group_layout() {
                 layouts.push(layout);
             }
-            material_texture_shader_input = Some(material_resource_manager.shader_input());
+            shader_input.material_texture = Some(material_resource_manager.shader_input());
 
             vertex_attribute_requirements =
                 material_resource_manager.vertex_attribute_requirements();
         }
 
-        Ok((
-            layouts,
-            camera_shader_input,
-            light_shader_input,
-            material_texture_shader_input,
-            vertex_attribute_requirements,
-        ))
+        Ok((layouts, shader_input, vertex_attribute_requirements))
     }
 
     /// Obtains all bind groups involved in the render pass.
@@ -367,13 +367,8 @@ impl RenderPassRecorder {
         disabled: bool,
     ) -> Result<Self> {
         let (pipeline, vertex_attribute_requirements) = if specification.has_model() {
-            let (
-                bind_group_layouts,
-                camera_shader_input,
-                light_shader_input,
-                material_texture_shader_input,
-                vertex_attribute_requirements,
-            ) = specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
+            let (bind_group_layouts, bind_group_shader_input, vertex_attribute_requirements) =
+                specification.get_bind_group_layouts_and_shader_inputs(render_resources)?;
 
             let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
                 specification.get_vertex_buffer_layouts_and_shader_inputs(
@@ -383,11 +378,11 @@ impl RenderPassRecorder {
 
             let shader = shader_manager.obtain_shader(
                 core_system,
-                camera_shader_input,
+                bind_group_shader_input.camera,
                 mesh_shader_input,
-                light_shader_input,
+                bind_group_shader_input.light,
                 &instance_feature_shader_inputs,
-                material_texture_shader_input,
+                bind_group_shader_input.material_texture,
                 vertex_attribute_requirements,
             )?;
 

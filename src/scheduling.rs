@@ -441,7 +441,7 @@ where
             .wait_until_done()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn get_executor(&self) -> Option<&TaskExecutor<S>> {
         self.executor.as_ref()
     }
@@ -897,7 +897,6 @@ mod test {
 
             impl $task {
                 const ID: TaskID = ConstStringHash64::new(stringify!($task));
-                #[allow(dead_code)]
                 const EXEC_TAG: ExecutionTag = ConstStringHash64::new(stringify!($task));
             }
 

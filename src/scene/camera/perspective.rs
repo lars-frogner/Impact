@@ -38,6 +38,13 @@ impl PerspectiveCamera<fre> {
                     bail!("Tried to add camera for entity while another entity still has one")
                 }
 
+                // if components.has_component_type::<ScalingComp>() {
+                //     bail!(
+                //         "Tried to add both camera and scaling component to the same entity\n\
+                //          (not allowed because the view transform is assumed to contain no scaling)"
+                //     )
+                // }
+
                 desynchronized.set_yes();
 
                 let mut scene_graph = scene_graph.write().unwrap();
