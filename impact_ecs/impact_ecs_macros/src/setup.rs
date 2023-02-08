@@ -9,7 +9,7 @@ use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     token::Paren,
-    Expr, Result, Token, Type,
+    Expr, GenericArgument, PathArguments, Result, Token, Type, TypeReference,
 };
 
 pub(crate) struct SetupInput {
@@ -27,6 +27,12 @@ struct SetupScope {
 struct SetupCompClosureArg {
     var: Ident,
     ty: Type,
+    interpreted_ty: InterpretedArgType,
+}
+
+enum InterpretedArgType {
+    CompRef(Type),
+    OptionalCompRef(Type),
 }
 
 struct SetupClosure {
@@ -39,20 +45,31 @@ struct ProcessedSetupInput {
     scope: Option<TokenStream>,
     components_name: Ident,
     closure_body: Expr,
-    comp_arg_names: Vec<Ident>,
-    comp_arg_types: Vec<Type>,
-    return_comp_types: Option<Vec<Type>>,
-    disallowed_comp_types: Option<Vec<Type>>,
+    arg_names: Vec<Ident>,
+    /// Types of all arguments, classified as being with or without a wrapping
+    /// [`Option`].
+    interpreted_arg_types: Vec<InterpretedArgType>,
+    /// Types of all non-[`Option`] arguments and types wrapped by `Option`s.
+    all_arg_comp_types: Vec<Type>,
+    /// Types of all non-[`Option`] arguments and required types listed after
+    /// the closure.
     required_comp_types: Vec<Type>,
+    /// Types of all non-[`Option`] arguments, types wrapped by `Option`s and
+    /// required types listed after the closure.
+    requested_comp_types: Vec<Type>,
+    /// Types in the return tuple.
+    return_comp_types: Option<Vec<Type>>,
+    /// Disallowed types listed after the closure.
+    disallowed_comp_types: Option<Vec<Type>>,
     full_closure_args: Vec<TokenStream>,
 }
 
 pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream> {
     let input = input.process();
 
-    querying_util::verify_comp_types_unique(&input.required_comp_types)?;
+    querying_util::verify_comp_types_unique(&input.requested_comp_types)?;
     querying_util::verify_disallowed_comps_unique(
-        &input.required_comp_types,
+        &input.requested_comp_types,
         &input.disallowed_comp_types,
     )?;
     if let Some(return_comp_types) = &input.return_comp_types {
@@ -60,8 +77,8 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
     }
 
     let input_verification_code = querying_util::generate_input_verification_code(
-        &input.comp_arg_types,
-        &input.required_comp_types,
+        &input.all_arg_comp_types,
+        &input.requested_comp_types,
         [&input.return_comp_types, &input.disallowed_comp_types],
         crate_root,
     )?;
@@ -92,14 +109,14 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream
 
     let (component_iter_names, component_iter_code) = generate_component_iter_names_and_code(
         &input.components_name,
-        &input.comp_arg_names,
-        &input.comp_arg_types,
+        &input.arg_names,
+        &input.interpreted_arg_types,
     );
 
     let closure_call_code = generate_closure_call_code(
         &input.components_name,
         &closure_name,
-        &input.comp_arg_names,
+        &input.arg_names,
         &component_iter_names,
         &component_storage_array_name,
         &input.return_comp_types,
@@ -207,10 +224,76 @@ impl Parse for SetupCompClosureArg {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
-        input.parse::<Token![&]>()?;
         let ty = input.parse()?;
+        let interpreted_ty = InterpretedArgType::from(&var, &ty)?;
+        Ok(Self {
+            var,
+            ty,
+            interpreted_ty,
+        })
+    }
+}
 
-        Ok(Self { var, ty })
+impl InterpretedArgType {
+    fn from(name: &Ident, ty: &Type) -> Result<Self> {
+        let err = || {
+            Err(syn::Error::new(
+                name.span(),
+                format!(
+                    "Invalid type for argument `{}`: expected `&C` or `Option<&C>` for a type `C`",
+                    name
+                ),
+            ))
+        };
+        match ty {
+            Type::Path(type_path) => {
+                let last_segment = type_path.path.segments.last().unwrap();
+                if last_segment.ident == Ident::new("Option", Span::call_site()) {
+                    if let PathArguments::AngleBracketed(bracketed) = &last_segment.arguments {
+                        if bracketed.args.len() == 1 {
+                            if let GenericArgument::Type(wrapped_ty) =
+                                bracketed.args.first().unwrap()
+                            {
+                                match wrapped_ty {
+                                    Type::Reference(TypeReference {
+                                        mutability, elem, ..
+                                    }) if mutability.is_none() => {
+                                        Ok(Self::OptionalCompRef(elem.as_ref().clone()))
+                                    }
+                                    _ => err(),
+                                }
+                            } else {
+                                err()
+                            }
+                        } else {
+                            err()
+                        }
+                    } else {
+                        err()
+                    }
+                } else {
+                    err()
+                }
+            }
+            Type::Reference(TypeReference {
+                mutability, elem, ..
+            }) if mutability.is_none() => Ok(Self::CompRef(elem.as_ref().clone())),
+            _ => err(),
+        }
+    }
+
+    fn unwrap_type(&self) -> Type {
+        match self {
+            Self::CompRef(ty) | Self::OptionalCompRef(ty) => ty.clone(),
+        }
+    }
+
+    fn get_non_optional(&self) -> Option<Type> {
+        if let Self::CompRef(ty) = self {
+            Some(ty.clone())
+        } else {
+            None
+        }
     }
 }
 
@@ -232,46 +315,83 @@ impl SetupInput {
             body: closure_body,
         } = closure;
 
-        let (comp_arg_names, comp_arg_types): (Vec<_>, Vec<_>) = comp_args
-            .into_iter()
-            .map(|SetupCompClosureArg { var, ty }| (var, ty))
-            .unzip();
+        let mut arg_names = Vec::with_capacity(comp_args.len());
+        let mut arg_types = Vec::with_capacity(comp_args.len());
+        let mut interpreted_arg_types = Vec::with_capacity(comp_args.len());
+        comp_args.into_iter().for_each(
+            |SetupCompClosureArg {
+                 var,
+                 ty,
+                 interpreted_ty,
+             }| {
+                arg_names.push(var);
+                arg_types.push(ty);
+                interpreted_arg_types.push(interpreted_ty);
+            },
+        );
 
+        // Types of all arguments that are not `Option`s
+        let required_arg_comp_types: Vec<_> = interpreted_arg_types
+            .iter()
+            .filter_map(InterpretedArgType::get_non_optional)
+            .collect();
+
+        // Types of all arguments that are not `Option`s and the types inside
+        // the `Option`s
+        let all_arg_comp_types: Vec<_> = interpreted_arg_types
+            .iter()
+            .map(InterpretedArgType::unwrap_type)
+            .collect();
+
+        // Types in the return tuple
         let return_comp_types =
             return_comp_types.map(|return_comp_types| return_comp_types.into_iter().collect());
 
+        // Required type list specified after the closure
         let also_required_comp_types =
             also_required_list.map(|TypeList { tys }| tys.into_iter().collect());
 
+        // Disallowed type list specified after the closure
         let disallowed_comp_types =
             disallowed_list.map(|TypeList { tys }| tys.into_iter().collect());
 
-        let required_comp_types = querying_util::determine_all_required_comp_types(
-            &comp_arg_types,
+        // Types of all arguments that are not `Option`s and required type list
+        // specified after the closure
+        let required_comp_types = querying_util::include_also_required_comp_types(
+            &required_arg_comp_types,
+            also_required_comp_types.clone(),
+        );
+
+        // Types of all arguments that are not `Option`s, types inside the
+        // `Option`s and required type list specified after the closure
+        let requested_comp_types = querying_util::include_also_required_comp_types(
+            &all_arg_comp_types,
             also_required_comp_types,
         );
 
-        let full_closure_args = create_full_closure_args(&comp_arg_names, &comp_arg_types);
+        let full_closure_args = create_full_closure_args(&arg_names, &arg_types);
 
         ProcessedSetupInput {
             scope,
             components_name,
             closure_body,
-            comp_arg_names,
-            comp_arg_types,
+            arg_names,
+            interpreted_arg_types,
+            all_arg_comp_types,
+            required_comp_types,
+            requested_comp_types,
             return_comp_types,
             disallowed_comp_types,
-            required_comp_types,
             full_closure_args,
         }
     }
 }
 
-fn create_full_closure_args(comp_arg_names: &[Ident], comp_arg_types: &[Type]) -> Vec<TokenStream> {
-    comp_arg_names
+fn create_full_closure_args(arg_names: &[Ident], arg_types: &[Type]) -> Vec<TokenStream> {
+    arg_names
         .iter()
-        .zip(comp_arg_types.iter())
-        .map(|(name, ty)| quote! { #name: &#ty })
+        .zip(arg_types.iter())
+        .map(|(name, ty)| quote! { #name: #ty })
         .collect()
 }
 
@@ -333,26 +453,45 @@ fn generate_component_storage_array_creation_code(
 
 fn generate_component_iter_names_and_code(
     components_name: &Ident,
-    comp_arg_names: &[Ident],
-    comp_arg_types: &[Type],
+    arg_names: &[Ident],
+    interpreted_arg_types: &[InterpretedArgType],
 ) -> (Vec<Ident>, Vec<TokenStream>) {
-    let (iter_names, iter_code): (Vec<_>, Vec<_>) = comp_arg_names
+    let (iter_names, iter_code): (Vec<_>, Vec<_>) = arg_names
         .iter()
-        .zip(comp_arg_types.iter())
-        .map(|(name, ty)| generate_component_iter_code(components_name, name, ty))
+        .zip(interpreted_arg_types.iter())
+        .map(|(name, interpreted_arg_type)| match interpreted_arg_type {
+            InterpretedArgType::CompRef(ty) => {
+                generate_required_component_iter_code(components_name, name, ty)
+            }
+            InterpretedArgType::OptionalCompRef(ty) => {
+                generate_optional_component_iter_code(components_name, name, ty)
+            }
+        })
         .unzip();
 
     (iter_names, iter_code)
 }
 
-fn generate_component_iter_code(
+fn generate_required_component_iter_code(
     components_name: &Ident,
     arg_name: &Ident,
-    arg_type: &Type,
+    comp_type: &Type,
 ) -> (Ident, TokenStream) {
     let iter_name = format_ident!("{}_iter_internal__", arg_name);
     let code = quote! {
-        let #iter_name = #components_name.components_of_type::<#arg_type>().iter();
+        let #iter_name = #components_name.components_of_type::<#comp_type>().iter();
+    };
+    (iter_name, code)
+}
+
+fn generate_optional_component_iter_code(
+    components_name: &Ident,
+    arg_name: &Ident,
+    comp_type: &Type,
+) -> (Ident, TokenStream) {
+    let iter_name = format_ident!("{}_iter_internal__", arg_name);
+    let code = quote! {
+        let #iter_name = #components_name.get_option_iter_for_component_of_type::<#comp_type>();
     };
     (iter_name, code)
 }
@@ -360,24 +499,24 @@ fn generate_component_iter_code(
 fn generate_closure_call_code(
     components_name: &Ident,
     closure_name: &Ident,
-    comp_arg_names: &[Ident],
+    arg_names: &[Ident],
     component_iter_names: &[Ident],
     component_storage_array_name: &Option<Ident>,
     return_comp_types: &Option<Vec<Type>>,
 ) -> TokenStream {
-    let (zipped_iter, nested_arg_names) = if comp_arg_names.len() > 1 {
+    let (zipped_iter, nested_arg_names) = if arg_names.len() > 1 {
         (
             querying_util::generate_nested_tuple(
                 &quote! { ::core::iter::zip },
                 component_iter_names.iter(),
             ),
-            querying_util::generate_nested_tuple(&quote! {}, comp_arg_names.iter()),
+            querying_util::generate_nested_tuple(&quote! {}, arg_names.iter()),
         )
-    } else if !comp_arg_names.is_empty() {
+    } else if !arg_names.is_empty() {
         // For a single component type, no zipping is needed
         (
             component_iter_names[0].to_token_stream(),
-            comp_arg_names[0].to_token_stream(),
+            arg_names[0].to_token_stream(),
         )
     } else {
         (quote! {0..#components_name.component_count()}, quote! {_})
@@ -385,7 +524,7 @@ fn generate_closure_call_code(
 
     let closure_return_value_name = Ident::new("_closure_result_internal__", Span::call_site());
     let closure_call_code = quote! {
-        let #closure_return_value_name = #closure_name(#(#comp_arg_names),*);
+        let #closure_return_value_name = #closure_name(#(#arg_names),*);
     };
 
     let component_storing_code = generate_component_storing_code(

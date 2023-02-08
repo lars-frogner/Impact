@@ -54,6 +54,8 @@ fn test_valid_setup_inputs() {
 
     setup!(components, || -> Byte { BYTE });
 
+    setup!(components, || -> Marked { Marked });
+
     setup!(
         {
             let comp = BYTE;
@@ -135,6 +137,34 @@ fn test_valid_setup_inputs() {
         |_byte: &Byte| {},
         ![Position, Rectangle],
         [Marked]
+    );
+
+    setup!(components, |_byte: Option<&Byte>| {});
+
+    setup!(
+        components,
+        |_byte: Option<&Byte>, _pos: Option<&Position>| {}
+    );
+
+    setup!(components, |_byte: &Byte, _pos: Option<&Position>| {});
+
+    setup!(components, |_byte: Option<&Byte>, _pos: &Position| {});
+
+    setup!(components, |_byte: Option<&Byte>,
+                        _pos: &Position|
+     -> Marked { Marked });
+
+    setup!(
+        components,
+        |_byte: Option<&Byte>, _pos: &Position| -> Marked { Marked },
+        [Rectangle]
+    );
+
+    setup!(
+        components,
+        |_byte: Option<&Byte>, _pos: &Position| -> Marked { Marked },
+        [Rectangle],
+        ![Marked]
     );
 
     // The macro accepts this because it does not know they are
@@ -678,4 +708,152 @@ fn setup_adding_and_overwriting_two_comps_in_one_comp_one_instance_storage_works
     assert_eq!(components.component_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2]);
     assert_eq!(components.components_of_type::<Position>(), &[POS]);
+}
+
+#[test]
+fn setup_requesting_optional_comp_from_empty_storage_runs_nothing() {
+    let components = ArchetypeComponentStorage::empty();
+    let mut count = 0;
+    setup!(components, |_pos: Option<&Position>| {
+        count += 1;
+    });
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn setup_requesting_optional_and_required_comp_from_empty_storage_runs_nothing_1() {
+    let components = ArchetypeComponentStorage::empty();
+    let mut count = 0;
+    setup!(components, |_pos: Option<&Position>, _byte: &Byte| {
+        count += 1;
+    });
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn setup_requesting_optional_and_required_comp_from_empty_storage_runs_nothing_2() {
+    let components = ArchetypeComponentStorage::empty();
+    let mut count = 0;
+    setup!(
+        components,
+        |_pos: Option<&Position>| {
+            count += 1;
+        },
+        [Byte]
+    );
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn setup_on_storage_missing_optional_comp_gives_none() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let mut count = 0;
+    setup!(components, |pos: Option<&Position>| {
+        assert!(pos.is_none());
+        count += 1;
+    });
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_missing_two_optional_comps_gives_none() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let mut count = 0;
+    setup!(
+        components,
+        |pos: Option<&Position>, rect: Option<&Rectangle>| {
+            assert!(pos.is_none());
+            assert!(rect.is_none());
+            count += 1;
+        }
+    );
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_missing_optional_and_matching_required_comp_gives_none_1() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let mut count = 0;
+    setup!(components, |_byte: &Byte, pos: Option<&Position>| {
+        assert!(pos.is_none());
+        count += 1;
+    });
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_missing_optional_and_matching_required_comp_gives_none_2() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let mut count = 0;
+    setup!(
+        components,
+        |pos: Option<&Position>| {
+            assert!(pos.is_none());
+            count += 1;
+        },
+        [Byte]
+    );
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_optional_comp_gives_some() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let mut count = 0;
+    setup!(components, |byte: Option<&Byte>| {
+        assert_eq!(byte.unwrap(), &BYTE);
+        count += 1;
+    });
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_optional_and_missing_comp_gives_some_and_none() {
+    let components = ArchetypeComponentStorage::from_view(&BYTE);
+    let mut count = 0;
+    setup!(components, |byte: Option<&Byte>, pos: Option<&Position>| {
+        assert_eq!(byte.unwrap(), &BYTE);
+        assert!(pos.is_none());
+        count += 1;
+    });
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_two_optional_comps_gives_some() {
+    let components = ArchetypeComponentStorage::try_from_view((&POS, &BYTE)).unwrap();
+    let mut count = 0;
+    setup!(components, |byte: Option<&Byte>, pos: Option<&Position>| {
+        assert_eq!(byte.unwrap(), &BYTE);
+        assert_eq!(pos.unwrap(), &POS);
+        count += 1;
+    });
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_optional_and_required_comps_gives_some_1() {
+    let components = ArchetypeComponentStorage::try_from_view((&POS, &BYTE)).unwrap();
+    let mut count = 0;
+    setup!(components, |byte: &Byte, pos: Option<&Position>| {
+        assert_eq!(byte, &BYTE);
+        assert_eq!(pos.unwrap(), &POS);
+        count += 1;
+    });
+    assert_eq!(count, 1);
+}
+
+#[test]
+fn setup_on_storage_with_optional_and_required_comps_gives_some_2() {
+    let components = ArchetypeComponentStorage::try_from_view((&POS, &BYTE)).unwrap();
+    let mut count = 0;
+    setup!(
+        components,
+        |pos: Option<&Position>| {
+            assert_eq!(pos.unwrap(), &POS);
+            count += 1;
+        },
+        [Byte]
+    );
+    assert_eq!(count, 1);
 }

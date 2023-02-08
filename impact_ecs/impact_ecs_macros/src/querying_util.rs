@@ -75,16 +75,16 @@ pub(crate) fn parse_type_lists(
     }
 }
 
-pub(crate) fn determine_all_required_comp_types(
-    comp_arg_types: &[Type],
+pub(crate) fn include_also_required_comp_types(
+    required_arg_comp_types: &[Type],
     also_required_comp_types: Option<Vec<Type>>,
 ) -> Vec<Type> {
     match also_required_comp_types {
         Some(mut also_required_comp_types) => {
-            also_required_comp_types.extend_from_slice(comp_arg_types);
+            also_required_comp_types.extend_from_slice(required_arg_comp_types);
             also_required_comp_types
         }
-        None => comp_arg_types.to_vec(),
+        None => required_arg_comp_types.to_vec(),
     }
 }
 
@@ -106,7 +106,7 @@ pub(crate) fn verify_comp_types_unique(comp_types: &[Type]) -> Result<()> {
 }
 
 pub(crate) fn verify_disallowed_comps_unique(
-    required_comp_types: &[Type],
+    requested_comp_types: &[Type],
     disallowed_comp_types: &Option<Vec<Type>>,
 ) -> Result<()> {
     if let Some(disallowed_comp_types) = disallowed_comp_types {
@@ -120,11 +120,11 @@ pub(crate) fn verify_disallowed_comps_unique(
                     ),
                 ));
             }
-            if required_comp_types.contains(ty) {
+            if requested_comp_types.contains(ty) {
                 return Err(Error::new_spanned(
                     &disallowed_comp_types[idx],
                     format!(
-                        "disallowed component type `{}` is also required",
+                        "disallowed component type `{}` is also requested",
                         ty.to_token_stream()
                     ),
                 ));
@@ -135,18 +135,18 @@ pub(crate) fn verify_disallowed_comps_unique(
 }
 
 pub(crate) fn generate_input_verification_code<'a>(
-    comp_arg_types: &[Type],
-    required_comp_types: &[Type],
+    arg_comp_types: &[Type],
+    requested_comp_types: &[Type],
     additional_comp_types: impl IntoIterator<Item = &'a Option<Vec<Type>>>,
     crate_root: &Ident,
 ) -> Result<TokenStream> {
-    let mut impl_assertions: Vec<_> = comp_arg_types
+    let mut impl_assertions: Vec<_> = arg_comp_types
         .iter()
         .map(create_assertion_that_type_is_not_zero_sized)
         .collect();
 
     impl_assertions.extend(
-        required_comp_types
+        requested_comp_types
             .iter()
             .map(|ty| create_assertion_that_type_impls_component_trait(ty, "required", crate_root)),
     );

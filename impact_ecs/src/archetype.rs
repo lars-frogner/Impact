@@ -14,6 +14,7 @@ use std::{
     any::TypeId,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
+    iter,
     marker::PhantomData,
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
@@ -362,6 +363,26 @@ where
         self.component_arrays[component_idx]
             .view()
             .component_instances()
+    }
+
+    /// Returns an iterator with the number of items equal to
+    /// [`component_count`]. If `C` is the type of a contained component, each
+    /// item will be a [`Some`] holding a reference to a different component
+    /// instance. Otherwise, each item will be a [`None`].
+    pub fn get_option_iter_for_component_of_type<C: Component>(
+        &self,
+    ) -> Box<dyn Iterator<Item = Option<&C>> + '_> {
+        if let Some(component_idx) = self.component_index_map.get(C::component_id()) {
+            Box::new(
+                self.component_arrays[component_idx]
+                    .view()
+                    .component_instances()
+                    .iter()
+                    .map(Some),
+            )
+        } else {
+            Box::new(iter::repeat(None).take(self.component_count()))
+        }
     }
 
     /// Includes the given array of component instances of a new

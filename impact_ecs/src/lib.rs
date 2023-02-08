@@ -109,18 +109,18 @@ pub use impact_ecs_macros::archetype_of;
 ///     components,
 ///     // Call closure for each component instance if `components` has both
 ///     // `Comp1` and `Comp2`
-///     |comp_1: &Comp1, comp_2: &mut Comp2| -> (Comp3, Comp4) {
-///         // Do something with `entity`, `comp_1` and `comp_2`
+///     |comp_1: &Comp1, comp_2: &Comp2, comp_3: Option<&Comp3>| -> (Comp4, Comp5) {
+///         // Do something with `comp_1` and `comp_2`, and `comp_3` if `Comp3` is present
 ///         // ...
-///         // Return instances of `comp_3` and `comp_4` to add to `components`
-///         (comp_3, comp_4)
+///         // Return instances of `comp_4` and `comp_5` to add to `components`
+///         (comp_4, comp_5)
 ///     },
 ///     // Require additionaly that `components` has `MarkerComp1` and
 ///     // `MarkerComp2` (optional)
 ///     [MarkerComp1, MarkerComp2]
-///     // Do not call the closure if `components` has `Comp3` or `Comp4`
+///     // Do not call the closure if `components` has `Comp4` or `Comp5`
 ///     // (optional)
-///     ![Comp3, Comp4]
+///     ![Comp4, Comp5]
 /// );
 /// ```
 ///
@@ -132,19 +132,23 @@ pub use impact_ecs_macros::archetype_of;
 /// the closure will return instances of for inclusion in the
 /// `ArchetypeComponentStorage`. The type of each closure argument must be
 /// annotated, and has to be an immutable reference to a type implementing the
-/// `Component` trait. If the closure returns anything, it must be a single
-/// value or a tuple of values implementing the `Component` trait, and the
-/// return type has to be annotated in the closure signature.
+/// `Component` trait, optionally wrapped in an [`Option`]. If the closure
+/// returns anything, it must be a single value or a tuple of values
+/// implementing the `Component` trait, and the return type has to be annotated
+/// in the closure signature.
 ///
 /// The body of the closure specifies what to do with each set of matching
 /// component instances present in the `ArchetypeComponentStorage`. The closure
-/// will only be called if the `ArchetypeComponentStorage` has the requested
-/// component types and if so it will be called once with each set of requested
-/// component instances. Any instances of a new component type that the closure
-/// returns will be added under a new component type in the
-/// `ArchetypeComponentStorage`. Any returned instances of an already existing
-/// component type will overwrite the existing instances for that component
-/// type.
+/// will only be called if the `ArchetypeComponentStorage` has all the
+/// non-`Option` component types specified as closure arguments, and if so it
+/// will be called once with each set of requested component instances. Any of
+/// the `Option`-wrapped component types present in the
+/// `ArchetypeComponentStorage` will be passed as `Some` to the closure, the
+/// ones that are not present will be `None`. Any instances of a new component
+/// type that the closure returns will be added under a new component type in
+/// the `ArchetypeComponentStorage`. Any returned instances of an already
+/// existing component type will overwrite the existing instances for that
+/// component type.
 ///
 /// Optionally, an array of additionaly required component types can be included
 /// as an argument to the macro. The closure will only be called if the
@@ -186,6 +190,9 @@ pub use impact_ecs_macros::archetype_of;
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Area(f32);
 /// # #[repr(C)]
+/// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
+/// # struct Dimming(f32);
+/// # #[repr(C)]
 /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
 /// # struct Luminosity(f32);
 /// # #[repr(C)]
@@ -201,8 +208,12 @@ pub use impact_ecs_macros::archetype_of;
 ///             *contains_area_lights = true;
 ///         },
 ///         components,
-///         |flux: &Flux, area: &Area| -> Luminosity {
-///             Luminosity(flux.0 * area.0)
+///         |flux: &Flux, area: &Area, dimming: Option<&Dimming>| -> Luminosity {
+///             if let Some(dimming_factor) = dimming {
+///                 Luminosity(dimming_factor.0 * flux.0 * area.0)
+///             } else {
+///                 Luminosity(flux.0 * area.0)
+///             }
 ///         },
 ///         [Light],
 ///         ![Disabled]
@@ -211,7 +222,10 @@ pub use impact_ecs_macros::archetype_of;
 ///
 /// let mut world = World::new();
 /// let mut components = ArchetypeComponentStorage::try_from_view(
-///     (&[Light, Light], &[Flux(1.0), Flux(5.0)], &[Area(2.0), Area(2.0)])
+///     (&[Light, Light],
+///      &[Flux(1.0), Flux(5.0)],
+///      &[Area(2.0), Area(2.0)],
+///      &[Dimming(0.5), Dimming(0.2)])
 /// )?;
 /// let mut contains_area_lights = false;
 ///
@@ -222,11 +236,11 @@ pub use impact_ecs_macros::archetype_of;
 /// assert!(contains_area_lights);
 /// assert_eq!(
 ///     world.entity(&entities[0]).component::<Luminosity>().access(),
-///     &Luminosity(2.0)
+///     &Luminosity(1.0)
 /// );
 /// assert_eq!(
 ///     world.entity(&entities[1]).component::<Luminosity>().access(),
-///     &Luminosity(10.0)
+///     &Luminosity(2.0)
 /// );
 /// #
 /// # Ok::<(), Error>(())

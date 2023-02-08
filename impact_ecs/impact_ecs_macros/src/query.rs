@@ -208,7 +208,7 @@ impl QueryInput {
         let disallowed_comp_types =
             disallowed_list.map(|TypeList { tys }| tys.into_iter().collect());
 
-        let required_comp_types = querying_util::determine_all_required_comp_types(
+        let required_comp_types = querying_util::include_also_required_comp_types(
             &comp_arg_types,
             also_required_comp_types,
         );
