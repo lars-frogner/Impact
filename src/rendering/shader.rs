@@ -732,28 +732,24 @@ impl ShaderGenerator {
         let mut define_matrix = |name: &str, start_field_idx: u32| {
             // Create expression constructing a 4x4 matrix from the columns
             // (each a field in the input struct)
-            let matrix_expr_handle = emit(
-                &mut vertex_function.body,
-                &mut vertex_function.expressions,
-                |expressions| {
-                    let compose_expr = Expression::Compose {
-                        ty: mat4x4_type_handle,
-                        components: (start_field_idx..(start_field_idx + 4))
-                            .into_iter()
-                            .map(|index| {
-                                append_to_arena(
-                                    expressions,
-                                    Expression::AccessIndex {
-                                        base: model_view_transform_arg_ptr_expr_handle,
-                                        index,
-                                    },
-                                )
-                            })
-                            .collect(),
-                    };
-                    append_to_arena(expressions, compose_expr)
-                },
-            );
+            let matrix_expr_handle = emit_in_func(vertex_function, |function| {
+                let compose_expr = Expression::Compose {
+                    ty: mat4x4_type_handle,
+                    components: (start_field_idx..(start_field_idx + 4))
+                        .into_iter()
+                        .map(|index| {
+                            include_expr_in_func(
+                                function,
+                                Expression::AccessIndex {
+                                    base: model_view_transform_arg_ptr_expr_handle,
+                                    index,
+                                },
+                            )
+                        })
+                        .collect(),
+                };
+                include_expr_in_func(function, compose_expr)
+            });
 
             let matrix_var_ptr_expr_handle = append_to_arena(
                 &mut vertex_function.expressions,
@@ -775,18 +771,15 @@ impl ShaderGenerator {
                 },
             );
 
-            let matrix_var_expr_handle = emit(
-                &mut vertex_function.body,
-                &mut vertex_function.expressions,
-                |expressions| {
-                    append_to_arena(
-                        expressions,
-                        Expression::Load {
-                            pointer: matrix_var_ptr_expr_handle,
-                        },
-                    )
-                },
-            );
+            let matrix_var_expr_handle = emit_in_func(vertex_function, |function| {
+                include_named_expr_in_func(
+                    function,
+                    name,
+                    Expression::Load {
+                        pointer: matrix_var_ptr_expr_handle,
+                    },
+                )
+            });
 
             matrix_var_expr_handle
         };
@@ -838,23 +831,20 @@ impl ShaderGenerator {
             },
         );
 
-        let projection_matrix_ptr_expr_handle = append_to_arena(
-            &mut vertex_function.expressions,
+        let projection_matrix_ptr_expr_handle = include_expr_in_func(
+            vertex_function,
             Expression::GlobalVariable(projection_matrix_var_handle),
         );
 
-        let projection_matrix_expr_handle = emit(
-            &mut vertex_function.body,
-            &mut vertex_function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: projection_matrix_ptr_expr_handle,
-                    },
-                )
-            },
-        );
+        let projection_matrix_expr_handle = emit_in_func(vertex_function, |function| {
+            include_named_expr_in_func(
+                function,
+                "projectionMatrix",
+                Expression::Load {
+                    pointer: projection_matrix_ptr_expr_handle,
+                },
+            )
+        });
 
         projection_matrix_expr_handle
     }
@@ -945,34 +935,30 @@ impl ShaderGenerator {
                 None
             };
 
-        let unity_constant_expr = append_to_arena(
-            &mut vertex_function.expressions,
+        let unity_constant_expr = include_expr_in_func(
+            vertex_function,
             Expression::Constant(append_to_arena(constants, float32_constant(1.0))),
         );
 
         // Create expression converting the xyz vertex position to an
         // xyzw homogeneous coordinate (with w = 1.0) and transforming
         // it to camera space with the model view matrix
-        let position_expr_handle = emit(
-            &mut vertex_function.body,
-            &mut vertex_function.expressions,
-            |expressions| {
-                let compose_expr = Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![input_model_position_expr_handle, unity_constant_expr],
-                };
-                let homogeneous_position_expr_handle = append_to_arena(expressions, compose_expr);
+        let position_expr_handle = emit_in_func(vertex_function, |function| {
+            let compose_expr = Expression::Compose {
+                ty: vec4_type_handle,
+                components: vec![input_model_position_expr_handle, unity_constant_expr],
+            };
+            let homogeneous_position_expr_handle = include_expr_in_func(function, compose_expr);
 
-                append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Multiply,
-                        left: model_view_transform_expressions.model_view_matrix,
-                        right: homogeneous_position_expr_handle,
-                    },
-                )
-            },
-        );
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: model_view_transform_expressions.model_view_matrix,
+                    right: homogeneous_position_expr_handle,
+                },
+            )
+        });
 
         let position_var_ptr_expr_handle = append_to_arena(
             &mut vertex_function.expressions,
@@ -994,38 +980,31 @@ impl ShaderGenerator {
             },
         );
 
-        let position_var_expr_handle = emit(
-            &mut vertex_function.body,
-            &mut vertex_function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: position_var_ptr_expr_handle,
-                    },
-                )
-            },
-        );
+        let position_var_expr_handle = emit_in_func(vertex_function, |function| {
+            include_named_expr_in_func(
+                function,
+                "cameraSpacePosition",
+                Expression::Load {
+                    pointer: position_var_ptr_expr_handle,
+                },
+            )
+        });
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
         // Create expression multiplying the camera space homogeneous
         // vertex position with the projection matrix, yielding the
         // clip space position
-        let clip_position_expr_handle = emit(
-            &mut vertex_function.body,
-            &mut vertex_function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Multiply,
-                        left: projection_matrix_var_expr_handle,
-                        right: position_var_expr_handle,
-                    },
-                )
-            },
-        );
+        let clip_position_expr_handle = emit_in_func(vertex_function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: projection_matrix_var_expr_handle,
+                    right: position_var_expr_handle,
+                },
+            )
+        });
         let output_clip_position_field_idx = output_struct_builder.add_builtin_position_field(
             "clipSpacePosition",
             vec4_type_handle,
@@ -1042,13 +1021,9 @@ impl ShaderGenerator {
         };
 
         if requirements.contains(VertexAttributeSet::POSITION) {
-            let output_position_expr_handle = emit(
-                &mut vertex_function.body,
-                &mut vertex_function.expressions,
-                |expressions| {
-                    append_to_arena(expressions, swizzle_xyz_expr(position_var_expr_handle))
-                },
-            );
+            let output_position_expr_handle = emit_in_func(vertex_function, |function| {
+                include_expr_in_func(function, swizzle_xyz_expr(position_var_expr_handle))
+            });
             output_field_indices.position = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "position",
@@ -1079,43 +1054,39 @@ impl ShaderGenerator {
             // Create expression converting the xyz normal vector to an xyzw
             // homogeneous vector (with w = 0.0) and transforming it to camera
             // space with the inverse transpose of the model view matrix
-            emit(
-                &mut vertex_function.body,
-                &mut vertex_function.expressions,
-                |expressions| {
-                    let compose_expr = Expression::Compose {
-                        ty: vec4_type_handle,
-                        components: vec![input_model_normal_vector_expr_handle, zero_constant_expr],
-                    };
-                    let homogeneous_model_space_normal_vector_expr_handle =
-                        append_to_arena(expressions, compose_expr);
+            emit_in_func(vertex_function, |function| {
+                let compose_expr = Expression::Compose {
+                    ty: vec4_type_handle,
+                    components: vec![input_model_normal_vector_expr_handle, zero_constant_expr],
+                };
+                let homogeneous_model_space_normal_vector_expr_handle =
+                    include_expr_in_func(function, compose_expr);
 
-                    let homogeneous_normal_vector_expr_handle = append_to_arena(
-                        expressions,
-                        Expression::Binary {
-                            op: BinaryOperator::Multiply,
-                            left: model_view_transform_expressions
-                                .normal_model_view_matrix
-                                .expect("Missing normal model view transform"),
-                            right: homogeneous_model_space_normal_vector_expr_handle,
-                        },
-                    );
+                let homogeneous_normal_vector_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: model_view_transform_expressions
+                            .normal_model_view_matrix
+                            .expect("Missing normal model view transform"),
+                        right: homogeneous_model_space_normal_vector_expr_handle,
+                    },
+                );
 
-                    let normal_vector_expr_handle = append_to_arena(
-                        expressions,
-                        swizzle_xyz_expr(homogeneous_normal_vector_expr_handle),
-                    );
+                let normal_vector_expr_handle = include_expr_in_func(
+                    function,
+                    swizzle_xyz_expr(homogeneous_normal_vector_expr_handle),
+                );
 
-                    output_field_indices.normal_vector = Some(
-                        output_struct_builder.add_field_with_perspective_interpolation(
-                            "normalVector",
-                            vec3_type_handle,
-                            VECTOR_3_SIZE,
-                            normal_vector_expr_handle,
-                        ),
-                    );
-                },
-            );
+                output_field_indices.normal_vector = Some(
+                    output_struct_builder.add_field_with_perspective_interpolation(
+                        "normalVector",
+                        vec3_type_handle,
+                        VECTOR_3_SIZE,
+                        normal_vector_expr_handle,
+                    ),
+                );
+            });
         }
 
         if let Some(input_texture_coord_expr_handle) = input_texture_coord_expr_handle {
@@ -1263,8 +1234,8 @@ impl ShaderGenerator {
         );
         *bind_group_idx += 1;
 
-        let point_lights_ptr_expr_handle = append_to_arena(
-            &mut fragment_function.expressions,
+        let point_lights_ptr_expr_handle = include_expr_in_func(
+            fragment_function,
             Expression::GlobalVariable(point_lights_var_handle),
         );
 
@@ -1553,24 +1524,20 @@ impl InputStructBuilder {
         let input_arg_ptr_expr_handle =
             generate_input_argument(function, Some(self.input_arg_name), input_type_handle, None);
 
-        let input_field_expr_handles = emit(
-            &mut function.body,
-            &mut function.expressions,
-            |expressions| {
-                (0..n_fields)
-                    .into_iter()
-                    .map(|idx| {
-                        append_to_arena(
-                            expressions,
-                            Expression::AccessIndex {
-                                base: input_arg_ptr_expr_handle,
-                                index: idx as u32,
-                            },
-                        )
-                    })
-                    .collect()
-            },
-        );
+        let input_field_expr_handles = emit_in_func(function, |function| {
+            (0..n_fields)
+                .into_iter()
+                .map(|idx| {
+                    include_expr_in_func(
+                        function,
+                        Expression::AccessIndex {
+                            base: input_arg_ptr_expr_handle,
+                            index: idx as u32,
+                        },
+                    )
+                })
+                .collect()
+        });
 
         InputStruct {
             input_field_expr_handles,
@@ -1709,19 +1676,15 @@ impl OutputStructBuilder {
         );
 
         for (idx, input_expr_handle) in self.input_expr_handles.into_iter().enumerate() {
-            let output_struct_field_ptr_handle = emit(
-                &mut function.body,
-                &mut function.expressions,
-                |expressions| {
-                    append_to_arena(
-                        expressions,
-                        Expression::AccessIndex {
-                            base: output_ptr_expr_handle,
-                            index: idx as u32,
-                        },
-                    )
-                },
-            );
+            let output_struct_field_ptr_handle = emit_in_func(function, |function| {
+                include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: output_ptr_expr_handle,
+                        index: idx as u32,
+                    },
+                )
+            });
             push_to_block(
                 &mut function.body,
                 Statement::Store {
@@ -1731,18 +1694,15 @@ impl OutputStructBuilder {
             );
         }
 
-        let output_expr_handle = emit(
-            &mut function.body,
-            &mut function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: output_ptr_expr_handle,
-                    },
-                )
-            },
-        );
+        let output_expr_handle = emit_in_func(function, |function| {
+            include_named_expr_in_func(
+                function,
+                "output",
+                Expression::Load {
+                    pointer: output_ptr_expr_handle,
+                },
+            )
+        });
 
         push_to_block(
             &mut function.body,
@@ -1883,35 +1843,31 @@ impl SampledTexture {
         function: &mut Function,
         texture_coord_expr_handle: Handle<Expression>,
     ) -> Handle<Expression> {
-        let texture_var_expr_handle = append_to_arena(
-            &mut function.expressions,
+        let texture_var_expr_handle = include_expr_in_func(
+            function,
             Expression::GlobalVariable(self.texture_var_handle),
         );
 
-        let sampler_var_expr_handle = append_to_arena(
-            &mut function.expressions,
+        let sampler_var_expr_handle = include_expr_in_func(
+            function,
             Expression::GlobalVariable(self.sampler_var_handle),
         );
 
-        let image_sampling_expr_handle = emit(
-            &mut function.body,
-            &mut function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::ImageSample {
-                        image: texture_var_expr_handle,
-                        sampler: sampler_var_expr_handle,
-                        gather: None,
-                        coordinate: texture_coord_expr_handle,
-                        array_index: None,
-                        offset: None,
-                        level: SampleLevel::Auto,
-                        depth_ref: None,
-                    },
-                )
-            },
-        );
+        let image_sampling_expr_handle = emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::ImageSample {
+                    image: texture_var_expr_handle,
+                    sampler: sampler_var_expr_handle,
+                    gather: None,
+                    coordinate: texture_coord_expr_handle,
+                    array_index: None,
+                    offset: None,
+                    level: SampleLevel::Auto,
+                    depth_ref: None,
+                },
+            )
+        });
 
         image_sampling_expr_handle
     }
@@ -1926,11 +1882,9 @@ impl SampledTexture {
     ) -> Handle<Expression> {
         let sampling_expr_handle = self.generate_sampling_expr(function, texture_coord_expr_handle);
 
-        emit(
-            &mut function.body,
-            &mut function.expressions,
-            |expressions| append_to_arena(expressions, swizzle_xyz_expr(sampling_expr_handle)),
-        )
+        emit_in_func(function, |function| {
+            include_expr_in_func(function, swizzle_xyz_expr(sampling_expr_handle))
+        })
     }
 }
 
@@ -2118,10 +2072,7 @@ pub fn generate_input_argument(
         binding,
     });
 
-    append_to_arena(
-        &mut function.expressions,
-        Expression::FunctionArgument(input_arg_idx),
-    )
+    include_expr_in_func(function, Expression::FunctionArgument(input_arg_idx))
 }
 
 fn new_name<S: ToString>(name_str: S) -> Option<String> {
@@ -2192,6 +2143,9 @@ fn push_to_block(block: &mut Block, statement: Statement) {
 /// Executes the given closure that adds [`Expression`]s to
 /// the given [`Arena`] before pushing to the given [`Block`]
 /// a [`Statement::Emit`] emitting the range of added expressions.
+///
+/// # Returns
+/// The value returned from the closure.
 fn emit<T>(
     block: &mut Block,
     arena: &mut Arena<Expression>,
@@ -2201,6 +2155,43 @@ fn emit<T>(
     let ret = add_expressions(arena);
     push_to_block(block, Statement::Emit(arena.range_from(start_length)));
     ret
+}
+
+/// Executes the given closure that adds [`Expression`]s to the given
+/// [`Function`] before pushing to the function body a [`Statement::Emit`]
+/// emitting the range of added expressions.
+///
+/// # Returns
+/// The value returned from the closure.
+fn emit_in_func<T>(function: &mut Function, add_expressions: impl FnOnce(&mut Function) -> T) -> T {
+    let start_length = function.expressions.len();
+    let ret = add_expressions(function);
+    let emit_statement = Statement::Emit(function.expressions.range_from(start_length));
+    push_to_block(&mut function.body, emit_statement);
+    ret
+}
+
+/// Includes the given expression in the the given function.
+///
+/// # Returns
+/// A handle to the included expression.
+fn include_expr_in_func(function: &mut Function, expr: Expression) -> Handle<Expression> {
+    append_to_arena(&mut function.expressions, expr)
+}
+
+/// Includes the given expression as a named expression with the given name in
+/// the given function.
+///
+/// # Returns
+/// A handle to the included expression.
+fn include_named_expr_in_func<S: ToString>(
+    function: &mut Function,
+    name: S,
+    expr: Expression,
+) -> Handle<Expression> {
+    let handle = include_expr_in_func(function, expr);
+    function.named_expressions.insert(handle, name.to_string());
+    handle
 }
 
 #[cfg(test)]

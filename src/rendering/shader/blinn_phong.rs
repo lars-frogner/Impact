@@ -1,10 +1,10 @@
 //! Generation of shaders for Blinn-Phong materials.
 
 use super::{
-    append_to_arena, emit, float32_constant, insert_in_arena, new_name, push_to_block, ForLoop,
-    InputStruct, InputStructBuilder, LightExpressions, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_to_arena, emit, emit_in_func, float32_constant, include_expr_in_func, insert_in_arena,
+    new_name, push_to_block, ForLoop, InputStruct, InputStructBuilder, LightExpressions,
+    MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, F32_TYPE, F32_WIDTH,
+    VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{
     Arena, BinaryOperator, Constant, Expression, Function, FunctionArgument, FunctionResult,
@@ -324,29 +324,25 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             },
         );
 
-        let view_dir_expr_handle = emit(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
-            |expressions| {
-                let neg_position_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Unary {
-                        op: UnaryOperator::Negate,
-                        expr: position_expr_handle,
-                    },
-                );
-                append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Normalize,
-                        arg: neg_position_expr_handle,
-                        arg1: None,
-                        arg2: None,
-                        arg3: None,
-                    },
-                )
-            },
-        );
+        let view_dir_expr_handle = emit_in_func(fragment_function, |function| {
+            let neg_position_expr_handle = include_expr_in_func(
+                function,
+                Expression::Unary {
+                    op: UnaryOperator::Negate,
+                    expr: position_expr_handle,
+                },
+            );
+            include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Normalize,
+                    arg: neg_position_expr_handle,
+                    arg1: None,
+                    arg2: None,
+                    arg3: None,
+                },
+            )
+        });
 
         let point_light_count_expr_handle =
             light_expressions.generate_point_light_count_expr(fragment_function);
@@ -487,37 +483,33 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             &mut fragment_function.expressions,
         );
 
-        let output_color_expr_handle = emit(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
-            |expressions| {
-                let color_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: color_ptr_expr_handle,
-                    },
-                );
+        let output_color_expr_handle = emit_in_func(fragment_function, |function| {
+            let color_expr_handle = include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: color_ptr_expr_handle,
+                },
+            );
 
-                let saturated_color_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Saturate,
-                        arg: color_expr_handle,
-                        arg1: None,
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
+            let saturated_color_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Saturate,
+                    arg: color_expr_handle,
+                    arg1: None,
+                    arg2: None,
+                    arg3: None,
+                },
+            );
 
-                append_to_arena(
-                    expressions,
-                    Expression::Compose {
-                        ty: vec4_type_handle,
-                        components: vec![saturated_color_expr_handle, alpha_expr_handle],
-                    },
-                )
-            },
-        );
+            include_expr_in_func(
+                function,
+                Expression::Compose {
+                    ty: vec4_type_handle,
+                    components: vec![saturated_color_expr_handle, alpha_expr_handle],
+                },
+            )
+        });
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
@@ -662,128 +654,124 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             Expression::Constant(append_to_arena(constants, float32_constant(0.0))),
         );
 
-        let illumination_expr_handle = emit(
-            &mut function.body,
-            &mut function.expressions,
-            |expressions| {
-                // dot(lightDir, normalVector)
-                let light_dir_dot_normal_vector_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Dot,
-                        arg: light_dir_expr_handle,
-                        arg1: Some(normal_vector_expr_handle),
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                // max(0.0, dot(lightDir, normalVector))
-                let clamped_light_dir_dot_normal_vector_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Max,
-                        arg: zero_constant_expr,
-                        arg1: Some(light_dir_dot_normal_vector_expr_handle),
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                // diffuseColor * max(0.0, dot(lightDir, normalVector))
-                let diffuse_color_times_diffuse_dot_product_expr_handle = append_to_arena(
-                    expressions,
+        let illumination_expr_handle = emit_in_func(&mut function, |function| {
+            // dot(lightDir, normalVector)
+            let light_dir_dot_normal_vector_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Dot,
+                    arg: light_dir_expr_handle,
+                    arg1: Some(normal_vector_expr_handle),
+                    arg2: None,
+                    arg3: None,
+                },
+            );
+            // max(0.0, dot(lightDir, normalVector))
+            let clamped_light_dir_dot_normal_vector_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Max,
+                    arg: zero_constant_expr,
+                    arg1: Some(light_dir_dot_normal_vector_expr_handle),
+                    arg2: None,
+                    arg3: None,
+                },
+            );
+            // diffuseColor * max(0.0, dot(lightDir, normalVector))
+            let diffuse_color_times_diffuse_dot_product_expr_handle = include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: diffuse_color_expr_handle,
+                    right: clamped_light_dir_dot_normal_vector_expr_handle,
+                },
+            );
+
+            // lightDir + viewDir
+            let light_dir_plus_view_dir_expr_handle = include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: light_dir_expr_handle,
+                    right: view_dir_expr_handle,
+                },
+            );
+            // normalize(lightDir + viewDir)
+            let half_vector_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Normalize,
+                    arg: light_dir_plus_view_dir_expr_handle,
+                    arg1: None,
+                    arg2: None,
+                    arg3: None,
+                },
+            );
+            // dot(normalize(lightDir + viewDir), normalVector)
+            let half_vector_dot_normal_vector_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Dot,
+                    arg: half_vector_expr_handle,
+                    arg1: Some(normal_vector_expr_handle),
+                    arg2: None,
+                    arg3: None,
+                },
+            );
+            // max(0.0, dot(normalize(lightDir + viewDir), normalVector))
+            let clamped_half_vector_dot_normal_vector_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Max,
+                    arg: zero_constant_expr,
+                    arg1: Some(half_vector_dot_normal_vector_expr_handle),
+                    arg2: None,
+                    arg3: None,
+                },
+            );
+            // pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess)
+            let specular_dot_product_pow_shininess_expr_handle = include_expr_in_func(
+                function,
+                Expression::Math {
+                    fun: MathFunction::Pow,
+                    arg: clamped_half_vector_dot_normal_vector_expr_handle,
+                    arg1: Some(shininess_expr_handle),
+                    arg2: None,
+                    arg3: None,
+                },
+            );
+            // specularColor * pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess)
+            let specular_color_times_specular_dot_product_pow_shininess_expr_handle =
+                include_expr_in_func(
+                    function,
                     Expression::Binary {
                         op: BinaryOperator::Multiply,
-                        left: diffuse_color_expr_handle,
-                        right: clamped_light_dir_dot_normal_vector_expr_handle,
+                        left: specular_color_expr_handle,
+                        right: specular_dot_product_pow_shininess_expr_handle,
                     },
                 );
+            // diffuseColor * max(0.0, dot(lightDir, normalVector))
+            // + specularColor * pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess)
+            let diffuse_term_plus_specular_term_expr_handle = include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: diffuse_color_times_diffuse_dot_product_expr_handle,
+                    right: specular_color_times_specular_dot_product_pow_shininess_expr_handle,
+                },
+            );
 
-                // lightDir + viewDir
-                let light_dir_plus_view_dir_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Add,
-                        left: light_dir_expr_handle,
-                        right: view_dir_expr_handle,
-                    },
-                );
-                // normalize(lightDir + viewDir)
-                let half_vector_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Normalize,
-                        arg: light_dir_plus_view_dir_expr_handle,
-                        arg1: None,
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                // dot(normalize(lightDir + viewDir), normalVector)
-                let half_vector_dot_normal_vector_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Dot,
-                        arg: half_vector_expr_handle,
-                        arg1: Some(normal_vector_expr_handle),
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                // max(0.0, dot(normalize(lightDir + viewDir), normalVector))
-                let clamped_half_vector_dot_normal_vector_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Max,
-                        arg: zero_constant_expr,
-                        arg1: Some(half_vector_dot_normal_vector_expr_handle),
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                // pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess)
-                let specular_dot_product_pow_shininess_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Pow,
-                        arg: clamped_half_vector_dot_normal_vector_expr_handle,
-                        arg1: Some(shininess_expr_handle),
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                // specularColor * pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess)
-                let specular_color_times_specular_dot_product_pow_shininess_expr_handle =
-                    append_to_arena(
-                        expressions,
-                        Expression::Binary {
-                            op: BinaryOperator::Multiply,
-                            left: specular_color_expr_handle,
-                            right: specular_dot_product_pow_shininess_expr_handle,
-                        },
-                    );
-                // diffuseColor * max(0.0, dot(lightDir, normalVector))
-                // + specularColor * pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess)
-                let diffuse_term_plus_specular_term_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Add,
-                        left: diffuse_color_times_diffuse_dot_product_expr_handle,
-                        right: specular_color_times_specular_dot_product_pow_shininess_expr_handle,
-                    },
-                );
-
-                // lightRadiance * (diffuseColor * max(0.0, dot(lightDir, normalVector))
-                // + specularColor * pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess))
-                append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Multiply,
-                        left: light_radiance_expr_handle,
-                        right: diffuse_term_plus_specular_term_expr_handle,
-                    },
-                )
-            },
-        );
+            // lightRadiance * (diffuseColor * max(0.0, dot(lightDir, normalVector))
+            // + specularColor * pow(max(0.0, dot(normalize(lightDir + viewDir), normalVector)), shininess))
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: light_radiance_expr_handle,
+                    right: diffuse_term_plus_specular_term_expr_handle,
+                },
+            )
+        });
 
         push_to_block(
             &mut function.body,
