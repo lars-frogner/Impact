@@ -6,7 +6,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
-use nalgebra::{Matrix4, Similarity3};
+use nalgebra::{vector, Similarity3, UnitQuaternion, Vector4};
 use std::{
     fmt::Debug,
     mem,
@@ -93,11 +93,16 @@ pub struct DynamicInstanceFeatureBuffer {
 }
 
 /// A model-to-camera transform for a specific instance of a model.
+///
+/// This struct is intended to be passed to the GPU in a vertex buffer. It holds
+/// the rotational component of the transformation in a 4-element unit
+/// quaternion, while a 4-element vector holds the translational component in
+/// the first three elements and the scaling factor in the last element.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InstanceModelViewTransform {
-    model_view_matrix: Matrix4<fre>,
-    model_view_matrix_for_normals: Matrix4<fre>,
+    rotation: UnitQuaternion<fre>,
+    translation_and_scaling: Vector4<fre>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -530,35 +535,22 @@ impl InstanceModelViewTransform {
     /// Creates a new identity model-to-camera transform.
     pub fn identity() -> Self {
         Self {
-            model_view_matrix: Matrix4::identity(),
-            model_view_matrix_for_normals: Matrix4::identity(),
+            rotation: UnitQuaternion::identity(),
+            translation_and_scaling: vector![0.0, 0.0, 0.0, 1.0],
         }
     }
 
     /// Creates a new model-to-camera transform corresponding
     /// to the given similarity transform.
     pub fn with_model_view_transform(transform: Similarity3<fre>) -> Self {
-        let model_view_matrix = transform.to_homogeneous();
-
-        // Normal vectors must be transformed with the inverse transpose matrix
-        let mut model_view_matrix_for_normals = transform.inverse().to_homogeneous();
-        model_view_matrix_for_normals.transpose_mut();
+        let rotation = transform.isometry.rotation;
+        let translation = transform.isometry.translation;
+        let scaling = transform.scaling();
 
         Self {
-            model_view_matrix,
-            model_view_matrix_for_normals,
+            rotation,
+            translation_and_scaling: vector![translation.x, translation.y, translation.z, scaling],
         }
-    }
-
-    /// Returns the matrix for the model-to-camera transform.
-    pub fn model_view_matrix(&self) -> &Matrix4<fre> {
-        &self.model_view_matrix
-    }
-
-    /// Returns the matrix for transforming normal vectors with
-    /// the model-to-camera transform.
-    pub fn model_view_matrix_for_normals(&self) -> &Matrix4<fre> {
-        &self.model_view_matrix_for_normals
     }
 }
 
@@ -573,26 +565,10 @@ impl_InstanceFeature!(
     wgpu::vertex_attr_array![
         INSTANCE_VERTEX_BINDING_START => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 3 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 4 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 5 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 6 => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 7 => Float32x4,
     ],
     InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-        model_view_matrix_column_locations: (
-            INSTANCE_VERTEX_BINDING_START,
-            INSTANCE_VERTEX_BINDING_START + 1,
-            INSTANCE_VERTEX_BINDING_START + 2,
-            INSTANCE_VERTEX_BINDING_START + 3
-        ),
-        normal_model_view_matrix_column_locations: (
-            INSTANCE_VERTEX_BINDING_START + 4,
-            INSTANCE_VERTEX_BINDING_START + 5,
-            INSTANCE_VERTEX_BINDING_START + 6,
-            INSTANCE_VERTEX_BINDING_START + 7
-        ),
+        rotation_location: INSTANCE_VERTEX_BINDING_START,
+        translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
     })
 );
 

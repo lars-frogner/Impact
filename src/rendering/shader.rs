@@ -83,17 +83,15 @@ pub enum InstanceFeatureShaderInput {
     None,
 }
 
-/// Input description specifying the vertex attribute
-/// locations of the columns of the model view matrix to
-/// use for transforming the mesh in the shader.
+/// Input description specifying the vertex attribute locations of the
+/// components of the model view transform.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModelViewTransformShaderInput {
-    /// Vertex attribute locations for the four columns of
-    /// the model view matrix.
-    pub model_view_matrix_column_locations: (u32, u32, u32, u32),
-    /// Vertex attribute locations for the four columns of
-    /// the model view matrix for transforming normal vectors.
-    pub normal_model_view_matrix_column_locations: (u32, u32, u32, u32),
+    /// Vertex attribute location for the rotation quaternion.
+    pub rotation_location: u32,
+    /// Vertex attribute locations for the 4-element vector containing the
+    /// translation vector and the scaling factor.
+    pub translation_and_scaling_location: u32,
 }
 
 /// Input description for any kind of material that may
@@ -125,13 +123,13 @@ pub enum MaterialShaderGenerator<'a> {
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
 }
 
-/// Handles to expressions for accessing the model view matrix
-/// variable, and optionally the model view matrix for normals
-/// variable, in the main vertex shader function.
+/// Handles to expressions for accessing the rotational, translational and
+/// scaling components of the model view transform variable.
 #[derive(Clone, Debug)]
 pub struct ModelViewTransformExpressions {
-    model_view_matrix: Handle<Expression>,
-    normal_model_view_matrix: Option<Handle<Expression>>,
+    rotation_quaternion: Handle<Expression>,
+    translation_vector: Handle<Expression>,
+    scaling_factor: Handle<Expression>,
 }
 
 /// Handles to expressions for accessing the light uniform variables in the main
@@ -497,7 +495,6 @@ impl ShaderGenerator {
 
         let model_view_transform_expressions = Self::generate_vertex_code_for_model_view_transform(
             model_view_transform_shader_input,
-            vertex_attribute_requirements,
             &mut module,
             &mut vertex_function,
         );
@@ -667,70 +664,48 @@ impl ShaderGenerator {
         Ok((model_view_transform_shader_input, material_shader_builder))
     }
 
-    /// Generates the declaration of the model view transform type,
-    /// adds it as an argument to the main vertex shader function and
-    /// generates the code for constructing the matrix from its columns
-    /// in the body of the function. If the material requires normal
-    /// vectors, corresponding code for the model view transform for
-    /// normals will also be generated.
+    /// Generates the declaration of the model view transform type, adds it as
+    /// an argument to the main vertex shader function and generates expressions
+    /// for the rotational, translational and scaling components of the
+    /// transformation in the body of the function.
     ///
     /// # Returns
-    /// A [`ModelViewTransformExpressions`] with handles to expressions
-    /// for the generated matrix variables.
+    /// A [`ModelViewTransformExpressions`] with handles to expressions for the
+    /// components of the transformation.
     fn generate_vertex_code_for_model_view_transform(
         model_view_transform_shader_input: &ModelViewTransformShaderInput,
-        vertex_attribute_requirements: VertexAttributeSet,
         module: &mut Module,
         vertex_function: &mut Function,
     ) -> ModelViewTransformExpressions {
         let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
-        let mat4x4_type_handle = insert_in_arena(&mut module.types, MATRIX_4X4_TYPE);
-
-        let new_struct_field = |name: &'static str, location: u32, offset: u32| StructMember {
-            name: new_name(name),
-            ty: vec4_type_handle,
-            binding: Some(Binding::Location {
-                location,
-                interpolation: None,
-                sampling: None,
-            }),
-            offset,
-        };
-
-        let (loc_0, loc_1, loc_2, loc_3) =
-            model_view_transform_shader_input.model_view_matrix_column_locations;
-
-        let column_fields =
-            if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
-                let (loc_4, loc_5, loc_6, loc_7) =
-                    model_view_transform_shader_input.normal_model_view_matrix_column_locations;
-
-                vec![
-                    new_struct_field("col0", loc_0, 0),
-                    new_struct_field("col1", loc_1, VECTOR_4_SIZE),
-                    new_struct_field("col2", loc_2, 2 * VECTOR_4_SIZE),
-                    new_struct_field("col3", loc_3, 3 * VECTOR_4_SIZE),
-                    new_struct_field("col4", loc_4, 4 * VECTOR_4_SIZE),
-                    new_struct_field("col5", loc_5, 5 * VECTOR_4_SIZE),
-                    new_struct_field("col6", loc_6, 6 * VECTOR_4_SIZE),
-                    new_struct_field("col7", loc_7, 7 * VECTOR_4_SIZE),
-                ]
-            } else {
-                vec![
-                    new_struct_field("col0", loc_0, 0),
-                    new_struct_field("col1", loc_1, VECTOR_4_SIZE),
-                    new_struct_field("col2", loc_2, 2 * VECTOR_4_SIZE),
-                    new_struct_field("col3", loc_3, 3 * VECTOR_4_SIZE),
-                ]
-            };
-
-        let struct_size = VECTOR_4_SIZE * column_fields.len() as u32;
 
         let model_view_transform_type = Type {
             name: new_name("ModelViewTransform"),
             inner: TypeInner::Struct {
-                members: column_fields,
-                span: struct_size,
+                members: vec![
+                    StructMember {
+                        name: new_name("rotationQuaternion"),
+                        ty: vec4_type_handle,
+                        binding: Some(Binding::Location {
+                            location: model_view_transform_shader_input.rotation_location,
+                            interpolation: None,
+                            sampling: None,
+                        }),
+                        offset: 0,
+                    },
+                    StructMember {
+                        name: new_name("translationAndScaling"),
+                        ty: vec4_type_handle,
+                        binding: Some(Binding::Location {
+                            location: model_view_transform_shader_input
+                                .translation_and_scaling_location,
+                            interpolation: None,
+                            sampling: None,
+                        }),
+                        offset: VECTOR_4_SIZE,
+                    },
+                ],
+                span: 2 * VECTOR_4_SIZE,
             },
         };
 
@@ -744,73 +719,44 @@ impl ShaderGenerator {
             None,
         );
 
-        let mut define_matrix = |name: &str, start_field_idx: u32| {
-            // Create expression constructing a 4x4 matrix from the columns
-            // (each a field in the input struct)
-            let matrix_expr_handle = emit_in_func(vertex_function, |function| {
-                let compose_expr = Expression::Compose {
-                    ty: mat4x4_type_handle,
-                    components: (start_field_idx..(start_field_idx + 4))
-                        .into_iter()
-                        .map(|index| {
-                            include_expr_in_func(
-                                function,
-                                Expression::AccessIndex {
-                                    base: model_view_transform_arg_ptr_expr_handle,
-                                    index,
-                                },
-                            )
-                        })
-                        .collect(),
-                };
-                include_expr_in_func(function, compose_expr)
-            });
-
-            let matrix_var_ptr_expr_handle = append_to_arena(
-                &mut vertex_function.expressions,
-                Expression::LocalVariable(append_to_arena(
-                    &mut vertex_function.local_variables,
-                    LocalVariable {
-                        name: new_name(name),
-                        ty: mat4x4_type_handle,
-                        init: None,
-                    },
-                )),
-            );
-
-            push_to_block(
-                &mut vertex_function.body,
-                Statement::Store {
-                    pointer: matrix_var_ptr_expr_handle,
-                    value: matrix_expr_handle,
-                },
-            );
-
-            let matrix_var_expr_handle = emit_in_func(vertex_function, |function| {
-                include_named_expr_in_func(
+        let (rotation_quaternion_expr_handle, translation_expr_handle, scaling_expr_handle) =
+            emit_in_func(vertex_function, |function| {
+                let rotation_quaternion_expr_handle = include_expr_in_func(
                     function,
-                    name,
-                    Expression::Load {
-                        pointer: matrix_var_ptr_expr_handle,
+                    Expression::AccessIndex {
+                        base: model_view_transform_arg_ptr_expr_handle,
+                        index: 0,
                     },
+                );
+                let translation_and_scaling_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: model_view_transform_arg_ptr_expr_handle,
+                        index: 1,
+                    },
+                );
+                let translation_expr_handle = include_expr_in_func(
+                    function,
+                    swizzle_xyz_expr(translation_and_scaling_expr_handle),
+                );
+                let scaling_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: translation_and_scaling_expr_handle,
+                        index: 3,
+                    },
+                );
+                (
+                    rotation_quaternion_expr_handle,
+                    translation_expr_handle,
+                    scaling_expr_handle,
                 )
             });
 
-            matrix_var_expr_handle
-        };
-
-        let model_view_matrix_var_expr_handle = define_matrix("modelViewMatrix", 0);
-
-        let normal_model_view_matrix_var_expr_handle =
-            if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
-                Some(define_matrix("normalModelViewMatrix", 4))
-            } else {
-                None
-            };
-
         ModelViewTransformExpressions {
-            model_view_matrix: model_view_matrix_var_expr_handle,
-            normal_model_view_matrix: normal_model_view_matrix_var_expr_handle,
+            rotation_quaternion: rotation_quaternion_expr_handle,
+            translation_vector: translation_expr_handle,
+            scaling_factor: scaling_expr_handle,
         }
     }
 
@@ -872,8 +818,8 @@ impl ShaderGenerator {
     ///
     /// The output struct always includes the clip space position, and the
     /// expression computing this by transforming the vertex position with the
-    /// model view matrix and projection matrix is generated here. Other vertex
-    /// attributes are included in the output struct as required by the
+    /// model view and projection transformations is generated here. Other
+    /// vertex attributes are included in the output struct as required by the
     /// material. If the vertex position or normal vector is required, this is
     /// transformed to camera space before assigned to the output struct.
     ///
@@ -895,6 +841,29 @@ impl ShaderGenerator {
         model_view_transform_expressions: &ModelViewTransformExpressions,
         projection_matrix_var_expr_handle: Handle<Expression>,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
+        let function_handles = SourceCodeFunctions::from_wgsl_source(
+            "\
+            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
+                let tmp = 2.0 * cross(quaternion.xyz, vector);
+                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
+            }
+
+            fn transformPosition(
+                rotationQuaternion: vec4<f32>,
+                translation: vec3<f32>,
+                scaling: f32,
+                position: vec3<f32>
+            ) -> vec3<f32> {
+                return rotateVectorWithQuaternion(rotationQuaternion, scaling * position) + translation;
+            }
+        ",
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let rotation_function_handle = function_handles[0];
+        let transformation_function_handle = function_handles[1];
+
         let vec2_type_handle = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -948,76 +917,45 @@ impl ShaderGenerator {
                 None
             };
 
+        let position_expr_handle = SourceCodeFunctions::generate_call(
+            &mut vertex_function.body,
+            &mut vertex_function.expressions,
+            transformation_function_handle,
+            vec![
+                model_view_transform_expressions.rotation_quaternion,
+                model_view_transform_expressions.translation_vector,
+                model_view_transform_expressions.scaling_factor,
+                input_model_position_expr_handle,
+            ],
+        );
+
+        let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
+
         let unity_constant_expr = include_expr_in_func(
             vertex_function,
-            Expression::Constant(append_to_arena(
+            Expression::Constant(define_constant_if_missing(
                 &mut module.constants,
                 float32_constant(1.0),
             )),
         );
 
-        // Create expression converting the xyz vertex position to an
-        // xyzw homogeneous coordinate (with w = 1.0) and transforming
-        // it to camera space with the model view matrix
-        let position_expr_handle = emit_in_func(vertex_function, |function| {
-            let compose_expr = Expression::Compose {
-                ty: vec4_type_handle,
-                components: vec![input_model_position_expr_handle, unity_constant_expr],
-            };
-            let homogeneous_position_expr_handle = include_expr_in_func(function, compose_expr);
-
-            include_expr_in_func(
-                function,
-                Expression::Binary {
-                    op: BinaryOperator::Multiply,
-                    left: model_view_transform_expressions.model_view_matrix,
-                    right: homogeneous_position_expr_handle,
-                },
-            )
-        });
-
-        let position_var_ptr_expr_handle = append_to_arena(
-            &mut vertex_function.expressions,
-            Expression::LocalVariable(append_to_arena(
-                &mut vertex_function.local_variables,
-                LocalVariable {
-                    name: new_name("cameraSpacePosition"),
-                    ty: vec4_type_handle,
-                    init: None,
-                },
-            )),
-        );
-
-        push_to_block(
-            &mut vertex_function.body,
-            Statement::Store {
-                pointer: position_var_ptr_expr_handle,
-                value: position_expr_handle,
-            },
-        );
-
-        let position_var_expr_handle = emit_in_func(vertex_function, |function| {
-            include_named_expr_in_func(
-                function,
-                "cameraSpacePosition",
-                Expression::Load {
-                    pointer: position_var_ptr_expr_handle,
-                },
-            )
-        });
-
-        let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
-
         // Create expression multiplying the camera space homogeneous
         // vertex position with the projection matrix, yielding the
         // clip space position
         let clip_position_expr_handle = emit_in_func(vertex_function, |function| {
+            let homogeneous_position_expr_handle = include_expr_in_func(
+                function,
+                Expression::Compose {
+                    ty: vec4_type_handle,
+                    components: vec![position_expr_handle, unity_constant_expr],
+                },
+            );
             include_expr_in_func(
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
                     left: projection_matrix_var_expr_handle,
-                    right: position_var_expr_handle,
+                    right: homogeneous_position_expr_handle,
                 },
             )
         });
@@ -1037,15 +975,12 @@ impl ShaderGenerator {
         };
 
         if requirements.contains(VertexAttributeSet::POSITION) {
-            let output_position_expr_handle = emit_in_func(vertex_function, |function| {
-                include_expr_in_func(function, swizzle_xyz_expr(position_var_expr_handle))
-            });
             output_field_indices.position = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "position",
                     vec3_type_handle,
                     VECTOR_3_SIZE,
-                    output_position_expr_handle,
+                    position_expr_handle,
                 ),
             );
         }
@@ -1062,50 +997,24 @@ impl ShaderGenerator {
         }
 
         if let Some(input_model_normal_vector_expr_handle) = input_model_normal_vector_expr_handle {
-            let zero_constant_expr = append_to_arena(
+            let normal_vector_expr_handle = SourceCodeFunctions::generate_call(
+                &mut vertex_function.body,
                 &mut vertex_function.expressions,
-                Expression::Constant(append_to_arena(
-                    &mut module.constants,
-                    float32_constant(0.0),
-                )),
+                rotation_function_handle,
+                vec![
+                    model_view_transform_expressions.rotation_quaternion,
+                    input_model_normal_vector_expr_handle,
+                ],
             );
 
-            // Create expression converting the xyz normal vector to an xyzw
-            // homogeneous vector (with w = 0.0) and transforming it to camera
-            // space with the inverse transpose of the model view matrix
-            emit_in_func(vertex_function, |function| {
-                let compose_expr = Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![input_model_normal_vector_expr_handle, zero_constant_expr],
-                };
-                let homogeneous_model_space_normal_vector_expr_handle =
-                    include_expr_in_func(function, compose_expr);
-
-                let homogeneous_normal_vector_expr_handle = include_expr_in_func(
-                    function,
-                    Expression::Binary {
-                        op: BinaryOperator::Multiply,
-                        left: model_view_transform_expressions
-                            .normal_model_view_matrix
-                            .expect("Missing normal model view transform"),
-                        right: homogeneous_model_space_normal_vector_expr_handle,
-                    },
-                );
-
-                let normal_vector_expr_handle = include_expr_in_func(
-                    function,
-                    swizzle_xyz_expr(homogeneous_normal_vector_expr_handle),
-                );
-
-                output_field_indices.normal_vector = Some(
-                    output_struct_builder.add_field_with_perspective_interpolation(
-                        "normalVector",
-                        vec3_type_handle,
-                        VECTOR_3_SIZE,
-                        normal_vector_expr_handle,
-                    ),
-                );
-            });
+            output_field_indices.normal_vector = Some(
+                output_struct_builder.add_field_with_perspective_interpolation(
+                    "normalVector",
+                    vec3_type_handle,
+                    VECTOR_3_SIZE,
+                    normal_vector_expr_handle,
+                ),
+            );
         }
 
         if let Some(input_texture_coord_expr_handle) = input_texture_coord_expr_handle {
@@ -1189,7 +1098,7 @@ impl ShaderGenerator {
             },
         );
 
-        let max_point_light_count_constant_handle = append_to_arena(
+        let max_point_light_count_constant_handle = define_constant_if_missing(
             &mut module.constants,
             u32_constant(light_shader_input.max_point_light_count),
         );
@@ -2854,18 +2763,8 @@ mod test {
 
     const MODEL_VIEW_TRANSFORM_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-            model_view_matrix_column_locations: (
-                INSTANCE_VERTEX_BINDING_START,
-                INSTANCE_VERTEX_BINDING_START + 1,
-                INSTANCE_VERTEX_BINDING_START + 2,
-                INSTANCE_VERTEX_BINDING_START + 3,
-            ),
-            normal_model_view_matrix_column_locations: (
-                INSTANCE_VERTEX_BINDING_START + 4,
-                INSTANCE_VERTEX_BINDING_START + 5,
-                INSTANCE_VERTEX_BINDING_START + 6,
-                INSTANCE_VERTEX_BINDING_START + 7,
-            ),
+            rotation_location: INSTANCE_VERTEX_BINDING_START,
+            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {
@@ -2943,49 +2842,8 @@ mod test {
     fn parse() {
         match wgsl_in::parse_str(
             "
-            struct VertexProperties {
-                @location(0) position:       vec3<f32>,
-                @location(1) texture_coords: vec2<f32>,
-            }
-            
-            struct VertexOutput {
-                @builtin(position) clip_position:  vec4<f32>,
-                @location(0)       position:       vec3<f32>,
-                @location(1)       texture_coords: vec2<f32>,
-            }
-
-            struct CameraUniform {
-                view_proj: mat4x4<f32>,
-            }
-
-            struct PointLight {
-                position: vec3<f32>,
-                radiance: vec3<f32>,
-            }
-
-            struct PointLights {
-                numLights: u32,
-                lights: array<PointLight, 10>
-            }
-
-            @group(2) @binding(0)
-            var<uniform> pointLights: PointLights;
-
-            @group(0) @binding(0)
-            var<uniform> camera: CameraUniform;
-            
-            @vertex
-            fn main(vertex: VertexProperties) -> VertexOutput {
-                var color: vec3<f32>;
-                var out: VertexOutput;
-
-                color = vertex.position.xyz;
-                color += vertex.position.xyz;
-
-                out.clip_position = camera.view_proj * vec4<f32>(vertex.position, 1.0);
-                out.position = vertex.position.xyz;
-                out.texture_coords = vertex.texture_coords;
-                return out;
+            fn main(vector: vec4<f32>) -> f32 {
+                return vector.w;
             }
             ",
         ) {
