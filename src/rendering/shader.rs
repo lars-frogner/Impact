@@ -1914,7 +1914,7 @@ impl ForLoop {
     ) -> Self {
         let u32_type_handle = insert_in_arena(types, U32_TYPE);
 
-        let zero_constant_handle = append_to_arena(constants, u32_constant(0));
+        let zero_constant_handle = define_constant_if_missing(constants, u32_constant(0));
 
         let idx_ptr_expr_handle = append_to_arena(
             &mut function.expressions,
@@ -1943,7 +1943,7 @@ impl ForLoop {
 
         let unity_constant_expr_handle = append_to_arena(
             &mut function.expressions,
-            Expression::Constant(append_to_arena(constants, u32_constant(1))),
+            Expression::Constant(define_constant_if_missing(constants, u32_constant(1))),
         );
 
         let incremented_idx_expr = emit(
@@ -2170,7 +2170,8 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                 },
             };
 
-            let new_h = append_to_arena(&mut self.exported_to_module.constants, new_const);
+            let new_h =
+                define_constant_if_missing(&mut self.exported_to_module.constants, new_const);
             self.const_map.insert(h_const, new_h);
             new_h
         })
@@ -2759,6 +2760,18 @@ fn append_to_arena<T>(arena: &mut Arena<T>, value: T) -> Handle<T> {
 /// of statements.
 fn push_to_block(block: &mut Block, statement: Statement) {
     block.push(statement, Span::UNDEFINED);
+}
+
+/// Appends the given constant to the given constant [`Arena`] if it does not
+/// already exist.
+///
+/// # Returns
+/// A handle to the appended or existing constant.
+fn define_constant_if_missing(
+    constants: &mut Arena<Constant>,
+    constant: Constant,
+) -> Handle<Constant> {
+    constants.fetch_or_append(constant, Span::UNDEFINED)
 }
 
 /// Executes the given closure that adds [`Expression`]s to
