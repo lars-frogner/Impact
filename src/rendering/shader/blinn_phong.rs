@@ -1,14 +1,13 @@
 //! Generation of shaders for Blinn-Phong materials.
 
 use super::{
-    append_to_arena, emit, emit_in_func, float32_constant, include_expr_in_func, insert_in_arena,
-    new_name, push_to_block, ForLoop, InputStruct, InputStructBuilder, LightExpressions,
+    append_to_arena, emit, emit_in_func, include_expr_in_func, insert_in_arena, new_name,
+    push_to_block, ForLoop, InputStruct, InputStructBuilder, LightExpressions,
     MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, SourceCodeFunctions,
     F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{
     BinaryOperator, Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement,
-    UnaryOperator,
 };
 
 /// Input description specifying the vertex attribute locations
@@ -235,6 +234,59 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
         light_expressions: Option<&LightExpressions>,
     ) {
+        let function_handles = SourceCodeFunctions::from_wgsl_source(
+            "\
+            fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
+                return normalize(-vertexPosition);
+            }
+
+            fn computeBlinnPhongColor(
+                viewDirection: vec3<f32>,
+                normalVector: vec3<f32>,
+                diffuseColor: vec3<f32>,
+                specularColor: vec3<f32>,
+                shininess: f32,
+                lightDirection: vec3<f32>,
+                lightRadiance: vec3<f32>
+            ) -> vec3<f32> {
+                let halfVector = normalize((lightDirection + viewDirection));
+                let diffuseFactor = max(0.0, dot(lightDirection, normalVector));
+                let specularFactor = pow(max(0.0, dot(halfVector, normalVector)), shininess);
+                return lightRadiance * (diffuseFactor * diffuseColor + specularFactor * specularColor);
+            }
+            
+            fn computeBlinnPhongColorForPointLight(
+                viewDirection: vec3<f32>,
+                normalVector: vec3<f32>,
+                vertexPosition: vec3<f32>,
+                diffuseColor: vec3<f32>,
+                specularColor: vec3<f32>,
+                shininess: f32,
+                lightPosition: vec3<f32>,
+                lightRadiance: vec3<f32>
+            ) -> vec3<f32> {
+                 let lightDisplacement = lightPosition - vertexPosition;
+                 let inverseSquaredLightDistance = 1.0 / dot(lightDisplacement, lightDisplacement);
+                 let lightDirection = lightDisplacement * sqrt(inverseSquaredLightDistance);
+                 let attenuatedLightRadiance = lightRadiance * inverseSquaredLightDistance;
+                 return computeBlinnPhongColor(
+                    viewDirection,
+                    normalVector,
+                    diffuseColor,
+                    specularColor,
+                    shininess,
+                    lightDirection,
+                    attenuatedLightRadiance
+                );
+            }
+        ",
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let view_direction_function_handle = function_handles[0];
+        let point_light_color_function_handle = function_handles[2];
+
         let light_expressions = light_expressions.expect("Missing lights for Blinn-Phong shading");
 
         let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
@@ -317,25 +369,12 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             },
         );
 
-        let view_dir_expr_handle = emit_in_func(fragment_function, |function| {
-            let neg_position_expr_handle = include_expr_in_func(
-                function,
-                Expression::Unary {
-                    op: UnaryOperator::Negate,
-                    expr: position_expr_handle,
-                },
-            );
-            include_expr_in_func(
-                function,
-                Expression::Math {
-                    fun: MathFunction::Normalize,
-                    arg: neg_position_expr_handle,
-                    arg1: None,
-                    arg2: None,
-                    arg3: None,
-                },
-            )
-        });
+        let view_dir_expr_handle = SourceCodeFunctions::generate_call(
+            &mut fragment_function.body,
+            &mut fragment_function.expressions,
+            view_direction_function_handle,
+            vec![position_expr_handle],
+        );
 
         let point_light_count_expr_handle =
             light_expressions.generate_point_light_count_expr(fragment_function);
@@ -355,92 +394,19 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 point_light_loop.idx_expr_handle,
             );
 
-        let unity_constant_expr = append_to_arena(
-            &mut fragment_function.expressions,
-            Expression::Constant(append_to_arena(
-                &mut module.constants,
-                float32_constant(1.0),
-            )),
-        );
-
-        let (light_dir_expr_handle, attenuated_light_radiance_expr_handle) = emit(
+        let returned_point_light_color_expr_handle = SourceCodeFunctions::generate_call(
             &mut point_light_loop.body,
             &mut fragment_function.expressions,
-            |expressions| {
-                let light_vector_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Subtract,
-                        left: light_position_expr_handle,
-                        right: position_expr_handle,
-                    },
-                );
-                let squared_light_dist_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Dot,
-                        arg: light_vector_expr_handle,
-                        arg1: Some(light_vector_expr_handle),
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                let one_over_squared_light_dist_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Divide,
-                        left: unity_constant_expr,
-                        right: squared_light_dist_expr_handle,
-                    },
-                );
-                let one_over_light_dist_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Math {
-                        fun: MathFunction::Sqrt,
-                        arg: one_over_squared_light_dist_expr_handle,
-                        arg1: None,
-                        arg2: None,
-                        arg3: None,
-                    },
-                );
-                let light_dir_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Multiply,
-                        left: light_vector_expr_handle,
-                        right: one_over_light_dist_expr_handle,
-                    },
-                );
-                let attenuated_light_radiance_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Multiply,
-                        left: light_radiance_expr_handle,
-                        right: one_over_squared_light_dist_expr_handle,
-                    },
-                );
-                (light_dir_expr_handle, attenuated_light_radiance_expr_handle)
-            },
-        );
-
-        let reflection_model_function_handle = SourceCodeFunctions::from_wgsl_source("\
-            fn computeBlinnPhongColor(viewDir: vec3<f32>, normalVector: vec3<f32>, diffuseColor: vec3<f32>, specularColor: vec3<f32>, shininess: f32, lightDir: vec3<f32>, lightRadiance: vec3<f32>) -> vec3<f32> {
-                return (lightRadiance * ((diffuseColor * max(0.0, dot(lightDir, normalVector))) + (specularColor * pow(max(0.0, dot(normalize((lightDir + viewDir)), normalVector)), shininess))));
-            }
-        ").unwrap().import_to_module(module)[0];
-
-        let returned_reflection_model_color_expr_handle = SourceCodeFunctions::generate_call(
-            &mut point_light_loop.body,
-            &mut fragment_function.expressions,
-            reflection_model_function_handle,
+            point_light_color_function_handle,
             vec![
                 view_dir_expr_handle,
                 normal_vector_expr_handle,
+                position_expr_handle,
                 diffuse_color_expr_handle,
                 specular_color_expr_handle,
                 shininess_expr_handle,
-                light_dir_expr_handle,
-                attenuated_light_radiance_expr_handle,
+                light_position_expr_handle,
+                light_radiance_expr_handle,
             ],
         );
 
@@ -459,7 +425,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     Expression::Binary {
                         op: BinaryOperator::Add,
                         left: color_expr_handle,
-                        right: returned_reflection_model_color_expr_handle,
+                        right: returned_point_light_color_expr_handle,
                     },
                 )
             },
