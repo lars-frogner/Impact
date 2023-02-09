@@ -19,11 +19,12 @@ use fixed::{
 use naga::{
     AddressSpace, Arena, ArraySize, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant,
     ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
-    GlobalVariable, Handle, ImageClass, ImageDimension, Interpolation, LocalVariable, Module,
-    ResourceBinding, SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Span, Statement,
-    StructMember, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
+    GlobalVariable, Handle, ImageClass, ImageDimension, ImageQuery, Interpolation, LocalVariable,
+    Module, ResourceBinding, SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Span,
+    Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UniqueArena,
+    VectorSize,
 };
-use std::{borrow::Cow, hash::Hash, mem, vec};
+use std::{borrow::Cow, collections::HashMap, hash::Hash, mem, vec};
 use vertex_color::VertexColorShaderGenerator;
 
 pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
@@ -214,6 +215,26 @@ pub struct ForLoop {
     break_if: Option<Handle<Expression>>,
     n_iterations_expr_handle: Handle<Expression>,
     zero_constant_handle: Handle<Constant>,
+}
+
+/// Helper for importing functions from one module to another.
+///
+/// This is an adaptation of the `DerivedModule` type in v0.5.0 of the
+/// `naga_oil` library by robtfm: <https://github.com/robtfm/naga_oil>.
+#[derive(Debug)]
+pub struct ModuleImporter<'a, 'b> {
+    imported_from_module: &'a Module,
+    exported_to_module: &'b mut Module,
+    type_map: HashMap<Handle<Type>, Handle<Type>>,
+    const_map: HashMap<Handle<Constant>, Handle<Constant>>,
+    global_map: HashMap<Handle<GlobalVariable>, Handle<GlobalVariable>>,
+    function_map: HashMap<String, Handle<Function>>,
+}
+
+/// A set of shader functions defined in source code that can be imported into
+/// an existing [`Module`].
+pub struct SourceCodeFunctions {
+    module: Module,
 }
 
 const U32_WIDTH: u32 = mem::size_of::<u32>() as u32;
@@ -2015,6 +2036,617 @@ impl ForLoop {
                 reject: Block::new(),
             },
         );
+    }
+}
+
+impl<'a, 'b> ModuleImporter<'a, 'b> {
+    /// Creates a new importer for importing functions from
+    /// `imported_from_module` to `exported_to_module`.
+    pub fn new(imported_from_module: &'a Module, exported_to_module: &'b mut Module) -> Self {
+        Self {
+            imported_from_module,
+            exported_to_module,
+            type_map: HashMap::new(),
+            const_map: HashMap::new(),
+            global_map: HashMap::new(),
+            function_map: HashMap::new(),
+        }
+    }
+
+    /// Imports the function with the given handle from the source to the
+    /// destination module.
+    ///
+    /// # Errors
+    /// Returns an error if no function with the given handle exists.
+    pub fn import_function(
+        &mut self,
+        function_handle: Handle<Function>,
+    ) -> Result<Handle<Function>> {
+        let func = self
+            .imported_from_module
+            .functions
+            .try_get(function_handle)?;
+        let name = func.name.as_ref().unwrap().clone();
+
+        let mapped_func = self.localize_function(func);
+
+        let new_h = append_to_arena(&mut self.exported_to_module.functions, mapped_func);
+        self.function_map.insert(name, new_h);
+
+        Ok(new_h)
+    }
+
+    fn import_type(&mut self, h_type: Handle<Type>) -> Handle<Type> {
+        self.type_map.get(&h_type).copied().unwrap_or_else(|| {
+            let ty = self
+                .imported_from_module
+                .types
+                .get_handle(h_type)
+                .unwrap()
+                .clone();
+
+            let name = ty.name.clone();
+
+            let new_type = Type {
+                name,
+                inner: match &ty.inner {
+                    TypeInner::Scalar { .. }
+                    | TypeInner::Vector { .. }
+                    | TypeInner::Matrix { .. }
+                    | TypeInner::ValuePointer { .. }
+                    | TypeInner::Image { .. }
+                    | TypeInner::Sampler { .. }
+                    | TypeInner::Atomic { .. } => ty.clone().inner,
+
+                    TypeInner::Pointer { base, space } => TypeInner::Pointer {
+                        base: self.import_type(*base),
+                        space: *space,
+                    },
+                    TypeInner::Struct { members, span } => {
+                        let members = members
+                            .iter()
+                            .map(|m| StructMember {
+                                name: m.name.clone(),
+                                ty: self.import_type(m.ty),
+                                binding: m.binding.clone(),
+                                offset: m.offset,
+                            })
+                            .collect();
+                        TypeInner::Struct {
+                            members,
+                            span: *span,
+                        }
+                    }
+                    TypeInner::Array { base, size, stride } => {
+                        let size = match size {
+                            ArraySize::Constant(c) => ArraySize::Constant(self.import_const(*c)),
+                            ArraySize::Dynamic => ArraySize::Dynamic,
+                        };
+                        TypeInner::Array {
+                            base: self.import_type(*base),
+                            size,
+                            stride: *stride,
+                        }
+                    }
+                    TypeInner::BindingArray { base, size } => {
+                        let size = match size {
+                            ArraySize::Constant(c) => ArraySize::Constant(self.import_const(*c)),
+                            ArraySize::Dynamic => ArraySize::Dynamic,
+                        };
+                        TypeInner::BindingArray {
+                            base: self.import_type(*base),
+                            size,
+                        }
+                    }
+                },
+            };
+            let new_h = insert_in_arena(&mut self.exported_to_module.types, new_type);
+            self.type_map.insert(h_type, new_h);
+            new_h
+        })
+    }
+
+    fn import_const(&mut self, h_const: Handle<Constant>) -> Handle<Constant> {
+        self.const_map.get(&h_const).copied().unwrap_or_else(|| {
+            let c = self
+                .imported_from_module
+                .constants
+                .try_get(h_const)
+                .unwrap()
+                .clone();
+
+            let new_const = Constant {
+                name: c.name.clone(),
+                specialization: c.specialization,
+                inner: match &c.inner {
+                    ConstantInner::Scalar { .. } => c.inner.clone(),
+                    ConstantInner::Composite { ty, components } => {
+                        let components = components.iter().map(|c| self.import_const(*c)).collect();
+                        ConstantInner::Composite {
+                            ty: self.import_type(*ty),
+                            components,
+                        }
+                    }
+                },
+            };
+
+            let new_h = append_to_arena(&mut self.exported_to_module.constants, new_const);
+            self.const_map.insert(h_const, new_h);
+            new_h
+        })
+    }
+
+    fn import_global(&mut self, h_global: Handle<GlobalVariable>) -> Handle<GlobalVariable> {
+        self.global_map.get(&h_global).copied().unwrap_or_else(|| {
+            let gv = self
+                .imported_from_module
+                .global_variables
+                .try_get(h_global)
+                .unwrap()
+                .clone();
+
+            let new_global = GlobalVariable {
+                name: gv.name.clone(),
+                space: gv.space,
+                binding: gv.binding.clone(),
+                ty: self.import_type(gv.ty),
+                init: gv.init.map(|c| self.import_const(c)),
+            };
+
+            let new_h = append_to_arena(&mut self.exported_to_module.global_variables, new_global);
+            self.global_map.insert(h_global, new_h);
+            new_h
+        })
+    }
+
+    fn import_block(
+        &mut self,
+        block: &Block,
+        old_expressions: &Arena<Expression>,
+        already_imported: &mut HashMap<Handle<Expression>, Handle<Expression>>,
+        new_expressions: &mut Arena<Expression>,
+    ) -> Block {
+        macro_rules! map_expr {
+            ($e:expr) => {
+                self.import_expression(
+                    *$e,
+                    old_expressions,
+                    already_imported,
+                    new_expressions,
+                    false,
+                )
+            };
+        }
+
+        macro_rules! map_expr_opt {
+            ($e:expr) => {
+                $e.as_ref().map(|expr| map_expr!(expr))
+            };
+        }
+
+        macro_rules! map_block {
+            ($b:expr) => {
+                self.import_block($b, old_expressions, already_imported, new_expressions)
+            };
+        }
+
+        let statements = block
+            .iter()
+            .map(|stmt| {
+                match stmt {
+                    // Remap function calls
+                    Statement::Call {
+                        function,
+                        arguments,
+                        result,
+                    } => Statement::Call {
+                        function: self.map_function_handle(*function),
+                        arguments: arguments.iter().map(|expr| map_expr!(expr)).collect(),
+                        result: result.as_ref().map(|result| map_expr!(result)),
+                    },
+
+                    // Recursively
+                    Statement::Block(b) => Statement::Block(map_block!(b)),
+                    Statement::If {
+                        condition,
+                        accept,
+                        reject,
+                    } => Statement::If {
+                        condition: map_expr!(condition),
+                        accept: map_block!(accept),
+                        reject: map_block!(reject),
+                    },
+                    Statement::Switch { selector, cases } => Statement::Switch {
+                        selector: map_expr!(selector),
+                        cases: cases
+                            .iter()
+                            .map(|case| SwitchCase {
+                                value: case.value.clone(),
+                                body: map_block!(&case.body),
+                                fall_through: case.fall_through,
+                            })
+                            .collect(),
+                    },
+                    Statement::Loop {
+                        body,
+                        continuing,
+                        break_if,
+                    } => Statement::Loop {
+                        body: map_block!(body),
+                        continuing: map_block!(continuing),
+                        break_if: map_expr_opt!(break_if),
+                    },
+
+                    // Map expressions
+                    Statement::Emit(exprs) => {
+                        // Iterate once to add expressions that should NOT be part of the emit statement
+                        for expr in exprs.clone() {
+                            self.import_expression(
+                                expr,
+                                old_expressions,
+                                already_imported,
+                                new_expressions,
+                                true,
+                            );
+                        }
+                        let old_length = new_expressions.len();
+                        // Iterate again to add expressions that should be part of the emit statement
+                        for expr in exprs.clone() {
+                            map_expr!(&expr);
+                        }
+
+                        Statement::Emit(new_expressions.range_from(old_length))
+                    }
+                    Statement::Store { pointer, value } => Statement::Store {
+                        pointer: map_expr!(pointer),
+                        value: map_expr!(value),
+                    },
+                    Statement::ImageStore {
+                        image,
+                        coordinate,
+                        array_index,
+                        value,
+                    } => Statement::ImageStore {
+                        image: map_expr!(image),
+                        coordinate: map_expr!(coordinate),
+                        array_index: map_expr_opt!(array_index),
+                        value: map_expr!(value),
+                    },
+                    Statement::Atomic {
+                        pointer,
+                        fun,
+                        value,
+                        result,
+                    } => Statement::Atomic {
+                        pointer: map_expr!(pointer),
+                        fun: *fun,
+                        value: map_expr!(value),
+                        result: map_expr!(result),
+                    },
+                    Statement::Return { value } => Statement::Return {
+                        value: map_expr_opt!(value),
+                    },
+
+                    // Else just copy
+                    Statement::Break
+                    | Statement::Continue
+                    | Statement::Kill
+                    | Statement::Barrier(_) => stmt.clone(),
+                }
+            })
+            .collect();
+
+        Block::from_vec(statements)
+    }
+
+    fn import_expression(
+        &mut self,
+        h_expr: Handle<Expression>,
+        old_expressions: &Arena<Expression>,
+        already_imported: &mut HashMap<Handle<Expression>, Handle<Expression>>,
+        new_expressions: &mut Arena<Expression>,
+        non_emitting_only: bool, // Only brings items that should NOT be emitted into scope
+    ) -> Handle<Expression> {
+        if let Some(h_new) = already_imported.get(&h_expr) {
+            return *h_new;
+        }
+
+        macro_rules! map_expr {
+            ($e:expr) => {
+                self.import_expression(
+                    *$e,
+                    old_expressions,
+                    already_imported,
+                    new_expressions,
+                    non_emitting_only,
+                )
+            };
+        }
+
+        macro_rules! map_expr_opt {
+            ($e:expr) => {
+                $e.as_ref().map(|expr| {
+                    self.import_expression(
+                        *expr,
+                        old_expressions,
+                        already_imported,
+                        new_expressions,
+                        non_emitting_only,
+                    )
+                })
+            };
+        }
+
+        let mut is_external = false;
+        let expr = old_expressions.try_get(h_expr).unwrap();
+        let expr = match expr {
+            Expression::CallResult(f) => Expression::CallResult(self.map_function_handle(*f)),
+            Expression::Constant(c) => {
+                is_external = true;
+                Expression::Constant(self.import_const(*c))
+            }
+            Expression::Compose { ty, components } => Expression::Compose {
+                ty: self.import_type(*ty),
+                components: components.iter().map(|expr| map_expr!(expr)).collect(),
+            },
+            Expression::GlobalVariable(gv) => {
+                is_external = true;
+                Expression::GlobalVariable(self.import_global(*gv))
+            }
+            Expression::ImageSample {
+                image,
+                sampler,
+                gather,
+                coordinate,
+                array_index,
+                offset,
+                level,
+                depth_ref,
+            } => Expression::ImageSample {
+                image: map_expr!(image),
+                sampler: map_expr!(sampler),
+                gather: *gather,
+                coordinate: map_expr!(coordinate),
+                array_index: map_expr_opt!(array_index),
+                offset: offset.map(|c| self.import_const(c)),
+                level: match level {
+                    SampleLevel::Auto | SampleLevel::Zero => *level,
+                    SampleLevel::Exact(expr) => SampleLevel::Exact(map_expr!(expr)),
+                    SampleLevel::Bias(expr) => SampleLevel::Bias(map_expr!(expr)),
+                    SampleLevel::Gradient { x, y } => SampleLevel::Gradient {
+                        x: map_expr!(x),
+                        y: map_expr!(y),
+                    },
+                },
+                depth_ref: map_expr_opt!(depth_ref),
+            },
+            Expression::Access { base, index } => Expression::Access {
+                base: map_expr!(base),
+                index: map_expr!(index),
+            },
+            Expression::AccessIndex { base, index } => Expression::AccessIndex {
+                base: map_expr!(base),
+                index: *index,
+            },
+            Expression::Splat { size, value } => Expression::Splat {
+                size: *size,
+                value: map_expr!(value),
+            },
+            Expression::Swizzle {
+                size,
+                vector,
+                pattern,
+            } => Expression::Swizzle {
+                size: *size,
+                vector: map_expr!(vector),
+                pattern: *pattern,
+            },
+            Expression::Load { pointer } => Expression::Load {
+                pointer: map_expr!(pointer),
+            },
+            Expression::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                sample,
+                level,
+            } => Expression::ImageLoad {
+                image: map_expr!(image),
+                coordinate: map_expr!(coordinate),
+                array_index: map_expr_opt!(array_index),
+                sample: map_expr_opt!(sample),
+                level: map_expr_opt!(level),
+            },
+            Expression::ImageQuery { image, query } => Expression::ImageQuery {
+                image: map_expr!(image),
+                query: match query {
+                    ImageQuery::Size { level } => ImageQuery::Size {
+                        level: map_expr_opt!(level),
+                    },
+                    _ => *query,
+                },
+            },
+            Expression::Unary { op, expr } => Expression::Unary {
+                op: *op,
+                expr: map_expr!(expr),
+            },
+            Expression::Binary { op, left, right } => Expression::Binary {
+                op: *op,
+                left: map_expr!(left),
+                right: map_expr!(right),
+            },
+            Expression::Select {
+                condition,
+                accept,
+                reject,
+            } => Expression::Select {
+                condition: map_expr!(condition),
+                accept: map_expr!(accept),
+                reject: map_expr!(reject),
+            },
+            Expression::Derivative { axis, expr } => Expression::Derivative {
+                axis: *axis,
+                expr: map_expr!(expr),
+            },
+            Expression::Relational { fun, argument } => Expression::Relational {
+                fun: *fun,
+                argument: map_expr!(argument),
+            },
+            Expression::Math {
+                fun,
+                arg,
+                arg1,
+                arg2,
+                arg3,
+            } => Expression::Math {
+                fun: *fun,
+                arg: map_expr!(arg),
+                arg1: map_expr_opt!(arg1),
+                arg2: map_expr_opt!(arg2),
+                arg3: map_expr_opt!(arg3),
+            },
+            Expression::As {
+                expr,
+                kind,
+                convert,
+            } => Expression::As {
+                expr: map_expr!(expr),
+                kind: *kind,
+                convert: *convert,
+            },
+            Expression::ArrayLength(expr) => Expression::ArrayLength(map_expr!(expr)),
+
+            Expression::LocalVariable(_) | Expression::FunctionArgument(_) => {
+                is_external = true;
+                expr.clone()
+            }
+
+            Expression::AtomicResult { .. } => expr.clone(),
+        };
+
+        if !non_emitting_only || is_external {
+            let h_new = append_to_arena(new_expressions, expr);
+
+            already_imported.insert(h_expr, h_new);
+            h_new
+        } else {
+            h_expr
+        }
+    }
+
+    fn localize_function(&mut self, func: &Function) -> Function {
+        let arguments = func
+            .arguments
+            .iter()
+            .map(|arg| FunctionArgument {
+                name: arg.name.clone(),
+                ty: self.import_type(arg.ty),
+                binding: arg.binding.clone(),
+            })
+            .collect();
+
+        let result = func.result.as_ref().map(|r| FunctionResult {
+            ty: self.import_type(r.ty),
+            binding: r.binding.clone(),
+        });
+
+        let mut local_variables = Arena::new();
+        for (h_l, l) in func.local_variables.iter() {
+            let new_local = LocalVariable {
+                name: l.name.clone(),
+                ty: self.import_type(l.ty),
+                init: l.init.map(|c| self.import_const(c)),
+            };
+            let new_h = append_to_arena(&mut local_variables, new_local);
+            assert_eq!(h_l, new_h);
+        }
+
+        let mut expressions = Arena::new();
+        let mut expr_map = HashMap::new();
+
+        let body = self.import_block(
+            &func.body,
+            &func.expressions,
+            &mut expr_map,
+            &mut expressions,
+        );
+
+        let named_expressions = func
+            .named_expressions
+            .iter()
+            .filter_map(|(h_expr, name)| expr_map.get(h_expr).map(|new_h| (*new_h, name.clone())))
+            .collect();
+
+        Function {
+            name: func.name.clone(),
+            arguments,
+            result,
+            local_variables,
+            expressions,
+            named_expressions,
+            body,
+        }
+    }
+
+    fn map_function_handle(&mut self, h_func: Handle<Function>) -> Handle<Function> {
+        let func = self.imported_from_module.functions.try_get(h_func).unwrap();
+        let name = func.name.as_ref().unwrap();
+        self.function_map
+            .get(name)
+            .copied()
+            .unwrap_or_else(|| self.import_function(h_func).unwrap())
+    }
+}
+
+impl SourceCodeFunctions {
+    /// Parses the given WGSL source code into a new set of
+    /// [`SourceCodeFunctions`].
+    ///
+    /// # Errors
+    /// Returns an error if the string contains invalid source code.
+    pub fn from_wgsl_source(source: &str) -> Result<Self> {
+        let module = naga::front::wgsl::parse_str(source)?;
+        Ok(Self { module })
+    }
+
+    /// Imports the functions into the given module.
+    ///
+    /// # Returns
+    /// The handles to the imported functions.
+    pub fn import_to_module(&self, module: &mut Module) -> Vec<Handle<Function>> {
+        let mut importer = ModuleImporter::new(&self.module, module);
+
+        let mut function_handles = Vec::with_capacity(self.module.functions.len());
+        for (function_handle, _) in self.module.functions.iter() {
+            function_handles.push(importer.import_function(function_handle).unwrap());
+        }
+        function_handles
+    }
+
+    /// Generates the code calling a function with the given handle with the
+    /// given argument expressions.
+    ///
+    /// # Returns
+    /// The return value expression.
+    pub fn generate_call(
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        function_handle: Handle<Function>,
+        arguments: Vec<Handle<Expression>>,
+    ) -> Handle<Expression> {
+        let return_expr_handle =
+            append_to_arena(expressions, Expression::CallResult(function_handle));
+
+        push_to_block(
+            block,
+            Statement::Call {
+                function: function_handle,
+                arguments,
+                result: Some(return_expr_handle),
+            },
+        );
+
+        return_expr_handle
     }
 }
 
