@@ -469,8 +469,7 @@ impl ShaderGenerator {
 
         let projection_matrix_var_expr_handle = Self::generate_vertex_code_for_projection_matrix(
             camera_shader_input,
-            &mut module.types,
-            &mut module.global_variables,
+            &mut module,
             &mut vertex_function,
             &mut bind_group_idx,
         );
@@ -478,7 +477,7 @@ impl ShaderGenerator {
         let model_view_transform_expressions = Self::generate_vertex_code_for_model_view_transform(
             model_view_transform_shader_input,
             vertex_attribute_requirements,
-            &mut module.types,
+            &mut module,
             &mut vertex_function,
         );
 
@@ -486,15 +485,14 @@ impl ShaderGenerator {
             Self::generate_vertex_code_for_vertex_attributes(
                 mesh_shader_input,
                 vertex_attribute_requirements,
-                &mut module.types,
-                &mut module.constants,
+                &mut module,
                 &mut vertex_function,
                 &model_view_transform_expressions,
                 projection_matrix_var_expr_handle,
             )?;
 
         let material_vertex_output_field_indices = material_shader_builder.generate_vertex_code(
-            &mut module.types,
+            &mut module,
             &mut vertex_function,
             &mut vertex_output_struct_builder,
         );
@@ -512,9 +510,7 @@ impl ShaderGenerator {
 
             Some(Self::generate_fragment_code_for_lights(
                 light_shader_input,
-                &mut module.types,
-                &mut module.global_variables,
-                &mut module.constants,
+                &mut module,
                 &mut fragment_function,
                 &mut bind_group_idx,
             ))
@@ -523,10 +519,7 @@ impl ShaderGenerator {
         };
 
         material_shader_builder.generate_fragment_code(
-            &mut module.types,
-            &mut module.constants,
-            &mut module.functions,
-            &mut module.global_variables,
+            &mut module,
             &mut fragment_function,
             &mut bind_group_idx,
             &fragment_input_struct,
@@ -666,11 +659,11 @@ impl ShaderGenerator {
     fn generate_vertex_code_for_model_view_transform(
         model_view_transform_shader_input: &ModelViewTransformShaderInput,
         vertex_attribute_requirements: VertexAttributeSet,
-        types: &mut UniqueArena<Type>,
+        module: &mut Module,
         vertex_function: &mut Function,
     ) -> ModelViewTransformExpressions {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
-        let mat4x4_type_handle = insert_in_arena(types, MATRIX_4X4_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+        let mat4x4_type_handle = insert_in_arena(&mut module.types, MATRIX_4X4_TYPE);
 
         let new_struct_field = |name: &'static str, location: u32, offset: u32| StructMember {
             name: new_name(name),
@@ -720,7 +713,8 @@ impl ShaderGenerator {
             },
         };
 
-        let model_view_transform_type_handle = insert_in_arena(types, model_view_transform_type);
+        let model_view_transform_type_handle =
+            insert_in_arena(&mut module.types, model_view_transform_type);
 
         let model_view_transform_arg_ptr_expr_handle = generate_input_argument(
             vertex_function,
@@ -807,18 +801,17 @@ impl ShaderGenerator {
     /// vertex shader function.
     fn generate_vertex_code_for_projection_matrix(
         camera_shader_input: &CameraShaderInput,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
+        module: &mut Module,
         vertex_function: &mut Function,
         bind_group_idx: &mut u32,
     ) -> Handle<Expression> {
         let bind_group = *bind_group_idx;
         *bind_group_idx += 1;
 
-        let mat4x4_type_handle = insert_in_arena(types, MATRIX_4X4_TYPE);
+        let mat4x4_type_handle = insert_in_arena(&mut module.types, MATRIX_4X4_TYPE);
 
         let projection_matrix_var_handle = append_to_arena(
-            global_variables,
+            &mut module.global_variables,
             GlobalVariable {
                 name: new_name("projectionMatrix"),
                 space: AddressSpace::Uniform,
@@ -876,15 +869,14 @@ impl ShaderGenerator {
     fn generate_vertex_code_for_vertex_attributes(
         mesh_shader_input: &MeshShaderInput,
         requirements: VertexAttributeSet,
-        types: &mut UniqueArena<Type>,
-        constants: &mut Arena<Constant>,
+        module: &mut Module,
         vertex_function: &mut Function,
         model_view_transform_expressions: &ModelViewTransformExpressions,
         projection_matrix_var_expr_handle: Handle<Expression>,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
-        let vec2_type_handle = insert_in_arena(types, VECTOR_2_TYPE);
-        let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+        let vec2_type_handle = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
+        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let input_model_position_expr_handle =
             Self::add_vertex_attribute_input_argument::<VertexPosition<fre>>(
@@ -937,7 +929,10 @@ impl ShaderGenerator {
 
         let unity_constant_expr = include_expr_in_func(
             vertex_function,
-            Expression::Constant(append_to_arena(constants, float32_constant(1.0))),
+            Expression::Constant(append_to_arena(
+                &mut module.constants,
+                float32_constant(1.0),
+            )),
         );
 
         // Create expression converting the xyz vertex position to an
@@ -1048,7 +1043,10 @@ impl ShaderGenerator {
         if let Some(input_model_normal_vector_expr_handle) = input_model_normal_vector_expr_handle {
             let zero_constant_expr = append_to_arena(
                 &mut vertex_function.expressions,
-                Expression::Constant(append_to_arena(constants, float32_constant(0.0))),
+                Expression::Constant(append_to_arena(
+                    &mut module.constants,
+                    float32_constant(0.0),
+                )),
             );
 
             // Create expression converting the xyz normal vector to an xyzw
@@ -1133,14 +1131,12 @@ impl ShaderGenerator {
     /// in the main fragment function.
     fn generate_fragment_code_for_lights(
         light_shader_input: &LightShaderInput,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
-        constants: &mut Arena<Constant>,
+        module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
     ) -> LightExpressions {
-        let u32_type_handle = insert_in_arena(types, U32_TYPE);
-        let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
+        let u32_type_handle = insert_in_arena(&mut module.types, U32_TYPE);
+        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
         // The struct is padded to 16 byte alignment as required for uniforms
         let point_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
@@ -1149,7 +1145,7 @@ impl ShaderGenerator {
         let light_count_size = 16;
 
         let point_light_struct_type_handle = insert_in_arena(
-            types,
+            &mut module.types,
             Type {
                 name: new_name("PointLight"),
                 inner: TypeInner::Struct {
@@ -1173,12 +1169,12 @@ impl ShaderGenerator {
         );
 
         let max_point_light_count_constant_handle = append_to_arena(
-            constants,
+            &mut module.constants,
             u32_constant(light_shader_input.max_point_light_count),
         );
 
         let point_lights_array_type_handle = insert_in_arena(
-            types,
+            &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
@@ -1190,7 +1186,7 @@ impl ShaderGenerator {
         );
 
         let point_lights_struct_type_handle = insert_in_arena(
-            types,
+            &mut module.types,
             Type {
                 name: new_name("PointLights"),
                 inner: TypeInner::Struct {
@@ -1220,7 +1216,7 @@ impl ShaderGenerator {
         );
 
         let point_lights_var_handle = append_to_arena(
-            global_variables,
+            &mut module.global_variables,
             GlobalVariable {
                 name: new_name("pointLights"),
                 space: AddressSpace::Uniform,
@@ -1366,16 +1362,16 @@ impl<'a> MaterialShaderGenerator<'a> {
     /// Any indices of material property fields added to the output struct.
     fn generate_vertex_code(
         &self,
-        types: &mut UniqueArena<Type>,
+        module: &mut Module,
         vertex_function: &mut Function,
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> MaterialVertexOutputFieldIndices {
         match self {
             Self::FixedColor(builder) => MaterialVertexOutputFieldIndices::FixedColor(
-                builder.generate_vertex_code(types, vertex_function, vertex_output_struct_builder),
+                builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
             ),
             Self::BlinnPhong(builder) => MaterialVertexOutputFieldIndices::BlinnPhong(
-                builder.generate_vertex_code(types, vertex_function, vertex_output_struct_builder),
+                builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
             ),
             _ => MaterialVertexOutputFieldIndices::None,
         }
@@ -1395,10 +1391,7 @@ impl<'a> MaterialShaderGenerator<'a> {
     /// material as this enum.
     fn generate_fragment_code(
         &self,
-        types: &mut UniqueArena<Type>,
-        constants: &mut Arena<Constant>,
-        functions: &mut Arena<Function>,
-        global_variables: &mut Arena<GlobalVariable>,
+        module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
@@ -1409,7 +1402,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
                 VertexColorShaderGenerator::generate_fragment_code(
-                    types,
+                    module,
                     fragment_function,
                     fragment_input_struct,
                     mesh_input_field_indices,
@@ -1419,15 +1412,14 @@ impl<'a> MaterialShaderGenerator<'a> {
                 Self::FixedColor(_),
                 MaterialVertexOutputFieldIndices::FixedColor(color_input_field_idx),
             ) => FixedColorShaderGenerator::generate_fragment_code(
-                types,
+                module,
                 fragment_function,
                 fragment_input_struct,
                 color_input_field_idx,
             ),
             (Self::FixedTexture(builder), MaterialVertexOutputFieldIndices::None) => builder
                 .generate_fragment_code(
-                    types,
-                    global_variables,
+                    module,
                     fragment_function,
                     bind_group_idx,
                     fragment_input_struct,
@@ -1437,10 +1429,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 Self::BlinnPhong(builder),
                 MaterialVertexOutputFieldIndices::BlinnPhong(material_input_field_indices),
             ) => builder.generate_fragment_code(
-                types,
-                constants,
-                functions,
-                global_variables,
+                module,
                 fragment_function,
                 bind_group_idx,
                 fragment_input_struct,

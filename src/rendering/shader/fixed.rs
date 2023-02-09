@@ -5,7 +5,7 @@ use super::{
     insert_in_arena, new_name, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
     SampledTexture, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use naga::{Arena, Function, GlobalVariable, Interpolation, Sampling, Type, UniqueArena};
+use naga::{Function, Interpolation, Module, Sampling};
 
 /// Input description specifying the vertex attribute location
 /// reqired for generating a shader for a
@@ -70,11 +70,11 @@ impl<'a> FixedColorShaderGenerator<'a> {
     /// for accessing the color in [`generate_fragment_code`].
     pub fn generate_vertex_code(
         &self,
-        types: &mut UniqueArena<Type>,
+        module: &mut Module,
         vertex_function: &mut Function,
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> FixedColorVertexOutputFieldIdx {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let vertex_color_arg_ptr_expr_handle = super::generate_location_bound_input_argument(
             vertex_function,
@@ -104,12 +104,12 @@ impl<'a> FixedColorShaderGenerator<'a> {
     /// is simply returned from the main fragment shader function in
     /// an output struct.
     pub fn generate_fragment_code(
-        types: &mut UniqueArena<Type>,
+        module: &mut Module,
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         color_input_field_idx: &FixedColorVertexOutputFieldIdx,
     ) {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
@@ -122,7 +122,7 @@ impl<'a> FixedColorShaderGenerator<'a> {
             fragment_input_struct.get_field_expr_handle(color_input_field_idx.0),
         );
 
-        output_struct_builder.generate_output_code(types, fragment_function);
+        output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
 }
 
@@ -147,8 +147,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
     /// in an output struct.
     pub fn generate_fragment_code(
         &self,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
+        module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
@@ -160,11 +159,11 @@ impl<'a> FixedTextureShaderGenerator<'a> {
         let (color_texture_binding, color_sampler_binding) =
             self.texture_input.color_texture_and_sampler_bindings;
 
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let color_texture = SampledTexture::declare(
-            types,
-            global_variables,
+            &mut module.types,
+            &mut module.global_variables,
             "color",
             bind_group,
             color_texture_binding,
@@ -191,6 +190,6 @@ impl<'a> FixedTextureShaderGenerator<'a> {
             color_sampling_expr_handle,
         );
 
-        output_struct_builder.generate_output_code(types, fragment_function);
+        output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
 }

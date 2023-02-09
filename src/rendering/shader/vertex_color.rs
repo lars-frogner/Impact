@@ -5,7 +5,7 @@ use super::{
     insert_in_arena, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder, VECTOR_4_SIZE,
     VECTOR_4_TYPE,
 };
-use naga::{Function, Type, UniqueArena};
+use naga::{Function, Module};
 
 /// Shader generator for the case when vertex colors
 /// included in the mesh are used to obtain the fragment
@@ -26,12 +26,12 @@ impl VertexColorShaderGenerator {
     /// function is simply returned from the main fragment shader function
     /// in an output struct.
     pub fn generate_fragment_code(
-        types: &mut UniqueArena<Type>,
+        module: &mut Module,
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
@@ -48,6 +48,6 @@ impl VertexColorShaderGenerator {
             ),
         );
 
-        output_struct_builder.generate_output_code(types, fragment_function);
+        output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
 }

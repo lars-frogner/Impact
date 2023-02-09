@@ -8,8 +8,7 @@ use super::{
 };
 use naga::{
     Arena, BinaryOperator, Constant, Expression, Function, FunctionArgument, FunctionResult,
-    GlobalVariable, Handle, LocalVariable, MathFunction, Statement, Type, UnaryOperator,
-    UniqueArena,
+    Handle, LocalVariable, MathFunction, Module, Statement, Type, UnaryOperator, UniqueArena,
 };
 
 /// Input description specifying the vertex attribute locations
@@ -106,12 +105,12 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
     /// [`generate_fragment_code`].
     pub fn generate_vertex_code(
         &self,
-        types: &mut UniqueArena<Type>,
+        module: &mut Module,
         vertex_function: &mut Function,
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> BlinnPhongVertexOutputFieldIndices {
-        let float_type_handle = insert_in_arena(types, F32_TYPE);
-        let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
+        let float_type_handle = insert_in_arena(&mut module.types, F32_TYPE);
+        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
         let mut input_struct_builder = InputStructBuilder::new("MaterialProperties", "material");
 
@@ -156,7 +155,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             F32_WIDTH,
         );
 
-        let input_struct = input_struct_builder.generate_input_code(types, vertex_function);
+        let input_struct =
+            input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
         let output_ambient_color_field_idx = vertex_output_struct_builder
             .add_field_with_perspective_interpolation(
@@ -240,8 +240,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
     ) {
         let light_expressions = light_expressions.expect("Missing lights for Blinn-Phong shading");
 
-        let vec3_type_handle = insert_in_arena(types, VECTOR_3_TYPE);
-        let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let reflection_model_function_handle =
             Self::generate_reflection_model_function(types, constants, functions);
@@ -272,8 +272,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 let (diffuse_color_expr_handle, specular_color_expr_handle) =
                     Self::generate_texture_fragment_code(
                         texture_input,
-                        types,
-                        global_variables,
+                        module,
                         fragment_function,
                         bind_group_idx,
                         fragment_input_struct,
@@ -348,8 +347,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             light_expressions.generate_point_light_count_expr(fragment_function);
 
         let mut point_light_loop = ForLoop::new(
-            types,
-            constants,
+            &mut module.types,
+            &mut module.constants,
             fragment_function,
             "point_light",
             point_light_count_expr_handle,
@@ -364,7 +363,10 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let unity_constant_expr = append_to_arena(
             &mut fragment_function.expressions,
-            Expression::Constant(append_to_arena(constants, float32_constant(1.0))),
+            Expression::Constant(append_to_arena(
+                &mut module.constants,
+                float32_constant(1.0),
+            )),
         );
 
         let (light_dir_expr_handle, attenuated_light_radiance_expr_handle) = emit(
@@ -522,13 +524,12 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             output_color_expr_handle,
         );
 
-        output_struct_builder.generate_output_code(types, fragment_function);
+        output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
 
     fn generate_texture_fragment_code(
         texture_input: &BlinnPhongTextureShaderInput,
-        types: &mut UniqueArena<Type>,
-        global_variables: &mut Arena<GlobalVariable>,
+        module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
@@ -541,8 +542,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             texture_input.diffuse_texture_and_sampler_bindings;
 
         let diffuse_color_texture = SampledTexture::declare(
-            types,
-            global_variables,
+            &mut module.types,
+            &mut module.global_variables,
             "diffuseColor",
             bind_group,
             diffuse_texture_binding,
@@ -562,8 +563,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             .specular_texture_and_sampler_bindings
             .map(|(specular_texture_binding, specular_sampler_binding)| {
                 let specular_color_texture = SampledTexture::declare(
-                    types,
-                    global_variables,
+                    &mut module.types,
+                    &mut module.global_variables,
                     "specularColor",
                     bind_group,
                     specular_texture_binding,
