@@ -6,12 +6,13 @@ use crate::{
     scene::{
         self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
         FixedTextureMaterial, MaterialComp, MeshComp, ModelID, ModelInstanceNodeID, PointLight,
-        Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial, VertexColorMaterial,
+        ScalingComp, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial, VertexColorMaterial,
     },
     window::{self, Window},
 };
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use nalgebra::{Point3, UnitQuaternion};
 
 /// Indicates whether an event caused the render resources to go out of sync
 /// with its source scene data.
@@ -150,17 +151,20 @@ impl Scene {
             components,
             |mesh: &MeshComp,
              material: &MaterialComp,
-             position: &PositionComp,
-             orientation: &OrientationComp|
+             position: Option<&PositionComp>,
+             orientation: Option<&OrientationComp>,
+             scaling: Option<&ScalingComp>|
              -> SceneGraphNodeComp::<ModelInstanceNodeID> {
                 let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
                 instance_feature_manager.register_instance(&material_library, model_id);
 
+                let position = position.map_or_else(Point3::origin, |position| position.0.cast());
+                let orientation = orientation
+                    .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
+                let scaling = scaling.map_or_else(|| 1.0, |scaling| scaling.0);
+
                 let model_to_world_transform =
-                    scene::model_to_world_transform_from_position_and_orientation(
-                        position.0.cast(),
-                        orientation.0.cast(),
-                    );
+                    scene::create_model_to_world_transform(position, orientation, scaling);
 
                 let feature_ids = if material.feature_id.is_not_applicable() {
                     Vec::new()

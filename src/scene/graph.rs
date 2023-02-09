@@ -930,11 +930,12 @@ impl_node_id_idx_traits!(CameraNodeID);
 
 /// Creates a [`NodeTransform`] from model to world space
 /// for a model with the given position and orientation.
-pub fn model_to_world_transform_from_position_and_orientation<F: Float>(
+pub fn create_model_to_world_transform<F: Float>(
     position: Point3<F>,
     orientation: UnitQuaternion<F>,
+    scaling: F,
 ) -> NodeTransform<F> {
-    NodeTransform::from_parts(position.into(), orientation, F::ONE)
+    NodeTransform::from_parts(position.into(), orientation, scaling)
 }
 
 #[cfg(test)]

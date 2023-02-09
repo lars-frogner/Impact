@@ -1,8 +1,17 @@
 //! [`Component`](impact_ecs::component::Component)s related to renderable scenes.
 
-use crate::scene::{CameraNodeID, MeshID, SceneGraphNodeID};
+use crate::{
+    rendering::fre,
+    scene::{CameraNodeID, MeshID, SceneGraphNodeID},
+};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
+
+/// [`Component`](impact_ecs::component::Component) for entities that
+/// have a scaling factor their mesh.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct ScalingComp(pub fre);
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a [`Mesh`](crate::geometry::Mesh).

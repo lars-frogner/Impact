@@ -20,7 +20,7 @@ use crate::{
     rendering::{fre, Assets, TextureID},
     scene::{
         BlinnPhongComp, FixedColorComp, FixedTextureComp, MeshComp, MeshID, MeshRepository,
-        Omnidirectional, PerspectiveCameraComp, RadianceComp, Scene, VertexColorComp,
+        Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp, Scene, VertexColorComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -131,26 +131,27 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
-    // world
-    //     .create_entities((
-    //         &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
-    //         &PositionComp(Point3::new(0.0, -1.0, 0.0)),
-    //         &OrientationComp(Orientation::from_axis_angle(
-    //             &Vector3::x_axis(),
-    //             3.0 * PI / 2.0,
-    //         )),
-    //         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-    //         // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
-    //         // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
-    //         &BlinnPhongComp {
-    //             ambient: vector![0.1, 0.1, 0.1],
-    //             diffuse: vector![0.4, 0.4, 0.4],
-    //             specular: vector![0.3, 0.3, 0.3],
-    //             shininess: 6.0,
-    //             alpha: 1.0,
-    //         },
-    //     ))
-    //     .unwrap();
+    world
+        .create_entities((
+            &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
+            &PositionComp(Point3::new(0.0, -1.0, 0.0)),
+            &OrientationComp(Orientation::from_axis_angle(
+                &Vector3::x_axis(),
+                3.0 * PI / 2.0,
+            )),
+            &ScalingComp(1000.0),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+            // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
+            // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
+            &BlinnPhongComp {
+                ambient: vector![0.1, 0.1, 0.1],
+                diffuse: vector![0.4, 0.4, 0.4],
+                specular: vector![0.3, 0.3, 0.3],
+                shininess: 6.0,
+                alpha: 1.0,
+            },
+        ))
+        .unwrap();
 
     world
         .create_entities((
@@ -162,13 +163,13 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
-    // world
-    //     .create_entities((
-    //         &PositionComp(Point3::new(5.0, 10.0, 10.0)),
-    //         &RadianceComp(vector![1.0, 1.0, 1.0] * 200.0),
-    //         &Omnidirectional,
-    //     ))
-    //     .unwrap();
+    world
+        .create_entities((
+            &PositionComp(Point3::new(5.0, 10.0, 10.0)),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 100.0),
+            &Omnidirectional,
+        ))
+        .unwrap();
 
     Ok(world)
 }

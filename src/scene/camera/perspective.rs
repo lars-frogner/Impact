@@ -5,8 +5,8 @@ use crate::{
     physics::{OrientationComp, PositionComp},
     rendering::fre,
     scene::{
-        self, PerspectiveCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
-        SceneGraphCameraNodeComp,
+        self, PerspectiveCameraComp, RenderResourcesDesynchronized, ScalingComp, SceneCamera,
+        SceneGraph, SceneGraphCameraNodeComp,
     },
     window::Window,
 };
@@ -38,12 +38,12 @@ impl PerspectiveCamera<fre> {
                     bail!("Tried to add camera for entity while another entity still has one")
                 }
 
-                // if components.has_component_type::<ScalingComp>() {
-                //     bail!(
-                //         "Tried to add both camera and scaling component to the same entity\n\
-                //          (not allowed because the view transform is assumed to contain no scaling)"
-                //     )
-                // }
+                if components.has_component_type::<ScalingComp>() {
+                    bail!(
+                        "Tried to add both camera and scaling component to the same entity\n\
+                         (not allowed because the view transform is assumed to contain no scaling)"
+                    )
+                }
 
                 desynchronized.set_yes();
 
@@ -64,11 +64,11 @@ impl PerspectiveCamera<fre> {
                     ),
                 );
 
-                let camera_to_world_transform =
-                    scene::model_to_world_transform_from_position_and_orientation(
-                        position.0.cast(),
-                        orientation.0.cast(),
-                    );
+                let camera_to_world_transform = scene::create_model_to_world_transform(
+                    position.0.cast(),
+                    orientation.0.cast(),
+                    1.0,
+                );
 
                 let node_id =
                     scene_graph.create_camera_node(root_node_id, camera_to_world_transform);

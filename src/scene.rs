@@ -14,11 +14,11 @@ mod systems;
 mod tasks;
 
 pub use camera::{PerspectiveCameraComp, SceneCamera};
-pub use components::{MeshComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
+pub use components::{MeshComp, ScalingComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
-    model_to_world_transform_from_position_and_orientation, CameraNodeID, GroupNodeID,
-    ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph, SceneGraphNodeID,
+    create_model_to_world_transform, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
+    NodeTransform, SceneGraph, SceneGraphNodeID,
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
