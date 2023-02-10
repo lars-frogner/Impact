@@ -12,6 +12,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use nalgebra::{Point3, UnitQuaternion};
 use std::sync::RwLock;
 
 impl PerspectiveCamera<fre> {
@@ -51,8 +52,8 @@ impl PerspectiveCamera<fre> {
                 let root_node_id = scene_graph.root_node_id();
             },
             components,
-            |position: &PositionComp,
-             orientation: &OrientationComp,
+            |position: Option<&PositionComp>,
+             orientation: Option<&OrientationComp>,
              camera_comp: &PerspectiveCameraComp|
              -> SceneGraphCameraNodeComp {
                 let camera = Self::new(
@@ -64,11 +65,12 @@ impl PerspectiveCamera<fre> {
                     ),
                 );
 
-                let camera_to_world_transform = scene::create_model_to_world_transform(
-                    position.0.cast(),
-                    orientation.0.cast(),
-                    1.0,
-                );
+                let position = position.map_or_else(Point3::origin, |position| position.0.cast());
+                let orientation = orientation
+                    .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
+
+                let camera_to_world_transform =
+                    scene::create_model_to_world_transform(position, orientation, 1.0);
 
                 let node_id =
                     scene_graph.create_camera_node(root_node_id, camera_to_world_transform);
