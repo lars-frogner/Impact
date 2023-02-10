@@ -1,5 +1,7 @@
 //! Mesh data and representation.
 
+mod generation;
+
 use crate::{
     geometry::{CollectionChange, CollectionChangeTracker, Sphere},
     num::Float,

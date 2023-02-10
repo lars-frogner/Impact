@@ -19,8 +19,9 @@ use crate::{
     },
     rendering::{fre, Assets, TextureID},
     scene::{
-        BlinnPhongComp, FixedColorComp, FixedTextureComp, MeshComp, MeshID, MeshRepository,
-        Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp, Scene, VertexColorComp,
+        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, FixedTextureComp, MeshComp,
+        MeshID, MeshRepository, Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp,
+        Scene, VertexColorComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -28,7 +29,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_utils::{hash32, hash64};
-use nalgebra::{point, vector, Point3, Vector3};
+use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
 use std::f64::consts::PI;
 
 #[cfg(target_arch = "wasm32")]
@@ -98,6 +99,13 @@ async fn init_world(window: Window) -> Result<World> {
         .add_mesh(MeshID(hash64!("Pentagon mesh")), create_pentagon_mesh())
         .unwrap();
 
+    mesh_repository
+        .add_mesh(
+            MeshID(hash64!("Box mesh")),
+            TriangleMesh::create_box(1.0, 1.0, 1.0),
+        )
+        .unwrap();
+
     let vertical_field_of_view = Degrees(45.0);
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
@@ -139,7 +147,7 @@ async fn init_world(window: Window) -> Result<World> {
                 &Vector3::x_axis(),
                 3.0 * PI / 2.0,
             )),
-            &ScalingComp(1000.0),
+            &ScalingComp(50.0),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
             // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
@@ -165,9 +173,34 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &PositionComp(Point3::new(5.0, 10.0, 10.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 100.0),
-            &Omnidirectional,
+            &MeshComp::new(MeshID(hash64!("Box mesh"))),
+            &PositionComp(Point3::new(-1.0, 0.5, 3.0)),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+            &AngularVelocityComp(AngularVelocity::new(
+                UnitVector3::new_normalize(vector![0.5, 0.2, 0.1]),
+                Degrees(2.0),
+            )),
+            &BlinnPhongComp {
+                ambient: vector![0.1, 0.1, 0.1],
+                diffuse: vector![0.4, 0.4, 0.4],
+                specular: vector![0.3, 0.3, 0.3],
+                shininess: 6.0,
+                alpha: 1.0,
+            },
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &[
+                PositionComp(Point3::new(5.0, 10.0, 10.0)),
+                PositionComp(Point3::new(-5.0, 4.0, -2.0)),
+            ],
+            &[
+                RadianceComp(vector![1.0, 1.0, 1.0] * 100.0),
+                RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
+            ],
+            &[Omnidirectional, Omnidirectional],
         ))
         .unwrap();
 
