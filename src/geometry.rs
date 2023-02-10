@@ -6,6 +6,7 @@ mod camera;
 mod frustum;
 mod instance;
 mod mesh;
+mod oriented_box;
 mod plane;
 mod sphere;
 mod tracking;
@@ -24,6 +25,7 @@ pub use mesh::{
     VertexPosition, VertexTextureCoords, N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS,
     VERTEX_ATTRIBUTE_NAMES,
 };
+pub use oriented_box::OrientedBox;
 pub use plane::Plane;
 pub use sphere::Sphere;
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
