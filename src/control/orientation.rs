@@ -122,10 +122,7 @@ impl CameraOrientationControllerBase {
     }
 
     fn compute_yaw_rotation(angular_displacement_x: Radians<f64>) -> Orientation {
-        UnitQuaternion::from_axis_angle(
-            &Vector3::y_axis(),
-            -angular_displacement_x.radians() as fph,
-        )
+        UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angular_displacement_x.radians() as fph)
     }
 
     fn compute_pitch_rotation(angular_displacement_y: Radians<f64>) -> Orientation {

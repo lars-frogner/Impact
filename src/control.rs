@@ -10,6 +10,7 @@ pub use orientation::{CameraOrientationController, RollFreeCameraOrientationCont
 
 use crate::{
     physics::{fph, Orientation, OrientationComp, Velocity, VelocityComp},
+    scene::PerspectiveCameraComp,
     window::Window,
 };
 use impact_ecs::{query, world::World as ECSWorld};
@@ -20,6 +21,13 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
     /// Updates the given world-space velocity of a controlled entity
     /// given its orientation.
     fn update_world_velocity(&self, velocity: &mut Velocity, orientation: &Orientation);
+
+    /// Updates the given world-space velocity of a controlled camera entity
+    /// given its orientation. This differs from [`update_world_velocity`] in
+    /// that the x-velocity in the local coordinate system is inverted, which is
+    /// needed to get the expected motion for cameras that look along the
+    /// negative z-direction.
+    fn update_world_velocity_for_camera(&self, velocity: &mut Velocity, orientation: &Orientation);
 
     /// Updates the overall motion state of the controlled entity based on the
     /// given [`MotionState`] specifying whether the entity should be moving
@@ -81,7 +89,15 @@ pub fn set_velocities_of_controlled_entities(
         |velocity: &mut VelocityComp, orientation: &OrientationComp| {
             motion_controller.update_world_velocity(&mut velocity.0, &orientation.0);
         },
-        [Controllable]
+        [Controllable],
+        ![PerspectiveCameraComp]
+    );
+    query!(
+        ecs_world,
+        |velocity: &mut VelocityComp, orientation: &OrientationComp| {
+            motion_controller.update_world_velocity_for_camera(&mut velocity.0, &orientation.0);
+        },
+        [Controllable, PerspectiveCameraComp]
     );
 }
 

@@ -127,6 +127,19 @@ impl MotionController for SemiDirectionalMotionController {
         }
     }
 
+    fn update_world_velocity_for_camera(&self, velocity: &mut Velocity, orientation: &Orientation) {
+        // Invert x-velocity since cameras look along negative z-axis
+        let mut camera_local_velocity = self.local_velocity;
+        camera_local_velocity.x *= -fph::ONE;
+
+        let new_velocity = orientation.transform_vector(&camera_local_velocity);
+        velocity.x = new_velocity.x;
+        velocity.z = new_velocity.z;
+        if self.vertical_control {
+            velocity.y = new_velocity.y;
+        }
+    }
+
     fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged {
         let result = self.state.update(state, direction);
         if result.motion_changed() {
