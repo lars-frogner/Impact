@@ -2,7 +2,7 @@
 
 use super::TriangleMesh;
 use crate::num::Float;
-use nalgebra::{UnitVector3, Vector3};
+use nalgebra::Vector3;
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
@@ -19,7 +19,61 @@ macro_rules! normal {
     };
 }
 
+macro_rules! texcoord {
+    [$u:expr, $v:expr] => {
+        $crate::geometry::VertexTextureCoords(nalgebra::vector![$u, $v])
+    };
+    ($coords:expr) => {
+        $crate::geometry::VertexTextureCoords($coords)
+    };
+}
+
 impl<F: Float> TriangleMesh<F> {
+    /// Creates a mesh representing a flat plane centered at
+    /// the origin with the given horizontal extents
+    ///
+    /// # Panics
+    /// If any of the given extents are negative.
+    pub fn create_plane(extent_x: F, extent_z: F) -> Self {
+        assert!(
+            extent_x >= F::ZERO,
+            "Tried to create plane mesh with negative x-extent"
+        );
+        assert!(
+            extent_z >= F::ZERO,
+            "Tried to create plane mesh with negative y-extent"
+        );
+
+        let hex = extent_x / F::TWO;
+        let hez = extent_z / F::TWO;
+
+        let positions = vec![
+            pos![-hex, F::ZERO, -hez],
+            pos![hex, F::ZERO, -hez],
+            pos![hex, F::ZERO, hez],
+            pos![-hex, F::ZERO, hez],
+        ];
+
+        let normal_vectors = vec![normal![Vector3::y_axis()]; 4];
+
+        let texture_coords = vec![
+            texcoord![F::ZERO, F::ONE],
+            texcoord![F::ONE, F::ONE],
+            texcoord![F::ONE, F::ZERO],
+            texcoord![F::ZERO, F::ZERO],
+        ];
+
+        let indices = vec![0, 1, 3, 1, 2, 3];
+
+        Self::new(
+            positions,
+            Vec::new(),
+            normal_vectors,
+            texture_coords,
+            indices,
+        )
+    }
+
     /// Creates a mesh representing a box with the given extents, centered at
     /// the origin and with the width, height and depth axes aligned with the
     /// x-, y- and z-axis respectively.

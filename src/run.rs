@@ -101,6 +101,13 @@ async fn init_world(window: Window) -> Result<World> {
 
     mesh_repository
         .add_mesh(
+            MeshID(hash64!("Plane mesh")),
+            TriangleMesh::create_plane(1.0, 1.0),
+        )
+        .unwrap();
+
+    mesh_repository
+        .add_mesh(
             MeshID(hash64!("Box mesh")),
             TriangleMesh::create_box(1.0, 1.0, 1.0),
         )
@@ -111,7 +118,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
 
-    let motion_controller = SemiDirectionalMotionController::new(0.2, false);
+    let motion_controller = SemiDirectionalMotionController::new(0.2, true);
     let orientation_controller =
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
@@ -141,19 +148,14 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
+            &MeshComp::new(MeshID(hash64!("Plane mesh"))),
             &PositionComp(Point3::new(0.0, -1.0, 0.0)),
-            &OrientationComp(Orientation::from_axis_angle(
-                &Vector3::x_axis(),
-                3.0 * PI / 2.0,
-            )),
             &ScalingComp(50.0),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             // &FixedTextureComp(TextureID(hash32!("Tree texture"))),
             // &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
-            &BlinnPhongComp {
+            &DiffuseTexturedBlinnPhongComp {
                 ambient: vector![0.1, 0.1, 0.1],
-                diffuse: vector![0.4, 0.4, 0.4],
+                diffuse: TextureID(hash32!("Tree texture")), //vector![0.4, 0.4, 0.4],
                 specular: vector![0.3, 0.3, 0.3],
                 shininess: 6.0,
                 alpha: 1.0,
@@ -164,9 +166,9 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
-            &PositionComp(Point3::new(0.0, 0.0, 4.0)),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(2.0))),
+            &PositionComp(Point3::new(0.0, 0.0, 2.0)),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             &VertexColorComp,
         ))
         .unwrap();
@@ -174,11 +176,11 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Box mesh"))),
-            &PositionComp(Point3::new(-1.0, 0.5, 3.0)),
+            &PositionComp(Point3::new(2.0, 0.0, 0.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
             &AngularVelocityComp(AngularVelocity::new(
                 UnitVector3::new_normalize(vector![0.5, 0.2, 0.1]),
-                Degrees(2.0),
+                Degrees(0.0),
             )),
             &BlinnPhongComp {
                 ambient: vector![0.1, 0.1, 0.1],
@@ -193,8 +195,8 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &[
-                PositionComp(Point3::new(5.0, 10.0, 10.0)),
-                PositionComp(Point3::new(-5.0, 4.0, -2.0)),
+                PositionComp(Point3::new(5.0, 10.0, -10.0)),
+                PositionComp(Point3::new(-5.0, 4.0, 2.0)),
             ],
             &[
                 RadianceComp(vector![1.0, 1.0, 1.0] * 100.0),
