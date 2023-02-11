@@ -2,7 +2,7 @@
 
 use super::TriangleMesh;
 use crate::num::Float;
-use nalgebra::Vector3;
+use nalgebra::{vector, UnitVector3, Vector3};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
@@ -168,6 +168,129 @@ impl<F: Float> TriangleMesh<F> {
         ]);
         normal_vectors.extend_from_slice(&[normal![Vector3::z_axis()]; 4]);
         add_face_indices();
+
+        Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
+    }
+
+    /// Creates a mesh representing a cylinder with the given length and
+    /// diameter, centered at the origin and with the length axis aligned with
+    /// the y-axis. `n_circumference_vertices` is the number of vertices to use
+    /// for representing a circular cross-section of the cylinder.
+    ///
+    /// # Panics
+    /// - If any of the given extents are negative.
+    /// - If `n_circumference_vertices` is smaller than 2.
+    pub fn create_cylinder(length: F, diameter: F, n_circumference_vertices: usize) -> Self {
+        assert!(
+            length >= F::ZERO,
+            "Tried to create cylinder mesh with negative length"
+        );
+        assert!(
+            diameter >= F::ZERO,
+            "Tried to create cylinder mesh with negative diameter"
+        );
+        assert!(
+            n_circumference_vertices >= 2,
+            "Tried to create cylinder mesh with fewer than two vertices around circumference"
+        );
+
+        let half_length = length / F::TWO;
+        let radius = diameter / F::TWO;
+
+        let mut positions = Vec::with_capacity(4 * n_circumference_vertices + 2);
+        let mut normal_vectors = Vec::with_capacity(4 * n_circumference_vertices + 2);
+        let mut indices = Vec::with_capacity(12 * n_circumference_vertices);
+
+        let n_circumference_vertices = u16::try_from(n_circumference_vertices).unwrap();
+
+        let angle_between_vertices =
+            F::TWO * F::PI() / F::from_u16(n_circumference_vertices).unwrap();
+
+        // Bottom and top center vertices
+        positions.push(pos![F::ZERO, -half_length, F::ZERO]);
+        positions.push(pos![F::ZERO, half_length, F::ZERO]);
+        normal_vectors.push(normal!(-Vector3::y_axis()));
+        normal_vectors.push(normal!(Vector3::y_axis()));
+
+        // First bottom and top side vertices
+        let bottom_pos = pos![radius, -half_length, F::ZERO];
+        let top_pos = pos![radius, half_length, F::ZERO];
+        positions.push(bottom_pos);
+        positions.push(top_pos);
+        normal_vectors.push(normal!(Vector3::x_axis()));
+        normal_vectors.push(normal!(Vector3::x_axis()));
+
+        // Duplicate positions and use vertical instead of radial normal vectors
+        positions.push(bottom_pos);
+        positions.push(top_pos);
+        normal_vectors.push(normal!(-Vector3::y_axis()));
+        normal_vectors.push(normal!(Vector3::y_axis()));
+
+        let mut angle = angle_between_vertices;
+
+        for i in 1..n_circumference_vertices {
+            let cos_angle = F::cos(angle);
+            let sin_angle = F::sin(angle);
+
+            let x = radius * cos_angle;
+            let z = radius * sin_angle;
+
+            let bottom_pos = pos![x, -half_length, z];
+            let top_pos = pos![x, half_length, z];
+
+            positions.push(bottom_pos);
+            positions.push(top_pos);
+
+            let radial_direction =
+                UnitVector3::new_unchecked(vector![cos_angle, F::ZERO, sin_angle]);
+            normal_vectors.push(normal!(radial_direction));
+            normal_vectors.push(normal!(radial_direction));
+
+            // Duplicate positions and use vertical instead of radial normal vectors
+            positions.push(bottom_pos);
+            positions.push(top_pos);
+            normal_vectors.push(normal!(-Vector3::y_axis()));
+            normal_vectors.push(normal!(Vector3::y_axis()));
+
+            let current_idx = 4 * i + 2;
+            indices.extend_from_slice(&[
+                // First side triangle
+                current_idx - 4,
+                current_idx,
+                current_idx - 3,
+                // Second side triangle
+                current_idx - 3,
+                current_idx,
+                current_idx + 1,
+                // Bottom lid triangle
+                current_idx + 2,
+                current_idx - 2,
+                0,
+                // Top lid triangle
+                current_idx - 1,
+                current_idx + 3,
+                1,
+            ]);
+
+            angle += angle_between_vertices;
+        }
+
+        // Connect to first vertices
+        let current_idx = 4 * n_circumference_vertices + 2;
+        indices.extend_from_slice(&[
+            current_idx - 4,
+            2,
+            current_idx - 3,
+            current_idx - 3,
+            2,
+            3,
+            4,
+            current_idx - 2,
+            0,
+            current_idx - 1,
+            5,
+            1,
+        ]);
 
         Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
     }
