@@ -198,7 +198,7 @@ impl<F: Float> TriangleMesh<F> {
         let radius = diameter / F::TWO;
 
         let mut positions = Vec::with_capacity(4 * n_circumference_vertices + 2);
-        let mut normal_vectors = Vec::with_capacity(4 * n_circumference_vertices + 2);
+        let mut normal_vectors = Vec::with_capacity(positions.capacity());
         let mut indices = Vec::with_capacity(12 * n_circumference_vertices);
 
         let n_circumference_vertices = u16::try_from(n_circumference_vertices).unwrap();
@@ -291,6 +291,112 @@ impl<F: Float> TriangleMesh<F> {
             5,
             1,
         ]);
+
+        Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
+    }
+
+    /// Creates a mesh representing a sphere with diameter 1.0, centered at the
+    /// origin. `n_rings` is the number of horizontal circular cross-sections
+    /// that vertices will be generated around. The number of vertices that will
+    /// be generated around each ring increases in proportion to `n_rings` to
+    /// maintain an approximately uniform resolution.
+    ///
+    /// # Panics
+    /// - If `n_rings` is zero.
+    pub fn create_sphere(n_rings: usize) -> Self {
+        assert!(n_rings > 0, "Tried to create sphere mesh with no rings");
+
+        let radius = F::ONE / F::TWO;
+
+        let n_circumference_vertices = 2 * n_rings + 2;
+
+        let mut positions = Vec::with_capacity(n_circumference_vertices * n_rings + 2);
+        let mut normal_vectors = Vec::with_capacity(positions.capacity());
+        let mut indices = Vec::with_capacity(6 * n_circumference_vertices * n_rings);
+
+        let n_rings = u16::try_from(n_rings).unwrap();
+        let n_circumference_vertices = u16::try_from(n_circumference_vertices).unwrap();
+
+        let delta_phi = F::TWO * F::PI() / F::from_u16(n_circumference_vertices).unwrap();
+        let delta_theta = F::PI() / F::from_u16(n_rings + 1).unwrap();
+
+        positions.push(pos![F::ZERO, radius, F::ZERO]);
+        normal_vectors.push(normal!(Vector3::y_axis()));
+
+        positions.push(pos![F::ZERO, -radius, F::ZERO]);
+        normal_vectors.push(normal!(-Vector3::y_axis()));
+
+        let mut theta = delta_theta;
+
+        for _ in 0..n_rings {
+            let sin_theta = F::sin(theta);
+            let cos_theta = F::cos(theta);
+            let y = radius * cos_theta;
+
+            let mut phi = F::ZERO;
+
+            for _ in 0..n_circumference_vertices {
+                let cos_phi_sin_theta = F::cos(phi) * sin_theta;
+                let sin_phi_sin_theta = F::sin(phi) * sin_theta;
+
+                positions.push(pos![
+                    radius * cos_phi_sin_theta,
+                    y,
+                    radius * sin_phi_sin_theta
+                ]);
+                normal_vectors.push(normal!(UnitVector3::new_unchecked(vector![
+                    cos_phi_sin_theta,
+                    cos_theta,
+                    sin_phi_sin_theta
+                ])));
+
+                phi += delta_phi;
+            }
+
+            theta += delta_theta;
+        }
+
+        let mut idx = 2;
+
+        // Top cap
+        for _ in 0..n_circumference_vertices - 1 {
+            indices.extend_from_slice(&[idx, idx + 1, 0]);
+            idx += 1;
+        }
+        indices.extend_from_slice(&[idx, idx - n_circumference_vertices + 1, 0]);
+        idx += 1;
+
+        for _ in 1..n_rings {
+            for _ in 0..n_circumference_vertices - 1 {
+                indices.extend_from_slice(&[
+                    idx,
+                    idx + 1,
+                    idx - n_circumference_vertices,
+                    idx - n_circumference_vertices,
+                    idx + 1,
+                    idx - n_circumference_vertices + 1,
+                ]);
+                idx += 1;
+            }
+            indices.extend_from_slice(&[
+                idx,
+                idx - n_circumference_vertices + 1,
+                idx - n_circumference_vertices,
+                idx - n_circumference_vertices,
+                idx - n_circumference_vertices + 1,
+                idx - 2 * n_circumference_vertices + 1,
+            ]);
+            idx += 1;
+        }
+
+        idx -= n_circumference_vertices;
+
+        // Bottom cap
+        for _ in 0..n_circumference_vertices - 1 {
+            indices.extend_from_slice(&[idx, idx + 1, 1]);
+            idx += 1;
+        }
+        indices.extend_from_slice(&[idx, idx - n_circumference_vertices + 1, 1]);
 
         Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
     }
