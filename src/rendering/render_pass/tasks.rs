@@ -29,6 +29,7 @@ define_task!(
 
             render_pass_manager.sync_with_render_resources(
                 renderer.core_system(),
+                renderer.config(),
                 render_resource_manager.synchronized(),
                 &mut shader_builder,
             )

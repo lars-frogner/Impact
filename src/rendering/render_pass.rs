@@ -10,7 +10,8 @@ use crate::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
         CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialRenderResourceManager, MaterialTextureShaderInput, MeshShaderInput, Shader,
+        MaterialRenderResourceManager, MaterialTextureShaderInput, MeshShaderInput,
+        RenderingConfig, Shader,
     },
     scene::{MaterialID, MeshID, ModelID, ShaderManager},
 };
@@ -82,6 +83,11 @@ impl RenderPassManager {
         self.model_render_pass_recorders.values()
     }
 
+    /// Deletes the render pass recorder for every model.
+    pub fn clear_model_render_pass_recorders(&mut self) {
+        self.model_render_pass_recorders.clear();
+    }
+
     /// Ensures that all render passes required for rendering the
     /// entities present in the given render resources with the given
     /// camera are available and configured correctly.
@@ -92,6 +98,7 @@ impl RenderPassManager {
     fn sync_with_render_resources(
         &mut self,
         core_system: &CoreRenderingSystem,
+        config: &RenderingConfig,
         render_resources: &SynchronizedRenderResources,
         shader_manager: &mut ShaderManager,
     ) -> Result<()> {
@@ -109,6 +116,7 @@ impl RenderPassManager {
                 Entry::Vacant(entry) => {
                     entry.insert(Self::create_render_pass_recorder_for_model(
                         core_system,
+                        config,
                         render_resources,
                         shader_manager,
                         model_id,
@@ -130,6 +138,7 @@ impl RenderPassManager {
 
     fn create_render_pass_recorder_for_model(
         core_system: &CoreRenderingSystem,
+        config: &RenderingConfig,
         render_resources: &SynchronizedRenderResources,
         shader_manager: &mut ShaderManager,
         model_id: ModelID,
@@ -138,6 +147,7 @@ impl RenderPassManager {
         let specification = RenderPassSpecification::for_model(model_id)?;
         RenderPassRecorder::new(
             core_system,
+            config,
             render_resources,
             shader_manager,
             specification,
@@ -361,6 +371,7 @@ impl RenderPassRecorder {
     /// to build or fetch the appropriate shader.
     pub fn new(
         core_system: &CoreRenderingSystem,
+        config: &RenderingConfig,
         render_resources: &SynchronizedRenderResources,
         shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
@@ -405,6 +416,7 @@ impl RenderPassRecorder {
                 &vertex_buffer_layouts,
                 core_system.surface_config().format,
                 depth_texture_format,
+                config,
                 &format!("{} render pipeline", &specification.label),
             ));
 
@@ -590,6 +602,7 @@ impl RenderPassRecorder {
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
         surface_texture_format: wgpu::TextureFormat,
         depth_texture_format: Option<wgpu::TextureFormat>,
+        config: &RenderingConfig,
         label: &str,
     ) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -612,8 +625,8 @@ impl RenderPassRecorder {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
+                cull_mode: config.cull_mode,
+                polygon_mode: config.polygon_mode,
                 unclipped_depth: false,
                 conservative: false,
             },

@@ -42,6 +42,8 @@ pub enum KeyboardInputAction {
     MoveUp,
     MoveDown,
     ToggleInteractionMode,
+    ToggleBackFaceCulling,
+    ToggleTriangleFill,
     Exit,
 }
 
@@ -143,6 +145,18 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::ToggleBackFaceCulling => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().toggle_back_face_culling();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::ToggleTriangleFill => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().toggle_triangle_fill();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     // Check if the input is for the motion controller,
                     // and if so, performed the required motion update
                     action if world.control_mode_active() => {
@@ -188,6 +202,8 @@ impl Default for KeyActionMap {
             MoveUp => Q,
             MoveDown => E,
             ToggleInteractionMode => Tab,
+            ToggleBackFaceCulling => B,
+            ToggleTriangleFill => F,
             Exit => Escape
         ))
     }

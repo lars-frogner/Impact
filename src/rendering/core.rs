@@ -128,7 +128,7 @@ impl CoreRenderingSystem {
         Ok(adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::POLYGON_MODE_LINE,
                     limits: if cfg!(target_arch = "wasm32") {
                         // Use looser limits for wasm
                         wgpu::Limits::downlevel_webgl2_defaults()

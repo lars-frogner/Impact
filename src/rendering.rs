@@ -50,10 +50,20 @@ pub type fre = f32;
 #[derive(Debug)]
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
+    config: RenderingConfig,
     assets: Assets,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
     depth_texture: DepthTexture,
+}
+
+/// Global rendering configuration options.
+#[derive(Clone, Debug)]
+pub struct RenderingConfig {
+    /// The face culling mode.
+    pub cull_mode: Option<wgpu::Face>,
+    /// Controls the way each polygon is rasterized.
+    pub polygon_mode: wgpu::PolygonMode,
 }
 
 impl RenderingSystem {
@@ -64,6 +74,7 @@ impl RenderingSystem {
 
         Ok(Self {
             core_system,
+            config: RenderingConfig::default(),
             assets,
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK, 1.0)),
@@ -74,6 +85,11 @@ impl RenderingSystem {
     /// Returns a reference to the core rendering system.
     pub fn core_system(&self) -> &CoreRenderingSystem {
         &self.core_system
+    }
+
+    /// Returns a reference to the global rendering configuration.
+    pub fn config(&self) -> &RenderingConfig {
+        &self.config
     }
 
     /// Returns a reference to the rendering assets.
@@ -136,6 +152,37 @@ impl RenderingSystem {
         self.depth_texture = DepthTexture::new(&self.core_system, "Depth texture");
     }
 
+    /// Toggles culling of triangle back faces in all render passes.
+    pub fn toggle_back_face_culling(&mut self) {
+        if self.config.cull_mode.is_some() {
+            self.config.cull_mode = None;
+        } else {
+            self.config.cull_mode = Some(wgpu::Face::Back);
+        }
+        // Remove all render pass recorders so that they will be recreated with
+        // the updated configuration
+        self.render_pass_manager
+            .write()
+            .unwrap()
+            .clear_model_render_pass_recorders();
+    }
+
+    /// Toggles rendering of triangle fill in all render passes. Only triangle
+    /// edges will be rendered if fill is turned off.
+    pub fn toggle_triangle_fill(&mut self) {
+        if self.config.polygon_mode != wgpu::PolygonMode::Fill {
+            self.config.polygon_mode = wgpu::PolygonMode::Fill;
+        } else {
+            self.config.polygon_mode = wgpu::PolygonMode::Line;
+        }
+        // Remove all render pass recorders so that they will be recreated with
+        // the updated configuration
+        self.render_pass_manager
+            .write()
+            .unwrap()
+            .clear_model_render_pass_recorders();
+    }
+
     /// Marks the render resources as being out of sync with the source data.
     pub fn declare_render_resources_desynchronized(&self) {
         self.render_resource_manager
@@ -173,5 +220,14 @@ impl RenderingSystem {
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render encoder"),
         })
+    }
+}
+
+impl Default for RenderingConfig {
+    fn default() -> Self {
+        Self {
+            cull_mode: Some(wgpu::Face::Back),
+            polygon_mode: wgpu::PolygonMode::Fill,
+        }
     }
 }
