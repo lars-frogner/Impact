@@ -2,7 +2,7 @@
 
 use bytemuck::Pod;
 use impact_utils::{AlignedByteVec, Alignment};
-use std::{any::TypeId, mem};
+use std::{any::TypeId, mem, ops::Deref};
 
 /// Represents a component.
 ///
@@ -122,6 +122,26 @@ pub struct ComponentView<'a> {
     bytes: &'a [u8],
 }
 
+/// Represents a single instance of a component type.
+pub trait ComponentInstance: ComponentArray {
+    /// Returns a type erased view of the component instance.
+    fn single_instance_view(&self) -> SingleInstance<ComponentView<'_>>;
+}
+
+/// Represents a collection of component instances where the number of instances
+/// may be one. Required for a type to be wrappable in a [`SingleInstance`].
+pub trait CanHaveSingleInstance {
+    /// Returns the number of component instances in the collection.
+    fn instance_count(&self) -> usize;
+}
+
+/// Wrapper for types holding component instances that guarantees that the
+/// wrapped container only holds component data for a single instance.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SingleInstance<T> {
+    container: T,
+}
+
 // We can treat a reference to a component as a component array
 // and slice with a single instance
 impl<'a, C: Component> ComponentArray for &'a C {
@@ -148,6 +168,7 @@ impl<'a, C: Component> ComponentArray for &'a C {
             Alignment::of::<C>(),
             self.component_bytes(),
         )
+        .into_inner()
     }
 
     fn into_storage(self) -> ComponentStorage {
@@ -162,6 +183,12 @@ impl<'a, C: Component> ComponentSlice<'a> for &'a C {
 
     fn component_instances<C2: Component>(&self) -> &'a [C2] {
         self.persistent_view().component_instances()
+    }
+}
+
+impl<'a, C: Component> ComponentInstance for &'a C {
+    fn single_instance_view(&self) -> SingleInstance<ComponentView<'_>> {
+        SingleInstance::new_unchecked(self.view())
     }
 }
 
@@ -194,13 +221,13 @@ impl ComponentStorage {
         component_id: ComponentID,
         component_size: usize,
         bytes: AlignedByteVec,
-    ) -> Self {
-        Self::new(component_id, 1, component_size, bytes)
+    ) -> SingleInstance<Self> {
+        SingleInstance::new_unchecked(Self::new(component_id, 1, component_size, bytes))
     }
 
     /// Initializes a new storage for a single instance of a zero-sized
     /// component with the given ID.
-    fn new_for_single_zero_sized_instance(component_id: ComponentID) -> Self {
+    fn new_for_single_zero_sized_instance(component_id: ComponentID) -> SingleInstance<Self> {
         Self::new_for_single_instance(component_id, 0, AlignedByteVec::new(Alignment::new(1)))
     }
 
@@ -226,6 +253,15 @@ impl ComponentStorage {
             component_size: view.component_size(),
             bytes: AlignedByteVec::copied_from_slice(view.component_align, view.bytes),
         }
+    }
+
+    /// Copies the bytes in the given view representing a single component
+    /// instance into a new storage.
+    #[cfg(test)]
+    pub(crate) fn from_single_instance_view<'a>(
+        slice: impl ComponentSlice<'a> + ComponentInstance,
+    ) -> SingleInstance<Self> {
+        SingleInstance::new_unchecked(Self::from_view(slice))
     }
 
     /// Returns the size of the storage in bytes.
@@ -304,19 +340,18 @@ impl ComponentStorage {
         self.component_count += component_count;
     }
 
-    /// Removes the component at the given index and makes the
-    /// last component take its place (unless the one to remove
-    /// is the last one).
+    /// Removes the component at the given index and makes the last component
+    /// take its place (unless the one to remove is the last one).
     ///
     /// # Note
     /// `idx` refers to the whole component, not its byte boundary.
     ///
     /// # Returns
-    /// A [`ComponentStorage`] with only the removed component.
+    /// A [`SingleInstance<ComponentStorage>`] with only the removed component.
     ///
     /// # Panics
     /// If `idx` is outside the bounds of the storage.
-    pub fn swap_remove(&mut self, idx: usize) -> Self {
+    pub fn swap_remove(&mut self, idx: usize) -> SingleInstance<Self> {
         assert!(
             idx < self.component_count(),
             "Index for component out of bounds"
@@ -409,6 +444,40 @@ impl ComponentArray for ComponentStorage {
     }
 }
 
+impl SingleInstance<ComponentStorage> {
+    /// Converts this single-instance storage into a storage containing copies
+    /// of the instance component data for the given number of instances.
+    ///
+    /// # Panics
+    /// If `n_instances` is zero.
+    pub fn duplicate_instance(self, n_instances: usize) -> ComponentStorage {
+        assert_ne!(
+            n_instances, 0,
+            "Tried to duplicate component storage data zero times"
+        );
+
+        let mut storage = self.into_inner();
+
+        if n_instances == 1 {
+            return storage;
+        }
+
+        if storage.component_size() != 0 {
+            let mut duplicated_bytes = AlignedByteVec::with_capacity(
+                storage.bytes.alignment(),
+                n_instances * storage.component_size(),
+            );
+            for _ in 0..n_instances {
+                duplicated_bytes.extend_from_slice(&storage.bytes);
+            }
+            storage.bytes = duplicated_bytes;
+        }
+        storage.component_count = n_instances;
+
+        storage
+    }
+}
+
 impl<'a> ComponentView<'a> {
     /// Creates a new view to the given bytes for a component
     /// with the given ID, count, size and alignment.
@@ -439,8 +508,14 @@ impl<'a> ComponentView<'a> {
         component_size: usize,
         component_align: Alignment,
         bytes: &'a [u8],
-    ) -> Self {
-        Self::new(component_id, 1, component_size, component_align, bytes)
+    ) -> SingleInstance<Self> {
+        SingleInstance::new_unchecked(Self::new(
+            component_id,
+            1,
+            component_size,
+            component_align,
+            bytes,
+        ))
     }
 
     fn validate_component<C: Component>(&self) {
@@ -581,6 +656,89 @@ impl<'a, const N: usize, C: Component> ComponentSlice<'a> for &'a [C; N] {
 
     fn component_instances<C2: Component>(&self) -> &'a [C2] {
         self.persistent_view().component_instances()
+    }
+}
+
+impl<T> SingleInstance<T>
+where
+    T: CanHaveSingleInstance,
+{
+    /// Wraps the given container in a [`SingleInstance`].
+    ///
+    /// # Panics
+    /// If the data in the container does not represent a single instance.
+    pub fn new(container: T) -> Self {
+        assert_eq!(container.instance_count(), 1);
+        Self::new_unchecked(container)
+    }
+
+    /// Wraps the given container in a [`SingleInstance`].
+    ///
+    /// # Warning
+    /// Does not verify that the data in the container represents a single
+    /// instance.
+    pub(crate) fn new_unchecked(container: T) -> Self {
+        Self { container }
+    }
+
+    /// Unwraps the [`SingleInstance`] wrapped container.
+    pub fn into_inner(self) -> T {
+        self.container
+    }
+}
+
+impl<T> Deref for SingleInstance<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.container
+    }
+}
+
+impl<T> ComponentArray for SingleInstance<T>
+where
+    T: ComponentArray,
+{
+    fn component_id(&self) -> ComponentID {
+        T::component_id(&self.container)
+    }
+
+    fn component_count(&self) -> usize {
+        T::component_count(&self.container)
+    }
+
+    fn component_size(&self) -> usize {
+        T::component_size(&self.container)
+    }
+
+    fn component_align(&self) -> Alignment {
+        T::component_align(&self.container)
+    }
+
+    fn view(&self) -> ComponentView<'_> {
+        T::view(&self.container)
+    }
+
+    fn into_storage(self) -> ComponentStorage {
+        self.into_inner().into_storage()
+    }
+}
+
+impl<T> ComponentInstance for SingleInstance<T>
+where
+    T: ComponentArray,
+{
+    fn single_instance_view(&self) -> SingleInstance<ComponentView<'_>> {
+        SingleInstance::new_unchecked(self.view())
+    }
+}
+
+impl<T> CanHaveSingleInstance for T
+where
+    T: ComponentArray,
+{
+    fn instance_count(&self) -> usize {
+        self.component_count()
     }
 }
 
@@ -845,8 +1003,8 @@ mod test {
 
     #[test]
     fn swap_removing_component_from_storage_works() {
-        let rect_1_storage = ComponentStorage::from_view(&RECT_1);
-        let rect_2_storage = ComponentStorage::from_view(&RECT_2);
+        let rect_1_storage = ComponentStorage::from_single_instance_view(&RECT_1);
+        let rect_2_storage = ComponentStorage::from_single_instance_view(&RECT_2);
 
         let mut storage = ComponentStorage::from_view(&RECT_1);
         assert_eq!(storage.swap_remove(0), rect_1_storage);
@@ -876,7 +1034,7 @@ mod test {
 
     #[test]
     fn swap_removing_zero_sized_component_from_storage_works() {
-        let marked_storage = ComponentStorage::from_view(&Marked);
+        let marked_storage = ComponentStorage::from_single_instance_view(&Marked);
 
         let mut storage = ComponentStorage::from_view(&Marked);
         storage.push(&Marked);
@@ -896,5 +1054,16 @@ mod test {
         assert_eq!(storage.component_count(), 1);
         assert_eq!(storage.swap_remove(0), marked_storage);
         assert_eq!(storage.component_count(), 0);
+    }
+
+    #[test]
+    fn duplicating_single_instance_storage_works() {
+        let single_instance_storage = ComponentStorage::from_single_instance_view(&RECT_1);
+
+        let storage = single_instance_storage.duplicate_instance(3);
+
+        assert_eq!(storage.component_count(), 3);
+        assert_eq!(storage.size(), 3 * mem::size_of::<Rectangle>());
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_1, RECT_1, RECT_1]);
     }
 }

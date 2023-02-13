@@ -2,7 +2,8 @@
 
 use super::{
     component::{
-        Component, ComponentArray, ComponentID, ComponentSlice, ComponentStorage, ComponentView,
+        CanHaveSingleInstance, Component, ComponentArray, ComponentID, ComponentSlice,
+        ComponentStorage, ComponentView, SingleInstance,
     },
     world::{Entity, EntityID},
 };
@@ -59,7 +60,7 @@ pub struct ArchetypeComponents<A> {
 /// # Example 1
 /// ```
 /// # use impact_ecs::{
-/// #    component::{Component, ComponentSlice},
+/// #    component::{Component, ComponentSlice, SingleInstance},
 /// #    archetype::ArchetypeComponentView
 /// # };
 /// # use impact_ecs_macros::ComponentDoctest as Component;
@@ -90,6 +91,10 @@ pub struct ArchetypeComponents<A> {
 ///     (&position).persistent_view(), (&mass).persistent_view()
 /// ].try_into()?;
 /// assert_eq!(pos_mass_view.n_component_types(), 2);
+///
+/// // We can also convert directly into a `SingleInstance`-wrapped view
+/// let mass_view: SingleInstance<ArchetypeComponentView<'_>> = (&mass).into();
+/// // ..
 /// #
 /// # Ok::<(), Error>(())
 /// ```
@@ -542,6 +547,15 @@ where
     }
 }
 
+impl<A> CanHaveSingleInstance for ArchetypeComponents<A>
+where
+    A: ComponentArray,
+{
+    fn instance_count(&self) -> usize {
+        self.component_count()
+    }
+}
+
 impl ArchetypeComponentStorage {
     /// Creates a new [`ArchetypeComponentStorage`] storing the data
     /// of the given value that may be convertible into an
@@ -579,6 +593,55 @@ impl ArchetypeComponentStorage {
     /// storage for a new component type.
     pub fn new_storage_with_capacity<C: Component>(&self) -> ComponentStorage {
         ComponentStorage::with_capacity::<C>(self.component_count)
+    }
+}
+
+impl SingleInstance<ArchetypeComponentStorage> {
+    /// Creates a new [`SingleInstance`] wrapped [`ArchetypeComponentStorage`]
+    /// storing the data of the given value that may be convertible into a
+    /// `SingleInstance` wrapped [`ArchetypeComponentView`].
+    ///
+    /// # Errors
+    /// Returns an error if the conversion of the input value into
+    /// [`SingleInstance<ArchetypeComponentView>`] fails.
+    pub fn try_from_single_instance_view<'a, E>(
+        view: impl TryInto<SingleInstance<ArchetypeComponentView<'a>>, Error = E>,
+    ) -> Result<Self>
+    where
+        E: Into<anyhow::Error>,
+    {
+        view.try_into()
+            .map(|view| SingleInstance::new_unchecked(view.into_inner().into_storage()))
+            .map_err(E::into)
+    }
+
+    /// Creates a new [`SingleInstance`] wrapped [`ArchetypeComponentStorage`]
+    /// storing the data of the given value that is convertible into a
+    /// `SingleInstance` wrapped [`ArchetypeComponentView`].
+    pub fn from_single_instance_view<'a, V>(view: V) -> Self
+    where
+        V: Into<SingleInstance<ArchetypeComponentView<'a>>>,
+    {
+        SingleInstance::new_unchecked(view.into().into_inner().into_storage())
+    }
+
+    /// Converts this single-instance storage into a storage containing copies
+    /// of the instance component data for the given number of instances.
+    ///
+    /// # Panics
+    /// If `n_instances` is zero.
+    pub fn duplicate_instance(self, n_instances: usize) -> ArchetypeComponentStorage {
+        let mut archetype_storage = self.into_inner();
+
+        archetype_storage.component_arrays = archetype_storage
+            .component_arrays
+            .into_iter()
+            .map(|storage| SingleInstance::new_unchecked(storage).duplicate_instance(n_instances))
+            .collect();
+
+        archetype_storage.component_count = n_instances;
+
+        archetype_storage
     }
 }
 
@@ -662,18 +725,19 @@ impl ArchetypeTable {
         }
     }
 
-    /// Removes the entity with the given [`EntityID`] and all its
-    /// data from the table.
+    /// Removes the entity with the given [`EntityID`] and all its data from the
+    /// table.
     ///
     /// # Returns
-    /// The removed component data in an [`ArchetypeComponentStorage`].
+    /// The removed component data in a
+    /// [`SingleInstance<ArchetypeComponentStorage>`].
     ///
     /// # Errors
     /// Returns an error if the entity is not present in the table.
     pub(crate) fn remove_entity(
         &mut self,
         entity_id: EntityID,
-    ) -> Result<ArchetypeComponentStorage> {
+    ) -> Result<SingleInstance<ArchetypeComponentStorage>> {
         if !self.has_entity(entity_id) {
             bail!("Entity to remove not present in archetype table");
         }
@@ -687,14 +751,14 @@ impl ArchetypeTable {
         let removed_component_arrays = self
             .component_storages
             .iter()
-            .map(|storage| storage.write().unwrap().swap_remove(idx))
+            .map(|storage| storage.write().unwrap().swap_remove(idx).into_inner())
             .collect();
 
-        Ok(ArchetypeComponents::new(
+        Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
             self.archetype.clone(),
             removed_component_arrays,
             1,
-        ))
+        )))
     }
 
     /// Returns a reference to the component of the type specified
@@ -1085,6 +1149,14 @@ macro_rules! impl_archetype_conversion {
                 [component.persistent_view()].try_into().unwrap()
             }
         }
+        impl<'a, $c> From<&'a $c> for SingleInstance<ArchetypeComponentView<'a>>
+        where
+            $c: 'a + Component,
+        {
+            fn from(component: &'a $c) -> Self {
+                SingleInstance::new_unchecked(component.try_into().unwrap())
+            }
+        }
         // For a a slice of instances of a single component type
         impl<'a, $c> From<&'a [$c]> for ArchetypeComponentView<'a>
         where
@@ -1114,6 +1186,16 @@ macro_rules! impl_archetype_conversion {
             #[allow(non_snake_case)]
             fn try_from(($(paste! { [<component_ $c>] }),*): ($(&'a $c),*)) -> Result<Self> {
                 [$(paste! { [<component_ $c>] }.persistent_view()),*].try_into()
+            }
+        }
+        impl<'a, $($c),*> TryFrom<($(&'a $c),*)> for SingleInstance<ArchetypeComponentView<'a>>
+        where
+        $($c: 'a + Component,)*
+        {
+            type Error = anyhow::Error;
+            #[allow(non_snake_case)]
+            fn try_from(components: ($(&'a $c),*)) -> Result<Self> {
+                components.try_into().map(SingleInstance::new_unchecked)
             }
         }
         // For slices of instances of multiple component types
@@ -1414,7 +1496,20 @@ mod test {
         assert_eq!(view.component_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
+        let view: SingleInstance<ArchetypeComponentView<'_>> = (&Marked).into();
+        assert_eq!(view.archetype(), &archetype_of!(Marked));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Marked>());
+
         let view: ArchetypeComponentView<'_> = (&BYTE).into();
+        assert_eq!(view.archetype(), &archetype_of!(Byte));
+        assert_eq!(view.n_component_types(), 1);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+
+        let view: SingleInstance<ArchetypeComponentView<'_>> = (&BYTE).into();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
         assert_eq!(view.component_count(), 1);
@@ -1430,7 +1525,28 @@ mod test {
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
         assert_eq!(view.components_of_type::<Position>(), &[POS]);
 
+        let view: SingleInstance<ArchetypeComponentView<'_>> = (&BYTE, &POS).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
+        assert_eq!(view.n_component_types(), 2);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+
         let view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
+        assert_eq!(view.n_component_types(), 3);
+        assert_eq!(view.component_count(), 1);
+        assert!(view.has_component_type::<Byte>());
+        assert!(view.has_component_type::<Position>());
+        assert!(view.has_component_type::<Rectangle>());
+        assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
+        assert_eq!(view.components_of_type::<Position>(), &[POS]);
+        assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
+
+        let view: SingleInstance<ArchetypeComponentView<'_>> =
+            (&BYTE, &POS, &RECT).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
         assert_eq!(view.component_count(), 1);
@@ -1798,7 +1914,7 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn removing_missing_component_from_archetype_archetype_view_fails() {
+    fn removing_missing_component_from_archetype_view_fails() {
         let mut view: ArchetypeComponentView<'_> = (&BYTE, &RECT).try_into().unwrap();
         view.remove_component_type_with_id(Position::component_id())
             .unwrap();
@@ -1806,14 +1922,14 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn removing_component_from_empty_archetype_archetype_view_fails() {
+    fn removing_component_from_empty_archetype_view_fails() {
         let mut view = ArchetypeComponentView::empty();
         view.remove_component_type_with_id(Position::component_id())
             .unwrap();
     }
 
     #[test]
-    fn removing_components_from_archetype_archetype_view_works() {
+    fn removing_components_from_archetype_view_works() {
         let mut view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         view.remove_component_type_with_id(Byte::component_id())
             .unwrap();
@@ -1832,6 +1948,33 @@ mod test {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!());
         assert_eq!(view.n_component_types(), 0);
+    }
+
+    #[test]
+    fn duplicating_single_instance_archetype_storage_works() {
+        let single_instance_storage =
+            SingleInstance::<ArchetypeComponentStorage>::try_from_single_instance_view((
+                &BYTE, &POS, &RECT,
+            ))
+            .unwrap();
+
+        let storage = single_instance_storage.duplicate_instance(3);
+
+        assert_eq!(
+            storage.archetype(),
+            &archetype_of!(Byte, Position, Rectangle)
+        );
+        assert_eq!(storage.n_component_types(), 3);
+        assert_eq!(storage.component_count(), 3);
+        assert!(storage.has_component_type::<Byte>());
+        assert!(storage.has_component_type::<Position>());
+        assert!(storage.has_component_type::<Rectangle>());
+        assert_eq!(storage.components_of_type::<Byte>(), &[BYTE, BYTE, BYTE]);
+        assert_eq!(storage.components_of_type::<Position>(), &[POS, POS, POS]);
+        assert_eq!(
+            storage.components_of_type::<Rectangle>(),
+            &[RECT, RECT, RECT]
+        );
     }
 
     #[test]

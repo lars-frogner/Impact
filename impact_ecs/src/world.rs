@@ -1,16 +1,11 @@
 //! Overarching container and coordinator for ECS.
 
-use crate::{
-    archetype::ArchetypeComponentStorage,
-    component::{ComponentArray, ComponentStorage},
-};
-
 use super::{
     archetype::{
-        Archetype, ArchetypeComponents, ArchetypeID, ArchetypeTable, ComponentStorageEntry,
-        ComponentStorageEntryMut,
+        Archetype, ArchetypeComponentStorage, ArchetypeComponents, ArchetypeID, ArchetypeTable,
+        ComponentStorageEntry, ComponentStorageEntryMut,
     },
-    component::{Component, ComponentID},
+    component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
 use anyhow::{anyhow, Result};
 use impact_utils::KeyIndexMapper;
@@ -90,20 +85,17 @@ impl World {
         }
     }
 
-    /// Creates a new [`Entity`] with the given set of components.
-    /// The given set of components must be provided as a type
-    /// that can be converted to an [`ArchetypeComponents`] object.
+    /// Creates a new [`Entity`] with the given set of components. The given set
+    /// of components must be provided as a type that can be converted to an
+    /// [`ArchetypeComponents`] object wrapped in a [`SingleInstance`].
     /// Typically, this will be a tuple of references to [`Component`]
-    /// instances, which can be converted into an
+    /// instances, which can be converted into a `SingleInstance` wrapped
     /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - The given set of components does not have a valid
-    ///   [`Archetype`], which happens if there are multiple
-    ///   components of the same type.
-    /// - More than one instance of each component type is
-    ///   provided (use [`World::create_entities`] for that).
+    /// Returns an error if the given set of components does not have a valid
+    /// [`Archetype`], which happens if there are multiple components of the
+    /// same type.
     ///
     /// # Examples
     /// ```
@@ -132,19 +124,16 @@ impl World {
     /// ```
     pub fn create_entity<A, E>(
         &mut self,
-        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
     ) -> Result<Entity>
     where
         A: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        self.create_entities(components).and_then(|mut entities| {
-            if entities.len() == 1 {
-                Ok(entities.pop().unwrap())
-            } else {
-                Err(anyhow!("Got components for more than one entity"))
-            }
-        })
+        Ok(self
+            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
+            .pop()
+            .unwrap())
     }
 
     /// Creates multiple new entities with the given set of components.
@@ -387,7 +376,10 @@ impl World {
         }
     }
 
-    fn remove_entity_data(&mut self, entity: &Entity) -> Result<ArchetypeComponentStorage> {
+    fn remove_entity_data(
+        &mut self,
+        entity: &Entity,
+    ) -> Result<SingleInstance<ArchetypeComponentStorage>> {
         let idx = self.get_table_idx(entity.archetype_id())?;
         let mut table = self.archetype_tables[idx].write().unwrap();
 
@@ -415,7 +407,7 @@ impl World {
     ) -> Result<()> {
         // Since the archetype of the entity changes when adding a
         // component, we need to first remove it from the old table
-        let mut components = self.remove_entity_data(entity)?;
+        let mut components = self.remove_entity_data(entity)?.into_inner();
 
         // We then add the component to the entity's data
         components.add_new_component_type(component_storage)?;
@@ -435,7 +427,7 @@ impl World {
     ) -> Result<()> {
         // Since the archetype of the entity changes when removing a
         // component, we need to first remove it from the old table
-        let mut components = self.remove_entity_data(entity)?;
+        let mut components = self.remove_entity_data(entity)?.into_inner();
 
         // We then remove the component from the entity's data
         components.remove_component_type_with_id(component_id)?;
