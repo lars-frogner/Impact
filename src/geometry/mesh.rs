@@ -65,7 +65,7 @@ pub struct TriangleMesh<F: Float> {
     colors: Vec<VertexColor<F>>,
     normal_vectors: Vec<VertexNormalVector<F>>,
     texture_coords: Vec<VertexTextureCoords<F>>,
-    indices: Vec<u16>,
+    indices: Vec<u32>,
     position_change_tracker: CollectionChangeTracker,
     color_change_tracker: CollectionChangeTracker,
     normal_vector_change_tracker: CollectionChangeTracker,
@@ -132,7 +132,7 @@ impl<F: Float> TriangleMesh<F> {
         colors: Vec<VertexColor<F>>,
         normal_vectors: Vec<VertexNormalVector<F>>,
         texture_coords: Vec<VertexTextureCoords<F>>,
-        indices: Vec<u16>,
+        indices: Vec<u32>,
     ) -> Self {
         let n_vertices = positions.len();
 
@@ -185,7 +185,7 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Returns a slice with the vertex indices describing the faces of the
     /// mesh.
-    pub fn indices(&self) -> &[u16] {
+    pub fn indices(&self) -> &[u32] {
         &self.indices
     }
 
