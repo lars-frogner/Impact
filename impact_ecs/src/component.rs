@@ -137,6 +137,7 @@ pub trait CanHaveSingleInstance {
 
 /// Wrapper for types holding component instances that guarantees that the
 /// wrapped container only holds component data for a single instance.
+#[repr(transparent)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SingleInstance<T> {
     container: T,
@@ -233,7 +234,7 @@ impl ComponentStorage {
 
     /// Initializes an empty storage with preallocated capacity for
     /// the given number of component instances of type `C`.
-    pub(crate) fn with_capacity<C: Component>(component_count: usize) -> Self {
+    pub fn with_capacity<C: Component>(component_count: usize) -> Self {
         let component_size = mem::size_of::<C>();
         Self::new(
             C::component_id(),
@@ -244,7 +245,7 @@ impl ComponentStorage {
     }
 
     /// Copies the bytes in the given view into a new storage.
-    pub(crate) fn from_view<'a>(slice: impl ComponentSlice<'a>) -> Self {
+    pub fn from_view<'a>(slice: impl ComponentSlice<'a>) -> Self {
         let view = slice.persistent_view();
 
         ComponentStorage {
@@ -257,8 +258,7 @@ impl ComponentStorage {
 
     /// Copies the bytes in the given view representing a single component
     /// instance into a new storage.
-    #[cfg(test)]
-    pub(crate) fn from_single_instance_view<'a>(
+    pub fn from_single_instance_view<'a>(
         slice: impl ComponentSlice<'a> + ComponentInstance,
     ) -> SingleInstance<Self> {
         SingleInstance::new_unchecked(Self::from_view(slice))
