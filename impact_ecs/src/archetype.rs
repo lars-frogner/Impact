@@ -643,6 +643,40 @@ impl SingleInstance<ArchetypeComponentStorage> {
 
         archetype_storage
     }
+
+    /// Creates an [`ArchetypeComponentStorage`] containing both the given
+    /// [`ArchetypeComponents`] as well as the components in this storage whose
+    /// types are not among the given components. If there are multiple
+    /// instances of each component type in the given `ArchetypeComponents`
+    /// container, the component data in this storage will be duplicated to
+    /// match the number of instances before merging.
+    ///
+    /// # Errors
+    /// Returns an error if the conversion of `components` into
+    /// `ArchetypeComponents` fails.
+    pub fn combined_with<A, E>(
+        self,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
+    ) -> Result<ArchetypeComponentStorage>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components: ArchetypeComponents<A> = components.try_into().map_err(E::into)?;
+
+        let mut duplicated_components = self.duplicate_instance(components.component_count());
+
+        duplicated_components
+            .add_or_overwrite_component_types(
+                components
+                    .into_component_arrays()
+                    .into_iter()
+                    .map(A::into_storage),
+            )
+            .unwrap();
+
+        Ok(duplicated_components)
+    }
 }
 
 impl<'a> From<ArchetypeComponentView<'a>> for ArchetypeComponentStorage {
@@ -2073,6 +2107,61 @@ mod test {
         assert_eq!(
             storage.components_of_type::<Rectangle>(),
             &[RECT, RECT, RECT]
+        );
+    }
+
+    #[test]
+    fn combining_single_instance_archetype_storage_with_single_instance_archetype_view_works() {
+        let single_instance_storage =
+            ArchetypeComponentStorage::try_from_single_instance_view((&BYTE, &POS)).unwrap();
+
+        let combined_storage = single_instance_storage
+            .combined_with((&RECT, &BYTE2))
+            .unwrap();
+
+        assert_eq!(
+            combined_storage.archetype(),
+            &archetype_of!(Byte, Position, Rectangle)
+        );
+        assert_eq!(combined_storage.n_component_types(), 3);
+        assert_eq!(combined_storage.component_count(), 1);
+        assert!(combined_storage.has_component_type::<Byte>());
+        assert!(combined_storage.has_component_type::<Position>());
+        assert!(combined_storage.has_component_type::<Rectangle>());
+        assert_eq!(combined_storage.components_of_type::<Byte>(), &[BYTE2]);
+        assert_eq!(combined_storage.components_of_type::<Position>(), &[POS]);
+        assert_eq!(combined_storage.components_of_type::<Rectangle>(), &[RECT]);
+    }
+
+    #[test]
+    fn combining_single_instance_archetype_storage_with_multi_instance_archetype_view_works() {
+        let single_instance_storage =
+            ArchetypeComponentStorage::try_from_single_instance_view((&BYTE, &POS)).unwrap();
+
+        let combined_storage = single_instance_storage
+            .combined_with((&[RECT, RECT], &[BYTE2, BYTE2]))
+            .unwrap();
+
+        assert_eq!(
+            combined_storage.archetype(),
+            &archetype_of!(Byte, Position, Rectangle)
+        );
+        assert_eq!(combined_storage.n_component_types(), 3);
+        assert_eq!(combined_storage.component_count(), 2);
+        assert!(combined_storage.has_component_type::<Byte>());
+        assert!(combined_storage.has_component_type::<Position>());
+        assert!(combined_storage.has_component_type::<Rectangle>());
+        assert_eq!(
+            combined_storage.components_of_type::<Byte>(),
+            &[BYTE2, BYTE2]
+        );
+        assert_eq!(
+            combined_storage.components_of_type::<Position>(),
+            &[POS, POS]
+        );
+        assert_eq!(
+            combined_storage.components_of_type::<Rectangle>(),
+            &[RECT, RECT]
         );
     }
 
