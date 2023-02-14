@@ -51,7 +51,7 @@ pub type fre = f32;
 pub struct RenderingSystem {
     core_system: CoreRenderingSystem,
     config: RenderingConfig,
-    assets: Assets,
+    assets: RwLock<Assets>,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
     depth_texture: DepthTexture,
@@ -75,7 +75,7 @@ impl RenderingSystem {
         Ok(Self {
             core_system,
             config: RenderingConfig::default(),
-            assets,
+            assets: RwLock::new(assets),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK, 1.0)),
             depth_texture,
@@ -92,12 +92,12 @@ impl RenderingSystem {
         &self.config
     }
 
-    /// Returns a reference to the rendering assets.
-    pub fn assets(&self) -> &Assets {
+    /// Returns a reference to the rendering assets, guarded by a [`RwLock`].
+    pub fn assets(&self) -> &RwLock<Assets> {
         &self.assets
     }
 
-    /// Returns a reference to the [`RenderBufferManager`], guarded
+    /// Returns a reference to the [`RenderResourceManager`], guarded
     /// by a [`RwLock`].
     pub fn render_resource_manager(&self) -> &RwLock<RenderResourceManager> {
         &self.render_resource_manager
