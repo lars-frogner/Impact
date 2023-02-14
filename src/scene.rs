@@ -5,6 +5,7 @@ mod components;
 mod events;
 mod graph;
 mod instance;
+pub mod io;
 mod light;
 mod material;
 mod mesh;

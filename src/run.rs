@@ -113,6 +113,20 @@ async fn init_world(window: Window) -> Result<World> {
         )
         .unwrap();
 
+    mesh_repository
+        .add_mesh(
+            MeshID(hash64!("Cylinder mesh")),
+            TriangleMesh::create_cylinder(1.0, 1.0, 100),
+        )
+        .unwrap();
+
+    mesh_repository
+        .add_mesh(
+            MeshID(hash64!("Sphere mesh")),
+            TriangleMesh::create_sphere(100),
+        )
+        .unwrap();
+
     let vertical_field_of_view = Degrees(45.0);
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
@@ -132,13 +146,40 @@ async fn init_world(window: Window) -> Result<World> {
         Some(Box::new(orientation_controller)),
     );
 
+    let test_model_components = world
+        .load_models_from_obj_file("assets/f-16/f-16.obj")
+        .unwrap();
+
+    for test_model_comps in test_model_components {
+        world
+            .create_entities(
+                test_model_comps
+                    .combined_with((
+                        &PositionComp(Point3::new(0.0, -0.6, 5.0)),
+                        &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+                        &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+                        // &VertexColorComp,
+                        // &FixedColorComp(vector![0.5, 0.5, 0.5, 1.0]),
+                        &BlinnPhongComp {
+                            ambient: vector![0.1, 0.1, 0.1],
+                            diffuse: vector![0.4, 0.4, 0.4],
+                            specular: vector![0.3, 0.3, 0.3],
+                            shininess: 6.0,
+                            alpha: 1.0,
+                        },
+                    ))
+                    .unwrap(),
+            )
+            .unwrap();
+    }
+
     world
         .create_entities((
             &PerspectiveCameraComp::new(
                 vertical_field_of_view,
                 UpperExclusiveBounds::new(0.1, 100.0),
             ),
-            &PositionComp(Point3::new(0.0, 0.0, 0.0)),
+            &PositionComp(Point3::new(0.0, 1.0, 0.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
             &VelocityComp(Vector3::zeros()),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
@@ -163,40 +204,56 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
-    world
-        .create_entities((
-            &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
-            &PositionComp(Point3::new(0.0, 0.0, 2.0)),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-            &VertexColorComp,
-        ))
-        .unwrap();
+    // world
+    //     .create_entities((
+    //         &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
+    //         &PositionComp(Point3::new(10.0, 0.0, 0.0)),
+    //         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+    //         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+    //         &BlinnPhongComp {
+    //             ambient: vector![0.1, 0.1, 0.1],
+    //             diffuse: vector![0.4, 0.4, 0.4],
+    //             specular: vector![0.3, 0.3, 0.3],
+    //             shininess: 6.0,
+    //             alpha: 1.0,
+    //         },
+    //     ))
+    //     .unwrap();
 
-    world
-        .create_entities((
-            &MeshComp::new(MeshID(hash64!("Box mesh"))),
-            &PositionComp(Point3::new(2.0, 0.0, 0.0)),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-            &AngularVelocityComp(AngularVelocity::new(
-                UnitVector3::new_normalize(vector![0.5, 0.2, 0.1]),
-                Degrees(0.0),
-            )),
-            &BlinnPhongComp {
-                ambient: vector![0.1, 0.1, 0.1],
-                diffuse: vector![0.4, 0.4, 0.4],
-                specular: vector![0.3, 0.3, 0.3],
-                shininess: 6.0,
-                alpha: 1.0,
-            },
-        ))
-        .unwrap();
+    // world
+    //     .create_entities((
+    //         &MeshComp::new(MeshID(hash64!("Pentagon mesh"))),
+    //         &PositionComp(Point3::new(0.0, 10.0, 0.0)),
+    //         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+    //         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+    //         &FixedColorComp(vector![1.0, 1.0, 1.0, 1.0]),
+    //     ))
+    //     .unwrap();
+
+    // world
+    //     .create_entities((
+    //         &MeshComp::new(MeshID(hash64!("Cylinder mesh"))),
+    //         &PositionComp(Point3::new(0.0, 0.0, 10.0)),
+    //         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+    //         &AngularVelocityComp(AngularVelocity::new(
+    //             UnitVector3::new_normalize(vector![0.5, 0.2, 0.1]),
+    //             Degrees(0.0),
+    //         )),
+    //         &BlinnPhongComp {
+    //             ambient: vector![0.1, 0.1, 0.1],
+    //             diffuse: vector![0.4, 0.4, 0.4],
+    //             specular: vector![0.3, 0.3, 0.3],
+    //             shininess: 6.0,
+    //             alpha: 1.0,
+    //         },
+    //     ))
+    //     .unwrap();
 
     world
         .create_entities((
             &[
                 PositionComp(Point3::new(5.0, 10.0, -10.0)),
-                PositionComp(Point3::new(-5.0, 4.0, 2.0)),
+                PositionComp(Point3::new(-5.0, 4.0, 8.0)),
             ],
             &[
                 RadianceComp(vector![1.0, 1.0, 1.0] * 100.0),

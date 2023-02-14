@@ -4,7 +4,7 @@ use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     physics::PhysicsSimulator,
     rendering::RenderingSystem,
-    scene::Scene,
+    scene::{io, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
@@ -12,12 +12,14 @@ use crate::{
 };
 use anyhow::Result;
 use impact_ecs::{
-    archetype::ArchetypeComponents,
-    component::ComponentArray,
+    archetype::{ArchetypeComponentStorage, ArchetypeComponents},
+    component::{ComponentArray, SingleInstance},
     world::{Entity, World as ECSWorld},
 };
 use std::{
+    fmt::Debug,
     num::NonZeroUsize,
+    path::Path,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -93,6 +95,31 @@ impl World {
     /// by a [`RwLock`].
     pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
+    }
+
+    /// Reads the Wavefront OBJ file at the given path and any associated MTL
+    /// material files and returns the set of components representing the mesh and
+    /// material of each model in the file. The meshes are added to the mesh
+    /// repository, and any image textures referenced in the MTL files are loaded as
+    /// rendering assets. Each [`ArchetypeComponentStorage`] in the returned list
+    /// contains the components describing a single model, and their order in the
+    /// list is the same as their order in the OBJ file.
+    ///
+    /// # Errors
+    /// Returns an error if any of the involved OBJ, MTL or texture files can not be
+    /// found or loaded.
+    pub fn load_models_from_obj_file<P>(
+        &self,
+        obj_file_path: P,
+    ) -> Result<Vec<SingleInstance<ArchetypeComponentStorage>>>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        io::load_models_from_obj_file(
+            &self.renderer,
+            self.scene.read().unwrap().mesh_repository(),
+            obj_file_path,
+        )
     }
 
     pub fn create_entities<A, E>(
