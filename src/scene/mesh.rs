@@ -2,7 +2,7 @@
 
 use crate::{geometry::TriangleMesh, num::Float};
 use anyhow::{anyhow, Result};
-use impact_utils::stringhash64_newtype;
+use impact_utils::{hash64, stringhash64_newtype};
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
@@ -53,5 +53,36 @@ impl<F: Float> MeshRepository<F> {
             }
             Entry::Occupied(_) => Err(anyhow!("Mesh {} already present in repository", mesh_id)),
         }
+    }
+
+    /// Includes the given mesh in the repository under an ID derived from the
+    /// given name.
+    ///
+    /// # Returns
+    /// The ID assigned to the mesh.
+    ///
+    /// # Errors
+    /// Returns an error if a mesh with the given name already exists. The
+    /// repository will remain unchanged.
+    pub fn add_named_mesh(
+        &mut self,
+        name: impl AsRef<str>,
+        mesh: TriangleMesh<F>,
+    ) -> Result<MeshID> {
+        let mesh_id = MeshID(hash64!(name.as_ref()));
+        self.add_mesh(mesh_id, mesh)?;
+        Ok(mesh_id)
+    }
+
+    /// Includes the given mesh in the repository under an ID derived from the
+    /// given name, unless a mesh with the same ID is already present.
+    pub fn add_named_mesh_unless_present(
+        &mut self,
+        name: impl AsRef<str>,
+        mesh: TriangleMesh<F>,
+    ) -> MeshID {
+        let mesh_id = MeshID(hash64!(name.as_ref()));
+        let _ = self.add_mesh(mesh_id, mesh);
+        mesh_id
     }
 }
