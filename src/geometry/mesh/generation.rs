@@ -63,7 +63,7 @@ impl<F: Float> TriangleMesh<F> {
             texcoord![F::ZERO, F::ZERO],
         ];
 
-        let indices = vec![0, 1, 3, 1, 2, 3];
+        let indices = vec![0, 3, 1, 1, 3, 2];
 
         Self::new(
             positions,
@@ -105,7 +105,7 @@ impl<F: Float> TriangleMesh<F> {
         let mut idx = 0;
 
         let mut add_face_indices = || {
-            indices.extend_from_slice(&[idx, idx + 1, idx + 3, idx + 1, idx + 2, idx + 3]);
+            indices.extend_from_slice(&[idx, idx + 3, idx + 1, idx + 1, idx + 3, idx + 2]);
             idx += 4;
         };
 
@@ -256,20 +256,20 @@ impl<F: Float> TriangleMesh<F> {
             indices.extend_from_slice(&[
                 // First side triangle
                 current_idx - 4,
-                current_idx,
                 current_idx - 3,
+                current_idx,
                 // Second side triangle
                 current_idx - 3,
-                current_idx,
                 current_idx + 1,
+                current_idx,
                 // Bottom lid triangle
                 current_idx + 2,
-                current_idx - 2,
                 0,
+                current_idx - 2,
                 // Top lid triangle
                 current_idx - 1,
-                current_idx + 3,
                 1,
+                current_idx + 3,
             ]);
 
             angle += angle_between_vertices;
@@ -279,17 +279,17 @@ impl<F: Float> TriangleMesh<F> {
         let current_idx = 4 * n_circumference_vertices + 2;
         indices.extend_from_slice(&[
             current_idx - 4,
-            2,
-            current_idx - 3,
             current_idx - 3,
             2,
+            current_idx - 3,
             3,
+            2,
             4,
-            current_idx - 2,
             0,
+            current_idx - 2,
             current_idx - 1,
-            5,
             1,
+            5,
         ]);
 
         Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
@@ -360,31 +360,31 @@ impl<F: Float> TriangleMesh<F> {
 
         // Top cap
         for _ in 0..n_circumference_vertices - 1 {
-            indices.extend_from_slice(&[idx, idx + 1, 0]);
+            indices.extend_from_slice(&[idx, 0, idx + 1]);
             idx += 1;
         }
-        indices.extend_from_slice(&[idx, idx - n_circumference_vertices + 1, 0]);
+        indices.extend_from_slice(&[idx, 0, idx - n_circumference_vertices + 1]);
         idx += 1;
 
         for _ in 1..n_rings {
             for _ in 0..n_circumference_vertices - 1 {
                 indices.extend_from_slice(&[
                     idx,
-                    idx + 1,
-                    idx - n_circumference_vertices,
                     idx - n_circumference_vertices,
                     idx + 1,
+                    idx - n_circumference_vertices,
                     idx - n_circumference_vertices + 1,
+                    idx + 1,
                 ]);
                 idx += 1;
             }
             indices.extend_from_slice(&[
                 idx,
-                idx - n_circumference_vertices + 1,
-                idx - n_circumference_vertices,
                 idx - n_circumference_vertices,
                 idx - n_circumference_vertices + 1,
+                idx - n_circumference_vertices,
                 idx - 2 * n_circumference_vertices + 1,
+                idx - n_circumference_vertices + 1,
             ]);
             idx += 1;
         }
@@ -393,10 +393,10 @@ impl<F: Float> TriangleMesh<F> {
 
         // Bottom cap
         for _ in 0..n_circumference_vertices - 1 {
-            indices.extend_from_slice(&[idx, idx + 1, 1]);
+            indices.extend_from_slice(&[idx, 1, idx + 1]);
             idx += 1;
         }
-        indices.extend_from_slice(&[idx, idx - n_circumference_vertices + 1, 1]);
+        indices.extend_from_slice(&[idx, 1, idx - n_circumference_vertices + 1]);
 
         Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
     }
