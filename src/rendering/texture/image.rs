@@ -32,10 +32,10 @@ impl ImageTexture {
     pub fn from_path(
         core_system: &CoreRenderingSystem,
         image_path: impl AsRef<Path>,
-        label: &str,
     ) -> Result<Self> {
+        let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
-        Self::from_image(core_system, &image, label)
+        Self::from_image(core_system, &image, &image_path.to_string_lossy())
     }
 
     /// Creates a texture for the image file represented by the given
