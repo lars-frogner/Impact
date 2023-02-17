@@ -5,8 +5,8 @@ use crate::{
     physics::{AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp, Static},
     rendering::RenderingTag,
     scene::{
-        CameraNodeID, GroupNodeID, ModelInstanceNodeID, PointLightComp, SceneGraphNodeComp,
-        SyncSceneCameraViewTransform,
+        CameraNodeID, DirectionComp, DirectionalLightComp, GroupNodeID, LightDirection,
+        ModelInstanceNodeID, PointLightComp, SceneGraphNodeComp, SyncSceneCameraViewTransform,
     },
     world::World,
 };
@@ -91,13 +91,13 @@ define_task!(
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the camera space position
-    /// of every applicable light source in the
+    /// and direction of every applicable light source in the
     /// [`LightStorage`](crate::scene::LightStorage).
-    [pub] SyncLightPositionsInStorage,
+    [pub] SyncLightPositionsAndDirectionsInStorage,
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing camera space positions of light in storage"; {
+        with_debug_logging!("Synchronizing camera space positions and directions of lights in storage"; {
             let scene = world.scene().read().unwrap();
 
             let ecs_world = world.ecs_world().read().unwrap();
@@ -117,6 +117,15 @@ define_task!(
                     light_storage
                         .point_light_mut(light_id)
                         .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
+                }
+            );
+
+            query!(
+                ecs_world, |directional_light: &DirectionalLightComp, direction: &DirectionComp| {
+                    let light_id = directional_light.id;
+                    light_storage
+                        .directional_light_mut(light_id)
+                        .set_camera_space_direction(LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast())));
                 }
             );
 

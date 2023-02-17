@@ -4,9 +4,10 @@ use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera},
     physics::{OrientationComp, PositionComp},
     scene::{
-        self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
-        FixedTextureMaterial, MaterialComp, MeshComp, ModelID, ModelInstanceNodeID, PointLight,
-        ScalingComp, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial, VertexColorMaterial,
+        self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, DirectionalLight,
+        FixedColorMaterial, FixedTextureMaterial, MaterialComp, MeshComp, ModelID,
+        ModelInstanceNodeID, PointLight, ScalingComp, Scene, SceneGraphNodeComp,
+        TexturedBlinnPhongMaterial, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -95,6 +96,12 @@ impl Scene {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         PointLight::add_point_light_component_for_entity(
+            self.scene_camera(),
+            self.light_storage(),
+            components,
+            desynchronized,
+        );
+        DirectionalLight::add_directional_light_component_for_entity(
             self.scene_camera(),
             self.light_storage(),
             components,
@@ -218,6 +225,7 @@ impl Scene {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         PointLight::remove_light_from_storage(self.light_storage(), entity, desynchronized);
+        DirectionalLight::remove_light_from_storage(self.light_storage(), entity, desynchronized);
     }
 
     fn remove_material_features_for_entity(

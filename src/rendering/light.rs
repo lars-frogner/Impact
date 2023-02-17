@@ -6,7 +6,7 @@ use crate::{
         uniform::{UniformRenderBufferManager, UniformTransferResult},
         CoreRenderingSystem, LightShaderInput,
     },
-    scene::{LightStorage, PointLight},
+    scene::{DirectionalLight, LightStorage, PointLight},
 };
 use impact_utils::ConstStringHash64;
 
@@ -15,6 +15,7 @@ use impact_utils::ConstStringHash64;
 #[derive(Debug)]
 pub struct LightRenderBufferManager {
     point_light_render_buffer_manager: UniformRenderBufferManager,
+    directional_light_render_buffer_manager: UniformRenderBufferManager,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     shader_input: LightShaderInput,
@@ -22,6 +23,7 @@ pub struct LightRenderBufferManager {
 
 impl LightRenderBufferManager {
     const POINT_LIGHT_BINDING: u32 = 0;
+    const DIRECTIONAL_LIGHT_BINDING: u32 = 1;
 
     /// Creates a new manager with render buffers initialized from the given
     /// [`LightStorage`].
@@ -33,19 +35,29 @@ impl LightRenderBufferManager {
             core_system,
             light_storage.point_light_buffer(),
         );
+        let directional_light_render_buffer_manager =
+            UniformRenderBufferManager::for_uniform_buffer(
+                core_system,
+                light_storage.directional_light_buffer(),
+            );
 
         let bind_group_layout = Self::create_bind_group_layout(core_system.device());
 
         let bind_group = Self::create_bind_group(
             core_system.device(),
             &point_light_render_buffer_manager,
+            &directional_light_render_buffer_manager,
             &bind_group_layout,
         );
 
-        let shader_input = Self::create_shader_input(&point_light_render_buffer_manager);
+        let shader_input = Self::create_shader_input(
+            &point_light_render_buffer_manager,
+            &directional_light_render_buffer_manager,
+        );
 
         Self {
             point_light_render_buffer_manager,
+            directional_light_render_buffer_manager,
             bind_group_layout,
             bind_group,
             shader_input,
@@ -77,32 +89,41 @@ impl LightRenderBufferManager {
         core_system: &CoreRenderingSystem,
         light_storage: &LightStorage,
     ) {
-        let mut buffer_size_changed = false;
-
-        let transfer_result = self
+        let point_light_transfer_result = self
             .point_light_render_buffer_manager
             .transfer_uniforms_to_render_buffer(core_system, light_storage.point_light_buffer());
 
-        if transfer_result == UniformTransferResult::CreatedNewBuffer {
-            buffer_size_changed = true;
-        }
+        let directional_light_transfer_result = self
+            .directional_light_render_buffer_manager
+            .transfer_uniforms_to_render_buffer(
+                core_system,
+                light_storage.directional_light_buffer(),
+            );
 
-        if buffer_size_changed {
+        if point_light_transfer_result == UniformTransferResult::CreatedNewBuffer
+            || directional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
+        {
+            // Recreate bind group and shader input
             self.bind_group = Self::create_bind_group(
                 core_system.device(),
                 &self.point_light_render_buffer_manager,
+                &self.directional_light_render_buffer_manager,
                 &self.bind_group_layout,
             );
 
-            self.shader_input = Self::create_shader_input(&self.point_light_render_buffer_manager);
+            self.shader_input = Self::create_shader_input(
+                &self.point_light_render_buffer_manager,
+                &self.directional_light_render_buffer_manager,
+            );
         }
     }
 
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[PointLight::create_bind_group_layout_entry(
-                Self::POINT_LIGHT_BINDING,
-            )],
+            entries: &[
+                PointLight::create_bind_group_layout_entry(Self::POINT_LIGHT_BINDING),
+                DirectionalLight::create_bind_group_layout_entry(Self::DIRECTIONAL_LIGHT_BINDING),
+            ],
             label: Some("Light bind group layout"),
         })
     }
@@ -110,28 +131,45 @@ impl LightRenderBufferManager {
     fn create_bind_group(
         device: &wgpu::Device,
         point_light_render_buffer_manager: &UniformRenderBufferManager,
+        directional_light_render_buffer_manager: &UniformRenderBufferManager,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            entries: &[point_light_render_buffer_manager
-                .create_bind_group_entry(Self::POINT_LIGHT_BINDING)],
+            entries: &[
+                point_light_render_buffer_manager
+                    .create_bind_group_entry(Self::POINT_LIGHT_BINDING),
+                directional_light_render_buffer_manager
+                    .create_bind_group_entry(Self::DIRECTIONAL_LIGHT_BINDING),
+            ],
             label: Some("Light bind group"),
         })
     }
 
     fn create_shader_input(
         point_light_render_buffer_manager: &UniformRenderBufferManager,
+        directional_light_render_buffer_manager: &UniformRenderBufferManager,
     ) -> LightShaderInput {
         LightShaderInput {
             point_light_binding: Self::POINT_LIGHT_BINDING,
+            directional_light_binding: Self::DIRECTIONAL_LIGHT_BINDING,
             max_point_light_count: point_light_render_buffer_manager.max_uniform_count() as u64,
+            max_directional_light_count: directional_light_render_buffer_manager.max_uniform_count()
+                as u64,
         }
     }
 }
 
 impl UniformBufferable for PointLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Point light");
+
+    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        buffer::create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::FRAGMENT)
+    }
+}
+
+impl UniformBufferable for DirectionalLight {
+    const ID: ConstStringHash64 = ConstStringHash64::new("Directional light");
 
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         buffer::create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::FRAGMENT)

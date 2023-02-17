@@ -23,7 +23,8 @@ pub use graph::{
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    LightID, LightStorage, Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp,
+    DirectionComp, DirectionalLight, DirectionalLightComp, LightDirection, LightID, LightStorage,
+    Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp,
 };
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
@@ -35,7 +36,7 @@ pub use material::{
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
-pub use systems::SyncLightPositionsInStorage;
+pub use systems::SyncLightPositionsAndDirectionsInStorage;
 pub use tasks::{BufferVisibleModelInstances, SyncSceneCameraViewTransform};
 
 use crate::rendering::fre;

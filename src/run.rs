@@ -19,9 +19,9 @@ use crate::{
     },
     rendering::{fre, Assets, TextureID},
     scene::{
-        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, FixedTextureComp, MeshComp,
-        MeshID, MeshRepository, Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp,
-        Scene, VertexColorComp,
+        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp, FixedColorComp,
+        FixedTextureComp, LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional,
+        PerspectiveCameraComp, RadianceComp, ScalingComp, Scene, VertexColorComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -96,10 +96,6 @@ async fn init_world(window: Window) -> Result<World> {
     );
 
     mesh_repository
-        .add_mesh(MeshID(hash64!("Pentagon mesh")), create_pentagon_mesh())
-        .unwrap();
-
-    mesh_repository
         .add_mesh(
             MeshID(hash64!("Plane mesh")),
             TriangleMesh::create_plane(1.0, 1.0),
@@ -146,25 +142,24 @@ async fn init_world(window: Window) -> Result<World> {
         Some(Box::new(orientation_controller)),
     );
 
-    let test_model_components = world
-        .load_models_from_obj_file("assets/f-16/f-16.obj")
-        .unwrap();
+    let test_model_components = world.load_models_from_obj_file("assets/bunny.obj").unwrap();
 
     for test_model_comps in test_model_components {
         world
             .create_entities(
                 test_model_comps
                     .combined_with((
-                        &PositionComp(Point3::new(0.0, -0.6, 5.0)),
+                        &PositionComp(Point3::new(0.0, -0.6, 7.0)),
+                        &ScalingComp(0.9),
                         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-                        &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+                        &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(2.0))),
                         // &VertexColorComp,
                         // &FixedColorComp(vector![0.5, 0.5, 0.5, 1.0]),
                         &BlinnPhongComp {
-                            ambient: vector![0.1, 0.1, 0.1],
-                            diffuse: vector![0.4, 0.4, 0.4],
-                            specular: vector![0.3, 0.3, 0.3],
-                            shininess: 6.0,
+                            ambient: vector![0.05, 0.05, 0.05],
+                            diffuse: vector![0.3, 0.3, 0.5],
+                            specular: vector![0.6, 0.6, 0.6],
+                            shininess: 13.0,
                             alpha: 1.0,
                         },
                     ))
@@ -252,50 +247,23 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &[
-                PositionComp(Point3::new(5.0, 10.0, -10.0)),
+                PositionComp(Point3::new(8.0, 10.0, -10.0)),
                 PositionComp(Point3::new(-5.0, 4.0, 8.0)),
             ],
             &[
-                RadianceComp(vector![1.0, 1.0, 1.0] * 100.0),
-                RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
+                RadianceComp(vector![1.0, 1.0, 0.5] * 130.0),
+                RadianceComp(vector![1.0, 0.7, 0.7] * 40.0),
             ],
             &[Omnidirectional, Omnidirectional],
         ))
         .unwrap();
 
+    world
+        .create_entities((
+            &DirectionComp(LightDirection::new_normalize(vector![0.6, -1.0, 1.0])),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 0.3),
+        ))
+        .unwrap();
+
     Ok(world)
-}
-
-fn create_pentagon_mesh() -> TriangleMesh<fre> {
-    let positions = [
-        VertexPosition(point![-0.0868241, 0.49240386, 0.0]),
-        VertexPosition(point![-0.49513406, 0.06958647, 0.0]),
-        VertexPosition(point![-0.21918549, -0.44939706, 0.0]),
-        VertexPosition(point![0.35966998, -0.3473291, 0.0]),
-        VertexPosition(point![0.44147372, 0.2347359, 0.0]),
-    ];
-    let colors = [
-        VertexColor(vector![1.0, 0.0, 0.0, 1.0]),
-        VertexColor(vector![0.0, 1.0, 0.0, 1.0]),
-        VertexColor(vector![0.0, 0.0, 1.0, 1.0]),
-        VertexColor(vector![0.0, 1.0, 1.0, 1.0]),
-        VertexColor(vector![1.0, 1.0, 0.0, 1.0]),
-    ];
-    let normal_vectors = [VertexNormalVector(Vector3::z_axis()); 5];
-    let texture_coords = [
-        VertexTextureCoords(vector![0.4131759, 1.0 - 0.99240386]),
-        VertexTextureCoords(vector![0.0048659444, 1.0 - 0.56958647]),
-        VertexTextureCoords(vector![0.28081453, 1.0 - 0.05060294]),
-        VertexTextureCoords(vector![0.85967, 1.0 - 0.1526709]),
-        VertexTextureCoords(vector![0.9414737, 1.0 - 0.7347359]),
-    ];
-    let indices = [0, 1, 4, 1, 2, 4, 2, 3, 4];
-
-    TriangleMesh::new(
-        positions.to_vec(),
-        colors.to_vec(),
-        normal_vectors.to_vec(),
-        texture_coords.to_vec(),
-        indices.to_vec(),
-    )
 }

@@ -279,6 +279,26 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     attenuatedLightRadiance
                 );
             }
+            
+            fn computeBlinnPhongColorForDirectionalLight(
+                viewDirection: vec3<f32>,
+                normalVector: vec3<f32>,
+                diffuseColor: vec3<f32>,
+                specularColor: vec3<f32>,
+                shininess: f32,
+                lightDirection: vec3<f32>,
+                lightRadiance: vec3<f32>
+            ) -> vec3<f32> {
+                 return computeBlinnPhongColor(
+                    viewDirection,
+                    normalVector,
+                    diffuseColor,
+                    specularColor,
+                    shininess,
+                    -lightDirection,
+                    lightRadiance
+                );
+            }
         ",
         )
         .unwrap()
@@ -286,6 +306,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let view_direction_function_handle = function_handles[0];
         let point_light_color_function_handle = function_handles[2];
+        let directional_light_color_function_handle = function_handles[3];
 
         let light_expressions = light_expressions.expect("Missing lights for Blinn-Phong shading");
 
@@ -440,6 +461,73 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         );
 
         point_light_loop.generate_code(
+            &mut fragment_function.body,
+            &mut fragment_function.expressions,
+        );
+
+        let directional_light_count_expr_handle =
+            light_expressions.generate_directional_light_count_expr(fragment_function);
+
+        let mut directional_light_loop = ForLoop::new(
+            &mut module.types,
+            &mut module.constants,
+            fragment_function,
+            "directional_light",
+            directional_light_count_expr_handle,
+        );
+
+        let (light_direction_expr_handle, light_radiance_expr_handle) = light_expressions
+            .generate_directional_light_field_expressions(
+                &mut directional_light_loop.body,
+                &mut fragment_function.expressions,
+                directional_light_loop.idx_expr_handle,
+            );
+
+        let returned_directional_light_color_expr_handle = SourceCodeFunctions::generate_call(
+            &mut directional_light_loop.body,
+            &mut fragment_function.expressions,
+            directional_light_color_function_handle,
+            vec![
+                view_dir_expr_handle,
+                normal_vector_expr_handle,
+                diffuse_color_expr_handle,
+                specular_color_expr_handle,
+                shininess_expr_handle,
+                light_direction_expr_handle,
+                light_radiance_expr_handle,
+            ],
+        );
+
+        let accumulated_color_expr_handle = emit(
+            &mut directional_light_loop.body,
+            &mut fragment_function.expressions,
+            |expressions| {
+                let color_expr_handle = append_to_arena(
+                    expressions,
+                    Expression::Load {
+                        pointer: color_ptr_expr_handle,
+                    },
+                );
+                append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: color_expr_handle,
+                        right: returned_directional_light_color_expr_handle,
+                    },
+                )
+            },
+        );
+
+        push_to_block(
+            &mut directional_light_loop.body,
+            Statement::Store {
+                pointer: color_ptr_expr_handle,
+                value: accumulated_color_expr_handle,
+            },
+        );
+
+        directional_light_loop.generate_code(
             &mut fragment_function.body,
             &mut fragment_function.expressions,
         );

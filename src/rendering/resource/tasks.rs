@@ -5,7 +5,8 @@ use crate::{
     define_task,
     rendering::RenderingTag,
     scene::{
-        BufferVisibleModelInstances, SyncLightPositionsInStorage, SyncSceneCameraViewTransform,
+        BufferVisibleModelInstances, SyncLightPositionsAndDirectionsInStorage,
+        SyncSceneCameraViewTransform,
     },
     world::{World, WorldTaskScheduler},
 };
@@ -109,7 +110,7 @@ define_task!(
 
 define_task!(
     SyncLightRenderBuffers,
-    depends_on = [SyncLightPositionsInStorage],
+    depends_on = [SyncLightPositionsAndDirectionsInStorage],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing light render buffers"; {

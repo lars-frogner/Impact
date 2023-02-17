@@ -1,14 +1,21 @@
 //! Management of lights.
 
 mod components;
+mod directional_light;
 mod point_light;
 
-pub use components::{Omnidirectional, PointLightComp, RadianceComp};
+pub use components::{
+    DirectionComp, DirectionalLightComp, Omnidirectional, PointLightComp, RadianceComp,
+};
+pub use directional_light::DirectionalLight;
 pub use point_light::PointLight;
 
 use crate::{geometry::UniformBuffer, rendering::fre};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Vector3;
+use nalgebra::{UnitVector3, Vector3};
+
+/// The direction of a directional light source.
+pub type LightDirection = UnitVector3<fre>;
 
 /// The RGB radiance of a light source.
 pub type Radiance = Vector3<fre>;
@@ -20,11 +27,13 @@ pub struct LightID(u32);
 
 type LightUniformBuffer<L> = UniformBuffer<LightID, L>;
 type PointLightUniformBuffer = LightUniformBuffer<PointLight>;
+type DirectionalLightUniformBuffer = LightUniformBuffer<DirectionalLight>;
 
 /// Container for all light sources in a scene.
 #[derive(Debug)]
 pub struct LightStorage {
     point_light_buffer: PointLightUniformBuffer,
+    directional_light_buffer: DirectionalLightUniformBuffer,
     light_id_counter: u32,
 }
 
@@ -39,6 +48,9 @@ impl LightStorage {
             point_light_buffer: PointLightUniformBuffer::with_capacity(
                 Self::INITIAL_LIGHT_CAPACITY,
             ),
+            directional_light_buffer: DirectionalLightUniformBuffer::with_capacity(
+                Self::INITIAL_LIGHT_CAPACITY,
+            ),
             light_id_counter: 0,
         }
     }
@@ -47,6 +59,12 @@ impl LightStorage {
     /// [`PointLight`]s.
     pub fn point_light_buffer(&self) -> &UniformBuffer<LightID, PointLight> {
         &self.point_light_buffer
+    }
+
+    /// Returns a reference to the [`UniformBuffer`] holding all
+    /// [`DirectionalLight`]s.
+    pub fn directional_light_buffer(&self) -> &UniformBuffer<LightID, DirectionalLight> {
+        &self.directional_light_buffer
     }
 
     /// Adds the given [`PointLight`] to the storage.
@@ -59,12 +77,31 @@ impl LightStorage {
         light_id
     }
 
+    /// Adds the given [`DirectionalLight`] to the storage.
+    ///
+    /// # Returns
+    /// A new [`LightID`] representing the added light source.
+    pub fn add_directional_light(&mut self, directional_light: DirectionalLight) -> LightID {
+        let light_id = self.create_new_light_id();
+        self.directional_light_buffer
+            .add_uniform(light_id, directional_light);
+        light_id
+    }
+
     /// Removes the [`PointLight`] with the given ID from the storage.
     ///
     /// # Panics
     /// If no point light with the given ID exists.
     pub fn remove_point_light(&mut self, light_id: LightID) {
         self.point_light_buffer.remove_uniform(light_id);
+    }
+
+    /// Removes the [`DirectionalLight`] with the given ID from the storage.
+    ///
+    /// # Panics
+    /// If no directional light with the given ID exists.
+    pub fn remove_directional_light(&mut self, light_id: LightID) {
+        self.directional_light_buffer.remove_uniform(light_id);
     }
 
     /// Returns a mutable reference to the [`PointLight`] with the given ID.
@@ -75,6 +112,17 @@ impl LightStorage {
         self.point_light_buffer
             .get_uniform_mut(light_id)
             .expect("Requested missing point light")
+    }
+
+    /// Returns a mutable reference to the [`DirectionalLight`] with the given
+    /// ID.
+    ///
+    /// # Panics
+    /// If no directional light with the given ID exists.
+    pub fn directional_light_mut(&mut self, light_id: LightID) -> &mut DirectionalLight {
+        self.directional_light_buffer
+            .get_uniform_mut(light_id)
+            .expect("Requested missing directional light")
     }
 
     fn create_new_light_id(&mut self) -> LightID {

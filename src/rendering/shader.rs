@@ -109,8 +109,12 @@ pub enum MaterialTextureShaderInput {
 pub struct LightShaderInput {
     /// Bind group binding of the uniform buffer for point lights.
     pub point_light_binding: u32,
+    /// Bind group binding of the uniform buffer for directional lights.
+    pub directional_light_binding: u32,
     /// Maximum number of lights in the point light uniform buffer.
     pub max_point_light_count: u64,
+    /// Maximum number of lights in the directional light uniform buffer.
+    pub max_directional_light_count: u64,
 }
 
 /// Shader generator for any kind of material.
@@ -137,6 +141,7 @@ pub struct ModelViewTransformExpressions {
 #[derive(Clone, Debug)]
 pub struct LightExpressions {
     point_lights: Handle<Expression>,
+    directional_lights: Handle<Expression>,
 }
 
 /// Indices of the fields holding the various mesh vertex
@@ -1068,8 +1073,9 @@ impl ShaderGenerator {
         let u32_type_handle = insert_in_arena(&mut module.types, U32_TYPE);
         let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
-        // The struct is padded to 16 byte alignment as required for uniforms
+        // The structs are padded to 16 byte alignment as required for uniforms
         let point_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
+        let directional_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
 
         // The count at the beginning of the uniform buffer is padded to 16 bytes
         let light_count_size = 16;
@@ -1098,9 +1104,38 @@ impl ShaderGenerator {
             },
         );
 
+        let directional_light_struct_type_handle = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("DirectionalLight"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("direction"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("radiance"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: VECTOR_3_SIZE + F32_WIDTH,
+                        },
+                    ],
+                    span: directional_light_struct_size,
+                },
+            },
+        );
+
         let max_point_light_count_constant_handle = define_constant_if_missing(
             &mut module.constants,
             u32_constant(light_shader_input.max_point_light_count),
+        );
+
+        let max_directional_light_count_constant_handle = define_constant_if_missing(
+            &mut module.constants,
+            u32_constant(light_shader_input.max_directional_light_count),
         );
 
         let point_lights_array_type_handle = insert_in_arena(
@@ -1111,6 +1146,18 @@ impl ShaderGenerator {
                     base: point_light_struct_type_handle,
                     size: ArraySize::Constant(max_point_light_count_constant_handle),
                     stride: point_light_struct_size,
+                },
+            },
+        );
+
+        let directional_lights_array_type_handle = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: directional_light_struct_type_handle,
+                    size: ArraySize::Constant(max_directional_light_count_constant_handle),
+                    stride: directional_light_struct_size,
                 },
             },
         );
@@ -1145,6 +1192,36 @@ impl ShaderGenerator {
             },
         );
 
+        let directional_lights_struct_type_handle = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("DirectionalLights"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("numLights"),
+                            ty: u32_type_handle,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("lights"),
+                            ty: directional_lights_array_type_handle,
+                            binding: None,
+                            offset: light_count_size,
+                        },
+                    ],
+                    span: directional_light_struct_size
+                        .checked_mul(
+                            u32::try_from(light_shader_input.max_directional_light_count).unwrap(),
+                        )
+                        .unwrap()
+                        .checked_add(light_count_size)
+                        .unwrap(),
+                },
+            },
+        );
+
         let point_lights_var_handle = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
@@ -1158,6 +1235,21 @@ impl ShaderGenerator {
                 init: None,
             },
         );
+
+        let directional_lights_var_handle = append_to_arena(
+            &mut module.global_variables,
+            GlobalVariable {
+                name: new_name("directionalLights"),
+                space: AddressSpace::Uniform,
+                binding: Some(ResourceBinding {
+                    group: *bind_group_idx,
+                    binding: light_shader_input.directional_light_binding,
+                }),
+                ty: directional_lights_struct_type_handle,
+                init: None,
+            },
+        );
+
         *bind_group_idx += 1;
 
         let point_lights_ptr_expr_handle = include_expr_in_func(
@@ -1165,8 +1257,14 @@ impl ShaderGenerator {
             Expression::GlobalVariable(point_lights_var_handle),
         );
 
+        let directional_lights_ptr_expr_handle = include_expr_in_func(
+            fragment_function,
+            Expression::GlobalVariable(directional_lights_var_handle),
+        );
+
         LightExpressions {
             point_lights: point_lights_ptr_expr_handle,
+            directional_lights: directional_lights_ptr_expr_handle,
         }
     }
 }
@@ -1175,6 +1273,13 @@ impl LightExpressions {
     /// Generates the expression for the number of active point lights.
     pub fn generate_point_light_count_expr(&self, function: &mut Function) -> Handle<Expression> {
         Self::generate_light_count_expr(function, self.point_lights)
+    }
+    /// Generates the expression for the number of active directional lights.
+    pub fn generate_directional_light_count_expr(
+        &self,
+        function: &mut Function,
+    ) -> Handle<Expression> {
+        Self::generate_light_count_expr(function, self.directional_lights)
     }
 
     /// Takes an index expression and generates expressions for the position and
@@ -1196,6 +1301,27 @@ impl LightExpressions {
         let radiance_expr_handle =
             Self::generate_field_access_expr(block, expressions, point_light_ptr_expr, 1);
         (position_expr_handle, radiance_expr_handle)
+    }
+
+    /// Takes an index expression and generates expressions for the direction and
+    /// radiance, respectively, of the directional light at that index.
+    pub fn generate_directional_light_field_expressions(
+        &self,
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        light_idx_expr_handle: Handle<Expression>,
+    ) -> (Handle<Expression>, Handle<Expression>) {
+        let directional_light_ptr_expr = Self::generate_light_ptr_expr(
+            block,
+            expressions,
+            self.directional_lights,
+            light_idx_expr_handle,
+        );
+        let direction_expr_handle =
+            Self::generate_field_access_expr(block, expressions, directional_light_ptr_expr, 0);
+        let radiance_expr_handle =
+            Self::generate_field_access_expr(block, expressions, directional_light_ptr_expr, 1);
+        (direction_expr_handle, radiance_expr_handle)
     }
 
     fn generate_light_count_expr(
@@ -2823,6 +2949,8 @@ mod test {
     const LIGHT_INPUT: LightShaderInput = LightShaderInput {
         point_light_binding: 0,
         max_point_light_count: 20,
+        directional_light_binding: 1,
+        max_directional_light_count: 20,
     };
 
     fn validate_module(module: &Module) -> ModuleInfo {
