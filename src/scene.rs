@@ -14,7 +14,7 @@ mod shader;
 mod systems;
 mod tasks;
 
-pub use camera::{PerspectiveCameraComp, SceneCamera};
+pub use camera::{OrthographicCameraComp, PerspectiveCameraComp, SceneCamera};
 pub use components::{MeshComp, ScalingComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{

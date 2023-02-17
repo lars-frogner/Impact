@@ -1,7 +1,7 @@
 //! Event handling related to scenes.
 
 use crate::{
-    geometry::PerspectiveCamera,
+    geometry::{OrthographicCamera, PerspectiveCamera},
     physics::{OrientationComp, PositionComp},
     scene::{
         self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
@@ -74,6 +74,13 @@ impl Scene {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
         PerspectiveCamera::add_camera_to_scene_for_entity(
+            window,
+            self.scene_graph(),
+            self.scene_camera(),
+            components,
+            desynchronized,
+        )?;
+        OrthographicCamera::add_camera_to_scene_for_entity(
             window,
             self.scene_graph(),
             self.scene_camera(),

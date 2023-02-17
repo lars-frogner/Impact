@@ -14,7 +14,7 @@ mod uniform;
 
 pub use angle::{Angle, Degrees, Radians};
 pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
-pub use camera::{Camera, PerspectiveCamera};
+pub use camera::{Camera, OrthographicCamera, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use instance::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,

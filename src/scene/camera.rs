@@ -1,9 +1,10 @@
 //! Management of cameras.
 
 mod components;
+mod orthographic;
 mod perspective;
 
-pub use components::PerspectiveCameraComp;
+pub use components::{OrthographicCameraComp, PerspectiveCameraComp};
 
 use crate::{
     geometry::Camera,
