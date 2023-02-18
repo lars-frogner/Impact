@@ -10,8 +10,8 @@ use crate::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         mesh::MeshRenderBufferManager, resource::SynchronizedRenderResources, CameraShaderInput,
         CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialRenderResourceManager, MaterialTextureShaderInput, MeshShaderInput,
-        RenderingConfig, Shader,
+        MaterialRenderResourceManager, MaterialShaderInput, MeshShaderInput, RenderingConfig,
+        Shader,
     },
     scene::{MaterialID, MeshID, ModelID, ShaderManager},
 };
@@ -58,7 +58,7 @@ pub struct RenderPassRecorder {
 struct BindGroupShaderInput<'a> {
     camera: Option<&'a CameraShaderInput>,
     light: Option<&'a LightShaderInput>,
-    material_texture: Option<&'a MaterialTextureShaderInput>,
+    material: Option<&'a MaterialShaderInput>,
 }
 
 impl RenderPassManager {
@@ -251,7 +251,7 @@ impl RenderPassSpecification {
         let mut shader_input = BindGroupShaderInput {
             camera: None,
             light: None,
-            material_texture: None,
+            material: None,
         };
         let mut vertex_attribute_requirements = VertexAttributeSet::empty();
 
@@ -272,7 +272,7 @@ impl RenderPassSpecification {
             if let Some(layout) = material_resource_manager.texture_bind_group_layout() {
                 layouts.push(layout);
             }
-            shader_input.material_texture = Some(material_resource_manager.shader_input());
+            shader_input.material = Some(material_resource_manager.shader_input());
 
             vertex_attribute_requirements =
                 material_resource_manager.vertex_attribute_requirements();
@@ -393,7 +393,7 @@ impl RenderPassRecorder {
                 mesh_shader_input,
                 bind_group_shader_input.light,
                 &instance_feature_shader_inputs,
-                bind_group_shader_input.material_texture,
+                bind_group_shader_input.material,
                 vertex_attribute_requirements,
             )?;
 

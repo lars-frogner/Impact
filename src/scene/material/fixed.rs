@@ -6,7 +6,7 @@ use crate::{
     impl_InstanceFeature,
     rendering::{
         FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
-        MaterialRenderResourceManager, MaterialTextureShaderInput,
+        MaterialRenderResourceManager, MaterialShaderInput,
     },
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
@@ -45,8 +45,7 @@ lazy_static! {
 impl FixedColorMaterial {
     pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::empty();
 
-    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::None;
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput = MaterialShaderInput::Fixed(None);
 
     /// Registers this material as a feature type in the given
     /// instance feature manager and adds the material specification
@@ -63,7 +62,7 @@ impl FixedColorMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
             vec![Self::FEATURE_TYPE_ID],
-            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+            Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*FIXED_COLOR_MATERIAL_ID, specification);
     }
@@ -107,11 +106,11 @@ impl FixedTextureMaterial {
     pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet =
         VertexAttributeSet::TEXTURE_COORDS;
 
-    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::FixedMaterial(FixedTextureShaderInput {
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput =
+        MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings:
                 MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
-        });
+        }));
 
     /// Checks if the entity-to-be with the given components has the component
     /// for this material, and if so, adds the appropriate material specification
@@ -142,7 +141,7 @@ impl FixedTextureMaterial {
                             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
                             texture_ids.to_vec(),
                             Vec::new(),
-                            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+                            Self::MATERIAL_SHADER_INPUT,
                         )
                     });
 

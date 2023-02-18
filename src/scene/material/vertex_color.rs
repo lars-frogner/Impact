@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::{InstanceFeatureID, VertexAttributeSet},
-    rendering::MaterialTextureShaderInput,
+    rendering::MaterialShaderInput,
     scene::{
         MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
         RenderResourcesDesynchronized, VertexColorComp,
@@ -26,8 +26,7 @@ lazy_static! {
 impl VertexColorMaterial {
     pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::COLOR;
 
-    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::None;
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput = MaterialShaderInput::VertexColor;
 
     /// Adds the material specification for this material to the given
     /// material library. Because this material uses no textures, the
@@ -38,7 +37,7 @@ impl VertexColorMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
             Vec::new(),
-            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+            Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);
     }

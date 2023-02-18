@@ -78,9 +78,17 @@ pub enum InstanceFeatureShaderInput {
     ModelViewTransform(ModelViewTransformShaderInput),
     FixedColorMaterial(FixedColorFeatureShaderInput),
     BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
-    /// For convenice in unit tests.
+    /// For convenience in unit tests.
     #[cfg(test)]
     None,
+}
+
+/// Input description for any kind of material.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MaterialShaderInput {
+    VertexColor,
+    Fixed(Option<FixedTextureShaderInput>),
+    BlinnPhong(Option<BlinnPhongTextureShaderInput>),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -92,15 +100,6 @@ pub struct ModelViewTransformShaderInput {
     /// Vertex attribute locations for the 4-element vector containing the
     /// translation vector and the scaling factor.
     pub translation_and_scaling_location: u32,
-}
-
-/// Input description for any kind of material that may
-/// require a texture.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum MaterialTextureShaderInput {
-    FixedMaterial(FixedTextureShaderInput),
-    BlinnPhongMaterial(BlinnPhongTextureShaderInput),
-    None,
 }
 
 /// Input description specifying the bind group binding and the total size of
@@ -454,8 +453,8 @@ impl ShaderGenerator {
     /// - `instance_feature_shader_inputs` does not contain a
     ///   [`ModelInstanceTransformShaderInput`] (no shaders without a model
     ///   view transform supported).
-    /// - `instance_feature_shader_inputs` and `material_texture_shader_input`
-    ///   do not provide a consistent and supproted material description.
+    /// - `instance_feature_shader_inputs` and `material_shader_input`
+    ///   do not provide a consistent and supported material description.
     /// - Not all vertex attributes required by the material are available in
     ///   the input mesh.
     pub fn generate_shader_module(
@@ -463,7 +462,7 @@ impl ShaderGenerator {
         mesh_shader_input: Option<&MeshShaderInput>,
         light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
-        material_texture_shader_input: Option<&MaterialTextureShaderInput>,
+        material_shader_input: Option<&MaterialShaderInput>,
         vertex_attribute_requirements: VertexAttributeSet,
     ) -> Result<(Module, EntryPointNames)> {
         let camera_shader_input = camera_shader_input
@@ -472,10 +471,8 @@ impl ShaderGenerator {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
 
-        let (model_view_transform_shader_input, material_shader_builder) = Self::interpret_inputs(
-            instance_feature_shader_inputs,
-            material_texture_shader_input,
-        )?;
+        let (model_view_transform_shader_input, material_shader_builder) =
+            Self::interpret_inputs(instance_feature_shader_inputs, material_shader_input)?;
 
         let material_requires_lights = material_shader_builder.requires_lights();
 
@@ -584,7 +581,7 @@ impl ShaderGenerator {
     /// Returns an error if:
     /// - `instance_feature_shader_inputs` does not contain a
     ///   [`ModelInstanceTransformShaderInput`].
-    /// - `instance_feature_shader_inputs` and `material_texture_shader_input`
+    /// - `instance_feature_shader_inputs` and `material_shader_input`
     ///   do not provide a consistent and supproted material description.
     ///
     /// # Panics
@@ -592,7 +589,7 @@ impl ShaderGenerator {
     /// inputs of the same type.
     fn interpret_inputs<'a>(
         instance_feature_shader_inputs: &'a [&'a InstanceFeatureShaderInput],
-        material_texture_shader_input: Option<&'a MaterialTextureShaderInput>,
+        material_shader_input: Option<&'a MaterialShaderInput>,
     ) -> Result<(
         &'a ModelViewTransformShaderInput,
         MaterialShaderGenerator<'a>,
@@ -630,35 +627,23 @@ impl ShaderGenerator {
         let material_shader_builder = match (
             fixed_color_feature_shader_input,
             blinn_phong_feature_shader_input,
-            material_texture_shader_input,
+            material_shader_input,
         ) {
-            (Some(feature_input), None, Some(MaterialTextureShaderInput::None)) => {
+            (Some(feature_input), None, Some(MaterialShaderInput::Fixed(None))) => {
                 MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input))
             }
-            (None, None, Some(MaterialTextureShaderInput::FixedMaterial(texture_input))) => {
+            (None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
                 MaterialShaderGenerator::FixedTexture(FixedTextureShaderGenerator::new(
                     texture_input,
                 ))
             }
-            (None, Some(feature_input), Some(texture_input)) => {
-                #[allow(clippy::match_wildcard_for_single_variants)]
-                let texture_input = match texture_input {
-                    MaterialTextureShaderInput::None => None,
-                    MaterialTextureShaderInput::BlinnPhongMaterial(texture_input) => {
-                        Some(texture_input)
-                    }
-                    _ => {
-                        return Err(anyhow!(
-                            "Tried to use Blinn-Phong material with texture from another material"
-                        ));
-                    }
-                };
+            (None, Some(feature_input), Some(MaterialShaderInput::BlinnPhong(texture_input))) => {
                 MaterialShaderGenerator::BlinnPhong(BlinnPhongShaderGenerator::new(
                     feature_input,
-                    texture_input,
+                    texture_input.as_ref(),
                 ))
             }
-            (None, None, Some(MaterialTextureShaderInput::None)) => {
+            (None, None, Some(MaterialShaderInput::VertexColor)) => {
                 MaterialShaderGenerator::VertexColor
             }
             _ => {
@@ -1396,14 +1381,22 @@ impl LightExpressions {
     }
 }
 
+impl MaterialShaderInput {
+    /// Whether the material requires light sources.
+    pub fn requires_lights(&self) -> bool {
+        match self {
+            Self::VertexColor | Self::Fixed(_) => false,
+            Self::BlinnPhong(_) => true,
+        }
+    }
+}
+
 impl<'a> MaterialShaderGenerator<'a> {
     /// Whether the material requires light sources.
     fn requires_lights(&self) -> bool {
         match self {
-            Self::VertexColor => VertexColorShaderGenerator::requires_lights(),
-            Self::FixedColor(_) => FixedColorShaderGenerator::requires_lights(),
-            Self::FixedTexture(_) => FixedTextureShaderGenerator::requires_lights(),
-            Self::BlinnPhong(_) => BlinnPhongShaderGenerator::requires_lights(),
+            Self::VertexColor | Self::FixedColor(_) | Self::FixedTexture(_) => false,
+            Self::BlinnPhong(_) => true,
         }
     }
 
@@ -2902,10 +2895,10 @@ mod test {
             color_location: MATERIAL_VERTEX_BINDING_START,
         });
 
-    const FIXED_TEXTURE_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::FixedMaterial(FixedTextureShaderInput {
+    const FIXED_TEXTURE_INPUT: MaterialShaderInput =
+        MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings: (0, 1),
-        });
+        }));
 
     const BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
@@ -2925,11 +2918,11 @@ mod test {
             alpha_location: MATERIAL_VERTEX_BINDING_START + 3,
         });
 
-    const DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
+    const DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =
+        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings: (0, 1),
             specular_texture_and_sampler_bindings: None,
-        });
+        }));
 
     const TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
@@ -2940,11 +2933,11 @@ mod test {
             alpha_location: MATERIAL_VERTEX_BINDING_START + 2,
         });
 
-    const TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
+    const TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =
+        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings: (0, 1),
             specular_texture_and_sampler_bindings: Some((2, 3)),
-        });
+        }));
 
     const LIGHT_INPUT: LightShaderInput = LightShaderInput {
         point_light_binding: 0,
@@ -3055,7 +3048,7 @@ mod test {
             }),
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
-            Some(&MaterialTextureShaderInput::None),
+            Some(&MaterialShaderInput::VertexColor),
             VertexColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
@@ -3076,7 +3069,7 @@ mod test {
             Some(&MINIMAL_MESH_INPUT),
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
-            Some(&MaterialTextureShaderInput::None),
+            Some(&MaterialShaderInput::Fixed(None)),
             FixedColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
@@ -3132,7 +3125,7 @@ mod test {
             }),
             Some(&LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
-            Some(&MaterialTextureShaderInput::None),
+            Some(&MaterialShaderInput::BlinnPhong(None)),
             BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()

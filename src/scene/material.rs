@@ -7,7 +7,7 @@ mod vertex_color;
 
 use crate::{
     geometry::{InstanceFeatureTypeID, VertexAttributeSet},
-    rendering::{fre, MaterialTextureShaderInput, TextureID},
+    rendering::{fre, MaterialShaderInput, TextureID},
 };
 use impact_utils::{hash64, stringhash64_newtype};
 use nalgebra::{Vector3, Vector4};
@@ -42,7 +42,7 @@ pub struct MaterialSpecification {
     vertex_attribute_requirements: VertexAttributeSet,
     image_texture_ids: Vec<TextureID>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
-    texture_shader_input: MaterialTextureShaderInput,
+    shader_input: MaterialShaderInput,
 }
 
 /// Container for different material specifications.
@@ -60,13 +60,13 @@ impl MaterialSpecification {
         vertex_attribute_requirements: VertexAttributeSet,
         image_texture_ids: Vec<TextureID>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
-        texture_shader_input: MaterialTextureShaderInput,
+        shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
             vertex_attribute_requirements,
             image_texture_ids,
             instance_feature_type_ids,
-            texture_shader_input,
+            shader_input,
         }
     }
 
@@ -88,10 +88,9 @@ impl MaterialSpecification {
         &self.instance_feature_type_ids
     }
 
-    /// Returns the input required for accessing the textures
-    /// in a shader.
-    pub fn texture_shader_input(&self) -> &MaterialTextureShaderInput {
-        &self.texture_shader_input
+    /// Whether the material requires light sources.
+    pub fn shader_input(&self) -> &MaterialShaderInput {
+        &self.shader_input
     }
 }
 

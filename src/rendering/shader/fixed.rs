@@ -47,11 +47,6 @@ pub struct FixedTextureShaderGenerator<'a> {
 pub struct FixedColorVertexOutputFieldIdx(usize);
 
 impl<'a> FixedColorShaderGenerator<'a> {
-    /// Whether the material requires light sources.
-    pub const fn requires_lights() -> bool {
-        false
-    }
-
     /// Creates a new shader generator using the given input
     /// description.
     pub fn new(feature_input: &'a FixedColorFeatureShaderInput) -> Self {
@@ -127,11 +122,6 @@ impl<'a> FixedColorShaderGenerator<'a> {
 }
 
 impl<'a> FixedTextureShaderGenerator<'a> {
-    /// Whether the material requires light sources.
-    pub const fn requires_lights() -> bool {
-        false
-    }
-
     /// Creates a new shader generator using the given input
     /// description.
     pub fn new(texture_input: &'a FixedTextureShaderInput) -> Self {

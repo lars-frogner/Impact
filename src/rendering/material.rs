@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{Assets, CoreRenderingSystem, ImageTexture, MaterialTextureShaderInput, TextureID},
+    rendering::{Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput, TextureID},
     scene::MaterialSpecification,
 };
 use anyhow::{anyhow, Result};
@@ -16,7 +16,7 @@ pub struct MaterialRenderResourceManager {
     texture_bind_group_layout: Option<wgpu::BindGroupLayout>,
     texture_bind_group: Option<wgpu::BindGroup>,
     vertex_attribute_requirements: VertexAttributeSet,
-    texture_shader_input: MaterialTextureShaderInput,
+    shader_input: MaterialShaderInput,
     label: String,
 }
 
@@ -54,7 +54,7 @@ impl MaterialRenderResourceManager {
             texture_bind_group_layout,
             texture_bind_group,
             vertex_attribute_requirements: material_specification.vertex_attribute_requirements(),
-            texture_shader_input: material_specification.texture_shader_input().clone(),
+            shader_input: material_specification.shader_input().clone(),
             label,
         })
     }
@@ -85,10 +85,9 @@ impl MaterialRenderResourceManager {
         self.vertex_attribute_requirements
     }
 
-    /// Returns the input required for accessing the textures
-    /// in a shader.
-    pub fn shader_input(&self) -> &MaterialTextureShaderInput {
-        &self.texture_shader_input
+    /// Returns the input required for generating shaders for the material.
+    pub fn shader_input(&self) -> &MaterialShaderInput {
+        &self.shader_input
     }
 
     /// Ensures that the render resources are in sync with the

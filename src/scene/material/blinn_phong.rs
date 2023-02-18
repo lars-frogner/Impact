@@ -6,7 +6,7 @@ use crate::{
     impl_InstanceFeature,
     rendering::{
         fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
-        InstanceFeatureShaderInput, MaterialRenderResourceManager, MaterialTextureShaderInput,
+        InstanceFeatureShaderInput, MaterialRenderResourceManager, MaterialShaderInput,
     },
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, InstanceFeatureManager, MaterialComp,
@@ -79,8 +79,7 @@ impl BlinnPhongMaterial {
     pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet =
         VertexAttributeSet::POSITION.union(VertexAttributeSet::NORMAL_VECTOR);
 
-    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::None;
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput = MaterialShaderInput::BlinnPhong(None);
 
     /// Registers this material as a feature type in the given
     /// instance feature manager and adds the material specification
@@ -97,7 +96,7 @@ impl BlinnPhongMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
             vec![Self::FEATURE_TYPE_ID],
-            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+            Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*BLINN_PHONG_MATERIAL_ID, specification);
     }
@@ -146,12 +145,12 @@ impl DiffuseTexturedBlinnPhongMaterial {
         .union(VertexAttributeSet::NORMAL_VECTOR)
         .union(VertexAttributeSet::TEXTURE_COORDS);
 
-    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput =
+        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings:
                 MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
             specular_texture_and_sampler_bindings: None,
-        });
+        }));
 
     /// Registers this material as a feature type in the given
     /// instance feature manager. No material specification is
@@ -195,7 +194,7 @@ impl DiffuseTexturedBlinnPhongMaterial {
                             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
                             texture_ids.to_vec(),
                             vec![Self::FEATURE_TYPE_ID],
-                            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+                            Self::MATERIAL_SHADER_INPUT,
                         )
                     });
 
@@ -226,14 +225,14 @@ impl TexturedBlinnPhongMaterial {
         .union(VertexAttributeSet::NORMAL_VECTOR)
         .union(VertexAttributeSet::TEXTURE_COORDS);
 
-    const MATERIAL_TEXTURE_SHADER_INPUT: MaterialTextureShaderInput =
-        MaterialTextureShaderInput::BlinnPhongMaterial(BlinnPhongTextureShaderInput {
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput =
+        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings:
                 MaterialRenderResourceManager::get_texture_and_sampler_bindings(0),
             specular_texture_and_sampler_bindings: Some(
                 MaterialRenderResourceManager::get_texture_and_sampler_bindings(1),
             ),
-        });
+        }));
 
     /// Registers this material as a feature type in the given
     /// instance feature manager. No material specification is
@@ -277,7 +276,7 @@ impl TexturedBlinnPhongMaterial {
                             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
                             texture_ids.to_vec(),
                             vec![Self::FEATURE_TYPE_ID],
-                            Self::MATERIAL_TEXTURE_SHADER_INPUT,
+                            Self::MATERIAL_SHADER_INPUT,
                         )
                     });
 
