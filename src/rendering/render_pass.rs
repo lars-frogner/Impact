@@ -37,7 +37,6 @@ pub struct RenderPassManager {
 #[derive(Clone, Debug)]
 pub struct RenderPassSpecification {
     model_id: Option<ModelID>,
-    mesh_id: Option<MeshID>,
     depth_test: bool,
     clear_color: Option<wgpu::Color>,
     clear_depth: Option<f32>,
@@ -162,7 +161,6 @@ impl RenderPassSpecification {
     pub fn for_model(model_id: ModelID) -> Result<Self> {
         Ok(Self {
             model_id: Some(model_id),
-            mesh_id: Some(model_id.mesh_id()),
             depth_test: true,
             clear_color: None,
             clear_depth: None,
@@ -175,7 +173,6 @@ impl RenderPassSpecification {
     pub fn clearing_pass(clear_color: wgpu::Color, clear_depth: f32) -> Self {
         Self {
             model_id: None,
-            mesh_id: None,
             depth_test: true,
             clear_color: Some(clear_color),
             clear_depth: Some(clear_depth),
@@ -207,22 +204,19 @@ impl RenderPassSpecification {
         let mut mesh_shader_input = None;
         let mut instance_feature_shader_inputs = Vec::with_capacity(1);
 
-        if let Some(mesh_id) = self.mesh_id {
-            let mesh_buffer_manager = Self::get_mesh_buffer_manager(render_resources, mesh_id)?;
+        if let Some(model_id) = self.model_id {
+            let mesh_buffer_manager =
+                Self::get_mesh_buffer_manager(render_resources, model_id.mesh_id())?;
 
             layouts.extend(
                 mesh_buffer_manager.request_vertex_buffer_layouts(vertex_attribute_requirements)?,
             );
             mesh_shader_input = Some(mesh_buffer_manager.shader_input());
 
-            if let Some(model_id) = self.model_id {
-                if let Some(buffers) =
-                    render_resources.get_instance_feature_buffer_managers(model_id)
-                {
+            if let Some(buffers) = render_resources.get_instance_feature_buffer_managers(model_id) {
                     for buffer in buffers {
                         layouts.push(buffer.vertex_buffer_layout().clone());
                         instance_feature_shader_inputs.push(buffer.shader_input());
-                    }
                 }
             }
         }
@@ -472,22 +466,20 @@ impl RenderPassRecorder {
         // Make sure all data is available before doing anything else
         let bind_groups = self.specification.get_bind_groups(render_resources)?;
 
-        let mesh_buffer_manager = match self.specification.mesh_id {
-            Some(mesh_id) => Some(RenderPassSpecification::get_mesh_buffer_manager(
+        let (mesh_buffer_manager, feature_buffer_managers) = match self.specification.model_id {
+            Some(model_id) => (
+                Some(RenderPassSpecification::get_mesh_buffer_manager(
                 render_resources,
-                mesh_id,
+                    model_id.mesh_id(),
             )?),
-            _ => None,
-        };
-
-        let feature_buffer_managers = match self.specification.model_id {
-            Some(model_id) => Some(
+                Some(
                 RenderPassSpecification::get_instance_feature_buffer_managers(
                     render_resources,
                     model_id,
                 )?,
             ),
-            _ => None,
+            ),
+            _ => (None, None),
         };
 
         let depth_texure_view = if self.specification.depth_test {
