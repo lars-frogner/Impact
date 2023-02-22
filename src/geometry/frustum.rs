@@ -7,7 +7,11 @@ use crate::{
     },
     num::Float,
 };
-use nalgebra::{self as na, vector, Matrix4, Point3, Projective3, UnitVector3, Vector3};
+use approx::AbsDiffEq;
+use nalgebra::{
+    self as na, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3,
+    Vector3,
+};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -15,7 +19,7 @@ use nalgebra::{self as na, vector, Matrix4, Point3, Projective3, UnitVector3, Ve
 ///
 /// The planes are created in such a way that their negative
 /// halfspaces correspond to the space outside the frustum.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Frustum<F: Float> {
     planes: [Plane<F>; 6],
     transform_matrix: Matrix4<F>,
@@ -177,6 +181,56 @@ impl<F: Float> Frustum<F> {
         }
     }
 
+    /// Computes the frustum resulting from rotating this frustum with the given
+    /// rotation quaternion.
+    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+        let rotated_planes = [
+            self.planes[0].rotated(rotation),
+            self.planes[1].rotated(rotation),
+            self.planes[2].rotated(rotation),
+            self.planes[3].rotated(rotation),
+            self.planes[4].rotated(rotation),
+            self.planes[5].rotated(rotation),
+        ];
+
+        let rotated_inverse_transform_matrix =
+            rotation.to_homogeneous() * self.inverse_transform_matrix;
+
+        let inverse_of_rotated_inverse_transform_matrix =
+            self.transform_matrix * rotation.inverse().to_homogeneous();
+
+        Self {
+            planes: rotated_planes,
+            transform_matrix: inverse_of_rotated_inverse_transform_matrix,
+            inverse_transform_matrix: rotated_inverse_transform_matrix,
+        }
+    }
+
+    /// Computes the frustum resulting from transforming this frustum with the
+    /// given similarity transform.
+    pub fn transformed(&self, transformation: &Similarity3<F>) -> Self {
+        let transformed_planes = [
+            self.planes[0].transformed(transformation),
+            self.planes[1].transformed(transformation),
+            self.planes[2].transformed(transformation),
+            self.planes[3].transformed(transformation),
+            self.planes[4].transformed(transformation),
+            self.planes[5].transformed(transformation),
+        ];
+
+        let transformed_inverse_transform_matrix =
+            transformation.to_homogeneous() * self.inverse_transform_matrix;
+
+        let inverse_of_transformed_inverse_transform_matrix =
+            self.transform_matrix * transformation.inverse().to_homogeneous();
+
+        Self {
+            planes: transformed_planes,
+            transform_matrix: inverse_of_transformed_inverse_transform_matrix,
+            inverse_transform_matrix: transformed_inverse_transform_matrix,
+        }
+    }
+
     /// Each element represents the plane making up a face
     /// of the frustum cube in normalized device coordinates,
     /// with the first and second tuple element representing
@@ -256,11 +310,37 @@ impl<F: Float> Frustum<F> {
     }
 }
 
+impl<F: Float + AbsDiffEq> AbsDiffEq for Frustum<F>
+where
+    F::Epsilon: Copy,
+{
+    type Epsilon = F::Epsilon;
+
+    fn default_epsilon() -> F::Epsilon {
+        F::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: F::Epsilon) -> bool {
+        self.planes[0].abs_diff_eq(&other.planes[0], epsilon)
+            && self.planes[1].abs_diff_eq(&other.planes[1], epsilon)
+            && self.planes[2].abs_diff_eq(&other.planes[2], epsilon)
+            && self.planes[3].abs_diff_eq(&other.planes[3], epsilon)
+            && self.planes[4].abs_diff_eq(&other.planes[4], epsilon)
+            && self.planes[5].abs_diff_eq(&other.planes[5], epsilon)
+            && self
+                .transform_matrix
+                .abs_diff_eq(&other.transform_matrix, epsilon)
+            && self
+                .inverse_transform_matrix
+                .abs_diff_eq(&other.inverse_transform_matrix, epsilon)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::{point, Rotation3, Scale3, Translation3, Vector3};
+    use nalgebra::{point, Perspective3, Rotation3, Scale3, Translation3, Vector3};
 
     #[test]
     fn creating_frustum_for_identity_transform_works() {
@@ -449,5 +529,29 @@ mod test {
             let sphere = Sphere::new(Point3::origin(), radius);
             assert!(!frustum.sphere_lies_outside(&sphere));
         }
+    }
+
+    #[test]
+    fn creating_frustum_for_transform_of_transformed_frustum_gives_transformed_frustum() {
+        let frustum = Frustum::<f64>::from_transform_matrix(
+            Perspective3::new(0.7, 2.3, 0.21, 160.2).to_homogeneous(),
+        );
+
+        let transformation = Similarity3::from_parts(
+            Translation3::new(2.1, -5.9, 0.01),
+            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            7.0,
+        );
+
+        let transformed_frustum = frustum.transformed(&transformation);
+
+        let frustum_from_transformed =
+            Frustum::<f64>::from_transform_matrix(*transformed_frustum.transform_matrix());
+
+        assert_abs_diff_eq!(
+            transformed_frustum,
+            frustum_from_transformed,
+            epsilon = 1e-9
+        );
     }
 }

@@ -1,7 +1,8 @@
 //! Representation of planes.
 
 use crate::{geometry::Sphere, num::Float};
-use nalgebra::{Point3, UnitVector3};
+use approx::AbsDiffEq;
+use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -17,7 +18,7 @@ use num_traits::Signed;
 /// positive and negative halfspace. The positive one
 /// is defined as the halfspace the unit normal is
 /// pointing into.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Plane<F: Float> {
     unit_normal: UnitVector3<F>,
     displacement: F,
@@ -109,8 +110,46 @@ impl<F: Float> Plane<F> {
         }
     }
 
+    /// Computes the plane resulting from rotating this plane with the given
+    /// rotation quaternion.
+    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+        let rotated_unit_normal =
+            UnitVector3::new_unchecked(rotation.transform_vector(&self.unit_normal));
+        Self::new(rotated_unit_normal, self.displacement)
+    }
+
+    /// Computes the plane resulting from transforming this plane with the given
+    /// similarity transform.
+    pub fn transformed(&self, transformation: &Similarity3<F>) -> Self {
+        let point_in_plane = Point3::from(self.unit_normal.as_ref() * (-self.displacement));
+        let transformed_point_in_plane = transformation.transform_point(&point_in_plane);
+        let transformed_unit_normal = UnitVector3::new_unchecked(
+            transformation
+                .isometry
+                .rotation
+                .transform_vector(&self.unit_normal),
+        );
+        Self::from_normal_and_point(transformed_unit_normal, &transformed_point_in_plane)
+    }
+
     fn calculate_displacement(unit_normal: &UnitVector3<F>, point_in_plane: &Point3<F>) -> F {
         -unit_normal.dot(&point_in_plane.coords)
+    }
+}
+
+impl<F: Float + AbsDiffEq> AbsDiffEq for Plane<F>
+where
+    F::Epsilon: Copy,
+{
+    type Epsilon = F::Epsilon;
+
+    fn default_epsilon() -> F::Epsilon {
+        F::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: F::Epsilon) -> bool {
+        self.unit_normal.abs_diff_eq(&other.unit_normal, epsilon)
+            && self.displacement.abs_diff_eq(&other.displacement, epsilon)
     }
 }
 
@@ -151,5 +190,13 @@ mod test {
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(plane.compute_signed_distance(&point![0.0, 8.0, 0.0]), 0.0);
+    }
+
+    #[test]
+    fn transforming_plane_with_identity_gives_same_plane() {
+        let plane = Plane::new(UnitVector3::new_normalize(vector![1.2, -0.1, 2.7]), -3.4);
+        let transformed_plane = plane.transformed(&Similarity3::identity());
+
+        assert_abs_diff_eq!(transformed_plane, plane, epsilon = 1e-9);
     }
 }

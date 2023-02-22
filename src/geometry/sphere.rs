@@ -2,7 +2,7 @@
 
 use crate::num::Float;
 use approx::abs_diff_eq;
-use na::Similarity3;
+use na::{Similarity3, UnitQuaternion};
 use nalgebra::{self as na, Point3};
 
 /// A sphere represented by the center point and the radius.
@@ -104,6 +104,12 @@ impl<F: Float> Sphere<F> {
     /// inside.
     pub fn contains_point(&self, point: &Point3<F>) -> bool {
         na::distance_squared(self.center(), point) <= self.radius_squared()
+    }
+
+    /// Computes the sphere resulting from rotating this sphere with the given
+    /// rotation quaternion.
+    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+        Self::new(rotation.transform_point(self.center()), self.radius())
     }
 
     /// Computes the sphere resulting from transforming this
