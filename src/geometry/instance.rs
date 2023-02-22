@@ -90,7 +90,13 @@ pub struct DynamicInstanceFeatureBuffer {
     shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
     n_valid_bytes: AtomicUsize,
+    range_start_indices: Vec<u32>,
+    last_valid_range_idx: AtomicUsize,
 }
+
+/// Index for a specific range of valid features in a
+/// [`DynamicInstanceFeatureBuffer`].
+pub type InstanceFeatureBufferRangeIndex = usize;
 
 /// A model-to-camera transform for a specific instance of a model.
 ///
@@ -336,6 +342,8 @@ impl DynamicInstanceFeatureBuffer {
             shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             n_valid_bytes: AtomicUsize::new(0),
+            range_start_indices: vec![0],
+            last_valid_range_idx: AtomicUsize::new(0),
         }
     }
 
@@ -349,6 +357,8 @@ impl DynamicInstanceFeatureBuffer {
             shader_input: storage.shader_input().clone(),
             bytes: AlignedByteVec::new(type_descriptor.alignment()),
             n_valid_bytes: AtomicUsize::new(0),
+            range_start_indices: vec![0],
+            last_valid_range_idx: AtomicUsize::new(0),
         }
     }
 
@@ -382,6 +392,41 @@ impl DynamicInstanceFeatureBuffer {
     pub fn n_valid_features(&self) -> usize {
         assert_ne!(self.feature_size(), 0);
         self.n_valid_bytes() / self.feature_size()
+    }
+
+    /// Returns the range of valid feature indices with the given
+    /// [`InstanceFeatureBufferRangeIndex`]. Ranges are defined by calling
+    /// [`begin_range`]. The range spans from and including the first feature
+    /// added after the `begin_range` call to and including the last feature
+    /// added before the next `begin_range` call, or to the last valid feature
+    /// if the `begin_range` call was the last one.
+    ///
+    /// # Note
+    /// An `InstanceFeatureBufferRangeIndex` may be reused between calls to
+    /// [`clear`] as long as the same number of `begin_range` calls are made
+    /// after each `clear`.
+    ///
+    /// # Panics
+    /// If the given range index does not correspond to a currently valid range.
+    pub fn valid_feature_range(&self, range_idx: InstanceFeatureBufferRangeIndex) -> Range<u32> {
+        let last_valid_range_idx = self.last_valid_range_idx();
+        assert!(
+            range_idx <= last_valid_range_idx,
+            "Invalid instance feature buffer range index"
+        );
+
+        let range_start_idx = self.range_start_indices[range_idx];
+
+        if range_idx == last_valid_range_idx {
+            range_start_idx..u32::try_from(self.n_valid_features()).unwrap()
+        } else {
+            range_start_idx..self.range_start_indices[range_idx + 1]
+        }
+    }
+
+    /// Returns a slice with the start index of each range of valid features.
+    pub fn valid_feature_range_start_indices(&self) -> &[u32] {
+        &self.range_start_indices[..(self.last_valid_range_idx() + 1)]
     }
 
     /// Returns the number of bytes from the beginning of the buffer
@@ -450,12 +495,43 @@ impl DynamicInstanceFeatureBuffer {
         self.add_feature_bytes(storage.feature_bytes(feature_id));
     }
 
-    /// Empties the buffer.
+    /// Begins a new range in the buffer starting at the location just after the
+    /// current last feature (or at the beginning if the buffer is empty). All
+    /// features added between this and the next [`begin_range`] call will be
+    /// considered part of this new range.
+    ///
+    /// # Returns
+    /// An [`InstanceFeatureBufferRangeIndex`] that can be passed to
+    /// [`valid_features_range`] to obtain the range.
+    pub fn begin_range(&mut self) -> InstanceFeatureBufferRangeIndex {
+        let last_valid_range_idx = self.last_valid_range_idx();
+        let next_last_valid_range_idx = last_valid_range_idx + 1;
+
+        let n_valid_features = u32::try_from(self.n_valid_features()).unwrap();
+
+        if next_last_valid_range_idx == self.range_start_indices.len() {
+            self.range_start_indices.push(n_valid_features);
+        } else {
+            self.range_start_indices[next_last_valid_range_idx] = n_valid_features;
+        }
+
+        self.last_valid_range_idx
+            .store(next_last_valid_range_idx, Ordering::Release);
+
+        next_last_valid_range_idx
+    }
+
+    /// Empties the buffer and forgets any range information.
     ///
     /// Does not actually drop anything, just resets the count of
     /// valid bytes to zero.
     pub fn clear(&self) {
         self.n_valid_bytes.store(0, Ordering::Release);
+        self.last_valid_range_idx.store(0, Ordering::Release);
+    }
+
+    fn last_valid_range_idx(&self) -> usize {
+        self.last_valid_range_idx.load(Ordering::Acquire)
     }
 
     fn add_feature_bytes(&mut self, feature_bytes: &[u8]) {
@@ -1027,5 +1103,111 @@ mod test {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<ZeroSizedFeature>();
         buffer.add_feature(&ZeroSizedFeature);
         buffer.n_valid_features();
+    }
+
+    #[test]
+    fn beginning_multiple_ranges_without_adding_features_in_instance_feature_buffer_gives_different_ranges(
+    ) {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature = create_dummy_feature();
+
+        assert_ne!(buffer.begin_range(), buffer.begin_range());
+        buffer.add_feature(&feature);
+        assert_ne!(buffer.begin_range(), buffer.begin_range());
+    }
+
+    #[test]
+    #[should_panic]
+    fn accessing_other_than_first_range_after_clearing_instance_feature_buffer_fails() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature = create_dummy_feature();
+
+        let _range_idx_1 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        let range_idx_2 = buffer.begin_range();
+        buffer.clear();
+        buffer.valid_feature_range(range_idx_2);
+    }
+
+    #[test]
+    fn creating_single_range_from_beginning_in_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature = create_dummy_feature();
+
+        let range_idx = buffer.begin_range();
+
+        assert_eq!(buffer.valid_feature_range(range_idx), 0..0);
+
+        buffer.add_feature(&feature);
+        assert_eq!(buffer.valid_feature_range(range_idx), 0..1);
+
+        buffer.add_feature(&feature);
+        assert_eq!(buffer.valid_feature_range(range_idx), 0..2);
+    }
+
+    #[test]
+    fn creating_single_range_not_from_beginning_in_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature = create_dummy_feature();
+
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+
+        let range_idx = buffer.begin_range();
+
+        assert_eq!(buffer.valid_feature_range(range_idx), 2..2);
+
+        buffer.add_feature(&feature);
+        assert_eq!(buffer.valid_feature_range(range_idx), 2..3);
+
+        buffer.add_feature(&feature);
+        assert_eq!(buffer.valid_feature_range(range_idx), 2..4);
+    }
+
+    #[test]
+    fn creating_multiple_ranges_from_beginning_in_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature = create_dummy_feature();
+
+        let range_idx_0 = buffer.begin_range();
+        let range_idx_1 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        let range_idx_2 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+        let range_idx_3 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+
+        assert_eq!(buffer.valid_feature_range(range_idx_0), 0..0);
+        assert_eq!(buffer.valid_feature_range(range_idx_1), 0..1);
+        assert_eq!(buffer.valid_feature_range(range_idx_2), 1..3);
+        assert_eq!(buffer.valid_feature_range(range_idx_3), 3..6);
+    }
+
+    #[test]
+    fn creating_multiple_ranges_not_from_beginning_in_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature = create_dummy_feature();
+
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+
+        let range_idx_0 = buffer.begin_range();
+        let range_idx_1 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        let range_idx_2 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+        let range_idx_3 = buffer.begin_range();
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+        buffer.add_feature(&feature);
+
+        assert_eq!(buffer.valid_feature_range(range_idx_0), 2..2);
+        assert_eq!(buffer.valid_feature_range(range_idx_1), 2..3);
+        assert_eq!(buffer.valid_feature_range(range_idx_2), 3..5);
+        assert_eq!(buffer.valid_feature_range(range_idx_3), 5..8);
     }
 }

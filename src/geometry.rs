@@ -17,8 +17,8 @@ pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
 pub use camera::{Camera, OrthographicCamera, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use instance::{
-    DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,
-    InstanceFeatureTypeID, InstanceModelViewTransform,
+    DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeIndex,
+    InstanceFeatureID, InstanceFeatureStorage, InstanceFeatureTypeID, InstanceModelViewTransform,
 };
 pub use mesh::{
     TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector,

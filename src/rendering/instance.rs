@@ -1,10 +1,12 @@
 //! Management of model instance data for rendering.
 
 use crate::{
-    geometry::{DynamicInstanceFeatureBuffer, InstanceFeatureTypeID},
+    geometry::{
+        DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeIndex, InstanceFeatureTypeID,
+    },
     rendering::{buffer::RenderBuffer, CoreRenderingSystem, InstanceFeatureShaderInput},
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Range};
 
 /// Owner and manager of a vertex render buffer for model instance
 /// features.
@@ -15,6 +17,8 @@ pub struct InstanceFeatureRenderBufferManager {
     shader_input: InstanceFeatureShaderInput,
     feature_type_id: InstanceFeatureTypeID,
     n_features: usize,
+    range_start_indices: Vec<u32>,
+    n_ranges: usize,
 }
 
 impl InstanceFeatureRenderBufferManager {
@@ -32,12 +36,17 @@ impl InstanceFeatureRenderBufferManager {
             label,
         );
 
+        let range_start_indices = feature_buffer.valid_feature_range_start_indices().to_vec();
+        let n_ranges = range_start_indices.len();
+
         Self {
             feature_render_buffer,
             vertex_buffer_layout: feature_buffer.vertex_buffer_layout().clone(),
             shader_input: feature_buffer.shader_input().clone(),
             feature_type_id: feature_buffer.feature_type_id(),
             n_features: feature_buffer.n_valid_features(),
+            range_start_indices,
+            n_ranges,
         }
     }
 
@@ -60,6 +69,28 @@ impl InstanceFeatureRenderBufferManager {
     /// Returns the number of features in the render buffer.
     pub fn n_features(&self) -> usize {
         self.n_features
+    }
+
+    /// Returns the range of feature indices with the given
+    /// [`InstanceFeatureBufferRangeIndex`]. See
+    /// [`DynamicInstanceFeatureBuffer::valid_feature_range`] for more
+    /// information.
+    ///
+    /// # Panics
+    /// If the given range index does not correspond to a currently valid range.
+    pub fn feature_range(&self, range_idx: InstanceFeatureBufferRangeIndex) -> Range<u32> {
+        assert!(
+            range_idx < self.n_ranges,
+            "Invalid instance feature render buffer range index"
+        );
+
+        let range_start_idx = self.range_start_indices[range_idx];
+
+        if range_idx + 1 == self.n_ranges {
+            range_start_idx..u32::try_from(self.n_features).unwrap()
+        } else {
+            range_start_idx..self.range_start_indices[range_idx + 1]
+        }
     }
 
     /// Writes the valid features in the given model instance feature
@@ -95,5 +126,12 @@ impl InstanceFeatureRenderBufferManager {
         }
 
         self.n_features = feature_buffer.n_valid_features();
+
+        let range_start_indices = feature_buffer.valid_feature_range_start_indices();
+        self.n_ranges = range_start_indices.len();
+        if self.n_ranges > self.range_start_indices.len() {
+            self.range_start_indices.resize(self.n_ranges, 0);
+        }
+        self.range_start_indices[..self.n_ranges].copy_from_slice(range_start_indices);
     }
 }
