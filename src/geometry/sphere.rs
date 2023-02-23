@@ -10,6 +10,7 @@ use nalgebra::{self as na, Point3};
 pub struct Sphere<F: Float> {
     center: Point3<F>,
     radius: F,
+    radius_squared: F,
 }
 
 impl<F: Float> Sphere<F> {
@@ -19,7 +20,11 @@ impl<F: Float> Sphere<F> {
     /// If `radius` is negative.
     pub fn new(center: Point3<F>, radius: F) -> Self {
         assert!(radius >= F::zero());
-        Self { center, radius }
+        Self {
+            center,
+            radius,
+            radius_squared: radius * radius,
+        }
     }
 
     /// Finds the smallest sphere that fully encloses the two
@@ -82,7 +87,7 @@ impl<F: Float> Sphere<F> {
 
     /// Returns the square of the radius of the sphere.
     pub fn radius_squared(&self) -> F {
-        self.radius * self.radius
+        self.radius_squared
     }
 
     /// Whether the given sphere is fully inside this sphere.
@@ -100,6 +105,25 @@ impl<F: Float> Sphere<F> {
     /// inside.
     pub fn contains_point(&self, point: &Point3<F>) -> bool {
         na::distance_squared(self.center(), point) <= self.radius_squared()
+    }
+
+    /// Whether all of the sphere is strictly outside the given axis-aligned
+    /// box. The sphere is considered inside if the boundaries exactly touch
+    /// each other.
+    pub fn is_outside_axis_aligned_box(&self, axis_aligned_box: &AxisAlignedBox<F>) -> bool {
+        let lower_corner = axis_aligned_box.lower_corner();
+        let upper_corner = axis_aligned_box.upper_corner();
+
+        let mut min_squared_distance_from_center = F::ZERO;
+        for idx in 0..3 {
+            if upper_corner[idx] < self.center[idx] {
+                min_squared_distance_from_center += (self.center[idx] - upper_corner[idx]).powi(2);
+            } else if lower_corner[idx] > self.center[idx] {
+                min_squared_distance_from_center += (lower_corner[idx] - self.center[idx]).powi(2);
+            }
+        }
+
+        min_squared_distance_from_center > self.radius_squared()
     }
 
     /// Computes the sphere resulting from rotating this sphere with the given
@@ -248,5 +272,69 @@ mod test {
         let sphere = Sphere::new(point![2.14, 0.0, -1.3], 1.0);
         let point = point![2.14, 1.0 + f64::EPSILON, -1.3];
         assert!(!sphere.contains_point(&point));
+    }
+
+    #[test]
+    fn sphere_outside_aligned_bounding_box_is_outside() {
+        let sphere = Sphere::new(Point3::origin(), 1.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![2.0, 2.0, 2.0], point![3.0, 4.0, 5.0]);
+        assert!(sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn sphere_partially_inside_aligned_bounding_box_is_not_outside() {
+        let sphere = Sphere::new(point![4.0, 2.0, 2.1], 2.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![1.1, 1.2, 1.3], point![3.2, 3.1, 3.0]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn sphere_completely_inside_aligned_bounding_box_is_not_outside() {
+        let sphere = Sphere::new(point![3.01, 3.06, 3.02], 0.9);
+        let axis_aligned_box = AxisAlignedBox::new(point![1.7, 1.6, 1.9], point![4.0, 5.0, 6.0]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn sphere_touching_aligned_bounding_box_edges_from_inside_is_not_outside() {
+        let sphere = Sphere::new(point![4.0, 4.0, 4.0], 1.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![3.0, 3.0, 3.0], point![5.0, 5.0, 5.0]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn sphere_touching_aligned_bounding_box_edge_from_outside_is_not_outside() {
+        let sphere = Sphere::new(point![3.0, 5.0, 5.0], 1.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![4.0, 4.0, 4.0], point![6.0, 6.0, 6.0]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn sphere_fully_enclosing_aligned_bounding_box_is_not_outside() {
+        let sphere = Sphere::new(point![3.0, 3.0, 3.0], 3.0);
+        let axis_aligned_box =
+            AxisAlignedBox::new(point![2.2, 2.1, 2.04], point![4.04, 4.06, 4.03]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn sphere_enclosing_degenerate_aligned_bounding_box_is_not_outside() {
+        let sphere = Sphere::new(point![5.0, 5.0, 5.0], 1.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![5.0, 5.0, 5.0], point![5.0, 5.0, 5.0]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn degenerate_sphere_inside_aligned_bounding_box_is_not_outside() {
+        let sphere = Sphere::new(point![5.0, 5.0, 5.0], 0.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![4.0, 4.0, 4.0], point![6.0, 6.0, 6.0]);
+        assert!(!sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn degenerate_sphere_outside_aligned_bounding_box_is_outside() {
+        let sphere = Sphere::new(point![3.0, 3.0, 3.0], 0.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![4.0, 4.0, 4.0], point![6.0, 6.0, 6.0]);
+        assert!(sphere.is_outside_axis_aligned_box(&axis_aligned_box));
     }
 }
