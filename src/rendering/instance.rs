@@ -2,7 +2,8 @@
 
 use crate::{
     geometry::{
-        DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeIndex, InstanceFeatureTypeID,
+        DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
+        InstanceFeatureTypeID,
     },
     rendering::{buffer::RenderBuffer, CoreRenderingSystem, InstanceFeatureShaderInput},
 };
@@ -16,9 +17,8 @@ pub struct InstanceFeatureRenderBufferManager {
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     shader_input: InstanceFeatureShaderInput,
     feature_type_id: InstanceFeatureTypeID,
-    n_features: usize,
-    range_start_indices: Vec<u32>,
-    n_ranges: usize,
+    n_features: u32,
+    range_map: InstanceFeatureBufferRangeMap,
 }
 
 impl InstanceFeatureRenderBufferManager {
@@ -36,17 +36,13 @@ impl InstanceFeatureRenderBufferManager {
             label,
         );
 
-        let range_start_indices = feature_buffer.valid_feature_range_start_indices().to_vec();
-        let n_ranges = range_start_indices.len();
-
         Self {
             feature_render_buffer,
             vertex_buffer_layout: feature_buffer.vertex_buffer_layout().clone(),
             shader_input: feature_buffer.shader_input().clone(),
             feature_type_id: feature_buffer.feature_type_id(),
-            n_features: feature_buffer.n_valid_features(),
-            range_start_indices,
-            n_ranges,
+            n_features: u32::try_from(feature_buffer.n_valid_features()).unwrap(),
+            range_map: feature_buffer.create_range_map(),
         }
     }
 
@@ -67,30 +63,19 @@ impl InstanceFeatureRenderBufferManager {
     }
 
     /// Returns the number of features in the render buffer.
-    pub fn n_features(&self) -> usize {
+    pub fn n_features(&self) -> u32 {
         self.n_features
     }
 
     /// Returns the range of feature indices with the given
-    /// [`InstanceFeatureBufferRangeIndex`]. See
+    /// [`InstanceFeatureBufferRangeID`]. See
     /// [`DynamicInstanceFeatureBuffer::valid_feature_range`] for more
     /// information.
     ///
     /// # Panics
-    /// If the given range index does not correspond to a currently valid range.
-    pub fn feature_range(&self, range_idx: InstanceFeatureBufferRangeIndex) -> Range<u32> {
-        assert!(
-            range_idx < self.n_ranges,
-            "Invalid instance feature render buffer range index"
-        );
-
-        let range_start_idx = self.range_start_indices[range_idx];
-
-        if range_idx + 1 == self.n_ranges {
-            range_start_idx..u32::try_from(self.n_features).unwrap()
-        } else {
-            range_start_idx..self.range_start_indices[range_idx + 1]
-        }
+    /// If no range with the given ID exists.
+    pub fn feature_range(&self, range_id: InstanceFeatureBufferRangeID) -> Range<u32> {
+        self.range_map.get_range(range_id, self.n_features)
     }
 
     /// Writes the valid features in the given model instance feature
@@ -125,13 +110,8 @@ impl InstanceFeatureRenderBufferManager {
                 .update_valid_bytes(core_system, valid_bytes);
         }
 
-        self.n_features = feature_buffer.n_valid_features();
+        self.n_features = u32::try_from(feature_buffer.n_valid_features()).unwrap();
 
-        let range_start_indices = feature_buffer.valid_feature_range_start_indices();
-        self.n_ranges = range_start_indices.len();
-        if self.n_ranges > self.range_start_indices.len() {
-            self.range_start_indices.resize(self.n_ranges, 0);
-        }
-        self.range_start_indices[..self.n_ranges].copy_from_slice(range_start_indices);
+        self.range_map = feature_buffer.create_range_map();
     }
 }
