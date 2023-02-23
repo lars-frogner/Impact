@@ -6,7 +6,6 @@ use crate::{
     rendering::fre,
     scene::{InstanceFeatureManager, ModelID, SceneCamera},
 };
-use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion};
@@ -399,48 +398,32 @@ impl<F: Float> SceneGraph<F> {
         scene_camera.set_view_transform(view_transform);
     }
 
-    /// Computes the model-to-camera space transforms of all the model
-    /// instances in the scene graph that are visible with the specified
-    /// camera and adds them to the given instance feature manager. If no
-    /// camera is specified, the computed transforms will be model-to-root
-    /// space transforms instead, and view culling is performed for the
-    /// identity projection transform.
+    /// Updates the bounding spheres of all nodes in the scene graph.
+    pub fn update_all_bounding_spheres(&mut self) {
+        self.update_bounding_spheres(self.root_node_id());
+    }
+
+    /// Computes the model-to-camera space transforms of all the model instances
+    /// in the scene graph that are visible with the specified camera and adds
+    /// them to the given instance feature manager.
     ///
-    /// # Errors
-    /// Returns an error if the specified camera is not present in the
-    /// given camera repository.
-    ///
-    /// # Panics
-    /// If the specified camera node does not exist.
+    /// # Warning
+    /// Make sure to [`update_all_bounding_spheres`] before calling this method
+    /// if any nodes have changed.
     pub fn sync_transforms_of_visible_model_instances(
-        &mut self,
+        &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        scene_camera: Option<&SceneCamera<F>>,
-    ) -> Result<()>
-    where
+        scene_camera: &SceneCamera<F>,
+    ) where
         InstanceModelViewTransform: InstanceFeature,
         F: simba::scalar::SubsetOf<fre>,
     {
-        let root_node_id = self.root_node_id();
-
-        let (camera_space_view_frustum, view_transform) = if let Some(scene_camera) = scene_camera {
-            let camera_space_view_frustum = scene_camera.camera().view_frustum().clone();
-            let view_transform = *scene_camera.view_transform();
-            (camera_space_view_frustum, view_transform)
-        } else {
-            (Frustum::for_identity_transform(), Similarity3::identity())
-        };
-
-        self.update_bounding_spheres(root_node_id);
-
-        self.update_model_view_transforms_for_model_instances_in_group(
+        self.sync_transforms_of_visible_model_instances_in_group(
             instance_feature_manager,
-            &camera_space_view_frustum,
-            root_node_id,
-            &view_transform,
+            scene_camera.camera().view_frustum(),
+            self.root_node_id(),
+            scene_camera.view_transform(),
         );
-
-        Ok(())
     }
 
     /// Computes the transform from the scene graph's root node space
@@ -461,88 +444,6 @@ impl<F: Float> SceneGraph<F> {
         }
 
         view_transform
-    }
-
-    /// Determines the model-to-camera transforms of the group and model
-    /// instance nodes that are children of the specified group node and
-    /// whose bounding spheres lie within the given camera frustum.
-    /// The given parent model-to-camera transform and the model-to-parent
-    /// transform of the specified group node are prepended to the transforms
-    /// of the children. For the children that are model instance
-    /// nodes, their final model-to-camera transforms are added to
-    /// the given instance feature manager.
-    ///
-    /// # Panics
-    /// If the specified group node does not exist.
-    fn update_model_view_transforms_for_model_instances_in_group(
-        &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
-        camera_space_view_frustum: &Frustum<F>,
-        group_node_id: GroupNodeID,
-        parent_group_to_camera_transform: &NodeTransform<F>,
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-        F: simba::scalar::SubsetOf<fre>,
-    {
-        let group_node = self.group_nodes.node(group_node_id);
-
-        let group_to_camera_transform =
-            parent_group_to_camera_transform * group_node.group_to_parent_transform();
-
-        if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
-            let bounding_sphere_camera_space =
-                bounding_sphere.transformed(&group_to_camera_transform);
-
-            if !camera_space_view_frustum.sphere_lies_outside(&bounding_sphere_camera_space) {
-                for &group_node_id in group_node.child_group_node_ids() {
-                    self.update_model_view_transforms_for_model_instances_in_group(
-                        instance_feature_manager,
-                        camera_space_view_frustum,
-                        group_node_id,
-                        &group_to_camera_transform,
-                    );
-                }
-
-                for &model_instance_node_id in group_node.child_model_instance_node_ids() {
-                    self.update_model_view_transform_of_model_instance(
-                        instance_feature_manager,
-                        model_instance_node_id,
-                        &group_to_camera_transform,
-                    );
-                }
-            }
-        }
-    }
-
-    /// Prepends the given parent group-to-camera transform to the
-    /// model-to-parent transform of the specified model instance node
-    /// and adds an instance with the resulting transform
-    /// to the given instance feature manager.
-    ///
-    /// # Panics
-    /// If the specified model instance node does not exist.
-    fn update_model_view_transform_of_model_instance(
-        &self,
-        instance_feature_manager: &mut InstanceFeatureManager,
-        model_instance_node_id: ModelInstanceNodeID,
-        parent_group_to_camera_transform: &NodeTransform<F>,
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-        F: simba::scalar::SubsetOf<fre>,
-    {
-        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-
-        let model_view_transform =
-            parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
-
-        let instance_model_view_transform =
-            InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
-
-        instance_feature_manager.buffer_instance(
-            model_instance_node.model_id(),
-            &instance_model_view_transform,
-            model_instance_node.feature_ids(),
-        );
     }
 
     /// Updates the bounding sphere of the specified group node
@@ -606,6 +507,88 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node
             .model_bounding_sphere()
             .transformed(model_instance_node.model_to_parent_transform())
+    }
+
+    /// Determines the model-to-camera transforms of the group and model
+    /// instance nodes that are children of the specified group node and
+    /// whose bounding spheres lie within the given camera frustum.
+    /// The given parent model-to-camera transform and the model-to-parent
+    /// transform of the specified group node are prepended to the transforms
+    /// of the children. For the children that are model instance
+    /// nodes, their final model-to-camera transforms are added to
+    /// the given instance feature manager.
+    ///
+    /// # Panics
+    /// If the specified group node does not exist.
+    fn buffer_transforms_of_visible_model_instances_in_group(
+        &self,
+        instance_feature_manager: &mut InstanceFeatureManager,
+        camera_space_view_frustum: &Frustum<F>,
+        group_node_id: GroupNodeID,
+        parent_group_to_camera_transform: &NodeTransform<F>,
+    ) where
+        InstanceModelViewTransform: InstanceFeature,
+        F: simba::scalar::SubsetOf<fre>,
+    {
+        let group_node = self.group_nodes.node(group_node_id);
+
+        let group_to_camera_transform =
+            parent_group_to_camera_transform * group_node.group_to_parent_transform();
+
+        if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
+            let bounding_sphere_camera_space =
+                bounding_sphere.transformed(&group_to_camera_transform);
+
+            if !camera_space_view_frustum.sphere_lies_outside(&bounding_sphere_camera_space) {
+                for &group_node_id in group_node.child_group_node_ids() {
+                    self.buffer_transforms_of_visible_model_instances_in_group(
+                        instance_feature_manager,
+                        camera_space_view_frustum,
+                        group_node_id,
+                        &group_to_camera_transform,
+                    );
+                }
+
+                for &model_instance_node_id in group_node.child_model_instance_node_ids() {
+                    self.buffer_model_view_transform_of_model_instance(
+                        instance_feature_manager,
+                        model_instance_node_id,
+                        &group_to_camera_transform,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Prepends the given parent group-to-camera transform to the
+    /// model-to-parent transform of the specified model instance node
+    /// and adds an instance with the resulting transform
+    /// to the given instance feature manager.
+    ///
+    /// # Panics
+    /// If the specified model instance node does not exist.
+    fn buffer_model_view_transform_of_model_instance(
+        &self,
+        instance_feature_manager: &mut InstanceFeatureManager,
+        model_instance_node_id: ModelInstanceNodeID,
+        parent_group_to_camera_transform: &NodeTransform<F>,
+    ) where
+        InstanceModelViewTransform: InstanceFeature,
+        F: simba::scalar::SubsetOf<fre>,
+    {
+        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+        let model_view_transform =
+            parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
+
+        let instance_model_view_transform =
+            InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
+
+        instance_feature_manager.buffer_instance(
+            model_instance_node.model_id(),
+            &instance_model_view_transform,
+            model_instance_node.feature_ids(),
+        );
     }
 
     #[cfg(test)]

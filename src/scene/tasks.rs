@@ -12,7 +12,7 @@ use crate::{
     window::ControlFlow,
     world::{World, WorldTaskScheduler},
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
@@ -29,7 +29,7 @@ define_task!(
             let scene = world.scene().read().unwrap();
             if let Some(scene_camera) = scene.scene_camera().write().unwrap().as_mut() {
                 scene.scene_graph()
-                    .write()
+                    .read()
                     .unwrap()
                     .sync_camera_view_transform(scene_camera);
 
@@ -45,6 +45,28 @@ define_task!(
 );
 
 define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the bounding spheres of
+    /// all [`SceneGraph`](crate::scene::SceneGraph) nodes.
+    [pub] UpdateSceneObjectBoundingSpheres,
+    depends_on = [
+        SyncSceneObjectTransformsWithPositions,
+        SyncSceneObjectTransformsWithOrientations
+    ],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Updating scene object bounding spheres"; {
+            let scene = world.scene().read().unwrap();
+            scene.scene_graph()
+                .write()
+                .unwrap()
+                .update_all_bounding_spheres();
+
+            Ok(())
+        })
+    }
+);
+
+define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
     /// [`SceneGraph`](crate::scene::SceneGraph) to determine which
     /// model instances are visible with the scene camera, update
@@ -52,20 +74,24 @@ define_task!(
     /// features for rendering.
     [pub] BufferVisibleModelInstances,
     depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations,
+        UpdateSceneObjectBoundingSpheres,
         SyncSceneCameraViewTransform
     ],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Buffering visible model instances"; {
             let scene = world.scene().read().unwrap();
-            let result = scene.scene_graph()
-                .write()
+            let maybe_scene_camera = scene.scene_camera().read().unwrap();
+            let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
+                anyhow!("Tried to buffer visible model instances without scene camera")
+            })?;
+
+            scene.scene_graph()
+                .read()
                 .unwrap()
-                .sync_transforms_of_visible_model_instances(
+                .buffer_transforms_of_visible_model_instances(
                     &mut scene.instance_feature_manager().write().unwrap(),
-                    scene.scene_camera().read().unwrap().as_ref(),
+                    scene_camera,
                 );
 
             world
@@ -74,7 +100,7 @@ define_task!(
                 .unwrap()
                 .declare_render_resources_desynchronized();
 
-            result
+            Ok(())
         })
     }
 );
@@ -86,8 +112,9 @@ impl Scene {
         task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
         task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
         task_scheduler.register_task(SyncSceneCameraViewTransform)?;
-        task_scheduler.register_task(SyncLightPositionsAndDirectionsInStorage)?;
-        task_scheduler.register_task(BufferVisibleModelInstances)
+        task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
+        task_scheduler.register_task(BufferVisibleModelInstances)?;
+        task_scheduler.register_task(SyncLightPositionsAndDirectionsInStorage)
     }
 
     /// Identifies scene-related errors that need special
