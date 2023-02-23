@@ -8,10 +8,14 @@ use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector4};
 use std::{
+    collections::HashMap,
     fmt::Debug,
     mem,
     ops::Range,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    },
 };
 
 /// Represents a piece of data associated with a model instance.
@@ -90,13 +94,26 @@ pub struct DynamicInstanceFeatureBuffer {
     shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
     n_valid_bytes: AtomicUsize,
-    range_start_indices: Vec<u32>,
-    last_valid_range_idx: AtomicUsize,
+    range_manager: InstanceFeatureBufferRangeManager,
 }
 
-/// Index for a specific range of valid features in a
+/// Identifier for a specific range of valid features in a
 /// [`DynamicInstanceFeatureBuffer`].
-pub type InstanceFeatureBufferRangeIndex = usize;
+pub type InstanceFeatureBufferRangeID = u32;
+
+/// Helper for managing ranges in a [`DynamicInstanceFeatureBuffer`].
+#[derive(Debug)]
+pub struct InstanceFeatureBufferRangeManager {
+    range_start_indices: Vec<u32>,
+    range_id_index_mapper: Mutex<KeyIndexMapper<InstanceFeatureBufferRangeID>>,
+}
+
+/// Describes the ranges defined in a [`DynamicInstanceFeatureBuffer`].
+#[derive(Clone, Debug)]
+pub struct InstanceFeatureBufferRangeMap {
+    range_start_indices: Vec<u32>,
+    range_id_index_map: HashMap<InstanceFeatureBufferRangeID, usize>,
+}
 
 /// A model-to-camera transform for a specific instance of a model.
 ///
@@ -342,8 +359,7 @@ impl DynamicInstanceFeatureBuffer {
             shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             n_valid_bytes: AtomicUsize::new(0),
-            range_start_indices: vec![0],
-            last_valid_range_idx: AtomicUsize::new(0),
+            range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
         }
     }
 
@@ -357,8 +373,7 @@ impl DynamicInstanceFeatureBuffer {
             shader_input: storage.shader_input().clone(),
             bytes: AlignedByteVec::new(type_descriptor.alignment()),
             n_valid_bytes: AtomicUsize::new(0),
-            range_start_indices: vec![0],
-            last_valid_range_idx: AtomicUsize::new(0),
+            range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
         }
     }
 
@@ -394,39 +409,30 @@ impl DynamicInstanceFeatureBuffer {
         self.n_valid_bytes() / self.feature_size()
     }
 
-    /// Returns the range of valid feature indices with the given
-    /// [`InstanceFeatureBufferRangeIndex`]. Ranges are defined by calling
-    /// [`begin_range`]. The range spans from and including the first feature
-    /// added after the `begin_range` call to and including the last feature
-    /// added before the next `begin_range` call, or to the last valid feature
-    /// if the `begin_range` call was the last one.
-    ///
-    /// # Note
-    /// An `InstanceFeatureBufferRangeIndex` may be reused between calls to
-    /// [`clear`] as long as the same number of `begin_range` calls are made
-    /// after each `clear`.
+    /// Returns the range of valid feature indices with the given ID. Ranges are
+    /// defined by calling [`begin_range`]. The range spans from and including
+    /// the first feature added after the `begin_range` call to and including
+    /// the last feature added before the next `begin_range` call, or to the
+    /// last valid feature if the `begin_range` call was the last one. Calling
+    /// [`clear`] removes all range information.
     ///
     /// # Panics
-    /// If the given range index does not correspond to a currently valid range.
-    pub fn valid_feature_range(&self, range_idx: InstanceFeatureBufferRangeIndex) -> Range<u32> {
-        let last_valid_range_idx = self.last_valid_range_idx();
-        assert!(
-            range_idx <= last_valid_range_idx,
-            "Invalid instance feature buffer range index"
-        );
-
-        let range_start_idx = self.range_start_indices[range_idx];
-
-        if range_idx == last_valid_range_idx {
-            range_start_idx..u32::try_from(self.n_valid_features()).unwrap()
-        } else {
-            range_start_idx..self.range_start_indices[range_idx + 1]
+    /// If no range with the given ID exists.
+    pub fn valid_feature_range(&self, range_id: InstanceFeatureBufferRangeID) -> Range<u32> {
+        self.range_manager
+            .get_range(range_id, || self.n_valid_features())
         }
+
+    /// Returns the range of valid feature indices encompassing all features
+    /// added before defining any explicit ranges with [`begin_range`].
+    pub fn initial_valid_feature_range(&self) -> Range<u32> {
+        self.valid_feature_range(InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID)
     }
 
-    /// Returns a slice with the start index of each range of valid features.
-    pub fn valid_feature_range_start_indices(&self) -> &[u32] {
-        &self.range_start_indices[..(self.last_valid_range_idx() + 1)]
+    /// Creates an [`InstanceFeatureBufferRangeMap`] containing the information
+    /// describing the ranges that have been defined with [`begin_range`].
+    pub fn create_range_map(&self) -> InstanceFeatureBufferRangeMap {
+        InstanceFeatureBufferRangeMap::from_manager(&self.range_manager)
     }
 
     /// Returns the number of bytes from the beginning of the buffer
@@ -496,42 +502,24 @@ impl DynamicInstanceFeatureBuffer {
     }
 
     /// Begins a new range in the buffer starting at the location just after the
-    /// current last feature (or at the beginning if the buffer is empty). All
-    /// features added between this and the next [`begin_range`] call will be
-    /// considered part of this new range.
+    /// current last feature (or at the beginning if the buffer is empty). The
+    /// range is assigned the given ID. All features added between this and the
+    /// next [`begin_range`] call will be considered part of this new range.
     ///
-    /// # Returns
-    /// An [`InstanceFeatureBufferRangeIndex`] that can be passed to
-    /// [`valid_features_range`] to obtain the range.
-    pub fn begin_range(&mut self) -> InstanceFeatureBufferRangeIndex {
-        let last_valid_range_idx = self.last_valid_range_idx();
-        let next_last_valid_range_idx = last_valid_range_idx + 1;
-
-        let n_valid_features = u32::try_from(self.n_valid_features()).unwrap();
-
-        if next_last_valid_range_idx == self.range_start_indices.len() {
-            self.range_start_indices.push(n_valid_features);
-        } else {
-            self.range_start_indices[next_last_valid_range_idx] = n_valid_features;
-        }
-
-        self.last_valid_range_idx
-            .store(next_last_valid_range_idx, Ordering::Release);
-
-        next_last_valid_range_idx
+    /// # Panics
+    /// If a range with the given ID already exists.
+    pub fn begin_range(&mut self, range_id: InstanceFeatureBufferRangeID) {
+        self.range_manager
+            .begin_range(self.n_valid_features(), range_id);
     }
 
     /// Empties the buffer and forgets any range information.
     ///
-    /// Does not actually drop anything, just resets the count of
-    /// valid bytes to zero.
+    /// Does not actually drop buffer contents, just resets the count of valid
+    /// bytes to zero.
     pub fn clear(&self) {
         self.n_valid_bytes.store(0, Ordering::Release);
-        self.last_valid_range_idx.store(0, Ordering::Release);
-    }
-
-    fn last_valid_range_idx(&self) -> usize {
-        self.last_valid_range_idx.load(Ordering::Acquire)
+        self.range_manager.clear();
     }
 
     fn add_feature_bytes(&mut self, feature_bytes: &[u8]) {
@@ -567,6 +555,141 @@ impl DynamicInstanceFeatureBuffer {
         }
 
         self.bytes.resize(new_buffer_size, 0);
+    }
+}
+
+impl InstanceFeatureBufferRangeManager {
+    /// ID of the initial range created when calling [`new_with_initial_range`].
+    pub const INITIAL_RANGE_ID: InstanceFeatureBufferRangeID = InstanceFeatureBufferRangeID::MAX;
+
+    /// Creates a new [`BufferRangeManager`] with a single range starting at
+    /// index 0. The ID of the initial range is available in the
+    /// [`Self::INITIAL_RANGE_ID`] constant.
+    pub fn new_with_initial_range() -> Self {
+        Self {
+            range_start_indices: vec![0],
+            range_id_index_mapper: Mutex::new(KeyIndexMapper::new_with_key(Self::INITIAL_RANGE_ID)),
+        }
+    }
+
+    /// Returns the range with the given [`InstanceFeatureBufferRangeID`]. If
+    /// the range is the last one, the given buffer length will be used as the
+    /// upper limit of the range.
+    ///
+    /// # Panics
+    /// - If no range with the given ID exists.
+    /// - If the range is the last one and the given buffer length is smaller
+    ///   than the range start index.
+    pub fn get_range(
+        &self,
+        range_id: InstanceFeatureBufferRangeID,
+        get_buffer_length: impl Fn() -> usize,
+    ) -> Range<u32> {
+        let range_id_index_mapper = self.range_id_index_mapper.lock().unwrap();
+
+        let range_idx = range_id_index_mapper
+            .get(range_id)
+            .expect("Requested range with invalid ID in buffer range manager");
+
+        let next_range_idx = range_idx + 1;
+
+        let range_start_idx = self.range_start_indices[range_idx];
+
+        let range_end_idx = if next_range_idx < range_id_index_mapper.len() {
+            self.range_start_indices[next_range_idx]
+        } else {
+            let buffer_length = u32::try_from(get_buffer_length()).unwrap();
+            assert!(
+                buffer_length >= range_start_idx,
+                "Provided buffer length is smaller than start index of last range in buffer range manager"
+            );
+            buffer_length
+        };
+
+        range_start_idx..range_end_idx
+    }
+
+    /// Begins a new range in the buffer starting at the given index, and
+    /// assigns the range the given ID.
+    ///
+    /// # Panics
+    /// - If the given start index is smaller than the start index of the
+    ///   previous range.
+    /// - If a range with the given ID already exists.
+    pub fn begin_range(&mut self, range_start_idx: usize, range_id: InstanceFeatureBufferRangeID) {
+        let mut range_id_index_mapper = self.range_id_index_mapper.lock().unwrap();
+        let range_idx = range_id_index_mapper.len();
+
+        let range_start_idx = u32::try_from(range_start_idx).unwrap();
+
+        assert!(
+            range_start_idx >= self.range_start_indices[range_idx - 1],
+            "Tried to create range starting before the previous range in buffer range manager"
+        );
+
+        range_id_index_mapper.push_key(range_id);
+
+        if range_idx == self.range_start_indices.len() {
+            self.range_start_indices.push(range_start_idx);
+        } else {
+            self.range_start_indices[range_idx] = range_start_idx;
+        }
+    }
+
+    /// Forgets all ranges.
+    pub fn clear(&self) {
+        self.range_id_index_mapper.lock().unwrap().clear();
+    }
+}
+
+impl InstanceFeatureBufferRangeMap {
+    fn from_manager(manager: &InstanceFeatureBufferRangeManager) -> Self {
+        let range_id_index_mapper = manager.range_id_index_mapper.lock().unwrap();
+
+        let range_start_indices =
+            manager.range_start_indices[..range_id_index_mapper.len()].to_vec();
+
+        let range_id_index_map = range_id_index_mapper.as_map().clone();
+
+        Self {
+            range_start_indices,
+            range_id_index_map,
+        }
+    }
+
+    /// Returns the range with the given [`InstanceFeatureBufferRangeID`]. If
+    /// the range is the last one, the given buffer length will be used as the
+    /// upper limit of the range.
+    ///
+    /// # Panics
+    /// - If no range with the given ID exists.
+    /// - If the range is the last one and the given buffer length is smaller
+    ///   than the range start index.
+    pub fn get_range(
+        &self,
+        range_id: InstanceFeatureBufferRangeID,
+        buffer_length: u32,
+    ) -> Range<u32> {
+        let range_idx = *self
+            .range_id_index_map
+            .get(&range_id)
+            .expect("Requested range with invalid ID in buffer range map");
+
+        let next_range_idx = range_idx + 1;
+
+        let range_start_idx = self.range_start_indices[range_idx];
+
+        let range_end_idx = if next_range_idx < self.range_start_indices.len() {
+            self.range_start_indices[next_range_idx]
+        } else {
+            assert!(
+                buffer_length >= range_start_idx,
+                "Provided buffer length is smaller than start index of last range in buffer range map"
+            );
+            buffer_length
+        };
+
+        range_start_idx..range_end_idx
     }
 }
 
@@ -1106,27 +1229,33 @@ mod test {
     }
 
     #[test]
-    fn beginning_multiple_ranges_without_adding_features_in_instance_feature_buffer_gives_different_ranges(
-    ) {
-        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-        let feature = create_dummy_feature();
-
-        assert_ne!(buffer.begin_range(), buffer.begin_range());
-        buffer.add_feature(&feature);
-        assert_ne!(buffer.begin_range(), buffer.begin_range());
+    fn requesting_initial_range_in_empty_instance_feature_buffer_works() {
+        let buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        assert_eq!(buffer.initial_valid_feature_range(), 0..0);
     }
 
     #[test]
     #[should_panic]
-    fn accessing_other_than_first_range_after_clearing_instance_feature_buffer_fails() {
+    fn defining_range_with_existing_id_in_instance_feature_buffer_fails() {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-        let feature = create_dummy_feature();
+        buffer.begin_range(0);
+        buffer.begin_range(0);
+    }
 
-        let _range_idx_1 = buffer.begin_range();
-        buffer.add_feature(&feature);
-        let range_idx_2 = buffer.begin_range();
+    #[test]
+    #[should_panic]
+    fn requesting_range_with_invalid_id_in_instance_feature_buffer_fails() {
+        let buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        buffer.valid_feature_range(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn requesting_range_with_id_invalidated_by_clearing_instance_feature_buffer_fails() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        buffer.begin_range(0);
         buffer.clear();
-        buffer.valid_feature_range(range_idx_2);
+        buffer.valid_feature_range(0);
     }
 
     #[test]
@@ -1134,15 +1263,15 @@ mod test {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
         let feature = create_dummy_feature();
 
-        let range_idx = buffer.begin_range();
+        buffer.begin_range(0);
 
-        assert_eq!(buffer.valid_feature_range(range_idx), 0..0);
-
-        buffer.add_feature(&feature);
-        assert_eq!(buffer.valid_feature_range(range_idx), 0..1);
+        assert_eq!(buffer.valid_feature_range(0), 0..0);
 
         buffer.add_feature(&feature);
-        assert_eq!(buffer.valid_feature_range(range_idx), 0..2);
+        assert_eq!(buffer.valid_feature_range(0), 0..1);
+
+        buffer.add_feature(&feature);
+        assert_eq!(buffer.valid_feature_range(0), 0..2);
     }
 
     #[test]
@@ -1153,15 +1282,16 @@ mod test {
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
 
-        let range_idx = buffer.begin_range();
+        let range_id = 0;
+        buffer.begin_range(range_id);
 
-        assert_eq!(buffer.valid_feature_range(range_idx), 2..2);
-
-        buffer.add_feature(&feature);
-        assert_eq!(buffer.valid_feature_range(range_idx), 2..3);
+        assert_eq!(buffer.valid_feature_range(range_id), 2..2);
 
         buffer.add_feature(&feature);
-        assert_eq!(buffer.valid_feature_range(range_idx), 2..4);
+        assert_eq!(buffer.valid_feature_range(range_id), 2..3);
+
+        buffer.add_feature(&feature);
+        assert_eq!(buffer.valid_feature_range(range_id), 2..4);
     }
 
     #[test]
@@ -1169,21 +1299,25 @@ mod test {
         let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
         let feature = create_dummy_feature();
 
-        let range_idx_0 = buffer.begin_range();
-        let range_idx_1 = buffer.begin_range();
+        buffer.begin_range(0);
+
+        buffer.begin_range(1);
         buffer.add_feature(&feature);
-        let range_idx_2 = buffer.begin_range();
+
+        buffer.begin_range(2);
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
-        let range_idx_3 = buffer.begin_range();
+
+        buffer.begin_range(3);
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
 
-        assert_eq!(buffer.valid_feature_range(range_idx_0), 0..0);
-        assert_eq!(buffer.valid_feature_range(range_idx_1), 0..1);
-        assert_eq!(buffer.valid_feature_range(range_idx_2), 1..3);
-        assert_eq!(buffer.valid_feature_range(range_idx_3), 3..6);
+        assert_eq!(buffer.initial_valid_feature_range(), 0..0);
+        assert_eq!(buffer.valid_feature_range(0), 0..0);
+        assert_eq!(buffer.valid_feature_range(1), 0..1);
+        assert_eq!(buffer.valid_feature_range(2), 1..3);
+        assert_eq!(buffer.valid_feature_range(3), 3..6);
     }
 
     #[test]
@@ -1194,20 +1328,24 @@ mod test {
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
 
-        let range_idx_0 = buffer.begin_range();
-        let range_idx_1 = buffer.begin_range();
+        buffer.begin_range(0);
+
+        buffer.begin_range(1);
         buffer.add_feature(&feature);
-        let range_idx_2 = buffer.begin_range();
+
+        buffer.begin_range(2);
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
-        let range_idx_3 = buffer.begin_range();
+
+        buffer.begin_range(3);
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
         buffer.add_feature(&feature);
 
-        assert_eq!(buffer.valid_feature_range(range_idx_0), 2..2);
-        assert_eq!(buffer.valid_feature_range(range_idx_1), 2..3);
-        assert_eq!(buffer.valid_feature_range(range_idx_2), 3..5);
-        assert_eq!(buffer.valid_feature_range(range_idx_3), 5..8);
+        assert_eq!(buffer.initial_valid_feature_range(), 0..2);
+        assert_eq!(buffer.valid_feature_range(0), 2..2);
+        assert_eq!(buffer.valid_feature_range(1), 2..3);
+        assert_eq!(buffer.valid_feature_range(2), 3..5);
+        assert_eq!(buffer.valid_feature_range(3), 5..8);
     }
 }
