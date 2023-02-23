@@ -3,14 +3,14 @@
 use crate::{
     geometry::{
         plane::{IntersectsPlane, SphereRelationToPlane},
-        Plane, Sphere,
+        AxisAlignedBox, Plane, Sphere,
     },
     num::Float,
 };
 use approx::AbsDiffEq;
 use nalgebra::{
-    self as na, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3,
-    Vector3,
+    self as na, point, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion,
+    UnitVector3, Vector3,
 };
 
 /// A frustum, which in general is a pyramid truncated at the
@@ -179,6 +179,30 @@ impl<F: Float> Frustum<F> {
             // the closest point
             na::distance_squared(sphere.center(), &closest_point) >= sphere.radius_squared()
         }
+    }
+
+    /// Computes the frustum's axis-aligned bounding box.
+    pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
+        let corners = [
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, -F::ONE, -F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, -F::ONE, F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, F::ONE, -F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, F::ONE, F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, -F::ONE, -F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, -F::ONE, F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, F::ONE, -F::ONE]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, F::ONE, F::ONE]),
+        ];
+
+        AxisAlignedBox::aabb_for_point_array(&corners)
     }
 
     /// Computes the frustum resulting from rotating this frustum with the given

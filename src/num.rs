@@ -9,6 +9,7 @@ pub trait Float: Copy + nt::FloatConst + nt::FromPrimitive + na::RealField + na:
     const ONE: Self;
     const NEG_ONE: Self;
     const TWO: Self;
+    const ONE_HALF: Self;
     const MIN: Self;
     const MAX: Self;
 }
@@ -20,6 +21,7 @@ macro_rules! impl_float {
             const ONE: Self = 1.0;
             const NEG_ONE: Self = -1.0;
             const TWO: Self = 2.0;
+            const ONE_HALF: Self = 0.5;
             const MIN: Self = Self::MIN;
             const MAX: Self = Self::MAX;
         }

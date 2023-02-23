@@ -8,8 +8,10 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{point, Point3, UnitVector3, Vector2, Vector4};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector4};
 use std::fmt::{Debug, Display};
+
+use super::{AxisAlignedBox, Point};
 
 /// Represents a type of attribute associated with a mesh vertex.
 pub trait VertexAttribute: Sized {
@@ -239,24 +241,22 @@ impl<F: Float> TriangleMesh<F> {
         self.index_change_tracker.change()
     }
 
-    /// Computes the smallest sphere enclosing all vertices in the mesh, or
-    /// [`None`] if the mesh has no vertices.
-    pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
-        if !self.has_positions() {
-            return None;
+    /// Computes the axis-aligned bounding box enclosing all vertices in the
+    /// mesh, or returns [`None`] if the mesh has no vertices.
+    pub fn compute_aabb(&self) -> Option<AxisAlignedBox<F>> {
+        if self.has_positions() {
+            Some(AxisAlignedBox::aabb_for_points(self.positions()))
+        } else {
+            None
         }
-        let (min_point, max_point) = self.positions().iter().fold(
-            (
-                point![F::MAX, F::MAX, F::MAX],
-                point![F::MIN, F::MIN, F::MIN],
-            ),
-            |(min_point, max_point), position| {
-                (position.0.inf(&min_point), position.0.sup(&max_point))
-            },
-        );
-        Some(Sphere::bounding_sphere_from_aabb_corners(
-            &min_point, &max_point,
-        ))
+    }
+
+    /// Computes the smallest sphere enclosing all vertices in the mesh, or
+    /// returns [`None`] if the mesh has no vertices.
+    pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
+        self.compute_aabb()
+            .as_ref()
+            .map(Sphere::bounding_sphere_from_aabb)
     }
 
     /// Forgets any recorded changes to the vertex positions.
@@ -291,5 +291,11 @@ impl<F: Float> TriangleMesh<F> {
         self.reset_normal_vector_change_tracking();
         self.reset_texture_coord_change_tracking();
         self.reset_index_change_tracking();
+    }
+}
+
+impl<F: Float> Point<F> for VertexPosition<F> {
+    fn point(&self) -> &Point3<F> {
+        &self.0
     }
 }

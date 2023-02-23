@@ -1,6 +1,6 @@
 //! Representation of spheres.
 
-use crate::num::Float;
+use crate::{geometry::AxisAlignedBox, num::Float};
 use approx::abs_diff_eq;
 use na::{Similarity3, UnitQuaternion};
 use nalgebra::{self as na, Point3};
@@ -42,8 +42,8 @@ impl<F: Float> Sphere<F> {
             return sphere_2.clone();
         }
 
-        let bounding_radius = F::from_f64(0.5).unwrap()
-            * (distance_between_centra + sphere_1.radius() + sphere_2.radius());
+        let bounding_radius =
+            F::ONE_HALF * (distance_between_centra + sphere_1.radius() + sphere_2.radius());
 
         let mean_center = na::center(sphere_1.center(), sphere_2.center());
 
@@ -52,7 +52,7 @@ impl<F: Float> Sphere<F> {
         } else {
             mean_center
                 + center_displacement
-                    * (F::from_f64(0.5).unwrap() * (sphere_2.radius() - sphere_1.radius())
+                    * (F::ONE_HALF * (sphere_2.radius() - sphere_1.radius())
                         / distance_between_centra)
         };
 
@@ -63,14 +63,10 @@ impl<F: Float> Sphere<F> {
         Self::new(bounding_center, bounding_radius)
     }
 
-    /// Finds the smallest sphere enclosing the axis-aligned bounding box
-    /// with the given lower and upper corner.
-    pub fn bounding_sphere_from_aabb_corners(
-        lower_corner: &Point3<F>,
-        upper_corner: &Point3<F>,
-    ) -> Self {
-        let center = na::center(lower_corner, upper_corner);
-        let radius = F::from_f64(0.5).unwrap() * na::distance(lower_corner, upper_corner);
+    /// Finds the smallest sphere enclosing the given axis-aligned bounding box.
+    pub fn bounding_sphere_from_aabb(aabb: &AxisAlignedBox<F>) -> Self {
+        let center = aabb.center();
+        let radius = F::ONE_HALF * na::distance(aabb.lower_corner(), aabb.upper_corner());
         Self::new(center, radius)
     }
 
@@ -204,13 +200,13 @@ mod test {
     }
 
     #[test]
-    fn computing_bounding_sphere_from_aabb_corners_works() {
+    fn computing_bounding_sphere_from_aabb_works() {
         let lower_corner = point![0.1, 0.2, 0.3];
         let upper_corner = point![2.1, 3.2, 4.3];
         let small_displacement = vector![1e-9, 1e-9, 1e-9];
 
         let bounding_sphere =
-            Sphere::bounding_sphere_from_aabb_corners(&lower_corner, &upper_corner);
+            Sphere::bounding_sphere_from_aabb(&AxisAlignedBox::new(lower_corner, upper_corner));
 
         assert!(bounding_sphere.contains_point(&(lower_corner + small_displacement)));
         assert!(bounding_sphere.contains_point(&(upper_corner - small_displacement)));
