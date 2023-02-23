@@ -116,6 +116,27 @@ where
         &self.raw_buffer[0..self.n_valid_uniforms()]
     }
 
+    /// Returns a mutable slice with the valid uniforms in the buffer.
+    pub fn valid_uniforms_mut(&mut self) -> &mut [U] {
+        let n_valid_uniforms = self.n_valid_uniforms();
+        &mut self.raw_buffer[0..n_valid_uniforms]
+    }
+
+    /// Returns a slice with the IDs of the valid uniforms in the buffer, in the
+    /// same order as the corresponding uniforms are stored.
+    pub fn valid_uniform_ids(&self) -> &[ID] {
+        &self.index_map.keys_at_indices()[0..self.n_valid_uniforms()]
+    }
+
+    /// Returns an iterator over the valid uniforms where each item contains the
+    /// uniform ID and a mutable reference to the uniform.
+    pub fn valid_uniforms_with_ids_mut(&mut self) -> impl Iterator<Item = (ID, &'_ mut U)> {
+        let n_valid_uniforms = self.n_valid_uniforms();
+        let ids = &self.index_map.keys_at_indices()[0..n_valid_uniforms];
+        let uniforms = &mut self.raw_buffer[0..n_valid_uniforms];
+        ids.iter().copied().zip(uniforms.iter_mut())
+    }
+
     /// Inserts the given uniform identified by the given ID
     /// into the buffer.
     ///
@@ -198,6 +219,7 @@ mod test {
         assert_eq!(buffer.n_valid_uniforms(), 0);
         assert!(buffer.raw_buffer().is_empty());
         assert!(buffer.valid_uniforms().is_empty());
+        assert!(buffer.valid_uniform_ids().is_empty());
     }
 
     #[test]
@@ -207,6 +229,7 @@ mod test {
         assert_eq!(buffer.n_valid_uniforms(), 0);
         assert_eq!(buffer.raw_buffer().len(), 4);
         assert!(buffer.valid_uniforms().is_empty());
+        assert!(buffer.valid_uniform_ids().is_empty());
     }
 
     #[test]
@@ -235,6 +258,7 @@ mod test {
         assert_eq!(buffer.uniform(id), &uniform);
         assert_eq!(buffer.uniform_mut(id), &uniform);
         assert_eq!(buffer.valid_uniforms(), &[uniform]);
+        assert_eq!(buffer.valid_uniform_ids(), &[id]);
     }
 
     #[test]
@@ -255,8 +279,15 @@ mod test {
 
         assert_eq!(buffer.n_valid_uniforms(), 2);
         assert_eq!(buffer.valid_uniforms().len(), 2);
-        assert!(buffer.valid_uniforms().contains(&uniform_1));
-        assert!(buffer.valid_uniforms().contains(&uniform_2));
+        assert_eq!(buffer.valid_uniform_ids().len(), 2);
+        assert_eq!(
+            &buffer.valid_uniforms()[0],
+            buffer.uniform(buffer.valid_uniform_ids()[0])
+        );
+        assert_eq!(
+            &buffer.valid_uniforms()[1],
+            buffer.uniform(buffer.valid_uniform_ids()[1])
+        );
     }
 
     #[test]
@@ -286,6 +317,7 @@ mod test {
         assert!(buffer.get_uniform(id).is_none());
         assert_eq!(buffer.n_valid_uniforms(), 0);
         assert!(buffer.valid_uniforms().is_empty());
+        assert!(buffer.valid_uniform_ids().is_empty());
     }
 
     #[test]
@@ -304,6 +336,7 @@ mod test {
         assert_eq!(buffer.n_valid_uniforms(), 1);
         assert_eq!(buffer.uniform(id_1), &uniform_1);
         assert_eq!(buffer.valid_uniforms(), &[uniform_1]);
+        assert_eq!(buffer.valid_uniform_ids(), &[id_1]);
     }
 
     #[test]
