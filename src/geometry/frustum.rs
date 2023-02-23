@@ -101,7 +101,8 @@ impl<F: Float> Frustum<F> {
             .all(|plane| plane.point_lies_in_positive_halfspace(point))
     }
 
-    /// Whether all of the given sphere is strictly outside the frustum.
+    /// Whether all of the given sphere is outside the frustum. The sphere is
+    /// considered inside if the boundaries exactly touch each other.
     pub fn sphere_lies_outside(&self, sphere: &Sphere<F>) -> bool {
         let mut intersects_from_negative_halfspace = [false, false, false];
 
@@ -177,7 +178,7 @@ impl<F: Float> Frustum<F> {
             // Finally we can determine whether the sphere is fully outside
             // the frustum by checking the distance from the sphere center to
             // the closest point
-            na::distance_squared(sphere.center(), &closest_point) >= sphere.radius_squared()
+            na::distance_squared(sphere.center(), &closest_point) > sphere.radius_squared()
         }
     }
 
@@ -549,7 +550,7 @@ mod test {
     #[test]
     fn centered_spheres_are_reported_as_not_outside() {
         let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
-        for radius in [0.01, 0.999, 1.001, 2.0, 10.0] {
+        for radius in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
             let sphere = Sphere::new(Point3::origin(), radius);
             assert!(!frustum.sphere_lies_outside(&sphere));
         }
