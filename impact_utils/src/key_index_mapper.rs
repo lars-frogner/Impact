@@ -56,6 +56,11 @@ where
         mapper
     }
 
+    /// Returns a reference to the [`HashMap`] of keys to indices.
+    pub fn as_map(&self) -> &HashMap<K, usize> {
+        &self.indices_for_keys
+    }
+
     /// Consumes the mapper and returns the [`HashMap`] of
     /// keys to indices.
     pub fn into_map(self) -> HashMap<K, usize> {
@@ -67,6 +72,13 @@ where
     /// stored.
     pub fn key_at_each_idx(&self) -> impl Iterator<Item = K> + '_ {
         self.keys_at_indices.iter().copied()
+    }
+
+    /// Returns a slice with all keys in the order in
+    /// which their entries in the underlying [`Vec`] are
+    /// stored.
+    pub fn keys_at_indices(&self) -> &[K] {
+        &self.keys_at_indices
     }
 
     /// Whether the mapper has no keys.
@@ -195,6 +207,12 @@ where
             *self.indices_for_keys.get_mut(&last_key).unwrap() = idx;
         }
     }
+
+    /// Clears all stored indices and keys.
+    pub fn clear(&mut self) {
+        self.indices_for_keys.clear();
+        self.keys_at_indices.clear();
+    }
 }
 
 impl<K> Default for KeyIndexMapper<K>
@@ -242,6 +260,12 @@ mod test {
         assert_eq!(iter.next().unwrap(), 2);
         assert_eq!(iter.next().unwrap(), 100);
         assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn key_index_mapper_keys_at_indices_gives_correct_keys() {
+        let mapper = KeyIndexMapper::new_with_keys([4, 2, 100]);
+        assert_eq!(mapper.keys_at_indices(), &[4, 2, 100]);
     }
 
     #[test]
