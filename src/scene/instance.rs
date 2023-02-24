@@ -56,6 +56,19 @@ impl InstanceFeatureManager {
             .map(|(_, buffers)| buffers)
     }
 
+    /// Returns a mutable iterator over each buffer of model instance
+    /// transforms.
+    pub fn transform_buffers_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &'_ mut DynamicInstanceFeatureBuffer> {
+        self.instance_feature_buffers.values_mut().map(|buffers| {
+            buffers
+                .1
+                .get_mut(0)
+                .expect("Missing transform buffer for model")
+        })
+    }
+
     /// Returns a reference to the storage of instance features of
     /// type `Fe`, or [`None`] if no storage exists for that type.
     pub fn get_storage<Fe: InstanceFeature>(&self) -> Option<&InstanceFeatureStorage> {
@@ -201,6 +214,30 @@ impl InstanceFeatureManager {
 
             feature_buffer.add_feature_from_storage(storage, feature_id);
         }
+    }
+
+    /// Finds the instance transform buffer for the model with the
+    /// given ID and pushes the given transfrom onto it.
+    ///
+    /// # Panics
+    /// If no buffers exist for the model with the given ID.
+    pub fn buffer_instance_transform(
+        &mut self,
+        model_id: ModelID,
+        transform: &InstanceModelViewTransform,
+    ) where
+        InstanceModelViewTransform: InstanceFeature,
+    {
+        let feature_buffers = &mut self
+            .instance_feature_buffers
+            .get_mut(&model_id)
+            .expect("Tried to buffer instance of missing model")
+            .1;
+
+        feature_buffers
+            .get_mut(1)
+            .expect("Missing transform buffer for instance")
+            .add_feature(transform);
     }
 
     fn register_instance_with_feature_type_ids(
