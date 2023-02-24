@@ -78,6 +78,14 @@ impl InstanceFeatureRenderBufferManager {
         self.range_map.get_range(range_id, self.n_features)
     }
 
+    /// Returns the range of feature indices encompassing all features added
+    /// before defining any explicit ranges. See
+    /// [`DynamicInstanceFeatureBuffer::initial_valid_feature_range`] for more
+    /// information.
+    pub fn initial_feature_range(&self) -> Range<u32> {
+        self.feature_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+    }
+
     /// Writes the valid features in the given model instance feature
     /// buffer into the instance feature render buffer (reallocating the
     /// render buffer if required).
