@@ -21,7 +21,7 @@ pub use frustum::Frustum;
 pub use instance::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeID,
     InstanceFeatureBufferRangeMap, InstanceFeatureID, InstanceFeatureStorage,
-    InstanceFeatureTypeID,
+    InstanceFeatureTypeID, InstanceModelLightTransform, InstanceModelViewTransform,
 };
 pub use mesh::{
     TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector,
