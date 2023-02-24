@@ -1,12 +1,13 @@
 //! Management of light source data for rendering.
 
 use crate::{
+    geometry::{CollectionChange, UniformBuffer},
     rendering::{
         buffer::{self, UniformBufferable},
         uniform::{UniformRenderBufferManager, UniformTransferResult},
         CoreRenderingSystem, LightShaderInput,
     },
-    scene::{DirectionalLight, LightStorage, PointLight},
+    scene::{DirectionalLight, LightID, LightStorage, PointLight},
 };
 use impact_utils::ConstStringHash64;
 
@@ -14,11 +15,17 @@ use impact_utils::ConstStringHash64;
 /// data. Also manages the bind group for these buffers.
 #[derive(Debug)]
 pub struct LightRenderBufferManager {
-    point_light_render_buffer_manager: UniformRenderBufferManager,
-    directional_light_render_buffer_manager: UniformRenderBufferManager,
+    point_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
+    directional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     shader_input: LightShaderInput,
+}
+
+#[derive(Debug)]
+struct UniformRenderBufferManagerWithLightIDs {
+    uniform_render_buffer_manager: UniformRenderBufferManager,
+    light_ids: Vec<LightID>,
 }
 
 impl LightRenderBufferManager {
@@ -31,12 +38,13 @@ impl LightRenderBufferManager {
         core_system: &CoreRenderingSystem,
         light_storage: &LightStorage,
     ) -> Self {
-        let point_light_render_buffer_manager = UniformRenderBufferManager::for_uniform_buffer(
-            core_system,
-            light_storage.point_light_buffer(),
-        );
+        let point_light_render_buffer_manager =
+            UniformRenderBufferManagerWithLightIDs::for_uniform_buffer(
+                core_system,
+                light_storage.point_light_buffer(),
+            );
         let directional_light_render_buffer_manager =
-            UniformRenderBufferManager::for_uniform_buffer(
+            UniformRenderBufferManagerWithLightIDs::for_uniform_buffer(
                 core_system,
                 light_storage.directional_light_buffer(),
             );
@@ -62,6 +70,18 @@ impl LightRenderBufferManager {
             bind_group,
             shader_input,
         }
+    }
+
+    /// Returns the slice of IDs of all the [`PointLight`]s currently residing
+    /// in the point light render buffer.
+    pub fn point_light_ids(&self) -> &[LightID] {
+        self.point_light_render_buffer_manager.light_ids()
+    }
+
+    /// Returns the slice of IDs of all the [`DirectionalLight`]scurrently
+    /// residing in directional light the render buffer.
+    pub fn directional_light_ids(&self) -> &[LightID] {
+        self.directional_light_render_buffer_manager.light_ids()
     }
 
     /// Returns a reference to the bind group layout for the set of light
@@ -130,16 +150,18 @@ impl LightRenderBufferManager {
 
     fn create_bind_group(
         device: &wgpu::Device,
-        point_light_render_buffer_manager: &UniformRenderBufferManager,
-        directional_light_render_buffer_manager: &UniformRenderBufferManager,
+        point_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
+        directional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 point_light_render_buffer_manager
+                    .manager()
                     .create_bind_group_entry(Self::POINT_LIGHT_BINDING),
                 directional_light_render_buffer_manager
+                    .manager()
                     .create_bind_group_entry(Self::DIRECTIONAL_LIGHT_BINDING),
             ],
             label: Some("Light bind group"),
@@ -147,16 +169,70 @@ impl LightRenderBufferManager {
     }
 
     fn create_shader_input(
-        point_light_render_buffer_manager: &UniformRenderBufferManager,
-        directional_light_render_buffer_manager: &UniformRenderBufferManager,
+        point_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
+        directional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
     ) -> LightShaderInput {
         LightShaderInput {
             point_light_binding: Self::POINT_LIGHT_BINDING,
             directional_light_binding: Self::DIRECTIONAL_LIGHT_BINDING,
-            max_point_light_count: point_light_render_buffer_manager.max_uniform_count() as u64,
-            max_directional_light_count: directional_light_render_buffer_manager.max_uniform_count()
-                as u64,
+            max_point_light_count: point_light_render_buffer_manager
+                .manager()
+                .max_uniform_count() as u64,
+            max_directional_light_count: directional_light_render_buffer_manager
+                .manager()
+                .max_uniform_count() as u64,
         }
+    }
+}
+
+impl UniformRenderBufferManagerWithLightIDs {
+    /// Creates a new manager with a render buffer and list of light IDs
+    /// initialized from the given uniform buffer.
+    fn for_uniform_buffer<U>(
+        core_system: &CoreRenderingSystem,
+        uniform_buffer: &UniformBuffer<LightID, U>,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        Self {
+            uniform_render_buffer_manager: UniformRenderBufferManager::for_uniform_buffer(
+                core_system,
+                uniform_buffer,
+            ),
+            light_ids: uniform_buffer.valid_uniform_ids().to_vec(),
+        }
+    }
+
+    fn manager(&self) -> &UniformRenderBufferManager {
+        &self.uniform_render_buffer_manager
+    }
+
+    fn light_ids(&self) -> &[LightID] {
+        &self.light_ids
+    }
+
+    fn transfer_uniforms_to_render_buffer<U>(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        uniform_buffer: &UniformBuffer<LightID, U>,
+    ) -> UniformTransferResult
+    where
+        U: UniformBufferable,
+    {
+        match uniform_buffer.change() {
+            CollectionChange::Count => {
+                self.light_ids = uniform_buffer.valid_uniform_ids().to_vec();
+            }
+            CollectionChange::Contents => {
+                self.light_ids
+                    .copy_from_slice(uniform_buffer.valid_uniform_ids());
+            }
+            CollectionChange::None => {}
+        }
+
+        self.uniform_render_buffer_manager
+            .transfer_uniforms_to_render_buffer(core_system, uniform_buffer)
     }
 }
 
