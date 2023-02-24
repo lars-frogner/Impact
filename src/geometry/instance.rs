@@ -128,6 +128,9 @@ pub struct InstanceModelViewTransform {
     translation_and_scaling: Vector4<fre>,
 }
 
+/// A model-to-light transform for a specific instance of a model.
+pub type InstanceModelLightTransform = InstanceModelViewTransform;
+
 #[derive(Copy, Clone, Debug)]
 struct InstanceFeatureTypeDescriptor {
     id: InstanceFeatureTypeID,
@@ -421,7 +424,7 @@ impl DynamicInstanceFeatureBuffer {
     pub fn valid_feature_range(&self, range_id: InstanceFeatureBufferRangeID) -> Range<u32> {
         self.range_manager
             .get_range(range_id, || self.n_valid_features())
-        }
+    }
 
     /// Returns the range of valid feature indices encompassing all features
     /// added before defining any explicit ranges with [`begin_range`].
@@ -643,6 +646,10 @@ impl InstanceFeatureBufferRangeManager {
 }
 
 impl InstanceFeatureBufferRangeMap {
+    /// ID of the initial range.
+    pub const INITIAL_RANGE_ID: InstanceFeatureBufferRangeID =
+        InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
+
     fn from_manager(manager: &InstanceFeatureBufferRangeManager) -> Self {
         let range_id_index_mapper = manager.range_id_index_mapper.lock().unwrap();
 
@@ -731,7 +738,7 @@ impl InstanceFeatureTypeDescriptor {
 }
 
 impl InstanceModelViewTransform {
-    /// Creates a new identity model-to-camera transform.
+    /// Creates a new identity transform.
     pub fn identity() -> Self {
         Self {
             rotation: UnitQuaternion::identity(),
@@ -750,6 +757,14 @@ impl InstanceModelViewTransform {
             rotation,
             translation_and_scaling: vector![translation.x, translation.y, translation.z, scaling],
         }
+    }
+}
+
+impl InstanceModelLightTransform {
+    /// Creates a new model-to-light transform corresponding
+    /// to the given similarity transform.
+    pub fn with_model_light_transform(transform: Similarity3<fre>) -> Self {
+        Self::with_model_view_transform(transform)
     }
 }
 
