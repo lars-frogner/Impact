@@ -135,6 +135,14 @@ impl LightStorage {
             .expect("Requested missing directional light")
     }
 
+    /// Returns an iterator over the directional lights in the storage where
+    /// each item contains the light ID and a mutable reference to the light.
+    pub fn directional_lights_with_ids_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (LightID, &mut DirectionalLight)> {
+        self.directional_light_buffer.valid_uniforms_with_ids_mut()
+    }
+
     fn create_new_light_id(&mut self) -> LightID {
         let light_id = LightID(self.light_id_counter);
         self.light_id_counter = self.light_id_counter.checked_add(1).unwrap();
