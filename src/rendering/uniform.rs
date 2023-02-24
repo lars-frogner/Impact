@@ -14,7 +14,7 @@ use std::{borrow::Cow, fmt::Debug, hash::Hash, mem};
 #[derive(Debug)]
 pub struct UniformRenderBufferManager {
     uniform_render_buffer: CountedRenderBuffer,
-    uniform_id: ConstStringHash64,
+    uniform_type_id: ConstStringHash64,
 }
 
 /// Indicates whether a new render buffer had to be created in order to hold all
@@ -37,18 +37,18 @@ impl UniformRenderBufferManager {
         ID: Copy + Hash + Eq + Debug,
         U: UniformBufferable,
     {
-        let uniform_id = U::ID;
+        let uniform_type_id = U::ID;
 
         let uniform_render_buffer = CountedRenderBuffer::new_uniform_buffer(
             core_system,
             uniform_buffer.raw_buffer(),
             uniform_buffer.n_valid_uniforms(),
-            Cow::Borrowed(uniform_id.string()),
+            Cow::Borrowed(uniform_type_id.string()),
         );
 
         Self {
             uniform_render_buffer,
-            uniform_id,
+            uniform_type_id,
         }
     }
 
@@ -94,7 +94,7 @@ impl UniformRenderBufferManager {
         ID: Copy + Hash + Eq + Debug,
         U: UniformBufferable,
     {
-        assert_eq!(U::ID, self.uniform_id);
+        assert_eq!(U::ID, self.uniform_type_id);
 
         let change = uniform_buffer.change();
 
