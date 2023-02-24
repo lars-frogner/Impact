@@ -10,7 +10,10 @@ pub use components::{
 pub use directional_light::DirectionalLight;
 pub use point_light::PointLight;
 
-use crate::{geometry::UniformBuffer, rendering::fre};
+use crate::{
+    geometry::{InstanceFeatureBufferRangeID, UniformBuffer},
+    rendering::fre,
+};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{UnitVector3, Vector3};
 
@@ -35,6 +38,13 @@ pub struct LightStorage {
     point_light_buffer: PointLightUniformBuffer,
     directional_light_buffer: DirectionalLightUniformBuffer,
     light_id_counter: u32,
+}
+
+impl LightID {
+    /// Converts the light ID into an [`InstanceFeatureBufferRangeID`].
+    pub fn as_instance_feature_buffer_range_id(&self) -> InstanceFeatureBufferRangeID {
+        self.0
+    }
 }
 
 impl LightStorage {
