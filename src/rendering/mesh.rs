@@ -131,8 +131,8 @@ impl MeshRenderBufferManager {
             Ok(VERTEX_ATTRIBUTE_FLAGS
                 .iter()
                 .zip(self.vertex_buffer_layouts.iter())
-                .filter_map(|(&attribute, layout)| {
-                    if self.available_attributes.contains(attribute) {
+                .filter_map(move |(&attribute, layout)| {
+                    if requested_attributes.contains(attribute) {
                         Some(layout.as_ref().unwrap().clone())
                     } else {
                         None
@@ -160,8 +160,8 @@ impl MeshRenderBufferManager {
             Ok(VERTEX_ATTRIBUTE_FLAGS
                 .iter()
                 .zip(self.vertex_buffers.iter())
-                .filter_map(|(&attribute, buffer)| {
-                    if self.available_attributes.contains(attribute) {
+                .filter_map(move |(&attribute, buffer)| {
+                    if requested_attributes.contains(attribute) {
                         Some(buffer.as_ref().unwrap())
                     } else {
                         None
