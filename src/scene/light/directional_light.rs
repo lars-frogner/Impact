@@ -10,7 +10,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
-use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{vector, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 use std::sync::RwLock;
 
 /// An directional light source represented by a camera space direction and an
@@ -23,7 +23,8 @@ use std::sync::RwLock;
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms.
+/// size is a multiple of 16 bytes as required for uniforms, and the fields
+/// that will be accessed on the GPU are aligned to 16-byte boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -33,11 +34,17 @@ use std::sync::RwLock;
 pub struct DirectionalLight {
     camera_to_light_space_rotation: UnitQuaternion<fre>,
     camera_space_direction: LightDirection,
+    // Padding to obtain 16-byte alignment for next field
+    orthographic_half_extent_x: fre,
     radiance: Radiance,
+    // Padding to obtain 16-byte alignment for next field
+    orthographic_half_extent_y: fre,
     orthographic_translation: Vector3<fre>,
+    // Padding to obtain 16-byte alignment for next field
+    orthographic_half_extent_z: fre,
     orthographic_scaling: Vector3<fre>,
-    orthographic_half_extents: Vector3<fre>,
-    _padding: [u8; 4],
+    // Padding to obtain make size multiple of 16-bytes
+    _padding: fre,
 }
 
 impl DirectionalLight {
@@ -47,11 +54,13 @@ impl DirectionalLight {
                 &camera_space_direction,
             ),
             camera_space_direction,
+            orthographic_half_extent_x: 0.0,
             radiance,
+            orthographic_half_extent_y: 0.0,
             orthographic_translation: Vector3::zeros(),
+            orthographic_half_extent_z: 0.0,
             orthographic_scaling: Vector3::zeros(),
-            orthographic_half_extents: Vector3::zeros(),
-            _padding: [0; 4],
+            _padding: 0.0,
         }
     }
 
@@ -102,17 +111,17 @@ impl DirectionalLight {
         let near = light_space_bounding_sphere.center().z + light_space_bounding_sphere.radius();
         let far = light_space_view_frustum_aabb.lower_corner().z;
 
-        self.orthographic_half_extents.x = 0.5 * (right - left);
-        self.orthographic_half_extents.y = 0.5 * (top - bottom);
-        self.orthographic_half_extents.z = -0.5 * (far - near);
+        self.orthographic_half_extent_x = 0.5 * (right - left);
+        self.orthographic_half_extent_y = 0.5 * (top - bottom);
+        self.orthographic_half_extent_z = -0.5 * (far - near);
 
         self.orthographic_translation.x = -0.5 * (left + right);
         self.orthographic_translation.y = -0.5 * (bottom + top);
         self.orthographic_translation.z = -0.5 * (near + far);
 
-        self.orthographic_scaling.x = 1.0 / self.orthographic_half_extents.x;
-        self.orthographic_scaling.y = 1.0 / self.orthographic_half_extents.y;
-        self.orthographic_scaling.z = -1.0 / self.orthographic_half_extents.z;
+        self.orthographic_scaling.x = 1.0 / self.orthographic_half_extent_x;
+        self.orthographic_scaling.y = 1.0 / self.orthographic_half_extent_y;
+        self.orthographic_scaling.z = -1.0 / self.orthographic_half_extent_z;
     }
 
     /// Determines whether the object with the given camera space bounding
@@ -125,10 +134,14 @@ impl DirectionalLight {
         let light_space_bounding_sphere =
             camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
 
-        let orthographic_lower_corner =
-            -self.orthographic_half_extents - self.orthographic_translation;
-        let orthographic_upper_corner =
-            self.orthographic_half_extents - self.orthographic_translation;
+        let orthographic_half_extents = vector![
+            self.orthographic_half_extent_x,
+            self.orthographic_half_extent_y,
+            self.orthographic_half_extent_z
+        ];
+
+        let orthographic_lower_corner = -orthographic_half_extents - self.orthographic_translation;
+        let orthographic_upper_corner = orthographic_half_extents - self.orthographic_translation;
 
         let orthographic_aabb = AxisAlignedBox::new(
             orthographic_lower_corner.into(),
