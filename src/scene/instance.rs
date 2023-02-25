@@ -235,7 +235,7 @@ impl InstanceFeatureManager {
             .1;
 
         feature_buffers
-            .get_mut(1)
+            .get_mut(0)
             .expect("Missing transform buffer for instance")
             .add_feature(transform);
     }
