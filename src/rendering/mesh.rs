@@ -176,6 +176,31 @@ impl MeshRenderBufferManager {
         }
     }
 
+    /// Returns an iterator over the layouts of the render buffers for the
+    /// requested set of vertex attributes in addition to position, which is
+    /// always included.
+    ///
+    /// # Errors
+    /// Returns an error if any of the requested vertex attributes are missing.
+    pub fn request_vertex_buffer_layouts_including_position(
+        &self,
+        requested_attributes: VertexAttributeSet,
+    ) -> Result<impl Iterator<Item = wgpu::VertexBufferLayout<'static>> + '_> {
+        self.request_vertex_buffer_layouts(requested_attributes | VertexAttributeSet::POSITION)
+    }
+
+    /// Returns an iterator over the render buffers for the requested set of
+    /// vertex attributes in addition to position, which is always included.
+    ///
+    /// # Errors
+    /// Returns an error if any of the requested vertex attributes are missing.
+    pub fn request_vertex_render_buffers_including_position(
+        &self,
+        requested_attributes: VertexAttributeSet,
+    ) -> Result<impl Iterator<Item = &RenderBuffer>> {
+        self.request_vertex_render_buffers(requested_attributes | VertexAttributeSet::POSITION)
+    }
+
     /// The input required for accessing the vertex attributes
     /// in a shader.
     pub fn shader_input(&self) -> &MeshShaderInput {
