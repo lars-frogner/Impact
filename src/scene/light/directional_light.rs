@@ -31,23 +31,27 @@ use std::sync::RwLock;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct DirectionalLight {
-    radiance: Radiance,
     camera_to_light_space_rotation: UnitQuaternion<fre>,
+    camera_space_direction: LightDirection,
+    radiance: Radiance,
     orthographic_translation: Vector3<fre>,
     orthographic_scaling: Vector3<fre>,
     orthographic_half_extents: Vector3<fre>,
+    _padding: [u8; 4],
 }
 
 impl DirectionalLight {
     fn new(camera_space_direction: LightDirection, radiance: Radiance) -> Self {
         Self {
-            radiance,
             camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
                 &camera_space_direction,
             ),
+            camera_space_direction,
+            radiance,
             orthographic_translation: Vector3::zeros(),
             orthographic_scaling: Vector3::zeros(),
             orthographic_half_extents: Vector3::zeros(),
+            _padding: [0; 4],
         }
     }
 
@@ -62,6 +66,7 @@ impl DirectionalLight {
 
     /// Sets the camera space direction of the light to the given direction.
     pub fn set_camera_space_direction(&mut self, camera_space_direction: LightDirection) {
+        self.camera_space_direction = camera_space_direction;
         self.camera_to_light_space_rotation =
             Self::compute_camera_to_light_space_rotation(&camera_space_direction);
     }
