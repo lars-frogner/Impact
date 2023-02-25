@@ -641,7 +641,9 @@ impl InstanceFeatureBufferRangeManager {
 
     /// Forgets all ranges.
     pub fn clear(&self) {
-        self.range_id_index_mapper.lock().unwrap().clear();
+        let mut range_id_index_mapper = self.range_id_index_mapper.lock().unwrap();
+        range_id_index_mapper.clear();
+        range_id_index_mapper.push_key(Self::INITIAL_RANGE_ID);
     }
 }
 
