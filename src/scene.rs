@@ -24,7 +24,7 @@ pub use graph::{
 pub use instance::InstanceFeatureManager;
 pub use light::{
     DirectionComp, DirectionalLight, DirectionalLightComp, LightDirection, LightID, LightStorage,
-    Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp,
+    LightType, Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp,
 };
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,

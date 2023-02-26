@@ -102,18 +102,32 @@ pub struct ModelViewTransformShaderInput {
     pub translation_and_scaling_location: u32,
 }
 
-/// Input description specifying the bind group binding and the total size of
-/// each light source uniform buffer.
+/// Shader input description for a specific light source type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct LightShaderInput {
-    /// Bind group binding of the uniform buffer for point lights.
-    pub point_light_binding: u32,
-    /// Bind group binding of the uniform buffer for directional lights.
-    pub directional_light_binding: u32,
-    /// Maximum number of lights in the point light uniform buffer.
-    pub max_point_light_count: u64,
-    /// Maximum number of lights in the directional light uniform buffer.
-    pub max_directional_light_count: u64,
+pub enum LightShaderInput {
+    PointLight(PointLightShaderInput),
+    DirectionalLight(DirectionalLightShaderInput),
+}
+
+/// Input description for point light sources, specifying the bind group
+/// binding and the total size of the point light uniform buffer.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PointLightShaderInput {
+    /// Bind group binding of the light uniform buffer.
+    pub uniform_binding: u32,
+    /// Maximum number of lights in the uniform buffer.
+    pub max_light_count: u64,
+}
+
+/// Input description for directional light sources, specifying the bind group
+/// binding and the total size of the directional light uniform buffer as well
+/// as shadow map bindings.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DirectionalLightShaderInput {
+    /// Bind group binding of the light uniform buffer.
+    pub uniform_binding: u32,
+    /// Maximum number of lights in the uniform buffer.
+    pub max_light_count: u64,
 }
 
 /// Shader generator for any kind of material.

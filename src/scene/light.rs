@@ -28,6 +28,13 @@ pub type Radiance = Vector3<fre>;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct LightID(u32);
 
+/// A type of light source.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LightType {
+    PointLight,
+    DirectionalLight,
+}
+
 type LightUniformBuffer<L> = UniformBuffer<LightID, L>;
 type PointLightUniformBuffer = LightUniformBuffer<PointLight>;
 type DirectionalLightUniformBuffer = LightUniformBuffer<DirectionalLight>;

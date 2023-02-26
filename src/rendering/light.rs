@@ -5,9 +5,9 @@ use crate::{
     rendering::{
         buffer::{self, UniformBufferable},
         uniform::{UniformRenderBufferManager, UniformTransferResult},
-        CoreRenderingSystem, LightShaderInput,
+        CoreRenderingSystem, DirectionalLightShaderInput, LightShaderInput, PointLightShaderInput,
     },
-    scene::{DirectionalLight, LightID, LightStorage, PointLight},
+    scene::{DirectionalLight, LightID, LightStorage, LightType, PointLight},
 };
 use impact_utils::ConstStringHash64;
 
@@ -19,7 +19,8 @@ pub struct LightRenderBufferManager {
     directional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
-    shader_input: LightShaderInput,
+    point_light_shader_input: LightShaderInput,
+    directional_light_shader_input: LightShaderInput,
 }
 
 #[derive(Debug)]
@@ -58,17 +59,19 @@ impl LightRenderBufferManager {
             &bind_group_layout,
         );
 
-        let shader_input = Self::create_shader_input(
-            &point_light_render_buffer_manager,
-            &directional_light_render_buffer_manager,
-        );
+        let point_light_shader_input =
+            Self::create_point_light_shader_input(&point_light_render_buffer_manager);
+
+        let directional_light_shader_input =
+            Self::create_directional_light_shader_input(&directional_light_render_buffer_manager);
 
         Self {
             point_light_render_buffer_manager,
             directional_light_render_buffer_manager,
             bind_group_layout,
             bind_group,
-            shader_input,
+            point_light_shader_input,
+            directional_light_shader_input,
         }
     }
 
@@ -96,9 +99,14 @@ impl LightRenderBufferManager {
         &self.bind_group
     }
 
-    /// Returns the input required for accessing the light data in a shader.
-    pub fn shader_input(&self) -> &LightShaderInput {
-        &self.shader_input
+    /// Returns the input required for accessing light data of the given type in
+    /// a shader.
+    pub fn shader_input_for_light_type(&self, light_type: LightType) -> &LightShaderInput {
+        match light_type {
+            LightType::PointLight => &self.point_light_shader_input,
+            LightType::DirectionalLight => &self.directional_light_shader_input,
+        }
+    }
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data
@@ -131,10 +139,16 @@ impl LightRenderBufferManager {
                 &self.bind_group_layout,
             );
 
-            self.shader_input = Self::create_shader_input(
-                &self.point_light_render_buffer_manager,
+            if point_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+                self.point_light_shader_input =
+                    Self::create_point_light_shader_input(&self.point_light_render_buffer_manager);
+            }
+
+            if directional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+                self.directional_light_shader_input = Self::create_directional_light_shader_input(
                 &self.directional_light_render_buffer_manager,
             );
+            }
         }
     }
 
@@ -168,20 +182,26 @@ impl LightRenderBufferManager {
         })
     }
 
-    fn create_shader_input(
+    fn create_point_light_shader_input(
         point_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
+    ) -> LightShaderInput {
+        LightShaderInput::PointLight(PointLightShaderInput {
+            uniform_binding: Self::POINT_LIGHT_BINDING,
+            max_light_count: point_light_render_buffer_manager
+                .manager()
+                .max_uniform_count() as u64,
+        })
+    }
+
+    fn create_directional_light_shader_input(
         directional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
     ) -> LightShaderInput {
-        LightShaderInput {
-            point_light_binding: Self::POINT_LIGHT_BINDING,
-            directional_light_binding: Self::DIRECTIONAL_LIGHT_BINDING,
-            max_point_light_count: point_light_render_buffer_manager
+        LightShaderInput::DirectionalLight(DirectionalLightShaderInput {
+            uniform_binding: Self::DIRECTIONAL_LIGHT_BINDING,
+            max_light_count: directional_light_render_buffer_manager
                 .manager()
                 .max_uniform_count() as u64,
-            max_directional_light_count: directional_light_render_buffer_manager
-                .manager()
-                .max_uniform_count() as u64,
-        }
+        })
     }
 }
 
