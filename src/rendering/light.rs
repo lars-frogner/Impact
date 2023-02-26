@@ -128,6 +128,43 @@ impl LightRenderBufferManager {
             LightType::DirectionalLight => &self.directional_light_shader_input,
         }
     }
+
+    /// Returns the push constant range that will contain the light index after
+    /// [`set_light_idx_push_constant`] is called.
+    pub const fn light_idx_push_constant_range() -> wgpu::PushConstantRange {
+        wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            range: Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START
+                ..Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START + 4,
+        }
+    }
+
+    /// Finds the index of the light with the given ID in the light type's
+    /// uniform buffer and writes it to the appropriate push constant range for
+    /// the given render pass.
+    ///
+    /// # Panics
+    /// If no light with the given ID is present in the relevant uniform buffer.
+    pub fn set_light_idx_push_constant(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        light_type: LightType,
+        light_id: LightID,
+    ) {
+        let light_idx = match light_type {
+            LightType::PointLight => &self.point_light_render_buffer_manager,
+            LightType::DirectionalLight => &self.directional_light_render_buffer_manager,
+        }
+        .find_idx_of_light_with_id(light_id)
+        .expect("Tried to set light index push constant for missing light");
+
+        let light_idx = u32::try_from(light_idx).unwrap();
+
+        render_pass.set_push_constants(
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+            Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START,
+            bytemuck::bytes_of(&light_idx),
+        );
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data
@@ -168,8 +205,8 @@ impl LightRenderBufferManager {
 
             if directional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
                 self.directional_light_shader_input = Self::create_directional_light_shader_input(
-                &self.directional_light_render_buffer_manager,
-            );
+                    &self.directional_light_render_buffer_manager,
+                );
             }
         }
     }

@@ -128,12 +128,18 @@ impl CoreRenderingSystem {
         Ok(adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::POLYGON_MODE_LINE,
+                    features: wgpu::Features::PUSH_CONSTANTS | wgpu::Features::POLYGON_MODE_LINE,
                     limits: if cfg!(target_arch = "wasm32") {
                         // Use looser limits for wasm
-                        wgpu::Limits::downlevel_webgl2_defaults()
+                        wgpu::Limits {
+                            max_push_constant_size: 128,
+                            ..wgpu::Limits::downlevel_webgl2_defaults()
+                        }
                     } else {
-                        wgpu::Limits::default()
+                        wgpu::Limits {
+                            max_push_constant_size: 128,
+                            ..wgpu::Limits::default()
+                        }
                     },
                     label: None,
                 },
