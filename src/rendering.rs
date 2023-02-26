@@ -26,9 +26,9 @@ pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
-    FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
-    LightShaderInput, MaterialShaderInput, MeshShaderInput, ModelViewTransformShaderInput, Shader,
-    ShaderGenerator,
+    DirectionalLightShaderInput, FixedColorFeatureShaderInput, FixedTextureShaderInput,
+    InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
+    ModelViewTransformShaderInput, PointLightShaderInput, Shader, ShaderGenerator,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{DepthTexture, ImageTexture};
@@ -64,17 +64,20 @@ pub struct RenderingConfig {
     pub cull_mode: Option<wgpu::Face>,
     /// Controls the way each polygon is rasterized.
     pub polygon_mode: wgpu::PolygonMode,
+    pub directional_light_shadow_map_resolution: u32,
 }
 
 impl RenderingSystem {
-    /// Creates a new rendering system consisting of the given
-    /// core system and rendering pipelines.
+    /// Creates a new rendering system consisting of the given core system and
+    /// assets.
     pub async fn new(core_system: CoreRenderingSystem, assets: Assets) -> Result<Self> {
+        let config = RenderingConfig::default();
+
         let depth_texture = DepthTexture::new(&core_system, "Depth texture");
 
         Ok(Self {
             core_system,
-            config: RenderingConfig::default(),
+            config,
             assets: RwLock::new(assets),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK, 1.0)),
@@ -228,6 +231,7 @@ impl Default for RenderingConfig {
         Self {
             cull_mode: Some(wgpu::Face::Back),
             polygon_mode: wgpu::PolygonMode::Fill,
+            directional_light_shadow_map_resolution: 1024,
         }
     }
 }

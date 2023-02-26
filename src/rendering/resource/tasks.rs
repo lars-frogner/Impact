@@ -128,6 +128,7 @@ define_task!(
                         .unwrap()
                         .as_mut(),
                         &light_storage,
+                        renderer.config(),
                 );
             }
             Ok(())

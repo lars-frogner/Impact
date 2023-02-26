@@ -9,7 +9,7 @@ use crate::{
     rendering::{
         camera::CameraRenderBufferManager, fre, instance::InstanceFeatureRenderBufferManager,
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager, Assets,
-        CoreRenderingSystem, MaterialRenderResourceManager,
+        CoreRenderingSystem, MaterialRenderResourceManager, RenderingConfig,
     },
     scene::{
         InstanceFeatureManager, LightStorage, MaterialID, MaterialSpecification, MeshID, ModelID,
@@ -284,6 +284,7 @@ impl DesynchronizedRenderResources {
         core_system: &CoreRenderingSystem,
         light_buffer_manager: &mut Option<LightRenderBufferManager>,
         light_storage: &LightStorage,
+        config: &RenderingConfig,
     ) {
         if let Some(light_buffer_manager) = light_buffer_manager {
             light_buffer_manager.sync_with_light_storage(core_system, light_storage);
@@ -293,6 +294,7 @@ impl DesynchronizedRenderResources {
             *light_buffer_manager = Some(LightRenderBufferManager::for_light_storage(
                 core_system,
                 light_storage,
+                config,
             ));
         }
     }
