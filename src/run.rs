@@ -10,14 +10,12 @@ use crate::{
         SemiDirectionalMotionController,
     },
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{
-        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
-    },
+    geometry::TriangleMesh,
     physics::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{fre, Assets, TextureID},
+    rendering::{Assets, TextureID},
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp, FixedColorComp,
         FixedTextureComp, LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional,
@@ -29,7 +27,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_utils::{hash32, hash64};
-use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
+use nalgebra::{vector, Point3, Vector3};
 use std::f64::consts::PI;
 
 #[cfg(target_arch = "wasm32")]
@@ -142,12 +140,10 @@ async fn init_world(window: Window) -> Result<World> {
         Some(Box::new(orientation_controller)),
     );
 
-    let test_model_components = world.load_models_from_obj_file("assets/bunny.obj").unwrap();
-
-    for test_model_comps in test_model_components {
+    for model_comps in world.load_models_from_obj_file("assets/bunny.obj").unwrap() {
         world
             .create_entities(
-                test_model_comps
+                model_comps
                     .combined_with((
                         &PositionComp(Point3::new(0.0, -0.6, 7.0)),
                         &ScalingComp(0.9),

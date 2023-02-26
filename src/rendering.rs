@@ -80,7 +80,7 @@ impl RenderingSystem {
             config,
             assets: RwLock::new(assets),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK, 1.0)),
+            render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
             depth_texture,
         })
     }
@@ -125,7 +125,7 @@ impl RenderingSystem {
     /// - If recording a render pass fails.
     pub fn render(&self) -> Result<()> {
         let surface_texture = self.core_system.surface().get_current_texture()?;
-        let view = Self::create_surface_texture_view(&surface_texture);
+        let surface_texture_view = Self::create_surface_texture_view(&surface_texture);
 
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
@@ -134,8 +134,8 @@ impl RenderingSystem {
             for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
                 render_pass_recorder.record_render_pass(
                     render_resources_guard.synchronized(),
-                    &view,
-                    &self.depth_texture,
+                    &surface_texture_view,
+                    self.depth_texture.view(),
                     &mut command_encoder,
                 )?;
             }

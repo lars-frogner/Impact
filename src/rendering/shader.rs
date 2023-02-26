@@ -48,8 +48,11 @@ pub struct Shader {
 /// Names of the different shader entry point functions.
 #[derive(Clone, Debug)]
 pub struct EntryPointNames {
+    /// Name of the vertex entry point function.
     pub vertex: Cow<'static, str>,
-    pub fragment: Cow<'static, str>,
+    /// Name of the fragment entry point function, or [`None`] if there is no
+    /// fragment entry point.
+    pub fragment: Option<Cow<'static, str>>,
 }
 
 /// Generator for shader programs.
@@ -128,6 +131,8 @@ pub struct DirectionalLightShaderInput {
     pub uniform_binding: u32,
     /// Maximum number of lights in the uniform buffer.
     pub max_light_count: u64,
+    /// Bind group bindings of the shadow map texture and sampler.
+    pub shadow_map_texture_and_sampler_binding: (u32, u32),
 }
 
 /// Shader generator for any kind of material.
@@ -149,12 +154,52 @@ pub struct ModelViewTransformExpressions {
     scaling_factor: Handle<Expression>,
 }
 
-/// Handles to expressions for accessing the light uniform variables in the main
-/// fragment shader function.
+/// Handles to expression for accessing the fields of a light uniform for the
+/// relevant light type in shader entry point functions.
 #[derive(Clone, Debug)]
-pub struct LightExpressions {
-    point_lights: Handle<Expression>,
-    directional_lights: Handle<Expression>,
+pub enum LightFieldExpressions {
+    PointLight(PointLightFieldExpressions),
+    DirectionalLight(DirectionalLightFieldExpressions),
+}
+
+/// Handles to expression for accessing the fields of a point light uniform in
+/// shader entry point functions.
+#[derive(Clone, Debug)]
+pub struct PointLightFieldExpressions {
+    in_fragment_function: PointLightFieldFragmentExpressions,
+}
+
+/// Handles to expression for accessing the fields of a directional light
+/// uniform in shader entry point functions.
+#[derive(Clone, Debug)]
+pub struct DirectionalLightFieldExpressions {
+    in_vertex_function: DirectionalLightVertexFieldExpressions,
+    in_fragment_function: Option<DirectionalLightFragmentFieldExpressions>,
+}
+
+/// Handles to expression for accessing the fields of a point light uniform in
+/// the fragment entry point function.
+#[derive(Clone, Debug)]
+pub struct PointLightFieldFragmentExpressions {
+    position: Handle<Expression>,
+    radiance: Handle<Expression>,
+}
+
+/// Handles to expression for accessing the fields of a directional light
+/// uniform in the vertex entry point function.
+#[derive(Clone, Debug)]
+pub struct DirectionalLightVertexFieldExpressions {
+    camera_to_light_space_rotation_quaternion: Handle<Expression>,
+    orthographic_translation: Handle<Expression>,
+    orthographic_scaling: Handle<Expression>,
+}
+
+/// Handles to expression for accessing the fields of a directional light
+/// uniform in the fragment entry point function.
+#[derive(Clone, Debug)]
+pub struct DirectionalLightFragmentFieldExpressions {
+    camera_space_direction: Handle<Expression>,
+    radiance: Handle<Expression>,
 }
 
 /// Indices of the fields holding the various mesh vertex
@@ -414,9 +459,13 @@ impl Shader {
         &self.entry_point_names.vertex
     }
 
-    /// Returns the name of the fragment entry point function.
-    pub fn fragment_entry_point_name(&self) -> &str {
-        &self.entry_point_names.fragment
+    /// Returns the name of the fragment entry point function, or [`None`] if
+    /// there is no fragment entry point.
+    pub fn fragment_entry_point_name(&self) -> Option<&str> {
+        self.entry_point_names
+            .fragment
+            .as_ref()
+            .map(|name| name.as_ref())
     }
 
     #[cfg(debug_assertions)]
@@ -453,22 +502,22 @@ impl std::fmt::Display for Shader {
 }
 
 impl ShaderGenerator {
-    /// Uses the given camera, mesh, model and material input
-    /// descriptions to generate an appropriate shader [`Module`],
-    /// containing both a vertex and fragment entry point.
+    /// Uses the given camera, mesh, light, model and material input
+    /// descriptions to generate an appropriate shader [`Module`], containing a
+    /// vertex and (optionally) a fragment entry point.
     ///
     /// # Returns
-    /// The generated shader [`Module`] and its [`ShaderEntryPointNames`].
+    /// The generated shader [`Module`] and its [`EntryPointNames`].
     ///
     /// # Errors
     /// Returns an error if:
     /// - There is no camera input (no shaders witout camera supported).
     /// - There is no mesh input (no shaders witout a mesh supported).
     /// - `instance_feature_shader_inputs` does not contain a
-    ///   [`ModelInstanceTransformShaderInput`] (no shaders without a model
-    ///   view transform supported).
-    /// - `instance_feature_shader_inputs` and `material_shader_input`
-    ///   do not provide a consistent and supported material description.
+    ///   [`ModelInstanceTransformShaderInput`] (no shaders without a model view
+    ///   transform supported).
+    /// - `instance_feature_shader_inputs` and `material_shader_input` do not
+    ///   provide a consistent and supported material description.
     /// - Not all vertex attributes required by the material are available in
     ///   the input mesh.
     pub fn generate_shader_module(
@@ -485,10 +534,8 @@ impl ShaderGenerator {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
 
-        let (model_view_transform_shader_input, material_shader_builder) =
+        let (model_view_transform_shader_input, material_shader_generator) =
             Self::interpret_inputs(instance_feature_shader_inputs, material_shader_input)?;
-
-        let material_requires_lights = material_shader_builder.requires_lights();
 
         let mut module = Module::default();
         let mut vertex_function = Function::default();
@@ -515,6 +562,16 @@ impl ShaderGenerator {
             &mut vertex_function,
         );
 
+        let light_expressions = light_shader_input.map(|light_shader_input| {
+            Self::generate_code_for_lights(
+                light_shader_input,
+                &mut module,
+                &mut vertex_function,
+                Some(&mut fragment_function),
+                &mut bind_group_idx,
+            )
+        });
+
         let (mesh_vertex_output_field_indices, mut vertex_output_struct_builder) =
             Self::generate_vertex_code_for_vertex_attributes(
                 mesh_shader_input,
@@ -523,65 +580,75 @@ impl ShaderGenerator {
                 &mut vertex_function,
                 &model_view_transform_expressions,
                 projection_matrix_var_expr_handle,
+                light_expressions.as_ref(),
             )?;
 
-        let material_vertex_output_field_indices = material_shader_builder.generate_vertex_code(
-            &mut module,
-            &mut vertex_function,
-            &mut vertex_output_struct_builder,
-        );
+        let entry_point_names = if let Some(material_shader_generator) = material_shader_generator {
+            let material_vertex_output_field_indices = material_shader_generator
+                .generate_vertex_code(
+                    &mut module,
+                    &mut vertex_function,
+                    &mut vertex_output_struct_builder,
+                );
 
-        vertex_output_struct_builder
-            .clone()
-            .generate_output_code(&mut module.types, &mut vertex_function);
+            vertex_output_struct_builder
+                .clone()
+                .generate_output_code(&mut module.types, &mut vertex_function);
 
-        let fragment_input_struct = vertex_output_struct_builder
-            .generate_input_code(&mut module.types, &mut fragment_function);
+            let fragment_input_struct = vertex_output_struct_builder
+                .generate_input_code(&mut module.types, &mut fragment_function);
 
-        let light_expressions = if material_requires_lights {
-            let light_shader_input =
-                light_shader_input.ok_or_else(|| anyhow!("Missing lights for material"))?;
-
-            Some(Self::generate_fragment_code_for_lights(
-                light_shader_input,
+            material_shader_generator.generate_fragment_code(
                 &mut module,
                 &mut fragment_function,
                 &mut bind_group_idx,
-            ))
+                &fragment_input_struct,
+                &mesh_vertex_output_field_indices,
+                &material_vertex_output_field_indices,
+                light_expressions.as_ref(),
+            );
+
+            let entry_point_names = EntryPointNames {
+                vertex: Cow::Borrowed("mainVS"),
+                fragment: Some(Cow::Borrowed("mainFS")),
+            };
+
+            module.entry_points.push(EntryPoint {
+                name: entry_point_names.vertex.to_string(),
+                stage: ShaderStage::Vertex,
+                early_depth_test: None,
+                workgroup_size: [0, 0, 0],
+                function: vertex_function,
+            });
+
+            module.entry_points.push(EntryPoint {
+                name: entry_point_names.fragment.as_ref().unwrap().to_string(),
+                stage: ShaderStage::Fragment,
+                early_depth_test: None,
+                workgroup_size: [0, 0, 0],
+                function: fragment_function,
+            });
+
+            entry_point_names
         } else {
-            None
+            vertex_output_struct_builder
+                .generate_output_code(&mut module.types, &mut vertex_function);
+
+            let entry_point_names = EntryPointNames {
+                vertex: Cow::Borrowed("mainVS"),
+                fragment: None,
+            };
+
+            module.entry_points.push(EntryPoint {
+                name: entry_point_names.vertex.to_string(),
+                stage: ShaderStage::Vertex,
+                early_depth_test: None,
+                workgroup_size: [0, 0, 0],
+                function: vertex_function,
+            });
+
+            entry_point_names
         };
-
-        material_shader_builder.generate_fragment_code(
-            &mut module,
-            &mut fragment_function,
-            &mut bind_group_idx,
-            &fragment_input_struct,
-            &mesh_vertex_output_field_indices,
-            &material_vertex_output_field_indices,
-            light_expressions.as_ref(),
-        );
-
-        let entry_point_names = EntryPointNames {
-            vertex: Cow::Borrowed("mainVS"),
-            fragment: Cow::Borrowed("mainFS"),
-        };
-
-        module.entry_points.push(EntryPoint {
-            name: entry_point_names.vertex.to_string(),
-            stage: ShaderStage::Vertex,
-            early_depth_test: None,
-            workgroup_size: [0, 0, 0],
-            function: vertex_function,
-        });
-
-        module.entry_points.push(EntryPoint {
-            name: entry_point_names.fragment.to_string(),
-            stage: ShaderStage::Fragment,
-            early_depth_test: None,
-            workgroup_size: [0, 0, 0],
-            function: fragment_function,
-        });
 
         Ok((module, entry_point_names))
     }
@@ -606,7 +673,7 @@ impl ShaderGenerator {
         material_shader_input: Option<&'a MaterialShaderInput>,
     ) -> Result<(
         &'a ModelViewTransformShaderInput,
-        MaterialShaderGenerator<'a>,
+        Option<MaterialShaderGenerator<'a>>,
     )> {
         let mut model_view_transform_shader_input = None;
         let mut fixed_color_feature_shader_input = None;
@@ -643,22 +710,22 @@ impl ShaderGenerator {
             blinn_phong_feature_shader_input,
             material_shader_input,
         ) {
-            (Some(feature_input), None, Some(MaterialShaderInput::Fixed(None))) => {
-                MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input))
-            }
+            (None, None, None) => None,
+            (Some(feature_input), None, Some(MaterialShaderInput::Fixed(None))) => Some(
+                MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input)),
+            ),
             (None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
-                MaterialShaderGenerator::FixedTexture(FixedTextureShaderGenerator::new(
-                    texture_input,
+                Some(MaterialShaderGenerator::FixedTexture(
+                    FixedTextureShaderGenerator::new(texture_input),
                 ))
             }
             (None, Some(feature_input), Some(MaterialShaderInput::BlinnPhong(texture_input))) => {
-                MaterialShaderGenerator::BlinnPhong(BlinnPhongShaderGenerator::new(
-                    feature_input,
-                    texture_input.as_ref(),
+                Some(MaterialShaderGenerator::BlinnPhong(
+                    BlinnPhongShaderGenerator::new(feature_input, texture_input.as_ref()),
                 ))
             }
             (None, None, Some(MaterialShaderInput::VertexColor)) => {
-                MaterialShaderGenerator::VertexColor
+                Some(MaterialShaderGenerator::VertexColor)
             }
             _ => {
                 return Err(anyhow!("Tried to build shader with invalid material"));
@@ -844,6 +911,7 @@ impl ShaderGenerator {
         vertex_function: &mut Function,
         model_view_transform_expressions: &ModelViewTransformExpressions,
         projection_matrix_var_expr_handle: Handle<Expression>,
+        light_expressions: Option<&LightFieldExpressions>,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
         let function_handles = SourceCodeFunctions::from_wgsl_source(
             "\
@@ -860,6 +928,16 @@ impl ShaderGenerator {
             ) -> vec3<f32> {
                 return rotateVectorWithQuaternion(rotationQuaternion, scaling * position) + translation;
             }
+
+            fn transformCameraSpacePositionToDirectionalLightClipSpace(
+                cameraToLightRotationQuaternion: vec4<f32>,
+                orthographicTranslation: vec3<f32>,
+                orthographicScaling: vec3<f32>,
+                cameraSpacePosition: vec3<f32>
+            ) -> vec3<f32> {
+                let lightSpacePosition = rotateVectorWithQuaternion(cameraToLightRotationQuaternion, cameraSpacePosition);
+                return (lightSpacePosition + orthographicTranslation) * orthographicScaling;
+            }
         ",
         )
         .unwrap()
@@ -867,6 +945,7 @@ impl ShaderGenerator {
 
         let rotation_function_handle = function_handles[0];
         let transformation_function_handle = function_handles[1];
+        let light_clip_space_transformation_function_handle = function_handles[2];
 
         let vec2_type_handle = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
@@ -1056,30 +1135,66 @@ impl ShaderGenerator {
         }
     }
 
-    /// Generates declarations for the light source uniform types, the types the
-    /// light uniform buffers will be mapped to and the global variables these
-    /// are bound to.
+    /// Generates declarations for the uniform type of the active light type,
+    /// the type the corresponding light uniform buffer will be mapped to, the
+    /// global variable this is bound to and expressions for the fields of the
+    /// light at the active index (which is set in a push constant).
     ///
     /// # Returns
-    /// Handle to the expression for accessing the point light uniform variable
-    /// in the main fragment function.
-    fn generate_fragment_code_for_lights(
+    /// Handle to expressions for accessing the fields of the point light in the
+    /// relevant entry point functions.
+    fn generate_code_for_lights(
         light_shader_input: &LightShaderInput,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        fragment_function: Option<&mut Function>,
+        bind_group_idx: &mut u32,
+    ) -> LightFieldExpressions {
+        match light_shader_input {
+            LightShaderInput::PointLight(light_shader_input) => {
+                Self::generate_code_for_point_lights(
+                    light_shader_input,
+                    module,
+                    fragment_function.unwrap(),
+                    bind_group_idx,
+                )
+            }
+            LightShaderInput::DirectionalLight(light_shader_input) => {
+                Self::generate_code_for_directional_lights(
+                    light_shader_input,
+                    module,
+                    vertex_function,
+                    fragment_function,
+                    bind_group_idx,
+                )
+            }
+        }
+    }
+
+    /// Generates declarations for the point light uniform type, the type the
+    /// point light uniform buffer will be mapped to, the global variable this
+    /// is bound to and expressions for the fields of the light at the active
+    /// index (which is set in a push constant).
+    ///
+    /// # Returns
+    /// Handle to expressions for accessing the fields of the active point light
+    /// in the fragment entry point function.
+    fn generate_code_for_point_lights(
+        light_shader_input: &PointLightShaderInput,
         module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> LightExpressions {
+    ) -> LightFieldExpressions {
         let u32_type_handle = insert_in_arena(&mut module.types, U32_TYPE);
         let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
-        // The structs are padded to 16 byte alignment as required for uniforms
-        let point_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
-        let directional_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
+        // The struct is padded to 16 byte alignment as required for uniforms
+        let single_light_struct_size = 2 * (VECTOR_3_SIZE + F32_WIDTH);
 
         // The count at the beginning of the uniform buffer is padded to 16 bytes
         let light_count_size = 16;
 
-        let point_light_struct_type_handle = insert_in_arena(
+        let single_light_struct_type_handle = insert_in_arena(
             &mut module.types,
             Type {
                 name: new_name("PointLight"),
@@ -1098,70 +1213,29 @@ impl ShaderGenerator {
                             offset: VECTOR_3_SIZE + F32_WIDTH,
                         },
                     ],
-                    span: point_light_struct_size,
+                    span: single_light_struct_size,
                 },
             },
         );
 
-        let directional_light_struct_type_handle = insert_in_arena(
-            &mut module.types,
-            Type {
-                name: new_name("DirectionalLight"),
-                inner: TypeInner::Struct {
-                    members: vec![
-                        StructMember {
-                            name: new_name("direction"),
-                            ty: vec3_type_handle,
-                            binding: None,
-                            offset: 0,
-                        },
-                        StructMember {
-                            name: new_name("radiance"),
-                            ty: vec3_type_handle,
-                            binding: None,
-                            offset: VECTOR_3_SIZE + F32_WIDTH,
-                        },
-                    ],
-                    span: directional_light_struct_size,
-                },
-            },
-        );
-
-        let max_point_light_count_constant_handle = define_constant_if_missing(
+        let max_light_count_constant_handle = define_constant_if_missing(
             &mut module.constants,
-            u32_constant(light_shader_input.max_point_light_count),
+            u32_constant(light_shader_input.max_light_count),
         );
 
-        let max_directional_light_count_constant_handle = define_constant_if_missing(
-            &mut module.constants,
-            u32_constant(light_shader_input.max_directional_light_count),
-        );
-
-        let point_lights_array_type_handle = insert_in_arena(
+        let light_array_type_handle = insert_in_arena(
             &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
-                    base: point_light_struct_type_handle,
-                    size: ArraySize::Constant(max_point_light_count_constant_handle),
-                    stride: point_light_struct_size,
+                    base: single_light_struct_type_handle,
+                    size: ArraySize::Constant(max_light_count_constant_handle),
+                    stride: single_light_struct_size,
                 },
             },
         );
 
-        let directional_lights_array_type_handle = insert_in_arena(
-            &mut module.types,
-            Type {
-                name: None,
-                inner: TypeInner::Array {
-                    base: directional_light_struct_type_handle,
-                    size: ArraySize::Constant(max_directional_light_count_constant_handle),
-                    stride: directional_light_struct_size,
-                },
-            },
-        );
-
-        let point_lights_struct_type_handle = insert_in_arena(
+        let lights_struct_type_handle = insert_in_arena(
             &mut module.types,
             Type {
                 name: new_name("PointLights"),
@@ -1175,15 +1249,13 @@ impl ShaderGenerator {
                         },
                         StructMember {
                             name: new_name("lights"),
-                            ty: point_lights_array_type_handle,
+                            ty: light_array_type_handle,
                             binding: None,
                             offset: light_count_size,
                         },
                     ],
-                    span: point_light_struct_size
-                        .checked_mul(
-                            u32::try_from(light_shader_input.max_point_light_count).unwrap(),
-                        )
+                    span: single_light_struct_size
+                        .checked_mul(u32::try_from(light_shader_input.max_light_count).unwrap())
                         .unwrap()
                         .checked_add(light_count_size)
                         .unwrap(),
@@ -1191,7 +1263,127 @@ impl ShaderGenerator {
             },
         );
 
-        let directional_lights_struct_type_handle = insert_in_arena(
+        let lights_struct_var_handle = append_to_arena(
+            &mut module.global_variables,
+            GlobalVariable {
+                name: new_name("pointLights"),
+                space: AddressSpace::Uniform,
+                binding: Some(ResourceBinding {
+                    group: *bind_group_idx,
+                    binding: light_shader_input.uniform_binding,
+                }),
+                ty: lights_struct_type_handle,
+                init: None,
+            },
+        );
+
+        *bind_group_idx += 1;
+
+        let active_light_idx_var_handle = append_to_arena(
+            &mut module.global_variables,
+            GlobalVariable {
+                name: new_name("activeLightIdx"),
+                space: AddressSpace::PushConstant,
+                binding: None,
+                ty: u32_type_handle,
+                init: None,
+            },
+        );
+
+        LightFieldExpressions::generate_point_light_code(
+            fragment_function,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
+        )
+    }
+
+    /// Generates declarations for the directional light uniform type, the type
+    /// the directional light uniform buffer will be mapped to, the global
+    /// variable this is bound to and expressions for the fields of the light at
+    /// the active index (which is set in a push constant).
+    ///
+    /// # Returns
+    /// Handle to expressions for accessing the fields of the point light in the
+    /// vertex and fragment entry point functions.
+    fn generate_code_for_directional_lights(
+        light_shader_input: &DirectionalLightShaderInput,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        fragment_function: Option<&mut Function>,
+        bind_group_idx: &mut u32,
+    ) -> LightFieldExpressions {
+        let u32_type_handle = insert_in_arena(&mut module.types, U32_TYPE);
+        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+
+        // The struct is padded to 16 byte alignment as required for uniforms
+        let single_light_struct_size = 5 * VECTOR_4_SIZE;
+
+        // The count at the beginning of the uniform buffer is padded to 16 bytes
+        let light_count_size = 16;
+
+        let single_light_struct_type_handle = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("DirectionalLight"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("cameraToLightRotationQuaternion"),
+                            ty: vec4_type_handle,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("cameraSpaceDirection"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: VECTOR_4_SIZE,
+                        },
+                        StructMember {
+                            name: new_name("radiance"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: 2 * VECTOR_4_SIZE,
+                        },
+                        StructMember {
+                            name: new_name("orthographicTranslation"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: 3 * VECTOR_4_SIZE,
+                        },
+                        StructMember {
+                            name: new_name("orthographicScaling"),
+                            ty: vec3_type_handle,
+                            binding: None,
+                            offset: 4 * VECTOR_4_SIZE,
+                        },
+                        // <-- The rest of the struct is not needed in the
+                        // shader and is mainly for padding
+                    ],
+                    span: single_light_struct_size,
+                },
+            },
+        );
+
+        let max_light_count_constant_handle = define_constant_if_missing(
+            &mut module.constants,
+            u32_constant(light_shader_input.max_light_count),
+        );
+
+        let lights_array_type_handle = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: single_light_struct_type_handle,
+                    size: ArraySize::Constant(max_light_count_constant_handle),
+                    stride: single_light_struct_size,
+                },
+            },
+        );
+
+        let lights_struct_type_handle = insert_in_arena(
             &mut module.types,
             Type {
                 name: new_name("DirectionalLights"),
@@ -1205,15 +1397,13 @@ impl ShaderGenerator {
                         },
                         StructMember {
                             name: new_name("lights"),
-                            ty: directional_lights_array_type_handle,
+                            ty: lights_array_type_handle,
                             binding: None,
                             offset: light_count_size,
                         },
                     ],
-                    span: directional_light_struct_size
-                        .checked_mul(
-                            u32::try_from(light_shader_input.max_directional_light_count).unwrap(),
-                        )
+                    span: single_light_struct_size
+                        .checked_mul(u32::try_from(light_shader_input.max_light_count).unwrap())
                         .unwrap()
                         .checked_add(light_count_size)
                         .unwrap(),
@@ -1221,177 +1411,39 @@ impl ShaderGenerator {
             },
         );
 
-        let point_lights_var_handle = append_to_arena(
-            &mut module.global_variables,
-            GlobalVariable {
-                name: new_name("pointLights"),
-                space: AddressSpace::Uniform,
-                binding: Some(ResourceBinding {
-                    group: *bind_group_idx,
-                    binding: light_shader_input.point_light_binding,
-                }),
-                ty: point_lights_struct_type_handle,
-                init: None,
-            },
-        );
-
-        let directional_lights_var_handle = append_to_arena(
+        let lights_struct_var_handle = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
                 name: new_name("directionalLights"),
                 space: AddressSpace::Uniform,
                 binding: Some(ResourceBinding {
                     group: *bind_group_idx,
-                    binding: light_shader_input.directional_light_binding,
+                    binding: light_shader_input.uniform_binding,
                 }),
-                ty: directional_lights_struct_type_handle,
+                ty: lights_struct_type_handle,
                 init: None,
             },
         );
 
         *bind_group_idx += 1;
 
-        let point_lights_ptr_expr_handle = include_expr_in_func(
+        let active_light_idx_var_handle = append_to_arena(
+            &mut module.global_variables,
+            GlobalVariable {
+                name: new_name("activeLightIdx"),
+                space: AddressSpace::PushConstant,
+                binding: None,
+                ty: u32_type_handle,
+                init: None,
+            },
+        );
+
+        LightFieldExpressions::generate_directional_light_code(
+            vertex_function,
             fragment_function,
-            Expression::GlobalVariable(point_lights_var_handle),
-        );
-
-        let directional_lights_ptr_expr_handle = include_expr_in_func(
-            fragment_function,
-            Expression::GlobalVariable(directional_lights_var_handle),
-        );
-
-        LightExpressions {
-            point_lights: point_lights_ptr_expr_handle,
-            directional_lights: directional_lights_ptr_expr_handle,
-        }
-    }
-}
-
-impl LightExpressions {
-    /// Generates the expression for the number of active point lights.
-    pub fn generate_point_light_count_expr(&self, function: &mut Function) -> Handle<Expression> {
-        Self::generate_light_count_expr(function, self.point_lights)
-    }
-    /// Generates the expression for the number of active directional lights.
-    pub fn generate_directional_light_count_expr(
-        &self,
-        function: &mut Function,
-    ) -> Handle<Expression> {
-        Self::generate_light_count_expr(function, self.directional_lights)
-    }
-
-    /// Takes an index expression and generates expressions for the position and
-    /// radiance, respectively, of the point light at that index.
-    pub fn generate_point_light_field_expressions(
-        &self,
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        light_idx_expr_handle: Handle<Expression>,
-    ) -> (Handle<Expression>, Handle<Expression>) {
-        let point_light_ptr_expr = Self::generate_light_ptr_expr(
-            block,
-            expressions,
-            self.point_lights,
-            light_idx_expr_handle,
-        );
-        let position_expr_handle =
-            Self::generate_field_access_expr(block, expressions, point_light_ptr_expr, 0);
-        let radiance_expr_handle =
-            Self::generate_field_access_expr(block, expressions, point_light_ptr_expr, 1);
-        (position_expr_handle, radiance_expr_handle)
-    }
-
-    /// Takes an index expression and generates expressions for the direction and
-    /// radiance, respectively, of the directional light at that index.
-    pub fn generate_directional_light_field_expressions(
-        &self,
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        light_idx_expr_handle: Handle<Expression>,
-    ) -> (Handle<Expression>, Handle<Expression>) {
-        let directional_light_ptr_expr = Self::generate_light_ptr_expr(
-            block,
-            expressions,
-            self.directional_lights,
-            light_idx_expr_handle,
-        );
-        let direction_expr_handle =
-            Self::generate_field_access_expr(block, expressions, directional_light_ptr_expr, 0);
-        let radiance_expr_handle =
-            Self::generate_field_access_expr(block, expressions, directional_light_ptr_expr, 1);
-        (direction_expr_handle, radiance_expr_handle)
-    }
-
-    fn generate_light_count_expr(
-        function: &mut Function,
-        struct_ptr_expr_handle: Handle<Expression>,
-    ) -> Handle<Expression> {
-        Self::generate_field_access_expr(
-            &mut function.body,
-            &mut function.expressions,
-            struct_ptr_expr_handle,
-            0,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
         )
-    }
-
-    fn generate_light_ptr_expr(
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        struct_ptr_expr_handle: Handle<Expression>,
-        light_idx_expr_handle: Handle<Expression>,
-    ) -> Handle<Expression> {
-        let lights_field_ptr_handle =
-            Self::generate_field_access_ptr_expr(block, expressions, struct_ptr_expr_handle, 1);
-
-        emit(block, expressions, |expressions| {
-            append_to_arena(
-                expressions,
-                Expression::Access {
-                    base: lights_field_ptr_handle,
-                    index: light_idx_expr_handle,
-                },
-            )
-        })
-    }
-
-    fn generate_field_access_expr(
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        struct_ptr_expr_handle: Handle<Expression>,
-        field_idx: u32,
-    ) -> Handle<Expression> {
-        let field_ptr_handle = Self::generate_field_access_ptr_expr(
-            block,
-            expressions,
-            struct_ptr_expr_handle,
-            field_idx,
-        );
-        emit(block, expressions, |expressions| {
-            append_to_arena(
-                expressions,
-                Expression::Load {
-                    pointer: field_ptr_handle,
-                },
-            )
-        })
-    }
-
-    fn generate_field_access_ptr_expr(
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        struct_ptr_expr_handle: Handle<Expression>,
-        field_idx: u32,
-    ) -> Handle<Expression> {
-        emit(block, expressions, |expressions| {
-            append_to_arena(
-                expressions,
-                Expression::AccessIndex {
-                    base: struct_ptr_expr_handle,
-                    index: field_idx,
-                },
-            )
-        })
     }
 }
 
@@ -1406,14 +1458,6 @@ impl MaterialShaderInput {
 }
 
 impl<'a> MaterialShaderGenerator<'a> {
-    /// Whether the material requires light sources.
-    fn requires_lights(&self) -> bool {
-        match self {
-            Self::VertexColor | Self::FixedColor(_) | Self::FixedTexture(_) => false,
-            Self::BlinnPhong(_) => true,
-        }
-    }
-
     /// Generates the vertex shader code specific to the relevant material
     /// by adding code representation to the given [`naga`] objects.
     ///
@@ -1460,7 +1504,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
-        light_expressions: Option<&LightExpressions>,
+        light_expressions: Option<&LightFieldExpressions>,
     ) {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
@@ -1501,6 +1545,263 @@ impl<'a> MaterialShaderGenerator<'a> {
                 light_expressions,
             ),
             _ => panic!("Mismatched material shader builder and output field indices type"),
+        }
+    }
+}
+
+impl LightFieldExpressions {
+    fn generate_point_light_code(
+        fragment_function: &mut Function,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        Self::PointLight(PointLightFieldExpressions::generate_code(
+            fragment_function,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
+        ))
+    }
+
+    fn generate_directional_light_code(
+        vertex_function: &mut Function,
+        fragment_function: Option<&mut Function>,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        Self::DirectionalLight(DirectionalLightFieldExpressions::generate_code(
+            vertex_function,
+            fragment_function,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
+        ))
+    }
+
+    fn generate_active_light_ptr_expr(
+        function: &mut Function,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Handle<Expression> {
+        let lights_struct_ptr_expr_handle = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(lights_struct_var_handle),
+        );
+
+        let active_light_idx_ptr_expr_handle = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(active_light_idx_var_handle),
+        );
+
+        let active_light_idx_expr_handle = emit_in_func(function, |function| {
+            include_named_expr_in_func(
+                function,
+                "activeLightIdx",
+                Expression::Load {
+                    pointer: active_light_idx_ptr_expr_handle,
+                },
+            )
+        });
+
+        Self::generate_single_light_ptr_expr(
+            function,
+            lights_struct_ptr_expr_handle,
+            active_light_idx_expr_handle,
+        )
+    }
+
+    fn generate_light_count_expr(
+        function: &mut Function,
+        lights_struct_ptr_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        Self::generate_field_access_expr(function, lights_struct_ptr_expr_handle, 0)
+    }
+
+    fn generate_single_light_ptr_expr(
+        function: &mut Function,
+        lights_struct_ptr_expr_handle: Handle<Expression>,
+        light_idx_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let lights_field_ptr_handle =
+            Self::generate_field_access_ptr_expr(function, lights_struct_ptr_expr_handle, 1);
+
+        emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Access {
+                    base: lights_field_ptr_handle,
+                    index: light_idx_expr_handle,
+                },
+            )
+        })
+    }
+
+    fn generate_field_access_expr(
+        function: &mut Function,
+        struct_ptr_expr_handle: Handle<Expression>,
+        field_idx: u32,
+    ) -> Handle<Expression> {
+        let field_ptr_handle =
+            Self::generate_field_access_ptr_expr(function, struct_ptr_expr_handle, field_idx);
+        emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: field_ptr_handle,
+                },
+            )
+        })
+    }
+
+    fn generate_field_access_ptr_expr(
+        function: &mut Function,
+        struct_ptr_expr_handle: Handle<Expression>,
+        field_idx: u32,
+    ) -> Handle<Expression> {
+        emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: struct_ptr_expr_handle,
+                    index: field_idx,
+                },
+            )
+        })
+    }
+}
+
+impl PointLightFieldExpressions {
+    fn generate_code(
+        fragment_function: &mut Function,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        Self {
+            in_fragment_function: PointLightFieldFragmentExpressions::generate_code(
+                fragment_function,
+                lights_struct_var_handle,
+                active_light_idx_var_handle,
+            ),
+        }
+    }
+}
+
+impl PointLightFieldFragmentExpressions {
+    fn generate_code(
+        fragment_function: &mut Function,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        let active_light_ptr_expr_handle = LightFieldExpressions::generate_active_light_ptr_expr(
+            fragment_function,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
+        );
+
+        let position = LightFieldExpressions::generate_field_access_expr(
+            fragment_function,
+            active_light_ptr_expr_handle,
+            0,
+        );
+
+        let radiance = LightFieldExpressions::generate_field_access_expr(
+            fragment_function,
+            active_light_ptr_expr_handle,
+            1,
+        );
+
+        Self { position, radiance }
+    }
+}
+
+impl DirectionalLightFieldExpressions {
+    fn generate_code(
+        vertex_function: &mut Function,
+        fragment_function: Option<&mut Function>,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        Self {
+            in_vertex_function: DirectionalLightVertexFieldExpressions::generate_code(
+                vertex_function,
+                lights_struct_var_handle,
+                active_light_idx_var_handle,
+            ),
+            in_fragment_function: fragment_function.map(|fragment_function| {
+                DirectionalLightFragmentFieldExpressions::generate_code(
+                    fragment_function,
+                    lights_struct_var_handle,
+                    active_light_idx_var_handle,
+                )
+            }),
+        }
+    }
+}
+
+impl DirectionalLightVertexFieldExpressions {
+    fn generate_code(
+        vertex_function: &mut Function,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        let active_light_ptr_expr_handle = LightFieldExpressions::generate_active_light_ptr_expr(
+            vertex_function,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
+        );
+
+        let camera_to_light_space_rotation_quaternion =
+            LightFieldExpressions::generate_field_access_expr(
+                vertex_function,
+                active_light_ptr_expr_handle,
+                0,
+            );
+
+        let orthographic_translation = LightFieldExpressions::generate_field_access_expr(
+            vertex_function,
+            active_light_ptr_expr_handle,
+            3,
+        );
+
+        let orthographic_scaling = LightFieldExpressions::generate_field_access_expr(
+            vertex_function,
+            active_light_ptr_expr_handle,
+            4,
+        );
+
+        Self {
+            camera_to_light_space_rotation_quaternion,
+            orthographic_translation,
+            orthographic_scaling,
+        }
+    }
+}
+
+impl DirectionalLightFragmentFieldExpressions {
+    fn generate_code(
+        fragment_function: &mut Function,
+        lights_struct_var_handle: Handle<GlobalVariable>,
+        active_light_idx_var_handle: Handle<GlobalVariable>,
+    ) -> Self {
+        let active_light_ptr_expr_handle = LightFieldExpressions::generate_active_light_ptr_expr(
+            fragment_function,
+            lights_struct_var_handle,
+            active_light_idx_var_handle,
+        );
+
+        let camera_space_direction = LightFieldExpressions::generate_field_access_expr(
+            fragment_function,
+            active_light_ptr_expr_handle,
+            1,
+        );
+
+        let radiance = LightFieldExpressions::generate_field_access_expr(
+            fragment_function,
+            active_light_ptr_expr_handle,
+            2,
+        );
+
+        Self {
+            camera_space_direction,
+            radiance,
         }
     }
 }
@@ -2953,12 +3254,18 @@ mod test {
             specular_texture_and_sampler_bindings: Some((2, 3)),
         }));
 
-    const LIGHT_INPUT: LightShaderInput = LightShaderInput {
-        point_light_binding: 0,
-        max_point_light_count: 20,
-        directional_light_binding: 1,
-        max_directional_light_count: 20,
-    };
+    const POINT_LIGHT_INPUT: LightShaderInput =
+        LightShaderInput::PointLight(PointLightShaderInput {
+            uniform_binding: 0,
+            max_light_count: 20,
+        });
+
+    const DIRECTIONAL_LIGHT_INPUT: LightShaderInput =
+        LightShaderInput::DirectionalLight(DirectionalLightShaderInput {
+            uniform_binding: 1,
+            max_light_count: 20,
+            shadow_map_texture_and_sampler_binding: (2, 3),
+        });
 
     fn validate_module(module: &Module) -> ModuleInfo {
         let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
@@ -2977,9 +3284,7 @@ mod test {
     fn parse() {
         match wgsl_in::parse_str(
             "
-            fn main(vector: vec4<f32>) -> f32 {
-                return vector.w;
-            }
+            var<push_constant> pc: f32;
             ",
         ) {
             Ok(module) => {
@@ -3035,9 +3340,8 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
-    fn building_shader_without_material_and_no_color_in_mesh_fails() {
-        ShaderGenerator::generate_shader_module(
+    fn building_depth_prepass_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -3045,7 +3349,15 @@ mod test {
             None,
             VertexAttributeSet::empty(),
         )
-        .unwrap();
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
     }
 
     #[test]
@@ -3126,7 +3438,7 @@ mod test {
     }
 
     #[test]
-    fn building_blinn_phong_shader_works() {
+    fn building_blinn_phong_shader_with_point_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -3137,7 +3449,7 @@ mod test {
                     None,
                 ],
             }),
-            Some(&LIGHT_INPUT),
+            Some(&POINT_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialShaderInput::BlinnPhong(None)),
             BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
@@ -3154,7 +3466,35 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_blinn_phong_shader_works() {
+    fn building_blinn_phong_shader_with_directional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                ],
+            }),
+            Some(&DIRECTIONAL_LIGHT_INPUT),
+            &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
+            Some(&MaterialShaderInput::BlinnPhong(None)),
+            BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_diffuse_textured_blinn_phong_shader_with_point_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -3165,7 +3505,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&LIGHT_INPUT),
+            Some(&POINT_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
@@ -3185,7 +3525,7 @@ mod test {
     }
 
     #[test]
-    fn building_textured_blinn_phong_shader_works() {
+    fn building_diffuse_textured_blinn_phong_shader_with_directional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -3196,7 +3536,69 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&LIGHT_INPUT),
+            Some(&DIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+            ],
+            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            DiffuseTexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_blinn_phong_shader_with_point_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            Some(&POINT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+            ],
+            Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_blinn_phong_shader_with_directional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            Some(&POINT_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,

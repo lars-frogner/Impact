@@ -2,7 +2,7 @@
 
 use super::{
     append_to_arena, emit, emit_in_func, include_expr_in_func, insert_in_arena, new_name,
-    push_to_block, ForLoop, InputStruct, InputStructBuilder, LightExpressions,
+    push_to_block, InputStruct, InputStructBuilder, LightFieldExpressions,
     MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, SourceCodeFunctions,
     F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
@@ -209,16 +209,16 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         indices
     }
 
-    /// Generates the fragment shader code specific to this material
-    /// by adding code representation to the given [`naga`] objects.
+    /// Generates the fragment shader code specific to this material by adding
+    /// code representation to the given [`naga`] objects.
     ///
-    /// The texture and sampler for any material properties sampled
-    /// from textured are declared as global variables, and sampling
-    /// expressions are generated in the main fragment shader function.
-    /// These are used together with material properties passed from the
-    /// main vertex shader to generate the Blinn-Phong shading equation,
-    /// whose output color is returned from the main fragment shader
-    /// function in an output struct.
+    /// The texture and sampler for any material properties sampled from
+    /// textured are declared as global variables, and sampling expressions are
+    /// generated in the main fragment shader function. These are used together
+    /// with material properties passed from the main vertex shader to evaluate
+    /// the Blinn-Phong shading equation for the active light, and the output
+    /// color is returned from the main fragment shader function in an output
+    /// struct.
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
@@ -227,7 +227,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
-        light_expressions: Option<&LightExpressions>,
+        light_expressions: Option<&LightFieldExpressions>,
     ) {
         let function_handles = SourceCodeFunctions::from_wgsl_source(
             "\
@@ -392,42 +392,58 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             vec![position_expr_handle],
         );
 
-        let point_light_count_expr_handle =
-            light_expressions.generate_point_light_count_expr(fragment_function);
+        let returned_light_color_expr_handle = match light_expressions {
+            LightFieldExpressions::PointLight(point_light_expressions) => {
+                let light_position_expr_handle =
+                    point_light_expressions.in_fragment_function.position;
+                let light_radiance_expr_handle =
+                    point_light_expressions.in_fragment_function.radiance;
 
-        let mut point_light_loop = ForLoop::new(
-            &mut module.types,
-            &mut module.constants,
-            fragment_function,
-            "point_light",
-            point_light_count_expr_handle,
-        );
+                SourceCodeFunctions::generate_call(
+                    &mut fragment_function.body,
+                    &mut fragment_function.expressions,
+                    point_light_color_function_handle,
+                    vec![
+                        view_dir_expr_handle,
+                        normal_vector_expr_handle,
+                        position_expr_handle,
+                        diffuse_color_expr_handle,
+                        specular_color_expr_handle,
+                        shininess_expr_handle,
+                        light_position_expr_handle,
+                        light_radiance_expr_handle,
+                    ],
+                )
+            }
+            LightFieldExpressions::DirectionalLight(directional_light_expressions) => {
+                let directional_light_expressions = directional_light_expressions
+                    .in_fragment_function
+                    .as_ref()
+                    .unwrap();
 
-        let (light_position_expr_handle, light_radiance_expr_handle) = light_expressions
-            .generate_point_light_field_expressions(
-                &mut point_light_loop.body,
-                &mut fragment_function.expressions,
-                point_light_loop.idx_expr_handle,
-            );
+                let light_direction_expr_handle =
+                    directional_light_expressions.camera_space_direction;
+                let light_radiance_expr_handle = directional_light_expressions.radiance;
 
-        let returned_point_light_color_expr_handle = SourceCodeFunctions::generate_call(
-            &mut point_light_loop.body,
-            &mut fragment_function.expressions,
-            point_light_color_function_handle,
-            vec![
-                view_dir_expr_handle,
-                normal_vector_expr_handle,
-                position_expr_handle,
-                diffuse_color_expr_handle,
-                specular_color_expr_handle,
-                shininess_expr_handle,
-                light_position_expr_handle,
-                light_radiance_expr_handle,
-            ],
-        );
+                SourceCodeFunctions::generate_call(
+                    &mut fragment_function.body,
+                    &mut fragment_function.expressions,
+                    directional_light_color_function_handle,
+                    vec![
+                        view_dir_expr_handle,
+                        normal_vector_expr_handle,
+                        diffuse_color_expr_handle,
+                        specular_color_expr_handle,
+                        shininess_expr_handle,
+                        light_direction_expr_handle,
+                        light_radiance_expr_handle,
+                    ],
+                )
+            }
+        };
 
         let accumulated_color_expr_handle = emit(
-            &mut point_light_loop.body,
+            &mut fragment_function.body,
             &mut fragment_function.expressions,
             |expressions| {
                 let color_expr_handle = append_to_arena(
@@ -441,90 +457,18 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     Expression::Binary {
                         op: BinaryOperator::Add,
                         left: color_expr_handle,
-                        right: returned_point_light_color_expr_handle,
+                        right: returned_light_color_expr_handle,
                     },
                 )
             },
         );
 
         push_to_block(
-            &mut point_light_loop.body,
+            &mut fragment_function.body,
             Statement::Store {
                 pointer: color_ptr_expr_handle,
                 value: accumulated_color_expr_handle,
             },
-        );
-
-        point_light_loop.generate_code(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
-        );
-
-        let directional_light_count_expr_handle =
-            light_expressions.generate_directional_light_count_expr(fragment_function);
-
-        let mut directional_light_loop = ForLoop::new(
-            &mut module.types,
-            &mut module.constants,
-            fragment_function,
-            "directional_light",
-            directional_light_count_expr_handle,
-        );
-
-        let (light_direction_expr_handle, light_radiance_expr_handle) = light_expressions
-            .generate_directional_light_field_expressions(
-                &mut directional_light_loop.body,
-                &mut fragment_function.expressions,
-                directional_light_loop.idx_expr_handle,
-            );
-
-        let returned_directional_light_color_expr_handle = SourceCodeFunctions::generate_call(
-            &mut directional_light_loop.body,
-            &mut fragment_function.expressions,
-            directional_light_color_function_handle,
-            vec![
-                view_dir_expr_handle,
-                normal_vector_expr_handle,
-                diffuse_color_expr_handle,
-                specular_color_expr_handle,
-                shininess_expr_handle,
-                light_direction_expr_handle,
-                light_radiance_expr_handle,
-            ],
-        );
-
-        let accumulated_color_expr_handle = emit(
-            &mut directional_light_loop.body,
-            &mut fragment_function.expressions,
-            |expressions| {
-                let color_expr_handle = append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: color_ptr_expr_handle,
-                    },
-                );
-                append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Add,
-                        left: color_expr_handle,
-                        right: returned_directional_light_color_expr_handle,
-                    },
-                )
-            },
-        );
-
-        push_to_block(
-            &mut directional_light_loop.body,
-            Statement::Store {
-                pointer: color_ptr_expr_handle,
-                value: accumulated_color_expr_handle,
-            },
-        );
-
-        directional_light_loop.generate_code(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
         );
 
         let output_color_expr_handle = emit_in_func(fragment_function, |function| {
