@@ -1,6 +1,7 @@
 //! Generation of graphics shaders.
 
 mod blinn_phong;
+mod depth;
 mod fixed;
 mod vertex_color;
 
@@ -16,6 +17,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
+use depth::LightSpaceDepthShaderGenerator;
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
 };
@@ -92,6 +94,7 @@ pub enum MaterialShaderInput {
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(Option<BlinnPhongTextureShaderInput>),
+    LightSpaceDepth,
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -143,6 +146,7 @@ pub enum MaterialShaderGenerator<'a> {
     FixedColor(FixedColorShaderGenerator<'a>),
     FixedTexture(FixedTextureShaderGenerator<'a>),
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
+    LightSpaceDepth,
 }
 
 /// Handles to expressions for accessing the rotational, translational and
@@ -791,6 +795,9 @@ impl ShaderGenerator {
             }
             (None, None, Some(MaterialShaderInput::VertexColor)) => {
                 Some(MaterialShaderGenerator::VertexColor)
+            }
+            (None, None, Some(MaterialShaderInput::LightSpaceDepth)) => {
+                Some(MaterialShaderGenerator::LightSpaceDepth)
             }
             _ => {
                 return Err(anyhow!("Tried to build shader with invalid material"));
@@ -1496,7 +1503,7 @@ impl MaterialShaderInput {
     pub fn requires_lights(&self) -> bool {
         match self {
             Self::VertexColor | Self::Fixed(_) => false,
-            Self::BlinnPhong(_) => true,
+            Self::BlinnPhong(_) | Self::LightSpaceDepth => true,
         }
     }
 }
@@ -1590,6 +1597,14 @@ impl<'a> MaterialShaderGenerator<'a> {
                 material_input_field_indices,
                 light_expressions,
             ),
+            (Self::LightSpaceDepth, MaterialVertexOutputFieldIndices::None) => {
+                LightSpaceDepthShaderGenerator::generate_fragment_code(
+                    module,
+                    fragment_function,
+                    fragment_input_struct,
+                    light_input_field_indices,
+                );
+            }
             _ => panic!("Mismatched material shader builder and output field indices type"),
         }
     }
@@ -3361,7 +3376,8 @@ mod test {
 
     use crate::scene::{
         BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
-        FixedTextureMaterial, TexturedBlinnPhongMaterial, VertexColorMaterial,
+        FixedTextureMaterial, LightSpaceDepthMaterial, TexturedBlinnPhongMaterial,
+        VertexColorMaterial,
     };
 
     use super::*;
@@ -3803,13 +3819,34 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&DIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
             Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
             TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_light_space_depth_shader_with_directional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MINIMAL_MESH_INPUT),
+            Some(&DIRECTIONAL_LIGHT_INPUT),
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
+            Some(&MaterialShaderInput::LightSpaceDepth),
+            LightSpaceDepthMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;

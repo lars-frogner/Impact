@@ -2,6 +2,7 @@
 
 mod blinn_phong;
 mod components;
+mod depth;
 mod fixed;
 mod vertex_color;
 
@@ -17,9 +18,10 @@ pub use blinn_phong::{
     BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, TexturedBlinnPhongMaterial,
 };
 pub use components::{
-    BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, FixedTextureComp, MaterialComp,
-    TexturedBlinnPhongComp, VertexColorComp,
+    BlinnPhongComp, DiffuseTexturedBlinnPhongComp, FixedColorComp, FixedTextureComp,
+    LightSpaceDepthComp, MaterialComp, TexturedBlinnPhongComp, VertexColorComp,
 };
+pub use depth::LightSpaceDepthMaterial;
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
 pub use vertex_color::VertexColorMaterial;
 

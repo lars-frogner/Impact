@@ -68,6 +68,12 @@ pub struct TexturedBlinnPhongComp {
     pub alpha: fre,
 }
 
+/// Marker [`Component`](impact_ecs::component::Component) for entities
+/// colored according to their depth in the clip space of a light source.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct LightSpaceDepthComp;
+
 impl MaterialComp {
     /// Creates a new component representing a material with the given
     /// IDs for the [`MaterialSpecification`](crate::scene::MaterialSpecification)
