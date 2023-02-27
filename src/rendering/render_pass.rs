@@ -737,10 +737,10 @@ impl RenderPassRecorder {
             );
 
             let target_color_state = if specification.depth_map_usage.is_prepass()
-                || specification.shadow_map_usage.is_update()
+                || specification.shadow_map_usage.is_clear_or_update()
             {
-                // For depth prepasses and shadow map updates we only compute
-                // depths, so we don't need a color target
+                // For depth prepasses and shadow map clearing or updates we only
+                // work with depths, so we don't need a color target
                 None
             } else {
                 Some(wgpu::ColorTargetState {
@@ -871,10 +871,10 @@ impl RenderPassRecorder {
         };
 
         let color_attachment = if self.specification.depth_map_usage.is_prepass()
-            || self.specification.shadow_map_usage.is_update()
+            || self.specification.shadow_map_usage.is_clear_or_update()
         {
-            // For depth prepasses and shadow map updates we only compute
-            // depths, so we don't need a color target
+            // For depth prepasses and shadow map clearing or updates we only
+            // work with depths, so we don't need a color target
             None
         } else {
             Some(wgpu::RenderPassColorAttachment {
