@@ -2552,29 +2552,70 @@ impl SampledTexture {
     }
 
     /// Generates and returns an expression comparison sampling the depth
-    /// texture with the x- and y-component of the given light clip space
-    /// position as texture coordinates and the z-component as the reference
-    /// depth.
+    /// texture with texture coordinates converted from the x- and y-component
+    /// of the given light clip space position and the z-component as the
+    /// reference depth.
     pub fn generate_shadow_map_sampling_expr(
         &self,
+        types: &mut UniqueArena<Type>,
+        constants: &mut Arena<Constant>,
         function: &mut Function,
         light_clip_position_expr_handle: Handle<Expression>,
     ) -> Handle<Expression> {
+        let vec2_type_handle = insert_in_arena(types, VECTOR_2_TYPE);
+
+        let unity_constant_expr = include_expr_in_func(
+            function,
+            Expression::Constant(define_constant_if_missing(constants, float32_constant(1.0))),
+        );
+
+        let half_constant_expr = include_expr_in_func(
+            function,
+            Expression::Constant(define_constant_if_missing(constants, float32_constant(0.5))),
+        );
+
         let (texture_coord_expr_handle, depth_reference_expr_handle) =
             emit_in_func(function, |function| {
-                (
-                    include_expr_in_func(
-                        function,
-                        swizzle_xy_expr(light_clip_position_expr_handle),
-                    ),
-                    include_expr_in_func(
-                        function,
-                        Expression::AccessIndex {
-                            base: light_clip_position_expr_handle,
-                            index: 2,
-                        },
-                    ),
-                )
+                let light_clip_position_xy_expr_handle = include_expr_in_func(
+                    function,
+                    swizzle_xy_expr(light_clip_position_expr_handle),
+                );
+
+                let offset_vector_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Compose {
+                        ty: vec2_type_handle,
+                        components: vec![unity_constant_expr, unity_constant_expr],
+                    },
+                );
+
+                let offset_light_clip_position_xy_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: light_clip_position_xy_expr_handle,
+                        right: offset_vector_expr_handle,
+                    },
+                );
+
+                let texture_coord_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: offset_light_clip_position_xy_expr_handle,
+                        right: half_constant_expr,
+                    },
+                );
+
+                let depth_reference_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: light_clip_position_expr_handle,
+                        index: 2,
+                    },
+                );
+
+                (texture_coord_expr_handle, depth_reference_expr_handle)
             });
 
         self.generate_sampling_expr(

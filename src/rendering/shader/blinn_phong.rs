@@ -446,7 +446,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 let light_clip_space_position_expr_handle = fragment_input_struct.get_field_expr_handle(
                     light_input_field_indices
                         .light_clip_position
-                        .expect("Missing light space clip position for Blinn-Phong shading with directional light"),
+                        .expect("Missing light clip space position for Blinn-Phong shading with directional light"),
                 );
 
                 // The value returned from the comparison sampling is 0.0 if the
@@ -454,6 +454,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 let comparison_sample_expr_handle = directional_light_expressions
                     .shadow_map
                     .generate_shadow_map_sampling_expr(
+                        &mut module.types,
+                        &mut module.constants,
                         fragment_function,
                         light_clip_space_position_expr_handle,
                     );
