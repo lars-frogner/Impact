@@ -270,24 +270,25 @@ impl RenderPassManager {
                             )?);
                         }
                         for &light_id in directional_light_ids {
-                            let passes =
-                                match self.light_shaded_model_shading_passes.entry(light_id) {
-                                    Entry::Occupied(entry) => entry.into_mut(),
-                                    Entry::Vacant(entry) => {
-                                        entry.insert(LightShadedModelShadingPasses {
-                                            shadow_map_clearing_pass: None,
-                                            // Some(RenderPassRecorder::new(
-                                            //     core_system,
-                                            //     config,
-                                            //     render_resources,
-                                            //     shader_manager,
-                                            //     RenderPassSpecification::shadow_map_clearing_pass(),
-                                            //     disable_pass,
-                                            // )?),
-                                            ..Default::default()
-                                        })
-                                    }
-                                };
+                            let passes = match self
+                                .light_shaded_model_shading_passes
+                                .entry(light_id)
+                            {
+                                Entry::Occupied(entry) => entry.into_mut(),
+                                Entry::Vacant(entry) => {
+                                    entry.insert(LightShadedModelShadingPasses {
+                                        shadow_map_clearing_pass: Some(RenderPassRecorder::new(
+                                            core_system,
+                                            config,
+                                            render_resources,
+                                            shader_manager,
+                                            RenderPassSpecification::shadow_map_clearing_pass(),
+                                            disable_pass,
+                                        )?),
+                                        ..Default::default()
+                                    })
+                                }
+                            };
 
                             let light = LightInfo {
                                 light_type: LightType::DirectionalLight,
@@ -296,17 +297,18 @@ impl RenderPassManager {
 
                             // Create a directional light shadow map update pass
                             // for the new model
-                            //     passes.shadow_map_update_passes
-                            //     .push(RenderPassRecorder::new(
-                            //         core_system,
-                            //         config,
-                            //         render_resources,
-                            //         shader_manager,
-                            //         RenderPassSpecification::shadow_map_update_pass(
-                            //             light, model_id,
-                            //         ),
-                            //         disable_pass,
-                            //     )?);
+                            passes
+                                .shadow_map_update_passes
+                                .push(RenderPassRecorder::new(
+                                    core_system,
+                                    config,
+                                    render_resources,
+                                    shader_manager,
+                                    RenderPassSpecification::shadow_map_update_pass(
+                                        light, model_id,
+                                    ),
+                                    disable_pass,
+                                )?);
 
                             // Create a directional light shading pass for the
                             // new model
@@ -518,7 +520,8 @@ impl RenderPassSpecification {
     /// The order of the bind groups is:
     /// 1. Camera.
     /// 2. Lights.
-    /// 3. Material textures.
+    /// 3. Shadow map textures.
+    /// 4. Material textures.
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
@@ -527,7 +530,7 @@ impl RenderPassSpecification {
         BindGroupShaderInput<'a>,
         VertexAttributeSet,
     )> {
-        let mut layouts = Vec::with_capacity(3);
+        let mut layouts = Vec::with_capacity(4);
 
         let mut shader_input = BindGroupShaderInput {
             camera: None,
@@ -549,7 +552,16 @@ impl RenderPassSpecification {
                 .get_light_buffer_manager()
                 .expect("Missing light render buffer manager for shading pass with light");
 
-            layouts.push(light_buffer_manager.bind_group_layout());
+            layouts.push(light_buffer_manager.light_bind_group_layout());
+
+            if self.shadow_map_usage.is_use() {
+                if let Some(layout) =
+                    light_buffer_manager.shadow_map_bind_group_layout_for_light_type(light_type)
+                {
+                    layouts.push(layout);
+                }
+            }
+
             shader_input.light = Some(light_buffer_manager.shader_input_for_light_type(light_type));
         }
 
@@ -578,12 +590,13 @@ impl RenderPassSpecification {
     /// The order of the bind groups is:
     /// 1. Camera.
     /// 2. Lights.
-    /// 3. Material textures.
+    /// 3. Shadow map textures.
+    /// 4. Material textures.
     fn get_bind_groups<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
-        let mut bind_groups = Vec::with_capacity(3);
+        let mut bind_groups = Vec::with_capacity(4);
 
         // We do not need a camera if we are updating shadow map
         if !self.shadow_map_usage.is_update() {
@@ -592,12 +605,20 @@ impl RenderPassSpecification {
             }
         }
 
-        if self.light.is_some() {
+        if let Some(LightInfo { light_type, .. }) = self.light {
             let light_buffer_manager = render_resources
                 .get_light_buffer_manager()
                 .expect("Missing light render buffer manager for shading pass with light");
 
-            bind_groups.push(light_buffer_manager.bind_group());
+            bind_groups.push(light_buffer_manager.light_bind_group());
+
+            if self.shadow_map_usage.is_use() {
+                if let Some(bind_group) =
+                    light_buffer_manager.shadow_map_bind_group_for_light_type(light_type)
+                {
+                    bind_groups.push(bind_group);
+                }
+            }
         }
 
         if let Some(model_id) = self.model_id {
@@ -1135,6 +1156,10 @@ impl ShadowMapUsage {
 
     fn is_update(&self) -> bool {
         *self == Self::Update
+    }
+
+    fn is_use(&self) -> bool {
+        *self == Self::Use
     }
 
     fn is_clear_or_update(&self) -> bool {
