@@ -44,6 +44,9 @@ pub enum KeyboardInputAction {
     ToggleInteractionMode,
     ToggleBackFaceCulling,
     ToggleTriangleFill,
+    SaveScreenshot,
+    SaveDepthMap,
+    SaveDirectionalLightShadowMap,
     Exit,
 }
 
@@ -157,6 +160,28 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::SaveScreenshot => {
+                        if state == &ElementState::Released {
+                            world.renderer().read().unwrap().request_screenshot_save();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::SaveDepthMap => {
+                        if state == &ElementState::Released {
+                            world.renderer().read().unwrap().request_depth_map_save();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::SaveDirectionalLightShadowMap => {
+                        if state == &ElementState::Released {
+                            world
+                                .renderer()
+                                .read()
+                                .unwrap()
+                                .request_directional_light_shadow_map_save();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     // Check if the input is for the motion controller,
                     // and if so, performed the required motion update
                     action if world.control_mode_active() => {
@@ -204,6 +229,9 @@ impl Default for KeyActionMap {
             ToggleInteractionMode => Tab,
             ToggleBackFaceCulling => B,
             ToggleTriangleFill => F,
+            SaveScreenshot => F12,
+            SaveDepthMap => F11,
+            SaveDirectionalLightShadowMap => F10,
             Exit => Escape
         ))
     }

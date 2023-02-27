@@ -15,7 +15,7 @@ cfg_if::cfg_if! {
 /// A texture representing a 2D image.
 #[derive(Debug)]
 pub struct ImageTexture {
-    _texture: wgpu::Texture,
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
@@ -99,7 +99,7 @@ impl ImageTexture {
         let sampler = Self::create_sampler(device);
 
         Self {
-            _texture: texture,
+            texture,
             view,
             sampler,
         }
@@ -163,6 +163,16 @@ impl ImageTexture {
             binding,
             resource: wgpu::BindingResource::Sampler(self.sampler()),
         }
+    }
+
+    /// Saves the texture as a color image at the given output path. The image
+    /// file format is automatically determined from the file extension.
+    pub fn save_as_image_file<P: AsRef<Path>>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        output_path: P,
+    ) -> Result<()> {
+        super::save_color_texture_as_image_file(core_system, &self.texture, output_path)
     }
 
     /// Creates a new [`wgpu::Texture`] configured to hold 2D image data

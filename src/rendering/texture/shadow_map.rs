@@ -1,10 +1,12 @@
-//!
+//! Textures representing shadow maps.
 
 use crate::rendering::CoreRenderingSystem;
+use anyhow::Result;
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct ShadowMapTexture {
-    _texture: wgpu::Texture,
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
@@ -28,7 +30,7 @@ impl ShadowMapTexture {
         let sampler = Self::create_sampler(device);
 
         Self {
-            _texture: texture,
+            texture,
             view,
             sampler,
         }
@@ -44,8 +46,8 @@ impl ShadowMapTexture {
         &self.sampler
     }
 
-    /// Creates the bind group layout entry for this texture type,
-    /// assigned to the given binding.
+    /// Creates the bind group layout entry for this texture type, assigned to
+    /// the given binding.
     pub const fn create_texture_bind_group_layout_entry(
         binding: u32,
     ) -> wgpu::BindGroupLayoutEntry {
@@ -61,8 +63,8 @@ impl ShadowMapTexture {
         }
     }
 
-    /// Creates the bind group layout entry for this texture's sampler
-    /// type, assigned to the given binding.
+    /// Creates the bind group layout entry for this texture's sampler type,
+    /// assigned to the given binding.
     pub const fn create_sampler_bind_group_layout_entry(
         binding: u32,
     ) -> wgpu::BindGroupLayoutEntry {
@@ -76,8 +78,8 @@ impl ShadowMapTexture {
         }
     }
 
-    /// Creates the bind group entry for this texture,
-    /// assigned to the given binding.
+    /// Creates the bind group entry for this texture, assigned to the given
+    /// binding.
     pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
@@ -85,13 +87,23 @@ impl ShadowMapTexture {
         }
     }
 
-    /// Creates the bind group entry for this texture's sampler,
-    /// assigned to the given binding.
+    /// Creates the bind group entry for this texture's sampler, assigned to the
+    /// given binding.
     pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::Sampler(self.sampler()),
         }
+    }
+
+    /// Saves the texture as a grayscale image at the given output path. The
+    /// image file format is automatically determined from the file extension.
+    pub fn save_as_image_file<P: AsRef<Path>>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        output_path: P,
+    ) -> Result<()> {
+        super::save_depth_texture_as_image_file(core_system, &self.texture, output_path)
     }
 
     fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d, label: &str) -> wgpu::Texture {
@@ -101,7 +113,9 @@ impl ShadowMapTexture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::FORMAT,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC,
             label: Some(label),
             view_formats: &[],
         })

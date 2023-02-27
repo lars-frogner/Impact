@@ -1,11 +1,13 @@
 //! Textures storing fragment depths.
 
 use crate::rendering::CoreRenderingSystem;
+use anyhow::Result;
+use std::path::Path;
 
 /// Texture for storing fragment depths.
 #[derive(Debug)]
 pub struct DepthTexture {
-    _texture: wgpu::Texture,
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
@@ -32,7 +34,7 @@ impl DepthTexture {
         let sampler = Self::create_sampler(device);
 
         Self {
-            _texture: texture,
+            texture,
             view,
             sampler,
         }
@@ -48,6 +50,16 @@ impl DepthTexture {
         &self.sampler
     }
 
+    /// Saves the texture as a grayscale image at the given output path. The
+    /// image file format is automatically determined from the file extension.
+    pub fn save_as_image_file<P: AsRef<Path>>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        output_path: P,
+    ) -> Result<()> {
+        super::save_depth_texture_as_image_file(core_system, &self.texture, output_path)
+    }
+
     /// Creates a new [`wgpu::Texture`] configured to hold 2D depth data
     /// in 32-bit float format.
     fn create_empty_depth32_texture(
@@ -61,7 +73,9 @@ impl DepthTexture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::FORMAT,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC,
             label: Some(label),
             view_formats: &[],
         })

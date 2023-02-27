@@ -36,7 +36,11 @@ pub use texture::{DepthTexture, ImageTexture};
 use self::resource::RenderResourceManager;
 use crate::window::ControlFlow;
 use anyhow::{Error, Result};
-use std::sync::RwLock;
+use chrono::Utc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    RwLock,
+};
 
 /// Floating point type used for rendering.
 ///
@@ -55,6 +59,7 @@ pub struct RenderingSystem {
     render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
     depth_texture: DepthTexture,
+    screenshotter: Screenshotter,
 }
 
 /// Global rendering configuration options.
@@ -65,6 +70,13 @@ pub struct RenderingConfig {
     /// Controls the way each polygon is rasterized.
     pub polygon_mode: wgpu::PolygonMode,
     pub directional_light_shadow_map_resolution: u32,
+}
+
+#[derive(Debug)]
+struct Screenshotter {
+    screenshot_save_requested: AtomicBool,
+    depth_map_save_requested: AtomicBool,
+    directional_light_shadow_map_save_requested: AtomicBool,
 }
 
 impl RenderingSystem {
@@ -82,6 +94,7 @@ impl RenderingSystem {
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
             depth_texture,
+            screenshotter: Screenshotter::new(),
         })
     }
 
@@ -144,6 +157,20 @@ impl RenderingSystem {
         self.core_system
             .queue()
             .submit(std::iter::once(command_encoder.finish()));
+
+        // Screenshots must be saved before the surface is presented
+        self.screenshotter
+            .save_screenshot_if_requested(&self.core_system, &surface_texture)?;
+
+        self.screenshotter
+            .save_depth_map_if_requested(&self.core_system, &self.depth_texture)?;
+
+        self.screenshotter
+            .save_directional_light_shadow_map_if_requested(
+                &self.core_system,
+                &self.render_resource_manager,
+            )?;
+
         surface_texture.present();
 
         Ok(())
@@ -184,6 +211,19 @@ impl RenderingSystem {
             .write()
             .unwrap()
             .clear_model_render_pass_recorders();
+    }
+
+    pub fn request_screenshot_save(&self) {
+        self.screenshotter.request_screenshot_save();
+    }
+
+    pub fn request_depth_map_save(&self) {
+        self.screenshotter.request_depth_map_save();
+    }
+
+    pub fn request_directional_light_shadow_map_save(&self) {
+        self.screenshotter
+            .request_directional_light_shadow_map_save();
     }
 
     /// Marks the render resources as being out of sync with the source data.
@@ -232,6 +272,96 @@ impl Default for RenderingConfig {
             cull_mode: Some(wgpu::Face::Back),
             polygon_mode: wgpu::PolygonMode::Fill,
             directional_light_shadow_map_resolution: 1024,
+        }
+    }
+}
+
+impl Screenshotter {
+    fn new() -> Self {
+        Self {
+            screenshot_save_requested: AtomicBool::new(false),
+            depth_map_save_requested: AtomicBool::new(false),
+            directional_light_shadow_map_save_requested: AtomicBool::new(false),
+        }
+    }
+
+    fn request_screenshot_save(&self) {
+        self.screenshot_save_requested
+            .store(true, Ordering::Release);
+    }
+
+    fn request_depth_map_save(&self) {
+        self.depth_map_save_requested.store(true, Ordering::Release);
+    }
+
+    fn request_directional_light_shadow_map_save(&self) {
+        self.directional_light_shadow_map_save_requested
+            .store(true, Ordering::Release);
+    }
+
+    fn save_screenshot_if_requested(
+        &self,
+        core_system: &CoreRenderingSystem,
+        surface_texture: &wgpu::SurfaceTexture,
+    ) -> Result<()> {
+        if self
+            .screenshot_save_requested
+            .swap(false, Ordering::Acquire)
+        {
+            texture::save_color_texture_as_image_file(
+                core_system,
+                &surface_texture.texture,
+                format!("screenshot_{}.png", Utc::now().to_rfc3339()),
+            )
+        } else {
+            Ok(())
+        }
+    }
+
+    fn save_depth_map_if_requested(
+        &self,
+        core_system: &CoreRenderingSystem,
+        depth_texture: &DepthTexture,
+    ) -> Result<()> {
+        if self.depth_map_save_requested.swap(false, Ordering::Acquire) {
+            depth_texture.save_as_image_file(
+                core_system,
+                format!("depth_map_{}.png", Utc::now().to_rfc3339()),
+            )
+        } else {
+            Ok(())
+        }
+    }
+
+    fn save_directional_light_shadow_map_if_requested(
+        &self,
+        core_system: &CoreRenderingSystem,
+        render_resource_manager: &RwLock<RenderResourceManager>,
+    ) -> Result<()> {
+        if self
+            .directional_light_shadow_map_save_requested
+            .swap(false, Ordering::Acquire)
+        {
+            if let Some(light_buffer_manager) = render_resource_manager
+                .read()
+                .unwrap()
+                .synchronized()
+                .get_light_buffer_manager()
+            {
+                light_buffer_manager
+                    .directional_light_shadow_map_texture()
+                    .save_as_image_file(
+                        core_system,
+                        format!(
+                            "directional_light_shadow_map_{}.png",
+                            Utc::now().to_rfc3339()
+                        ),
+                    )
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
         }
     }
 }

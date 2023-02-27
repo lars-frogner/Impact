@@ -157,7 +157,7 @@ impl CoreRenderingSystem {
     ) -> wgpu::SurfaceConfiguration {
         let caps = surface.get_capabilities(adapter);
         wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             format: caps.formats[0],
             width: u32::from(width),
             height: u32::from(height),
