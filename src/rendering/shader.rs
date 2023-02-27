@@ -4,6 +4,9 @@ mod blinn_phong;
 mod fixed;
 mod vertex_color;
 
+pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
+pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
+
 use crate::{
     geometry::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
@@ -26,9 +29,6 @@ use naga::{
 };
 use std::{borrow::Cow, collections::HashMap, hash::Hash, mem, vec};
 use vertex_color::VertexColorShaderGenerator;
-
-pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
-pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
 
 cfg_if::cfg_if! {
     if #[cfg(not(target_arch = "wasm32"))] {
@@ -149,9 +149,30 @@ pub enum MaterialShaderGenerator<'a> {
 /// scaling components of the model view transform variable.
 #[derive(Clone, Debug)]
 pub struct ModelViewTransformExpressions {
-    rotation_quaternion: Handle<Expression>,
-    translation_vector: Handle<Expression>,
-    scaling_factor: Handle<Expression>,
+    pub rotation_quaternion: Handle<Expression>,
+    pub translation_vector: Handle<Expression>,
+    pub scaling_factor: Handle<Expression>,
+}
+
+/// Handle to expressions for a projection.
+#[derive(Clone, Debug)]
+pub enum ProjectionExpressions {
+    Camera(CameraProjectionExpressions),
+    DirectionalLight(DirectionalLightProjectionExpressions),
+}
+
+/// Handle to expression for the camera projection matrix.
+#[derive(Clone, Debug)]
+pub struct CameraProjectionExpressions {
+    matrix_expr_handle: Handle<Expression>,
+}
+
+/// Handle to expressions for the orthographic transform components associated
+/// with a directional light.
+#[derive(Clone, Debug)]
+pub struct DirectionalLightProjectionExpressions {
+    pub translation: Handle<Expression>,
+    pub scaling: Handle<Expression>,
 }
 
 /// Handles to expression for accessing the fields of a light uniform for the
@@ -166,51 +187,59 @@ pub enum LightFieldExpressions {
 /// shader entry point functions.
 #[derive(Clone, Debug)]
 pub struct PointLightFieldExpressions {
-    in_fragment_function: PointLightFieldFragmentExpressions,
+    pub in_fragment_function: PointLightFieldFragmentExpressions,
 }
 
 /// Handles to expression for accessing the fields of a directional light
 /// uniform in shader entry point functions.
 #[derive(Clone, Debug)]
 pub struct DirectionalLightFieldExpressions {
-    in_vertex_function: DirectionalLightVertexFieldExpressions,
-    in_fragment_function: Option<DirectionalLightFragmentFieldExpressions>,
+    pub in_vertex_function: DirectionalLightVertexFieldExpressions,
+    pub in_fragment_function: Option<DirectionalLightFragmentFieldExpressions>,
 }
 
 /// Handles to expression for accessing the fields of a point light uniform in
 /// the fragment entry point function.
 #[derive(Clone, Debug)]
 pub struct PointLightFieldFragmentExpressions {
-    position: Handle<Expression>,
-    radiance: Handle<Expression>,
+    pub position: Handle<Expression>,
+    pub radiance: Handle<Expression>,
 }
 
 /// Handles to expression for accessing the fields of a directional light
 /// uniform in the vertex entry point function.
 #[derive(Clone, Debug)]
 pub struct DirectionalLightVertexFieldExpressions {
-    camera_to_light_space_rotation_quaternion: Handle<Expression>,
-    orthographic_translation: Handle<Expression>,
-    orthographic_scaling: Handle<Expression>,
+    pub camera_to_light_space_rotation_quaternion: Handle<Expression>,
+    pub orthographic_projection: DirectionalLightProjectionExpressions,
 }
 
 /// Handles to expression for accessing the fields of a directional light
-/// uniform in the fragment entry point function.
+/// uniform in the fragment entry point function. Also holds a
+/// [`SampledTexture`] that can be used for sampling the shadow map.
 #[derive(Clone, Debug)]
 pub struct DirectionalLightFragmentFieldExpressions {
-    camera_space_direction: Handle<Expression>,
-    radiance: Handle<Expression>,
+    pub camera_space_direction: Handle<Expression>,
+    pub radiance: Handle<Expression>,
+    pub shadow_map: SampledTexture,
 }
 
-/// Indices of the fields holding the various mesh vertex
-/// attributes in the vertex shader output struct.
+/// Indices of the fields holding the various mesh vertex attributes and related
+/// quantities in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct MeshVertexOutputFieldIndices {
-    _clip_position: usize,
-    position: Option<usize>,
-    color: Option<usize>,
-    normal_vector: Option<usize>,
-    texture_coords: Option<usize>,
+    pub _clip_position: usize,
+    pub position: Option<usize>,
+    pub color: Option<usize>,
+    pub normal_vector: Option<usize>,
+    pub texture_coords: Option<usize>,
+}
+
+/// Indices of the fields holding the various light related properties in the
+/// vertex shader output struct.
+#[derive(Clone, Debug)]
+pub struct LightVertexOutputFieldIndices {
+    pub light_clip_position: Option<usize>,
 }
 
 /// Indices of any fields holding the properties of a
@@ -261,9 +290,16 @@ pub struct StructBuilder {
 /// Helper for declaring global variables for a texture
 /// with an associated sampler and generating a sampling
 /// expression.
+#[derive(Clone, Debug)]
 pub struct SampledTexture {
     texture_var_handle: Handle<GlobalVariable>,
     sampler_var_handle: Handle<GlobalVariable>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TextureType {
+    Image,
+    Depth,
 }
 
 /// Helper for importing functions from one module to another.
@@ -282,6 +318,7 @@ pub struct ModuleImporter<'a, 'b> {
 
 /// A set of shader functions defined in source code that can be imported into
 /// an existing [`Module`].
+#[derive(Debug)]
 pub struct SourceCodeFunctions {
     module: Module,
 }
@@ -360,6 +397,20 @@ const IMAGE_TEXTURE_TYPE: Type = Type {
 const IMAGE_TEXTURE_SAMPLER_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Sampler { comparison: false },
+};
+
+const DEPTH_TEXTURE_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Image {
+        dim: ImageDimension::D2,
+        arrayed: false,
+        class: ImageClass::Depth { multi: false },
+    },
+};
+
+const COMPARISON_SAMPLER_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Sampler { comparison: true },
 };
 
 impl Shader {
@@ -516,9 +567,6 @@ impl ShaderGenerator {
         material_shader_input: Option<&MaterialShaderInput>,
         vertex_attribute_requirements: VertexAttributeSet,
     ) -> Result<(Module, EntryPointNames)> {
-        let camera_shader_input = camera_shader_input
-            .ok_or_else(|| anyhow!("Tried to build shader with no camera input"))?;
-
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
 
@@ -534,31 +582,51 @@ impl ShaderGenerator {
         // are set in `RenderPassRecorder::record_render_pass`, that is:
         // 1. Camera.
         // 2. Lights.
-        // 3. Material textures.
+        // 3. Shadow map textures.
+        // 4. Material textures.
         let mut bind_group_idx = 0;
 
-        let projection_matrix_var_expr_handle = Self::generate_vertex_code_for_projection_matrix(
-            camera_shader_input,
-            &mut module,
-            &mut vertex_function,
-            &mut bind_group_idx,
-        );
+        let camera_projection = camera_shader_input.map(|camera_shader_input| {
+            Self::generate_vertex_code_for_projection_matrix(
+                camera_shader_input,
+                &mut module,
+                &mut vertex_function,
+                &mut bind_group_idx,
+            )
+        });
 
-        let model_view_transform_expressions = Self::generate_vertex_code_for_model_view_transform(
+        let model_view_transform = Self::generate_vertex_code_for_model_view_transform(
             model_view_transform_shader_input,
             &mut module,
             &mut vertex_function,
         );
 
-        let light_expressions = light_shader_input.map(|light_shader_input| {
+        let light = light_shader_input.map(|light_shader_input| {
             Self::generate_code_for_lights(
                 light_shader_input,
                 &mut module,
                 &mut vertex_function,
-                Some(&mut fragment_function),
+                if material_shader_generator.is_some() {
+                    Some(&mut fragment_function)
+                } else {
+                    None
+                },
                 &mut bind_group_idx,
             )
         });
+
+        let projection = if let Some(camera_projection) = camera_projection {
+            ProjectionExpressions::Camera(camera_projection)
+        } else {
+            light
+                .as_ref()
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Tried to build shader with no camera or light input (missing projection)"
+                    )
+                })?
+                .try_get_projection_to_light_clip_space()?
+        };
 
         let (mesh_vertex_output_field_indices, mut vertex_output_struct_builder) =
             Self::generate_vertex_code_for_vertex_attributes(
@@ -566,12 +634,20 @@ impl ShaderGenerator {
                 vertex_attribute_requirements,
                 &mut module,
                 &mut vertex_function,
-                &model_view_transform_expressions,
-                projection_matrix_var_expr_handle,
-                light_expressions.as_ref(),
+                &model_view_transform,
+                projection,
             )?;
 
         let entry_point_names = if let Some(material_shader_generator) = material_shader_generator {
+            let light_vertex_output_field_indices = light.as_ref().map(|light| {
+                light.generate_vertex_output_code(
+                    &mut module,
+                    &mut vertex_function,
+                    &mut vertex_output_struct_builder,
+                    &mesh_vertex_output_field_indices,
+                )
+            });
+
             let material_vertex_output_field_indices = material_shader_generator
                 .generate_vertex_code(
                     &mut module,
@@ -592,8 +668,9 @@ impl ShaderGenerator {
                 &mut bind_group_idx,
                 &fragment_input_struct,
                 &mesh_vertex_output_field_indices,
+                light_vertex_output_field_indices.as_ref(),
                 &material_vertex_output_field_indices,
-                light_expressions.as_ref(),
+                light.as_ref(),
             );
 
             let entry_point_names = EntryPointNames {
@@ -819,18 +896,15 @@ impl ShaderGenerator {
         }
     }
 
-    /// Generates the declaration of the global uniform variable for the
-    /// camera projection matrix.
-    ///
-    /// # Returns
-    /// Handle to the expression for the the projection matrix in the main
-    /// vertex shader function.
+    /// Generates the declaration of the global uniform variable for the camera
+    /// projection matrix and returns a new [`CameraProjectionMatrix`]
+    /// representing the matrix.
     fn generate_vertex_code_for_projection_matrix(
         camera_shader_input: &CameraShaderInput,
         module: &mut Module,
         vertex_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> Handle<Expression> {
+    ) -> CameraProjectionExpressions {
         let bind_group = *bind_group_idx;
         *bind_group_idx += 1;
 
@@ -855,7 +929,7 @@ impl ShaderGenerator {
             Expression::GlobalVariable(projection_matrix_var_handle),
         );
 
-        let projection_matrix_expr_handle = emit_in_func(vertex_function, |function| {
+        let matrix_expr_handle = emit_in_func(vertex_function, |function| {
             include_named_expr_in_func(
                 function,
                 "projectionMatrix",
@@ -865,7 +939,7 @@ impl ShaderGenerator {
             )
         });
 
-        projection_matrix_expr_handle
+        CameraProjectionExpressions { matrix_expr_handle }
     }
 
     /// Generates the arguments for the required mesh vertex attributes in the
@@ -898,8 +972,7 @@ impl ShaderGenerator {
         module: &mut Module,
         vertex_function: &mut Function,
         model_view_transform_expressions: &ModelViewTransformExpressions,
-        projection_matrix_var_expr_handle: Handle<Expression>,
-        light_expressions: Option<&LightFieldExpressions>,
+        projection: ProjectionExpressions,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
         let function_handles = SourceCodeFunctions::from_wgsl_source(
             "\
@@ -916,16 +989,6 @@ impl ShaderGenerator {
             ) -> vec3<f32> {
                 return rotateVectorWithQuaternion(rotationQuaternion, scaling * position) + translation;
             }
-
-            fn transformCameraSpacePositionToDirectionalLightClipSpace(
-                cameraToLightRotationQuaternion: vec4<f32>,
-                orthographicTranslation: vec3<f32>,
-                orthographicScaling: vec3<f32>,
-                cameraSpacePosition: vec3<f32>
-            ) -> vec3<f32> {
-                let lightSpacePosition = rotateVectorWithQuaternion(cameraToLightRotationQuaternion, cameraSpacePosition);
-                return (lightSpacePosition + orthographicTranslation) * orthographicScaling;
-            }
         ",
         )
         .unwrap()
@@ -933,7 +996,6 @@ impl ShaderGenerator {
 
         let rotation_function_handle = function_handles[0];
         let transformation_function_handle = function_handles[1];
-        let light_clip_space_transformation_function_handle = function_handles[2];
 
         let vec2_type_handle = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
@@ -1002,34 +1064,8 @@ impl ShaderGenerator {
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
-        let unity_constant_expr = include_expr_in_func(
-            vertex_function,
-            Expression::Constant(define_constant_if_missing(
-                &mut module.constants,
-                float32_constant(1.0),
-            )),
-        );
-
-        // Create expression multiplying the camera space homogeneous
-        // vertex position with the projection matrix, yielding the
-        // clip space position
-        let clip_position_expr_handle = emit_in_func(vertex_function, |function| {
-            let homogeneous_position_expr_handle = include_expr_in_func(
-                function,
-                Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![position_expr_handle, unity_constant_expr],
-                },
-            );
-            include_expr_in_func(
-                function,
-                Expression::Binary {
-                    op: BinaryOperator::Multiply,
-                    left: projection_matrix_var_expr_handle,
-                    right: homogeneous_position_expr_handle,
-                },
-            )
-        });
+        let clip_position_expr_handle =
+            projection.generate_clip_position_expr(module, vertex_function, position_expr_handle);
         let output_clip_position_field_idx = output_struct_builder.add_builtin_position_field(
             "clipSpacePosition",
             vec4_type_handle,
@@ -1415,6 +1451,25 @@ impl ShaderGenerator {
 
         *bind_group_idx += 1;
 
+        let (shadow_map_texture_binding, shadow_map_sampler_binding) =
+            light_shader_input.shadow_map_texture_and_sampler_binding;
+
+        let shadow_map = if fragment_function.is_some() {
+            Some(SampledTexture::declare(
+                &mut module.types,
+                &mut module.global_variables,
+                TextureType::Depth,
+                "shadowMap",
+                *bind_group_idx,
+                shadow_map_texture_binding,
+                shadow_map_sampler_binding,
+            ))
+        } else {
+            None
+        };
+
+        *bind_group_idx += 1;
+
         let active_light_idx_var_handle = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
@@ -1431,6 +1486,7 @@ impl ShaderGenerator {
             fragment_function,
             lights_struct_var_handle,
             active_light_idx_var_handle,
+            shadow_map,
         )
     }
 }
@@ -1455,7 +1511,7 @@ impl<'a> MaterialShaderGenerator<'a> {
     ///
     /// # Returns
     /// Any indices of material property fields added to the output struct.
-    fn generate_vertex_code(
+    pub fn generate_vertex_code(
         &self,
         module: &mut Module,
         vertex_function: &mut Function,
@@ -1484,13 +1540,14 @@ impl<'a> MaterialShaderGenerator<'a> {
     /// # Panics
     /// If `material_input_field_indices` does not represent the same
     /// material as this enum.
-    fn generate_fragment_code(
+    pub fn generate_fragment_code(
         &self,
         module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
+        light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
         light_expressions: Option<&LightFieldExpressions>,
     ) {
@@ -1529,6 +1586,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 bind_group_idx,
                 fragment_input_struct,
                 mesh_input_field_indices,
+                light_input_field_indices,
                 material_input_field_indices,
                 light_expressions,
             ),
@@ -1537,8 +1595,127 @@ impl<'a> MaterialShaderGenerator<'a> {
     }
 }
 
+impl ProjectionExpressions {
+    /// Generates an expression for the given position (as a vec3) projected
+    /// with the projection in the vertex entry point function. The projected
+    /// position will be a vec4.
+    pub fn generate_clip_position_expr(
+        &self,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        position_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        match self {
+            Self::Camera(camera_projection_matrix) => camera_projection_matrix
+                .generate_clip_position_expr(module, vertex_function, position_expr_handle),
+            Self::DirectionalLight(directional_light_orthographic_projection) => {
+                directional_light_orthographic_projection.generate_clip_position_expr(
+                    module,
+                    vertex_function,
+                    position_expr_handle,
+                )
+            }
+        }
+    }
+}
+
+impl CameraProjectionExpressions {
+    /// Generates an expression for the given position (as a vec3) projected
+    /// with the projection matrix in the vertex entry point function. The
+    /// projected position will be a vec4.
+    pub fn generate_clip_position_expr(
+        &self,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        position_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+
+        let unity_constant_expr = include_expr_in_func(
+            vertex_function,
+            Expression::Constant(define_constant_if_missing(
+                &mut module.constants,
+                float32_constant(1.0),
+            )),
+        );
+
+        emit_in_func(vertex_function, |function| {
+            let homogeneous_position_expr_handle = include_expr_in_func(
+                function,
+                Expression::Compose {
+                    ty: vec4_type_handle,
+                    components: vec![position_expr_handle, unity_constant_expr],
+                },
+            );
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: self.matrix_expr_handle,
+                    right: homogeneous_position_expr_handle,
+                },
+            )
+        })
+    }
+}
+
+impl DirectionalLightProjectionExpressions {
+    /// Generates an expression for the given position (as a vec3) projected
+    /// with the orthographic projection in the vertex entry point function. The
+    /// projected position will be a vec4 with w = 1.0;
+    pub fn generate_clip_position_expr(
+        &self,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        position_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let function_handles = SourceCodeFunctions::from_wgsl_source(
+            "\
+            fn applyOrthographicProjectionToPosition(
+                orthographicTranslation: vec3<f32>,
+                orthographicScaling: vec3<f32>,
+                position: vec3<f32>
+            ) -> vec3<f32> {
+                return (position + orthographicTranslation) * orthographicScaling;
+            }
+        ",
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let projection_function_handle = function_handles[0];
+
+        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+
+        let light_clip_space_position_expr_handle = SourceCodeFunctions::generate_call(
+            &mut vertex_function.body,
+            &mut vertex_function.expressions,
+            projection_function_handle,
+            vec![self.translation, self.scaling, position_expr_handle],
+        );
+
+        let unity_constant_expr = include_expr_in_func(
+            vertex_function,
+            Expression::Constant(define_constant_if_missing(
+                &mut module.constants,
+                float32_constant(1.0),
+            )),
+        );
+
+        emit_in_func(vertex_function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Compose {
+                    ty: vec4_type_handle,
+                    components: vec![light_clip_space_position_expr_handle, unity_constant_expr],
+                },
+            )
+        })
+    }
+}
+
 impl LightFieldExpressions {
-    fn generate_point_light_code(
+    pub fn generate_point_light_code(
         fragment_function: &mut Function,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
@@ -1550,18 +1727,52 @@ impl LightFieldExpressions {
         ))
     }
 
-    fn generate_directional_light_code(
+    pub fn generate_directional_light_code(
         vertex_function: &mut Function,
         fragment_function: Option<&mut Function>,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
+        shadow_map: Option<SampledTexture>,
     ) -> Self {
         Self::DirectionalLight(DirectionalLightFieldExpressions::generate_code(
             vertex_function,
             fragment_function,
             lights_struct_var_handle,
             active_light_idx_var_handle,
+            shadow_map,
         ))
+    }
+
+    pub fn try_get_projection_to_light_clip_space(&self) -> Result<ProjectionExpressions> {
+        if let Self::DirectionalLight(directional_light_field_expressions) = self {
+            Ok(directional_light_field_expressions.get_projection_to_light_clip_space())
+        } else {
+            Err(anyhow!(
+                "Requested projection for point light in shader (unsupported)"
+            ))
+        }
+    }
+
+    pub fn generate_vertex_output_code(
+        &self,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        output_struct_builder: &mut OutputStructBuilder,
+        mesh_output_field_indices: &MeshVertexOutputFieldIndices,
+    ) -> LightVertexOutputFieldIndices {
+        match self {
+            Self::PointLight(_) => LightVertexOutputFieldIndices {
+                light_clip_position: None,
+            },
+            Self::DirectionalLight(directional_light_field_expressions) => {
+                directional_light_field_expressions.generate_vertex_output_code(
+                    module,
+                    vertex_function,
+                    output_struct_builder,
+                    mesh_output_field_indices,
+                )
+            }
+        }
     }
 
     fn generate_active_light_ptr_expr(
@@ -1657,7 +1868,7 @@ impl LightFieldExpressions {
 }
 
 impl PointLightFieldExpressions {
-    fn generate_code(
+    pub fn generate_code(
         fragment_function: &mut Function,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
@@ -1673,7 +1884,7 @@ impl PointLightFieldExpressions {
 }
 
 impl PointLightFieldFragmentExpressions {
-    fn generate_code(
+    pub fn generate_code(
         fragment_function: &mut Function,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
@@ -1701,11 +1912,12 @@ impl PointLightFieldFragmentExpressions {
 }
 
 impl DirectionalLightFieldExpressions {
-    fn generate_code(
+    pub fn generate_code(
         vertex_function: &mut Function,
         fragment_function: Option<&mut Function>,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
+        shadow_map: Option<SampledTexture>,
     ) -> Self {
         Self {
             in_vertex_function: DirectionalLightVertexFieldExpressions::generate_code(
@@ -1718,14 +1930,84 @@ impl DirectionalLightFieldExpressions {
                     fragment_function,
                     lights_struct_var_handle,
                     active_light_idx_var_handle,
+                    shadow_map.unwrap(),
                 )
             }),
         }
     }
+
+    pub fn generate_vertex_output_code(
+        &self,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        output_struct_builder: &mut OutputStructBuilder,
+        mesh_output_field_indices: &MeshVertexOutputFieldIndices,
+    ) -> LightVertexOutputFieldIndices {
+        let function_handles = SourceCodeFunctions::from_wgsl_source(
+            "\
+            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
+                let tmp = 2.0 * cross(quaternion.xyz, vector);
+                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
+            }
+
+            fn transformCameraSpacePositionToDirectionalLightClipSpace(
+                cameraToLightRotationQuaternion: vec4<f32>,
+                orthographicTranslation: vec3<f32>,
+                orthographicScaling: vec3<f32>,
+                cameraSpacePosition: vec3<f32>
+            ) -> vec3<f32> {
+                let lightSpacePosition = rotateVectorWithQuaternion(cameraToLightRotationQuaternion, cameraSpacePosition);
+                return (lightSpacePosition + orthographicTranslation) * orthographicScaling;
+            }
+        ",
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let light_clip_space_transformation_function_handle = function_handles[1];
+
+        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+
+        let camera_space_position_expr_handle = output_struct_builder
+            .get_field_expr(
+                mesh_output_field_indices
+                    .position
+                    .expect("Missing position for shading with directional light"),
+            )
+            .unwrap();
+
+        let light_clip_space_position_expr_handle = SourceCodeFunctions::generate_call(
+            &mut vertex_function.body,
+            &mut vertex_function.expressions,
+            light_clip_space_transformation_function_handle,
+            vec![
+                self.in_vertex_function
+                    .camera_to_light_space_rotation_quaternion,
+                self.in_vertex_function.orthographic_projection.translation,
+                self.in_vertex_function.orthographic_projection.scaling,
+                camera_space_position_expr_handle,
+            ],
+        );
+
+        LightVertexOutputFieldIndices {
+            light_clip_position: Some(
+                output_struct_builder.add_field_with_perspective_interpolation(
+                    "lightClipSpacePosition",
+                    vec3_type_handle,
+                    VECTOR_3_SIZE,
+                    light_clip_space_position_expr_handle,
+                ),
+            ),
+        }
+    }
+
+    fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
+        self.in_vertex_function.get_projection_to_light_clip_space()
+    }
 }
 
 impl DirectionalLightVertexFieldExpressions {
-    fn generate_code(
+    pub fn generate_code(
         vertex_function: &mut Function,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
@@ -1755,19 +2037,28 @@ impl DirectionalLightVertexFieldExpressions {
             4,
         );
 
+        let orthographic_projection = DirectionalLightProjectionExpressions {
+            translation: orthographic_translation,
+            scaling: orthographic_scaling,
+        };
+
         Self {
             camera_to_light_space_rotation_quaternion,
-            orthographic_translation,
-            orthographic_scaling,
+            orthographic_projection,
         }
+    }
+
+    pub fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
+        ProjectionExpressions::DirectionalLight(self.orthographic_projection.clone())
     }
 }
 
 impl DirectionalLightFragmentFieldExpressions {
-    fn generate_code(
+    pub fn generate_code(
         fragment_function: &mut Function,
         lights_struct_var_handle: Handle<GlobalVariable>,
         active_light_idx_var_handle: Handle<GlobalVariable>,
+        shadow_map: SampledTexture,
     ) -> Self {
         let active_light_ptr_expr_handle = LightFieldExpressions::generate_active_light_ptr_expr(
             fragment_function,
@@ -1790,6 +2081,7 @@ impl DirectionalLightFragmentFieldExpressions {
         Self {
             camera_space_direction,
             radiance,
+            shadow_map,
         }
     }
 }
@@ -1800,7 +2092,7 @@ impl InputStruct {
     ///
     /// # Panics
     /// If the index is out of bounds.
-    fn get_field_expr_handle(&self, idx: usize) -> Handle<Expression> {
+    pub fn get_field_expr_handle(&self, idx: usize) -> Handle<Expression> {
         self.input_field_expr_handles[idx]
     }
 }
@@ -1809,14 +2101,14 @@ impl InputStructBuilder {
     /// Creates a builder for an input struct with the given
     /// type name and name to use when including the struct
     /// as an input argument.
-    fn new<S: ToString, T: ToString>(type_name: S, input_arg_name: T) -> Self {
+    pub fn new<S: ToString, T: ToString>(type_name: S, input_arg_name: T) -> Self {
         Self {
             builder: StructBuilder::new(type_name),
             input_arg_name: input_arg_name.to_string(),
         }
     }
 
-    fn n_fields(&self) -> usize {
+    pub fn n_fields(&self) -> usize {
         self.builder.n_fields()
     }
 
@@ -1828,7 +2120,7 @@ impl InputStructBuilder {
     ///
     /// # Returns
     /// The index of the added field.
-    fn add_field<S: ToString>(
+    pub fn add_field<S: ToString>(
         &mut self,
         name: S,
         type_handle: Handle<Type>,
@@ -1853,7 +2145,7 @@ impl InputStructBuilder {
     /// # Returns
     /// An [`InputStruct`] holding the expression for accessing
     /// each field in the body of the function.
-    fn generate_input_code(
+    pub fn generate_input_code(
         self,
         types: &mut UniqueArena<Type>,
         function: &mut Function,
@@ -1889,12 +2181,18 @@ impl InputStructBuilder {
 impl OutputStructBuilder {
     /// Creates a builder for an output struct with the given
     /// type name.
-    fn new<S: ToString>(type_name: S) -> Self {
+    pub fn new<S: ToString>(type_name: S) -> Self {
         Self {
             builder: StructBuilder::new(type_name),
             input_expr_handles: Vec::new(),
             location: 0,
         }
+    }
+
+    /// Returns the expression for the field with the given index, or [`None`]
+    /// if no field exists for the index.
+    pub fn get_field_expr(&self, field_idx: usize) -> Option<Handle<Expression>> {
+        self.input_expr_handles.get(field_idx).copied()
     }
 
     /// Adds a new struct field.
@@ -1908,7 +2206,7 @@ impl OutputStructBuilder {
     ///
     /// # Returns
     /// The index of the added field.
-    fn add_field<S: ToString>(
+    pub fn add_field<S: ToString>(
         &mut self,
         name: S,
         type_handle: Handle<Type>,
@@ -1948,7 +2246,7 @@ impl OutputStructBuilder {
     ///
     /// # Returns
     /// The index of the added field.
-    fn add_field_with_perspective_interpolation<S: ToString>(
+    pub fn add_field_with_perspective_interpolation<S: ToString>(
         &mut self,
         name: S,
         type_handle: Handle<Type>,
@@ -1973,7 +2271,7 @@ impl OutputStructBuilder {
     ///
     /// # Returns
     /// The index of the added field.
-    fn add_builtin_position_field<S: ToString>(
+    pub fn add_builtin_position_field<S: ToString>(
         &mut self,
         name: S,
         type_handle: Handle<Type>,
@@ -1996,7 +2294,7 @@ impl OutputStructBuilder {
     /// and generates statements assigning a value to each field
     /// using the expression provided when the field was added,
     /// followed by a return statement.
-    fn generate_output_code(self, types: &mut UniqueArena<Type>, function: &mut Function) {
+    pub fn generate_output_code(self, types: &mut UniqueArena<Type>, function: &mut Function) {
         let output_type_handle = insert_in_arena(types, self.builder.into_type());
 
         function.result = Some(FunctionResult {
@@ -2060,7 +2358,7 @@ impl OutputStructBuilder {
     /// # Returns
     /// An [`InputStruct`] holding the expression for accessing
     /// each field in the body of the function.
-    fn generate_input_code(
+    pub fn generate_input_code(
         self,
         types: &mut UniqueArena<Type>,
         function: &mut Function,
@@ -2076,7 +2374,7 @@ impl OutputStructBuilder {
 impl StructBuilder {
     /// Creates a new builder for a struct with the given type
     /// name.
-    fn new<S: ToString>(type_name: S) -> Self {
+    pub fn new<S: ToString>(type_name: S) -> Self {
         Self {
             type_name: type_name.to_string(),
             fields: Vec::new(),
@@ -2084,7 +2382,7 @@ impl StructBuilder {
         }
     }
 
-    fn n_fields(&self) -> usize {
+    pub fn n_fields(&self) -> usize {
         self.fields.len()
     }
 
@@ -2092,7 +2390,7 @@ impl StructBuilder {
     ///
     /// # Returns
     /// The index of the added field.
-    fn add_field<S: ToString>(
+    pub fn add_field<S: ToString>(
         &mut self,
         name: S,
         type_handle: Handle<Type>,
@@ -2114,7 +2412,7 @@ impl StructBuilder {
     }
 
     /// Creates a struct [`Type`] from the builder.
-    fn into_type(self) -> Type {
+    pub fn into_type(self) -> Type {
         Type {
             name: Some(self.type_name),
             inner: TypeInner::Struct {
@@ -2132,16 +2430,22 @@ impl SampledTexture {
     /// # Returns
     /// A new [`SampledTexture`] with handles to the declared
     /// variables.
-    fn declare(
+    pub fn declare(
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
+        texture_type: TextureType,
         name: &'static str,
         group: u32,
         texture_binding: u32,
         sampler_binding: u32,
     ) -> Self {
-        let texture_type_handle = insert_in_arena(types, IMAGE_TEXTURE_TYPE);
-        let sampler_type_handle = insert_in_arena(types, IMAGE_TEXTURE_SAMPLER_TYPE);
+        let (texture_type_const, sampler_type_const) = match texture_type {
+            TextureType::Image => (IMAGE_TEXTURE_TYPE, IMAGE_TEXTURE_SAMPLER_TYPE),
+            TextureType::Depth => (DEPTH_TEXTURE_TYPE, COMPARISON_SAMPLER_TYPE),
+        };
+
+        let texture_type_handle = insert_in_arena(types, texture_type_const);
+        let sampler_type_handle = insert_in_arena(types, sampler_type_const);
 
         let texture_var_handle = append_to_arena(
             global_variables,
@@ -2177,12 +2481,15 @@ impl SampledTexture {
         }
     }
 
-    /// Generates and returns an expression sampling the texture at
-    /// the texture coordinates specified by the given expression.
-    fn generate_sampling_expr(
+    /// Generates and returns an expression sampling the texture at the texture
+    /// coordinates specified by the given expression. If sampling a depth
+    /// texture, a reference depth must also be provided for the comparison
+    /// sampling.
+    pub fn generate_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr_handle: Handle<Expression>,
+        depth_reference_expr_handle: Option<Handle<Expression>>,
     ) -> Handle<Expression> {
         let texture_var_expr_handle = include_expr_in_func(
             function,
@@ -2205,7 +2512,7 @@ impl SampledTexture {
                     array_index: None,
                     offset: None,
                     level: SampleLevel::Auto,
-                    depth_ref: None,
+                    depth_ref: depth_reference_expr_handle,
                 },
             )
         });
@@ -2216,16 +2523,50 @@ impl SampledTexture {
     /// Generates and returns an expression sampling the texture at
     /// the texture coordinates specified by the given expression,
     /// and extracting the RGB values of the sampled RGBA color.
-    fn generate_rgb_sampling_expr(
+    pub fn generate_rgb_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr_handle: Handle<Expression>,
     ) -> Handle<Expression> {
-        let sampling_expr_handle = self.generate_sampling_expr(function, texture_coord_expr_handle);
+        let sampling_expr_handle =
+            self.generate_sampling_expr(function, texture_coord_expr_handle, None);
 
         emit_in_func(function, |function| {
             include_expr_in_func(function, swizzle_xyz_expr(sampling_expr_handle))
         })
+    }
+
+    /// Generates and returns an expression comparison sampling the depth
+    /// texture with the x- and y-component of the given light clip space
+    /// position as texture coordinates and the z-component as the reference
+    /// depth.
+    pub fn generate_shadow_map_sampling_expr(
+        &self,
+        function: &mut Function,
+        light_clip_position_expr_handle: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let (texture_coord_expr_handle, depth_reference_expr_handle) =
+            emit_in_func(function, |function| {
+                (
+                    include_expr_in_func(
+                        function,
+                        swizzle_xy_expr(light_clip_position_expr_handle),
+                    ),
+                    include_expr_in_func(
+                        function,
+                        Expression::AccessIndex {
+                            base: light_clip_position_expr_handle,
+                            index: 2,
+                        },
+                    ),
+                )
+            });
+
+        self.generate_sampling_expr(
+            function,
+            texture_coord_expr_handle,
+            Some(depth_reference_expr_handle),
+        )
     }
 }
 
@@ -2926,6 +3267,19 @@ fn swizzle_xyz_expr(expr_handle: Handle<Expression>) -> Expression {
     }
 }
 
+fn swizzle_xy_expr(expr_handle: Handle<Expression>) -> Expression {
+    Expression::Swizzle {
+        size: VectorSize::Bi,
+        vector: expr_handle,
+        pattern: [
+            SwizzleComponent::X,
+            SwizzleComponent::Y,
+            SwizzleComponent::X,
+            SwizzleComponent::X,
+        ],
+    }
+}
+
 /// Inserts the given value in the given [`UniqueArena`]
 /// if it is not already present.
 ///
@@ -2962,23 +3316,6 @@ fn define_constant_if_missing(
     constant: Constant,
 ) -> Handle<Constant> {
     constants.fetch_or_append(constant, Span::UNDEFINED)
-}
-
-/// Executes the given closure that adds [`Expression`]s to
-/// the given [`Arena`] before pushing to the given [`Block`]
-/// a [`Statement::Emit`] emitting the range of added expressions.
-///
-/// # Returns
-/// The value returned from the closure.
-fn emit<T>(
-    block: &mut Block,
-    arena: &mut Arena<Expression>,
-    add_expressions: impl FnOnce(&mut Arena<Expression>) -> T,
-) -> T {
-    let start_length = arena.len();
-    let ret = add_expressions(arena);
-    push_to_block(block, Statement::Emit(arena.range_from(start_length)));
-    ret
 }
 
 /// Executes the given closure that adds [`Expression`]s to the given
@@ -3192,6 +3529,27 @@ mod test {
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             None,
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
+            None,
+            VertexAttributeSet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_directional_light_shadow_map_update_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            Some(&DIRECTIONAL_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),

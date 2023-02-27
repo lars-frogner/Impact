@@ -119,7 +119,10 @@ impl ShadowMapTexture {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
-            compare: Some(wgpu::CompareFunction::LessEqual),
+            // The result of the comparison sampling will be 1.0 if the sampled
+            // depth is greater than or equal to the reference depth (meaning
+            // that the fragment is not occluded), and 0.0 otherwise.
+            compare: Some(wgpu::CompareFunction::GreaterEqual),
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             ..Default::default()

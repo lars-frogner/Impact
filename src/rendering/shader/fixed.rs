@@ -3,7 +3,7 @@
 
 use super::{
     insert_in_arena, new_name, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    SampledTexture, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    SampledTexture, TextureType, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{Function, Interpolation, Module, Sampling};
 
@@ -154,6 +154,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
         let color_texture = SampledTexture::declare(
             &mut module.types,
             &mut module.global_variables,
+            TextureType::Image,
             "color",
             bind_group,
             color_texture_binding,
@@ -167,6 +168,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
                     .texture_coords
                     .expect("No `texture_coords` passed to fixed texture fragment shader"),
             ),
+            None,
         );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
