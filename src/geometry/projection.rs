@@ -22,9 +22,14 @@ use std::fmt::Debug;
 pub struct PerspectiveTransform<F: Float> {
     matrix: Matrix4<F>,
 }
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct OrthographicTransform<F: Float> {
+    matrix: Matrix4<F>,
+}
 
 impl<F: Float> PerspectiveTransform<F> {
-    /// Creates a new perspective camera.
+    /// Creates a new perspective transformation.
     ///
     /// # Note
     /// `aspect_ratio` is the ratio of width to height of the view plane.
@@ -112,12 +117,12 @@ impl<F: Float> PerspectiveTransform<F> {
     ///
     /// # Panics
     /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle<F>>(&mut self, fov: A) {
-        let fov = fov.radians();
-        assert_abs_diff_ne!(fov, F::ZERO);
+    pub fn set_vertical_field_of_view<A: Angle<F>>(&mut self, vertical_field_of_view: A) {
+        let vertical_field_of_view = vertical_field_of_view.radians();
+        assert_abs_diff_ne!(vertical_field_of_view, F::ZERO);
 
         let old_m22 = self.matrix.m22;
-        let new_m22 = F::ONE / F::tan(F::ONE_HALF * fov);
+        let new_m22 = F::ONE / F::tan(F::ONE_HALF * vertical_field_of_view);
         self.matrix.m22 = new_m22;
         self.matrix.m11 *= new_m22 / old_m22;
     }
@@ -133,8 +138,110 @@ impl<F: Float> PerspectiveTransform<F> {
     }
 }
 
+impl<F: Float> OrthographicTransform<F> {
+    /// Creates a new orthographic transformation.
+    ///
+    /// # Panics
+    /// If the extent of the view box along any axis is zero.
+    pub fn new(left: F, right: F, bottom: F, top: F, near: F, far: F) -> Self {
+        let mut transform = Self {
+            matrix: Matrix4::identity(),
+        };
+
+        transform.set_left_and_right(left, right);
+        transform.set_bottom_and_top(bottom, top);
+        transform.set_near_and_far(near, far);
+
+        transform
+    }
+
+    /// Creates a new orthographic transformation.
+    ///
+    /// # Note
+    /// `aspect_ratio` is the ratio of width to height of the view plane.
+    ///
+    /// # Panics
+    /// If `aspect_ratio` or `vertical_field_of_view` is zero
+    pub fn with_field_of_view<A: Angle<F>>(
+        aspect_ratio: F,
+        vertical_field_of_view: A,
+        near_and_far_distance: UpperExclusiveBounds<F>,
+    ) -> Self {
+        let vertical_field_of_view = vertical_field_of_view.radians();
+        assert_abs_diff_ne!(vertical_field_of_view, F::ZERO);
+        assert_abs_diff_ne!(aspect_ratio, F::zero());
+
+        let (near_distance, far_distance) = near_and_far_distance.bounds();
+        let half_height = far_distance * F::tan(vertical_field_of_view);
+        let half_width = half_height / aspect_ratio;
+
+        Self::new(
+            -half_width,
+            half_width,
+            -half_height,
+            half_height,
+            near_distance,
+            far_distance,
+        )
+    }
+
+    /// Returns a reference to orthographic transformation seen as a
+    /// [`Projective3`].
+    pub fn as_projective(&self) -> &Projective3<F> {
+        unsafe { &*(self as *const Self).cast::<Projective3<F>>() }
+    }
+
+    /// Returns the orthographic transformation as a [`Projective3`].
+    pub fn to_projective(self) -> Projective3<F> {
+        Projective3::from_matrix_unchecked(self.matrix)
+    }
+
+    pub fn transform_point(&self, point: &Point3<F>) -> Point3<F> {
+        Point3::new(
+            self.matrix.m11 * point.x + self.matrix.m14,
+            self.matrix.m22 * point.y + self.matrix.m24,
+            self.matrix.m33 * point.z + self.matrix.m34,
+        )
+    }
+
+    pub fn transform_vector(&self, vector: &Vector3<F>) -> Vector3<F> {
+        Vector3::new(
+            self.matrix.m11 * vector.x,
+            self.matrix.m22 * vector.y,
+            self.matrix.m33 * vector.z,
+        )
+    }
+
+    pub fn set_left_and_right(&mut self, left: F, right: F) {
+        assert_abs_diff_ne!(left, right);
+        let translation_x = -F::ONE_HALF * (left + right);
+        let scaling_x = -F::TWO / (right - left);
+        self.matrix.m11 = scaling_x;
+        self.matrix.m14 = scaling_x * translation_x;
+    }
+
+    pub fn set_bottom_and_top(&mut self, bottom: F, top: F) {
+        assert_abs_diff_ne!(bottom, top);
+        let translation_y = -F::ONE_HALF * (bottom + top);
+        let scaling_y = F::TWO / (top - bottom);
+        self.matrix.m22 = scaling_y;
+        self.matrix.m24 = scaling_y * translation_y;
+    }
+
+    pub fn set_near_and_far(&mut self, near: F, far: F) {
+        assert_abs_diff_ne!(near, far);
+        let translation_z = near;
+        let scaling_z = -F::ONE / (far - near);
+        self.matrix.m33 = scaling_z;
+        self.matrix.m34 = scaling_z * translation_z;
+    }
+}
+
 unsafe impl<F: Float> Zeroable for PerspectiveTransform<F> {}
 unsafe impl<F: Float> Pod for PerspectiveTransform<F> {}
+
+unsafe impl<F: Float> Zeroable for OrthographicTransform<F> {}
+unsafe impl<F: Float> Pod for OrthographicTransform<F> {}
 
 #[cfg(test)]
 mod test {

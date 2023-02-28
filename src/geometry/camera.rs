@@ -2,35 +2,14 @@
 
 use crate::{
     geometry::{
-        Angle, Bounds, EntityChangeTracker, Frustum, PerspectiveTransform, Radians,
-        UpperExclusiveBounds,
+        Angle, Bounds, EntityChangeTracker, Frustum, OrthographicTransform, PerspectiveTransform,
+        Radians, UpperExclusiveBounds,
     },
     num::Float,
 };
 use approx::assert_abs_diff_ne;
-use nalgebra::{Orthographic3, Projective3};
+use nalgebra::Projective3;
 use std::fmt::Debug;
-
-/// 3D camera using a perspective transformation.
-#[derive(Debug)]
-pub struct PerspectiveCamera<F: Float> {
-    perspective_transform: PerspectiveTransform<F>,
-    view_frustum: Frustum<F>,
-    /// Tracker for whether the projection transform has changed.
-    projection_transform_change_tracker: EntityChangeTracker,
-}
-
-/// 3D camera using an orthographic transformation.
-#[derive(Debug)]
-pub struct OrthographicCamera<F: Float> {
-    aspect_ratio: F,
-    vertical_field_of_view: Radians<F>,
-    near_and_far_distance: UpperExclusiveBounds<F>,
-    orthographic_transform: Orthographic3<F>,
-    view_frustum: Frustum<F>,
-    /// Tracker for whether the projection transform has changed.
-    projection_transform_change_tracker: EntityChangeTracker,
-}
 
 /// Represents a 3D camera.
 pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
@@ -56,6 +35,27 @@ pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
 
     /// Forgets any recorded changes to the projection transform.
     fn reset_projection_change_tracking(&self);
+}
+
+/// 3D camera using a perspective transformation.
+#[derive(Debug)]
+pub struct PerspectiveCamera<F: Float> {
+    perspective_transform: PerspectiveTransform<F>,
+    view_frustum: Frustum<F>,
+    /// Tracker for whether the projection transform has changed.
+    projection_transform_change_tracker: EntityChangeTracker,
+}
+
+/// 3D camera using an orthographic transformation.
+#[derive(Debug)]
+pub struct OrthographicCamera<F: Float> {
+    aspect_ratio: F,
+    vertical_field_of_view: Radians<F>,
+    near_and_far_distance: UpperExclusiveBounds<F>,
+    orthographic_transform: OrthographicTransform<F>,
+    view_frustum: Frustum<F>,
+    /// Tracker for whether the projection transform has changed.
+    projection_transform_change_tracker: EntityChangeTracker,
 }
 
 impl<F: Float> PerspectiveCamera<F> {
@@ -159,21 +159,17 @@ impl<F: Float> OrthographicCamera<F> {
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<F>,
     ) -> Self {
-        let vertical_field_of_view = vertical_field_of_view.as_radians();
-
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
-        assert_abs_diff_ne!(vertical_field_of_view, Radians::zero());
-
-        let orthographic_transform = Self::create_orthographic_transform_with_inverted_x(
+        let orthographic_transform = OrthographicTransform::with_field_of_view(
             aspect_ratio,
             vertical_field_of_view,
-            &near_and_far_distance,
+            near_and_far_distance.clone(),
         );
+
         let view_frustum = Frustum::from_transform(orthographic_transform.as_projective());
 
         Self {
             aspect_ratio,
-            vertical_field_of_view,
+            vertical_field_of_view: vertical_field_of_view.as_radians(),
             near_and_far_distance,
             orthographic_transform,
             view_frustum,
@@ -213,32 +209,13 @@ impl<F: Float> OrthographicCamera<F> {
     }
 
     fn update_projection_transform_and_frustum(&mut self) {
-        self.orthographic_transform = Self::create_orthographic_transform_with_inverted_x(
+        self.orthographic_transform = OrthographicTransform::with_field_of_view(
             self.aspect_ratio,
             self.vertical_field_of_view,
-            &self.near_and_far_distance,
+            self.near_and_far_distance.clone(),
         );
         self.view_frustum = Frustum::from_transform(self.orthographic_transform.as_projective());
         self.projection_transform_change_tracker.notify_change();
-    }
-
-    fn create_orthographic_transform_with_inverted_x(
-        aspect_ratio: F,
-        vertical_field_of_view: Radians<F>,
-        near_and_far_distance: &UpperExclusiveBounds<F>,
-    ) -> Orthographic3<F> {
-        let mut orthographic_transform = Orthographic3::from_fov(
-            aspect_ratio,
-            vertical_field_of_view.radians(),
-            near_and_far_distance.lower(),
-            near_and_far_distance.upper(),
-        );
-        // Swap left and right
-        orthographic_transform.set_left_and_right(
-            orthographic_transform.right(),
-            orthographic_transform.left(),
-        );
-        orthographic_transform
     }
 }
 
