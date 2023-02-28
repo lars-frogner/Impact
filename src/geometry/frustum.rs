@@ -10,7 +10,7 @@ use crate::{
 use approx::AbsDiffEq;
 use nalgebra::{
     self as na, point, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion,
-    UnitVector3, Vector3,
+    UnitVector3,
 };
 
 /// A frustum, which in general is a pyramid truncated at the
@@ -38,23 +38,6 @@ impl<F: Float> Frustum<F> {
             planes: Self::planes_from_transform_matrix(transform.matrix()),
             transform_matrix: transform.to_homogeneous(),
             inverse_transform_matrix: transform.inverse().to_homogeneous(),
-        }
-    }
-
-    /// Creates the frustum representing the clip space of the identity
-    /// transform, which is the cube spanning from -1 to 1 in each dimension.
-    pub fn for_identity_transform() -> Self {
-        Self {
-            planes: [
-                Plane::new(Vector3::x_axis(), F::ONE),
-                Plane::new(-Vector3::x_axis(), F::ONE),
-                Plane::new(Vector3::y_axis(), F::ONE),
-                Plane::new(-Vector3::y_axis(), F::ONE),
-                Plane::new(Vector3::z_axis(), F::ONE),
-                Plane::new(-Vector3::z_axis(), F::ONE),
-            ],
-            transform_matrix: Matrix4::identity(),
-            inverse_transform_matrix: Matrix4::identity(),
         }
     }
 
@@ -186,19 +169,19 @@ impl<F: Float> Frustum<F> {
     pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
         let corners = [
             self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, -F::ONE, -F::ONE]),
+                .transform_point(&point![-F::ONE, -F::ONE, F::ZERO]),
             self.inverse_transform_matrix
                 .transform_point(&point![-F::ONE, -F::ONE, F::ONE]),
             self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, F::ONE, -F::ONE]),
+                .transform_point(&point![-F::ONE, F::ONE, F::ZERO]),
             self.inverse_transform_matrix
                 .transform_point(&point![-F::ONE, F::ONE, F::ONE]),
             self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, -F::ONE, -F::ONE]),
+                .transform_point(&point![F::ONE, -F::ONE, F::ZERO]),
             self.inverse_transform_matrix
                 .transform_point(&point![F::ONE, -F::ONE, F::ONE]),
             self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, F::ONE, -F::ONE]),
+                .transform_point(&point![F::ONE, F::ONE, F::ZERO]),
             self.inverse_transform_matrix
                 .transform_point(&point![F::ONE, F::ONE, F::ONE]),
         ];
@@ -262,52 +245,52 @@ impl<F: Float> Frustum<F> {
     /// the axis of the plane normal (0 => x, 1 => y, 2 => z)
     /// and the offset of the plane along that axis, respectively.
     const CUBE_PLANES_NDC: [(usize, F); 6] = [
-        (0, F::NEG_ONE),
+        // x is flipped, so left plane has 1.0 NDC and right has -1.0
         (0, F::ONE),
+        (0, F::NEG_ONE),
         (1, F::NEG_ONE),
         (1, F::ONE),
-        (2, F::NEG_ONE),
+        (2, F::ZERO),
         (2, F::ONE),
     ];
 
     fn planes_from_transform_matrix(transform_matrix: &Matrix4<F>) -> [Plane<F>; 6] {
         let m = transform_matrix;
 
+        // We swap the left and right plane here to account for that the
+        // projection matrix flips the x-axis
         let left = Self::plane_from_unnormalized_coefficients(
-            m[(3, 0)] + m[(0, 0)],
-            m[(3, 1)] + m[(0, 1)],
-            m[(3, 2)] + m[(0, 2)],
-            m[(3, 3)] + m[(0, 3)],
+            m.m41 - m.m11,
+            m.m42 - m.m12,
+            m.m43 - m.m13,
+            -(m.m44 - m.m14),
         );
         let right = Self::plane_from_unnormalized_coefficients(
-            m[(3, 0)] - m[(0, 0)],
-            m[(3, 1)] - m[(0, 1)],
-            m[(3, 2)] - m[(0, 2)],
-            m[(3, 3)] - m[(0, 3)],
+            m.m41 + m.m11,
+            m.m42 + m.m12,
+            m.m43 + m.m13,
+            -(m.m44 + m.m14),
         );
+
         let bottom = Self::plane_from_unnormalized_coefficients(
-            m[(3, 0)] + m[(1, 0)],
-            m[(3, 1)] + m[(1, 1)],
-            m[(3, 2)] + m[(1, 2)],
-            m[(3, 3)] + m[(1, 3)],
+            m.m41 + m.m21,
+            m.m42 + m.m22,
+            m.m43 + m.m23,
+            -(m.m44 + m.m24),
         );
         let top = Self::plane_from_unnormalized_coefficients(
-            m[(3, 0)] - m[(1, 0)],
-            m[(3, 1)] - m[(1, 1)],
-            m[(3, 2)] - m[(1, 2)],
-            m[(3, 3)] - m[(1, 3)],
+            m.m41 - m.m21,
+            m.m42 - m.m22,
+            m.m43 - m.m23,
+            -(m.m44 - m.m24),
         );
-        let near = Self::plane_from_unnormalized_coefficients(
-            m[(3, 0)] + m[(2, 0)],
-            m[(3, 1)] + m[(2, 1)],
-            m[(3, 2)] + m[(2, 2)],
-            m[(3, 3)] + m[(2, 3)],
-        );
+
+        let near = Self::plane_from_unnormalized_coefficients(m.m31, m.m32, m.m33, -m.m34);
         let far = Self::plane_from_unnormalized_coefficients(
-            m[(3, 0)] - m[(2, 0)],
-            m[(3, 1)] - m[(2, 1)],
-            m[(3, 2)] - m[(2, 2)],
-            m[(3, 3)] - m[(2, 3)],
+            m.m41 - m.m31,
+            m.m42 - m.m32,
+            m.m43 - m.m33,
+            -(m.m44 - m.m34),
         );
 
         [left, right, bottom, top, near, far]
@@ -364,118 +347,15 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::geometry::OrthographicTransform;
     use approx::assert_abs_diff_eq;
-    use nalgebra::{point, Perspective3, Rotation3, Scale3, Translation3, Vector3};
-
-    #[test]
-    fn creating_frustum_for_identity_transform_works() {
-        // Should give axis aligned cube with walls at +-1.0
-        let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
-
-        assert_abs_diff_eq!(frustum.left_plane().unit_normal(), &Vector3::x_axis());
-        assert_abs_diff_eq!(frustum.left_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.right_plane().unit_normal(), &(-Vector3::x_axis()));
-        assert_abs_diff_eq!(frustum.right_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.bottom_plane().unit_normal(), &Vector3::y_axis());
-        assert_abs_diff_eq!(frustum.bottom_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.top_plane().unit_normal(), &(-Vector3::y_axis()));
-        assert_abs_diff_eq!(frustum.top_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.near_plane().unit_normal(), &Vector3::z_axis());
-        assert_abs_diff_eq!(frustum.near_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.far_plane().unit_normal(), &(-Vector3::z_axis()));
-        assert_abs_diff_eq!(frustum.far_plane().displacement(), 1.0);
-    }
-
-    #[test]
-    fn creating_frustum_for_translation_transform_works() {
-        let dx = 1.2;
-        let dy = 5.3;
-        let dz = -0.1;
-
-        let frustum =
-            Frustum::<f64>::from_transform_matrix(Translation3::new(dx, dy, dz).to_homogeneous());
-
-        assert_abs_diff_eq!(frustum.left_plane().unit_normal(), &Vector3::x_axis());
-        assert_abs_diff_eq!(frustum.left_plane().displacement(), 1.0 + dx);
-
-        assert_abs_diff_eq!(frustum.right_plane().unit_normal(), &(-Vector3::x_axis()));
-        assert_abs_diff_eq!(frustum.right_plane().displacement(), 1.0 - dx);
-
-        assert_abs_diff_eq!(frustum.bottom_plane().unit_normal(), &Vector3::y_axis());
-        assert_abs_diff_eq!(frustum.bottom_plane().displacement(), 1.0 + dy);
-
-        assert_abs_diff_eq!(frustum.top_plane().unit_normal(), &(-Vector3::y_axis()));
-        assert_abs_diff_eq!(frustum.top_plane().displacement(), 1.0 - dy);
-
-        assert_abs_diff_eq!(frustum.near_plane().unit_normal(), &Vector3::z_axis());
-        assert_abs_diff_eq!(frustum.near_plane().displacement(), 1.0 + dz);
-
-        assert_abs_diff_eq!(frustum.far_plane().unit_normal(), &(-Vector3::z_axis()));
-        assert_abs_diff_eq!(frustum.far_plane().displacement(), 1.0 - dz);
-    }
-
-    #[test]
-    fn creating_frustum_for_nonuniform_scale_transform_works() {
-        let sx = 1.2;
-        let sy = 5.3;
-        let sz = 9.1;
-
-        let frustum =
-            Frustum::<f64>::from_transform_matrix(Scale3::new(sx, sy, sz).to_homogeneous());
-
-        assert_abs_diff_eq!(frustum.left_plane().unit_normal(), &Vector3::x_axis());
-        assert_abs_diff_eq!(frustum.left_plane().displacement(), 1.0 / sx);
-
-        assert_abs_diff_eq!(frustum.right_plane().unit_normal(), &(-Vector3::x_axis()));
-        assert_abs_diff_eq!(frustum.right_plane().displacement(), 1.0 / sx);
-
-        assert_abs_diff_eq!(frustum.bottom_plane().unit_normal(), &Vector3::y_axis());
-        assert_abs_diff_eq!(frustum.bottom_plane().displacement(), 1.0 / sy);
-
-        assert_abs_diff_eq!(frustum.top_plane().unit_normal(), &(-Vector3::y_axis()));
-        assert_abs_diff_eq!(frustum.top_plane().displacement(), 1.0 / sy);
-
-        assert_abs_diff_eq!(frustum.near_plane().unit_normal(), &Vector3::z_axis());
-        assert_abs_diff_eq!(frustum.near_plane().displacement(), 1.0 / sz);
-
-        assert_abs_diff_eq!(frustum.far_plane().unit_normal(), &(-Vector3::z_axis()));
-        assert_abs_diff_eq!(frustum.far_plane().displacement(), 1.0 / sz);
-    }
-
-    #[test]
-    fn creating_frustum_for_90_deg_rotation_transform_works() {
-        let frustum = Frustum::<f64>::from_transform_matrix(
-            Rotation3::from_axis_angle(&Vector3::z_axis(), std::f64::consts::FRAC_PI_2)
-                .to_homogeneous(),
-        );
-
-        assert_abs_diff_eq!(frustum.left_plane().unit_normal(), &(-Vector3::y_axis()));
-        assert_abs_diff_eq!(frustum.left_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.right_plane().unit_normal(), &Vector3::y_axis());
-        assert_abs_diff_eq!(frustum.right_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.bottom_plane().unit_normal(), &Vector3::x_axis());
-        assert_abs_diff_eq!(frustum.bottom_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.top_plane().unit_normal(), &(-Vector3::x_axis()));
-        assert_abs_diff_eq!(frustum.top_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.near_plane().unit_normal(), &Vector3::z_axis());
-        assert_abs_diff_eq!(frustum.near_plane().displacement(), 1.0);
-
-        assert_abs_diff_eq!(frustum.far_plane().unit_normal(), &(-Vector3::z_axis()));
-        assert_abs_diff_eq!(frustum.far_plane().displacement(), 1.0);
-    }
+    use nalgebra::{point, Perspective3, Rotation3, Translation3};
 
     #[test]
     fn inside_points_are_reported_as_inside() {
-        let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
         for x in [-0.999, 0.999] {
             for y in [-0.999, 0.999] {
                 for z in [-0.999, 0.999] {
@@ -487,7 +367,9 @@ mod test {
 
     #[test]
     fn outside_points_are_reported_as_outside() {
-        let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
         for x in [-1.001, 1.001] {
             for y in [-1.001, 1.001] {
                 for z in [-1.001, 1.001] {
@@ -499,7 +381,9 @@ mod test {
 
     #[test]
     fn outside_spheres_are_reported_as_outside() {
-        let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
         for x in [-2, 0, 2] {
             for y in [-2, 0, 2] {
                 for z in [-2, 0, 2] {
@@ -525,7 +409,9 @@ mod test {
 
     #[test]
     fn barely_inside_spheres_are_reported_as_not_outside() {
-        let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
         for x in [-2, 0, 2] {
             for y in [-2, 0, 2] {
                 for z in [-2, 0, 2] {
@@ -549,7 +435,9 @@ mod test {
 
     #[test]
     fn centered_spheres_are_reported_as_not_outside() {
-        let frustum = Frustum::<f64>::from_transform_matrix(Matrix4::identity());
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
         for radius in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
             let sphere = Sphere::new(Point3::origin(), radius);
             assert!(!frustum.sphere_lies_outside(&sphere));
