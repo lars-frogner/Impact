@@ -215,7 +215,7 @@ impl RenderPassManager {
             let disable_pass = feature_buffer_manager
                 .first()
                 .unwrap()
-                .vertex_render_buffer()
+                .initial_feature_range()
                 .is_empty();
 
             // Create depth prepasses for new models and update disabled state
