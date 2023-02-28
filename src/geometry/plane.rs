@@ -77,7 +77,7 @@ impl<F: Float> Plane<F> {
     /// point. If the signed distance is negative, the point lies
     /// in the negative halfspace of the plane.
     pub fn compute_signed_distance(&self, point: &Point3<F>) -> F {
-        self.unit_normal().dot(&point.coords) + self.displacement
+        self.unit_normal().dot(&point.coords) - self.displacement
     }
 
     /// Whether the given point is strictly in the positive
@@ -121,7 +121,7 @@ impl<F: Float> Plane<F> {
     /// Computes the plane resulting from transforming this plane with the given
     /// similarity transform.
     pub fn transformed(&self, transformation: &Similarity3<F>) -> Self {
-        let point_in_plane = Point3::from(self.unit_normal.as_ref() * (-self.displacement));
+        let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
         let transformed_point_in_plane = transformation.transform_point(&point_in_plane);
         let transformed_unit_normal = UnitVector3::new_unchecked(
             transformation
@@ -133,7 +133,7 @@ impl<F: Float> Plane<F> {
     }
 
     fn calculate_displacement(unit_normal: &UnitVector3<F>, point_in_plane: &Point3<F>) -> F {
-        -unit_normal.dot(&point_in_plane.coords)
+        unit_normal.dot(&point_in_plane.coords)
     }
 }
 
