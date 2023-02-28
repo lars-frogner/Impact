@@ -1,18 +1,20 @@
 //! Camera types.
 
 use crate::{
-    geometry::{Angle, Bounds, EntityChangeTracker, Frustum, Radians, UpperExclusiveBounds},
+    geometry::{
+        Angle, Bounds, EntityChangeTracker, Frustum, PerspectiveTransform, Radians,
+        UpperExclusiveBounds,
+    },
     num::Float,
 };
 use approx::assert_abs_diff_ne;
-use nalgebra::{Orthographic3, Perspective3, Projective3};
+use nalgebra::{Orthographic3, Projective3};
 use std::fmt::Debug;
 
 /// 3D camera using a perspective transformation.
 #[derive(Debug)]
 pub struct PerspectiveCamera<F: Float> {
-    perspective_transform: Perspective3<F>,
-    projection_transform: Projective3<F>,
+    perspective_transform: PerspectiveTransform<F>,
     view_frustum: Frustum<F>,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
@@ -33,12 +35,6 @@ pub struct OrthographicCamera<F: Float> {
 /// Represents a 3D camera.
 pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
     /// Returns the projection transform used by the camera.
-    ///
-    /// When the projection transform is applied to a point,
-    /// the point is transformed into normalized device
-    /// coordinates. In this coordinate space, the camera
-    /// frustum is a cube enclosing all coordinates ranging
-    /// from -1.0 to 1.0 in x and y and 0.0 to 1.0 in z.
     fn projection_transform(&self) -> &Projective3<F>;
 
     /// Returns the frustum representing the view volume of the
@@ -75,24 +71,13 @@ impl<F: Float> PerspectiveCamera<F> {
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<F>,
     ) -> Self {
-        let vertical_field_of_view = vertical_field_of_view.as_radians();
+        let perspective_transform =
+            PerspectiveTransform::new(aspect_ratio, vertical_field_of_view, near_and_far_distance);
 
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
-        assert_abs_diff_ne!(vertical_field_of_view, Radians::zero());
-
-        let perspective_transform = Self::create_perspective_transform(
-            aspect_ratio,
-            vertical_field_of_view,
-            &near_and_far_distance,
-        );
-        let projection_transform =
-            Self::create_projection_transform_with_inverted_x(&perspective_transform);
-
-        let view_frustum = Frustum::from_transform(&projection_transform);
+        let view_frustum = Frustum::from_transform(perspective_transform.as_projective());
 
         Self {
             perspective_transform,
-            projection_transform,
             view_frustum,
             projection_transform_change_tracker: EntityChangeTracker::default(),
         }
@@ -100,17 +85,17 @@ impl<F: Float> PerspectiveCamera<F> {
 
     /// Returns the vertical field of view angle in radians.
     pub fn vertical_field_of_view(&self) -> Radians<F> {
-        Radians(self.perspective_transform.fovy())
+        self.perspective_transform.vertical_field_of_view()
     }
 
     /// Returns the near distance of the camera.
     pub fn near_distance(&self) -> F {
-        self.perspective_transform.znear()
+        self.perspective_transform.near_distance()
     }
 
     /// Returns the far distance of the camera.
     pub fn far_distance(&self) -> F {
-        self.perspective_transform.zfar()
+        self.perspective_transform.far_distance()
     }
 
     /// Sets the vertical field of view angle.
@@ -118,58 +103,25 @@ impl<F: Float> PerspectiveCamera<F> {
     /// # Panics
     /// If `fov` is zero.
     pub fn set_vertical_field_of_view<A: Angle<F>>(&mut self, fov: A) {
-        let fov = fov.as_radians();
-        assert_abs_diff_ne!(fov, Radians::zero());
-        self.perspective_transform.set_fovy(fov.radians());
-        self.update_projection_transform_and_frustum();
+        self.perspective_transform.set_vertical_field_of_view(fov);
+        self.update_frustum_and_notify_change();
     }
 
     pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
-        let (near_distance, far_distance) = near_and_far_distance.bounds();
         self.perspective_transform
-            .set_znear_and_zfar(near_distance, far_distance);
-        self.update_projection_transform_and_frustum();
+            .set_near_and_far_distance(near_and_far_distance);
+        self.update_frustum_and_notify_change();
     }
 
-    fn update_projection_transform_and_frustum(&mut self) {
-        self.projection_transform =
-            Self::create_projection_transform_with_inverted_x(&self.perspective_transform);
-        self.view_frustum = Frustum::from_transform(&self.projection_transform);
+    fn update_frustum_and_notify_change(&mut self) {
+        self.view_frustum = Frustum::from_transform(self.perspective_transform.as_projective());
         self.projection_transform_change_tracker.notify_change();
-    }
-
-    fn create_perspective_transform(
-        aspect_ratio: F,
-        vertical_field_of_view: Radians<F>,
-        near_and_far_distance: &UpperExclusiveBounds<F>,
-    ) -> Perspective3<F> {
-        Perspective3::new(
-            aspect_ratio,
-            vertical_field_of_view.radians(),
-            near_and_far_distance.lower(),
-            near_and_far_distance.upper(),
-        )
-    }
-
-    /// Creates a [`Projective3`] transform that is equivalent to the given
-    /// [`Perspective3`] transform except that the projected x-coordinates will
-    /// be inverted. This is needed to make it so that points with positive
-    /// x-coordinates in camera space gets projected to the left of the screen
-    /// and vice versa, which is the correct behavior for a camera that looks
-    /// along the negative z-axis.
-    fn create_projection_transform_with_inverted_x(
-        perspective_transform: &Perspective3<F>,
-    ) -> Projective3<F> {
-        let mut projection_transform = perspective_transform.to_projective();
-        projection_transform.matrix_mut_unchecked().m11 *= -F::ONE;
-        assert!(projection_transform.matrix().is_invertible());
-        projection_transform
     }
 }
 
 impl<F: Float> Camera<F> for PerspectiveCamera<F> {
     fn projection_transform(&self) -> &Projective3<F> {
-        &self.projection_transform
+        self.perspective_transform.as_projective()
     }
 
     fn view_frustum(&self) -> &Frustum<F> {
@@ -177,13 +129,12 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
     }
 
     fn aspect_ratio(&self) -> F {
-        self.perspective_transform.aspect()
+        self.perspective_transform.aspect_ratio()
     }
 
     fn set_aspect_ratio(&mut self, aspect_ratio: F) {
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
-        self.perspective_transform.set_aspect(aspect_ratio);
-        self.update_projection_transform_and_frustum();
+        self.perspective_transform.set_aspect_ratio(aspect_ratio);
+        self.update_frustum_and_notify_change();
     }
 
     fn projection_transform_changed(&self) -> bool {
