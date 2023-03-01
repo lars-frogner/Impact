@@ -6,7 +6,7 @@ use crate::{
 };
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Matrix4, Point3, Projective3, Vector3};
+use nalgebra::{Matrix4, Point3, Projective3, Scale3, Translation3, Vector3};
 use std::fmt::Debug;
 
 /// A perspective transformation that maps points in a view frustum pointing
@@ -185,6 +185,31 @@ impl<F: Float> OrthographicTransform<F> {
         )
     }
 
+    /// Computes the translation and nonuniform scaling representing the
+    /// orthographic transformation. Applying the translation followed by the
+    /// scaling corresponds to applying the orthograpic transformation.
+    pub fn compute_orthographic_translation_and_scaling(
+        left: F,
+        right: F,
+        bottom: F,
+        top: F,
+        near: F,
+        far: F,
+    ) -> (Translation3<F>, Scale3<F>) {
+        (
+            Translation3::new(
+                Self::compute_translation_x(left, right),
+                Self::compute_translation_y(bottom, top),
+                Self::compute_translation_z(near, far),
+            ),
+            Scale3::new(
+                Self::compute_scaling_x(left, right),
+                Self::compute_scaling_y(bottom, top),
+                Self::compute_scaling_z(near, far),
+            ),
+        )
+    }
+
     /// Returns a reference to orthographic transformation seen as a
     /// [`Projective3`].
     pub fn as_projective(&self) -> &Projective3<F> {
@@ -214,26 +239,50 @@ impl<F: Float> OrthographicTransform<F> {
 
     pub fn set_left_and_right(&mut self, left: F, right: F) {
         assert_abs_diff_ne!(left, right);
-        let translation_x = -F::ONE_HALF * (left + right);
-        let scaling_x = -F::TWO / (right - left);
+        let translation_x = Self::compute_translation_x(left, right);
+        let scaling_x = Self::compute_scaling_x(left, right);
         self.matrix.m11 = scaling_x;
         self.matrix.m14 = scaling_x * translation_x;
     }
 
     pub fn set_bottom_and_top(&mut self, bottom: F, top: F) {
         assert_abs_diff_ne!(bottom, top);
-        let translation_y = -F::ONE_HALF * (bottom + top);
-        let scaling_y = F::TWO / (top - bottom);
+        let translation_y = Self::compute_translation_y(bottom, top);
+        let scaling_y = Self::compute_scaling_y(bottom, top);
         self.matrix.m22 = scaling_y;
         self.matrix.m24 = scaling_y * translation_y;
     }
 
     pub fn set_near_and_far(&mut self, near: F, far: F) {
         assert_abs_diff_ne!(near, far);
-        let translation_z = near;
-        let scaling_z = -F::ONE / (far - near);
+        let translation_z = Self::compute_translation_z(near, far);
+        let scaling_z = Self::compute_scaling_z(near, far);
         self.matrix.m33 = scaling_z;
         self.matrix.m34 = scaling_z * translation_z;
+    }
+
+    fn compute_translation_x(left: F, right: F) -> F {
+        -F::ONE_HALF * (left + right)
+    }
+
+    fn compute_translation_y(bottom: F, top: F) -> F {
+        -F::ONE_HALF * (bottom + top)
+    }
+
+    fn compute_translation_z(near: F, _far: F) -> F {
+        -near
+    }
+
+    fn compute_scaling_x(left: F, right: F) -> F {
+        -F::TWO / (right - left)
+    }
+
+    fn compute_scaling_y(bottom: F, top: F) -> F {
+        F::TWO / (top - bottom)
+    }
+
+    fn compute_scaling_z(near: F, far: F) -> F {
+        F::ONE / (far - near)
     }
 }
 
@@ -249,6 +298,12 @@ mod test {
     use crate::geometry::Degrees;
     use approx::assert_abs_diff_eq;
     use nalgebra::{point, vector};
+
+    #[test]
+    fn test() {
+        let transform = OrthographicTransform::new(-182.0, 21.0, -11.0, 195.0, -1.0, 1.0);
+        dbg!(transform.transform_point(&point![0.0, 0.0, -1.0]));
+    }
 
     #[test]
     #[should_panic]
