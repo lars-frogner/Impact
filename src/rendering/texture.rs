@@ -71,9 +71,9 @@ pub fn save_depth_texture_as_image_file<P: AsRef<Path>>(
 
     let mut data = extract_texture_data::<f32>(core_system.device(), core_system.queue(), texture);
 
-    // Map from [-1, 1] to [0, 1]
-    for val in &mut data {
-        *val = 0.5 * (*val + 1.0);
+    // Gamma correction
+    for value in &mut data {
+        *value = f32::powf(*value, 2.2);
     }
 
     let image_buffer: ImageBuffer<Luma<f32>, _> =
