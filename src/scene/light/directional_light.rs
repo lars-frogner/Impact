@@ -1,7 +1,7 @@
 //! Unidirectional light sources.
 
 use crate::{
-    geometry::{AxisAlignedBox, Frustum, Sphere},
+    geometry::{AxisAlignedBox, Frustum, OrthographicTransform, Sphere},
     rendering::fre,
     scene::{
         DirectionComp, DirectionalLightComp, LightDirection, LightStorage, Radiance, RadianceComp,
@@ -10,7 +10,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
-use nalgebra::{vector, Similarity3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{vector, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3};
 use std::sync::RwLock;
 
 /// An directional light source represented by a camera space direction and an
@@ -39,10 +39,10 @@ pub struct DirectionalLight {
     radiance: Radiance,
     // Padding to obtain 16-byte alignment for next field
     orthographic_half_extent_y: fre,
-    orthographic_translation: Vector3<fre>,
+    orthographic_translation: Translation3<fre>,
     // Padding to obtain 16-byte alignment for next field
     orthographic_half_extent_z: fre,
-    orthographic_scaling: Vector3<fre>,
+    orthographic_scaling: Scale3<fre>,
     // Padding to obtain make size multiple of 16-bytes
     _padding: fre,
 }
@@ -57,9 +57,9 @@ impl DirectionalLight {
             orthographic_half_extent_x: 0.0,
             radiance,
             orthographic_half_extent_y: 0.0,
-            orthographic_translation: Vector3::zeros(),
+            orthographic_translation: Translation3::identity(),
             orthographic_half_extent_z: 0.0,
-            orthographic_scaling: Vector3::zeros(),
+            orthographic_scaling: Scale3::identity(),
             _padding: 0.0,
         }
     }
@@ -111,17 +111,14 @@ impl DirectionalLight {
         let near = light_space_bounding_sphere.center().z + light_space_bounding_sphere.radius();
         let far = light_space_view_frustum_aabb.lower_corner().z;
 
+        (self.orthographic_translation, self.orthographic_scaling) =
+            OrthographicTransform::compute_orthographic_translation_and_scaling(
+                left, right, bottom, top, near, far,
+            );
+
         self.orthographic_half_extent_x = 0.5 * (right - left);
         self.orthographic_half_extent_y = 0.5 * (top - bottom);
         self.orthographic_half_extent_z = -0.5 * (far - near);
-
-        self.orthographic_translation.x = -0.5 * (left + right);
-        self.orthographic_translation.y = -0.5 * (bottom + top);
-        self.orthographic_translation.z = -0.5 * (near + far);
-
-        self.orthographic_scaling.x = 1.0 / self.orthographic_half_extent_x;
-        self.orthographic_scaling.y = 1.0 / self.orthographic_half_extent_y;
-        self.orthographic_scaling.z = -1.0 / self.orthographic_half_extent_z;
     }
 
     /// Determines whether the object with the given camera space bounding
@@ -140,8 +137,10 @@ impl DirectionalLight {
             self.orthographic_half_extent_z
         ];
 
-        let orthographic_lower_corner = -orthographic_half_extents - self.orthographic_translation;
-        let orthographic_upper_corner = orthographic_half_extents - self.orthographic_translation;
+        let orthographic_lower_corner =
+            -orthographic_half_extents - self.orthographic_translation.vector;
+        let orthographic_upper_corner =
+            orthographic_half_extents - self.orthographic_translation.vector;
 
         let orthographic_aabb = AxisAlignedBox::new(
             orthographic_lower_corner.into(),
