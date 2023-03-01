@@ -95,21 +95,44 @@ impl DirectionalLight {
         let light_space_bounding_sphere =
             camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
 
-        // Use the bounds of the view frustum in light space to determine limits
-        // for orthographic projection
+        // Use the bounds of the view frustum in light space along with the
+        // bounding sphere to constrain limits for orthographic projection
         let light_space_view_frustum_aabb = light_space_view_frustum.compute_aabb();
 
-        let left = light_space_view_frustum_aabb.lower_corner().x;
-        let right = light_space_view_frustum_aabb.upper_corner().x;
+        let bounding_sphere_center = light_space_bounding_sphere.center();
+        let bounding_sphere_radius = light_space_bounding_sphere.radius();
 
-        let bottom = light_space_view_frustum_aabb.lower_corner().y;
-        let top = light_space_view_frustum_aabb.upper_corner().y;
+        let view_frustum_aabb_lower_corner = light_space_view_frustum_aabb.lower_corner();
+        let view_frustum_aabb_upper_corner = light_space_view_frustum_aabb.upper_corner();
+
+        // Constrain limits using either the view frustum or the bounding
+        // volume, depending on which gives the snuggest fit
+        let left = fre::max(
+            view_frustum_aabb_lower_corner.x,
+            bounding_sphere_center.x - bounding_sphere_radius,
+        );
+        let right = fre::min(
+            view_frustum_aabb_upper_corner.x,
+            bounding_sphere_center.x + bounding_sphere_radius,
+        );
+
+        let bottom = fre::max(
+            view_frustum_aabb_lower_corner.y,
+            bounding_sphere_center.y - bounding_sphere_radius,
+        );
+        let top = fre::min(
+            view_frustum_aabb_upper_corner.y,
+            bounding_sphere_center.y + bounding_sphere_radius,
+        );
 
         // For the near plane we use the point on the bounding sphere farthest
         // towards the light source, as models between the light and the view
         // frustum may cast shadows into the frustum
         let near = light_space_bounding_sphere.center().z + light_space_bounding_sphere.radius();
-        let far = light_space_view_frustum_aabb.lower_corner().z;
+        let far = fre::max(
+            view_frustum_aabb_lower_corner.z,
+            bounding_sphere_center.z - bounding_sphere_radius,
+        );
 
         (self.orthographic_translation, self.orthographic_scaling) =
             OrthographicTransform::compute_orthographic_translation_and_scaling(

@@ -790,8 +790,8 @@ impl RenderPassRecorder {
                     depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState {
-                        constant: 10,
-                        slope_scale: 10.0,
+                        constant: 8,
+                        slope_scale: 1.5,
                         clamp: 0.0,
                     },
                 })
