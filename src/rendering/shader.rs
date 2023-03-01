@@ -26,8 +26,8 @@ use naga::{
     ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
     GlobalVariable, Handle, ImageClass, ImageDimension, ImageQuery, Interpolation, LocalVariable,
     Module, ResourceBinding, SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Span,
-    Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UniqueArena,
-    VectorSize,
+    Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator,
+    UniqueArena, VectorSize,
 };
 use std::{borrow::Cow, collections::HashMap, hash::Hash, mem, vec};
 use vertex_color::VertexColorShaderGenerator;
@@ -2574,36 +2574,77 @@ impl SampledTexture {
             Expression::Constant(define_constant_if_missing(constants, float32_constant(0.5))),
         );
 
-        let (texture_coord_expr_handle, depth_reference_expr_handle) =
+        let (texture_coords_expr_handle, depth_reference_expr_handle) =
             emit_in_func(function, |function| {
-                let light_clip_position_xy_expr_handle = include_expr_in_func(
-                    function,
-                    swizzle_xy_expr(light_clip_position_expr_handle),
-                );
+                // Map x [-1, 1] to u [0, 1]
 
-                let offset_vector_expr_handle = include_expr_in_func(
+                let light_clip_position_x_expr_handle = include_expr_in_func(
                     function,
-                    Expression::Compose {
-                        ty: vec2_type_handle,
-                        components: vec![unity_constant_expr, unity_constant_expr],
+                    Expression::AccessIndex {
+                        base: light_clip_position_expr_handle,
+                        index: 0,
                     },
                 );
 
-                let offset_light_clip_position_xy_expr_handle = include_expr_in_func(
+                let offset_light_clip_position_x_expr_handle = include_expr_in_func(
                     function,
                     Expression::Binary {
                         op: BinaryOperator::Add,
-                        left: light_clip_position_xy_expr_handle,
-                        right: offset_vector_expr_handle,
+                        left: light_clip_position_x_expr_handle,
+                        right: unity_constant_expr,
                     },
                 );
 
-                let texture_coord_expr_handle = include_expr_in_func(
+                let u_texture_coord_expr_handle = include_expr_in_func(
                     function,
                     Expression::Binary {
                         op: BinaryOperator::Multiply,
-                        left: offset_light_clip_position_xy_expr_handle,
+                        left: offset_light_clip_position_x_expr_handle,
                         right: half_constant_expr,
+                    },
+                );
+
+                // Map y [-1, 1] to v [1, 0]
+
+                let light_clip_position_y_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: light_clip_position_expr_handle,
+                        index: 1,
+                    },
+                );
+
+                let negated_light_clip_position_y_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Unary {
+                        op: UnaryOperator::Negate,
+                        expr: light_clip_position_y_expr_handle,
+                    },
+                );
+
+                let offset_negated_light_clip_position_y_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: negated_light_clip_position_y_expr_handle,
+                        right: unity_constant_expr,
+                    },
+                );
+
+                let v_texture_coord_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: offset_negated_light_clip_position_y_expr_handle,
+                        right: half_constant_expr,
+                    },
+                );
+
+                let texture_coords_expr_handle = include_expr_in_func(
+                    function,
+                    Expression::Compose {
+                        ty: vec2_type_handle,
+                        components: vec![u_texture_coord_expr_handle, v_texture_coord_expr_handle],
                     },
                 );
 
@@ -2615,12 +2656,12 @@ impl SampledTexture {
                     },
                 );
 
-                (texture_coord_expr_handle, depth_reference_expr_handle)
+                (texture_coords_expr_handle, depth_reference_expr_handle)
             });
 
         self.generate_sampling_expr(
             function,
-            texture_coord_expr_handle,
+            texture_coords_expr_handle,
             Some(depth_reference_expr_handle),
         )
     }
