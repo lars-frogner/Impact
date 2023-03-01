@@ -789,7 +789,11 @@ impl RenderPassRecorder {
                     depth_write_enabled: true,
                     depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
+                    bias: wgpu::DepthBiasState {
+                        constant: 10,
+                        slope_scale: 10.0,
+                        clamp: 0.0,
+                    },
                 })
             } else if !specification.depth_map_usage.is_none() {
                 Some(wgpu::DepthStencilState {
