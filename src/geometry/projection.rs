@@ -300,12 +300,6 @@ mod test {
     use nalgebra::{point, vector};
 
     #[test]
-    fn test() {
-        let transform = OrthographicTransform::new(-182.0, 21.0, -11.0, 195.0, -1.0, 1.0);
-        dbg!(transform.transform_point(&point![0.0, 0.0, -1.0]));
-    }
-
-    #[test]
     #[should_panic]
     fn constructing_perspective_transform_with_zero_aspect_ratio() {
         PerspectiveTransform::new(0.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
