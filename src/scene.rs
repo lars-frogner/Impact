@@ -30,8 +30,9 @@ pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
     DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedTextureComp,
     FixedTextureMaterial, LightSpaceDepthComp, LightSpaceDepthMaterial, MaterialComp, MaterialID,
-    MaterialLibrary, MaterialSpecification, RGBAColor, RGBColor, TexturedBlinnPhongComp,
-    TexturedBlinnPhongMaterial, VertexColorComp, VertexColorMaterial,
+    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+    MaterialSpecification, RGBAColor, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
+    VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
@@ -118,9 +119,13 @@ impl Scene {
 
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
+        FixedTextureMaterial::register(&mut material_library);
         BlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
-        DiffuseTexturedBlinnPhongMaterial::register(&mut instance_feature_manager);
-        TexturedBlinnPhongMaterial::register(&mut instance_feature_manager);
+        DiffuseTexturedBlinnPhongMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+        TexturedBlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
         LightSpaceDepthMaterial::register(&mut material_library);
     }
 }

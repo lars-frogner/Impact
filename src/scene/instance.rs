@@ -302,6 +302,7 @@ mod test {
         ModelID::for_mesh_and_material(
             MeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
             MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
+            None,
         )
     }
 

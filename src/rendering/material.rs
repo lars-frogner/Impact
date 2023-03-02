@@ -2,81 +2,44 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput, TextureID},
-    scene::MaterialSpecification,
+    rendering::{
+        Assets, CoreRenderingSystem, ImageTexture, MaterialPropertyTextureSetShaderInput,
+        MaterialShaderInput, TextureID,
+    },
+    scene::{MaterialPropertyTextureSet, MaterialSpecification},
 };
 use anyhow::{anyhow, Result};
 
-/// Owner and manager of a render resources for a material,
-/// including a bind group for the set of textures used for
-/// the material.
+/// Manager of a render resources for a material type.
 #[derive(Debug)]
 pub struct MaterialRenderResourceManager {
-    image_texture_ids: Vec<TextureID>,
-    texture_bind_group_layout: Option<wgpu::BindGroupLayout>,
-    texture_bind_group: Option<wgpu::BindGroup>,
     vertex_attribute_requirements: VertexAttributeSet,
     shader_input: MaterialShaderInput,
     label: String,
 }
 
+/// Manager of a set of textures used for material properties.
+#[derive(Debug)]
+pub struct MaterialPropertyTextureManager {
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
+    shader_input: MaterialPropertyTextureSetShaderInput,
+}
+
 impl MaterialRenderResourceManager {
-    /// Creates a new manager with render resources initialized
-    /// from the given material specification.
+    /// Creates a new manager with render resources initialized from the given
+    /// material specification.
     pub fn for_material_specification(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
         material_specification: &MaterialSpecification,
         label: String,
     ) -> Result<Self> {
-        let image_texture_ids = material_specification.image_texture_ids().to_vec();
-
-        let (texture_bind_group_layout, texture_bind_group) = if image_texture_ids.is_empty() {
-            (None, None)
-        } else {
-            let texture_bind_group_layout = Self::create_texture_bind_group_layout(
-                core_system.device(),
-                image_texture_ids.len(),
-                &label,
-            );
-            let texture_bind_group = Self::create_texture_bind_group(
-                core_system.device(),
-                assets,
-                &image_texture_ids,
-                &texture_bind_group_layout,
-                &label,
-            )?;
-            (Some(texture_bind_group_layout), Some(texture_bind_group))
-        };
-
         Ok(Self {
-            image_texture_ids,
-            texture_bind_group_layout,
-            texture_bind_group,
             vertex_attribute_requirements: material_specification.vertex_attribute_requirements(),
             shader_input: material_specification.shader_input().clone(),
             label,
         })
-    }
-
-    /// Returns the binding that will be used for the texture at
-    /// the given index and its sampler in the bind group.
-    pub const fn get_texture_and_sampler_bindings(texture_idx: usize) -> (u32, u32) {
-        let texture_binding = (2 * texture_idx) as u32;
-        let sampler_binding = texture_binding + 1;
-        (texture_binding, sampler_binding)
-    }
-
-    /// Returns a reference to the bind group layout for the
-    /// set of textures used for the material.
-    pub fn texture_bind_group_layout(&self) -> Option<&wgpu::BindGroupLayout> {
-        self.texture_bind_group_layout.as_ref()
-    }
-
-    /// Returns a reference to the bind group for the set of
-    /// textures used for the material.
-    pub fn texture_bind_group(&self) -> Option<&wgpu::BindGroup> {
-        self.texture_bind_group.as_ref()
     }
 
     /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
@@ -89,34 +52,60 @@ impl MaterialRenderResourceManager {
     pub fn shader_input(&self) -> &MaterialShaderInput {
         &self.shader_input
     }
+}
 
-    /// Ensures that the render resources are in sync with the
-    /// given material specification. This includes recreating
-    /// the bind group if the set of textures has changed.
-    pub fn sync_with_material_specification(
-        &mut self,
+impl MaterialPropertyTextureManager {
+    /// Creates a new manager for the given set of material property textures.
+    pub fn for_texture_set(
         core_system: &CoreRenderingSystem,
         assets: &Assets,
-        material_specification: &MaterialSpecification,
-    ) -> Result<()> {
-        assert_eq!(
-            self.image_texture_ids.len(),
-            material_specification.image_texture_ids().len(),
-            "Changed number of textures in material specification"
+        texture_set: &MaterialPropertyTextureSet,
+        label: String,
+    ) -> Result<Self> {
+        let image_texture_ids = texture_set.image_texture_ids().to_vec();
+
+        let bind_group_layout = Self::create_texture_bind_group_layout(
+            core_system.device(),
+            image_texture_ids.len(),
+            &label,
         );
-        if let Some(layout) = &self.texture_bind_group_layout {
-            if material_specification.image_texture_ids() != self.image_texture_ids {
-                self.image_texture_ids = material_specification.image_texture_ids().to_vec();
-                self.texture_bind_group = Some(Self::create_texture_bind_group(
-                    core_system.device(),
-                    assets,
-                    &self.image_texture_ids,
-                    layout,
-                    &self.label,
-                )?);
-            }
-        }
-        Ok(())
+
+        let bind_group = Self::create_texture_bind_group(
+            core_system.device(),
+            assets,
+            &image_texture_ids,
+            &bind_group_layout,
+            &label,
+        )?;
+
+        Ok(Self {
+            bind_group_layout,
+            bind_group,
+            shader_input: texture_set.shader_input().clone(),
+        })
+    }
+
+    /// Returns the binding that will be used for the texture at the given index
+    /// and its sampler in the bind group.
+    pub const fn get_texture_and_sampler_bindings(texture_idx: usize) -> (u32, u32) {
+        let texture_binding = (2 * texture_idx) as u32;
+        let sampler_binding = texture_binding + 1;
+        (texture_binding, sampler_binding)
+    }
+
+    /// Returns a reference to the bind group layout for the set of textures.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
+    }
+
+    /// Returns a reference to the bind group for the set of textures.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
+    }
+
+    // Returns the input required for using the texture set in a shader.
+    pub fn shader_input(&self) -> &MaterialPropertyTextureSetShaderInput {
+        &self.shader_input
     }
 
     fn create_texture_bind_group_layout(

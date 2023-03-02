@@ -1,7 +1,7 @@
 //! Materials visualizing the depth of each fragment.
 
 use crate::{
-    geometry::{InstanceFeatureID, VertexAttributeSet},
+    geometry::VertexAttributeSet,
     rendering::MaterialShaderInput,
     scene::{
         LightSpaceDepthComp, MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
@@ -37,7 +37,6 @@ impl LightSpaceDepthMaterial {
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
-            Vec::new(),
             Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*LIGHT_SPACE_DEPTH_MATERIAL_ID, specification);
@@ -52,12 +51,7 @@ impl LightSpaceDepthMaterial {
     ) {
         setup!(
             components,
-            || -> MaterialComp {
-                MaterialComp {
-                    id: *LIGHT_SPACE_DEPTH_MATERIAL_ID,
-                    feature_id: InstanceFeatureID::not_applicable(),
-                }
-            },
+            || -> MaterialComp { MaterialComp::new(*LIGHT_SPACE_DEPTH_MATERIAL_ID, None, None) },
             [LightSpaceDepthComp],
             ![MaterialComp]
         );

@@ -11,10 +11,14 @@ use crate::{
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
         resource::SynchronizedRenderResources, texture::ShadowMapTexture, CameraShaderInput,
         CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput, LightShaderInput,
+        MaterialPropertyTextureManager, MaterialPropertyTextureSetShaderInput,
         MaterialRenderResourceManager, MaterialShaderInput, MeshShaderInput, RenderingConfig,
         Shader,
     },
-    scene::{LightID, LightType, MaterialID, MeshID, ModelID, ShaderManager},
+    scene::{
+        LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
+        ShaderManager,
+    },
 };
 use anyhow::{anyhow, Result};
 use impact_utils::KeyIndexMapper;
@@ -112,6 +116,7 @@ struct BindGroupShaderInput<'a> {
     camera: Option<&'a CameraShaderInput>,
     light: Option<&'a LightShaderInput>,
     material: Option<&'a MaterialShaderInput>,
+    material_property_textures: Option<&'a MaterialPropertyTextureSetShaderInput>,
 }
 
 impl RenderPassManager {
@@ -521,7 +526,7 @@ impl RenderPassSpecification {
     /// 1. Camera.
     /// 2. Lights.
     /// 3. Shadow map textures.
-    /// 4. Material textures.
+    /// 4. Material property textures.
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
@@ -536,6 +541,7 @@ impl RenderPassSpecification {
             camera: None,
             light: None,
             material: None,
+            material_property_textures: None,
         };
         let mut vertex_attribute_requirements = VertexAttributeSet::empty();
 
@@ -572,13 +578,23 @@ impl RenderPassSpecification {
                 let material_resource_manager =
                     Self::get_material_resource_manager(render_resources, model_id.material_id())?;
 
-                if let Some(layout) = material_resource_manager.texture_bind_group_layout() {
-                    layouts.push(layout);
-                }
                 shader_input.material = Some(material_resource_manager.shader_input());
 
                 vertex_attribute_requirements =
                     material_resource_manager.vertex_attribute_requirements();
+
+                if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
+                    let material_property_texture_manager =
+                        Self::get_material_property_texture_manager(
+                            render_resources,
+                            texture_set_id,
+                        )?;
+
+                    shader_input.material_property_textures =
+                        Some(material_property_texture_manager.shader_input());
+
+                    layouts.push(material_property_texture_manager.bind_group_layout());
+                }
             }
         }
 
@@ -625,11 +641,14 @@ impl RenderPassSpecification {
             // We do not need a material if we are doing a depth prepass or
             // updating shadow map
             if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
-                if let Some(bind_group) =
-                    Self::get_material_resource_manager(render_resources, model_id.material_id())?
-                        .texture_bind_group()
-                {
-                    bind_groups.push(bind_group);
+                if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
+                    let material_property_texture_manager =
+                        Self::get_material_property_texture_manager(
+                            render_resources,
+                            texture_set_id,
+                        )?;
+
+                    bind_groups.push(material_property_texture_manager.bind_group());
                 }
             }
         }
@@ -712,6 +731,20 @@ impl RenderPassSpecification {
             .get_material_resource_manager(material_id)
             .ok_or_else(|| anyhow!("Missing resource manager for material {}", material_id))
     }
+
+    fn get_material_property_texture_manager(
+        render_resources: &SynchronizedRenderResources,
+        texture_set_id: MaterialPropertyTextureSetID,
+    ) -> Result<&MaterialPropertyTextureManager> {
+        render_resources
+            .get_material_property_texture_manager(texture_set_id)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing manager for material property texture set {}",
+                    texture_set_id
+                )
+            })
+    }
 }
 
 impl RenderPassRecorder {
@@ -747,6 +780,7 @@ impl RenderPassRecorder {
                 bind_group_shader_input.light,
                 &instance_feature_shader_inputs,
                 bind_group_shader_input.material,
+                bind_group_shader_input.material_property_textures,
                 vertex_attribute_requirements,
             )?;
 

@@ -171,7 +171,11 @@ impl Scene {
              orientation: Option<&OrientationComp>,
              scaling: Option<&ScalingComp>|
              -> SceneGraphNodeComp::<ModelInstanceNodeID> {
-                let model_id = ModelID::for_mesh_and_material(mesh.id, material.id);
+                let model_id = ModelID::for_mesh_and_material(
+                    mesh.id,
+                    material.material_id,
+                    material.material_property_texture_set_id(),
+                );
                 instance_feature_manager.register_instance(&material_library, model_id);
 
                 let position = position.map_or_else(Point3::origin, |position| position.0.cast());
@@ -182,10 +186,11 @@ impl Scene {
                 let model_to_world_transform =
                     scene::create_model_to_world_transform(position, orientation, scaling);
 
-                let feature_ids = if material.feature_id.is_not_applicable() {
-                    Vec::new()
+                let feature_ids = if let Some(feature_id) = material.material_property_feature_id()
+                {
+                    vec![feature_id]
                 } else {
-                    vec![material.feature_id]
+                    Vec::new()
                 };
 
                 // Panic on errors since returning an error could leave us
@@ -236,9 +241,7 @@ impl Scene {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         if let Some(material) = entity.get_component::<MaterialComp>() {
-            let feature_id = material.access().feature_id;
-
-            if !feature_id.is_not_applicable() {
+            if let Some(feature_id) = material.access().material_property_feature_id() {
                 self.instance_feature_manager()
                     .write()
                     .unwrap()

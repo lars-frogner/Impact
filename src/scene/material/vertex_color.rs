@@ -1,7 +1,7 @@
 //! Material using the colors of the mesh vertices.
 
 use crate::{
-    geometry::{InstanceFeatureID, VertexAttributeSet},
+    geometry::VertexAttributeSet,
     rendering::MaterialShaderInput,
     scene::{
         MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
@@ -36,7 +36,6 @@ impl VertexColorMaterial {
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             Vec::new(),
-            Vec::new(),
             Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);
@@ -51,12 +50,7 @@ impl VertexColorMaterial {
     ) {
         setup!(
             components,
-            || -> MaterialComp {
-                MaterialComp {
-                    id: *VERTEX_COLOR_MATERIAL_ID,
-                    feature_id: InstanceFeatureID::not_applicable(),
-                }
-            },
+            || -> MaterialComp { MaterialComp::new(*VERTEX_COLOR_MATERIAL_ID, None, None) },
             [VertexColorComp],
             ![MaterialComp]
         );

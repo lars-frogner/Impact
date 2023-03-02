@@ -21,14 +21,15 @@ pub use buffer::{
     create_vertex_buffer_layout_for_instance, create_vertex_buffer_layout_for_vertex,
     VertexBufferable,
 };
-pub use material::MaterialRenderResourceManager;
+pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
     DirectionalLightShaderInput, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-    InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
-    ModelViewTransformShaderInput, PointLightShaderInput, Shader, ShaderGenerator,
+    InstanceFeatureShaderInput, LightShaderInput, MaterialPropertyTextureSetShaderInput,
+    MaterialShaderInput, MeshShaderInput, ModelViewTransformShaderInput, PointLightShaderInput,
+    Shader, ShaderGenerator,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{DepthTexture, ImageTexture};

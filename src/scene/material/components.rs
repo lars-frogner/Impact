@@ -3,7 +3,7 @@
 use crate::{
     geometry::InstanceFeatureID,
     rendering::{fre, TextureID},
-    scene::{MaterialID, RGBAColor, RGBColor},
+    scene::{MaterialID, MaterialPropertyTextureSetID, RGBAColor, RGBColor},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
@@ -14,10 +14,15 @@ use impact_ecs::Component;
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MaterialComp {
     /// The ID of the entity's [`MaterialSpecification`](crate::scene::MaterialSpecification).
-    pub id: MaterialID,
-    /// The ID of the entry for the entity's per-instance material
-    /// data in the [InstanceFeatureStorage](crate::geometry::InstanceFeatureStorage).
-    pub feature_id: InstanceFeatureID,
+    pub material_id: MaterialID,
+    /// The ID of the entry for the entity's per-instance material properties in
+    /// the [InstanceFeatureStorage](crate::geometry::InstanceFeatureStorage)
+    /// (may be N/A).
+    pub material_property_feature_id: InstanceFeatureID,
+    /// The ID of the entity's
+    /// [`MaterialPropertyTextureSet`](crate::scene::MaterialPropertyTextureSet)
+    /// (may represent an empty set).
+    pub material_property_texture_set_id: MaterialPropertyTextureSetID,
 }
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities
@@ -77,11 +82,41 @@ pub struct LightSpaceDepthComp;
 impl MaterialComp {
     /// Creates a new component representing a material with the given
     /// IDs for the [`MaterialSpecification`](crate::scene::MaterialSpecification)
-    /// and the per-instance material data.
-    pub fn new(material_id: MaterialID, feature_id: InstanceFeatureID) -> Self {
+    /// and the per-instance material data (which is optional).
+    pub fn new(
+        material_id: MaterialID,
+        material_property_feature_id: Option<InstanceFeatureID>,
+        material_property_texture_set_id: Option<MaterialPropertyTextureSetID>,
+    ) -> Self {
+        let material_property_feature_id =
+            material_property_feature_id.unwrap_or_else(InstanceFeatureID::not_applicable);
+        let material_property_texture_set_id =
+            material_property_texture_set_id.unwrap_or_else(MaterialPropertyTextureSetID::empty);
         Self {
-            id: material_id,
-            feature_id,
+            material_id,
+            material_property_feature_id,
+            material_property_texture_set_id,
+        }
+    }
+
+    /// Returns the ID of the entry for the entity's per-instance material
+    /// properties in the
+    /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage), or
+    /// [`None`] if there are no untextured per-instance material properties.
+    pub fn material_property_feature_id(&self) -> Option<InstanceFeatureID> {
+        if self.material_property_feature_id.is_not_applicable() {
+            None
+        } else {
+            Some(self.material_property_feature_id)
+        }
+    }
+
+    /// Returns the ID of the material property texture set, or [`None`] if no material properties are textured.
+    pub fn material_property_texture_set_id(&self) -> Option<MaterialPropertyTextureSetID> {
+        if self.material_property_texture_set_id.is_empty() {
+            None
+        } else {
+            Some(self.material_property_texture_set_id)
         }
     }
 }
