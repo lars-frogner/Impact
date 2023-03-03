@@ -1,11 +1,13 @@
 //! Management of materials.
 
+mod ambient_color;
 mod blinn_phong;
 mod components;
 mod depth;
 mod fixed;
 mod vertex_color;
 
+pub use ambient_color::GlobalAmbientColorMaterial;
 pub use blinn_phong::{
     BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, TexturedBlinnPhongMaterial,
 };

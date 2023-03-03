@@ -15,8 +15,8 @@ use crate::{
         MeshShaderInput, RenderingConfig, Shader,
     },
     scene::{
-        LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
-        ShaderManager,
+        GlobalAmbientColorMaterial, LightID, LightType, MaterialID, MaterialPropertyTextureSetID,
+        MeshID, ModelID, ShaderManager,
     },
 };
 use anyhow::{anyhow, Result};
@@ -31,13 +31,19 @@ use std::{
 pub struct RenderPassManager {
     /// Pass for clearing the rendering surface and depth map.
     clearing_pass_recorder: RenderPassRecorder,
-    /// Passes for filling the depth map before any shading is done.
-    depth_prepasses: HashMap<ModelID, RenderPassRecorder>,
+    /// Passes for filling the depth map with the depths of the models that do
+    /// not depend on light sources.
+    non_light_shaded_model_depth_prepasses: Vec<RenderPassRecorder>,
+    /// Passes for shading each model that depends on light sources with the
+    /// global ambient color contribution. This also does the job of filling the
+    /// remainder of the depth map.
+    light_shaded_model_global_ambient_color_shading_passes: Vec<RenderPassRecorder>,
     /// Passes for shading models that do not depend on light sources.
-    non_light_shaded_model_shading_passes: HashMap<ModelID, RenderPassRecorder>,
+    non_light_shaded_model_shading_passes: Vec<RenderPassRecorder>,
     /// Passes for shading models that depend on light sources, including passes
     /// for clearing and filling the shadow map.
     light_shaded_model_shading_passes: HashMap<LightID, LightShadedModelShadingPasses>,
+    non_light_shaded_model_index_mapper: KeyIndexMapper<ModelID>,
     light_shaded_model_index_mapper: KeyIndexMapper<ModelID>,
 }
 
@@ -55,6 +61,10 @@ pub struct RenderPassSpecification {
     light: Option<LightInfo>,
     /// Whether and how the shadow map will be used.
     shadow_map_usage: ShadowMapUsage,
+    /// ID of the material to use for shading the model, or [`None`] if the pass
+    /// should use the material associated with the model. The override material
+    /// is assumed not to have textured material properties.
+    override_material: Option<MaterialID>,
     label: String,
 }
 
@@ -94,9 +104,13 @@ enum DepthMapUsage {
     Clear,
     /// Fill the depth map with model depths without doing shading.
     Prepass,
-    /// Use the depth map for depth testing when shading.
-    Use,
+    /// Use the depth map for depth testing when shading. The [`WriteDepths`]
+    /// value decides whether depths will be written to the depth map during the
+    /// pass.
+    Use(WriteDepths),
 }
+
+type WriteDepths = bool;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ShadowMapUsage {
@@ -123,9 +137,11 @@ impl RenderPassManager {
     pub fn new(clear_color: wgpu::Color) -> Self {
         Self {
             clearing_pass_recorder: RenderPassRecorder::surface_clearing_pass(clear_color),
-            depth_prepasses: HashMap::new(),
-            non_light_shaded_model_shading_passes: HashMap::new(),
+            non_light_shaded_model_depth_prepasses: Vec::new(),
+            light_shaded_model_global_ambient_color_shading_passes: Vec::new(),
+            non_light_shaded_model_shading_passes: Vec::new(),
             light_shaded_model_shading_passes: HashMap::new(),
+            non_light_shaded_model_index_mapper: KeyIndexMapper::new(),
             light_shaded_model_index_mapper: KeyIndexMapper::new(),
         }
     }
@@ -133,8 +149,12 @@ impl RenderPassManager {
     /// Returns an iterator over all render passes in the appropriate order.
     pub fn recorders(&self) -> impl Iterator<Item = &RenderPassRecorder> {
         iter::once(&self.clearing_pass_recorder)
-            .chain(self.depth_prepasses.values())
-            .chain(self.non_light_shaded_model_shading_passes.values())
+            .chain(self.non_light_shaded_model_depth_prepasses.iter())
+            .chain(
+                self.light_shaded_model_global_ambient_color_shading_passes
+                    .iter(),
+            )
+            .chain(self.non_light_shaded_model_shading_passes.iter())
             .chain(
                 self.light_shaded_model_shading_passes
                     .values()
@@ -150,9 +170,12 @@ impl RenderPassManager {
 
     /// Deletes all the render passes except for the initial clearing pass.
     pub fn clear_model_render_pass_recorders(&mut self) {
-        self.depth_prepasses.clear();
+        self.non_light_shaded_model_depth_prepasses.clear();
+        self.light_shaded_model_global_ambient_color_shading_passes
+            .clear();
         self.non_light_shaded_model_shading_passes.clear();
         self.light_shaded_model_shading_passes.clear();
+        self.non_light_shaded_model_index_mapper.clear();
         self.light_shaded_model_index_mapper.clear();
     }
 
@@ -184,15 +207,26 @@ impl RenderPassManager {
 
         let feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
-        // Remove depth prepasses for models that are no longer present
-        self.depth_prepasses
-            .retain(|model_id, _| feature_buffer_managers.contains_key(model_id));
+        // Remove passes for non light shaded models that are no longer present
+        let removed_non_light_shaded_model_ids: Vec<_> = self
+            .non_light_shaded_model_index_mapper
+            .key_at_each_idx()
+            .filter(|model_id| !feature_buffer_managers.contains_key(model_id))
+            .collect();
 
-        // Remove shading passes for non light shaded models that are no longer present
-        self.non_light_shaded_model_shading_passes
-            .retain(|model_id, _| feature_buffer_managers.contains_key(model_id));
+        for model_id in removed_non_light_shaded_model_ids {
+            let model_idx = self
+                .non_light_shaded_model_index_mapper
+                .swap_remove_key(model_id);
 
-        // Remove shading passes for light shaded models that are no longer present
+            self.non_light_shaded_model_depth_prepasses
+                .swap_remove(model_idx);
+
+            self.non_light_shaded_model_shading_passes
+                .swap_remove(model_idx);
+        }
+
+        // Remove passes for light shaded models that are no longer present
         let removed_light_shaded_model_ids: Vec<_> = self
             .light_shaded_model_index_mapper
             .key_at_each_idx()
@@ -203,6 +237,10 @@ impl RenderPassManager {
             let model_idx = self
                 .light_shaded_model_index_mapper
                 .swap_remove_key(model_id);
+
+            self.light_shaded_model_global_ambient_color_shading_passes
+                .swap_remove(model_idx);
+
             self.light_shaded_model_shading_passes
                 .values_mut()
                 .for_each(|passes| {
@@ -221,25 +259,6 @@ impl RenderPassManager {
                 .initial_feature_range()
                 .is_empty();
 
-            // Create depth prepasses for new models and update disabled state
-            // of existing ones
-            match self.depth_prepasses.entry(model_id) {
-                Entry::Vacant(entry) => {
-                    entry.insert(RenderPassRecorder::new(
-                        core_system,
-                        config,
-                        render_resources,
-                        shader_manager,
-                        RenderPassSpecification::depth_prepass(model_id),
-                        disable_pass,
-                    )?);
-                }
-                Entry::Occupied(mut entry) => {
-                    let recorder = entry.get_mut();
-                    recorder.set_disabled(disable_pass);
-                }
-            }
-
             let material_requires_lights = render_resources
                 .get_material_resource_manager(model_id.material_id())
                 .expect("Missing resource manager for material after synchronization")
@@ -250,6 +269,19 @@ impl RenderPassManager {
                 match self.light_shaded_model_index_mapper.try_push_key(model_id) {
                     // The model has no existing shading passes
                     Ok(_) => {
+                        // Create a global ambient color shading pass for the new model
+                        self.light_shaded_model_global_ambient_color_shading_passes
+                            .push(RenderPassRecorder::new(
+                                core_system,
+                                config,
+                                render_resources,
+                                shader_manager,
+                                RenderPassSpecification::global_ambient_color_shading_pass(
+                                    model_id,
+                                ),
+                                disable_pass,
+                            )?);
+
                         for &light_id in point_light_ids {
                             let passes = self
                                 .light_shaded_model_shading_passes
@@ -330,6 +362,10 @@ impl RenderPassManager {
                     // The model already has shading passes
                     Err(model_idx) => {
                         // Set the disabled state of the passes for the existing model
+
+                        self.light_shaded_model_global_ambient_color_shading_passes[model_idx]
+                            .set_disabled(disable_pass);
+
                         self.light_shaded_model_shading_passes
                             .values_mut()
                             .for_each(|passes| {
@@ -343,24 +379,45 @@ impl RenderPassManager {
                     }
                 }
             } else {
-                // Create a shading pass for the model if it is new, or update
-                // the disabled state of its shading pass if it already exists
-                match self.non_light_shaded_model_shading_passes.entry(model_id) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(RenderPassRecorder::new(
-                            core_system,
-                            config,
-                            render_resources,
-                            shader_manager,
-                            RenderPassSpecification::model_shading_pass_without_shadow_map(
-                                None, model_id,
-                            ),
-                            disable_pass,
-                        )?);
+                match self
+                    .non_light_shaded_model_index_mapper
+                    .try_push_key(model_id)
+                {
+                    // The model has no existing shading passes
+                    Ok(_) => {
+                        // Create a depth prepass for the new model
+                        self.non_light_shaded_model_depth_prepasses
+                            .push(RenderPassRecorder::new(
+                                core_system,
+                                config,
+                                render_resources,
+                                shader_manager,
+                                RenderPassSpecification::depth_prepass(model_id),
+                                disable_pass,
+                            )?);
+
+                        // Create a shading pass for the new model
+                        self.non_light_shaded_model_shading_passes
+                            .push(RenderPassRecorder::new(
+                                core_system,
+                                config,
+                                render_resources,
+                                shader_manager,
+                                RenderPassSpecification::model_shading_pass_without_shadow_map(
+                                    None, model_id,
+                                ),
+                                disable_pass,
+                            )?);
                     }
-                    Entry::Occupied(mut entry) => {
-                        let recorder = entry.get_mut();
-                        recorder.set_disabled(disable_pass);
+                    // The model already has shading passes
+                    Err(model_idx) => {
+                        // Set the disabled state of the passes for the existing model
+
+                        self.non_light_shaded_model_depth_prepasses[model_idx]
+                            .set_disabled(disable_pass);
+
+                        self.non_light_shaded_model_shading_passes[model_idx]
+                            .set_disabled(disable_pass);
                     }
                 }
             }
@@ -383,6 +440,7 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::Clear,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
+            override_material: None,
             label: "Clearing pass".to_string(),
         }
     }
@@ -396,20 +454,45 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::Prepass,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
-            label: "Depth prepass".to_string(),
+            override_material: None,
+            label: format!("Depth prepass for model {}", model_id),
+        }
+    }
+
+    /// Creates the specification for the render pass that will render the model
+    /// with the given ID with the global ambient color.
+    pub fn global_ambient_color_shading_pass(model_id: ModelID) -> Self {
+        Self {
+            clear_color: None,
+            model_id: Some(model_id),
+            depth_map_usage: DepthMapUsage::use_readwrite(),
+            light: None,
+            shadow_map_usage: ShadowMapUsage::None,
+            override_material: Some(GlobalAmbientColorMaterial::material_id()),
+            label: format!("Global ambient color shading of model {}", model_id),
         }
     }
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID without making use of a shadow map.
     fn model_shading_pass_without_shadow_map(light: Option<LightInfo>, model_id: ModelID) -> Self {
+        let label = if let Some(light) = light {
+            format!(
+                "Shading of model {} for light {} without shadow map",
+                model_id, light.light_id
+            )
+        } else {
+            format!("Shading of model {}", model_id)
+        };
+
         Self {
             clear_color: None,
             model_id: Some(model_id),
-            depth_map_usage: DepthMapUsage::Use,
+            depth_map_usage: DepthMapUsage::use_readonly(),
             light,
             shadow_map_usage: ShadowMapUsage::None,
-            label: format!("Shading of model {} without shadow map", model_id),
+            override_material: None,
+            label,
         }
     }
 
@@ -419,10 +502,14 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: Some(model_id),
-            depth_map_usage: DepthMapUsage::Use,
+            depth_map_usage: DepthMapUsage::use_readonly(),
             light: Some(light),
             shadow_map_usage: ShadowMapUsage::Use,
-            label: format!("Shading of model {} with shadow map", model_id),
+            override_material: None,
+            label: format!(
+                "Shading of model {} for light {} with shadow map",
+                model_id, light.light_id
+            ),
         }
     }
 
@@ -435,6 +522,7 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::None,
             light: None,
             shadow_map_usage: ShadowMapUsage::Clear,
+            override_material: None,
             label: "Shadow map clearing pass".to_string(),
         }
     }
@@ -449,8 +537,70 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::None,
             light: Some(light),
             shadow_map_usage: ShadowMapUsage::Update,
-            label: format!("Shadow map update for model {}", model_id),
+            override_material: None,
+            label: format!(
+                "Shadow map update for model {} and light {}",
+                model_id, light.light_id
+            ),
         }
+    }
+
+    fn get_mesh_buffer_manager(
+        render_resources: &SynchronizedRenderResources,
+        mesh_id: MeshID,
+    ) -> Result<&MeshRenderBufferManager> {
+        render_resources
+            .get_mesh_buffer_manager(mesh_id)
+            .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))
+    }
+
+    fn get_instance_feature_buffer_managers(
+        render_resources: &SynchronizedRenderResources,
+        model_id: ModelID,
+        depth_map_usage: DepthMapUsage,
+        shadow_map_usage: ShadowMapUsage,
+        override_material: Option<MaterialID>,
+    ) -> Result<impl Iterator<Item = &InstanceFeatureRenderBufferManager>> {
+        render_resources
+            .get_instance_feature_buffer_managers(model_id)
+            .map(|buffers| {
+                if depth_map_usage.is_prepass()
+                    || shadow_map_usage.is_update()
+                    || override_material.is_some()
+                {
+                    // For depth prepass or shadow map update we only need
+                    // transforms, and we do not support other instance features
+                    // for override materials
+                    &buffers[..1]
+                } else {
+                    &buffers[..]
+                }
+                .iter()
+            })
+            .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
+    }
+
+    fn get_material_resource_manager(
+        render_resources: &SynchronizedRenderResources,
+        material_id: MaterialID,
+    ) -> Result<&MaterialRenderResourceManager> {
+        render_resources
+            .get_material_resource_manager(material_id)
+            .ok_or_else(|| anyhow!("Missing resource manager for material {}", material_id))
+    }
+
+    fn get_material_property_texture_manager(
+        render_resources: &SynchronizedRenderResources,
+        texture_set_id: MaterialPropertyTextureSetID,
+    ) -> Result<&MaterialPropertyTextureManager> {
+        render_resources
+            .get_material_property_texture_manager(texture_set_id)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing manager for material property texture set {}",
+                    texture_set_id
+                )
+            })
     }
 
     /// Obtains the push constant ranges involved in the render pass.
@@ -495,8 +645,13 @@ impl RenderPassSpecification {
             );
             mesh_shader_input = Some(mesh_buffer_manager.shader_input());
 
-            if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update() {
-                // For depth prepass or shadow map update we only need transforms
+            if self.depth_map_usage.is_prepass()
+                || self.shadow_map_usage.is_update()
+                || self.override_material.is_some()
+            {
+                // For depth prepass or shadow map update we only need
+                // transforms, and we do not support other instance features for
+                // override materials
                 if let Some(buffer) =
                     render_resources.get_instance_transform_buffer_manager(model_id)
                 {
@@ -573,8 +728,12 @@ impl RenderPassSpecification {
             // We do not need a material if we are doing a depth prepass or
             // updating shadow map
             if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
+                let material_id = self
+                    .override_material
+                    .unwrap_or_else(|| model_id.material_id());
+
                 let material_resource_manager =
-                    Self::get_material_resource_manager(render_resources, model_id.material_id())?;
+                    Self::get_material_resource_manager(render_resources, material_id)?;
 
                 shader_input.material = Some(material_resource_manager.shader_input());
 
@@ -585,14 +744,17 @@ impl RenderPassSpecification {
                     layouts.push(fixed_resources.bind_group_layout());
                 }
 
-                if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
-                    let material_property_texture_manager =
-                        Self::get_material_property_texture_manager(
-                            render_resources,
-                            texture_set_id,
-                        )?;
+                // We do not support textured material properties for override materials
+                if self.override_material.is_none() {
+                    if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
+                        let material_property_texture_manager =
+                            Self::get_material_property_texture_manager(
+                                render_resources,
+                                texture_set_id,
+                            )?;
 
-                    layouts.push(material_property_texture_manager.bind_group_layout());
+                        layouts.push(material_property_texture_manager.bind_group_layout());
+                    }
                 }
             }
         }
@@ -641,21 +803,28 @@ impl RenderPassSpecification {
             // We do not need a material if we are doing a depth prepass or
             // updating shadow map
             if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
+                let material_id = self
+                    .override_material
+                    .unwrap_or_else(|| model_id.material_id());
+
                 let material_resource_manager =
-                    Self::get_material_resource_manager(render_resources, model_id.material_id())?;
+                    Self::get_material_resource_manager(render_resources, material_id)?;
 
                 if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
                     bind_groups.push(fixed_resources.bind_group());
                 }
 
-                if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
-                    let material_property_texture_manager =
-                        Self::get_material_property_texture_manager(
-                            render_resources,
-                            texture_set_id,
-                        )?;
+                // We do not support textured material properties for override materials
+                if self.override_material.is_none() {
+                    if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
+                        let material_property_texture_manager =
+                            Self::get_material_property_texture_manager(
+                                render_resources,
+                                texture_set_id,
+                            )?;
 
-                    bind_groups.push(material_property_texture_manager.bind_group());
+                        bind_groups.push(material_property_texture_manager.bind_group());
+                    }
                 }
             }
         }
@@ -680,6 +849,84 @@ impl RenderPassSpecification {
         }
     }
 
+    fn determine_blend_state(&self) -> wgpu::BlendState {
+        if self.light.is_some() {
+            // Since we determine contributions from each light in
+            // separate render passes, we need to add up the color
+            // contributions. We simply ignore alpha.
+            wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent::default(),
+            }
+        } else {
+            wgpu::BlendState::REPLACE
+        }
+    }
+
+    fn determine_color_target_state(
+        &self,
+        core_system: &CoreRenderingSystem,
+    ) -> Option<wgpu::ColorTargetState> {
+        if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_clear_or_update() {
+            // For depth prepasses and shadow map clearing or updates we only
+            // work with depths, so we don't need a color target
+            None
+        } else {
+            Some(wgpu::ColorTargetState {
+                format: core_system.surface_config().format,
+                // Since we determine contributions from each light in
+                // separate render passes, we need to add up the color
+                // contributions. We simply ignore alpha.
+                blend: Some(self.determine_blend_state()),
+                write_mask: wgpu::ColorWrites::COLOR,
+            })
+        }
+    }
+
+    fn determine_depth_stencil_state(&self) -> Option<wgpu::DepthStencilState> {
+        if self.shadow_map_usage.is_clear_or_update() {
+            // For modifying the shadow map we have to set it as the depth
+            // map for the pipeline
+            Some(wgpu::DepthStencilState {
+                format: ShadowMapTexture::FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 8,
+                    slope_scale: 1.5,
+                    clamp: 0.0,
+                },
+            })
+        } else if !self.depth_map_usage.is_none() {
+            let depth_write_enabled = self.depth_map_usage.make_writeable();
+
+            let depth_compare = if depth_write_enabled {
+                wgpu::CompareFunction::Less
+            } else {
+                // When we turn off depth writing, all closest depths have
+                // been determined. To be able to do subsequent shading, we
+                // must allow shading when the depth is equal to the depth
+                // in the depth map.
+                wgpu::CompareFunction::LessEqual
+            };
+
+            Some(wgpu::DepthStencilState {
+                format: DepthTexture::FORMAT,
+                depth_write_enabled,
+                depth_compare,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            })
+        } else {
+            None
+        }
+    }
+
     fn determine_color_load_operation(&self) -> wgpu::LoadOp<wgpu::Color> {
         match self.clear_color {
             Some(clear_color) => wgpu::LoadOp::Clear(clear_color),
@@ -699,58 +946,6 @@ impl RenderPassSpecification {
                 store: true,
             }
         }
-    }
-
-    fn get_mesh_buffer_manager(
-        render_resources: &SynchronizedRenderResources,
-        mesh_id: MeshID,
-    ) -> Result<&MeshRenderBufferManager> {
-        render_resources
-            .get_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))
-    }
-
-    fn get_instance_feature_buffer_managers(
-        render_resources: &SynchronizedRenderResources,
-        model_id: ModelID,
-        depth_map_usage: DepthMapUsage,
-        shadow_map_usage: ShadowMapUsage,
-    ) -> Result<impl Iterator<Item = &InstanceFeatureRenderBufferManager>> {
-        render_resources
-            .get_instance_feature_buffer_managers(model_id)
-            .map(|buffers| {
-                if depth_map_usage.is_prepass() || shadow_map_usage.is_update() {
-                    // For depth prepass or shadow map update we only need transforms
-                    &buffers[..1]
-                } else {
-                    &buffers[..]
-                }
-                .iter()
-            })
-            .ok_or_else(|| anyhow!("Missing instance render buffer for model {}", model_id))
-    }
-
-    fn get_material_resource_manager(
-        render_resources: &SynchronizedRenderResources,
-        material_id: MaterialID,
-    ) -> Result<&MaterialRenderResourceManager> {
-        render_resources
-            .get_material_resource_manager(material_id)
-            .ok_or_else(|| anyhow!("Missing resource manager for material {}", material_id))
-    }
-
-    fn get_material_property_texture_manager(
-        render_resources: &SynchronizedRenderResources,
-        texture_set_id: MaterialPropertyTextureSetID,
-    ) -> Result<&MaterialPropertyTextureManager> {
-        render_resources
-            .get_material_property_texture_manager(texture_set_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Missing manager for material property texture set {}",
-                    texture_set_id
-                )
-            })
     }
 }
 
@@ -797,69 +992,17 @@ impl RenderPassRecorder {
                 &format!("{} render pipeline layout", &specification.label),
             );
 
-            let target_color_state = if specification.depth_map_usage.is_prepass()
-                || specification.shadow_map_usage.is_clear_or_update()
-            {
-                // For depth prepasses and shadow map clearing or updates we only
-                // work with depths, so we don't need a color target
-                None
-            } else {
-                Some(wgpu::ColorTargetState {
-                    format: core_system.surface_config().format,
-                    // Since we determine contributions from each light in
-                    // separate render passes, we need to add up the color
-                    // contributions. We simply ignore alpha.
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
-                            dst_factor: wgpu::BlendFactor::One,
-                            operation: wgpu::BlendOperation::Add,
-                        },
-                        alpha: wgpu::BlendComponent::default(),
-                    }),
-                    write_mask: wgpu::ColorWrites::COLOR,
-                })
-            };
+            let color_target_state = specification.determine_color_target_state(core_system);
 
-            let depth_stencil = if specification.shadow_map_usage.is_clear_or_update() {
-                // For modifying the shadow map we have to set it as the depth
-                // map for the pipeline
-                Some(wgpu::DepthStencilState {
-                    format: ShadowMapTexture::FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState {
-                        constant: 8,
-                        slope_scale: 1.5,
-                        clamp: 0.0,
-                    },
-                })
-            } else if !specification.depth_map_usage.is_none() {
-                Some(wgpu::DepthStencilState {
-                    format: DepthTexture::FORMAT,
-                    // No need to write depths during shading passes since we
-                    // are doing depth prepasses
-                    depth_write_enabled: specification.depth_map_usage.is_clear_or_prepass(),
-                    // Since we determine all depths in advance before doing any
-                    // shading, we must allow shading when the depth is equal to
-                    // the depth in the depth map (which will be the case for
-                    // every shaded fragment)
-                    depth_compare: wgpu::CompareFunction::LessEqual,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                })
-            } else {
-                None
-            };
+            let depth_stencil_state = specification.determine_depth_stencil_state();
 
             let pipeline = Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
                 shader,
                 &vertex_buffer_layouts,
-                target_color_state,
-                depth_stencil,
+                color_target_state,
+                depth_stencil_state,
                 config,
                 &format!("{} render pipeline", &specification.label),
             ));
@@ -910,8 +1053,11 @@ impl RenderPassRecorder {
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         if self.disabled() {
+            log::debug!("Skipping render pass: {}", &self.specification.label);
             return Ok(());
         }
+
+        log::debug!("Recording render pass: {}", &self.specification.label);
 
         // Make sure all data is available before doing anything else
 
@@ -929,6 +1075,7 @@ impl RenderPassRecorder {
                         model_id,
                         self.specification.depth_map_usage,
                         self.specification.shadow_map_usage,
+                        self.specification.override_material,
                     )?,
                 ),
             ),
@@ -1117,13 +1264,13 @@ impl RenderPassRecorder {
         layout: &wgpu::PipelineLayout,
         shader: &Shader,
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
-        target_color_state: Option<wgpu::ColorTargetState>,
-        depth_stencil: Option<wgpu::DepthStencilState>,
+        color_target_state: Option<wgpu::ColorTargetState>,
+        depth_stencil_state: Option<wgpu::DepthStencilState>,
         config: &RenderingConfig,
         label: &str,
     ) -> wgpu::RenderPipeline {
-        let has_fragment_state_targets = target_color_state.is_some();
-        let fragment_state_targets = &[target_color_state];
+        let has_fragment_state_targets = color_target_state.is_some();
+        let fragment_state_targets = &[color_target_state];
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: Some(layout),
@@ -1159,7 +1306,7 @@ impl RenderPassRecorder {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil,
+            depth_stencil: depth_stencil_state,
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -1172,6 +1319,14 @@ impl RenderPassRecorder {
 }
 
 impl DepthMapUsage {
+    fn use_readonly() -> Self {
+        Self::Use(false)
+    }
+
+    fn use_readwrite() -> Self {
+        Self::Use(true)
+    }
+
     fn is_none(&self) -> bool {
         *self == Self::None
     }
@@ -1186,6 +1341,10 @@ impl DepthMapUsage {
 
     fn is_clear_or_prepass(&self) -> bool {
         self.is_clear() || self.is_prepass()
+    }
+
+    fn make_writeable(&self) -> bool {
+        self.is_clear_or_prepass() || self == &Self::Use(true)
     }
 }
 

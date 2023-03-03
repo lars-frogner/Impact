@@ -54,6 +54,12 @@ impl LightID {
     }
 }
 
+impl std::fmt::Display for LightID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl LightStorage {
     /// By creating light uniform buffers with a small initial capacity, we
     /// avoid excessive buffer reallocation when the first few lights are added.

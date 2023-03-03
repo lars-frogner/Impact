@@ -26,18 +26,14 @@ lazy_static! {
 impl VertexColorMaterial {
     pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::COLOR;
 
-    const MATERIAL_SHADER_INPUT: MaterialShaderInput = MaterialShaderInput::VertexColor;
-
     /// Adds the material specification for this material to the given
-    /// material library. Because this material uses no textures, the
-    /// same material specification can be used for all instances using
-    /// the material.
+    /// material library.
     pub fn register(material_library: &mut MaterialLibrary) {
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
             None,
             Vec::new(),
-            Self::MATERIAL_SHADER_INPUT,
+            MaterialShaderInput::VertexColor,
         );
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);
     }

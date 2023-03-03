@@ -49,9 +49,7 @@ impl FixedColorMaterial {
 
     /// Registers this material as a feature type in the given
     /// instance feature manager and adds the material specification
-    /// to the given material library. Because this material uses no
-    /// textures, the same material specification can be used for all
-    /// instances using the material.
+    /// to the given material library.
     pub fn register(
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,

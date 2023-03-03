@@ -18,8 +18,8 @@ mod uniform;
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, TextureID};
 pub use buffer::{
-    create_vertex_buffer_layout_for_instance, create_vertex_buffer_layout_for_vertex,
-    UniformBufferable, VertexBufferable,
+    create_uniform_buffer_bind_group_layout_entry, create_vertex_buffer_layout_for_instance,
+    create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
 };
 pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
@@ -27,8 +27,9 @@ pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
     DirectionalLightShaderInput, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-    InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
-    ModelViewTransformShaderInput, PointLightShaderInput, Shader, ShaderGenerator,
+    GlobalAmbientColorShaderInput, InstanceFeatureShaderInput, LightShaderInput,
+    MaterialShaderInput, MeshShaderInput, ModelViewTransformShaderInput, PointLightShaderInput,
+    Shader, ShaderGenerator,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{DepthTexture, ImageTexture};
@@ -69,6 +70,8 @@ pub struct RenderingConfig {
     pub cull_mode: Option<wgpu::Face>,
     /// Controls the way each polygon is rasterized.
     pub polygon_mode: wgpu::PolygonMode,
+    /// The width and height of the directional light shadow map in number of
+    /// texels.
     pub directional_light_shadow_map_resolution: u32,
 }
 

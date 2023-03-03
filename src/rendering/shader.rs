@@ -1,10 +1,12 @@
 //! Generation of graphics shaders.
 
+mod ambient_color;
 mod blinn_phong;
 mod depth;
 mod fixed;
 mod vertex_color;
 
+pub use ambient_color::GlobalAmbientColorShaderInput;
 pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
 
@@ -15,6 +17,7 @@ use crate::{
     },
     rendering::{fre, CoreRenderingSystem},
 };
+use ambient_color::GlobalAmbientColorShaderGenerator;
 use anyhow::{anyhow, Result};
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
 use depth::LightSpaceDepthShaderGenerator;
@@ -91,6 +94,7 @@ pub enum InstanceFeatureShaderInput {
 /// Input description for any kind of material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum MaterialShaderInput {
+    GlobalAmbientColor(GlobalAmbientColorShaderInput),
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(Option<BlinnPhongTextureShaderInput>),
@@ -141,7 +145,7 @@ pub struct DirectionalLightShaderInput {
 /// Shader generator for any kind of material.
 #[derive(Clone, Debug)]
 pub enum MaterialShaderGenerator<'a> {
-    /// Use vertex colors included in the mesh.
+    GlobalAmbientColor(GlobalAmbientColorShaderGenerator<'a>),
     VertexColor,
     FixedColor(FixedColorShaderGenerator<'a>),
     FixedTexture(FixedTextureShaderGenerator<'a>),
@@ -780,6 +784,11 @@ impl ShaderGenerator {
             material_shader_input,
         ) {
             (None, None, None) => None,
+            (None, None, Some(MaterialShaderInput::GlobalAmbientColor(input))) => {
+                Some(MaterialShaderGenerator::GlobalAmbientColor(
+                    GlobalAmbientColorShaderGenerator::new(input),
+                ))
+            }
             (Some(feature_input), None, Some(MaterialShaderInput::Fixed(None))) => Some(
                 MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input)),
             ),
@@ -799,8 +808,11 @@ impl ShaderGenerator {
             (None, None, Some(MaterialShaderInput::LightSpaceDepth)) => {
                 Some(MaterialShaderGenerator::LightSpaceDepth)
             }
-            _ => {
-                return Err(anyhow!("Tried to build shader with invalid material"));
+            input => {
+                return Err(anyhow!(
+                    "Tried to build shader with invalid material: {:?}",
+                    input
+                ));
             }
         };
 
@@ -1502,7 +1514,7 @@ impl MaterialShaderInput {
     /// Whether the material requires light sources.
     pub fn requires_lights(&self) -> bool {
         match self {
-            Self::VertexColor | Self::Fixed(_) => false,
+            Self::GlobalAmbientColor(_) | Self::VertexColor | Self::Fixed(_) => false,
             Self::BlinnPhong(_) | Self::LightSpaceDepth => true,
         }
     }
@@ -1559,6 +1571,9 @@ impl<'a> MaterialShaderGenerator<'a> {
         light_expressions: Option<&LightFieldExpressions>,
     ) {
         match (self, material_input_field_indices) {
+            (Self::GlobalAmbientColor(generator), MaterialVertexOutputFieldIndices::None) => {
+                generator.generate_fragment_code(module, fragment_function, bind_group_idx);
+            }
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
                 VertexColorShaderGenerator::generate_fragment_code(
                     module,
@@ -1576,7 +1591,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 fragment_input_struct,
                 color_input_field_idx,
             ),
-            (Self::FixedTexture(builder), MaterialVertexOutputFieldIndices::None) => builder
+            (Self::FixedTexture(generator), MaterialVertexOutputFieldIndices::None) => generator
                 .generate_fragment_code(
                     module,
                     fragment_function,
@@ -1585,9 +1600,9 @@ impl<'a> MaterialShaderGenerator<'a> {
                     mesh_input_field_indices,
                 ),
             (
-                Self::BlinnPhong(builder),
+                Self::BlinnPhong(generator),
                 MaterialVertexOutputFieldIndices::BlinnPhong(material_input_field_indices),
-            ) => builder.generate_fragment_code(
+            ) => generator.generate_fragment_code(
                 module,
                 fragment_function,
                 bind_group_idx,
@@ -3458,8 +3473,8 @@ mod test {
 
     use crate::scene::{
         BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
-        FixedTextureMaterial, LightSpaceDepthMaterial, TexturedBlinnPhongMaterial,
-        VertexColorMaterial,
+        FixedTextureMaterial, GlobalAmbientColorMaterial, LightSpaceDepthMaterial,
+        TexturedBlinnPhongMaterial, VertexColorMaterial,
     };
 
     use super::*;
@@ -3513,6 +3528,11 @@ mod test {
             specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
             shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
             alpha_location: MATERIAL_VERTEX_BINDING_START + 3,
+        });
+
+    const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
+        MaterialShaderInput::GlobalAmbientColor(GlobalAmbientColorShaderInput {
+            uniform_binding: 0,
         });
 
     const DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =
@@ -3651,6 +3671,27 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_global_ambient_color_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
+            Some(&GLOBAL_AMBIENT_COLOR_INPUT),
+            GlobalAmbientColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;

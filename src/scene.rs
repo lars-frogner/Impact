@@ -29,8 +29,8 @@ pub use light::{
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
     DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
-    FixedTextureComp, FixedTextureMaterial, LightSpaceDepthComp, LightSpaceDepthMaterial,
-    MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+    FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, LightSpaceDepthComp,
+    LightSpaceDepthMaterial, MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
     MaterialPropertyTextureSetID, MaterialSpecification, RGBAColor, RGBColor,
     TexturedBlinnPhongComp, TexturedBlinnPhongMaterial, VertexColorComp, VertexColorMaterial,
 };
@@ -41,11 +41,13 @@ pub use systems::SyncLightPositionsAndDirectionsInStorage;
 pub use tasks::{BufferVisibleModelInstances, SyncSceneCameraViewTransform};
 
 use crate::rendering::fre;
+use nalgebra::vector;
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
 #[derive(Debug)]
 pub struct Scene {
+    config: SceneConfig,
     mesh_repository: RwLock<MeshRepository<fre>>,
     material_library: RwLock<MaterialLibrary>,
     light_storage: RwLock<LightStorage>,
@@ -55,10 +57,21 @@ pub struct Scene {
     scene_camera: RwLock<Option<SceneCamera<fre>>>,
 }
 
+/// Global scene configuration options.
+#[derive(Clone, Debug)]
+pub struct SceneConfig {
+    /// The fixed ambient color to use for every model whose material is light
+    /// dependent.
+    pub global_ambient_color: RGBColor,
+}
+
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(mesh_repository: MeshRepository<fre>) -> Self {
+        let config = SceneConfig::default();
+
         let scene = Self {
+            config,
             mesh_repository: RwLock::new(mesh_repository),
             material_library: RwLock::new(MaterialLibrary::new()),
             light_storage: RwLock::new(LightStorage::new()),
@@ -67,8 +80,15 @@ impl Scene {
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
         };
+
         scene.register_materials();
+
         scene
+    }
+
+    /// Returns a reference to the global scene configuration.
+    pub fn config(&self) -> &SceneConfig {
+        &self.config
     }
 
     /// Returns a reference to the [`MeshRepository`], guarded
@@ -117,6 +137,10 @@ impl Scene {
         let mut material_library = self.material_library.write().unwrap();
         let mut instance_feature_manager = self.instance_feature_manager.write().unwrap();
 
+        GlobalAmbientColorMaterial::register(
+            &mut material_library,
+            self.config.global_ambient_color,
+        );
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);
@@ -127,5 +151,13 @@ impl Scene {
         );
         TexturedBlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
         LightSpaceDepthMaterial::register(&mut material_library);
+    }
+}
+
+impl Default for SceneConfig {
+    fn default() -> Self {
+        Self {
+            global_ambient_color: vector![0.05, 0.05, 0.05],
+        }
     }
 }
