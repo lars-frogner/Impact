@@ -36,6 +36,7 @@ impl LightSpaceDepthMaterial {
     pub fn register(material_library: &mut MaterialLibrary) {
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            None,
             Vec::new(),
             Self::MATERIAL_SHADER_INPUT,
         );

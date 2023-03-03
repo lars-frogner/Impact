@@ -3,8 +3,7 @@
 use crate::{
     geometry::VertexAttributeSet,
     rendering::{
-        Assets, CoreRenderingSystem, ImageTexture, MaterialPropertyTextureSetShaderInput,
-        MaterialShaderInput, TextureID,
+        Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput, TextureID,
     },
     scene::{MaterialPropertyTextureSet, MaterialSpecification},
 };
@@ -23,7 +22,6 @@ pub struct MaterialRenderResourceManager {
 pub struct MaterialPropertyTextureManager {
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
-    shader_input: MaterialPropertyTextureSetShaderInput,
 }
 
 impl MaterialRenderResourceManager {
@@ -81,7 +79,6 @@ impl MaterialPropertyTextureManager {
         Ok(Self {
             bind_group_layout,
             bind_group,
-            shader_input: texture_set.shader_input().clone(),
         })
     }
 
@@ -101,11 +98,6 @@ impl MaterialPropertyTextureManager {
     /// Returns a reference to the bind group for the set of textures.
     pub fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_group
-    }
-
-    // Returns the input required for using the texture set in a shader.
-    pub fn shader_input(&self) -> &MaterialPropertyTextureSetShaderInput {
-        &self.shader_input
     }
 
     fn create_texture_bind_group_layout(

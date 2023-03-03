@@ -19,7 +19,7 @@ pub use vertex_color::VertexColorMaterial;
 
 use crate::{
     geometry::{InstanceFeatureTypeID, VertexAttributeSet},
-    rendering::{fre, MaterialPropertyTextureSetShaderInput, MaterialShaderInput, TextureID},
+    rendering::{fre, MaterialShaderInput, TextureID},
 };
 use bytemuck::Zeroable;
 use impact_utils::{hash64, stringhash64_newtype, StringHash64};
@@ -57,7 +57,6 @@ pub struct MaterialSpecification {
 #[derive(Clone, Debug)]
 pub struct MaterialPropertyTextureSet {
     image_texture_ids: Vec<TextureID>,
-    shader_input: MaterialPropertyTextureSetShaderInput,
 }
 
 /// Container for material specifications and material property texture sets.
@@ -109,25 +108,14 @@ impl MaterialPropertyTextureSet {
     ///
     /// # Panics
     /// If the given list of texture IDs is empty.
-    pub fn new(
-        image_texture_ids: Vec<TextureID>,
-        shader_input: MaterialPropertyTextureSetShaderInput,
-    ) -> Self {
+    pub fn new(image_texture_ids: Vec<TextureID>) -> Self {
         assert!(!image_texture_ids.is_empty());
-        Self {
-            image_texture_ids,
-            shader_input,
-        }
+        Self { image_texture_ids }
     }
 
     /// Returns the IDs of the image textures in the texture set.
     pub fn image_texture_ids(&self) -> &[TextureID] {
         &self.image_texture_ids
-    }
-
-    /// Returns the input required for using the texture set in a shader.
-    pub fn shader_input(&self) -> &MaterialPropertyTextureSetShaderInput {
-        &self.shader_input
     }
 }
 

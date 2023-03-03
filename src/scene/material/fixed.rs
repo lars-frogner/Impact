@@ -6,7 +6,7 @@ use crate::{
     impl_InstanceFeature,
     rendering::{
         FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
-        MaterialPropertyTextureManager, MaterialPropertyTextureSetShaderInput, MaterialShaderInput,
+        MaterialPropertyTextureManager, MaterialShaderInput,
     },
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
@@ -60,8 +60,9 @@ impl FixedColorMaterial {
 
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            None,
             vec![Self::FEATURE_TYPE_ID],
-            MaterialShaderInput::Fixed,
+            MaterialShaderInput::Fixed(None),
         );
         material_library.add_material_specification(*FIXED_COLOR_MATERIAL_ID, specification);
     }
@@ -102,18 +103,19 @@ impl FixedTextureMaterial {
     pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet =
         VertexAttributeSet::TEXTURE_COORDS;
 
-    const MATERIAL_PROPERT_TEXTURE_SHADER_INPUT: MaterialPropertyTextureSetShaderInput =
-        MaterialPropertyTextureSetShaderInput::Fixed(FixedTextureShaderInput {
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput =
+        MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings:
                 MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
-        });
+        }));
 
     /// Adds the material specification to the given material library.
     pub fn register(material_library: &mut MaterialLibrary) {
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            None,
             Vec::new(),
-            MaterialShaderInput::Fixed,
+            Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*FIXED_TEXTURE_MATERIAL_ID, specification);
     }
@@ -141,12 +143,7 @@ impl FixedTextureMaterial {
                 // Add a new texture set if none with the same textures already exist
                 material_library
                     .material_property_texture_set_entry(texture_set_id)
-                    .or_insert_with(|| {
-                        MaterialPropertyTextureSet::new(
-                            texture_ids.to_vec(),
-                            Self::MATERIAL_PROPERT_TEXTURE_SHADER_INPUT,
-                        )
-                    });
+                    .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
                 MaterialComp::new(*FIXED_TEXTURE_MATERIAL_ID, None, Some(texture_set_id))
             },

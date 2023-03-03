@@ -11,9 +11,8 @@ use crate::{
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
         resource::SynchronizedRenderResources, texture::ShadowMapTexture, CameraShaderInput,
         CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialPropertyTextureManager, MaterialPropertyTextureSetShaderInput,
-        MaterialRenderResourceManager, MaterialShaderInput, MeshShaderInput, RenderingConfig,
-        Shader,
+        MaterialPropertyTextureManager, MaterialRenderResourceManager, MaterialShaderInput,
+        MeshShaderInput, RenderingConfig, Shader,
     },
     scene::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
@@ -116,7 +115,6 @@ struct BindGroupShaderInput<'a> {
     camera: Option<&'a CameraShaderInput>,
     light: Option<&'a LightShaderInput>,
     material: Option<&'a MaterialShaderInput>,
-    material_property_textures: Option<&'a MaterialPropertyTextureSetShaderInput>,
 }
 
 impl RenderPassManager {
@@ -541,7 +539,6 @@ impl RenderPassSpecification {
             camera: None,
             light: None,
             material: None,
-            material_property_textures: None,
         };
         let mut vertex_attribute_requirements = VertexAttributeSet::empty();
 
@@ -589,9 +586,6 @@ impl RenderPassSpecification {
                             render_resources,
                             texture_set_id,
                         )?;
-
-                    shader_input.material_property_textures =
-                        Some(material_property_texture_manager.shader_input());
 
                     layouts.push(material_property_texture_manager.bind_group_layout());
                 }
@@ -780,7 +774,6 @@ impl RenderPassRecorder {
                 bind_group_shader_input.light,
                 &instance_feature_shader_inputs,
                 bind_group_shader_input.material,
-                bind_group_shader_input.material_property_textures,
                 vertex_attribute_requirements,
             )?;
 

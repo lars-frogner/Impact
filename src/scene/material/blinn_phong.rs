@@ -6,8 +6,7 @@ use crate::{
     impl_InstanceFeature,
     rendering::{
         fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
-        InstanceFeatureShaderInput, MaterialPropertyTextureManager,
-        MaterialPropertyTextureSetShaderInput, MaterialShaderInput,
+        InstanceFeatureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
     },
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, InstanceFeatureManager, MaterialComp,
@@ -97,8 +96,9 @@ impl BlinnPhongMaterial {
 
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            None,
             vec![Self::FEATURE_TYPE_ID],
-            MaterialShaderInput::BlinnPhong,
+            MaterialShaderInput::BlinnPhong(None),
         );
         material_library.add_material_specification(*BLINN_PHONG_MATERIAL_ID, specification);
     }
@@ -144,12 +144,12 @@ impl DiffuseTexturedBlinnPhongMaterial {
         .union(VertexAttributeSet::NORMAL_VECTOR)
         .union(VertexAttributeSet::TEXTURE_COORDS);
 
-    const MATERIAL_PROPERT_TEXTURE_SHADER_INPUT: MaterialPropertyTextureSetShaderInput =
-        MaterialPropertyTextureSetShaderInput::BlinnPhong(BlinnPhongTextureShaderInput {
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput =
+        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings:
                 MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
             specular_texture_and_sampler_bindings: None,
-        });
+        }));
 
     /// Registers this material as a feature type in the given instance feature
     /// manager and adds the material specification to the given material
@@ -162,8 +162,9 @@ impl DiffuseTexturedBlinnPhongMaterial {
 
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            None,
             vec![Self::FEATURE_TYPE_ID],
-            MaterialShaderInput::BlinnPhong,
+            Self::MATERIAL_SHADER_INPUT,
         );
         material_library
             .add_material_specification(*DIFFUSE_TEXTURED_BLINN_PHONG_MATERIAL_ID, specification);
@@ -195,12 +196,7 @@ impl DiffuseTexturedBlinnPhongMaterial {
                 // Add a new texture set if none with the same textures already exist
                 material_library
                     .material_property_texture_set_entry(texture_set_id)
-                    .or_insert_with(|| {
-                        MaterialPropertyTextureSet::new(
-                            texture_ids.to_vec(),
-                            Self::MATERIAL_PROPERT_TEXTURE_SHADER_INPUT,
-                        )
-                    });
+                    .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
                 let material = Self {
                     ambient_color: blinn_phong.ambient,
@@ -230,14 +226,14 @@ impl TexturedBlinnPhongMaterial {
         .union(VertexAttributeSet::NORMAL_VECTOR)
         .union(VertexAttributeSet::TEXTURE_COORDS);
 
-    const MATERIAL_PROPERT_TEXTURE_SHADER_INPUT: MaterialPropertyTextureSetShaderInput =
-        MaterialPropertyTextureSetShaderInput::BlinnPhong(BlinnPhongTextureShaderInput {
+    const MATERIAL_SHADER_INPUT: MaterialShaderInput =
+        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings:
                 MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
             specular_texture_and_sampler_bindings: Some(
                 MaterialPropertyTextureManager::get_texture_and_sampler_bindings(1),
             ),
-        });
+        }));
 
     /// Registers this material as a feature type in the given instance feature
     /// manager and adds the material specification to the given material
@@ -250,8 +246,9 @@ impl TexturedBlinnPhongMaterial {
 
         let specification = MaterialSpecification::new(
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            None,
             vec![Self::FEATURE_TYPE_ID],
-            MaterialShaderInput::BlinnPhong,
+            Self::MATERIAL_SHADER_INPUT,
         );
         material_library
             .add_material_specification(*TEXTURED_BLINN_PHONG_MATERIAL_ID, specification);
@@ -283,12 +280,7 @@ impl TexturedBlinnPhongMaterial {
                 // Add a new texture set if none with the same textures already exist
                 material_library
                     .material_property_texture_set_entry(texture_set_id)
-                    .or_insert_with(|| {
-                        MaterialPropertyTextureSet::new(
-                            texture_ids.to_vec(),
-                            Self::MATERIAL_PROPERT_TEXTURE_SHADER_INPUT,
-                        )
-                    });
+                    .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
                 let material = Self {
                     ambient_color: blinn_phong.ambient,
