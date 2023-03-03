@@ -205,13 +205,13 @@ impl RenderPassManager {
                 point_light_ids.contains(light_id) || directional_light_ids.contains(light_id)
             });
 
-        let feature_buffer_managers = render_resources.instance_feature_buffer_managers();
+        let all_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
         // Remove passes for non light shaded models that are no longer present
         let removed_non_light_shaded_model_ids: Vec<_> = self
             .non_light_shaded_model_index_mapper
             .key_at_each_idx()
-            .filter(|model_id| !feature_buffer_managers.contains_key(model_id))
+            .filter(|model_id| !all_feature_buffer_managers.contains_key(model_id))
             .collect();
 
         for model_id in removed_non_light_shaded_model_ids {
@@ -230,7 +230,7 @@ impl RenderPassManager {
         let removed_light_shaded_model_ids: Vec<_> = self
             .light_shaded_model_index_mapper
             .key_at_each_idx()
-            .filter(|model_id| !feature_buffer_managers.contains_key(model_id))
+            .filter(|model_id| !all_feature_buffer_managers.contains_key(model_id))
             .collect();
 
         for model_id in removed_light_shaded_model_ids {
@@ -251,13 +251,11 @@ impl RenderPassManager {
                 });
         }
 
-        for (&model_id, feature_buffer_manager) in feature_buffer_managers {
+        for (&model_id, feature_buffer_managers) in all_feature_buffer_managers {
+            let transform_buffer_manager = feature_buffer_managers.first().unwrap();
+
             // Avoid rendering the model if there are currently no instances
-            let disable_pass = feature_buffer_manager
-                .first()
-                .unwrap()
-                .initial_feature_range()
-                .is_empty();
+            let no_visible_instances = transform_buffer_manager.initial_feature_range().is_empty();
 
             let material_requires_lights = render_resources
                 .get_material_resource_manager(model_id.material_id())
@@ -279,7 +277,7 @@ impl RenderPassManager {
                                 RenderPassSpecification::global_ambient_color_shading_pass(
                                     model_id,
                                 ),
-                                disable_pass,
+                                no_visible_instances,
                             )?);
 
                         for &light_id in point_light_ids {
@@ -301,10 +299,14 @@ impl RenderPassManager {
                                     }),
                                     model_id,
                                 ),
-                                disable_pass,
+                                no_visible_instances,
                             )?);
                         }
                         for &light_id in directional_light_ids {
+                            let no_shadow_casting_instances = transform_buffer_manager
+                                .feature_range(light_id.as_instance_feature_buffer_range_id())
+                                .is_empty();
+
                             let passes = match self
                                 .light_shaded_model_shading_passes
                                 .entry(light_id)
@@ -318,7 +320,7 @@ impl RenderPassManager {
                                             render_resources,
                                             shader_manager,
                                             RenderPassSpecification::shadow_map_clearing_pass(),
-                                            disable_pass,
+                                            false,
                                         )?),
                                         ..Default::default()
                                     })
@@ -342,7 +344,7 @@ impl RenderPassManager {
                                     RenderPassSpecification::shadow_map_update_pass(
                                         light, model_id,
                                     ),
-                                    disable_pass,
+                                    no_shadow_casting_instances,
                                 )?);
 
                             // Create a directional light shading pass for the
@@ -355,7 +357,7 @@ impl RenderPassManager {
                                 RenderPassSpecification::model_shading_pass_with_shadow_map(
                                     light, model_id,
                                 ),
-                                disable_pass,
+                                no_visible_instances,
                             )?);
                         }
                     }
@@ -364,18 +366,25 @@ impl RenderPassManager {
                         // Set the disabled state of the passes for the existing model
 
                         self.light_shaded_model_global_ambient_color_shading_passes[model_idx]
-                            .set_disabled(disable_pass);
+                            .set_disabled(no_visible_instances);
 
-                        self.light_shaded_model_shading_passes
-                            .values_mut()
-                            .for_each(|passes| {
+                        self.light_shaded_model_shading_passes.iter_mut().for_each(
+                            |(&light_id, passes)| {
                                 if let Some(recorder) =
                                     passes.shadow_map_update_passes.get_mut(model_idx)
                                 {
-                                    recorder.set_disabled(disable_pass);
+                                    let no_shadow_casting_instances = transform_buffer_manager
+                                        .feature_range(
+                                            light_id.as_instance_feature_buffer_range_id(),
+                                        )
+                                        .is_empty();
+
+                                    recorder.set_disabled(no_shadow_casting_instances);
                                 }
-                                passes.shading_passes[model_idx].set_disabled(disable_pass);
-                            });
+
+                                passes.shading_passes[model_idx].set_disabled(no_visible_instances);
+                            },
+                        );
                     }
                 }
             } else {
@@ -393,7 +402,7 @@ impl RenderPassManager {
                                 render_resources,
                                 shader_manager,
                                 RenderPassSpecification::depth_prepass(model_id),
-                                disable_pass,
+                                no_visible_instances,
                             )?);
 
                         // Create a shading pass for the new model
@@ -406,7 +415,7 @@ impl RenderPassManager {
                                 RenderPassSpecification::model_shading_pass_without_shadow_map(
                                     None, model_id,
                                 ),
-                                disable_pass,
+                                no_visible_instances,
                             )?);
                     }
                     // The model already has shading passes
@@ -414,10 +423,10 @@ impl RenderPassManager {
                         // Set the disabled state of the passes for the existing model
 
                         self.non_light_shaded_model_depth_prepasses[model_idx]
-                            .set_disabled(disable_pass);
+                            .set_disabled(no_visible_instances);
 
                         self.non_light_shaded_model_shading_passes[model_idx]
-                            .set_disabled(disable_pass);
+                            .set_disabled(no_visible_instances);
                     }
                 }
             }
