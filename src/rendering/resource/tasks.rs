@@ -151,7 +151,6 @@ define_task!(
                 let material_library = scene.material_library().read().unwrap();
                 DesynchronizedRenderResources::sync_material_resources_with_material_library(
                     renderer.core_system(),
-                    &renderer.assets().read().unwrap(),
                     render_resource_manager
                         .desynchronized()
                         .material_resource_managers
@@ -159,10 +158,9 @@ define_task!(
                         .unwrap()
                         .as_mut(),
                         &material_library,
-                )
-            } else {
-                Ok(())
+                );
             }
+            Ok(())
         })
     }
 );

@@ -3,18 +3,29 @@
 use crate::{
     geometry::VertexAttributeSet,
     rendering::{
+        buffer::{self, RenderBuffer},
         Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput, TextureID,
     },
-    scene::{MaterialPropertyTextureSet, MaterialSpecification},
+    scene::{FixedMaterialResources, MaterialPropertyTextureSet, MaterialSpecification},
 };
 use anyhow::{anyhow, Result};
+use std::borrow::Cow;
 
-/// Manager of a render resources for a material type.
+/// Manager of render resources for a material type.
 #[derive(Debug)]
 pub struct MaterialRenderResourceManager {
     vertex_attribute_requirements: VertexAttributeSet,
+    fixed_resources: Option<FixedMaterialRenderResourceManager>,
     shader_input: MaterialShaderInput,
-    label: String,
+}
+
+/// Manager of render resources for a material type that are the same for all
+/// uses of the material.
+#[derive(Debug)]
+pub struct FixedMaterialRenderResourceManager {
+    _uniform_render_buffer: RenderBuffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
 /// Manager of a set of textures used for material properties.
@@ -29,15 +40,24 @@ impl MaterialRenderResourceManager {
     /// material specification.
     pub fn for_material_specification(
         core_system: &CoreRenderingSystem,
-        assets: &Assets,
         material_specification: &MaterialSpecification,
         label: String,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        let fixed_resources = material_specification
+            .fixed_resources()
+            .map(|fixed_resources| {
+                FixedMaterialRenderResourceManager::for_fixed_resources(
+                    core_system,
+                    fixed_resources,
+                    format!("{} fixed resources", &label),
+                )
+            });
+
+        Self {
             vertex_attribute_requirements: material_specification.vertex_attribute_requirements(),
+            fixed_resources,
             shader_input: material_specification.shader_input().clone(),
-            label,
-        })
+        }
     }
 
     /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
@@ -46,9 +66,92 @@ impl MaterialRenderResourceManager {
         self.vertex_attribute_requirements
     }
 
+    /// Returns a reference to the [`FixedMaterialRenderResourceManager`] for
+    /// the material, or [`None`] if the material has no fixed resources.
+    pub fn fixed_resources(&self) -> Option<&FixedMaterialRenderResourceManager> {
+        self.fixed_resources.as_ref()
+    }
+
     /// Returns the input required for generating shaders for the material.
     pub fn shader_input(&self) -> &MaterialShaderInput {
         &self.shader_input
+    }
+}
+
+impl FixedMaterialRenderResourceManager {
+    fn for_fixed_resources(
+        core_system: &CoreRenderingSystem,
+        fixed_resources: &FixedMaterialResources,
+        label: String,
+    ) -> Self {
+        let uniform_render_buffer = RenderBuffer::new_buffer_for_single_uniform_bytes(
+            core_system,
+            fixed_resources.uniform_bytes(),
+            Cow::Owned(label.clone()),
+        );
+
+        let uniform_bind_group_layout_entry = *fixed_resources.uniform_bind_group_layout_entry();
+
+        let uniform_binding = uniform_bind_group_layout_entry.binding;
+
+        let bind_group_layout = Self::create_bind_group_layout(
+            core_system.device(),
+            uniform_bind_group_layout_entry,
+            &label,
+        );
+
+        let bind_group = Self::create_bind_group(
+            core_system.device(),
+            uniform_binding,
+            &uniform_render_buffer,
+            &bind_group_layout,
+            &label,
+        );
+
+        Self {
+            _uniform_render_buffer: uniform_render_buffer,
+            bind_group_layout,
+            bind_group,
+        }
+    }
+
+    /// Returns a reference to the bind group layout for the fixed material
+    /// resources.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
+    }
+
+    /// Returns a reference to the bind group for the fixed material resources.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
+    }
+
+    fn create_bind_group_layout(
+        device: &wgpu::Device,
+        uniform_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
+        label: &str,
+    ) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[uniform_bind_group_layout_entry],
+            label: Some(&format!("{} bind group layout", label)),
+        })
+    }
+
+    fn create_bind_group(
+        device: &wgpu::Device,
+        uniform_binding: u32,
+        uniform_render_buffer: &RenderBuffer,
+        layout: &wgpu::BindGroupLayout,
+        label: &str,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[buffer::create_single_uniform_bind_group_entry(
+                uniform_binding,
+                uniform_render_buffer,
+            )],
+            label: Some(&format!("{} bind group", label)),
+        })
     }
 }
 

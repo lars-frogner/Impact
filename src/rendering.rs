@@ -19,7 +19,7 @@ pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, TextureID};
 pub use buffer::{
     create_vertex_buffer_layout_for_instance, create_vertex_buffer_layout_for_vertex,
-    VertexBufferable,
+    UniformBufferable, VertexBufferable,
 };
 pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
 pub use render_pass::{RenderPassManager, SyncRenderPasses};

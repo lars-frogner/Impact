@@ -524,7 +524,8 @@ impl RenderPassSpecification {
     /// 1. Camera.
     /// 2. Lights.
     /// 3. Shadow map textures.
-    /// 4. Material property textures.
+    /// 4. Fixed material resources.
+    /// 5. Material property textures.
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
@@ -533,7 +534,7 @@ impl RenderPassSpecification {
         BindGroupShaderInput<'a>,
         VertexAttributeSet,
     )> {
-        let mut layouts = Vec::with_capacity(4);
+        let mut layouts = Vec::with_capacity(5);
 
         let mut shader_input = BindGroupShaderInput {
             camera: None,
@@ -580,6 +581,10 @@ impl RenderPassSpecification {
                 vertex_attribute_requirements =
                     material_resource_manager.vertex_attribute_requirements();
 
+                if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                    layouts.push(fixed_resources.bind_group_layout());
+                }
+
                 if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
                     let material_property_texture_manager =
                         Self::get_material_property_texture_manager(
@@ -601,7 +606,8 @@ impl RenderPassSpecification {
     /// 1. Camera.
     /// 2. Lights.
     /// 3. Shadow map textures.
-    /// 4. Material textures.
+    /// 4. Fixed material resources.
+    /// 5. Material property textures.
     fn get_bind_groups<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
@@ -635,6 +641,13 @@ impl RenderPassSpecification {
             // We do not need a material if we are doing a depth prepass or
             // updating shadow map
             if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
+                let material_resource_manager =
+                    Self::get_material_resource_manager(render_resources, model_id.material_id())?;
+
+                if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                    bind_groups.push(fixed_resources.bind_group());
+                }
+
                 if let Some(texture_set_id) = model_id.material_property_texture_set_id() {
                     let material_property_texture_manager =
                         Self::get_material_property_texture_manager(

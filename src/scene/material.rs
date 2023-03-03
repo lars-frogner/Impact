@@ -19,10 +19,10 @@ pub use vertex_color::VertexColorMaterial;
 
 use crate::{
     geometry::{InstanceFeatureTypeID, VertexAttributeSet},
-    rendering::{fre, MaterialShaderInput, TextureID},
+    rendering::{fre, MaterialShaderInput, TextureID, UniformBufferable},
 };
 use bytemuck::Zeroable;
-use impact_utils::{hash64, stringhash64_newtype, StringHash64};
+use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, StringHash64};
 use nalgebra::{Vector3, Vector4};
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -44,13 +44,23 @@ stringhash64_newtype!(
     [pub] MaterialPropertyTextureSetID
 );
 
-/// A material type specified by a set of untextured per-material properties (as
-/// instance features).
+/// A material description specifying the set of untextured per-material
+/// properties (as instance features) and optionally some fixed material
+/// resources.
 #[derive(Clone, Debug)]
 pub struct MaterialSpecification {
     vertex_attribute_requirements: VertexAttributeSet,
+    fixed_resources: Option<FixedMaterialResources>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     shader_input: MaterialShaderInput,
+}
+
+/// Container for rendering resources for a specific material type that are the
+/// same for all uses of the material.
+#[derive(Clone, Debug)]
+pub struct FixedMaterialResources {
+    uniform_bytes: AlignedByteVec,
+    uniform_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
 }
 
 /// Specifies a set of textures used for textured material properties.
@@ -70,15 +80,17 @@ pub struct MaterialLibrary {
 const MATERIAL_VERTEX_BINDING_START: u32 = 20;
 
 impl MaterialSpecification {
-    /// Creates a new material specification with the given untextured material
-    /// properties.
+    /// Creates a new material specification with the given fixed resources and
+    /// untextured material property types.
     pub fn new(
         vertex_attribute_requirements: VertexAttributeSet,
+        fixed_resources: Option<FixedMaterialResources>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
         shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
             vertex_attribute_requirements,
+            fixed_resources,
             instance_feature_type_ids,
             shader_input,
         }
@@ -90,6 +102,12 @@ impl MaterialSpecification {
         self.vertex_attribute_requirements
     }
 
+    /// Returns a reference to the [`FixedMaterialResources`] of the material,
+    /// or [`None`] if the material has no fixed resources.
+    pub fn fixed_resources(&self) -> Option<&FixedMaterialResources> {
+        self.fixed_resources.as_ref()
+    }
+
     /// Returns the IDs of the material property types used
     /// for the material.
     pub fn instance_feature_type_ids(&self) -> &[InstanceFeatureTypeID] {
@@ -99,6 +117,42 @@ impl MaterialSpecification {
     /// Returns the input required for using the material in a shader.
     pub fn shader_input(&self) -> &MaterialShaderInput {
         &self.shader_input
+    }
+}
+
+impl FixedMaterialResources {
+    /// Binding index for the uniform buffer with fixed material data.
+    pub const UNIFORM_BINDING: u32 = 0;
+
+    /// Creates a new container for fixed material resources holding the given
+    /// piece of uniform bufferable data.
+    pub fn new<U>(resource_uniform: &U) -> Self
+    where
+        U: UniformBufferable,
+    {
+        let uniform_data = AlignedByteVec::copied_from_slice(
+            Alignment::of::<U>(),
+            bytemuck::bytes_of(resource_uniform),
+        );
+
+        let uniform_bind_group_layout_entry =
+            U::create_bind_group_layout_entry(Self::UNIFORM_BINDING);
+
+        Self {
+            uniform_bytes: uniform_data,
+            uniform_bind_group_layout_entry,
+        }
+    }
+
+    /// Returns a byte view of the piece of fixed material data that will reside
+    /// in a uniform buffer.
+    pub fn uniform_bytes(&self) -> &[u8] {
+        &self.uniform_bytes
+    }
+
+    /// Returns the bind group layout entry for the fixed material uniform data.
+    pub fn uniform_bind_group_layout_entry(&self) -> &wgpu::BindGroupLayoutEntry {
+        &self.uniform_bind_group_layout_entry
     }
 }
 

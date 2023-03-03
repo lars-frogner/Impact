@@ -343,25 +343,22 @@ impl DesynchronizedRenderResources {
     /// missing render resources for new source data will be created.
     fn sync_material_resources_with_material_library(
         core_system: &CoreRenderingSystem,
-        assets: &Assets,
         material_resource_managers: &mut MaterialResourceManagerMap,
         material_library: &MaterialLibrary,
-    ) -> Result<()> {
+    ) {
         for (&material_id, material_specification) in material_library.material_specifications() {
             if let Entry::Vacant(entry) = material_resource_managers.entry(material_id) {
                 entry.insert(MaterialRenderResourceManager::for_material_specification(
                     core_system,
-                    assets,
                     material_specification,
                     material_id.to_string(),
-                )?);
+                ));
             };
         }
         Self::remove_unmatched_render_resources(
             material_resource_managers,
             material_library.material_specifications(),
         );
-        Ok(())
     }
 
     /// Performs any required updates for keeping the given map of material

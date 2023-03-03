@@ -28,11 +28,11 @@ pub use light::{
 };
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
-    DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedTextureComp,
-    FixedTextureMaterial, LightSpaceDepthComp, LightSpaceDepthMaterial, MaterialComp, MaterialID,
-    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-    MaterialSpecification, RGBAColor, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
-    VertexColorComp, VertexColorMaterial,
+    DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
+    FixedTextureComp, FixedTextureMaterial, LightSpaceDepthComp, LightSpaceDepthMaterial,
+    MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+    MaterialPropertyTextureSetID, MaterialSpecification, RGBAColor, RGBColor,
+    TexturedBlinnPhongComp, TexturedBlinnPhongMaterial, VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;

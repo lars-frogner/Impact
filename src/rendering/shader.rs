@@ -586,7 +586,8 @@ impl ShaderGenerator {
         // 1. Camera.
         // 2. Lights.
         // 3. Shadow map textures.
-        // 4. Material property textures.
+        // 4. Fixed material resources.
+        // 5. Material property textures.
         let mut bind_group_idx = 0;
 
         let camera_projection = camera_shader_input.map(|camera_shader_input| {
@@ -784,7 +785,7 @@ impl ShaderGenerator {
             ),
             (None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
                 Some(MaterialShaderGenerator::FixedTexture(
-                FixedTextureShaderGenerator::new(texture_input),
+                    FixedTextureShaderGenerator::new(texture_input),
                 ))
             }
             (None, Some(feature_input), Some(MaterialShaderInput::BlinnPhong(texture_input))) => {
