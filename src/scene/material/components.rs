@@ -46,7 +46,6 @@ pub struct FixedTextureComp(pub TextureID);
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct BlinnPhongComp {
-    pub ambient: RGBColor,
     pub diffuse: RGBColor,
     pub specular: RGBColor,
     pub shininess: fre,
@@ -55,7 +54,6 @@ pub struct BlinnPhongComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DiffuseTexturedBlinnPhongComp {
-    pub ambient: RGBColor,
     pub specular: RGBColor,
     pub diffuse: TextureID,
     pub shininess: fre,
@@ -64,7 +62,6 @@ pub struct DiffuseTexturedBlinnPhongComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct TexturedBlinnPhongComp {
-    pub ambient: RGBColor,
     pub diffuse: TextureID,
     pub specular: TextureID,
     pub shininess: fre,

@@ -19,9 +19,6 @@ use naga::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlinnPhongFeatureShaderInput {
     /// Vertex attribute location for the instance feature
-    /// representing ambient color.
-    pub ambient_color_location: u32,
-    /// Vertex attribute location for the instance feature
     /// representing diffuse color. If [`None`], diffuse
     /// color is obtained from a texture instead.
     pub diffuse_color_location: Option<u32>,
@@ -64,7 +61,6 @@ pub struct BlinnPhongShaderGenerator<'a> {
 /// properties in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct BlinnPhongVertexOutputFieldIndices {
-    ambient_color: usize,
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     shininess: usize,
@@ -105,13 +101,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let mut input_struct_builder = InputStructBuilder::new("MaterialProperties", "material");
 
-        let input_ambient_color_field_idx = input_struct_builder.add_field(
-            "ambientColor",
-            vec3_type_handle,
-            self.feature_input.ambient_color_location,
-            VECTOR_3_SIZE,
-        );
-
         let input_diffuse_color_field_idx =
             self.feature_input.diffuse_color_location.map(|location| {
                 input_struct_builder.add_field(
@@ -142,14 +131,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let input_struct =
             input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
-        let output_ambient_color_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "ambientColor",
-                vec3_type_handle,
-                VECTOR_3_SIZE,
-                input_struct.get_field_expr_handle(input_ambient_color_field_idx),
-            );
-
         let output_shininess_field_idx = vertex_output_struct_builder
             .add_field_with_perspective_interpolation(
                 "shininess",
@@ -159,7 +140,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             );
 
         let mut indices = BlinnPhongVertexOutputFieldIndices {
-            ambient_color: output_ambient_color_field_idx,
             diffuse_color: None,
             specular_color: None,
             shininess: output_shininess_field_idx,
@@ -304,9 +284,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 .expect("Missing normal vector for Blinn-Phong shading"),
         );
 
-        let ambient_color_expr_handle =
-            fragment_input_struct.get_field_expr_handle(material_input_field_indices.ambient_color);
-
         let shininess_expr_handle =
             fragment_input_struct.get_field_expr_handle(material_input_field_indices.shininess);
 
@@ -356,14 +333,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     init: None,
                 },
             )),
-        );
-
-        push_to_block(
-            &mut fragment_function.body,
-            Statement::Store {
-                pointer: color_ptr_expr_handle,
-                value: ambient_color_expr_handle,
-            },
         );
 
         let view_dir_expr_handle = SourceCodeFunctions::generate_call(
@@ -451,28 +420,11 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             }
         };
 
-        let accumulated_color_expr_handle = emit_in_func(fragment_function, |function| {
-            let color_expr_handle = include_expr_in_func(
-                function,
-                Expression::Load {
-                    pointer: color_ptr_expr_handle,
-                },
-            );
-            include_expr_in_func(
-                function,
-                Expression::Binary {
-                    op: BinaryOperator::Add,
-                    left: color_expr_handle,
-                    right: light_color_expr_handle,
-                },
-            )
-        });
-
         push_to_block(
             &mut fragment_function.body,
             Statement::Store {
                 pointer: color_ptr_expr_handle,
-                value: accumulated_color_expr_handle,
+                value: light_color_expr_handle,
             },
         );
 

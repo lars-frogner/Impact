@@ -237,7 +237,6 @@ fn create_blinn_phong_material_component_from_tobj_material(
     material: &ObjMaterial,
 ) -> SingleInstance<ComponentStorage> {
     ComponentStorage::from_single_instance_view(&BlinnPhongComp {
-        ambient: material.ambient.into(),
         diffuse: material.diffuse.into(),
         specular: material.specular.into(),
         shininess: material.shininess,
@@ -254,7 +253,6 @@ fn create_diffuse_textured_blinn_phong_material_component_from_tobj_material(
 
     Ok(ComponentStorage::from_single_instance_view(
         &DiffuseTexturedBlinnPhongComp {
-            ambient: material.ambient.into(),
             diffuse: diffuse_texture_id,
             specular: material.specular.into(),
             shininess: material.shininess,
@@ -274,7 +272,6 @@ fn create_textured_blinn_phong_material_component_from_tobj_material(
 
     Ok(ComponentStorage::from_single_instance_view(
         &TexturedBlinnPhongComp {
-            ambient: material.ambient.into(),
             diffuse: diffuse_texture_id,
             specular: specular_texture_id,
             shininess: material.shininess,

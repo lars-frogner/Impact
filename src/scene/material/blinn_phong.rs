@@ -20,51 +20,42 @@ use impact_utils::hash64;
 use lazy_static::lazy_static;
 use std::sync::RwLock;
 
-/// Material using the Blinn-Phong reflection model, with
-/// fixed ambient, diffuse and specular colors and fixed
-/// shininess.
+/// Material using the Blinn-Phong reflection model, with fixed diffuse and
+/// specular colors and fixed shininess.
 ///
-/// This type stores the material's per-instance data that will
-/// be sent to the GPU. It implements [`InstanceFeature`], and
-/// can thus be stored in an
+/// This type stores the material's per-instance data that will be sent to the
+/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct BlinnPhongMaterial {
-    ambient_color: RGBColor,
     diffuse_color: RGBColor,
     specular_color: RGBColor,
     shininess: fre,
 }
 
-/// Material using the Blinn-Phong reflection model, with
-/// textured diffuse colors, fixed ambient and specular
-/// colors and fixed shininess.
+/// Material using the Blinn-Phong reflection model, with textured diffuse
+/// colors, fixed specular color and fixed shininess.
 ///
-/// This type stores the material's per-instance data that will
-/// be sent to the GPU. It implements [`InstanceFeature`], and
-/// can thus be stored in an
+/// This type stores the material's per-instance data that will be sent to the
+/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct DiffuseTexturedBlinnPhongMaterial {
-    ambient_color: RGBColor,
     specular_color: RGBColor,
     shininess: fre,
 }
 
-/// Material using the Blinn-Phong reflection model, with
-/// textured diffuse and specular colors, fixed ambient
-/// color and fixed shininess.
+/// Material using the Blinn-Phong reflection model, with textured diffuse and
+/// specular colors and fixed shininess.
 ///
-/// This type stores the material's per-instance data that will
-/// be sent to the GPU. It implements [`InstanceFeature`], and
-/// can thus be stored in an
+/// This type stores the material's per-instance data that will be sent to the
+/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedBlinnPhongMaterial {
-    ambient_color: RGBColor,
     shininess: fre,
 }
 
@@ -117,7 +108,6 @@ impl BlinnPhongMaterial {
             components,
             |blinn_phong: &BlinnPhongComp| -> MaterialComp {
                 let material = Self {
-                    ambient_color: blinn_phong.ambient,
                     diffuse_color: blinn_phong.diffuse,
                     specular_color: blinn_phong.specular,
                     shininess: blinn_phong.shininess,
@@ -195,7 +185,6 @@ impl DiffuseTexturedBlinnPhongMaterial {
                     .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
                 let material = Self {
-                    ambient_color: blinn_phong.ambient,
                     specular_color: blinn_phong.specular,
                     shininess: blinn_phong.shininess,
                 };
@@ -278,7 +267,6 @@ impl TexturedBlinnPhongMaterial {
                     .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
                 let material = Self {
-                    ambient_color: blinn_phong.ambient,
                     shininess: blinn_phong.shininess,
                 };
 
@@ -303,14 +291,12 @@ impl_InstanceFeature!(
     wgpu::vertex_attr_array![
         MATERIAL_VERTEX_BINDING_START => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
+        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        ambient_color_location: MATERIAL_VERTEX_BINDING_START,
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 3,
+        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+        shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );
 
@@ -318,27 +304,23 @@ impl_InstanceFeature!(
     DiffuseTexturedBlinnPhongMaterial,
     wgpu::vertex_attr_array![
         MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
+        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: None,
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+        shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
     })
 );
 
 impl_InstanceFeature!(
     TexturedBlinnPhongMaterial,
     wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
+        MATERIAL_VERTEX_BINDING_START => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: None,
         specular_color_location: None,
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+        shininess_location: MATERIAL_VERTEX_BINDING_START,
     })
 );

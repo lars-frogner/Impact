@@ -3518,18 +3518,16 @@ mod test {
 
     const BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            ambient_color_location: MATERIAL_VERTEX_BINDING_START,
-            diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-            shininess_location: MATERIAL_VERTEX_BINDING_START + 3,
+            diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+            shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
         });
 
     const DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            ambient_color_location: MATERIAL_VERTEX_BINDING_START,
             diffuse_color_location: None,
-            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-            shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+            shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
         });
 
     const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
@@ -3545,10 +3543,9 @@ mod test {
 
     const TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            ambient_color_location: MATERIAL_VERTEX_BINDING_START,
             diffuse_color_location: None,
             specular_color_location: None,
-            shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+            shininess_location: MATERIAL_VERTEX_BINDING_START,
         });
 
     const TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =
