@@ -334,7 +334,7 @@ impl ThreadPoolTaskErrors {
     /// Returns a [`Result`] that is either [`Ok`] if the task with
     /// the given ID succeeded or was never executed, or [`Err`]
     /// containing the resulting [`TaskError`] if it was executed
-    /// and failed. In the latter case, the record if the error is
+    /// and failed. In the latter case, the record of the error is
     /// removed from this object.
     pub fn take_result_of(&mut self, task_id: TaskID) -> Result<(), TaskError> {
         match self.errors.remove(&task_id) {
@@ -545,7 +545,7 @@ impl TaskStatus {
     }
 
     fn register_error(&self, worker_id: WorkerID, task_id: TaskID, error: TaskError) {
-        log::debug!(
+        log::error!(
             "Worker {} registered error on task {}: {}",
             worker_id,
             task_id,

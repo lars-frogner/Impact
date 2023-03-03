@@ -240,16 +240,10 @@ impl RenderingSystem {
         self.core_system.initialize_surface();
     }
 
-    fn handle_render_error(&self, error: Error, control_flow: &mut ControlFlow<'_>) {
-        match error.downcast_ref() {
+    fn handle_render_error(&self, error: Error, _control_flow: &mut ControlFlow<'_>) {
+        if let Some(wgpu::SurfaceError::Lost) = error.downcast_ref() {
             // Recreate swap chain if lost
-            Some(wgpu::SurfaceError::Lost) => self.initialize_surface(),
-            // Quit if GPU is out of memory
-            Some(wgpu::SurfaceError::OutOfMemory) => {
-                control_flow.exit();
-            }
-            // Other errors should be resolved by the next frame, so we just log the error and continue
-            _ => log::error!("{:?}", error),
+            self.initialize_surface();
         }
     }
 

@@ -47,5 +47,9 @@ impl RenderingSystem {
         if let Err(render_error) = task_errors.take_result_of(Render.id()) {
             self.handle_render_error(render_error, control_flow);
         }
+        if task_errors.n_errors() > 0 {
+            log::error!("Aborting due to fatal errors");
+            control_flow.exit();
+        }
     }
 }

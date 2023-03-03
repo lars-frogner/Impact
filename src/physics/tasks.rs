@@ -29,8 +29,12 @@ impl PhysicsSimulator {
     /// handling in the given set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
-        _task_errors: &mut ThreadPoolTaskErrors,
-        _control_flow: &mut ControlFlow<'_>,
+        task_errors: &mut ThreadPoolTaskErrors,
+        control_flow: &mut ControlFlow<'_>,
     ) {
+        if task_errors.n_errors() > 0 {
+            log::error!("Aborting due to fatal errors");
+            control_flow.exit();
+        }
     }
 }
