@@ -3,7 +3,7 @@
 use crate::{
     geometry::InstanceFeatureID,
     rendering::{fre, TextureID},
-    scene::{MaterialID, MaterialPropertyTextureSetID, RGBAColor, RGBColor},
+    scene::{MaterialID, MaterialPropertyTextureSetID, RGBColor},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
@@ -35,7 +35,7 @@ pub struct VertexColorComp;
 /// have a fixed, uniform color that is independent of lighting.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct FixedColorComp(pub RGBAColor);
+pub struct FixedColorComp(pub RGBColor);
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a fixed, textured color that is independent of lighting.
@@ -50,7 +50,6 @@ pub struct BlinnPhongComp {
     pub diffuse: RGBColor,
     pub specular: RGBColor,
     pub shininess: fre,
-    pub alpha: fre,
 }
 
 #[repr(C)]
@@ -60,7 +59,6 @@ pub struct DiffuseTexturedBlinnPhongComp {
     pub specular: RGBColor,
     pub diffuse: TextureID,
     pub shininess: fre,
-    pub alpha: fre,
 }
 
 #[repr(C)]
@@ -70,7 +68,6 @@ pub struct TexturedBlinnPhongComp {
     pub diffuse: TextureID,
     pub specular: TextureID,
     pub shininess: fre,
-    pub alpha: fre,
 }
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities

@@ -31,8 +31,8 @@ pub use material::{
     DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
     FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, LightSpaceDepthComp,
     LightSpaceDepthMaterial, MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-    MaterialPropertyTextureSetID, MaterialSpecification, RGBAColor, RGBColor,
-    TexturedBlinnPhongComp, TexturedBlinnPhongMaterial, VertexColorComp, VertexColorMaterial,
+    MaterialPropertyTextureSetID, MaterialSpecification, RGBColor, TexturedBlinnPhongComp,
+    TexturedBlinnPhongMaterial, VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;

@@ -134,9 +134,7 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
 
     let positions = aggregate_3(&mesh.positions, |x, y, z| VertexPosition(point![x, y, z]));
 
-    let colors = aggregate_3(&mesh.vertex_color, |r, g, b| {
-        VertexColor(vector![r, g, b, 1.0])
-    });
+    let colors = aggregate_3(&mesh.vertex_color, |r, g, b| VertexColor(vector![r, g, b]));
 
     let normal_vectors = aggregate_3(&mesh.normals, |nx, ny, nz| {
         VertexNormalVector(UnitVector3::new_normalize(vector![nx, ny, nz]))
@@ -243,7 +241,6 @@ fn create_blinn_phong_material_component_from_tobj_material(
         diffuse: material.diffuse.into(),
         specular: material.specular.into(),
         shininess: material.shininess,
-        alpha: material.dissolve,
     })
 }
 
@@ -261,7 +258,6 @@ fn create_diffuse_textured_blinn_phong_material_component_from_tobj_material(
             diffuse: diffuse_texture_id,
             specular: material.specular.into(),
             shininess: material.shininess,
-            alpha: material.dissolve,
         },
     ))
 }
@@ -282,7 +278,6 @@ fn create_textured_blinn_phong_material_component_from_tobj_material(
             diffuse: diffuse_texture_id,
             specular: specular_texture_id,
             shininess: material.shininess,
-            alpha: material.dissolve,
         },
     ))
 }

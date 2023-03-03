@@ -1,10 +1,11 @@
 //! Generation of shaders for Blinn-Phong materials.
 
 use super::{
-    append_to_arena, emit_in_func, include_expr_in_func, insert_in_arena, new_name, push_to_block,
-    InputStruct, InputStructBuilder, LightFieldExpressions, LightVertexOutputFieldIndices,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, SourceCodeFunctions,
-    TextureType, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
+    insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
+    LightFieldExpressions, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
+    OutputStructBuilder, SampledTexture, SourceCodeFunctions, TextureType, F32_TYPE, F32_WIDTH,
+    VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{
     BinaryOperator, Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement,
@@ -31,9 +32,6 @@ pub struct BlinnPhongFeatureShaderInput {
     /// Vertex attribute location for the instance feature
     /// representing shininess.
     pub shininess_location: u32,
-    /// Vertex attribute location for the instance feature
-    /// representing alpha.
-    pub alpha_location: u32,
 }
 
 /// Input description specifying the bindings of textures
@@ -70,7 +68,6 @@ pub struct BlinnPhongVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     shininess: usize,
-    alpha: usize,
 }
 
 impl<'a> BlinnPhongShaderGenerator<'a> {
@@ -142,13 +139,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             F32_WIDTH,
         );
 
-        let input_alpha_field_idx = input_struct_builder.add_field(
-            "alpha",
-            float_type_handle,
-            self.feature_input.alpha_location,
-            F32_WIDTH,
-        );
-
         let input_struct =
             input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
@@ -168,20 +158,11 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 input_struct.get_field_expr_handle(input_shininess_field_idx),
             );
 
-        let output_alpha_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "alpha",
-                float_type_handle,
-                F32_WIDTH,
-                input_struct.get_field_expr_handle(input_alpha_field_idx),
-            );
-
         let mut indices = BlinnPhongVertexOutputFieldIndices {
             ambient_color: output_ambient_color_field_idx,
             diffuse_color: None,
             specular_color: None,
             shininess: output_shininess_field_idx,
-            alpha: output_alpha_field_idx,
         };
 
         if let Some(idx) = input_diffuse_color_field_idx {
@@ -328,9 +309,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let shininess_expr_handle =
             fragment_input_struct.get_field_expr_handle(material_input_field_indices.shininess);
-
-        let alpha_expr_handle =
-            fragment_input_struct.get_field_expr_handle(material_input_field_indices.alpha);
 
         let (diffuse_color_expr_handle, specular_color_expr_handle) =
             if let Some(texture_input) = self.texture_input {
@@ -506,7 +484,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 },
             );
 
-            let saturated_color_expr_handle = include_expr_in_func(
+            include_expr_in_func(
                 function,
                 Expression::Math {
                     fun: MathFunction::Saturate,
@@ -515,16 +493,15 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     arg2: None,
                     arg3: None,
                 },
-            );
-
-            include_expr_in_func(
-                function,
-                Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![saturated_color_expr_handle, alpha_expr_handle],
-                },
             )
         });
+
+        let output_rgba_color_expr_handle = append_unity_component_to_vec3(
+            &mut module.types,
+            &mut module.constants,
+            fragment_function,
+            output_color_expr_handle,
+        );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
@@ -534,7 +511,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             None,
             None,
             VECTOR_4_SIZE,
-            output_color_expr_handle,
+            output_rgba_color_expr_handle,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);

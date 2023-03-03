@@ -1,9 +1,9 @@
 //! Generation of shaders for materials with a global ambient color.
 
 use super::{
-    append_to_arena, define_constant_if_missing, emit_in_func, float32_constant,
-    include_expr_in_func, include_named_expr_in_func, insert_in_arena, new_name,
-    OutputStructBuilder, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
+    include_named_expr_in_func, insert_in_arena, new_name, OutputStructBuilder, VECTOR_3_TYPE,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{AddressSpace, Expression, Function, GlobalVariable, Module, ResourceBinding};
 
@@ -66,31 +66,22 @@ impl<'a> GlobalAmbientColorShaderGenerator<'a> {
             Expression::GlobalVariable(ambient_color_var_handle),
         );
 
-        let unity_constant_expr = include_expr_in_func(
-            fragment_function,
-            Expression::Constant(define_constant_if_missing(
-                &mut module.constants,
-                float32_constant(1.0),
-            )),
-        );
-
-        let ambient_rgba_color_expr_handle = emit_in_func(fragment_function, |function| {
-            let ambient_color_expr_handle = include_named_expr_in_func(
+        let ambient_color_expr_handle = emit_in_func(fragment_function, |function| {
+            include_named_expr_in_func(
                 function,
                 "ambientColor",
                 Expression::Load {
                     pointer: ambient_color_ptr_expr_handle,
                 },
-            );
-
-            include_expr_in_func(
-                function,
-                Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![ambient_color_expr_handle, unity_constant_expr],
-                },
             )
         });
+
+        let ambient_rgba_color_expr_handle = append_unity_component_to_vec3(
+            &mut module.types,
+            &mut module.constants,
+            fragment_function,
+            ambient_color_expr_handle,
+        );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 

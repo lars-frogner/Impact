@@ -1,15 +1,13 @@
-//! Generation of shaders for materials with a fixed color
-//! or texture.
+//! Generation of shaders for material using vertex colors included in the mesh.
 
 use super::{
-    insert_in_arena, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder, VECTOR_4_SIZE,
-    VECTOR_4_TYPE,
+    append_unity_component_to_vec3, insert_in_arena, InputStruct, MeshVertexOutputFieldIndices,
+    OutputStructBuilder, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{Function, Module};
 
-/// Shader generator for the case when vertex colors
-/// included in the mesh are used to obtain the fragment
-/// color.
+/// Shader generator for the case when vertex colors included in the mesh are
+/// used to obtain the fragment color.
 #[derive(Copy, Clone, Debug)]
 pub struct VertexColorShaderGenerator;
 
@@ -28,6 +26,19 @@ impl VertexColorShaderGenerator {
     ) {
         let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
+        let vertex_color_expr_handle = fragment_input_struct.get_field_expr_handle(
+            mesh_input_field_indices
+                .color
+                .expect("No `color` passed to vertex color fragment shader"),
+        );
+
+        let output_rgba_color_expr_handle = append_unity_component_to_vec3(
+            &mut module.types,
+            &mut module.constants,
+            fragment_function,
+            vertex_color_expr_handle,
+        );
+
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
@@ -36,11 +47,7 @@ impl VertexColorShaderGenerator {
             None,
             None,
             VECTOR_4_SIZE,
-            fragment_input_struct.get_field_expr_handle(
-                mesh_input_field_indices
-                    .color
-                    .expect("No `color` passed to vertex color fragment shader"),
-            ),
+            output_rgba_color_expr_handle,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);

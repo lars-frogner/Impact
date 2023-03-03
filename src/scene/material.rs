@@ -25,14 +25,11 @@ use crate::{
 };
 use bytemuck::Zeroable;
 use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, StringHash64};
-use nalgebra::{Vector3, Vector4};
+use nalgebra::Vector3;
 use std::collections::{hash_map::Entry, HashMap};
 
 /// A color with RGB components.
 pub type RGBColor = Vector3<fre>;
-
-/// A color with RGBA components.
-pub type RGBAColor = Vector4<fre>;
 
 stringhash64_newtype!(
     /// Identifier for specific material types.

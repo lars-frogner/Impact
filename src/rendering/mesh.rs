@@ -363,7 +363,7 @@ impl VertexBufferable for VertexColor<fre> {
 
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            Self::BINDING_LOCATION => Float32x4,
+            Self::BINDING_LOCATION => Float32x3,
         ]);
 }
 

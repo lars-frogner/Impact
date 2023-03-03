@@ -1034,7 +1034,7 @@ impl ShaderGenerator {
                     vertex_function,
                     mesh_shader_input,
                     new_name("color"),
-                    vec4_type_handle,
+                    vec3_type_handle,
                 )?,
             )
         } else {
@@ -1115,8 +1115,8 @@ impl ShaderGenerator {
             output_field_indices.color = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "color",
-                    vec4_type_handle,
-                    VECTOR_4_SIZE,
+                    vec3_type_handle,
+                    VECTOR_3_SIZE,
                     input_color_expr_handle,
                 ),
             );
@@ -1659,24 +1659,14 @@ impl CameraProjectionExpressions {
         vertex_function: &mut Function,
         position_expr_handle: Handle<Expression>,
     ) -> Handle<Expression> {
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
-
-        let unity_constant_expr = include_expr_in_func(
+        let homogeneous_position_expr_handle = append_unity_component_to_vec3(
+            &mut module.types,
+            &mut module.constants,
             vertex_function,
-            Expression::Constant(define_constant_if_missing(
-                &mut module.constants,
-                float32_constant(1.0),
-            )),
+            position_expr_handle,
         );
 
         emit_in_func(vertex_function, |function| {
-            let homogeneous_position_expr_handle = include_expr_in_func(
-                function,
-                Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![position_expr_handle, unity_constant_expr],
-                },
-            );
             include_expr_in_func(
                 function,
                 Expression::Binary {
@@ -1715,8 +1705,6 @@ impl DirectionalLightProjectionExpressions {
 
         let projection_function_handle = function_handles[0];
 
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
-
         let light_clip_space_position_expr_handle = SourceCodeFunctions::generate_call(
             &mut vertex_function.body,
             &mut vertex_function.expressions,
@@ -1724,23 +1712,12 @@ impl DirectionalLightProjectionExpressions {
             vec![self.translation, self.scaling, position_expr_handle],
         );
 
-        let unity_constant_expr = include_expr_in_func(
+        append_unity_component_to_vec3(
+            &mut module.types,
+            &mut module.constants,
             vertex_function,
-            Expression::Constant(define_constant_if_missing(
-                &mut module.constants,
-                float32_constant(1.0),
-            )),
-        );
-
-        emit_in_func(vertex_function, |function| {
-            include_expr_in_func(
-                function,
-                Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![light_clip_space_position_expr_handle, unity_constant_expr],
-                },
-            )
-        })
+            light_clip_space_position_expr_handle,
+        )
     }
 }
 
@@ -3467,6 +3444,33 @@ fn include_named_expr_in_func<S: ToString>(
     handle
 }
 
+/// Takes an expression for a `vec3<f32>` and generates an expression for a
+/// `vec4<f32>` where the first three components are the same as in the `vec3`
+/// and the last component is 1.0.
+fn append_unity_component_to_vec3(
+    types: &mut UniqueArena<Type>,
+    constants: &mut Arena<Constant>,
+    function: &mut Function,
+    vec3_expr_handle: Handle<Expression>,
+) -> Handle<Expression> {
+    let vec4_type_handle = insert_in_arena(types, VECTOR_4_TYPE);
+
+    let unity_constant_expr = include_expr_in_func(
+        function,
+        Expression::Constant(define_constant_if_missing(constants, float32_constant(1.0))),
+    );
+
+    emit_in_func(function, |function| {
+        include_expr_in_func(
+            function,
+            Expression::Compose {
+                ty: vec4_type_handle,
+                components: vec![vec3_expr_handle, unity_constant_expr],
+            },
+        )
+    })
+}
+
 #[cfg(test)]
 mod test {
     #![allow(clippy::dbg_macro)]
@@ -3518,7 +3522,6 @@ mod test {
             diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
             specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
             shininess_location: MATERIAL_VERTEX_BINDING_START + 3,
-            alpha_location: MATERIAL_VERTEX_BINDING_START + 4,
         });
 
     const DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
@@ -3527,7 +3530,6 @@ mod test {
             diffuse_color_location: None,
             specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
             shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-            alpha_location: MATERIAL_VERTEX_BINDING_START + 3,
         });
 
     const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
@@ -3547,7 +3549,6 @@ mod test {
             diffuse_color_location: None,
             specular_color_location: None,
             shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-            alpha_location: MATERIAL_VERTEX_BINDING_START + 2,
         });
 
     const TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =

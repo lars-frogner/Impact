@@ -8,7 +8,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, UnitVector3, Vector2, Vector4};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector3};
 use std::fmt::{Debug, Display};
 
 use super::{AxisAlignedBox, Point};
@@ -31,10 +31,10 @@ pub trait VertexAttribute: Sized {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VertexPosition<F: Float>(pub Point3<F>);
 
-/// The RGBA color of a mesh at a vertex position.
+/// The RGB color of a mesh at a vertex position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexColor<F: Float>(pub Vector4<F>);
+pub struct VertexColor<F: Float>(pub Vector3<F>);
 
 /// The unit normal vector of a mesh at a vertex position.
 #[repr(transparent)]

@@ -22,7 +22,7 @@ use std::sync::RwLock;
 
 /// Material using the Blinn-Phong reflection model, with
 /// fixed ambient, diffuse and specular colors and fixed
-/// shininess and alpha.
+/// shininess.
 ///
 /// This type stores the material's per-instance data that will
 /// be sent to the GPU. It implements [`InstanceFeature`], and
@@ -35,12 +35,11 @@ pub struct BlinnPhongMaterial {
     diffuse_color: RGBColor,
     specular_color: RGBColor,
     shininess: fre,
-    alpha: fre,
 }
 
 /// Material using the Blinn-Phong reflection model, with
 /// textured diffuse colors, fixed ambient and specular
-/// colors and fixed shininess and alpha.
+/// colors and fixed shininess.
 ///
 /// This type stores the material's per-instance data that will
 /// be sent to the GPU. It implements [`InstanceFeature`], and
@@ -52,12 +51,11 @@ pub struct DiffuseTexturedBlinnPhongMaterial {
     ambient_color: RGBColor,
     specular_color: RGBColor,
     shininess: fre,
-    alpha: fre,
 }
 
 /// Material using the Blinn-Phong reflection model, with
 /// textured diffuse and specular colors, fixed ambient
-/// color and fixed shininess and alpha.
+/// color and fixed shininess.
 ///
 /// This type stores the material's per-instance data that will
 /// be sent to the GPU. It implements [`InstanceFeature`], and
@@ -68,7 +66,6 @@ pub struct DiffuseTexturedBlinnPhongMaterial {
 pub struct TexturedBlinnPhongMaterial {
     ambient_color: RGBColor,
     shininess: fre,
-    alpha: fre,
 }
 
 lazy_static! {
@@ -124,7 +121,6 @@ impl BlinnPhongMaterial {
                     diffuse_color: blinn_phong.diffuse,
                     specular_color: blinn_phong.specular,
                     shininess: blinn_phong.shininess,
-                    alpha: blinn_phong.alpha,
                 };
 
                 let feature_id = instance_feature_manager
@@ -202,7 +198,6 @@ impl DiffuseTexturedBlinnPhongMaterial {
                     ambient_color: blinn_phong.ambient,
                     specular_color: blinn_phong.specular,
                     shininess: blinn_phong.shininess,
-                    alpha: blinn_phong.alpha,
                 };
 
                 let feature_id = instance_feature_manager
@@ -285,7 +280,6 @@ impl TexturedBlinnPhongMaterial {
                 let material = Self {
                     ambient_color: blinn_phong.ambient,
                     shininess: blinn_phong.shininess,
-                    alpha: blinn_phong.alpha,
                 };
 
                 let feature_id = instance_feature_manager
@@ -311,14 +305,12 @@ impl_InstanceFeature!(
         MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 2 => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 3 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 4 => Float32
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
         ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
         shininess_location: MATERIAL_VERTEX_BINDING_START + 3,
-        alpha_location: MATERIAL_VERTEX_BINDING_START + 4,
     })
 );
 
@@ -328,14 +320,12 @@ impl_InstanceFeature!(
         MATERIAL_VERTEX_BINDING_START => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
         ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: None,
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-        alpha_location: MATERIAL_VERTEX_BINDING_START + 3,
     })
 );
 
@@ -344,13 +334,11 @@ impl_InstanceFeature!(
     wgpu::vertex_attr_array![
         MATERIAL_VERTEX_BINDING_START => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
         ambient_color_location: MATERIAL_VERTEX_BINDING_START,
         diffuse_color_location: None,
         specular_color_location: None,
         shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-        alpha_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );

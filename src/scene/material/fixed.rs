@@ -11,7 +11,7 @@ use crate::{
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
         MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-        MaterialSpecification, RGBAColor, RenderResourcesDesynchronized,
+        MaterialSpecification, RGBColor, RenderResourcesDesynchronized,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -30,7 +30,7 @@ use std::sync::RwLock;
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct FixedColorMaterial {
-    color: RGBAColor,
+    color: RGBColor,
 }
 
 /// Marker type for a material with a fixed, textured color that
@@ -152,7 +152,7 @@ impl FixedTextureMaterial {
 
 impl_InstanceFeature!(
     FixedColorMaterial,
-    wgpu::vertex_attr_array![MATERIAL_VERTEX_BINDING_START => Float32x4],
+    wgpu::vertex_attr_array![MATERIAL_VERTEX_BINDING_START => Float32x3],
     InstanceFeatureShaderInput::FixedColorMaterial(FixedColorFeatureShaderInput {
         color_location: MATERIAL_VERTEX_BINDING_START,
     })
