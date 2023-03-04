@@ -31,7 +31,7 @@ pub use mesh::{
 };
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;
-pub use projection::{OrthographicTransform, PerspectiveTransform};
+pub use projection::{CubeMapFace, CubeMapper, OrthographicTransform, PerspectiveTransform};
 pub use sphere::Sphere;
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 pub use uniform::UniformBuffer;

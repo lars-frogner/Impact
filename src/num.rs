@@ -10,18 +10,22 @@ pub trait Float: Copy + nt::FloatConst + nt::FromPrimitive + na::RealField + na:
     const NEG_ONE: Self;
     const TWO: Self;
     const ONE_HALF: Self;
+    const FRAC_1_SQRT_2: Self;
+    const NEG_FRAC_1_SQRT_2: Self;
     const MIN: Self;
     const MAX: Self;
 }
 
 macro_rules! impl_float {
-    ($f:ty) => {
+    ($f:tt) => {
         impl Float for $f {
             const ZERO: Self = 0.0;
             const ONE: Self = 1.0;
             const NEG_ONE: Self = -1.0;
             const TWO: Self = 2.0;
             const ONE_HALF: Self = 0.5;
+            const FRAC_1_SQRT_2: Self = std::$f::consts::FRAC_1_SQRT_2;
+            const NEG_FRAC_1_SQRT_2: Self = -std::$f::consts::FRAC_1_SQRT_2;
             const MIN: Self = Self::MIN;
             const MAX: Self = Self::MAX;
         }

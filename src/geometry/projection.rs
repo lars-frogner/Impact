@@ -6,7 +6,10 @@ use crate::{
 };
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Matrix4, Point3, Projective3, Scale3, Translation3, Vector3};
+use nalgebra::{
+    vector, Matrix4, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
+    UnitQuaternion, Vector3,
+};
 use std::fmt::Debug;
 
 /// A perspective transformation that maps points in a view frustum pointing
@@ -26,6 +29,27 @@ pub struct PerspectiveTransform<F: Float> {
 #[derive(Copy, Clone, Debug)]
 pub struct OrthographicTransform<F: Float> {
     matrix: Matrix4<F>,
+}
+
+/// Projects 3D points onto a face of a cubemap.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct CubeMapper<F: Float> {
+    transform_to_positive_z_face: Similarity3<F>,
+    z_scaling: F,
+    z_translation: F,
+}
+
+/// One of the six faces of a cubemap. The enum value corresponds to the
+/// conventional index of the face.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CubeMapFace {
+    PositiveX = 0,
+    NegativeX = 1,
+    PositiveY = 2,
+    NegativeY = 3,
+    PositiveZ = 4,
+    NegativeZ = 5,
 }
 
 impl<F: Float> PerspectiveTransform<F> {
@@ -292,6 +316,152 @@ unsafe impl<F: Float> Pod for PerspectiveTransform<F> {}
 unsafe impl<F: Float> Zeroable for OrthographicTransform<F> {}
 unsafe impl<F: Float> Pod for OrthographicTransform<F> {}
 
+impl<F: Float> CubeMapper<F> {
+    /// Quaternions representing the rotation from each of the six cube faces to
+    /// the positive z face. That is, a point with a certain texture coordinate
+    /// within a cube face would, after being rotated with the corresponding
+    /// rotation here, have the same texture coordinate within the positive z
+    /// face.
+    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion<F>; 6] = [
+        // From positive x face:
+        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -F::ONE_HALF * F::PI())
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+            F::ZERO,
+            F::NEG_FRAC_1_SQRT_2,
+            F::ZERO,
+            <F as Float>::FRAC_1_SQRT_2
+        ])),
+        // From negative x face:
+        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), F::ONE_HALF * F::PI())
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+            F::ZERO,
+            <F as Float>::FRAC_1_SQRT_2,
+            F::ZERO,
+            <F as Float>::FRAC_1_SQRT_2
+        ])),
+        // From positive y face:
+        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), F::ONE_HALF * F::PI())
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+            <F as Float>::FRAC_1_SQRT_2,
+            F::ZERO,
+            F::ZERO,
+            <F as Float>::FRAC_1_SQRT_2
+        ])),
+        // From negative y face:
+        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -F::ONE_HALF * F::PI())
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+            F::NEG_FRAC_1_SQRT_2,
+            F::ZERO,
+            F::ZERO,
+            <F as Float>::FRAC_1_SQRT_2
+        ])),
+        // From positive z face:
+        // UnitQuaternion::identity()
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+            F::ONE
+        ])),
+        // From negative z face:
+        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), F::PI())
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+            F::ZERO,
+            F::ONE,
+            F::ZERO,
+            F::ZERO
+        ])),
+    ];
+
+    /// Creates a new mapper for 3D points onto the given cubemap face.
+    ///
+    /// The given near and far distance refer to distances from the origin along
+    /// the outward direction of the cube face. They do not affect the x and
+    /// y-coordinates (or texture coordinates) of the projected point, but scale
+    /// the projected z-coordinate so that points at the near plane are
+    /// projected to z = 0.0 and points on the far plane are projected to z =
+    /// 1.0.
+    ///
+    /// The given transformation to cube space will be applied to each point
+    /// prior to projection onto the face.
+    pub fn for_face(
+        face: CubeMapFace,
+        near_and_far_distance: UpperExclusiveBounds<F>,
+        transform_to_cube_space: Similarity3<F>,
+    ) -> Self {
+        let transform_to_positive_z_face =
+            Self::ROTATIONS_TO_POSITIVE_Z_FACE[face as usize] * transform_to_cube_space;
+
+        let (z_scaling, z_translation) =
+            Self::compute_z_scaling_and_translation(near_and_far_distance);
+
+        Self {
+            transform_to_positive_z_face,
+            z_scaling,
+            z_translation,
+        }
+    }
+
+    /// Creates a new mapper for 3D points onto the given cubemap face.
+    ///
+    /// The given near and far distance refer to distances from the origin along
+    /// the outward direction of the cube face. They do not affect the x- and
+    /// y-coordinates (or texture coordinates) of the projected point, but scale
+    /// the projected z-coordinate so that points at the near plane are
+    /// projected to z = 0.0 and points on the far plane are projected to z =
+    /// 1.0.
+    ///
+    /// Points to project must be specified in the coordinate system of the
+    /// cubemap.
+    pub fn in_cube_space_for_face(
+        face: CubeMapFace,
+        near_and_far_distance: UpperExclusiveBounds<F>,
+    ) -> Self {
+        Self::for_face(face, near_and_far_distance, Similarity3::identity())
+    }
+
+    /// Projects the given 3D point onto the cubemap face, producing a new 3D
+    /// point whose x- and y-coordinates correspond to offsets from the face
+    /// center in a plane parallel to the face, with the orientations of the
+    /// axes following the cubemap conventions. The z-coordinate of the
+    /// projected point is the offset perpendicular to the face, scaled to yield
+    /// z = 0.0 at the near distance from the origin and z = 1.0 at the far
+    /// distance.
+    ///
+    /// If the x- or y-coordinate after projection lies outside the -1.0 to 1.0
+    /// range, or the z-coordinate is negative, the point belongs to another
+    /// face.
+    pub fn map_point(&self, point: &Point3<F>) -> Point3<F> {
+        let rotated_point = self.transform_to_positive_z_face.transform_point(point);
+        Self::map_point_to_positive_z_face(self.z_scaling, self.z_translation, &rotated_point)
+    }
+
+    fn compute_z_scaling_and_translation(near_and_far_distance: UpperExclusiveBounds<F>) -> (F, F) {
+        let (near_distance, far_distance) = near_and_far_distance.bounds();
+
+        let inverse_z_span = F::ONE / (near_distance - far_distance);
+
+        let z_scaling = -F::ONE_HALF * ((near_distance + far_distance) * inverse_z_span - F::ONE);
+
+        let z_translation = far_distance * near_distance * inverse_z_span;
+
+        (z_scaling, z_translation)
+    }
+
+    fn map_point_to_positive_z_face(
+        z_scaling: F,
+        z_translation: F,
+        point: &Point3<F>,
+    ) -> Point3<F> {
+        let inverse_point_z = F::ONE / point.z;
+        Point3::new(
+            point.x * inverse_point_z,
+            point.y * inverse_point_z,
+            (z_scaling * point.z + z_translation) * inverse_point_z,
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -394,5 +564,191 @@ mod test {
 
         let point = point![0.0, 0.0, -far_distance];
         assert_abs_diff_eq!(transform.transform_point(&point).z, 1.0);
+    }
+
+    #[test]
+    fn mapping_to_positive_x_cubemap_face_works() {
+        let near = 0.1;
+        let far = 10.0;
+        let mapper = CubeMapper::in_cube_space_for_face(
+            CubeMapFace::PositiveX,
+            UpperExclusiveBounds::new(near, far),
+        );
+
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![far, far, far]),
+            point![-1.0, 1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![far, -far, -far]),
+            point![1.0, -1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![near, near, near]),
+            point![-1.0, 1.0, 0.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![near, -near, -near]),
+            point![1.0, -1.0, 0.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_negative_x_cubemap_face_works() {
+        let near = 0.1;
+        let far = 10.0;
+        let mapper = CubeMapper::in_cube_space_for_face(
+            CubeMapFace::NegativeX,
+            UpperExclusiveBounds::new(near, far),
+        );
+
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-far, far, far]),
+            point![1.0, 1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-far, -far, -far]),
+            point![-1.0, -1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-near, near, near]),
+            point![1.0, 1.0, 0.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-near, -near, -near]),
+            point![-1.0, -1.0, 0.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_positive_y_cubemap_face_works() {
+        let near = 0.1;
+        let far = 10.0;
+        let mapper = CubeMapper::in_cube_space_for_face(
+            CubeMapFace::PositiveY,
+            UpperExclusiveBounds::new(near, far),
+        );
+
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![far, far, far]),
+            point![1.0, -1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-far, far, -far]),
+            point![-1.0, 1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![near, near, near]),
+            point![1.0, -1.0, 0.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-near, near, -near]),
+            point![-1.0, 1.0, 0.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_negative_y_cubemap_face_works() {
+        let near = 0.1;
+        let far = 10.0;
+        let mapper = CubeMapper::in_cube_space_for_face(
+            CubeMapFace::NegativeY,
+            UpperExclusiveBounds::new(near, far),
+        );
+
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![far, -far, far]),
+            point![1.0, 1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-far, -far, -far]),
+            point![-1.0, -1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![near, -near, near]),
+            point![1.0, 1.0, 0.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-near, -near, -near]),
+            point![-1.0, -1.0, 0.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_positive_z_cubemap_face_works() {
+        let near = 0.1;
+        let far = 10.0;
+        let mapper = CubeMapper::in_cube_space_for_face(
+            CubeMapFace::PositiveZ,
+            UpperExclusiveBounds::new(near, far),
+        );
+
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![far, far, far]),
+            point![1.0, 1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-far, -far, far]),
+            point![-1.0, -1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![near, near, near]),
+            point![1.0, 1.0, 0.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-near, -near, near]),
+            point![-1.0, -1.0, 0.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_negative_z_cubemap_face_works() {
+        let near = 0.1;
+        let far = 10.0;
+        let mapper = CubeMapper::in_cube_space_for_face(
+            CubeMapFace::NegativeZ,
+            UpperExclusiveBounds::new(near, far),
+        );
+
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![far, far, -far]),
+            point![-1.0, 1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-far, -far, -far]),
+            point![1.0, -1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![near, near, -near]),
+            point![-1.0, 1.0, 0.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            mapper.map_point(&point![-near, -near, -near]),
+            point![1.0, -1.0, 0.0],
+            epsilon = 1e-9
+        );
     }
 }
