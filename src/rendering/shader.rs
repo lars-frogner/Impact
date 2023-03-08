@@ -1810,13 +1810,23 @@ impl PointLightProjectionExpressions {
                 nearDistance: f32,
                 inverseDistanceSpan: f32,
                 position: vec3<f32>,
-            ) -> vec3<f32> {
-                return vec3<f32>(
-                    position.xy / position.z,
-                    // Multipy with the sign of the z-coordinate relative to the
-                    // near distance so that vertices behind the near plane are
-                    // clipped out rather than messing up the depth map
-                    sign(position.z - nearDistance) * (length(position) - nearDistance) * inverseDistanceSpan
+            ) -> vec4<f32> {
+                // It is important not to perform perspective division manually
+                // here, because the homogeneous vector should be interpolated
+                // first.
+                
+                // The reason we use length(position) rather than position.z is
+                // so we can compute the reference depth for sampling the
+                // cubemap without knowing which face of the cubemap the
+                // fragment belongs to.
+
+                // The multiplication by position.z is to cancel out the
+                // perspective division by position.z.
+
+                return vec4<f32>(
+                    position.xy,
+                    (length(position) - nearDistance) * inverseDistanceSpan * position.z,
+                    position.z,
                 );
             }
         ",
@@ -1826,7 +1836,7 @@ impl PointLightProjectionExpressions {
 
         let projection_function = source_code.functions[0];
 
-        let light_clip_space_position_expr = SourceCode::generate_call_named(
+        SourceCode::generate_call_named(
             vertex_function,
             "lightClipSpacePosition",
             projection_function,
@@ -1835,13 +1845,6 @@ impl PointLightProjectionExpressions {
                 self.inverse_distance_span,
                 position_expr,
             ],
-        );
-
-        append_unity_component_to_vec3(
-            &mut module.types,
-            &mut module.constants,
-            vertex_function,
-            light_clip_space_position_expr,
         )
     }
 }
@@ -3686,7 +3689,7 @@ impl SourceCode {
         push_to_block(
             block,
             Statement::Call {
-                function: function,
+                function,
                 arguments,
                 result: Some(return_expr),
             },

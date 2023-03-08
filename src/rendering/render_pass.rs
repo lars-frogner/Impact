@@ -975,8 +975,8 @@ impl RenderPassSpecification {
 
             let bias = match shadow_map_id {
                 ShadowMapIdentifier::ForPointLight(_) => wgpu::DepthBiasState {
-                    constant: 8,
-                    slope_scale: 1.5,
+                    constant: 0,
+                    slope_scale: 0.0,
                     clamp: 0.0,
                 },
                 ShadowMapIdentifier::ForDirectionalLight => wgpu::DepthBiasState {
