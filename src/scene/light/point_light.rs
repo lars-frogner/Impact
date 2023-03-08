@@ -1,7 +1,7 @@
 //! Omnidirectional light sources.
 
 use crate::{
-    geometry::{CubeMapper, CubemapFace, Frustum, Sphere, UpperExclusiveBounds},
+    geometry::{CubeMapper, CubemapFace, Frustum, Sphere},
     physics::PositionComp,
     rendering::fre,
     scene::{
@@ -43,10 +43,14 @@ pub struct PointLight {
     near_distance: fre,
     inverse_distance_span: fre,
     // Padding to make size multiple of 16-bytes
-    _padding_3: [fre; 2],
+    far_distance: fre,
+    _padding_3: fre,
 }
 
 impl PointLight {
+    const MIN_NEAR_DISTANCE: fre = 1e-2;
+    const MAX_FAR_DISTANCE: fre = fre::INFINITY;
+
     fn new(camera_space_position: Point3<fre>, radiance: Radiance) -> Self {
         Self {
             camera_to_light_space_rotation: UnitQuaternion::identity(),
@@ -56,7 +60,8 @@ impl PointLight {
             _padding_2: 0.0,
             near_distance: 0.0,
             inverse_distance_span: 0.0,
-            _padding_3: [0.0; 2],
+            far_distance: 0.0,
+            _padding_3: 0.0,
         }
     }
 
@@ -69,8 +74,7 @@ impl PointLight {
         transform_to_camera_space: &Similarity3<fre>,
     ) -> Similarity3<fre> {
         CubeMapper::rotation_to_positive_z_face_from_face(face)
-            * self.camera_to_light_space_rotation
-            * Translation3::from(-self.camera_space_position)
+            * self.create_camera_to_light_space_transform()
             * transform_to_camera_space
     }
 
@@ -89,21 +93,28 @@ impl PointLight {
             camera_space_bounding_sphere.center(),
         );
 
-        self.near_distance = 0.05;
-        // dbg!(fre::max(
-        //     0.05,
-        //     bounding_sphere_center_distance - camera_space_bounding_sphere.radius(),
-        // ));
-        let far_distance = 100.0;
-        // dbg!(bounding_sphere_center_distance + camera_space_bounding_sphere.radius());
-        self.inverse_distance_span = 1.0 / (far_distance - self.near_distance);
+        self.near_distance = fre::clamp(
+            bounding_sphere_center_distance - camera_space_bounding_sphere.radius(),
+            Self::MIN_NEAR_DISTANCE,
+            Self::MAX_FAR_DISTANCE - 1e-9,
+        );
+
+        self.far_distance = fre::clamp(
+            bounding_sphere_center_distance + camera_space_bounding_sphere.radius(),
+            self.near_distance + 1e-9,
+            Self::MAX_FAR_DISTANCE,
+        );
+
+        self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
 
-    pub fn bounding_sphere_may_cast_visible_shadow(
-        &self,
-        camera_space_bounding_sphere: &Sphere<fre>,
-    ) -> bool {
-        true
+    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum<fre> {
+        CubeMapper::compute_frustum_for_face(
+            face,
+            &self.create_camera_to_light_space_transform(),
+            self.near_distance,
+            self.far_distance,
+        )
     }
 
     /// Checks if the entity-to-be with the given components has the right
@@ -157,5 +168,13 @@ impl PointLight {
             light_storage.write().unwrap().remove_point_light(light_id);
             desynchronized.set_yes();
         }
+    }
+
+    fn create_camera_to_light_space_transform(&self) -> Similarity3<fre> {
+        Similarity3::from_parts(
+            Translation3::from(-self.camera_space_position),
+            self.camera_to_light_space_rotation,
+            1.0,
+        )
     }
 }

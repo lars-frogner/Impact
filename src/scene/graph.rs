@@ -637,7 +637,7 @@ impl<F: Float> SceneGraph<F> {
 impl SceneGraph<fre> {
     /// Goes through all point lights in the given light storage and updates
     /// their cubemap orientations and distance spans to encompass all model
-    /// instances that may cast visible shadows with as few frustra as possible.
+    /// instances that may cast visible shadows with as few frusta as possible.
     /// Then the model to cubemap face space transform of every such shadow
     /// casting model instance is computed for the relevant cube faces of each
     /// light and copied to the model's instance transform buffer in new ranges
@@ -681,10 +681,14 @@ impl SceneGraph<fre> {
                         );
                     }
 
+                    let camera_space_face_frustum =
+                        point_light.compute_camera_space_frustum_for_face(face);
+
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
                         instance_feature_manager,
                         point_light,
                         face,
+                        &camera_space_face_frustum,
                         root_node,
                         view_transform,
                     );
@@ -749,6 +753,7 @@ impl SceneGraph<fre> {
         instance_feature_manager: &mut InstanceFeatureManager,
         point_light: &PointLight,
         face: CubemapFace,
+        camera_space_face_frustum: &Frustum<fre>,
         group_node: &GroupNode<fre>,
         group_to_camera_transform: &NodeTransform<fre>,
     ) {
@@ -763,13 +768,14 @@ impl SceneGraph<fre> {
                 let child_camera_space_bounding_sphere =
                     child_world_space_bounding_sphere.transformed(&child_group_to_camera_transform);
 
-                if point_light
-                    .bounding_sphere_may_cast_visible_shadow(&child_camera_space_bounding_sphere)
+                if !camera_space_face_frustum
+                    .sphere_lies_outside(&child_camera_space_bounding_sphere)
                 {
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
                         instance_feature_manager,
                         point_light,
                         face,
+                        camera_space_face_frustum,
                         child_group_node,
                         &child_group_to_camera_transform,
                     );
@@ -790,9 +796,9 @@ impl SceneGraph<fre> {
                 model_instance_world_space_bounding_sphere
                     .transformed(&model_instance_to_camera_transform);
 
-            if point_light.bounding_sphere_may_cast_visible_shadow(
-                &model_instance_camera_space_bounding_sphere,
-            ) {
+            if !camera_space_face_frustum
+                .sphere_lies_outside(&model_instance_camera_space_bounding_sphere)
+            {
                 let instance_model_light_transform =
                     InstanceModelLightTransform::with_model_light_transform(
                         point_light.create_transform_to_positive_z_cubemap_face_space(

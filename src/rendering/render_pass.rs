@@ -85,7 +85,7 @@ struct LightShadedModelShadingPasses {
     shadow_map_clearing_passes: Vec<RenderPassRecorder>,
     /// Passes for writing the depths of each model from the light's point of
     /// view to the shadow map.
-    shadow_map_update_passes: Vec<RenderPassRecorder>,
+    shadow_map_update_passes: Vec<Vec<RenderPassRecorder>>,
     /// Passes for shading each model with contributions from the light.
     shading_passes: Vec<RenderPassRecorder>,
 }
@@ -169,7 +169,7 @@ impl RenderPassManager {
                         passes
                             .shadow_map_clearing_passes
                             .iter()
-                            .chain(passes.shadow_map_update_passes.iter())
+                            .chain(passes.shadow_map_update_passes.iter().flatten())
                             .chain(passes.shading_passes.iter())
                     }),
             )
@@ -317,8 +317,7 @@ impl RenderPassManager {
                                                 RenderPassSpecification::shadow_map_clearing_pass(
                                                     ShadowMapIdentifier::ForPointLight(face),
                                                 ),
-                                                !faces_have_shadow_casting_model_instances
-                                                    [face.as_idx_usize()],
+                                                false,
                                             )?);
                                         }
 
@@ -336,22 +335,25 @@ impl RenderPassManager {
 
                             // Create a point light shadow map update pass for
                             // each cubemap face for the new model
+
+                            passes.shadow_map_update_passes.push(Vec::with_capacity(6));
+
+                            let shadow_map_update_passes_for_faces =
+                                passes.shadow_map_update_passes.last_mut().unwrap();
+
                             for face in CubemapFace::all() {
-                                passes
-                                    .shadow_map_update_passes
-                                    .push(RenderPassRecorder::new(
-                                        core_system,
-                                        config,
-                                        render_resources,
-                                        shader_manager,
-                                        RenderPassSpecification::shadow_map_update_pass(
-                                            light,
-                                            model_id,
-                                            ShadowMapIdentifier::ForPointLight(face),
-                                        ),
-                                        !faces_have_shadow_casting_model_instances
-                                            [face.as_idx_usize()],
-                                    )?);
+                                shadow_map_update_passes_for_faces.push(RenderPassRecorder::new(
+                                    core_system,
+                                    config,
+                                    render_resources,
+                                    shader_manager,
+                                    RenderPassSpecification::shadow_map_update_pass(
+                                        light,
+                                        model_id,
+                                        ShadowMapIdentifier::ForPointLight(face),
+                                    ),
+                                    !faces_have_shadow_casting_model_instances[face.as_idx_usize()],
+                                )?);
                             }
 
                             // Create a point light shading pass for the new model
@@ -401,7 +403,7 @@ impl RenderPassManager {
                             // for the new model
                             passes
                                 .shadow_map_update_passes
-                                .push(RenderPassRecorder::new(
+                                .push(vec![RenderPassRecorder::new(
                                     core_system,
                                     config,
                                     render_resources,
@@ -412,7 +414,7 @@ impl RenderPassManager {
                                         ShadowMapIdentifier::ForDirectionalLight,
                                     ),
                                     no_shadow_casting_instances,
-                                )?);
+                                )?]);
 
                             // Create a directional light shading pass for the
                             // new model
@@ -437,16 +439,35 @@ impl RenderPassManager {
 
                         self.light_shaded_model_shading_passes.iter_mut().for_each(
                             |(&light_id, passes)| {
-                                if let Some(recorder) =
+                                if let Some(recorders) =
                                     passes.shadow_map_update_passes.get_mut(model_idx)
                                 {
-                                    let no_shadow_casting_instances = transform_buffer_manager
-                                        .feature_range(
-                                            light_id.as_instance_feature_buffer_range_id(),
-                                        )
-                                        .is_empty();
+                                    for recorder in recorders {
+                                        let range_id =
+                                            if let ShadowMapUsage::Update(shadow_map_id) =
+                                                recorder.specification.shadow_map_usage
+                                            {
+                                                match shadow_map_id {
+                                                    ShadowMapIdentifier::ForPointLight(face) => {
+                                                        light_id
+                                                            .as_instance_feature_buffer_range_id()
+                                                            + face.as_idx_u32()
+                                                    }
+                                                    ShadowMapIdentifier::ForDirectionalLight => {
+                                                        light_id
+                                                            .as_instance_feature_buffer_range_id()
+                                                    }
+                                                }
+                                            } else {
+                                                unreachable!()
+                                            };
 
-                                    recorder.set_disabled(no_shadow_casting_instances);
+                                        let no_shadow_casting_instances = transform_buffer_manager
+                                            .feature_range(range_id)
+                                            .is_empty();
+
+                                        recorder.set_disabled(no_shadow_casting_instances);
+                                    }
                                 }
 
                                 passes.shading_passes[model_idx].set_disabled(no_visible_instances);
