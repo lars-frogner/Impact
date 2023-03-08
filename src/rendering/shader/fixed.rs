@@ -70,12 +70,12 @@ impl<'a> FixedColorShaderGenerator<'a> {
         vertex_function: &mut Function,
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> FixedColorVertexOutputFieldIdx {
-        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+        let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
-        let vertex_color_arg_expr_handle = super::generate_location_bound_input_argument(
+        let vertex_color_arg_expr = super::generate_location_bound_input_argument(
             vertex_function,
             new_name("color"),
-            vec3_type_handle,
+            vec3_type,
             self.feature_input.color_location,
         );
 
@@ -83,11 +83,11 @@ impl<'a> FixedColorShaderGenerator<'a> {
         // perspective interpolation
         let output_color_field_idx = vertex_output_struct_builder.add_field(
             "color",
-            vec3_type_handle,
+            vec3_type,
             Some(Interpolation::Flat),
             Some(Sampling::Center),
             VECTOR_3_SIZE,
-            vertex_color_arg_expr_handle,
+            vertex_color_arg_expr,
         );
 
         FixedColorVertexOutputFieldIdx(output_color_field_idx)
@@ -105,27 +105,26 @@ impl<'a> FixedColorShaderGenerator<'a> {
         fragment_input_struct: &InputStruct,
         color_input_field_idx: &FixedColorVertexOutputFieldIdx,
     ) {
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let vertex_color_expr_handle =
-            fragment_input_struct.get_field_expr_handle(color_input_field_idx.0);
+        let vertex_color_expr = fragment_input_struct.get_field_expr(color_input_field_idx.0);
 
-        let output_rgba_color_expr_handle = append_unity_component_to_vec3(
+        let output_rgba_color_expr = append_unity_component_to_vec3(
             &mut module.types,
             &mut module.constants,
             fragment_function,
-            vertex_color_expr_handle,
+            vertex_color_expr,
         );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
             "color",
-            vec4_type_handle,
+            vec4_type,
             None,
             None,
             VECTOR_4_SIZE,
-            output_rgba_color_expr_handle,
+            output_rgba_color_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
@@ -160,7 +159,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
         let (color_texture_binding, color_sampler_binding) =
             self.texture_input.color_texture_and_sampler_bindings;
 
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let color_texture = SampledTexture::declare(
             &mut module.types,
@@ -172,9 +171,9 @@ impl<'a> FixedTextureShaderGenerator<'a> {
             color_sampler_binding,
         );
 
-        let color_sampling_expr_handle = color_texture.generate_sampling_expr(
+        let color_sampling_expr = color_texture.generate_sampling_expr(
             fragment_function,
-            fragment_input_struct.get_field_expr_handle(
+            fragment_input_struct.get_field_expr(
                 mesh_input_field_indices
                     .texture_coords
                     .expect("No `texture_coords` passed to fixed texture fragment shader"),
@@ -186,11 +185,11 @@ impl<'a> FixedTextureShaderGenerator<'a> {
 
         output_struct_builder.add_field(
             "color",
-            vec4_type_handle,
+            vec4_type,
             None,
             None,
             VECTOR_4_SIZE,
-            color_sampling_expr_handle,
+            color_sampling_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);

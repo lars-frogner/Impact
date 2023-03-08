@@ -44,10 +44,10 @@ impl<'a> GlobalAmbientColorShaderGenerator<'a> {
         let bind_group = *bind_group_idx;
         *bind_group_idx += 1;
 
-        let vec3_type_handle = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+        let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let ambient_color_var_handle = append_to_arena(
+        let ambient_color_var = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
                 name: new_name("ambientColor"),
@@ -56,42 +56,42 @@ impl<'a> GlobalAmbientColorShaderGenerator<'a> {
                     group: bind_group,
                     binding: self.input.uniform_binding,
                 }),
-                ty: vec3_type_handle,
+                ty: vec3_type,
                 init: None,
             },
         );
 
-        let ambient_color_ptr_expr_handle = include_expr_in_func(
+        let ambient_color_ptr_expr = include_expr_in_func(
             fragment_function,
-            Expression::GlobalVariable(ambient_color_var_handle),
+            Expression::GlobalVariable(ambient_color_var),
         );
 
-        let ambient_color_expr_handle = emit_in_func(fragment_function, |function| {
+        let ambient_color_expr = emit_in_func(fragment_function, |function| {
             include_named_expr_in_func(
                 function,
                 "ambientColor",
                 Expression::Load {
-                    pointer: ambient_color_ptr_expr_handle,
+                    pointer: ambient_color_ptr_expr,
                 },
             )
         });
 
-        let ambient_rgba_color_expr_handle = append_unity_component_to_vec3(
+        let ambient_rgba_color_expr = append_unity_component_to_vec3(
             &mut module.types,
             &mut module.constants,
             fragment_function,
-            ambient_color_expr_handle,
+            ambient_color_expr,
         );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
             "color",
-            vec4_type_handle,
+            vec4_type,
             None,
             None,
             VECTOR_4_SIZE,
-            ambient_rgba_color_expr_handle,
+            ambient_rgba_color_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);

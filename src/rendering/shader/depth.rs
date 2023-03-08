@@ -28,17 +28,16 @@ impl LightSpaceDepthShaderGenerator {
         let light_input_field_indices =
             light_input_field_indices.expect("Missing light for visualizing light space depth");
 
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
-        let light_clip_space_position_expr_handle = match light_input_field_indices {
+        let light_clip_space_position_expr = match light_input_field_indices {
             LightVertexOutputFieldIndices::PointLight => unimplemented!(
                 "Light clip space depth visualization is not supported for point lights"
             ),
             LightVertexOutputFieldIndices::DirectionalLight(light_input_field_indices) => {
-                fragment_input_struct
-                    .get_field_expr_handle(light_input_field_indices.light_clip_position)
+                fragment_input_struct.get_field_expr(light_input_field_indices.light_clip_position)
             }
         };
 
@@ -58,29 +57,29 @@ impl LightSpaceDepthShaderGenerator {
             )),
         );
 
-        let color_expr_handle = emit_in_func(fragment_function, |function| {
-            let depth_expr_handle = include_expr_in_func(
+        let color_expr = emit_in_func(fragment_function, |function| {
+            let depth_expr = include_expr_in_func(
                 function,
                 Expression::AccessIndex {
-                    base: light_clip_space_position_expr_handle,
+                    base: light_clip_space_position_expr,
                     index: 2,
                 },
             );
 
-            let depth_expr_handle = include_expr_in_func(
+            let depth_expr = include_expr_in_func(
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Add,
-                    left: depth_expr_handle,
+                    left: depth_expr,
                     right: unity_constant_expr,
                 },
             );
 
-            let depth_expr_handle = include_expr_in_func(
+            let depth_expr = include_expr_in_func(
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    left: depth_expr_handle,
+                    left: depth_expr,
                     right: half_constant_expr,
                 },
             );
@@ -88,25 +87,13 @@ impl LightSpaceDepthShaderGenerator {
             include_expr_in_func(
                 function,
                 Expression::Compose {
-                    ty: vec4_type_handle,
-                    components: vec![
-                        depth_expr_handle,
-                        depth_expr_handle,
-                        depth_expr_handle,
-                        unity_constant_expr,
-                    ],
+                    ty: vec4_type,
+                    components: vec![depth_expr, depth_expr, depth_expr, unity_constant_expr],
                 },
             )
         });
 
-        output_struct_builder.add_field(
-            "color",
-            vec4_type_handle,
-            None,
-            None,
-            VECTOR_4_SIZE,
-            color_expr_handle,
-        );
+        output_struct_builder.add_field("color", vec4_type, None, None, VECTOR_4_SIZE, color_expr);
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }

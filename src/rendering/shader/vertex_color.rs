@@ -24,30 +24,30 @@ impl VertexColorShaderGenerator {
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
-        let vec4_type_handle = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let vertex_color_expr_handle = fragment_input_struct.get_field_expr_handle(
+        let vertex_color_expr = fragment_input_struct.get_field_expr(
             mesh_input_field_indices
                 .color
                 .expect("No `color` passed to vertex color fragment shader"),
         );
 
-        let output_rgba_color_expr_handle = append_unity_component_to_vec3(
+        let output_rgba_color_expr = append_unity_component_to_vec3(
             &mut module.types,
             &mut module.constants,
             fragment_function,
-            vertex_color_expr_handle,
+            vertex_color_expr,
         );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
             "color",
-            vec4_type_handle,
+            vec4_type,
             None,
             None,
             VECTOR_4_SIZE,
-            output_rgba_color_expr_handle,
+            output_rgba_color_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
