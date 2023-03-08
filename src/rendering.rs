@@ -35,7 +35,7 @@ pub use tasks::{Render, RenderingTag};
 pub use texture::{DepthTexture, ImageTexture};
 
 use self::resource::RenderResourceManager;
-use crate::window::ControlFlow;
+use crate::{geometry::CubemapFace, window::ControlFlow};
 use anyhow::{Error, Result};
 use chrono::Utc;
 use std::sync::{
@@ -70,6 +70,9 @@ pub struct RenderingConfig {
     pub cull_mode: Option<wgpu::Face>,
     /// Controls the way each polygon is rasterized.
     pub polygon_mode: wgpu::PolygonMode,
+    /// The width and height of each face of the point light shadow cubemap in
+    /// number of texels.
+    pub point_light_shadow_map_resolution: u32,
     /// The width and height of the directional light shadow map in number of
     /// texels.
     pub directional_light_shadow_map_resolution: u32,
@@ -79,6 +82,7 @@ pub struct RenderingConfig {
 struct Screenshotter {
     screenshot_save_requested: AtomicBool,
     depth_map_save_requested: AtomicBool,
+    point_light_shadow_map_save_requested: AtomicBool,
     directional_light_shadow_map_save_requested: AtomicBool,
 }
 
@@ -169,6 +173,12 @@ impl RenderingSystem {
             .save_depth_map_if_requested(&self.core_system, &self.depth_texture)?;
 
         self.screenshotter
+            .save_point_light_shadow_map_if_requested(
+                &self.core_system,
+                &self.render_resource_manager,
+            )?;
+
+        self.screenshotter
             .save_directional_light_shadow_map_if_requested(
                 &self.core_system,
                 &self.render_resource_manager,
@@ -224,6 +234,10 @@ impl RenderingSystem {
         self.screenshotter.request_depth_map_save();
     }
 
+    pub fn request_point_light_shadow_map_save(&self) {
+        self.screenshotter.request_point_light_shadow_map_save();
+    }
+
     pub fn request_directional_light_shadow_map_save(&self) {
         self.screenshotter
             .request_directional_light_shadow_map_save();
@@ -268,6 +282,7 @@ impl Default for RenderingConfig {
         Self {
             cull_mode: Some(wgpu::Face::Back),
             polygon_mode: wgpu::PolygonMode::Fill,
+            point_light_shadow_map_resolution: 1024,
             directional_light_shadow_map_resolution: 1024,
         }
     }
@@ -278,6 +293,7 @@ impl Screenshotter {
         Self {
             screenshot_save_requested: AtomicBool::new(false),
             depth_map_save_requested: AtomicBool::new(false),
+            point_light_shadow_map_save_requested: AtomicBool::new(false),
             directional_light_shadow_map_save_requested: AtomicBool::new(false),
         }
     }
@@ -289,6 +305,11 @@ impl Screenshotter {
 
     fn request_depth_map_save(&self) {
         self.depth_map_save_requested.store(true, Ordering::Release);
+    }
+
+    fn request_point_light_shadow_map_save(&self) {
+        self.point_light_shadow_map_save_requested
+            .store(true, Ordering::Release);
     }
 
     fn request_directional_light_shadow_map_save(&self) {
@@ -325,6 +346,43 @@ impl Screenshotter {
                 core_system,
                 format!("depth_map_{}.png", Utc::now().to_rfc3339()),
             )
+        } else {
+            Ok(())
+        }
+    }
+
+    fn save_point_light_shadow_map_if_requested(
+        &self,
+        core_system: &CoreRenderingSystem,
+        render_resource_manager: &RwLock<RenderResourceManager>,
+    ) -> Result<()> {
+        if self
+            .point_light_shadow_map_save_requested
+            .swap(false, Ordering::Acquire)
+        {
+            if let Some(light_buffer_manager) = render_resource_manager
+                .read()
+                .unwrap()
+                .synchronized()
+                .get_light_buffer_manager()
+            {
+                for face in CubemapFace::all() {
+                    light_buffer_manager
+                        .point_light_shadow_map_texture()
+                        .save_face_as_image_file(
+                            core_system,
+                            face,
+                            format!(
+                                "point_light_shadow_map_{}_{:?}.png",
+                                Utc::now().to_rfc3339(),
+                                face
+                            ),
+                        )?;
+                }
+                Ok(())
+            } else {
+                Ok(())
+            }
         } else {
             Ok(())
         }

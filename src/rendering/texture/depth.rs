@@ -57,7 +57,7 @@ impl DepthTexture {
         core_system: &CoreRenderingSystem,
         output_path: P,
     ) -> Result<()> {
-        super::save_depth_texture_as_image_file(core_system, &self.texture, output_path)
+        super::save_depth_texture_as_image_file(core_system, &self.texture, 0, output_path)
     }
 
     /// Creates a new [`wgpu::Texture`] configured to hold 2D depth data

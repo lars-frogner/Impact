@@ -14,17 +14,16 @@ use nalgebra::{vector, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVe
 use std::sync::RwLock;
 
 /// An directional light source represented by a camera space direction and an
-/// RGB radiance. The direction is embedded in a rotation quaternion that also
-/// defines the orientation of the light's local coordinate system with respect
-/// to camera space. The struct also includes an orthographic transformation,
-/// which maps the light's space to clip space in such a way as to include all
-/// objects in the scene that may cast shadows inside or into the camera view
-/// frustum.
+/// RGB radiance. The struct also includes a rotation quaternion that defines
+/// the orientation of the light's local coordinate system with respect to
+/// camera space, and an orthographic transformation that maps the light's space
+/// to clip space in such a way as to include all objects in the scene that may
+/// cast shadows inside or into the camera view frustum.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms, and the fields
-/// that will be accessed on the GPU are aligned to 16-byte boundaries.
+/// size is a multiple of 16 bytes as required for uniforms, and the fields that
+/// will be accessed on the GPU are aligned to 16-byte boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -43,7 +42,7 @@ pub struct DirectionalLight {
     // Padding to obtain 16-byte alignment for next field
     orthographic_half_extent_z: fre,
     orthographic_scaling: Scale3<fre>,
-    // Padding to obtain make size multiple of 16-bytes
+    // Padding to make size multiple of 16-bytes
     _padding: fre,
 }
 

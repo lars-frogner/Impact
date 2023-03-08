@@ -6,7 +6,7 @@ mod shadow_map;
 
 pub use self::image::ImageTexture;
 pub use depth::DepthTexture;
-pub use shadow_map::ShadowMapTexture;
+pub use shadow_map::{ShadowCubemapTexture, ShadowMapTexture};
 
 use crate::rendering::CoreRenderingSystem;
 use ::image::{buffer::ConvertBuffer, ImageBuffer, Luma, Rgba};
@@ -22,12 +22,17 @@ use wgpu::util::DeviceExt;
 ///
 /// # Errors
 /// Returns an error if the format of the given texture is not supported.
+///
+/// # Panics
+/// If the texture is a texture array with multiple textures.
 pub fn save_color_texture_as_image_file<P: AsRef<Path>>(
     core_system: &CoreRenderingSystem,
     texture: &wgpu::Texture,
     output_path: P,
 ) -> Result<()> {
-    let mut data = extract_texture_data(core_system.device(), core_system.queue(), texture);
+    assert_eq!(texture.depth_or_array_layers(), 1);
+
+    let mut data = extract_texture_data(core_system.device(), core_system.queue(), texture, 0);
 
     match texture.format() {
         wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb => {}
@@ -50,8 +55,9 @@ pub fn save_color_texture_as_image_file<P: AsRef<Path>>(
     Ok(())
 }
 
-/// Saves the given depth texture as a grayscale image at the given output path.
-/// The image file format is automatically determined from the file extension.
+/// Saves the texture at the given index of the given depth texture array as a
+/// grayscale image at the given output path. The image file format is
+/// automatically determined from the file extension.
 ///
 /// The supported texture format is [`wgpu::TextureFormat::Depth32Float`].
 ///
@@ -60,6 +66,7 @@ pub fn save_color_texture_as_image_file<P: AsRef<Path>>(
 pub fn save_depth_texture_as_image_file<P: AsRef<Path>>(
     core_system: &CoreRenderingSystem,
     texture: &wgpu::Texture,
+    texture_array_idx: u32,
     output_path: P,
 ) -> Result<()> {
     if texture.format() != wgpu::TextureFormat::Depth32Float {
@@ -69,7 +76,12 @@ pub fn save_depth_texture_as_image_file<P: AsRef<Path>>(
         );
     }
 
-    let mut data = extract_texture_data::<f32>(core_system.device(), core_system.queue(), texture);
+    let mut data = extract_texture_data::<f32>(
+        core_system.device(),
+        core_system.queue(),
+        texture,
+        texture_array_idx,
+    );
 
     // Gamma correction
     for value in &mut data {
@@ -90,8 +102,10 @@ fn extract_texture_data<T: Pod>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
+    texture_array_idx: u32,
 ) -> Vec<T> {
-    assert_eq!(texture.depth_or_array_layers(), 1);
+    assert!(texture_array_idx < texture.depth_or_array_layers());
+    let texture_array_idx = texture_array_idx as usize;
 
     let width = texture.width();
     let height = texture.height();
@@ -101,7 +115,8 @@ fn extract_texture_data<T: Pod>(
         label: Some("Texture copy encoder"),
     });
 
-    let raw_buffer = vec![0; (pixel_size * width * height) as usize];
+    let raw_buffer =
+        vec![0; (pixel_size * width * height * texture.depth_or_array_layers()) as usize];
 
     let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         contents: raw_buffer.as_slice(),
@@ -129,7 +144,12 @@ fn extract_texture_data<T: Pod>(
     device.poll(wgpu::Maintain::Wait);
     let buffer_view = buffer_slice.get_mapped_range();
 
-    bytemuck::cast_slice(&buffer_view).to_vec()
+    // Extract only the data of the texture with the given texture array index
+    let texture_image_size = (pixel_size * width * height) as usize;
+    let buffer_view = &buffer_view
+        [texture_array_idx * texture_image_size..(texture_array_idx + 1) * texture_image_size];
+
+    bytemuck::cast_slice(buffer_view).to_vec()
 }
 
 fn convert_bgra8_to_rgba8(bgra_bytes: &mut [u8]) {

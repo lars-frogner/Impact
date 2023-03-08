@@ -1,6 +1,7 @@
 //! Omnidirectional light sources.
 
 use crate::{
+    geometry::{CubeMapper, CubemapFace, Frustum, Sphere, UpperExclusiveBounds},
     physics::PositionComp,
     rendering::fre,
     scene::{
@@ -10,15 +11,19 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
-use nalgebra::{Point3, Similarity3};
+use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion};
 use std::sync::RwLock;
 
 /// An point light source represented by a camera space position and an RGB
-/// radiance.
+/// radiance. The struct also includes a rotation quaternion that defines the
+/// orientation of the light's local coordinate system with respect to camera
+/// space, and a near and far distance restricting the distance range in which
+/// the light can cast shadows.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
-/// will be passed directly to the GPU in a uniform buffer. Since the size of a
-/// uniform has to be a multiple of 16 bytes, the struct is padded to 32 bytes.
+/// will be passed directly to the GPU in a uniform buffer. Importantly, its
+/// size is a multiple of 16 bytes as required for uniforms, and the fields that
+/// will be accessed on the GPU are aligned to 16-byte boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -26,25 +31,79 @@ use std::sync::RwLock;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct PointLight {
+    camera_to_light_space_rotation: UnitQuaternion<fre>,
     camera_space_position: Point3<fre>,
+    // Padding to obtain 16-byte alignment for next field
     _padding_1: fre,
     radiance: Radiance,
+    // Padding to obtain 16-byte alignment for next field (the `near_distance`
+    // and `inverse_distance_span` fields are accessed as a struct in a single
+    // field in the shader)
     _padding_2: fre,
+    near_distance: fre,
+    inverse_distance_span: fre,
+    // Padding to make size multiple of 16-bytes
+    _padding_3: [fre; 2],
 }
 
 impl PointLight {
     fn new(camera_space_position: Point3<fre>, radiance: Radiance) -> Self {
         Self {
+            camera_to_light_space_rotation: UnitQuaternion::identity(),
             camera_space_position,
             _padding_1: 0.0,
             radiance,
             _padding_2: 0.0,
+            near_distance: 0.0,
+            inverse_distance_span: 0.0,
+            _padding_3: [0.0; 2],
         }
+    }
+
+    /// Takes a transform into camera space and returns the corresponding
+    /// transform into the space of the positive z face for points lying in
+    /// front of the given face.
+    pub fn create_transform_to_positive_z_cubemap_face_space(
+        &self,
+        face: CubemapFace,
+        transform_to_camera_space: &Similarity3<fre>,
+    ) -> Similarity3<fre> {
+        CubeMapper::rotation_to_positive_z_face_from_face(face)
+            * self.camera_to_light_space_rotation
+            * Translation3::from(-self.camera_space_position)
+            * transform_to_camera_space
     }
 
     /// Sets the camera space position of the light to the given position.
     pub fn set_camera_space_position(&mut self, camera_space_position: Point3<fre>) {
         self.camera_space_position = camera_space_position;
+    }
+
+    pub fn orient_and_scale_cubemap_for_view_frustum(
+        &mut self,
+        camera_space_view_frustum: &Frustum<fre>,
+        camera_space_bounding_sphere: &Sphere<fre>,
+    ) {
+        let bounding_sphere_center_distance = nalgebra::distance(
+            &self.camera_space_position,
+            camera_space_bounding_sphere.center(),
+        );
+
+        self.near_distance = 0.05;
+        // dbg!(fre::max(
+        //     0.05,
+        //     bounding_sphere_center_distance - camera_space_bounding_sphere.radius(),
+        // ));
+        let far_distance = 100.0;
+        // dbg!(bounding_sphere_center_distance + camera_space_bounding_sphere.radius());
+        self.inverse_distance_span = 1.0 / (far_distance - self.near_distance);
+    }
+
+    pub fn bounding_sphere_may_cast_visible_shadow(
+        &self,
+        camera_space_bounding_sphere: &Sphere<fre>,
+    ) -> bool {
+        true
     }
 
     /// Checks if the entity-to-be with the given components has the right

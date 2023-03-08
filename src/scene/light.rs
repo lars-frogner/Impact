@@ -50,7 +50,9 @@ pub struct LightStorage {
 impl LightID {
     /// Converts the light ID into an [`InstanceFeatureBufferRangeID`].
     pub fn as_instance_feature_buffer_range_id(&self) -> InstanceFeatureBufferRangeID {
-        self.0
+        // Use a stride of 6 so that the ID can be incremented up to 5 times to
+        // create additional ranges associated with the same light
+        6 * self.0
     }
 }
 
@@ -146,6 +148,14 @@ impl LightStorage {
         self.directional_light_buffer
             .get_uniform_mut(light_id)
             .expect("Requested missing directional light")
+    }
+
+    /// Returns an iterator over the point lights in the storage where each item
+    /// contains the light ID and a mutable reference to the light.
+    pub fn point_lights_with_ids_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (LightID, &mut PointLight)> {
+        self.point_light_buffer.valid_uniforms_with_ids_mut()
     }
 
     /// Returns an iterator over the directional lights in the storage where

@@ -46,6 +46,7 @@ pub enum KeyboardInputAction {
     ToggleTriangleFill,
     SaveScreenshot,
     SaveDepthMap,
+    SavePointLightShadowMap,
     SaveDirectionalLightShadowMap,
     Exit,
 }
@@ -172,6 +173,16 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::SavePointLightShadowMap => {
+                        if state == &ElementState::Released {
+                            world
+                                .renderer()
+                                .read()
+                                .unwrap()
+                                .request_point_light_shadow_map_save();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::SaveDirectionalLightShadowMap => {
                         if state == &ElementState::Released {
                             world
@@ -231,7 +242,8 @@ impl Default for KeyActionMap {
             ToggleTriangleFill => F,
             SaveScreenshot => F12,
             SaveDepthMap => F11,
-            SaveDirectionalLightShadowMap => F10,
+            SavePointLightShadowMap => F10,
+            SaveDirectionalLightShadowMap => F9,
             Exit => Escape
         ))
     }

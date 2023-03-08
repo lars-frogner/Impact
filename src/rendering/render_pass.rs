@@ -5,7 +5,7 @@ mod tasks;
 pub use tasks::SyncRenderPasses;
 
 use crate::{
-    geometry::VertexAttributeSet,
+    geometry::{CubemapFace, VertexAttributeSet},
     rendering::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
@@ -23,7 +23,7 @@ use anyhow::{anyhow, Result};
 use impact_utils::KeyIndexMapper;
 use std::{
     collections::{hash_map::Entry, HashMap},
-    iter,
+    iter, vec,
 };
 
 /// Manager and owner of render passes.
@@ -81,8 +81,8 @@ pub struct RenderPassRecorder {
 
 #[derive(Debug, Default)]
 struct LightShadedModelShadingPasses {
-    /// Pass for clearing the shadow map to the maximum depth.
-    shadow_map_clearing_pass: Option<RenderPassRecorder>,
+    /// Passes for clearing the shadow maps to the maximum depth.
+    shadow_map_clearing_passes: Vec<RenderPassRecorder>,
     /// Passes for writing the depths of each model from the light's point of
     /// view to the shadow map.
     shadow_map_update_passes: Vec<RenderPassRecorder>,
@@ -116,12 +116,19 @@ type WriteDepths = bool;
 enum ShadowMapUsage {
     /// No shadow map is used.
     None,
-    /// Clear the shadow map with the maximum depth (1.0).
-    Clear,
-    /// Fill the shadow map with model depths from the light's point of view.
-    Update,
+    /// Clear the specified shadow map with the maximum depth (1.0).
+    Clear(ShadowMapIdentifier),
+    /// Fill the specified shadow map with model depths from the light's point
+    /// of view.
+    Update(ShadowMapIdentifier),
     /// Make the shadow map texture available for sampling in the shader.
     Use,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ShadowMapIdentifier {
+    ForDirectionalLight,
+    ForPointLight(CubemapFace),
 }
 
 #[derive(Debug)]
@@ -160,7 +167,7 @@ impl RenderPassManager {
                     .values()
                     .flat_map(|passes| {
                         passes
-                            .shadow_map_clearing_pass
+                            .shadow_map_clearing_passes
                             .iter()
                             .chain(passes.shadow_map_update_passes.iter())
                             .chain(passes.shading_passes.iter())
@@ -281,10 +288,71 @@ impl RenderPassManager {
                             )?);
 
                         for &light_id in point_light_ids {
-                            let passes = self
-                                .light_shaded_model_shading_passes
-                                .entry(light_id)
-                                .or_default();
+                            let faces_have_shadow_casting_model_instances: Vec<_> =
+                                CubemapFace::all()
+                                    .into_iter()
+                                    .map(|face| {
+                                        !transform_buffer_manager
+                                            .feature_range(
+                                                light_id.as_instance_feature_buffer_range_id()
+                                                    + face.as_idx_u32(),
+                                            )
+                                            .is_empty()
+                                    })
+                                    .collect();
+
+                            let passes =
+                                match self.light_shaded_model_shading_passes.entry(light_id) {
+                                    Entry::Occupied(entry) => entry.into_mut(),
+                                    Entry::Vacant(entry) => {
+                                        let mut shadow_map_clearing_passes = Vec::with_capacity(6);
+
+                                        for face in CubemapFace::all() {
+                                            shadow_map_clearing_passes
+                                                .push(RenderPassRecorder::new(
+                                                core_system,
+                                                config,
+                                                render_resources,
+                                                shader_manager,
+                                                RenderPassSpecification::shadow_map_clearing_pass(
+                                                    ShadowMapIdentifier::ForPointLight(face),
+                                                ),
+                                                !faces_have_shadow_casting_model_instances
+                                                    [face.as_idx_usize()],
+                                            )?);
+                                        }
+
+                                        entry.insert(LightShadedModelShadingPasses {
+                                            shadow_map_clearing_passes,
+                                            ..Default::default()
+                                        })
+                                    }
+                                };
+
+                            let light = LightInfo {
+                                light_type: LightType::PointLight,
+                                light_id,
+                            };
+
+                            // Create a point light shadow map update pass for
+                            // each cubemap face for the new model
+                            for face in CubemapFace::all() {
+                                passes
+                                    .shadow_map_update_passes
+                                    .push(RenderPassRecorder::new(
+                                        core_system,
+                                        config,
+                                        render_resources,
+                                        shader_manager,
+                                        RenderPassSpecification::shadow_map_update_pass(
+                                            light,
+                                            model_id,
+                                            ShadowMapIdentifier::ForPointLight(face),
+                                        ),
+                                        !faces_have_shadow_casting_model_instances
+                                            [face.as_idx_usize()],
+                                    )?);
+                            }
 
                             // Create a point light shading pass for the new model
                             passes.shading_passes.push(RenderPassRecorder::new(
@@ -292,12 +360,8 @@ impl RenderPassManager {
                                 config,
                                 render_resources,
                                 shader_manager,
-                                RenderPassSpecification::model_shading_pass_without_shadow_map(
-                                    Some(LightInfo {
-                                        light_type: LightType::PointLight,
-                                        light_id,
-                                    }),
-                                    model_id,
+                                RenderPassSpecification::model_shading_pass_with_shadow_map(
+                                    light, model_id,
                                 ),
                                 no_visible_instances,
                             )?);
@@ -307,25 +371,26 @@ impl RenderPassManager {
                                 .feature_range(light_id.as_instance_feature_buffer_range_id())
                                 .is_empty();
 
-                            let passes = match self
-                                .light_shaded_model_shading_passes
-                                .entry(light_id)
-                            {
-                                Entry::Occupied(entry) => entry.into_mut(),
-                                Entry::Vacant(entry) => {
-                                    entry.insert(LightShadedModelShadingPasses {
-                                        shadow_map_clearing_pass: Some(RenderPassRecorder::new(
+                            let passes =
+                                match self.light_shaded_model_shading_passes.entry(light_id) {
+                                    Entry::Occupied(entry) => entry.into_mut(),
+                                    Entry::Vacant(entry) => {
+                                        entry.insert(LightShadedModelShadingPasses {
+                                            shadow_map_clearing_passes:
+                                                vec![RenderPassRecorder::new(
                                             core_system,
                                             config,
                                             render_resources,
                                             shader_manager,
-                                            RenderPassSpecification::shadow_map_clearing_pass(),
+                                            RenderPassSpecification::shadow_map_clearing_pass(
+                                                ShadowMapIdentifier::ForDirectionalLight,
+                                            ),
                                             false,
-                                        )?),
-                                        ..Default::default()
-                                    })
-                                }
-                            };
+                                        )?],
+                                            ..Default::default()
+                                        })
+                                    }
+                                };
 
                             let light = LightInfo {
                                 light_type: LightType::DirectionalLight,
@@ -342,7 +407,9 @@ impl RenderPassManager {
                                     render_resources,
                                     shader_manager,
                                     RenderPassSpecification::shadow_map_update_pass(
-                                        light, model_id,
+                                        light,
+                                        model_id,
+                                        ShadowMapIdentifier::ForDirectionalLight,
                                     ),
                                     no_shadow_casting_instances,
                                 )?);
@@ -450,7 +517,7 @@ impl RenderPassSpecification {
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
             override_material: None,
-            label: "Clearing pass".to_string(),
+            label: "Surface clearing pass".to_string(),
         }
     }
 
@@ -487,8 +554,8 @@ impl RenderPassSpecification {
     fn model_shading_pass_without_shadow_map(light: Option<LightInfo>, model_id: ModelID) -> Self {
         let label = if let Some(light) = light {
             format!(
-                "Shading of model {} for light {} without shadow map",
-                model_id, light.light_id
+                "Shading of model {} for light {} ({:?}) without shadow map",
+                model_id, light.light_id, light.light_type
             )
         } else {
             format!("Shading of model {}", model_id)
@@ -516,40 +583,44 @@ impl RenderPassSpecification {
             shadow_map_usage: ShadowMapUsage::Use,
             override_material: None,
             label: format!(
-                "Shading of model {} for light {} with shadow map",
-                model_id, light.light_id
+                "Shading of model {} for light {} ({:?}) with shadow map",
+                model_id, light.light_id, light.light_type
             ),
         }
     }
 
-    /// Creates the specification for the render pass that will clear the
+    /// Creates the specification for the render pass that will clear the given
     /// shadow map.
-    fn shadow_map_clearing_pass() -> Self {
+    fn shadow_map_clearing_pass(shadow_map_id: ShadowMapIdentifier) -> Self {
         Self {
             clear_color: None,
             model_id: None,
             depth_map_usage: DepthMapUsage::None,
             light: None,
-            shadow_map_usage: ShadowMapUsage::Clear,
+            shadow_map_usage: ShadowMapUsage::Clear(shadow_map_id),
             override_material: None,
-            label: "Shadow map clearing pass".to_string(),
+            label: format!("Shadow map clearing pass ({:?})", shadow_map_id),
         }
     }
 
-    /// Creates the specification for the render pass that will update a shadow
-    /// map with the depths of the model with the given ID from the point of
-    /// view of the given light.
-    fn shadow_map_update_pass(light: LightInfo, model_id: ModelID) -> Self {
+    /// Creates the specification for the render pass that will update the given
+    /// shadow map with the depths of the model with the given ID from the point
+    /// of view of the given light.
+    fn shadow_map_update_pass(
+        light: LightInfo,
+        model_id: ModelID,
+        shadow_map_id: ShadowMapIdentifier,
+    ) -> Self {
         Self {
             clear_color: None,
             model_id: Some(model_id),
             depth_map_usage: DepthMapUsage::None,
             light: Some(light),
-            shadow_map_usage: ShadowMapUsage::Update,
+            shadow_map_usage: ShadowMapUsage::Update(shadow_map_id),
             override_material: None,
             label: format!(
-                "Shadow map update for model {} and light {}",
-                model_id, light.light_id
+                "Shadow map update for model {} and light {} ({:?})",
+                model_id, light.light_id, light.light_type
             ),
         }
     }
@@ -723,11 +794,9 @@ impl RenderPassSpecification {
             layouts.push(light_buffer_manager.light_bind_group_layout());
 
             if self.shadow_map_usage.is_use() {
-                if let Some(layout) =
-                    light_buffer_manager.shadow_map_bind_group_layout_for_light_type(light_type)
-                {
-                    layouts.push(layout);
-                }
+                layouts.push(
+                    light_buffer_manager.shadow_map_bind_group_layout_for_light_type(light_type),
+                );
             }
 
             shader_input.light = Some(light_buffer_manager.shader_input_for_light_type(light_type));
@@ -800,11 +869,8 @@ impl RenderPassSpecification {
             bind_groups.push(light_buffer_manager.light_bind_group());
 
             if self.shadow_map_usage.is_use() {
-                if let Some(bind_group) =
-                    light_buffer_manager.shadow_map_bind_group_for_light_type(light_type)
-                {
-                    bind_groups.push(bind_group);
-                }
+                bind_groups
+                    .push(light_buffer_manager.shadow_map_bind_group_for_light_type(light_type));
             }
         }
 
@@ -841,18 +907,24 @@ impl RenderPassSpecification {
         Ok(bind_groups)
     }
 
-    /// Obtains the shadow map texture involved in the render pass.
-    fn get_shadow_map_texture<'a>(
+    /// Obtains a view into the shadow map texture involved in the render pass.
+    fn get_shadow_map_texture_view<'a>(
         &self,
         render_resources: &'a SynchronizedRenderResources,
-    ) -> Option<&'a ShadowMapTexture> {
-        if !self.shadow_map_usage.is_none() {
-            Some(
-                render_resources
-                    .get_light_buffer_manager()
-                    .expect("Missing light render buffer manager for shadow mapping render pass")
-                    .directional_light_shadow_map_texture(),
-            )
+    ) -> Option<&'a wgpu::TextureView> {
+        if let Some(shadow_map_id) = self.shadow_map_usage.get_shadow_map_to_clear_or_update() {
+            let light_buffer_manager = render_resources
+                .get_light_buffer_manager()
+                .expect("Missing light render buffer manager for shadow mapping render pass");
+
+            Some(match shadow_map_id {
+                ShadowMapIdentifier::ForPointLight(face) => light_buffer_manager
+                    .point_light_shadow_map_texture()
+                    .face_view(face),
+                ShadowMapIdentifier::ForDirectionalLight => light_buffer_manager
+                    .directional_light_shadow_map_texture()
+                    .view(),
+            })
         } else {
             None
         }
@@ -897,19 +969,29 @@ impl RenderPassSpecification {
     }
 
     fn determine_depth_stencil_state(&self) -> Option<wgpu::DepthStencilState> {
-        if self.shadow_map_usage.is_clear_or_update() {
+        if let Some(shadow_map_id) = self.shadow_map_usage.get_shadow_map_to_clear_or_update() {
             // For modifying the shadow map we have to set it as the depth
             // map for the pipeline
+
+            let bias = match shadow_map_id {
+                ShadowMapIdentifier::ForPointLight(_) => wgpu::DepthBiasState {
+                    constant: 8,
+                    slope_scale: 1.5,
+                    clamp: 0.0,
+                },
+                ShadowMapIdentifier::ForDirectionalLight => wgpu::DepthBiasState {
+                    constant: 8,
+                    slope_scale: 1.5,
+                    clamp: 0.0,
+                },
+            };
+
             Some(wgpu::DepthStencilState {
                 format: ShadowMapTexture::FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState {
-                    constant: 8,
-                    slope_scale: 1.5,
-                    clamp: 0.0,
-                },
+                bias,
             })
         } else if !self.depth_map_usage.is_none() {
             let depth_write_enabled = self.depth_map_usage.make_writeable();
@@ -1114,9 +1196,8 @@ impl RenderPassRecorder {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: self
                     .specification
-                    .get_shadow_map_texture(render_resources)
-                    .unwrap()
-                    .view(),
+                    .get_shadow_map_texture_view(render_resources)
+                    .unwrap(),
                 depth_ops: Some(self.depth_operations),
                 stencil_ops: None,
             })
@@ -1191,26 +1272,39 @@ impl RenderPassRecorder {
                 );
                 vertex_buffer_slot += 1;
 
-                if self.specification.shadow_map_usage.is_update() {
+                if let ShadowMapUsage::Update(shadow_map_id) = self.specification.shadow_map_usage {
                     // When updating the shadow map, we don't use model view
                     // transforms but rather the model to light space tranforms
                     // that have been written to the range dedicated for the
                     // active light in the transform buffer
-                    let buffer_range_id = self
-                        .specification
-                        .light
-                        .unwrap()
-                        .light_id
-                        .as_instance_feature_buffer_range_id();
+                    let buffer_range_id = match shadow_map_id {
+                        ShadowMapIdentifier::ForPointLight(face) => {
+                            // Offset the light index with the face index to get
+                            // the index for the range of transforms for the
+                            // specific cubemap face
+                            self.specification
+                                .light
+                                .unwrap()
+                                .light_id
+                                .as_instance_feature_buffer_range_id()
+                                + face.as_idx_u32()
+                        }
+                        ShadowMapIdentifier::ForDirectionalLight => self
+                            .specification
+                            .light
+                            .unwrap()
+                            .light_id
+                            .as_instance_feature_buffer_range_id(),
+                    };
 
                     transform_buffer_manager.feature_range(buffer_range_id)
                 } else if self.specification.depth_map_usage.is_prepass() {
-                    // When doing a depth prepass we use the mode view
+                    // When doing a depth prepass we use the model view
                     // transforms, which are in the initial range of the buffer,
                     // but we don't include any other instance features
                     transform_buffer_manager.initial_feature_range()
                 } else {
-                    // When doing a shading pass  we use the mode view
+                    // When doing a shading pass we use the model view
                     // transforms and also include any other instance features
                     for feature_buffer_manager in feature_buffer_managers {
                         render_pass.set_vertex_buffer(
@@ -1363,11 +1457,11 @@ impl ShadowMapUsage {
     }
 
     fn is_clear(&self) -> bool {
-        *self == Self::Clear
+        matches!(*self, Self::Clear(_))
     }
 
     fn is_update(&self) -> bool {
-        *self == Self::Update
+        matches!(*self, Self::Update(_))
     }
 
     fn is_use(&self) -> bool {
@@ -1376,5 +1470,12 @@ impl ShadowMapUsage {
 
     fn is_clear_or_update(&self) -> bool {
         self.is_clear() || self.is_update()
+    }
+
+    fn get_shadow_map_to_clear_or_update(&self) -> Option<ShadowMapIdentifier> {
+        match self {
+            Self::Update(shadow_map_id) | Self::Clear(shadow_map_id) => Some(*shadow_map_id),
+            _ => None,
+        }
     }
 }

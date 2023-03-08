@@ -4,11 +4,11 @@ use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
     insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
     LightFieldExpressions, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, SourceCodeFunctions, TextureType, F32_TYPE, F32_WIDTH,
+    OutputStructBuilder, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
     VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{
-    BinaryOperator, Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement,
+    Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement,
 };
 
 /// Input description specifying the vertex attribute locations
@@ -191,7 +191,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
         light_expressions: Option<&LightFieldExpressions>,
     ) {
-        let function_handles = SourceCodeFunctions::from_wgsl_source(
+        let source_code_handles = SourceCode::from_wgsl_source(
             "\
             fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
                 return normalize(-vertexPosition);
@@ -211,59 +211,13 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 let specularFactor = pow(max(0.0, dot(halfVector, normalVector)), shininess);
                 return lightRadiance * (diffuseFactor * diffuseColor + specularFactor * specularColor);
             }
-            
-            fn computeBlinnPhongColorForPointLight(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                vertexPosition: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
-                shininess: f32,
-                lightPosition: vec3<f32>,
-                lightRadiance: vec3<f32>
-            ) -> vec3<f32> {
-                 let lightDisplacement = lightPosition - vertexPosition;
-                 let inverseSquaredLightDistance = 1.0 / dot(lightDisplacement, lightDisplacement);
-                 let lightDirection = lightDisplacement * sqrt(inverseSquaredLightDistance);
-                 let attenuatedLightRadiance = lightRadiance * inverseSquaredLightDistance;
-                 return computeBlinnPhongColor(
-                    viewDirection,
-                    normalVector,
-                    diffuseColor,
-                    specularColor,
-                    shininess,
-                    lightDirection,
-                    attenuatedLightRadiance
-                );
-            }
-            
-            fn computeBlinnPhongColorForDirectionalLight(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
-                shininess: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>
-            ) -> vec3<f32> {
-                 return computeBlinnPhongColor(
-                    viewDirection,
-                    normalVector,
-                    diffuseColor,
-                    specularColor,
-                    shininess,
-                    -lightDirection,
-                    lightRadiance
-                );
-            }
         ",
         )
         .unwrap()
         .import_to_module(module);
 
-        let view_direction_function_handle = function_handles[0];
-        let point_light_color_function_handle = function_handles[2];
-        let directional_light_color_function_handle = function_handles[3];
+        let view_direction_function_handle = source_code_handles.functions[0];
+        let light_color_function_handle = source_code_handles.functions[1];
 
         let light_input_field_indices =
             light_input_field_indices.expect("Missing light for Blinn-Phong shading");
@@ -335,89 +289,72 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             )),
         );
 
-        let view_dir_expr_handle = SourceCodeFunctions::generate_call(
-            &mut fragment_function.body,
-            &mut fragment_function.expressions,
+        let view_dir_expr_handle = SourceCode::generate_call_named(
+            fragment_function,
+            "viewDirection",
             view_direction_function_handle,
             vec![position_expr_handle],
         );
 
-        let light_color_expr_handle = match light_expressions {
-            LightFieldExpressions::PointLight(point_light_expressions) => {
-                let light_position_expr_handle =
-                    point_light_expressions.in_fragment_function.position;
-                let light_radiance_expr_handle =
-                    point_light_expressions.in_fragment_function.radiance;
+        let light_color_expr_handle = match (light_expressions, light_input_field_indices) {
+            (
+                LightFieldExpressions::PointLight(point_light_expressions),
+                LightVertexOutputFieldIndices::PointLight,
+            ) => {
+                let point_light_expressions = point_light_expressions.in_fragment_function.as_ref().unwrap();
+                
+                let (light_dir_expr_handle, light_radiance_expr_handle) = point_light_expressions.generate_fragment_shading_code(module, fragment_function, position_expr_handle);
 
-                SourceCodeFunctions::generate_call(
-                    &mut fragment_function.body,
-                    &mut fragment_function.expressions,
-                    point_light_color_function_handle,
+                SourceCode::generate_call_named(
+                    fragment_function,
+                    "lightColor",
+                    light_color_function_handle,
                     vec![
                         view_dir_expr_handle,
                         normal_vector_expr_handle,
-                        position_expr_handle,
                         diffuse_color_expr_handle,
                         specular_color_expr_handle,
                         shininess_expr_handle,
-                        light_position_expr_handle,
+                        light_dir_expr_handle,
                         light_radiance_expr_handle,
                     ],
                 )
             }
-            LightFieldExpressions::DirectionalLight(directional_light_expressions) => {
+            (
+                LightFieldExpressions::DirectionalLight(directional_light_expressions),
+                LightVertexOutputFieldIndices::DirectionalLight(
+                    directional_light_input_field_indices,
+                ),
+            ) => {
                 let directional_light_expressions = directional_light_expressions
                     .in_fragment_function
                     .as_ref()
                     .unwrap();
 
-                let light_direction_expr_handle =
-                    directional_light_expressions.camera_space_direction;
-                let light_radiance_expr_handle = directional_light_expressions.radiance;
 
-                let light_color_expr_handle = SourceCodeFunctions::generate_call(
-                    &mut fragment_function.body,
-                    &mut fragment_function.expressions,
-                    directional_light_color_function_handle,
+                let light_clip_space_position_expr_handle = fragment_input_struct
+                    .get_field_expr_handle(
+                        directional_light_input_field_indices.light_clip_position,
+                    );
+
+                let (light_dir_expr_handle, light_radiance_expr_handle) = directional_light_expressions.generate_fragment_shading_code(module, fragment_function, light_clip_space_position_expr_handle);
+
+                SourceCode::generate_call_named(
+                    fragment_function,
+                    "lightColor",
+                    light_color_function_handle,
                     vec![
                         view_dir_expr_handle,
                         normal_vector_expr_handle,
                         diffuse_color_expr_handle,
                         specular_color_expr_handle,
                         shininess_expr_handle,
-                        light_direction_expr_handle,
+                        light_dir_expr_handle,
                         light_radiance_expr_handle,
                     ],
-                );
-
-                let light_clip_space_position_expr_handle = fragment_input_struct.get_field_expr_handle(
-                    light_input_field_indices
-                        .light_clip_position
-                        .expect("Missing light clip space position for Blinn-Phong shading with directional light"),
-                );
-
-                // The value returned from the comparison sampling is 0.0 if the
-                // fragment is occluded and 1.0 otherwise
-                let comparison_sample_expr_handle = directional_light_expressions
-                    .shadow_map
-                    .generate_shadow_map_sampling_expr(
-                        &mut module.types,
-                        &mut module.constants,
-                        fragment_function,
-                        light_clip_space_position_expr_handle,
-                    );
-
-                emit_in_func(fragment_function, |function| {
-                    include_expr_in_func(
-                        function,
-                        Expression::Binary {
-                            op: BinaryOperator::Multiply,
-                            left: comparison_sample_expr_handle,
-                            right: light_color_expr_handle,
-                        },
-                    )
-                })
-            }
+                )
+            },
+            _ => panic!("Different light types for light field expressions and light vertex output field indices")
         };
 
         push_to_block(

@@ -32,11 +32,15 @@ impl LightSpaceDepthShaderGenerator {
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
-        let light_clip_space_position_expr_handle = fragment_input_struct.get_field_expr_handle(
-            light_input_field_indices
-                .light_clip_position
-                .expect("Missing light clip space position for visualizing light space depth"),
-        );
+        let light_clip_space_position_expr_handle = match light_input_field_indices {
+            LightVertexOutputFieldIndices::PointLight => unimplemented!(
+                "Light clip space depth visualization is not supported for point lights"
+            ),
+            LightVertexOutputFieldIndices::DirectionalLight(light_input_field_indices) => {
+                fragment_input_struct
+                    .get_field_expr_handle(light_input_field_indices.light_clip_position)
+            }
+        };
 
         let unity_constant_expr = include_expr_in_func(
             fragment_function,

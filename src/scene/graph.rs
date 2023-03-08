@@ -2,12 +2,14 @@
 
 use crate::{
     geometry::{
-        Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
+        CubemapFace, Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
         InstanceModelViewTransform, Sphere,
     },
     num::Float,
     rendering::fre,
-    scene::{DirectionalLight, InstanceFeatureManager, LightStorage, ModelID, SceneCamera},
+    scene::{
+        DirectionalLight, InstanceFeatureManager, LightStorage, ModelID, PointLight, SceneCamera,
+    },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
@@ -633,6 +635,64 @@ impl<F: Float> SceneGraph<F> {
 }
 
 impl SceneGraph<fre> {
+    /// Goes through all point lights in the given light storage and updates
+    /// their cubemap orientations and distance spans to encompass all model
+    /// instances that may cast visible shadows with as few frustra as possible.
+    /// Then the model to cubemap face space transform of every such shadow
+    /// casting model instance is computed for the relevant cube faces of each
+    /// light and copied to the model's instance transform buffer in new ranges
+    /// dedicated to the faces of the cubemap of the particular light.
+    ///
+    /// # Warning
+    /// Make sure to [`buffer_transforms_of_visible_model_instances`] before
+    /// calling this method, so that the ranges of model to cubemap face
+    /// transforms in the model instance buffers come after the initial range
+    /// containing model to camera transforms.
+    pub fn bound_point_lights_and_buffer_shadow_casting_model_instances(
+        &self,
+        light_storage: &mut LightStorage,
+        instance_feature_manager: &mut InstanceFeatureManager,
+        scene_camera: &SceneCamera<fre>,
+    ) {
+        let camera_space_view_frustum = scene_camera.camera().view_frustum();
+        let view_transform = scene_camera.view_transform();
+
+        let root_node_id = self.root_node_id();
+        let root_node = self.group_nodes.node(root_node_id);
+
+        if let Some(world_space_bounding_sphere) = root_node.get_bounding_sphere() {
+            let camera_space_bounding_sphere =
+                world_space_bounding_sphere.transformed(view_transform);
+
+            for (light_id, point_light) in light_storage.point_lights_with_ids_mut() {
+                point_light.orient_and_scale_cubemap_for_view_frustum(
+                    camera_space_view_frustum,
+                    &camera_space_bounding_sphere,
+                );
+
+                for face in CubemapFace::all() {
+                    // Begin a new range dedicated for tranforms to the current
+                    // cubemap face space for the current light at the end of
+                    // each transform buffer, identified by the light's ID plus
+                    // a face index offset
+                    for buffer in instance_feature_manager.transform_buffers_mut() {
+                        buffer.begin_range(
+                            light_id.as_instance_feature_buffer_range_id() + face.as_idx_u32(),
+                        );
+                    }
+
+                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+                        instance_feature_manager,
+                        point_light,
+                        face,
+                        root_node,
+                        view_transform,
+                    );
+                }
+            }
+        }
+    }
+
     /// Goes through all directional lights in the given light storage and
     /// updates their orthographic transforms to encompass all model instances
     /// that may cast visible shadows. Then the model to light transform of
@@ -642,7 +702,7 @@ impl SceneGraph<fre> {
     ///
     /// # Warning
     /// Make sure to [`buffer_transforms_of_visible_model_instances`] before
-    /// calling this method, so that the ranges of model to light transform in
+    /// calling this method, so that the ranges of model to light transforms in
     /// the model instance buffers come after the initial range containing model
     /// to camera transforms.
     pub fn bound_directional_lights_and_buffer_shadow_casting_model_instances(
@@ -679,6 +739,71 @@ impl SceneGraph<fre> {
                     directional_light,
                     root_node,
                     view_transform,
+                );
+            }
+        }
+    }
+
+    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+        &self,
+        instance_feature_manager: &mut InstanceFeatureManager,
+        point_light: &PointLight,
+        face: CubemapFace,
+        group_node: &GroupNode<fre>,
+        group_to_camera_transform: &NodeTransform<fre>,
+    ) {
+        for &child_group_node_id in group_node.child_group_node_ids() {
+            let child_group_node = self.group_nodes.node(child_group_node_id);
+
+            if let Some(child_world_space_bounding_sphere) = child_group_node.get_bounding_sphere()
+            {
+                let child_group_to_camera_transform =
+                    group_to_camera_transform * child_group_node.group_to_parent_transform();
+
+                let child_camera_space_bounding_sphere =
+                    child_world_space_bounding_sphere.transformed(&child_group_to_camera_transform);
+
+                if point_light
+                    .bounding_sphere_may_cast_visible_shadow(&child_camera_space_bounding_sphere)
+                {
+                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+                        instance_feature_manager,
+                        point_light,
+                        face,
+                        child_group_node,
+                        &child_group_to_camera_transform,
+                    );
+                }
+            }
+        }
+
+        for &model_instance_node_id in group_node.child_model_instance_node_ids() {
+            let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+            let model_instance_world_space_bounding_sphere =
+                model_instance_node.model_bounding_sphere();
+
+            let model_instance_to_camera_transform =
+                group_to_camera_transform * model_instance_node.model_to_parent_transform();
+
+            let model_instance_camera_space_bounding_sphere =
+                model_instance_world_space_bounding_sphere
+                    .transformed(&model_instance_to_camera_transform);
+
+            if point_light.bounding_sphere_may_cast_visible_shadow(
+                &model_instance_camera_space_bounding_sphere,
+            ) {
+                let instance_model_light_transform =
+                    InstanceModelLightTransform::with_model_light_transform(
+                        point_light.create_transform_to_positive_z_cubemap_face_space(
+                            face,
+                            &model_instance_to_camera_transform,
+                        ),
+                    );
+
+                instance_feature_manager.buffer_instance_transform(
+                    model_instance_node.model_id(),
+                    &instance_model_light_transform,
                 );
             }
         }
