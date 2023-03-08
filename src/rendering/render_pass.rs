@@ -1396,14 +1396,7 @@ impl RenderPassRecorder {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                // Because we flip the x-axis of the projection matrix in order
-                // to avoid a projected view that is mirrored compared to world
-                // coordinates, the face orientations become reversed in
-                // framebuffer space compared to world space. We therefore
-                // define front faces as having clockwise winding order in
-                // framebuffer space, which corresponds to anti-clockwise
-                // winding order in world space.
-                front_face: wgpu::FrontFace::Cw,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: config.cull_mode,
                 polygon_mode: config.polygon_mode,
                 unclipped_depth: false,

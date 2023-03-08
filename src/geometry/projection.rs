@@ -14,17 +14,13 @@ use std::fmt::Debug;
 
 /// A perspective transformation that maps points in a view frustum pointing
 /// along the negative z-axis into the cube spanning from -1 to 1 in x and y and
-/// from 0 to 1 in z in normalized device coordinates, with a flipped x-axis.
-///
-/// The reason for flipping the x-axis is to make it so that points with
-/// positive x-coordinates in view space gets projected to the left of the
-/// screen and vice versa, which is the intuitive behavior for a camera looking
-/// down the negative z-axis in view space.
+/// from 0 to 1 in z in normalized device coordinates.
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct PerspectiveTransform<F: Float> {
     matrix: Matrix4<F>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct OrthographicTransform<F: Float> {
@@ -92,7 +88,7 @@ impl<F: Float> PerspectiveTransform<F> {
 
     /// Returns the ratio of width to height of the view frustum.
     pub fn aspect_ratio(&self) -> F {
-        -self.matrix.m22 / self.matrix.m11
+        self.matrix.m22 / self.matrix.m11
     }
 
     /// Returns the vertical field of view angle in radians.
@@ -134,7 +130,7 @@ impl<F: Float> PerspectiveTransform<F> {
     /// If `aspect_ratio` is zero.
     pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
         assert_abs_diff_ne!(aspect_ratio, F::zero());
-        self.matrix.m11 = -self.matrix.m22 / aspect_ratio;
+        self.matrix.m11 = self.matrix.m22 / aspect_ratio;
     }
 
     /// Sets the vertical field of view angle.
@@ -298,7 +294,7 @@ impl<F: Float> OrthographicTransform<F> {
     }
 
     fn compute_scaling_x(left: F, right: F) -> F {
-        -F::TWO / (right - left)
+        F::TWO / (right - left)
     }
 
     fn compute_scaling_y(bottom: F, top: F) -> F {

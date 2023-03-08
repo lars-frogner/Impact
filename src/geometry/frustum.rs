@@ -245,9 +245,8 @@ impl<F: Float> Frustum<F> {
     /// the axis of the plane normal (0 => x, 1 => y, 2 => z)
     /// and the offset of the plane along that axis, respectively.
     const CUBE_PLANES_NDC: [(usize, F); 6] = [
-        // x is flipped, so left plane has 1.0 NDC and right has -1.0
-        (0, F::ONE),
         (0, F::NEG_ONE),
+        (0, F::ONE),
         (1, F::NEG_ONE),
         (1, F::ONE),
         (2, F::ZERO),
@@ -257,19 +256,17 @@ impl<F: Float> Frustum<F> {
     fn planes_from_transform_matrix(transform_matrix: &Matrix4<F>) -> [Plane<F>; 6] {
         let m = transform_matrix;
 
-        // We swap the left and right plane here to account for that the
-        // projection matrix flips the x-axis
         let left = Self::plane_from_unnormalized_coefficients(
-            m.m41 - m.m11,
-            m.m42 - m.m12,
-            m.m43 - m.m13,
-            -(m.m44 - m.m14),
-        );
-        let right = Self::plane_from_unnormalized_coefficients(
             m.m41 + m.m11,
             m.m42 + m.m12,
             m.m43 + m.m13,
             -(m.m44 + m.m14),
+        );
+        let right = Self::plane_from_unnormalized_coefficients(
+            m.m41 - m.m11,
+            m.m42 - m.m12,
+            m.m43 - m.m13,
+            -(m.m44 - m.m14),
         );
 
         let bottom = Self::plane_from_unnormalized_coefficients(
