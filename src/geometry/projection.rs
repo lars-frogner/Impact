@@ -1,14 +1,14 @@
 //! Projection transformations.
 
 use crate::{
-    geometry::{Angle, Bounds, Radians, UpperExclusiveBounds},
+    geometry::{Angle, Bounds, Frustum, Radians, UpperExclusiveBounds},
     num::Float,
 };
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{
-    vector, Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Translation3, UnitQuaternion,
-    Vector3,
+    vector, Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
+    UnitQuaternion, Vector3,
 };
 use std::fmt::Debug;
 
@@ -150,11 +150,11 @@ impl<F: Float> PerspectiveTransform<F> {
     pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
         let (near_distance, far_distance) = near_and_far_distance.bounds();
 
-        let inverse_depth_span = F::ONE / (near_distance - far_distance);
+        let inverse_distance_span = F::ONE / (near_distance - far_distance);
 
         self.matrix.m33 =
-            F::ONE_HALF * ((near_distance + far_distance) * inverse_depth_span - F::ONE);
-        self.matrix.m34 = far_distance * near_distance * inverse_depth_span;
+            F::ONE_HALF * ((near_distance + far_distance) * inverse_distance_span - F::ONE);
+        self.matrix.m34 = far_distance * near_distance * inverse_distance_span;
     }
 }
 
@@ -378,6 +378,29 @@ impl<F: Float> CubeMapper<F> {
         Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]
     }
 
+    /// Computes the frustum for the given cubemap face, using the given
+    /// transform to cubemap space (defining the position and orientation of the
+    /// full cubemap in the parent space) and the given near and far distance.
+    pub fn compute_frustum_for_face(
+        face: CubemapFace,
+        transform_to_cube_space: &Similarity3<F>,
+        near_distance: F,
+        far_distance: F,
+    ) -> Frustum<F> {
+        let (view_projection_matrix, inverse_view_projection_matrix) =
+            Self::compute_view_projection_matrix_and_inverse_for_face(
+                face,
+                transform_to_cube_space,
+                near_distance,
+                far_distance,
+            );
+
+        Frustum::from_transform_matrix_with_inverse(
+            view_projection_matrix,
+            inverse_view_projection_matrix,
+        )
+    }
+
     /// Creates a new mapper for 3D points onto a cubemap.
     ///
     /// The given rotation to cube space will be applied to each point prior to
@@ -416,6 +439,55 @@ impl<F: Float> CubeMapper<F> {
         let rotated_point =
             self.rotations_to_positive_z_face[face.as_idx_usize()].transform_point(point);
         Self::map_point_to_positive_z_face(&rotated_point)
+    }
+
+    fn compute_view_projection_matrix_and_inverse_for_face(
+        face: CubemapFace,
+        view_transform: &Similarity3<F>,
+        near_distance: F,
+        far_distance: F,
+    ) -> (Matrix4<F>, Matrix4<F>) {
+        let (projection_matrix_for_positive_z_face, inverse_projection_matrix_for_positive_z_face) =
+            Self::create_projection_matrix_and_inverse_for_positive_z_face(
+                near_distance,
+                far_distance,
+            );
+
+        let complete_view_transform =
+            Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()] * view_transform;
+
+        let view_projection_matrix =
+            projection_matrix_for_positive_z_face * complete_view_transform.to_homogeneous();
+
+        let inverse_view_projection_matrix = complete_view_transform.inverse().to_homogeneous()
+            * inverse_projection_matrix_for_positive_z_face;
+
+        (view_projection_matrix, inverse_view_projection_matrix)
+    }
+
+    fn create_projection_matrix_and_inverse_for_positive_z_face(
+        near_distance: F,
+        far_distance: F,
+    ) -> (Matrix4<F>, Matrix4<F>) {
+        let mut matrix = Matrix4::identity();
+
+        let inverse_distance_span = F::ONE / (far_distance - near_distance);
+
+        matrix.m33 = far_distance * inverse_distance_span;
+        matrix.m34 = -far_distance * near_distance * inverse_distance_span;
+
+        matrix.m43 = F::ONE;
+        matrix.m44 = F::ZERO;
+
+        let mut inverse_matrix = Matrix4::identity();
+
+        inverse_matrix.m33 = F::ZERO;
+        inverse_matrix.m34 = F::ONE;
+
+        inverse_matrix.m43 = F::ONE / matrix.m34;
+        inverse_matrix.m44 = -matrix.m33 * inverse_matrix.m43;
+
+        (matrix, inverse_matrix)
     }
 
     fn map_point_to_positive_z_face(point: &Point3<F>) -> Point2<F> {
@@ -724,5 +796,243 @@ mod test {
             point![1.0, -1.0],
             epsilon = 1e-9
         );
+    }
+
+    #[test]
+    fn mapping_to_positive_x_cubemap_face_with_frustum_works() {
+        let near = 0.1;
+        let far = 10.0;
+
+        let frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::PositiveX,
+            &Similarity3::identity(),
+            near,
+            far,
+        );
+        let projection = frustum.transform_matrix();
+
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![far, far, far]).xy(),
+            point![-1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![far, -far, -far]).xy(),
+            point![1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![near, near, near]).xy(),
+            point![-1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![near, -near, -near]).xy(),
+            point![1.0, -1.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_negative_x_cubemap_face_with_frustum_works() {
+        let near = 0.1;
+        let far = 10.0;
+
+        let frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::NegativeX,
+            &Similarity3::identity(),
+            near,
+            far,
+        );
+        let projection = frustum.transform_matrix();
+
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-far, far, far]).xy(),
+            point![1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-far, -far, -far]).xy(),
+            point![-1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-near, near, near]).xy(),
+            point![1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&point![-near, -near, -near])
+                .xy(),
+            point![-1.0, -1.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_positive_y_cubemap_face_with_frustum_works() {
+        let near = 0.1;
+        let far = 10.0;
+
+        let frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::PositiveY,
+            &Similarity3::identity(),
+            near,
+            far,
+        );
+        let projection = frustum.transform_matrix();
+
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![far, far, far]).xy(),
+            point![1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-far, far, -far]).xy(),
+            point![-1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![near, near, near]).xy(),
+            point![1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-near, near, -near]).xy(),
+            point![-1.0, 1.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_negative_y_cubemap_face_with_frustum_works() {
+        let near = 0.1;
+        let far = 10.0;
+
+        let frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::NegativeY,
+            &Similarity3::identity(),
+            near,
+            far,
+        );
+        let projection = frustum.transform_matrix();
+
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![far, -far, far]).xy(),
+            point![1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-far, -far, -far]).xy(),
+            point![-1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![near, -near, near]).xy(),
+            point![1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&point![-near, -near, -near])
+                .xy(),
+            point![-1.0, -1.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_positive_z_cubemap_face_with_frustum_works() {
+        let near = 0.1;
+        let far = 10.0;
+
+        let frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::PositiveZ,
+            &Similarity3::identity(),
+            near,
+            far,
+        );
+        let projection = frustum.transform_matrix();
+
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![far, far, far]).xy(),
+            point![1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-far, -far, far]).xy(),
+            point![-1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![near, near, near]).xy(),
+            point![1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-near, -near, near]).xy(),
+            point![-1.0, -1.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn mapping_to_negative_z_cubemap_face_with_frustum_works() {
+        let near = 0.1;
+        let far = 10.0;
+
+        let frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::NegativeZ,
+            &Similarity3::identity(),
+            near,
+            far,
+        );
+        let projection = frustum.transform_matrix();
+
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![far, far, -far]).xy(),
+            point![-1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![-far, -far, -far]).xy(),
+            point![1.0, -1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection.transform_point(&point![near, near, -near]).xy(),
+            point![-1.0, 1.0],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&point![-near, -near, -near])
+                .xy(),
+            point![1.0, -1.0],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn computed_frusta_for_different_cubemap_faces_are_consistent() {
+        let positive_z_frustum = CubeMapper::compute_frustum_for_face(
+            CubemapFace::PositiveZ,
+            &Similarity3::identity(),
+            0.01,
+            100.0,
+        );
+
+        for face in CubemapFace::all() {
+            let frustum_rotated_to_positive_z =
+                CubeMapper::compute_frustum_for_face(face, &Similarity3::identity(), 0.01, 100.0)
+                    .rotated(&CubeMapper::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]);
+
+            assert_abs_diff_eq!(
+                &frustum_rotated_to_positive_z,
+                &positive_z_frustum,
+                epsilon = 1e-9
+            );
+        }
     }
 }

@@ -41,6 +41,19 @@ impl<F: Float> Frustum<F> {
         }
     }
 
+    /// Creates the frustum representing the clip space of the given transform
+    /// matrix, using the given matrix inverse rather than computing it.
+    pub fn from_transform_matrix_with_inverse(
+        transform_matrix: Matrix4<F>,
+        inverse_transform_matrix: Matrix4<F>,
+    ) -> Self {
+        Self {
+            planes: Self::planes_from_transform_matrix(&transform_matrix),
+            transform_matrix,
+            inverse_transform_matrix,
+        }
+    }
+
     /// Returns the plane defining the left face of the frustum.
     pub fn left_plane(&self) -> &Plane<F> {
         &self.planes[0]
