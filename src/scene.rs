@@ -38,7 +38,11 @@ pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
 pub use systems::SyncLightPositionsAndDirectionsInStorage;
-pub use tasks::{BufferVisibleModelInstances, SyncSceneCameraViewTransform};
+pub use tasks::{
+    BoundDirectionalLightsAndBufferShadowCastingModelInstances,
+    BoundPointLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
+    SyncSceneCameraViewTransform,
+};
 
 use crate::rendering::fre;
 use nalgebra::vector;

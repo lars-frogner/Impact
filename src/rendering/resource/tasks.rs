@@ -5,8 +5,9 @@ use crate::{
     define_task,
     rendering::RenderingTag,
     scene::{
-        BufferVisibleModelInstances, SyncLightPositionsAndDirectionsInStorage,
-        SyncSceneCameraViewTransform,
+        BoundDirectionalLightsAndBufferShadowCastingModelInstances,
+        BoundPointLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
+        SyncLightPositionsAndDirectionsInStorage, SyncSceneCameraViewTransform,
     },
     world::{World, WorldTaskScheduler},
 };
@@ -112,7 +113,11 @@ define_task!(
 
 define_task!(
     SyncLightRenderBuffers,
-    depends_on = [SyncLightPositionsAndDirectionsInStorage],
+    depends_on = [
+        SyncLightPositionsAndDirectionsInStorage,
+        BoundPointLightsAndBufferShadowCastingModelInstances,
+        BoundDirectionalLightsAndBufferShadowCastingModelInstances
+    ],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing light render buffers"; {
@@ -196,7 +201,11 @@ define_task!(
 
 define_task!(
     SyncInstanceFeatureBuffers,
-    depends_on = [BufferVisibleModelInstances],
+    depends_on = [
+        BufferVisibleModelInstances,
+        BoundPointLightsAndBufferShadowCastingModelInstances,
+        BoundDirectionalLightsAndBufferShadowCastingModelInstances
+    ],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing model instance feature render buffers"; {
