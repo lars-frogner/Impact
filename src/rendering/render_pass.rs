@@ -989,30 +989,31 @@ impl RenderPassSpecification {
         }
     }
 
+    fn determine_front_face(&self) -> wgpu::FrontFace {
+        if let ShadowMapUsage::Update(ShadowMapIdentifier::ForPointLight(_)) = self.shadow_map_usage
+        {
+            // The cubemap projection does not flip the z-axis, so the front
+            // faces will have the opposite winding order compared to normal
+            wgpu::FrontFace::Cw
+        } else {
+            wgpu::FrontFace::Ccw
+        }
+    }
+
     fn determine_depth_stencil_state(&self) -> Option<wgpu::DepthStencilState> {
-        if let Some(shadow_map_id) = self.shadow_map_usage.get_shadow_map_to_clear_or_update() {
+        if self.shadow_map_usage.is_clear_or_update() {
             // For modifying the shadow map we have to set it as the depth
             // map for the pipeline
-
-            let bias = match shadow_map_id {
-                ShadowMapIdentifier::ForPointLight(_) => wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-                ShadowMapIdentifier::ForDirectionalLight => wgpu::DepthBiasState {
-                    constant: 8,
-                    slope_scale: 1.5,
-                    clamp: 0.0,
-                },
-            };
-
             Some(wgpu::DepthStencilState {
                 format: ShadowMapTexture::FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
-                bias,
+                bias: wgpu::DepthBiasState {
+                    constant: 8,
+                    slope_scale: 1.5,
+                    clamp: 0.0,
+                },
             })
         } else if !self.depth_map_usage.is_none() {
             let depth_write_enabled = self.depth_map_usage.make_writeable();
@@ -1106,6 +1107,8 @@ impl RenderPassRecorder {
 
             let color_target_state = specification.determine_color_target_state(core_system);
 
+            let front_face = specification.determine_front_face();
+
             let depth_stencil_state = specification.determine_depth_stencil_state();
 
             let pipeline = Some(Self::create_render_pipeline(
@@ -1114,6 +1117,7 @@ impl RenderPassRecorder {
                 shader,
                 &vertex_buffer_layouts,
                 color_target_state,
+                front_face,
                 depth_stencil_state,
                 config,
                 &format!("{} render pipeline", &specification.label),
@@ -1389,6 +1393,7 @@ impl RenderPassRecorder {
         shader: &Shader,
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
         color_target_state: Option<wgpu::ColorTargetState>,
+        front_face: wgpu::FrontFace,
         depth_stencil_state: Option<wgpu::DepthStencilState>,
         config: &RenderingConfig,
         label: &str,
@@ -1417,7 +1422,7 @@ impl RenderPassRecorder {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
+                front_face,
                 cull_mode: config.cull_mode,
                 polygon_mode: config.polygon_mode,
                 unclipped_depth: false,
