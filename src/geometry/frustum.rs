@@ -97,8 +97,8 @@ impl<F: Float> Frustum<F> {
             .all(|plane| plane.point_lies_in_positive_halfspace(point))
     }
 
-    /// Whether all of the given sphere is outside the frustum. The sphere is
-    /// considered inside if the boundaries exactly touch each other.
+    /// Whether all of the given sphere is outside the frustum. If the
+    /// boundaries exactly touch each other, the sphere is considered inside.
     pub fn sphere_lies_outside(&self, sphere: &Sphere<F>) -> bool {
         let mut intersects_from_negative_halfspace = [false, false, false];
 
@@ -178,9 +178,9 @@ impl<F: Float> Frustum<F> {
         }
     }
 
-    /// Computes the frustum's axis-aligned bounding box.
-    pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
-        let corners = [
+    /// Computes the 8 corners of the frustum.
+    pub fn compute_corners(&self) -> [Point3<F>; 8] {
+        [
             self.inverse_transform_matrix
                 .transform_point(&point![-F::ONE, -F::ONE, F::ZERO]),
             self.inverse_transform_matrix
@@ -197,9 +197,24 @@ impl<F: Float> Frustum<F> {
                 .transform_point(&point![F::ONE, F::ONE, F::ZERO]),
             self.inverse_transform_matrix
                 .transform_point(&point![F::ONE, F::ONE, F::ONE]),
-        ];
+        ]
+    }
 
-        AxisAlignedBox::aabb_for_point_array(&corners)
+    /// Computes the center point of the frustum.
+    pub fn compute_center(&self) -> Point3<F> {
+        let corners = self.compute_corners();
+        let n_corners = corners.len();
+
+        corners
+            .into_iter()
+            .reduce(|accum, point| accum + point.coords)
+            .unwrap()
+            / (F::from_usize(n_corners).unwrap())
+    }
+
+    /// Computes the frustum's axis-aligned bounding box.
+    pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
+        AxisAlignedBox::aabb_for_point_array(&self.compute_corners())
     }
 
     /// Computes the frustum resulting from rotating this frustum with the given

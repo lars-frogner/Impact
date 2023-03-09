@@ -107,4 +107,178 @@ impl<F: Float> AxisAlignedBox<F> {
     pub fn extent_z(&self) -> F {
         self.upper_corner.z - self.lower_corner.z
     }
+
+    /// Whether all of the given axis-aligned box is outside this box. If the
+    /// boundaries exactly touch each other, the box is considered inside.
+    pub fn box_lies_outside(&self, other: &Self) -> bool {
+        !((self.lower_corner.x <= other.upper_corner.x
+            && self.upper_corner.x >= other.lower_corner.x)
+            && (self.lower_corner.y <= other.upper_corner.y
+                && self.upper_corner.y >= other.lower_corner.y)
+            && (self.lower_corner.z <= other.upper_corner.z
+                && self.upper_corner.z >= other.lower_corner.z))
+    }
+
+    /// Computes the corner of the axis aligned box that is closest to the given
+    /// point.
+    pub fn compute_closest_corner(&self, point: &Point3<F>) -> Point3<F> {
+        let mut closest_corner = Point3::origin();
+        for dim in 0..3 {
+            if (self.lower_corner[dim] - point[dim]).abs()
+                < (self.upper_corner[dim] - point[dim]).abs()
+            {
+                closest_corner[dim] = self.lower_corner[dim];
+            } else {
+                closest_corner[dim] = self.upper_corner[dim];
+            }
+        }
+        closest_corner
+    }
+
+    /// Computes the corner of the axis aligned box that is farthest from the
+    /// given point.
+    pub fn compute_farthest_corner(&self, point: &Point3<F>) -> Point3<F> {
+        let mut farthest_corner = Point3::origin();
+        for dim in 0..3 {
+            if (self.lower_corner[dim] - point[dim]).abs()
+                > (self.upper_corner[dim] - point[dim]).abs()
+            {
+                farthest_corner[dim] = self.lower_corner[dim];
+            } else {
+                farthest_corner[dim] = self.upper_corner[dim];
+            }
+        }
+        farthest_corner
+    }
+
+    /// Computes the axis-aligned bounding box enclosing only the volume
+    /// enclosed by both this and the given bounding box, or [`None`] if the two
+    /// boxes do not overlap.
+    pub fn union_with(&self, other: &Self) -> Option<Self> {
+        let lower_corner = self.lower_corner().sup(other.lower_corner());
+        let upper_corner = self.upper_corner().inf(other.upper_corner());
+
+        if (upper_corner - lower_corner)
+            .iter()
+            .any(|&diff| diff < F::ZERO)
+        {
+            None
+        } else {
+            Some(Self::new(lower_corner, upper_corner))
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+    use nalgebra::point;
+
+    #[test]
+    fn box_lies_outside_with_non_overlapping_boxes_works() {
+        let aabb1 = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let aabb2 = AxisAlignedBox::new(point![2.0, 2.0, 2.0], point![3.0, 3.0, 3.0]);
+        assert!(aabb1.box_lies_outside(&aabb2));
+    }
+
+    #[test]
+    fn box_lies_outside_with_touching_boxes_works() {
+        let aabb1 = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let aabb2 = AxisAlignedBox::new(point![1.0, 1.0, 1.0], point![2.0, 2.0, 2.0]);
+        assert!(!aabb1.box_lies_outside(&aabb2));
+    }
+
+    #[test]
+    fn box_lies_outside_with_overlapping_boxes_works() {
+        let aabb1 = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let aabb2 = AxisAlignedBox::new(point![1.0, 1.0, 1.0], point![3.0, 3.0, 3.0]);
+        assert!(!aabb1.box_lies_outside(&aabb2));
+    }
+
+    #[test]
+    fn box_lies_outside_with_equal_boxes_works() {
+        let aabb1 = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let aabb2 = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert!(!aabb1.box_lies_outside(&aabb2));
+    }
+
+    #[test]
+    fn box_lies_outside_with_nested_boxes_works() {
+        let aabb1 = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let aabb2 = AxisAlignedBox::new(point![0.5, 0.5, 0.5], point![1.5, 1.5, 1.5]);
+        assert!(!aabb1.box_lies_outside(&aabb2));
+    }
+
+    #[test]
+    fn compute_closest_corner_with_point_inside_box_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_closest_corner(&point![0.6, 0.6, 0.6]),
+            point![1.0, 1.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn compute_closest_corner_with_point_outside_box_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_closest_corner(&point![2.0, 2.0, 2.0]),
+            point![1.0, 1.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn compute_closest_corner_with_point_on_box_corner_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_closest_corner(&point![1.0, 1.0, 1.0]),
+            point![1.0, 1.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn compute_closest_corner_with_point_on_box_edge_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_closest_corner(&point![0.0, 0.4, 0.4]),
+            point![0.0, 0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn compute_farthest_corner_with_point_inside_box_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_farthest_corner(&point![0.6, 0.6, 0.6]),
+            point![0.0, 0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn compute_farthest_corner_with_point_outside_box_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_farthest_corner(&point![2.0, 2.0, 2.0]),
+            point![0.0, 0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn compute_farthest_corner_with_point_on_box_corner_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_farthest_corner(&point![1.0, 1.0, 1.0]),
+            point![0.0, 0.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn compute_farthest_corner_with_point_on_box_edge_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        assert_abs_diff_eq!(
+            aabb.compute_farthest_corner(&point![0.0, 0.4, 0.4]),
+            point![1.0, 1.0, 1.0]
+        );
+    }
 }

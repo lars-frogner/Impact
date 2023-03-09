@@ -2,7 +2,7 @@
 
 use crate::{geometry::AxisAlignedBox, num::Float};
 use approx::abs_diff_eq;
-use na::{Similarity3, UnitQuaternion};
+use na::{vector, Similarity3, UnitQuaternion};
 use nalgebra::{self as na, Point3};
 
 /// A sphere represented by the center point and the radius.
@@ -147,6 +147,12 @@ impl<F: Float> Sphere<F> {
         spheres.into_iter().fold(self, |bounding_sphere, sphere| {
             Self::bounding_sphere_from_pair(&bounding_sphere, sphere)
         })
+    }
+
+    /// Computes the circle's axis-aligned bounding box.
+    pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
+        let radius_vector = vector![self.radius, self.radius, self.radius];
+        AxisAlignedBox::new(self.center - radius_vector, self.center + radius_vector)
     }
 
     fn first_sphere_encloses_second_sphere(
