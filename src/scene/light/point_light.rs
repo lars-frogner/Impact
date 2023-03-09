@@ -1,7 +1,7 @@
 //! Omnidirectional light sources.
 
 use crate::{
-    geometry::{CubeMapper, CubemapFace, Frustum, Sphere},
+    geometry::{AxisAlignedBox, CubeMapper, CubemapFace, Frustum, Sphere},
     physics::PositionComp,
     rendering::fre,
     scene::{
@@ -11,7 +11,9 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
-use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion};
+use nalgebra::{
+    self as na, Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
+};
 use std::sync::RwLock;
 
 /// An point light source represented by a camera space position and an RGB
@@ -83,16 +85,56 @@ impl PointLight {
         self.camera_space_position = camera_space_position;
     }
 
-    pub fn orient_and_scale_cubemap_for_view_frustum(
+    /// Updates the cubemap orientation and near and far distances to encompass
+    /// all shadow casting models without wasting depth resolution or causing
+    /// unnecessary draw calls.
+    pub fn orient_and_scale_cubemap_for_shadow_casting_models(
         &mut self,
-        camera_space_view_frustum: &Frustum<fre>,
         camera_space_bounding_sphere: &Sphere<fre>,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<fre>>,
     ) {
-        let bounding_sphere_center_distance = nalgebra::distance(
+        let bounding_sphere_center_distance = na::distance(
             &self.camera_space_position,
             camera_space_bounding_sphere.center(),
         );
 
+        let (camera_to_light_space_rotation, far_distance) = if let Some(
+            camera_space_aabb_for_visible_models,
+        ) =
+            camera_space_aabb_for_visible_models
+        {
+            // Let the orientation of cubemap space be so that the negative
+            // z-axis points towards the center of the volume containing visible
+            // models
+            let camera_to_light_space_rotation =
+                Self::compute_camera_to_light_space_rotation(&UnitVector3::new_normalize(
+                    camera_space_aabb_for_visible_models.center() - self.camera_space_position,
+                ));
+
+            // Use the farthest point of the volume containing visible models as
+            // the far distance
+            let far_distance = na::distance(
+                &camera_space_aabb_for_visible_models
+                    .compute_farthest_corner(&self.camera_space_position),
+                &self.camera_space_position,
+            );
+
+            (camera_to_light_space_rotation, far_distance)
+        } else {
+            // In this case no models are visible, so the rotation does not
+            // matter
+            let camera_to_light_space_rotation = UnitQuaternion::identity();
+
+            let far_distance =
+                bounding_sphere_center_distance + camera_space_bounding_sphere.radius();
+
+            (camera_to_light_space_rotation, far_distance)
+        };
+
+        self.camera_to_light_space_rotation = camera_to_light_space_rotation;
+
+        // The near distance must never be farther than the closest model to the
+        // light source
         self.near_distance = fre::clamp(
             bounding_sphere_center_distance - camera_space_bounding_sphere.radius(),
             Self::MIN_NEAR_DISTANCE,
@@ -100,14 +142,15 @@ impl PointLight {
         );
 
         self.far_distance = fre::clamp(
-            bounding_sphere_center_distance + camera_space_bounding_sphere.radius(),
-            self.near_distance + 1e-9,
-            Self::MAX_FAR_DISTANCE,
+            far_distance,
+            Self::MIN_NEAR_DISTANCE,
+            Self::MAX_FAR_DISTANCE - 1e-9,
         );
 
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
 
+    /// Computes the frustum for the given cubemap face in camera space.
     pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum<fre> {
         CubeMapper::compute_frustum_for_face(
             face,
@@ -115,6 +158,21 @@ impl PointLight {
             self.near_distance,
             self.far_distance,
         )
+    }
+
+    /// Whether the given cubemap face frustum may contain any visible models.
+    pub fn camera_space_frustum_for_face_may_contain_visible_models(
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<fre>>,
+        camera_space_face_frustum: &Frustum<fre>,
+    ) -> bool {
+        if let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models {
+            !camera_space_face_frustum
+                .compute_aabb()
+                .box_lies_outside(camera_space_aabb_for_visible_models)
+        } else {
+            // In this case no models are visible
+            false
+        }
     }
 
     /// Checks if the entity-to-be with the given components has the right
@@ -171,10 +229,28 @@ impl PointLight {
     }
 
     fn create_camera_to_light_space_transform(&self) -> Similarity3<fre> {
-        Similarity3::from_parts(
-            Translation3::from(-self.camera_space_position),
-            self.camera_to_light_space_rotation,
+        Similarity3::from_isometry(
+            self.camera_to_light_space_rotation * Translation3::from(-self.camera_space_position),
             1.0,
         )
+    }
+
+    fn compute_camera_to_light_space_rotation(
+        camera_space_direction: &UnitVector3<fre>,
+    ) -> UnitQuaternion<fre> {
+        let direction_is_very_close_to_vertical =
+            fre::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
+
+        // We orient the light's local coordinate system so that the light
+        // direction in camera space maps to the -z-direction in light space,
+        // and the y-direction in camera space maps to the y-direction in light
+        // space, unless the light direction is nearly vertical in camera space,
+        // in which case we map the -z-direction in camera space to the
+        // y-direction in light space
+        if direction_is_very_close_to_vertical {
+            UnitQuaternion::look_at_rh(camera_space_direction, &-Vector3::z())
+        } else {
+            UnitQuaternion::look_at_rh(camera_space_direction, &Vector3::y())
+        }
     }
 }

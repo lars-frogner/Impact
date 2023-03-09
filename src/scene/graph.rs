@@ -637,11 +637,12 @@ impl<F: Float> SceneGraph<F> {
 impl SceneGraph<fre> {
     /// Goes through all point lights in the given light storage and updates
     /// their cubemap orientations and distance spans to encompass all model
-    /// instances that may cast visible shadows with as few frusta as possible.
-    /// Then the model to cubemap face space transform of every such shadow
-    /// casting model instance is computed for the relevant cube faces of each
-    /// light and copied to the model's instance transform buffer in new ranges
-    /// dedicated to the faces of the cubemap of the particular light.
+    /// instances that may cast visible shadows in a way that preserves quality
+    /// and efficiency. Then the model to cubemap face space transform of every
+    /// such shadow casting model instance is computed for the relevant cube
+    /// faces of each light and copied to the model's instance transform buffer
+    /// in new ranges dedicated to the faces of the cubemap of the particular
+    /// light.
     ///
     /// # Warning
     /// Make sure to [`buffer_transforms_of_visible_model_instances`] before
@@ -665,9 +666,13 @@ impl SceneGraph<fre> {
                 world_space_bounding_sphere.transformed(view_transform);
 
             for (light_id, point_light) in light_storage.point_lights_with_ids_mut() {
-                point_light.orient_and_scale_cubemap_for_view_frustum(
-                    camera_space_view_frustum,
+                let camera_space_aabb_for_visible_models = camera_space_bounding_sphere
+                    .compute_aabb()
+                    .union_with(&camera_space_view_frustum.compute_aabb());
+
+                point_light.orient_and_scale_cubemap_for_shadow_casting_models(
                     &camera_space_bounding_sphere,
+                    camera_space_aabb_for_visible_models.as_ref(),
                 );
 
                 for face in CubemapFace::all() {
@@ -684,14 +689,19 @@ impl SceneGraph<fre> {
                     let camera_space_face_frustum =
                         point_light.compute_camera_space_frustum_for_face(face);
 
-                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
-                        instance_feature_manager,
-                        point_light,
-                        face,
+                    if PointLight::camera_space_frustum_for_face_may_contain_visible_models(
+                        camera_space_aabb_for_visible_models.as_ref(),
                         &camera_space_face_frustum,
-                        root_node,
-                        view_transform,
-                    );
+                    ) {
+                        self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+                            instance_feature_manager,
+                            point_light,
+                            face,
+                            &camera_space_face_frustum,
+                            root_node,
+                            view_transform,
+                        );
+                    }
                 }
             }
         }
