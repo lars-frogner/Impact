@@ -150,11 +150,8 @@ impl<F: Float> PerspectiveTransform<F> {
     pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
         let (near_distance, far_distance) = near_and_far_distance.bounds();
 
-        let inverse_distance_span = F::ONE / (near_distance - far_distance);
-
-        self.matrix.m33 =
-            F::ONE_HALF * ((near_distance + far_distance) * inverse_distance_span - F::ONE);
-        self.matrix.m34 = far_distance * near_distance * inverse_distance_span;
+        self.matrix.m33 = -far_distance / (far_distance - near_distance);
+        self.matrix.m34 = self.matrix.m33 * near_distance;
     }
 }
 
@@ -474,7 +471,7 @@ impl<F: Float> CubeMapper<F> {
         let inverse_distance_span = F::ONE / (far_distance - near_distance);
 
         matrix.m33 = far_distance * inverse_distance_span;
-        matrix.m34 = -far_distance * near_distance * inverse_distance_span;
+        matrix.m34 = -matrix.m33 * near_distance;
 
         matrix.m43 = F::ONE;
         matrix.m44 = F::ZERO;
