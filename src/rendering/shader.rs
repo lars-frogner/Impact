@@ -175,16 +175,13 @@ pub enum ProjectionExpressions {
 /// Handle to expression for the camera projection matrix.
 #[derive(Clone, Debug)]
 pub struct CameraProjectionExpressions {
-    matrix_expr: Handle<Expression>,
+    matrix: Handle<Expression>,
 }
 
-/// Handle to expressions required for projecting points onto a face of a shadow
+/// Marker type with method for projecting points onto a face of a shadow
 /// cubemap.
 #[derive(Clone, Debug)]
-pub struct PointLightProjectionExpressions {
-    pub near_distance: Handle<Expression>,
-    pub inverse_distance_span: Handle<Expression>,
-}
+pub struct PointLightProjectionExpressions;
 
 /// Handle to expressions for the orthographic transform components associated
 /// with a directional light.
@@ -194,46 +191,38 @@ pub struct DirectionalLightProjectionExpressions {
     pub scaling: Handle<Expression>,
 }
 
-/// Handles to expression for accessing the fields of a light uniform for the
-/// relevant light type in shader entry point functions.
+/// Generator for shader code associated with a light source.
 #[derive(Clone, Debug)]
-pub enum LightFieldExpressions {
-    PointLight(PointLightFieldExpressions),
-    DirectionalLight(DirectionalLightFieldExpressions),
+pub enum LightShaderGenerator {
+    PointLight(PointLightShaderGenerator),
+    DirectionalLight(DirectionalLightShaderGenerator),
 }
 
-/// Handles to expression for accessing the quantities in a point light uniform
-/// in shader entry point functions.
+/// Generator for shader code associated with a point light source.
 #[derive(Clone, Debug)]
-pub struct PointLightFieldExpressions {
-    /// Expressions in the vertex entry point function (only available in the
-    /// shadow map update pass).
-    pub in_vertex_function: Option<PointLightFieldVertexExpressions>,
-    /// Expressions in the fragment entry point function.
-    pub in_fragment_function: Option<PointLightFieldFragmentExpressions>,
+pub enum PointLightShaderGenerator {
+    ForShadowMapUpdate(PointLightShadowMapUpdateShaderGenerator),
+    ForShading(PointLightShadingShaderGenerator),
 }
 
-/// Handles to expression for accessing the fields of a directional light
-/// uniform in shader entry point functions.
+/// Generator for shader code associated with a directional light source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightFieldExpressions {
-    /// Expressions in the vertex entry point function.
-    pub in_vertex_function: DirectionalLightVertexFieldExpressions,
-    /// Expressions in the fragment entry point function.
-    pub in_fragment_function: Option<DirectionalLightFragmentFieldExpressions>,
+pub struct DirectionalLightShaderGenerator {
+    pub for_vertex: DirectionalLightVertexShaderGenerator,
+    pub for_fragment: Option<DirectionalLightFragmentShaderGenerator>,
 }
 
-/// Handles to expression for accessing the quantities in a point light uniform
-/// in the vertex entry point function.
+/// Generator for shader code for updating the shadow cubemap of a point light.
 #[derive(Clone, Debug)]
-pub struct PointLightFieldVertexExpressions {
-    pub projection: PointLightProjectionExpressions,
+pub struct PointLightShadowMapUpdateShaderGenerator {
+    pub near_distance: Handle<Expression>,
+    pub inverse_distance_span: Handle<Expression>,
 }
 
-/// Handles to expression for accessing the quantities in a point light uniform
-/// in the fragment entry point function.
+/// Generator for shader code for shading a fragment with the light from a point
+/// light.
 #[derive(Clone, Debug)]
-pub struct PointLightFieldFragmentExpressions {
+pub struct PointLightShadingShaderGenerator {
     pub camera_to_light_space_rotation_quaternion: Handle<Expression>,
     pub camera_space_position: Handle<Expression>,
     pub radiance: Handle<Expression>,
@@ -242,19 +231,18 @@ pub struct PointLightFieldFragmentExpressions {
     pub shadow_map: SampledTexture,
 }
 
-/// Handles to expression for accessing the fields of a directional light
-/// uniform in the vertex entry point function.
+/// Generator for vertex entry point shader code associated with a directional
+/// light source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightVertexFieldExpressions {
+pub struct DirectionalLightVertexShaderGenerator {
     pub camera_to_light_space_rotation_quaternion: Handle<Expression>,
     pub orthographic_projection: DirectionalLightProjectionExpressions,
 }
 
-/// Handles to expression for accessing the fields of a directional light
-/// uniform in the fragment entry point function. Also holds a
-/// [`SampledTexture`] that can be used for sampling the shadow map.
+/// Generator for fragment entry point shader code associated with a directional
+/// light source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightFragmentFieldExpressions {
+pub struct DirectionalLightFragmentShaderGenerator {
     pub camera_space_direction: Handle<Expression>,
     pub radiance: Handle<Expression>,
     pub shadow_map: SampledTexture,
@@ -628,7 +616,7 @@ impl ShaderGenerator {
         light_shader_input: Option<&LightShaderInput>,
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_shader_input: Option<&MaterialShaderInput>,
-        vertex_attribute_requirements: VertexAttributeSet,
+        mut vertex_attribute_requirements: VertexAttributeSet,
     ) -> Result<(Module, EntryPointNames)> {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
@@ -665,24 +653,22 @@ impl ShaderGenerator {
             &mut vertex_function,
         );
 
-        let light = light_shader_input.map(|light_shader_input| {
-            Self::generate_code_for_lights(
+        let light_shader_generator = light_shader_input.map(|light_shader_input| {
+            Self::create_light_shader_generator(
                 light_shader_input,
                 &mut module,
                 &mut vertex_function,
-                if material_shader_generator.is_some() {
-                    Some(&mut fragment_function)
-                } else {
-                    None
-                },
+                &mut fragment_function,
                 &mut bind_group_idx,
+                &mut vertex_attribute_requirements,
+                material_shader_generator.is_some(),
             )
         });
 
         let projection = if let Some(camera_projection) = camera_projection {
             ProjectionExpressions::Camera(camera_projection)
         } else {
-            light
+            light_shader_generator
                 .as_ref()
                 .ok_or_else(|| {
                     anyhow!(
@@ -703,8 +689,8 @@ impl ShaderGenerator {
             )?;
 
         let entry_point_names = if let Some(material_shader_generator) = material_shader_generator {
-            let light_vertex_output_field_indices = light.as_ref().map(|light| {
-                light.generate_vertex_output_code(
+            let light_vertex_output_field_indices = light_shader_generator.as_ref().map(|light| {
+                light.generate_vertex_output_code_for_shading(
                     &mut module,
                     &mut vertex_function,
                     &mut vertex_output_struct_builder,
@@ -734,50 +720,62 @@ impl ShaderGenerator {
                 &mesh_vertex_output_field_indices,
                 light_vertex_output_field_indices.as_ref(),
                 &material_vertex_output_field_indices,
-                light.as_ref(),
+                light_shader_generator.as_ref(),
             );
 
-            let entry_point_names = EntryPointNames {
+            EntryPointNames {
                 vertex: Cow::Borrowed("mainVS"),
                 fragment: Some(Cow::Borrowed("mainFS")),
-            };
+            }
+        } else {
+            vertex_output_struct_builder
+                .clone()
+                .generate_output_code(&mut module.types, &mut vertex_function);
 
-            module.entry_points.push(EntryPoint {
-                name: entry_point_names.vertex.to_string(),
-                stage: ShaderStage::Vertex,
-                early_depth_test: None,
-                workgroup_size: [0, 0, 0],
-                function: vertex_function,
-            });
+            let fragment_entry_point_name =
+                if let Some(light_shader_generator) = light_shader_generator {
+                    if light_shader_generator.has_fragment_output() {
+                        let fragment_input_struct = vertex_output_struct_builder
+                            .generate_input_code(&mut module.types, &mut fragment_function);
 
+                        light_shader_generator.generate_fragment_output_code(
+                            &mut module,
+                            &mut fragment_function,
+                            &fragment_input_struct,
+                            &mesh_vertex_output_field_indices,
+                        );
+
+                        Some(Cow::Borrowed("mainFS"))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+            EntryPointNames {
+                vertex: Cow::Borrowed("mainVS"),
+                fragment: fragment_entry_point_name,
+            }
+        };
+
+        module.entry_points.push(EntryPoint {
+            name: entry_point_names.vertex.to_string(),
+            stage: ShaderStage::Vertex,
+            early_depth_test: None,
+            workgroup_size: [0, 0, 0],
+            function: vertex_function,
+        });
+
+        if let Some(name) = entry_point_names.fragment.as_ref() {
             module.entry_points.push(EntryPoint {
-                name: entry_point_names.fragment.as_ref().unwrap().to_string(),
+                name: name.to_string(),
                 stage: ShaderStage::Fragment,
                 early_depth_test: None,
                 workgroup_size: [0, 0, 0],
                 function: fragment_function,
             });
-
-            entry_point_names
-        } else {
-            vertex_output_struct_builder
-                .generate_output_code(&mut module.types, &mut vertex_function);
-
-            let entry_point_names = EntryPointNames {
-                vertex: Cow::Borrowed("mainVS"),
-                fragment: None,
-            };
-
-            module.entry_points.push(EntryPoint {
-                name: entry_point_names.vertex.to_string(),
-                stage: ShaderStage::Vertex,
-                early_depth_test: None,
-                workgroup_size: [0, 0, 0],
-                function: vertex_function,
-            });
-
-            entry_point_names
-        };
+        }
 
         Ok((module, entry_point_names))
     }
@@ -1008,7 +1006,9 @@ impl ShaderGenerator {
             )
         });
 
-        CameraProjectionExpressions { matrix_expr }
+        CameraProjectionExpressions {
+            matrix: matrix_expr,
+        }
     }
 
     /// Generates the arguments for the required mesh vertex attributes in the
@@ -1040,7 +1040,7 @@ impl ShaderGenerator {
         requirements: VertexAttributeSet,
         module: &mut Module,
         vertex_function: &mut Function,
-        model_view_transform_expressions: &ModelViewTransformExpressions,
+        model_view_transform: &ModelViewTransformExpressions,
         projection: ProjectionExpressions,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
         let source_code = SourceCode::from_wgsl_source(
@@ -1124,9 +1124,9 @@ impl ShaderGenerator {
             "cameraSpacePosition",
             transformation_function,
             vec![
-                model_view_transform_expressions.rotation_quaternion,
-                model_view_transform_expressions.translation_vector,
-                model_view_transform_expressions.scaling_factor,
+                model_view_transform.rotation_quaternion,
+                model_view_transform.translation_vector,
+                model_view_transform.scaling_factor,
                 input_model_position_expr,
             ],
         );
@@ -1178,7 +1178,7 @@ impl ShaderGenerator {
                 "cameraSpaceNormalVector",
                 rotation_function,
                 vec![
-                    model_view_transform_expressions.rotation_quaternion,
+                    model_view_transform.rotation_quaternion,
                     input_model_normal_vector_expr,
                 ],
             );
@@ -1228,58 +1228,56 @@ impl ShaderGenerator {
         }
     }
 
-    /// Generates declarations for the uniform type of the active light type,
-    /// the type the corresponding light uniform buffer will be mapped to, the
-    /// global variable this is bound to and expressions for the fields of the
-    /// light at the active index (which is set in a push constant).
-    ///
-    /// # Returns
-    /// Handle to expressions for accessing the fields of the point light in the
-    /// relevant entry point functions.
-    fn generate_code_for_lights(
+    /// Creates a generator of shader code for the light type in the given
+    /// shader input.
+    fn create_light_shader_generator(
         light_shader_input: &LightShaderInput,
         module: &mut Module,
         vertex_function: &mut Function,
-        fragment_function: Option<&mut Function>,
+        fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> LightFieldExpressions {
+        vertex_attribute_requirements: &mut VertexAttributeSet,
+        has_material: bool,
+    ) -> LightShaderGenerator {
         match light_shader_input {
             LightShaderInput::PointLight(light_shader_input) => {
-                Self::generate_code_for_point_lights(
+                Self::create_point_light_shader_generator(
                     light_shader_input,
                     module,
-                    vertex_function,
                     fragment_function,
                     bind_group_idx,
+                    vertex_attribute_requirements,
+                    has_material,
                 )
             }
             LightShaderInput::DirectionalLight(light_shader_input) => {
-                Self::generate_code_for_directional_lights(
+                Self::create_directional_light_shader_generator(
                     light_shader_input,
                     module,
                     vertex_function,
                     fragment_function,
                     bind_group_idx,
+                    has_material,
                 )
             }
         }
     }
 
-    /// Generates declarations for the point light uniform type, the type the
-    /// point light uniform buffer will be mapped to, the global variable this
-    /// is bound to and expressions for the fields of the light at the active
-    /// index (which is set in a push constant).
+    /// Creates a generator of shader code for point lights.
     ///
-    /// # Returns
-    /// Handle to expressions for accessing the fields of the active point light
-    /// in the fragment entry point function.
-    fn generate_code_for_point_lights(
+    /// This involves generating declarations for the point light uniform type,
+    /// the type the point light uniform buffer will be mapped to, the global
+    /// variable this is bound to, the global variables referring to the shadow
+    /// map texture and sampler if required, and expressions for the fields of
+    /// the light at the active index (which is set in a push constant).
+    fn create_point_light_shader_generator(
         light_shader_input: &PointLightShaderInput,
         module: &mut Module,
-        vertex_function: &mut Function,
-        fragment_function: Option<&mut Function>,
+        fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> LightFieldExpressions {
+        vertex_attribute_requirements: &mut VertexAttributeSet,
+        has_material: bool,
+    ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
         let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
@@ -1423,9 +1421,9 @@ impl ShaderGenerator {
             },
         );
 
-        if let Some(fragment_function) = fragment_function {
-            // If we have a fragment function, we will do shading that involves
-            // the shadow cubemap
+        if has_material {
+            // If we have a material, we will do shading that involves the
+            // shadow cubemap
             let (shadow_map_texture_binding, shadow_map_sampler_binding) =
                 light_shader_input.shadow_map_texture_and_sampler_binding;
 
@@ -1441,36 +1439,41 @@ impl ShaderGenerator {
 
             *bind_group_idx += 1;
 
-            LightFieldExpressions::generate_point_light_fragment_code(
+            LightShaderGenerator::new_for_point_light_shading(
                 fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
                 shadow_map,
             )
         } else {
-            LightFieldExpressions::generate_point_light_vertex_code(
-                vertex_function,
+            // For updating the shadow map, we need access to the unprojected
+            // cubemap space position in the fragment shader
+            *vertex_attribute_requirements |= VertexAttributeSet::POSITION;
+
+            LightShaderGenerator::new_for_point_light_shadow_map_update(
+                fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
             )
         }
     }
 
-    /// Generates declarations for the directional light uniform type, the type
-    /// the directional light uniform buffer will be mapped to, the global
-    /// variable this is bound to and expressions for the fields of the light at
-    /// the active index (which is set in a push constant).
+    /// Creates a generator of shader code for point lights.
     ///
-    /// # Returns
-    /// Handle to expressions for accessing the fields of the point light in the
-    /// vertex and fragment entry point functions.
-    fn generate_code_for_directional_lights(
+    /// This involves generating declarations for the directional light uniform
+    /// type, the type the directional light uniform buffer will be mapped to,
+    /// the global variable this is bound to, the global variables referring to
+    /// the shadow map texture and sampler if required, and expressions for the
+    /// fields of the light at the active index (which is set in a push
+    /// constant).
+    fn create_directional_light_shader_generator(
         light_shader_input: &DirectionalLightShaderInput,
         module: &mut Module,
         vertex_function: &mut Function,
-        fragment_function: Option<&mut Function>,
+        fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> LightFieldExpressions {
+        has_material: bool,
+    ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -1589,7 +1592,7 @@ impl ShaderGenerator {
         let (shadow_map_texture_binding, shadow_map_sampler_binding) =
             light_shader_input.shadow_map_texture_and_sampler_binding;
 
-        let shadow_map = if fragment_function.is_some() {
+        let shadow_map = if has_material {
             Some(SampledTexture::declare(
                 &mut module.types,
                 &mut module.global_variables,
@@ -1616,7 +1619,7 @@ impl ShaderGenerator {
             },
         );
 
-        LightFieldExpressions::generate_directional_light_code(
+        LightShaderGenerator::new_for_directional_light(
             vertex_function,
             fragment_function,
             lights_struct_var,
@@ -1684,7 +1687,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
-        light_expressions: Option<&LightFieldExpressions>,
+        light_shader_generator: Option<&LightShaderGenerator>,
     ) {
         match (self, material_input_field_indices) {
             (Self::GlobalAmbientColor(generator), MaterialVertexOutputFieldIndices::None) => {
@@ -1726,7 +1729,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 mesh_input_field_indices,
                 light_input_field_indices,
                 material_input_field_indices,
-                light_expressions,
+                light_shader_generator,
             ),
             (Self::LightSpaceDepth, MaterialVertexOutputFieldIndices::None) => {
                 LightSpaceDepthShaderGenerator::generate_fragment_code(
@@ -1754,7 +1757,7 @@ impl ProjectionExpressions {
         match self {
             Self::Camera(camera_projection_matrix) => camera_projection_matrix
                 .generate_clip_position_expr(module, vertex_function, position_expr),
-            Self::PointLight(point_light_projection) => point_light_projection
+            Self::PointLight(point_light_cubemap_projection) => point_light_cubemap_projection
                 .generate_clip_position_expr(module, vertex_function, position_expr),
             Self::DirectionalLight(directional_light_orthographic_projection) => {
                 directional_light_orthographic_projection.generate_clip_position_expr(
@@ -1789,7 +1792,7 @@ impl CameraProjectionExpressions {
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    left: self.matrix_expr,
+                    left: self.matrix,
                     right: homogeneous_position_expr,
                 },
             )
@@ -1798,6 +1801,7 @@ impl CameraProjectionExpressions {
 }
 
 impl PointLightProjectionExpressions {
+    #[allow(clippy::unused_self)]
     pub fn generate_clip_position_expr(
         &self,
         module: &mut Module,
@@ -1807,25 +1811,17 @@ impl PointLightProjectionExpressions {
         let source_code = SourceCode::from_wgsl_source(
             "\
             fn applyCubemapFaceProjection(
-                nearDistance: f32,
-                inverseDistanceSpan: f32,
                 position: vec3<f32>,
             ) -> vec4<f32> {
                 // It is important not to perform perspective division manually
                 // here, because the homogeneous vector should be interpolated
                 // first.
-                
-                // The reason we use length(position) rather than position.z is
-                // so we can compute the reference depth for sampling the
-                // cubemap without knowing which face of the cubemap the
-                // fragment belongs to.
-
-                // The multiplication by position.z is to cancel out the
-                // perspective division by position.z.
 
                 return vec4<f32>(
                     position.xy,
-                    (length(position) - nearDistance) * inverseDistanceSpan * position.z,
+                    // This component does not matter, as we compute the proper
+                    // depth in the fragment shader
+                    position.z,
                     position.z,
                 );
             }
@@ -1840,11 +1836,7 @@ impl PointLightProjectionExpressions {
             vertex_function,
             "lightClipSpacePosition",
             projection_function,
-            vec![
-                self.near_distance,
-                self.inverse_distance_span,
-                position_expr,
-            ],
+            vec![position_expr],
         )
     }
 }
@@ -1891,47 +1883,45 @@ impl DirectionalLightProjectionExpressions {
     }
 }
 
-impl LightFieldExpressions {
-    pub fn generate_point_light_vertex_code(
-        vertex_function: &mut Function,
+impl LightShaderGenerator {
+    pub fn new_for_point_light_shadow_map_update(
+        fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
     ) -> Self {
-        Self::PointLight(PointLightFieldExpressions {
-            in_vertex_function: Some(PointLightFieldVertexExpressions::generate_code(
-                vertex_function,
+        Self::PointLight(PointLightShaderGenerator::ForShadowMapUpdate(
+            PointLightShadowMapUpdateShaderGenerator::new(
+                fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
-            )),
-            in_fragment_function: None,
-        })
+            ),
+        ))
     }
 
-    pub fn generate_point_light_fragment_code(
+    pub fn new_for_point_light_shading(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: SampledTexture,
     ) -> Self {
-        Self::PointLight(PointLightFieldExpressions {
-            in_vertex_function: None,
-            in_fragment_function: Some(PointLightFieldFragmentExpressions::generate_code(
+        Self::PointLight(PointLightShaderGenerator::ForShading(
+            PointLightShadingShaderGenerator::new(
                 fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
                 shadow_map,
-            )),
-        })
+            ),
+        ))
     }
 
-    pub fn generate_directional_light_code(
+    pub fn new_for_directional_light(
         vertex_function: &mut Function,
-        fragment_function: Option<&mut Function>,
+        fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: Option<SampledTexture>,
     ) -> Self {
-        Self::DirectionalLight(DirectionalLightFieldExpressions::generate_code(
+        Self::DirectionalLight(DirectionalLightShaderGenerator::new(
             vertex_function,
             fragment_function,
             lights_struct_var,
@@ -1942,8 +1932,8 @@ impl LightFieldExpressions {
 
     pub fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
         match self {
-            Self::PointLight(point_light_field_expressions) => {
-                point_light_field_expressions.get_projection_to_light_clip_space()
+            Self::PointLight(_) => {
+                ProjectionExpressions::PointLight(PointLightProjectionExpressions)
             }
             Self::DirectionalLight(directional_light_field_expressions) => {
                 directional_light_field_expressions.get_projection_to_light_clip_space()
@@ -1951,7 +1941,7 @@ impl LightFieldExpressions {
         }
     }
 
-    pub fn generate_vertex_output_code(
+    pub fn generate_vertex_output_code_for_shading(
         &self,
         module: &mut Module,
         vertex_function: &mut Function,
@@ -1962,7 +1952,7 @@ impl LightFieldExpressions {
             Self::PointLight(_) => LightVertexOutputFieldIndices::PointLight,
             Self::DirectionalLight(directional_light_field_expressions) => {
                 LightVertexOutputFieldIndices::DirectionalLight(
-                    directional_light_field_expressions.generate_vertex_output_code(
+                    directional_light_field_expressions.generate_vertex_output_code_for_shading(
                         module,
                         vertex_function,
                         output_struct_builder,
@@ -1970,6 +1960,33 @@ impl LightFieldExpressions {
                     ),
                 )
             }
+        }
+    }
+
+    pub fn has_fragment_output(&self) -> bool {
+        matches!(
+            self,
+            Self::PointLight(PointLightShaderGenerator::ForShadowMapUpdate(_))
+        )
+    }
+
+    pub fn generate_fragment_output_code(
+        &self,
+        module: &mut Module,
+        fragment_function: &mut Function,
+        fragment_input_struct: &InputStruct,
+        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
+    ) {
+        if let Self::PointLight(PointLightShaderGenerator::ForShadowMapUpdate(
+            shadow_map_update_shader_generator,
+        )) = self
+        {
+            shadow_map_update_shader_generator.generate_fragment_output_code(
+                module,
+                fragment_function,
+                fragment_input_struct,
+                mesh_input_field_indices,
+            );
         }
     }
 
@@ -2067,111 +2084,149 @@ impl LightFieldExpressions {
     }
 }
 
-impl PointLightFieldExpressions {
-    fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
-        self.in_vertex_function
-            .as_ref()
-            .expect("Tried to obtain projection to point light clip space without vertex function")
-            .get_projection_to_light_clip_space()
-    }
-}
-
-impl PointLightFieldVertexExpressions {
-    fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
-        ProjectionExpressions::PointLight(self.projection.clone())
-    }
-}
-
-impl PointLightFieldVertexExpressions {
-    pub fn generate_code(
-        vertex_function: &mut Function,
+impl PointLightShadowMapUpdateShaderGenerator {
+    pub fn new(
+        fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
     ) -> Self {
-        let active_light_ptr_expr = LightFieldExpressions::generate_active_light_ptr_expr(
-            vertex_function,
+        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
+            fragment_function,
             lights_struct_var,
             active_light_idx_var,
         );
 
-        let distance_mapping = LightFieldExpressions::generate_field_access_ptr_expr(
-            vertex_function,
+        let distance_mapping = LightShaderGenerator::generate_field_access_ptr_expr(
+            fragment_function,
             active_light_ptr_expr,
             3,
         );
 
-        let near_distance = LightFieldExpressions::generate_named_field_access_expr(
-            vertex_function,
+        let near_distance = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
             "lightNearDistance",
             distance_mapping,
             0,
         );
 
-        let inverse_distance_span = LightFieldExpressions::generate_named_field_access_expr(
-            vertex_function,
+        let inverse_distance_span = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
             "lightInverseDistanceSpan",
             distance_mapping,
             1,
         );
 
         Self {
-            projection: PointLightProjectionExpressions {
-                near_distance,
-                inverse_distance_span,
-            },
+            near_distance,
+            inverse_distance_span,
         }
+    }
+
+    pub fn generate_fragment_output_code(
+        &self,
+        module: &mut Module,
+        fragment_function: &mut Function,
+        fragment_input_struct: &InputStruct,
+        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
+    ) {
+        let source_code = SourceCode::from_wgsl_source(
+            "\
+            fn computeShadowMapFragmentDepth(
+                nearDistance: f32,
+                inverseDistanceSpan: f32,
+                cubemapSpaceFragmentPosition: vec3<f32>,
+            ) -> f32 {
+                // Compute distance between fragment and light and scale to [0, 1] range
+                return (length(cubemapSpaceFragmentPosition) - nearDistance) * inverseDistanceSpan;
+            }
+        ",
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let compute_depth = source_code.functions[0];
+
+        let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
+
+        let position_expr = fragment_input_struct.get_field_expr(
+            mesh_input_field_indices
+                .position
+                .expect("Missing position for point light shadow map update"),
+        );
+
+        let depth = SourceCode::generate_call_named(
+            fragment_function,
+            "fragmentDepth",
+            compute_depth,
+            vec![
+                self.near_distance,
+                self.inverse_distance_span,
+                position_expr,
+            ],
+        );
+
+        let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
+
+        output_struct_builder.add_builtin_fragment_depth_field(
+            "fragmentDepth",
+            f32_type,
+            F32_WIDTH,
+            depth,
+        );
+
+        output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
 }
 
-impl PointLightFieldFragmentExpressions {
-    pub fn generate_code(
+impl PointLightShadingShaderGenerator {
+    pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: SampledTexture,
     ) -> Self {
-        let active_light_ptr_expr = LightFieldExpressions::generate_active_light_ptr_expr(
+        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             fragment_function,
             lights_struct_var,
             active_light_idx_var,
         );
 
         let camera_to_light_space_rotation_quaternion =
-            LightFieldExpressions::generate_named_field_access_expr(
+            LightShaderGenerator::generate_named_field_access_expr(
                 fragment_function,
                 "cameraToLightSpaceRotationQuaternion",
                 active_light_ptr_expr,
                 0,
             );
 
-        let camera_space_position = LightFieldExpressions::generate_named_field_access_expr(
+        let camera_space_position = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "cameraSpaceLightPosition",
             active_light_ptr_expr,
             1,
         );
 
-        let radiance = LightFieldExpressions::generate_named_field_access_expr(
+        let radiance = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "lightRadiance",
             active_light_ptr_expr,
             2,
         );
 
-        let distance_mapping = LightFieldExpressions::generate_field_access_ptr_expr(
+        let distance_mapping = LightShaderGenerator::generate_field_access_ptr_expr(
             fragment_function,
             active_light_ptr_expr,
             3,
         );
 
-        let near_distance = LightFieldExpressions::generate_named_field_access_expr(
+        let near_distance = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "lightNearDistance",
             distance_mapping,
             0,
         );
 
-        let inverse_distance_span = LightFieldExpressions::generate_named_field_access_expr(
+        let inverse_distance_span = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "lightInverseDistanceSpan",
             distance_mapping,
@@ -2193,13 +2248,15 @@ impl PointLightFieldFragmentExpressions {
         module: &mut Module,
         fragment_function: &mut Function,
         position_expr: Handle<Expression>,
+        normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
         let source_code = SourceCode::from_wgsl_source(
             "\
             struct LightQuantities {
                 lightDirection: vec3<f32>,
+                lightDirectionDotNormalVector: f32,
                 attenuatedLightRadiance: vec3<f32>,
-                lightSpaceVertexDisplacement: vec3<f32>,
+                lightSpaceFragmentDisplacement: vec3<f32>,
                 normalizedDistance: f32,
             }
 
@@ -2214,18 +2271,25 @@ impl PointLightFieldFragmentExpressions {
                 cameraToLightSpaceRotationQuaternion: vec4<f32>,
                 nearDistance: f32,
                 inverseDistanceSpan: f32,
-                vertexPosition: vec3<f32>,
+                fragmentPosition: vec3<f32>,
+                fragmentNormal: vec3<f32>,
             ) -> LightQuantities {
                 var output: LightQuantities;
 
-                let lightDisplacement = lightPosition - vertexPosition;
-                let squaredDistance = dot(lightDisplacement, lightDisplacement);
-                let distance = sqrt(squaredDistance);
-                output.lightDirection = lightDisplacement / distance;
-                output.attenuatedLightRadiance = lightRadiance / squaredDistance;
+                let lightDisplacement = lightPosition - fragmentPosition;
+                let inverseSquaredDistance = 1.0 / dot(lightDisplacement, lightDisplacement);
+                output.lightDirection = lightDisplacement * sqrt(inverseSquaredDistance);
+                output.lightDirectionDotNormalVector = dot(output.lightDirection, fragmentNormal);
+                
+                output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
 
-                output.lightSpaceVertexDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, -lightDisplacement);
-                output.normalizedDistance = (distance - nearDistance) * inverseDistanceSpan;
+                // Add an offset to the fragment position along the fragment
+                // normal to avoid shadow acne. The offset increases as the
+                // light becomes less perpendicular to the surface.
+                let offsetFragmentDisplacement = -lightDisplacement + fragmentNormal * clamp(1.0 - output.lightDirectionDotNormalVector, 1e-2, 1.0) * 5e-3 / inverseDistanceSpan;
+
+                output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
+                output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
 
                 return output;
             }
@@ -2247,6 +2311,7 @@ impl PointLightFieldFragmentExpressions {
                 self.near_distance,
                 self.inverse_distance_span,
                 position_expr,
+                normal_vector_expr,
             ],
         );
 
@@ -2257,14 +2322,14 @@ impl PointLightFieldFragmentExpressions {
                         function,
                         Expression::AccessIndex {
                             base: light_quantities,
-                            index: 2,
+                            index: 3,
                         },
                     ),
                     include_expr_in_func(
                         function,
                         Expression::AccessIndex {
                             base: light_quantities,
-                            index: 3,
+                            index: 4,
                         },
                     ),
                 )
@@ -2291,7 +2356,7 @@ impl PointLightFieldFragmentExpressions {
                 function,
                 Expression::AccessIndex {
                     base: light_quantities,
-                    index: 1,
+                    index: 2,
                 },
             );
 
@@ -2309,32 +2374,32 @@ impl PointLightFieldFragmentExpressions {
     }
 }
 
-impl DirectionalLightFieldExpressions {
-    pub fn generate_code(
+impl DirectionalLightShaderGenerator {
+    pub fn new(
         vertex_function: &mut Function,
-        fragment_function: Option<&mut Function>,
+        fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: Option<SampledTexture>,
     ) -> Self {
         Self {
-            in_vertex_function: DirectionalLightVertexFieldExpressions::generate_code(
+            for_vertex: DirectionalLightVertexShaderGenerator::new(
                 vertex_function,
                 lights_struct_var,
                 active_light_idx_var,
             ),
-            in_fragment_function: fragment_function.map(|fragment_function| {
-                DirectionalLightFragmentFieldExpressions::generate_code(
+            for_fragment: shadow_map.map(|shadow_map| {
+                DirectionalLightFragmentShaderGenerator::new(
                     fragment_function,
                     lights_struct_var,
                     active_light_idx_var,
-                    shadow_map.unwrap(),
+                    shadow_map,
                 )
             }),
         }
     }
 
-    pub fn generate_vertex_output_code(
+    pub fn generate_vertex_output_code_for_shading(
         &self,
         module: &mut Module,
         vertex_function: &mut Function,
@@ -2379,10 +2444,9 @@ impl DirectionalLightFieldExpressions {
             "lightClipSpacePosition",
             light_clip_space_transformation_function,
             vec![
-                self.in_vertex_function
-                    .camera_to_light_space_rotation_quaternion,
-                self.in_vertex_function.orthographic_projection.translation,
-                self.in_vertex_function.orthographic_projection.scaling,
+                self.for_vertex.camera_to_light_space_rotation_quaternion,
+                self.for_vertex.orthographic_projection.translation,
+                self.for_vertex.orthographic_projection.scaling,
                 camera_space_position_expr,
             ],
         );
@@ -2398,38 +2462,38 @@ impl DirectionalLightFieldExpressions {
     }
 
     fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
-        self.in_vertex_function.get_projection_to_light_clip_space()
+        self.for_vertex.get_projection_to_light_clip_space()
     }
 }
 
-impl DirectionalLightVertexFieldExpressions {
-    pub fn generate_code(
+impl DirectionalLightVertexShaderGenerator {
+    pub fn new(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
     ) -> Self {
-        let active_light_ptr_expr = LightFieldExpressions::generate_active_light_ptr_expr(
+        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             vertex_function,
             lights_struct_var,
             active_light_idx_var,
         );
 
         let camera_to_light_space_rotation_quaternion =
-            LightFieldExpressions::generate_named_field_access_expr(
+            LightShaderGenerator::generate_named_field_access_expr(
                 vertex_function,
                 "cameraToLightSpaceRotationQuaternion",
                 active_light_ptr_expr,
                 0,
             );
 
-        let orthographic_translation = LightFieldExpressions::generate_named_field_access_expr(
+        let orthographic_translation = LightShaderGenerator::generate_named_field_access_expr(
             vertex_function,
             "lightOrthographicTranslation",
             active_light_ptr_expr,
             3,
         );
 
-        let orthographic_scaling = LightFieldExpressions::generate_named_field_access_expr(
+        let orthographic_scaling = LightShaderGenerator::generate_named_field_access_expr(
             vertex_function,
             "lightOrthographicScaling",
             active_light_ptr_expr,
@@ -2452,27 +2516,27 @@ impl DirectionalLightVertexFieldExpressions {
     }
 }
 
-impl DirectionalLightFragmentFieldExpressions {
-    pub fn generate_code(
+impl DirectionalLightFragmentShaderGenerator {
+    pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: SampledTexture,
     ) -> Self {
-        let active_light_ptr_expr = LightFieldExpressions::generate_active_light_ptr_expr(
+        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             fragment_function,
             lights_struct_var,
             active_light_idx_var,
         );
 
-        let camera_space_direction = LightFieldExpressions::generate_named_field_access_expr(
+        let camera_space_direction = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "cameraSpaceLightDirection",
             active_light_ptr_expr,
             1,
         );
 
-        let radiance = LightFieldExpressions::generate_named_field_access_expr(
+        let radiance = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "lightRadiance",
             active_light_ptr_expr,
@@ -2724,6 +2788,30 @@ impl OutputStructBuilder {
             name,
             type_handle,
             Some(Binding::BuiltIn(BuiltIn::Position { invariant: false })),
+            size,
+        )
+    }
+
+    /// Adds a new struct field with the built-in fragment depth binding rather
+    /// than a location binding.
+    ///
+    /// The field is given an automatically incremented location binding.
+    ///
+    /// # Returns
+    /// The index of the added field.
+    pub fn add_builtin_fragment_depth_field<S: ToString>(
+        &mut self,
+        name: S,
+        type_handle: Handle<Type>,
+        size: u32,
+        input_expr: Handle<Expression>,
+    ) -> usize {
+        self.input_expressions.push(input_expr);
+
+        self.builder.add_field(
+            name,
+            type_handle,
+            Some(Binding::BuiltIn(BuiltIn::FragDepth)),
             size,
         )
     }

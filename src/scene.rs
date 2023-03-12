@@ -161,7 +161,7 @@ impl Scene {
 impl Default for SceneConfig {
     fn default() -> Self {
         Self {
-            global_ambient_color: vector![0.05, 0.05, 0.05],
+            global_ambient_color: vector![1.0, 1.0, 1.0] * 0.05,
         }
     }
 }

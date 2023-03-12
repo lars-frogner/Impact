@@ -3,13 +3,11 @@
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
     insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
-    LightFieldExpressions, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
-    VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
+    OutputStructBuilder, PointLightShaderGenerator, SampledTexture, SourceCode, TextureType,
+    F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use naga::{
-    Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement,
-};
+use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
 
 /// Input description specifying the vertex attribute locations
 /// of Blinn-Phong material properties, reqired for generating a
@@ -103,22 +101,12 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let input_diffuse_color_field_idx =
             self.feature_input.diffuse_color_location.map(|location| {
-                input_struct_builder.add_field(
-                    "diffuseColor",
-                    vec3_type,
-                    location,
-                    VECTOR_3_SIZE,
-                )
+                input_struct_builder.add_field("diffuseColor", vec3_type, location, VECTOR_3_SIZE)
             });
 
         let input_specular_color_field_idx =
             self.feature_input.specular_color_location.map(|location| {
-                input_struct_builder.add_field(
-                    "specularColor",
-                    vec3_type,
-                    location,
-                    VECTOR_3_SIZE,
-                )
+                input_struct_builder.add_field("specularColor", vec3_type, location, VECTOR_3_SIZE)
             });
 
         let input_shininess_field_idx = input_struct_builder.add_field(
@@ -189,7 +177,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
         material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
-        light_expressions: Option<&LightFieldExpressions>,
+        light_shader_generator: Option<&LightShaderGenerator>,
     ) {
         let source_code = SourceCode::from_wgsl_source(
             "\
@@ -204,7 +192,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 specularColor: vec3<f32>,
                 shininess: f32,
                 lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>
+                lightRadiance: vec3<f32>,
             ) -> vec3<f32> {
                 let halfVector = normalize((lightDirection + viewDirection));
                 let diffuseFactor = max(0.0, dot(lightDirection, normalVector));
@@ -221,7 +209,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let light_input_field_indices =
             light_input_field_indices.expect("Missing light for Blinn-Phong shading");
-        let light_expressions = light_expressions.expect("Missing light for Blinn-Phong shading");
+        let light_shader_generator =
+            light_shader_generator.expect("Missing light for Blinn-Phong shading");
 
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -241,41 +230,41 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let shininess_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.shininess);
 
-        let (diffuse_color_expr, specular_color_expr) =
-            if let Some(texture_input) = self.texture_input {
-                let (diffuse_color_expr, specular_color_expr) =
-                    Self::generate_texture_fragment_code(
-                        texture_input,
-                        module,
-                        fragment_function,
-                        bind_group_idx,
-                        fragment_input_struct,
-                        mesh_input_field_indices,
-                    );
-                (
-                    diffuse_color_expr,
-                    specular_color_expr.unwrap_or_else(|| {
-                        fragment_input_struct.get_field_expr(
-                            material_input_field_indices.specular_color.expect(
-                                "Missing `specular_color` feature for Blinn-Phong material",
-                            ),
-                        )
-                    }),
-                )
-            } else {
-                (
-                    fragment_input_struct.get_field_expr(
-                        material_input_field_indices
-                            .diffuse_color
-                            .expect("Missing `diffuse_color` feature for Blinn-Phong material"),
-                    ),
+        let (diffuse_color_expr, specular_color_expr) = if let Some(texture_input) =
+            self.texture_input
+        {
+            let (diffuse_color_expr, specular_color_expr) = Self::generate_texture_fragment_code(
+                texture_input,
+                module,
+                fragment_function,
+                bind_group_idx,
+                fragment_input_struct,
+                mesh_input_field_indices,
+            );
+            (
+                diffuse_color_expr,
+                specular_color_expr.unwrap_or_else(|| {
                     fragment_input_struct.get_field_expr(
                         material_input_field_indices
                             .specular_color
                             .expect("Missing `specular_color` feature for Blinn-Phong material"),
-                    ),
-                )
-            };
+                    )
+                }),
+            )
+        } else {
+            (
+                fragment_input_struct.get_field_expr(
+                    material_input_field_indices
+                        .diffuse_color
+                        .expect("Missing `diffuse_color` feature for Blinn-Phong material"),
+                ),
+                fragment_input_struct.get_field_expr(
+                    material_input_field_indices
+                        .specular_color
+                        .expect("Missing `specular_color` feature for Blinn-Phong material"),
+                ),
+            )
+        };
 
         let color_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
@@ -296,14 +285,20 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             vec![position_expr],
         );
 
-        let light_color_expr = match (light_expressions, light_input_field_indices) {
+        let light_color_expr = match (light_shader_generator, light_input_field_indices) {
             (
-                LightFieldExpressions::PointLight(point_light_expressions),
+                LightShaderGenerator::PointLight(PointLightShaderGenerator::ForShading(
+                    point_light_shader_generator,
+                )),
                 LightVertexOutputFieldIndices::PointLight,
             ) => {
-                let point_light_expressions = point_light_expressions.in_fragment_function.as_ref().unwrap();
-                
-                let (light_dir_expr, light_radiance_expr) = point_light_expressions.generate_fragment_shading_code(module, fragment_function, position_expr);
+                let (light_dir_expr, light_radiance_expr) = point_light_shader_generator
+                    .generate_fragment_shading_code(
+                        module,
+                        fragment_function,
+                        position_expr,
+                        normal_vector_expr,
+                    );
 
                 SourceCode::generate_call_named(
                     fragment_function,
@@ -321,23 +316,23 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 )
             }
             (
-                LightFieldExpressions::DirectionalLight(directional_light_expressions),
+                LightShaderGenerator::DirectionalLight(directional_light_expressions),
                 LightVertexOutputFieldIndices::DirectionalLight(
                     directional_light_input_field_indices,
                 ),
             ) => {
-                let directional_light_expressions = directional_light_expressions
-                    .in_fragment_function
-                    .as_ref()
-                    .unwrap();
-
+                let directional_light_expressions =
+                    directional_light_expressions.for_fragment.as_ref().unwrap();
 
                 let light_clip_space_position_expr = fragment_input_struct
-                    .get_field_expr(
-                        directional_light_input_field_indices.light_clip_position,
-                    );
+                    .get_field_expr(directional_light_input_field_indices.light_clip_position);
 
-                let (light_dir_expr, light_radiance_expr) = directional_light_expressions.generate_fragment_shading_code(module, fragment_function, light_clip_space_position_expr);
+                let (light_dir_expr, light_radiance_expr) = directional_light_expressions
+                    .generate_fragment_shading_code(
+                        module,
+                        fragment_function,
+                        light_clip_space_position_expr,
+                    );
 
                 SourceCode::generate_call_named(
                     fragment_function,
@@ -353,8 +348,10 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                         light_radiance_expr,
                     ],
                 )
-            },
-            _ => panic!("Different light types for light field expressions and light vertex output field indices")
+            }
+            _ => {
+                panic!("Different light types for light field expressions and light vertex output field indices");
+            }
         };
 
         push_to_block(
@@ -436,12 +433,11 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 .expect("No `texture_coords` passed to fixed texture fragment shader"),
         );
 
-        let diffuse_color_sampling_expr = diffuse_color_texture
-            .generate_rgb_sampling_expr(fragment_function, texture_coord_expr);
+        let diffuse_color_sampling_expr =
+            diffuse_color_texture.generate_rgb_sampling_expr(fragment_function, texture_coord_expr);
 
-        let specular_color_sampling_expr = texture_input
-            .specular_texture_and_sampler_bindings
-            .map(|(specular_texture_binding, specular_sampler_binding)| {
+        let specular_color_sampling_expr = texture_input.specular_texture_and_sampler_bindings.map(
+            |(specular_texture_binding, specular_sampler_binding)| {
                 let specular_color_texture = SampledTexture::declare(
                     &mut module.types,
                     &mut module.global_variables,
@@ -454,11 +450,9 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
                 specular_color_texture
                     .generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
-            });
+            },
+        );
 
-        (
-            diffuse_color_sampling_expr,
-            specular_color_sampling_expr,
-        )
+        (diffuse_color_sampling_expr, specular_color_sampling_expr)
     }
 }
