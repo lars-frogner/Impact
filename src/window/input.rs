@@ -44,6 +44,7 @@ pub enum KeyboardInputAction {
     ToggleInteractionMode,
     ToggleBackFaceCulling,
     ToggleTriangleFill,
+    Toggle4xMSAA,
     SaveScreenshot,
     SaveDepthMap,
     SavePointLightShadowMap,
@@ -161,6 +162,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::Toggle4xMSAA => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().toggle_4x_msaa();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
                             world.renderer().read().unwrap().request_screenshot_save();
@@ -240,6 +247,7 @@ impl Default for KeyActionMap {
             ToggleInteractionMode => Tab,
             ToggleBackFaceCulling => B,
             ToggleTriangleFill => F,
+            Toggle4xMSAA => M,
             SaveScreenshot => F12,
             SaveDepthMap => F11,
             SavePointLightShadowMap => F10,

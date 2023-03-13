@@ -1049,6 +1049,14 @@ impl RenderPassSpecification {
         }
     }
 
+    fn determine_multisampling_sample_count(&self, config: &RenderingConfig) -> u32 {
+        if self.shadow_map_usage.is_clear_or_update() {
+            1
+        } else {
+            config.multisampling_sample_count
+        }
+    }
+
     fn determine_color_load_operation(&self) -> wgpu::LoadOp<wgpu::Color> {
         match self.clear_color {
             Some(clear_color) => wgpu::LoadOp::Clear(clear_color),
@@ -1120,6 +1128,9 @@ impl RenderPassRecorder {
 
             let depth_stencil_state = specification.determine_depth_stencil_state();
 
+            let multisampling_sample_count =
+                specification.determine_multisampling_sample_count(config);
+
             let pipeline = Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
@@ -1128,6 +1139,7 @@ impl RenderPassRecorder {
                 color_target_state,
                 front_face,
                 depth_stencil_state,
+                multisampling_sample_count,
                 config,
                 &format!("{} render pipeline", &specification.label),
             ));
@@ -1174,6 +1186,7 @@ impl RenderPassRecorder {
         &self,
         render_resources: &SynchronizedRenderResources,
         color_attachment_texture_view: &wgpu::TextureView,
+        color_attachment_resolve_target: Option<&wgpu::TextureView>,
         depth_texture_view: &wgpu::TextureView,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -1216,7 +1229,7 @@ impl RenderPassRecorder {
         } else {
             Some(wgpu::RenderPassColorAttachment {
                 view: color_attachment_texture_view,
-                resolve_target: None,
+                resolve_target: color_attachment_resolve_target,
                 ops: wgpu::Operations {
                     load: self.color_load_operation,
                     store: true,
@@ -1404,6 +1417,7 @@ impl RenderPassRecorder {
         color_target_state: Option<wgpu::ColorTargetState>,
         front_face: wgpu::FrontFace,
         depth_stencil_state: Option<wgpu::DepthStencilState>,
+        multisampling_sample_count: u32,
         config: &RenderingConfig,
         label: &str,
     ) -> wgpu::RenderPipeline {
@@ -1439,7 +1453,7 @@ impl RenderPassRecorder {
             },
             depth_stencil: depth_stencil_state,
             multisample: wgpu::MultisampleState {
-                count: 1,
+                count: multisampling_sample_count,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
