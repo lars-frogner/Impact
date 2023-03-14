@@ -4,12 +4,14 @@ use crate::{
     geometry::{CollectionChange, UniformBuffer},
     rendering::{
         buffer::{self, UniformBufferable},
-        texture::{ShadowCubemapTexture, ShadowMapTexture},
+        texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{UniformRenderBufferManager, UniformTransferResult},
-        CoreRenderingSystem, DirectionalLightShaderInput, LightShaderInput, PointLightShaderInput,
-        RenderingConfig,
+        CascadeIdx, CoreRenderingSystem, DirectionalLightShaderInput, LightShaderInput,
+        PointLightShaderInput, RenderingConfig,
     },
-    scene::{DirectionalLight, LightID, LightStorage, LightType, PointLight},
+    scene::{
+        DirectionalLight, LightID, LightStorage, LightType, PointLight, MAX_SHADOW_MAP_CASCADES,
+    },
 };
 use impact_utils::ConstStringHash64;
 use std::mem;
@@ -22,7 +24,7 @@ pub struct LightRenderBufferManager {
     point_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     directional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     point_light_shadow_map_texture: ShadowCubemapTexture,
-    directional_light_shadow_map_texture: ShadowMapTexture,
+    directional_light_shadow_map_texture: CascadedShadowMapTexture,
     light_bind_group_layout: wgpu::BindGroupLayout,
     light_bind_group: wgpu::BindGroup,
     point_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
@@ -52,6 +54,10 @@ impl LightRenderBufferManager {
     const LIGHT_IDX_PUSH_CONSTANT_RANGE_END: u32 =
         Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START + mem::size_of::<u32>() as u32;
 
+    const CASCADE_IDX_PUSH_CONSTANT_RANGE_START: u32 = Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_END;
+    const CASCADE_IDX_PUSH_CONSTANT_RANGE_END: u32 =
+        Self::CASCADE_IDX_PUSH_CONSTANT_RANGE_START + mem::size_of::<CascadeIdx>() as u32;
+
     /// Creates a new manager with render buffers initialized from the given
     /// [`LightStorage`].
     pub fn for_light_storage(
@@ -76,11 +82,11 @@ impl LightRenderBufferManager {
             "Point light shadow cubemap texture",
         );
 
-        let directional_light_shadow_map_texture = ShadowMapTexture::new(
+        let directional_light_shadow_map_texture = CascadedShadowMapTexture::new(
             core_system,
             config.directional_light_shadow_map_resolution,
-            config.directional_light_shadow_map_resolution,
-            "Directional light shadow map texture",
+            MAX_SHADOW_MAP_CASCADES,
+            "Directional light cascaded shadow map texture",
         );
 
         let light_bind_group_layout = Self::create_light_bind_group_layout(core_system.device());
@@ -150,8 +156,9 @@ impl LightRenderBufferManager {
         &self.point_light_shadow_map_texture
     }
 
-    /// Returns a reference to the shadow map texture for directional lights.
-    pub fn directional_light_shadow_map_texture(&self) -> &ShadowMapTexture {
+    /// Returns a reference to the cascaded shadow map texture for directional
+    /// lights.
+    pub fn directional_light_shadow_map_texture(&self) -> &CascadedShadowMapTexture {
         &self.directional_light_shadow_map_texture
     }
 
@@ -207,6 +214,17 @@ impl LightRenderBufferManager {
         }
     }
 
+    /// Returns the push constant range that will contain the the light index
+    /// and cascade index after [`set_light_idx_push_constant`] and
+    /// [`set_cascade_idx_push_constant`] is called.
+    pub const fn light_idx_and_cascade_idx_push_constant_range() -> wgpu::PushConstantRange {
+        wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            range: Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START
+                ..Self::CASCADE_IDX_PUSH_CONSTANT_RANGE_END,
+        }
+    }
+
     /// Finds the index of the light with the given ID in the light type's
     /// uniform buffer and writes it to the appropriate push constant range for
     /// the given render pass.
@@ -232,6 +250,19 @@ impl LightRenderBufferManager {
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START,
             bytemuck::bytes_of(&light_idx),
+        );
+    }
+
+    /// Writes the given cascade index to the appropriate push constant range
+    /// for the given render pass.
+    pub fn set_cascade_idx_push_constant(
+        render_pass: &mut wgpu::RenderPass<'_>,
+        cascade_idx: CascadeIdx,
+    ) {
+        render_pass.set_push_constants(
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+            Self::CASCADE_IDX_PUSH_CONSTANT_RANGE_START,
+            bytemuck::bytes_of(&cascade_idx),
         );
     }
 
@@ -346,10 +377,10 @@ impl LightRenderBufferManager {
     ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                ShadowMapTexture::create_texture_bind_group_layout_entry(
+                CascadedShadowMapTexture::create_texture_bind_group_layout_entry(
                     Self::DIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 ),
-                ShadowMapTexture::create_sampler_bind_group_layout_entry(
+                CascadedShadowMapTexture::create_sampler_bind_group_layout_entry(
                     Self::DIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
                 ),
             ],
@@ -359,7 +390,7 @@ impl LightRenderBufferManager {
 
     fn create_directional_light_shadow_map_bind_group(
         device: &wgpu::Device,
-        directional_light_shadow_map_texture: &ShadowMapTexture,
+        directional_light_shadow_map_texture: &CascadedShadowMapTexture,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {

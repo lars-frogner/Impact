@@ -6,7 +6,9 @@ mod shadow_map;
 
 pub use self::image::{ImageTexture, MultisampledRenderTargetTexture};
 pub use depth::DepthTexture;
-pub use shadow_map::{ShadowCubemapTexture, ShadowMapTexture};
+pub use shadow_map::{
+    CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,
+};
 
 use crate::rendering::CoreRenderingSystem;
 use ::image::{buffer::ConvertBuffer, ImageBuffer, Luma, Rgba};

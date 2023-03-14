@@ -9,21 +9,21 @@ use crate::{
     rendering::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
-        resource::SynchronizedRenderResources, texture::ShadowMapTexture, CameraShaderInput,
-        CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialPropertyTextureManager, MaterialRenderResourceManager, MaterialShaderInput,
-        MeshShaderInput, RenderingConfig, Shader,
+        resource::SynchronizedRenderResources, texture::SHADOW_MAP_FORMAT, CameraShaderInput,
+        CascadeIdx, CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput,
+        LightShaderInput, MaterialPropertyTextureManager, MaterialRenderResourceManager,
+        MaterialShaderInput, MeshShaderInput, RenderingConfig, Shader,
     },
     scene::{
         GlobalAmbientColorMaterial, LightID, LightType, MaterialID, MaterialPropertyTextureSetID,
-        MeshID, ModelID, ShaderManager,
+        MeshID, ModelID, ShaderManager, MAX_SHADOW_MAP_CASCADES,
     },
 };
 use anyhow::{anyhow, Result};
 use impact_utils::KeyIndexMapper;
 use std::{
     collections::{hash_map::Entry, HashMap},
-    iter, vec,
+    iter,
 };
 
 /// Manager and owner of render passes.
@@ -127,7 +127,7 @@ enum ShadowMapUsage {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ShadowMapIdentifier {
-    ForDirectionalLight,
+    ForDirectionalLight(CascadeIdx),
     ForPointLight(CubemapFace),
 }
 
@@ -368,27 +368,46 @@ impl RenderPassManager {
                                 no_visible_instances,
                             )?);
                         }
+
                         for &light_id in directional_light_ids {
-                            let no_shadow_casting_instances = transform_buffer_manager
-                                .feature_range(light_id.as_instance_feature_buffer_range_id())
-                                .is_empty();
+                            let cascades_have_shadow_casting_model_instances: Vec<_> = (0
+                                ..MAX_SHADOW_MAP_CASCADES)
+                                .into_iter()
+                                .map(|cascade_idx| {
+                                    !transform_buffer_manager
+                                        .feature_range(
+                                            light_id.as_instance_feature_buffer_range_id()
+                                                + cascade_idx,
+                                        )
+                                        .is_empty()
+                                })
+                                .collect();
 
                             let passes =
                                 match self.light_shaded_model_shading_passes.entry(light_id) {
                                     Entry::Occupied(entry) => entry.into_mut(),
                                     Entry::Vacant(entry) => {
+                                        let mut shadow_map_clearing_passes =
+                                            Vec::with_capacity(MAX_SHADOW_MAP_CASCADES as usize);
+
+                                        for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
+                                            shadow_map_clearing_passes
+                                                .push(RenderPassRecorder::new(
+                                                core_system,
+                                                config,
+                                                render_resources,
+                                                shader_manager,
+                                                RenderPassSpecification::shadow_map_clearing_pass(
+                                                    ShadowMapIdentifier::ForDirectionalLight(
+                                                        cascade_idx,
+                                                    ),
+                                                ),
+                                                false,
+                                            )?);
+                                        }
+
                                         entry.insert(LightShadedModelShadingPasses {
-                                            shadow_map_clearing_passes:
-                                                vec![RenderPassRecorder::new(
-                                            core_system,
-                                            config,
-                                            render_resources,
-                                            shader_manager,
-                                            RenderPassSpecification::shadow_map_clearing_pass(
-                                                ShadowMapIdentifier::ForDirectionalLight,
-                                            ),
-                                            false,
-                                        )?],
+                                            shadow_map_clearing_passes,
                                             ..Default::default()
                                         })
                                     }
@@ -400,21 +419,32 @@ impl RenderPassManager {
                             };
 
                             // Create a directional light shadow map update pass
-                            // for the new model
+                            // for each cascade for the new model
+
                             passes
                                 .shadow_map_update_passes
-                                .push(vec![RenderPassRecorder::new(
-                                    core_system,
-                                    config,
-                                    render_resources,
-                                    shader_manager,
-                                    RenderPassSpecification::shadow_map_update_pass(
-                                        light,
-                                        model_id,
-                                        ShadowMapIdentifier::ForDirectionalLight,
-                                    ),
-                                    no_shadow_casting_instances,
-                                )?]);
+                                .push(Vec::with_capacity(MAX_SHADOW_MAP_CASCADES as usize));
+
+                            let shadow_map_update_passes_for_cascades =
+                                passes.shadow_map_update_passes.last_mut().unwrap();
+
+                            for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
+                                shadow_map_update_passes_for_cascades.push(
+                                    RenderPassRecorder::new(
+                                        core_system,
+                                        config,
+                                        render_resources,
+                                        shader_manager,
+                                        RenderPassSpecification::shadow_map_update_pass(
+                                            light,
+                                            model_id,
+                                            ShadowMapIdentifier::ForDirectionalLight(cascade_idx),
+                                        ),
+                                        !cascades_have_shadow_casting_model_instances
+                                            [cascade_idx as usize],
+                                    )?,
+                                );
+                            }
 
                             // Create a directional light shading pass for the
                             // new model
@@ -453,9 +483,12 @@ impl RenderPassManager {
                                                             .as_instance_feature_buffer_range_id()
                                                             + face.as_idx_u32()
                                                     }
-                                                    ShadowMapIdentifier::ForDirectionalLight => {
+                                                    ShadowMapIdentifier::ForDirectionalLight(
+                                                        cascade_idx,
+                                                    ) => {
                                                         light_id
                                                             .as_instance_feature_buffer_range_id()
+                                                            + cascade_idx
                                                     }
                                                 }
                                             } else {
@@ -641,7 +674,7 @@ impl RenderPassSpecification {
             override_material: None,
             label: format!(
                 "Shadow map update for model {} and light {} ({:?})",
-                model_id, light.light_id, light.light_type
+                model_id, light.light_id, shadow_map_id
             ),
         }
     }
@@ -709,7 +742,15 @@ impl RenderPassSpecification {
         let mut push_constant_ranges = Vec::with_capacity(1);
 
         if self.light.is_some() {
-            push_constant_ranges.push(LightRenderBufferManager::light_idx_push_constant_range());
+            let push_constant_range = if matches!(
+                self.shadow_map_usage,
+                ShadowMapUsage::Update(ShadowMapIdentifier::ForDirectionalLight(_))
+            ) {
+                LightRenderBufferManager::light_idx_and_cascade_idx_push_constant_range()
+            } else {
+                LightRenderBufferManager::light_idx_push_constant_range()
+            };
+            push_constant_ranges.push(push_constant_range);
         }
 
         push_constant_ranges
@@ -942,9 +983,9 @@ impl RenderPassSpecification {
                 ShadowMapIdentifier::ForPointLight(face) => light_buffer_manager
                     .point_light_shadow_map_texture()
                     .face_view(face),
-                ShadowMapIdentifier::ForDirectionalLight => light_buffer_manager
+                ShadowMapIdentifier::ForDirectionalLight(cascade_idx) => light_buffer_manager
                     .directional_light_shadow_map_texture()
-                    .view(),
+                    .cascade_view(cascade_idx),
             })
         } else {
             None
@@ -1008,7 +1049,7 @@ impl RenderPassSpecification {
                 // outputted from the vertex shader rather than the updated
                 // depth outputted from the fragment shader
                 ShadowMapIdentifier::ForPointLight(_) => wgpu::DepthBiasState::default(),
-                ShadowMapIdentifier::ForDirectionalLight => wgpu::DepthBiasState {
+                ShadowMapIdentifier::ForDirectionalLight(_) => wgpu::DepthBiasState {
                     constant: 8,
                     slope_scale: 1.5,
                     clamp: 0.0,
@@ -1018,7 +1059,7 @@ impl RenderPassSpecification {
             // For modifying the shadow map we have to set it as the depth
             // map for the pipeline
             Some(wgpu::DepthStencilState {
-                format: ShadowMapTexture::FORMAT,
+                format: SHADOW_MAP_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
@@ -1064,7 +1105,7 @@ impl RenderPassSpecification {
         }
     }
 
-    fn determine_depth_loperations(&self) -> wgpu::Operations<f32> {
+    fn determine_depth_operations(&self) -> wgpu::Operations<f32> {
         if self.depth_map_usage.is_clear() || self.shadow_map_usage.is_clear() {
             wgpu::Operations {
                 load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
@@ -1151,7 +1192,7 @@ impl RenderPassRecorder {
         };
 
         let color_load_operation = specification.determine_color_load_operation();
-        let depth_operations = specification.determine_depth_loperations();
+        let depth_operations = specification.determine_depth_operations();
 
         Ok(Self {
             specification,
@@ -1166,7 +1207,7 @@ impl RenderPassRecorder {
     pub fn surface_clearing_pass(clear_color: wgpu::Color) -> Self {
         let specification = RenderPassSpecification::surface_clearing_pass(clear_color);
         let color_load_operation = specification.determine_color_load_operation();
-        let depth_operations = specification.determine_depth_loperations();
+        let depth_operations = specification.determine_depth_operations();
         Self {
             specification,
             vertex_attribute_requirements: VertexAttributeSet::empty(),
@@ -1290,6 +1331,17 @@ impl RenderPassRecorder {
                     .set_light_idx_push_constant(&mut render_pass, light_type, light_id);
             }
 
+            if let ShadowMapUsage::Update(ShadowMapIdentifier::ForDirectionalLight(cascade_idx)) =
+                self.specification.shadow_map_usage
+            {
+                // Write the index of the cascade to use for this pass into the
+                // appropriate push constant range
+                LightRenderBufferManager::set_cascade_idx_push_constant(
+                    &mut render_pass,
+                    cascade_idx,
+                );
+            }
+
             for (index, &bind_group) in bind_groups.iter().enumerate() {
                 render_pass.set_bind_group(u32::try_from(index).unwrap(), bind_group, &[]);
             }
@@ -1336,12 +1388,17 @@ impl RenderPassRecorder {
                                 .as_instance_feature_buffer_range_id()
                                 + face.as_idx_u32()
                         }
-                        ShadowMapIdentifier::ForDirectionalLight => self
-                            .specification
-                            .light
-                            .unwrap()
-                            .light_id
-                            .as_instance_feature_buffer_range_id(),
+                        ShadowMapIdentifier::ForDirectionalLight(cascade_idx) => {
+                            // Offset the light index with the cascade index to
+                            // get the index for the range of transforms for the
+                            // specific cascade
+                            self.specification
+                                .light
+                                .unwrap()
+                                .light_id
+                                .as_instance_feature_buffer_range_id()
+                                + cascade_idx
+                        }
                     };
 
                     transform_buffer_manager.feature_range(buffer_range_id)
@@ -1494,10 +1551,6 @@ impl DepthMapUsage {
 }
 
 impl ShadowMapUsage {
-    fn is_none(&self) -> bool {
-        *self == Self::None
-    }
-
     fn is_clear(&self) -> bool {
         matches!(*self, Self::Clear(_))
     }

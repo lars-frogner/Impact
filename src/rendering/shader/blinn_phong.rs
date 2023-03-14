@@ -2,10 +2,11 @@
 
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
-    insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
-    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, PointLightShaderGenerator, SampledTexture, SourceCode, TextureType,
-    F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    insert_in_arena, new_name, push_to_block, DirectionalLightShaderGenerator, InputStruct,
+    InputStructBuilder, LightShaderGenerator, LightVertexOutputFieldIndices,
+    MeshVertexOutputFieldIndices, OutputStructBuilder, PointLightShaderGenerator, SampledTexture,
+    SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
+    VECTOR_4_TYPE,
 };
 use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
 
@@ -207,8 +208,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let view_direction_function = source_code.functions[0];
         let light_color_function = source_code.functions[1];
 
-        let light_input_field_indices =
-            light_input_field_indices.expect("Missing light for Blinn-Phong shading");
         let light_shader_generator =
             light_shader_generator.expect("Missing light for Blinn-Phong shading");
 
@@ -290,7 +289,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 LightShaderGenerator::PointLight(PointLightShaderGenerator::ForShading(
                     point_light_shader_generator,
                 )),
-                LightVertexOutputFieldIndices::PointLight,
+                None,
             ) => {
                 let (light_dir_expr, light_radiance_expr) = point_light_shader_generator
                     .generate_fragment_shading_code(
@@ -316,22 +315,25 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 )
             }
             (
-                LightShaderGenerator::DirectionalLight(directional_light_expressions),
-                LightVertexOutputFieldIndices::DirectionalLight(
-                    directional_light_input_field_indices,
+                LightShaderGenerator::DirectionalLight(
+                    DirectionalLightShaderGenerator::ForShading(directional_light_shader_generator),
                 ),
+                Some(LightVertexOutputFieldIndices::DirectionalLight(
+                    directional_light_input_field_indices,
+                )),
             ) => {
-                let directional_light_expressions =
-                    directional_light_expressions.for_fragment.as_ref().unwrap();
+                let camera_clip_space_position_expr =
+                    fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
-                let light_clip_space_position_expr = fragment_input_struct
-                    .get_field_expr(directional_light_input_field_indices.light_clip_position);
+                let light_space_position_expr = fragment_input_struct
+                    .get_field_expr(directional_light_input_field_indices.light_space_position);
 
-                let (light_dir_expr, light_radiance_expr) = directional_light_expressions
+                let (light_dir_expr, light_radiance_expr) = directional_light_shader_generator
                     .generate_fragment_shading_code(
                         module,
                         fragment_function,
-                        light_clip_space_position_expr,
+                        camera_clip_space_position_expr,
+                        light_space_position_expr,
                     );
 
                 SourceCode::generate_call_named(
@@ -350,7 +352,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 )
             }
             _ => {
-                panic!("Different light types for light field expressions and light vertex output field indices");
+                panic!("Invalid variant of light shader generator and/or light vertex output field indices for Blinn-Phong shading");
             }
         };
 

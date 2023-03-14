@@ -3,7 +3,7 @@
 use crate::{
     geometry::{
         plane::{IntersectsPlane, SphereRelationToPlane},
-        AxisAlignedBox, Plane, Sphere,
+        AxisAlignedBox, Bounds, Plane, Sphere, UpperExclusiveBounds,
     },
     num::Float,
 };
@@ -88,6 +88,16 @@ impl<F: Float> Frustum<F> {
     /// that this frustum represents.
     pub fn transform_matrix(&self) -> &Matrix4<F> {
         &self.transform_matrix
+    }
+
+    /// Returns the distance from the frustum apex to the near plane.
+    pub fn near_distance(&self) -> F {
+        self.near_plane().displacement()
+    }
+
+    /// Returns the distance from the frustum apex to the far plane.
+    pub fn far_distance(&self) -> F {
+        -self.far_plane().displacement()
     }
 
     /// Whether the given point is strictly inside the frustum.
@@ -200,6 +210,43 @@ impl<F: Float> Frustum<F> {
         ]
     }
 
+    /// Computes the 8 corners of the part of the frustum lying between the
+    /// given depths in clip space.
+    pub fn compute_corners_of_subfrustum(
+        &self,
+        clip_space_depth_limits: UpperExclusiveBounds<F>,
+    ) -> [Point3<F>; 8] {
+        let (lower_depth, upper_depth) = clip_space_depth_limits.bounds();
+        [
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, -F::ONE, lower_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, -F::ONE, upper_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, F::ONE, lower_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![-F::ONE, F::ONE, upper_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, -F::ONE, lower_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, -F::ONE, upper_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, F::ONE, lower_depth]),
+            self.inverse_transform_matrix
+                .transform_point(&point![F::ONE, F::ONE, upper_depth]),
+        ]
+    }
+
+    /// Computes the clip space depth corresponding to the given distance from
+    /// the frustum apex along the view direction.
+    pub fn convert_view_distance_to_clip_space_depth(&self, distance: F) -> F {
+        self.transform_matrix
+            .transform_point(&Point3::from(
+                self.near_plane().unit_normal().as_ref() * distance,
+            ))
+            .z
+    }
+
     /// Computes the center point of the frustum.
     pub fn compute_center(&self) -> Point3<F> {
         let corners = self.compute_corners();
@@ -215,6 +262,17 @@ impl<F: Float> Frustum<F> {
     /// Computes the frustum's axis-aligned bounding box.
     pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
         AxisAlignedBox::aabb_for_point_array(&self.compute_corners())
+    }
+
+    /// Computes the axis-aligned bounding box for the part of the frustum lying
+    /// between the given depths in clip space.
+    pub fn compute_aabb_for_subfrustum(
+        &self,
+        clip_space_depth_limits: UpperExclusiveBounds<F>,
+    ) -> AxisAlignedBox<F> {
+        AxisAlignedBox::aabb_for_point_array(
+            &self.compute_corners_of_subfrustum(clip_space_depth_limits),
+        )
     }
 
     /// Computes the frustum resulting from rotating this frustum with the given
@@ -372,9 +430,22 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::geometry::OrthographicTransform;
+    use crate::geometry::{Degrees, OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
-    use nalgebra::{point, Perspective3, Rotation3, Translation3};
+    use nalgebra::{point, Rotation3, Translation3};
+
+    #[test]
+    fn computing_frustum_near_and_far_distance_works() {
+        let near = 0.21;
+        let far = 160.2;
+        let frustum = Frustum::<f64>::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(near, far))
+                .as_projective(),
+        );
+
+        assert_abs_diff_eq!(frustum.near_distance(), near, epsilon = 1e-9);
+        assert_abs_diff_eq!(frustum.far_distance(), far, epsilon = 1e-9);
+    }
 
     #[test]
     fn inside_points_are_reported_as_inside() {
@@ -471,8 +542,9 @@ mod test {
 
     #[test]
     fn creating_frustum_for_transform_of_transformed_frustum_gives_transformed_frustum() {
-        let frustum = Frustum::<f64>::from_transform_matrix(
-            Perspective3::new(0.7, 2.3, 0.21, 160.2).to_homogeneous(),
+        let frustum = Frustum::<f64>::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
+                .as_projective(),
         );
 
         let transformation = Similarity3::from_parts(
@@ -489,6 +561,122 @@ mod test {
         assert_abs_diff_eq!(
             transformed_frustum,
             frustum_from_transformed,
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn computing_orthographic_frustum_corners_works() {
+        let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
+        );
+
+        let corners = frustum.compute_corners();
+
+        assert_abs_diff_eq!(corners[0], point![left, bottom, near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[1], point![left, bottom, far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[2], point![left, top, near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[3], point![left, top, far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[4], point![right, bottom, near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[5], point![right, bottom, far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[6], point![right, top, near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[7], point![right, top, far], epsilon = 1e-9);
+    }
+
+    #[test]
+    fn computing_orthographic_subfrustum_corners_works() {
+        let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
+        );
+
+        let (new_near, new_far) = (4.9, 5.2);
+
+        let new_near_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_near);
+        let new_far_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_far);
+
+        let corners = frustum.compute_corners_of_subfrustum(UpperExclusiveBounds::new(
+            new_near_clip_space,
+            new_far_clip_space,
+        ));
+
+        assert_abs_diff_eq!(corners[0], point![left, bottom, new_near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[1], point![left, bottom, new_far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[2], point![left, top, new_near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[3], point![left, top, new_far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[4], point![right, bottom, new_near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[5], point![right, bottom, new_far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[6], point![right, top, new_near], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[7], point![right, top, new_far], epsilon = 1e-9);
+    }
+
+    #[test]
+    fn computing_orthographic_frustum_center_works() {
+        let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
+        );
+
+        let center = frustum.compute_center();
+
+        assert_abs_diff_eq!(
+            center,
+            point![
+                0.5 * (left + right),
+                0.5 * (bottom + top),
+                0.5 * (near + far)
+            ],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn computing_orthographic_frustum_aabb_works() {
+        let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
+        );
+
+        let aabb = frustum.compute_aabb();
+
+        assert_abs_diff_eq!(
+            aabb.lower_corner(),
+            &point![left, bottom, near],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            aabb.upper_corner(),
+            &point![right, top, far],
+            epsilon = 1e-9
+        );
+    }
+
+    #[test]
+    fn computing_orthographic_subfrustum_aabb_works() {
+        let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
+        );
+
+        let (new_near, new_far) = (4.9, 5.2);
+
+        let new_near_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_near);
+        let new_far_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_far);
+
+        let aabb = frustum.compute_aabb_for_subfrustum(UpperExclusiveBounds::new(
+            new_near_clip_space,
+            new_far_clip_space,
+        ));
+
+        assert_abs_diff_eq!(
+            aabb.lower_corner(),
+            &point![left, bottom, new_near],
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            aabb.upper_corner(),
+            &point![right, top, new_far],
             epsilon = 1e-9
         );
     }

@@ -7,8 +7,8 @@ use crate::{
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{
-    vector, Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
-    UnitQuaternion, Vector3,
+    point, vector, Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3,
+    Translation3, UnitQuaternion, Vector3,
 };
 use std::fmt::Debug;
 
@@ -224,6 +224,26 @@ impl<F: Float> OrthographicTransform<F> {
                 Self::compute_scaling_y(bottom, top),
                 Self::compute_scaling_z(near, far),
             ),
+        )
+    }
+
+    /// Computes the center and half extents of the orthographic view frustum
+    /// represented by the given translation and nonuniform scaling.
+    pub fn compute_center_and_half_extents_from_translation_and_scaling(
+        translation: &Translation3<F>,
+        scaling: &Scale3<F>,
+    ) -> (Point3<F>, Vector3<F>) {
+        (
+            point![
+                -translation.x,
+                -translation.y,
+                F::ONE_HALF * (F::ONE / scaling.z - F::TWO * translation.z)
+            ],
+            vector![
+                F::ONE / scaling.x,
+                F::ONE / scaling.y,
+                -F::ONE_HALF / scaling.z
+            ],
         )
     }
 

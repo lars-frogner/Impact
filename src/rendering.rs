@@ -32,10 +32,10 @@ pub use shader::{
     Shader, ShaderGenerator,
 };
 pub use tasks::{Render, RenderingTag};
-pub use texture::{DepthTexture, ImageTexture, MultisampledRenderTargetTexture};
+pub use texture::{CascadeIdx, DepthTexture, ImageTexture, MultisampledRenderTargetTexture};
 
 use self::resource::RenderResourceManager;
-use crate::{geometry::CubemapFace, window::ControlFlow};
+use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::ControlFlow};
 use anyhow::{Error, Result};
 use chrono::Utc;
 use std::sync::{
@@ -71,14 +71,14 @@ pub struct RenderingConfig {
     pub cull_mode: Option<wgpu::Face>,
     /// Controls the way each polygon is rasterized.
     pub polygon_mode: wgpu::PolygonMode,
+    /// The number of samples to use for multisampling anti-aliasing.
+    pub multisampling_sample_count: u32,
     /// The width and height of each face of the point light shadow cubemap in
     /// number of texels.
     pub point_light_shadow_map_resolution: u32,
     /// The width and height of the directional light shadow map in number of
     /// texels.
     pub directional_light_shadow_map_resolution: u32,
-    /// The number of samples to use for multisampling anti-aliasing.
-    pub multisampling_sample_count: u32,
 }
 
 #[derive(Debug)]
@@ -349,9 +349,9 @@ impl Default for RenderingConfig {
         Self {
             cull_mode: Some(wgpu::Face::Back),
             polygon_mode: wgpu::PolygonMode::Fill,
+            multisampling_sample_count: 1,
             point_light_shadow_map_resolution: 1024,
             directional_light_shadow_map_resolution: 1024,
-            multisampling_sample_count: 1,
         }
     }
 }
@@ -471,15 +471,20 @@ impl Screenshotter {
                 .synchronized()
                 .get_light_buffer_manager()
             {
-                light_buffer_manager
-                    .directional_light_shadow_map_texture()
-                    .save_as_image_file(
-                        core_system,
-                        format!(
-                            "directional_light_shadow_map_{}.png",
-                            Utc::now().to_rfc3339()
-                        ),
-                    )
+                for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
+                    light_buffer_manager
+                        .directional_light_shadow_map_texture()
+                        .save_cascade_as_image_file(
+                            core_system,
+                            cascade_idx,
+                            format!(
+                                "directional_light_shadow_map_{}_{}.png",
+                                Utc::now().to_rfc3339(),
+                                cascade_idx
+                            ),
+                        )?;
+                }
+                Ok(())
             } else {
                 Ok(())
             }

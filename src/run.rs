@@ -5,10 +5,7 @@ use super::{
     rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem},
 };
 use crate::{
-    control::{
-        CameraOrientationController, Controllable, RollFreeCameraOrientationController,
-        SemiDirectionalMotionController,
-    },
+    control::{Controllable, RollFreeCameraOrientationController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     geometry::TriangleMesh,
     physics::{
@@ -18,8 +15,8 @@ use crate::{
     rendering::{Assets, TextureID},
     scene::{
         BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp, FixedColorComp,
-        FixedTextureComp, LightDirection, LightSpaceDepthComp, MeshComp, MeshID, MeshRepository,
-        Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp, Scene, VertexColorComp,
+        LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional, PerspectiveCameraComp,
+        RadianceComp, ScalingComp, Scene,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -121,7 +118,7 @@ async fn init_world(window: Window) -> Result<World> {
         )
         .unwrap();
 
-    let vertical_field_of_view = Degrees(45.0);
+    let vertical_field_of_view = Degrees(70.0);
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
@@ -276,43 +273,29 @@ async fn init_world(window: Window) -> Result<World> {
             &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
             &ScalingComp(0.2),
             &PositionComp(Point3::new(0.0, 1.0, -2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 15.0),
             &FixedColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,
         ))
         .unwrap();
-    // world
-    //     .create_entities((
-    //         &[
-    //             PositionComp(Point3::new(8.0, 10.0, -10.0)),
-    //             PositionComp(Point3::new(-5.0, 4.0, 8.0)),
-    //         ],
-    //         &[
-    //             RadianceComp(vector![1.0, 1.0, 0.5] * 130.0),
-    //             RadianceComp(vector![1.0, 0.7, 0.7] * 40.0),
-    //         ],
-    //         &[Omnidirectional, Omnidirectional],
-    //     ))
-    //     .unwrap();
 
-    // world
-    //     .create_entities((
-    //         &DirectionComp(LightDirection::new_normalize(vector![0.6, -1.0, 1.0])),
-    //         &RadianceComp(vector![1.0, 1.0, 1.0] * 0.3),
-    //     ))
-    //     .unwrap();
-    // world
-    //     .create_entities((
-    //         &[
-    //             DirectionComp(LightDirection::new_normalize(vector![0.3, -1.0, 0.5])),
-    //             DirectionComp(LightDirection::new_normalize(vector![-0.4, -0.6, -0.3])),
-    //         ],
-    //         &[
-    //             RadianceComp(vector![1.0, 1.0, 1.0] * 0.3),
-    //             RadianceComp(vector![1.0, 1.0, 1.0] * 0.1),
-    //         ],
-    //     ))
-    //     .unwrap();
+    world
+        .create_entities((
+            &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
+            &ScalingComp(0.2),
+            &PositionComp(Point3::new(2.0, 5.0, 2.0)),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 30.0),
+            &FixedColorComp(vector![1.0, 1.0, 1.0]),
+            &Omnidirectional,
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &DirectionComp(LightDirection::new_normalize(vector![0.6, -1.0, 1.0])),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 0.4),
+        ))
+        .unwrap();
 
     Ok(world)
 }

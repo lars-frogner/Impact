@@ -179,6 +179,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
                     .expect("No `texture_coords` passed to fixed texture fragment shader"),
             ),
             None,
+            None,
         );
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");

@@ -5,8 +5,8 @@ use crate::{
     physics::{OrientationComp, PositionComp},
     scene::{
         self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, DirectionalLight,
-        FixedColorMaterial, FixedTextureMaterial, LightSpaceDepthMaterial, MaterialComp, MeshComp,
-        ModelID, ModelInstanceNodeID, PointLight, ScalingComp, Scene, SceneGraphNodeComp,
+        FixedColorMaterial, FixedTextureMaterial, MaterialComp, MeshComp, ModelID,
+        ModelInstanceNodeID, PointLight, ScalingComp, Scene, SceneGraphNodeComp,
         TexturedBlinnPhongMaterial, VertexColorMaterial,
     },
     window::{self, Window},
@@ -147,8 +147,6 @@ impl Scene {
             components,
             desynchronized,
         );
-
-        LightSpaceDepthMaterial::add_material_component_for_entity(components, desynchronized);
     }
 
     fn add_model_instance_node_component_for_entity(

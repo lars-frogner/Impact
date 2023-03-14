@@ -2,7 +2,6 @@
 
 mod ambient_color;
 mod blinn_phong;
-mod depth;
 mod fixed;
 mod vertex_color;
 
@@ -16,11 +15,11 @@ use crate::{
         VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
     rendering::{fre, CoreRenderingSystem},
+    scene::MAX_SHADOW_MAP_CASCADES,
 };
 use ambient_color::GlobalAmbientColorShaderGenerator;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
-use depth::LightSpaceDepthShaderGenerator;
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
 };
@@ -98,7 +97,6 @@ pub enum MaterialShaderInput {
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(Option<BlinnPhongTextureShaderInput>),
-    LightSpaceDepth,
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -152,7 +150,6 @@ pub enum MaterialShaderGenerator<'a> {
     FixedColor(FixedColorShaderGenerator<'a>),
     FixedTexture(FixedTextureShaderGenerator<'a>),
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
-    LightSpaceDepth,
 }
 
 /// Handles to expressions for accessing the rotational, translational and
@@ -207,9 +204,9 @@ pub enum PointLightShaderGenerator {
 
 /// Generator for shader code associated with a directional light source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightShaderGenerator {
-    pub for_vertex: DirectionalLightVertexShaderGenerator,
-    pub for_fragment: Option<DirectionalLightFragmentShaderGenerator>,
+pub enum DirectionalLightShaderGenerator {
+    ForShadowMapUpdate(DirectionalLightShadowMapUpdateShaderGenerator),
+    ForShading(DirectionalLightShadingShaderGenerator),
 }
 
 /// Generator for shader code for updating the shadow cubemap of a point light.
@@ -231,20 +228,19 @@ pub struct PointLightShadingShaderGenerator {
     pub shadow_map: SampledTexture,
 }
 
-/// Generator for vertex entry point shader code associated with a directional
-/// light source.
+/// Generator for shader code for updating the shadow map of a directional light
+/// source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightVertexShaderGenerator {
-    pub camera_to_light_space_rotation_quaternion: Handle<Expression>,
+pub struct DirectionalLightShadowMapUpdateShaderGenerator {
     pub orthographic_projection: DirectionalLightProjectionExpressions,
 }
 
-/// Generator for fragment entry point shader code associated with a directional
-/// light source.
+/// Generator for shading a fragment with the light from a directional light
+/// source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightFragmentShaderGenerator {
-    pub camera_space_direction: Handle<Expression>,
-    pub radiance: Handle<Expression>,
+pub struct DirectionalLightShadingShaderGenerator {
+    pub active_light_ptr_expr_in_vertex_function: Handle<Expression>,
+    pub active_light_ptr_expr_in_fragment_function: Handle<Expression>,
     pub shadow_map: SampledTexture,
 }
 
@@ -252,7 +248,7 @@ pub struct DirectionalLightFragmentShaderGenerator {
 /// quantities in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct MeshVertexOutputFieldIndices {
-    pub _clip_position: usize,
+    pub clip_position: usize,
     pub position: Option<usize>,
     pub color: Option<usize>,
     pub normal_vector: Option<usize>,
@@ -263,7 +259,6 @@ pub struct MeshVertexOutputFieldIndices {
 /// relevant light type in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub enum LightVertexOutputFieldIndices {
-    PointLight,
     DirectionalLight(DirectionalLightVertexOutputFieldIndices),
 }
 
@@ -271,7 +266,7 @@ pub enum LightVertexOutputFieldIndices {
 /// properties in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct DirectionalLightVertexOutputFieldIndices {
-    pub light_clip_position: usize,
+    pub light_space_position: usize,
 }
 
 /// Indices of any fields holding the properties of a
@@ -331,8 +326,8 @@ pub struct SampledTexture {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextureType {
     Image,
-    Depth,
     DepthCubemap,
+    DepthArray,
 }
 
 /// Helper for importing functions from one module to another.
@@ -442,15 +437,6 @@ const IMAGE_TEXTURE_SAMPLER_TYPE: Type = Type {
     inner: TypeInner::Sampler { comparison: false },
 };
 
-const DEPTH_TEXTURE_TYPE: Type = Type {
-    name: None,
-    inner: TypeInner::Image {
-        dim: ImageDimension::D2,
-        arrayed: false,
-        class: ImageClass::Depth { multi: false },
-    },
-};
-
 const COMPARISON_SAMPLER_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Sampler { comparison: true },
@@ -461,6 +447,15 @@ const DEPTH_CUBEMAP_TEXTURE_TYPE: Type = Type {
     inner: TypeInner::Image {
         dim: ImageDimension::Cube,
         arrayed: false,
+        class: ImageClass::Depth { multi: false },
+    },
+};
+
+const DEPTH_TEXTURE_ARRAY_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Image {
+        dim: ImageDimension::D2,
+        arrayed: true,
         class: ImageClass::Depth { multi: false },
     },
 };
@@ -667,6 +662,8 @@ impl ShaderGenerator {
 
         let projection = if let Some(camera_projection) = camera_projection {
             ProjectionExpressions::Camera(camera_projection)
+        } else if material_shader_generator.is_some() {
+            bail!("Tried to build shader with material but no camera");
         } else {
             light_shader_generator
                 .as_ref()
@@ -676,6 +673,7 @@ impl ShaderGenerator {
                     )
                 })?
                 .get_projection_to_light_clip_space()
+                .unwrap()
         };
 
         let (mesh_vertex_output_field_indices, mut vertex_output_struct_builder) =
@@ -689,14 +687,15 @@ impl ShaderGenerator {
             )?;
 
         let entry_point_names = if let Some(material_shader_generator) = material_shader_generator {
-            let light_vertex_output_field_indices = light_shader_generator.as_ref().map(|light| {
-                light.generate_vertex_output_code_for_shading(
-                    &mut module,
-                    &mut vertex_function,
-                    &mut vertex_output_struct_builder,
-                    &mesh_vertex_output_field_indices,
-                )
-            });
+            let light_vertex_output_field_indices =
+                light_shader_generator.as_ref().and_then(|light| {
+                    light.generate_vertex_output_code_for_shading(
+                        &mut module,
+                        &mut vertex_function,
+                        &mut vertex_output_struct_builder,
+                        &mesh_vertex_output_field_indices,
+                    )
+                });
 
             let material_vertex_output_field_indices = material_shader_generator
                 .generate_vertex_code(
@@ -858,9 +857,6 @@ impl ShaderGenerator {
             }
             (None, None, Some(MaterialShaderInput::VertexColor)) => {
                 Some(MaterialShaderGenerator::VertexColor)
-            }
-            (None, None, Some(MaterialShaderInput::LightSpaceDepth)) => {
-                Some(MaterialShaderGenerator::LightSpaceDepth)
             }
             input => {
                 return Err(anyhow!(
@@ -1143,7 +1139,7 @@ impl ShaderGenerator {
         );
 
         let mut output_field_indices = MeshVertexOutputFieldIndices {
-            _clip_position: output_clip_position_field_idx,
+            clip_position: output_clip_position_field_idx,
             position: None,
             color: None,
             normal_vector: None,
@@ -1478,11 +1474,56 @@ impl ShaderGenerator {
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        // The struct is padded to 16 byte alignment as required for uniforms
-        let single_light_struct_size = 5 * VECTOR_4_SIZE;
+        // The structs are padded to 16 byte alignment as required for uniforms
+        let orthographic_transform_struct_size = 2 * VECTOR_4_SIZE;
+
+        let single_light_struct_size = 3 * VECTOR_4_SIZE
+            + MAX_SHADOW_MAP_CASCADES * orthographic_transform_struct_size
+            + 4 * F32_WIDTH;
 
         // The count at the beginning of the uniform buffer is padded to 16 bytes
         let light_count_size = 16;
+
+        let orthographic_transform_struct_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("OrthographicTransform"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("translation"),
+                            ty: vec3_type,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("scaling"),
+                            ty: vec3_type,
+                            binding: None,
+                            offset: VECTOR_4_SIZE,
+                        },
+                    ],
+                    span: orthographic_transform_struct_size,
+                },
+            },
+        );
+
+        let max_shadow_map_cascades_constant = define_constant_if_missing(
+            &mut module.constants,
+            u32_constant(MAX_SHADOW_MAP_CASCADES.into()),
+        );
+
+        let orthographic_transform_array_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: orthographic_transform_struct_type,
+                    size: ArraySize::Constant(max_shadow_map_cascades_constant),
+                    stride: orthographic_transform_struct_size,
+                },
+            },
+        );
 
         let single_light_struct_type = insert_in_arena(
             &mut module.types,
@@ -1509,19 +1550,26 @@ impl ShaderGenerator {
                             offset: 2 * VECTOR_4_SIZE,
                         },
                         StructMember {
-                            name: new_name("orthographicTranslation"),
-                            ty: vec3_type,
+                            name: new_name("orthographicTransforms"),
+                            ty: orthographic_transform_array_type,
                             binding: None,
                             offset: 3 * VECTOR_4_SIZE,
                         },
+                        // We interpret the array of partition depths as a vec4
+                        // rather than an array to satisfy 16-byte padding
+                        // requirements. The largest value for
+                        // MAX_SHADOW_MAP_CASCADES that we support is thus 5. If
+                        // MAX_SHADOW_MAP_CASCADES is smaller than that, the
+                        // last element(s) in the vec4 will consist of padding.
                         StructMember {
-                            name: new_name("orthographicScaling"),
-                            ty: vec3_type,
+                            name: new_name("partitionDepths"),
+                            ty: vec4_type,
                             binding: None,
-                            offset: 4 * VECTOR_4_SIZE,
+                            offset: 3 * VECTOR_4_SIZE
+                                + MAX_SHADOW_MAP_CASCADES * orthographic_transform_struct_size,
                         },
-                        // <-- The rest of the struct is not needed in the
-                        // shader and is mainly for padding
+                        // <-- The rest of the struct is for padding an not
+                        // needed in the shader
                     ],
                     span: single_light_struct_size,
                 },
@@ -1589,43 +1637,87 @@ impl ShaderGenerator {
 
         *bind_group_idx += 1;
 
-        let (shadow_map_texture_binding, shadow_map_sampler_binding) =
-            light_shader_input.shadow_map_texture_and_sampler_binding;
+        if has_material {
+            let active_light_idx_var = append_to_arena(
+                &mut module.global_variables,
+                GlobalVariable {
+                    name: new_name("activeLightIdx"),
+                    space: AddressSpace::PushConstant,
+                    binding: None,
+                    ty: u32_type,
+                    init: None,
+                },
+            );
 
-        let shadow_map = if has_material {
-            Some(SampledTexture::declare(
+            // If we have a material, we will do shading that involves the
+            // shadow map
+            let (shadow_map_texture_binding, shadow_map_sampler_binding) =
+                light_shader_input.shadow_map_texture_and_sampler_binding;
+
+            let shadow_map = SampledTexture::declare(
                 &mut module.types,
                 &mut module.global_variables,
-                TextureType::Depth,
-                "shadowMap",
+                TextureType::DepthArray,
+                "cascadedShadowMap",
                 *bind_group_idx,
                 shadow_map_texture_binding,
                 shadow_map_sampler_binding,
-            ))
+            );
+
+            *bind_group_idx += 1;
+
+            LightShaderGenerator::new_for_directional_light_shading(
+                vertex_function,
+                fragment_function,
+                lights_struct_var,
+                active_light_idx_var,
+                shadow_map,
+            )
         } else {
-            None
-        };
+            // For updating the shadow map, we need the index of the cascade to
+            // update, which is provided in the same push constant range as the
+            // light index
+            let active_light_and_cascade_idx_struct_type = insert_in_arena(
+                &mut module.types,
+                Type {
+                    name: new_name("ActiveLightAndCascadeIdx"),
+                    inner: TypeInner::Struct {
+                        members: vec![
+                            StructMember {
+                                name: new_name("lightIdx"),
+                                ty: u32_type,
+                                binding: None,
+                                offset: 0,
+                            },
+                            StructMember {
+                                name: new_name("cascadeIdx"),
+                                ty: u32_type,
+                                binding: None,
+                                offset: U32_WIDTH,
+                            },
+                        ],
+                        span: 2 * U32_WIDTH,
+                    },
+                },
+            );
 
-        *bind_group_idx += 1;
+            let active_light_and_cascade_idx_var = append_to_arena(
+                &mut module.global_variables,
+                GlobalVariable {
+                    name: new_name("activeLightAndCascadeIdx"),
+                    space: AddressSpace::PushConstant,
+                    binding: None,
+                    ty: active_light_and_cascade_idx_struct_type,
+                    init: None,
+                },
+            );
 
-        let active_light_idx_var = append_to_arena(
-            &mut module.global_variables,
-            GlobalVariable {
-                name: new_name("activeLightIdx"),
-                space: AddressSpace::PushConstant,
-                binding: None,
-                ty: u32_type,
-                init: None,
-            },
-        );
-
-        LightShaderGenerator::new_for_directional_light(
-            vertex_function,
-            fragment_function,
-            lights_struct_var,
-            active_light_idx_var,
-            shadow_map,
-        )
+            LightShaderGenerator::new_for_directional_light_shadow_map_update(
+                vertex_function,
+                lights_struct_var,
+                active_light_and_cascade_idx_var,
+            )
+        }
     }
 }
 
@@ -1634,7 +1726,7 @@ impl MaterialShaderInput {
     pub fn requires_lights(&self) -> bool {
         match self {
             Self::GlobalAmbientColor(_) | Self::VertexColor | Self::Fixed(_) => false,
-            Self::BlinnPhong(_) | Self::LightSpaceDepth => true,
+            Self::BlinnPhong(_) => true,
         }
     }
 }
@@ -1731,14 +1823,6 @@ impl<'a> MaterialShaderGenerator<'a> {
                 material_input_field_indices,
                 light_shader_generator,
             ),
-            (Self::LightSpaceDepth, MaterialVertexOutputFieldIndices::None) => {
-                LightSpaceDepthShaderGenerator::generate_fragment_code(
-                    module,
-                    fragment_function,
-                    fragment_input_struct,
-                    light_input_field_indices,
-                );
-            }
             _ => panic!("Mismatched material shader builder and output field indices type"),
         }
     }
@@ -1914,30 +1998,47 @@ impl LightShaderGenerator {
         ))
     }
 
-    pub fn new_for_directional_light(
+    pub fn new_for_directional_light_shadow_map_update(
+        vertex_function: &mut Function,
+        lights_struct_var: Handle<GlobalVariable>,
+        active_light_and_cascade_idx_var: Handle<GlobalVariable>,
+    ) -> Self {
+        Self::DirectionalLight(DirectionalLightShaderGenerator::ForShadowMapUpdate(
+            DirectionalLightShadowMapUpdateShaderGenerator::new(
+                vertex_function,
+                lights_struct_var,
+                active_light_and_cascade_idx_var,
+            ),
+        ))
+    }
+
+    pub fn new_for_directional_light_shading(
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
-        shadow_map: Option<SampledTexture>,
+        shadow_map: SampledTexture,
     ) -> Self {
-        Self::DirectionalLight(DirectionalLightShaderGenerator::new(
-            vertex_function,
-            fragment_function,
-            lights_struct_var,
-            active_light_idx_var,
-            shadow_map,
+        Self::DirectionalLight(DirectionalLightShaderGenerator::ForShading(
+            DirectionalLightShadingShaderGenerator::new(
+                vertex_function,
+                fragment_function,
+                lights_struct_var,
+                active_light_idx_var,
+                shadow_map,
+            ),
         ))
     }
 
-    pub fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
+    pub fn get_projection_to_light_clip_space(&self) -> Option<ProjectionExpressions> {
         match self {
-            Self::PointLight(_) => {
-                ProjectionExpressions::PointLight(PointLightProjectionExpressions)
-            }
-            Self::DirectionalLight(directional_light_field_expressions) => {
-                directional_light_field_expressions.get_projection_to_light_clip_space()
-            }
+            Self::PointLight(_) => Some(ProjectionExpressions::PointLight(
+                PointLightProjectionExpressions,
+            )),
+            Self::DirectionalLight(DirectionalLightShaderGenerator::ForShadowMapUpdate(
+                shader_generator,
+            )) => Some(shader_generator.get_projection_to_light_clip_space()),
+            Self::DirectionalLight(_) => None,
         }
     }
 
@@ -1947,19 +2048,19 @@ impl LightShaderGenerator {
         vertex_function: &mut Function,
         output_struct_builder: &mut OutputStructBuilder,
         mesh_output_field_indices: &MeshVertexOutputFieldIndices,
-    ) -> LightVertexOutputFieldIndices {
+    ) -> Option<LightVertexOutputFieldIndices> {
         match self {
-            Self::PointLight(_) => LightVertexOutputFieldIndices::PointLight,
-            Self::DirectionalLight(directional_light_field_expressions) => {
-                LightVertexOutputFieldIndices::DirectionalLight(
-                    directional_light_field_expressions.generate_vertex_output_code_for_shading(
-                        module,
-                        vertex_function,
-                        output_struct_builder,
-                        mesh_output_field_indices,
-                    ),
-                )
-            }
+            Self::DirectionalLight(DirectionalLightShaderGenerator::ForShading(
+                shader_generator,
+            )) => Some(LightVertexOutputFieldIndices::DirectionalLight(
+                shader_generator.generate_vertex_output_code_for_shading(
+                    module,
+                    vertex_function,
+                    output_struct_builder,
+                    mesh_output_field_indices,
+                ),
+            )),
+            _ => None,
         }
     }
 
@@ -1998,6 +2099,20 @@ impl LightShaderGenerator {
         let lights_struct_ptr_expr =
             include_expr_in_func(function, Expression::GlobalVariable(lights_struct_var));
 
+        let active_light_idx_expr =
+            Self::generate_active_light_idx_expr(function, active_light_idx_var);
+
+        Self::generate_single_light_ptr_expr(
+            function,
+            lights_struct_ptr_expr,
+            active_light_idx_expr,
+        )
+    }
+
+    fn generate_active_light_idx_expr(
+        function: &mut Function,
+        active_light_idx_var: Handle<GlobalVariable>,
+    ) -> Handle<Expression> {
         let active_light_idx_ptr_expr =
             include_expr_in_func(function, Expression::GlobalVariable(active_light_idx_var));
 
@@ -2011,18 +2126,7 @@ impl LightShaderGenerator {
             )
         });
 
-        Self::generate_single_light_ptr_expr(
-            function,
-            lights_struct_ptr_expr,
-            active_light_idx_expr,
-        )
-    }
-
-    fn generate_light_count_expr(
-        function: &mut Function,
-        lights_struct_ptr_expr: Handle<Expression>,
-    ) -> Handle<Expression> {
-        Self::generate_field_access_expr(function, lights_struct_ptr_expr, 0)
+        active_light_idx_expr
     }
 
     fn generate_single_light_ptr_expr(
@@ -2053,17 +2157,6 @@ impl LightShaderGenerator {
         let field_ptr = Self::generate_field_access_ptr_expr(function, struct_ptr_expr, field_idx);
         emit_in_func(function, |function| {
             include_named_expr_in_func(function, name, Expression::Load { pointer: field_ptr })
-        })
-    }
-
-    fn generate_field_access_expr(
-        function: &mut Function,
-        struct_ptr_expr: Handle<Expression>,
-        field_idx: u32,
-    ) -> Handle<Expression> {
-        let field_ptr = Self::generate_field_access_ptr_expr(function, struct_ptr_expr, field_idx);
-        emit_in_func(function, |function| {
-            include_expr_in_func(function, Expression::Load { pointer: field_ptr })
         })
     }
 
@@ -2340,6 +2433,7 @@ impl PointLightShadingShaderGenerator {
         let light_access_factor_expr = self.shadow_map.generate_sampling_expr(
             fragment_function,
             texture_coord_expr,
+            None,
             Some(depth_reference_expr),
         );
 
@@ -2375,27 +2469,128 @@ impl PointLightShadingShaderGenerator {
 }
 
 impl DirectionalLightShaderGenerator {
+    fn generate_single_orthographic_transform_ptr_expr(
+        function: &mut Function,
+        active_light_ptr_expr: Handle<Expression>,
+        cascade_idx_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let orthographic_transforms_field_ptr =
+            LightShaderGenerator::generate_field_access_ptr_expr(
+                function,
+                active_light_ptr_expr,
+                3,
+            );
+
+        emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Access {
+                    base: orthographic_transforms_field_ptr,
+                    index: cascade_idx_expr,
+                },
+            )
+        })
+    }
+}
+
+impl DirectionalLightShadowMapUpdateShaderGenerator {
+    pub fn new(
+        vertex_function: &mut Function,
+        lights_struct_var: Handle<GlobalVariable>,
+        active_light_and_cascade_idx_var: Handle<GlobalVariable>,
+    ) -> Self {
+        let active_light_and_cascade_idx_ptr_expr = include_expr_in_func(
+            vertex_function,
+            Expression::GlobalVariable(active_light_and_cascade_idx_var),
+        );
+
+        let active_light_idx_expr = LightShaderGenerator::generate_named_field_access_expr(
+            vertex_function,
+            "lightIdx",
+            active_light_and_cascade_idx_ptr_expr,
+            0,
+        );
+
+        let active_cascade_idx_expr = LightShaderGenerator::generate_named_field_access_expr(
+            vertex_function,
+            "cascadeIdx",
+            active_light_and_cascade_idx_ptr_expr,
+            1,
+        );
+
+        let lights_struct_ptr_expr = include_expr_in_func(
+            vertex_function,
+            Expression::GlobalVariable(lights_struct_var),
+        );
+
+        let active_light_ptr_expr = LightShaderGenerator::generate_single_light_ptr_expr(
+            vertex_function,
+            lights_struct_ptr_expr,
+            active_light_idx_expr,
+        );
+
+        let orthographic_transform_ptr_expr =
+            DirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
+                vertex_function,
+                active_light_ptr_expr,
+                active_cascade_idx_expr,
+            );
+
+        let orthographic_translation = LightShaderGenerator::generate_named_field_access_expr(
+            vertex_function,
+            "lightOrthographicTranslation",
+            orthographic_transform_ptr_expr,
+            0,
+        );
+
+        let orthographic_scaling = LightShaderGenerator::generate_named_field_access_expr(
+            vertex_function,
+            "lightOrthographicScaling",
+            orthographic_transform_ptr_expr,
+            1,
+        );
+
+        let orthographic_projection = DirectionalLightProjectionExpressions {
+            translation: orthographic_translation,
+            scaling: orthographic_scaling,
+        };
+
+        Self {
+            orthographic_projection,
+        }
+    }
+
+    pub fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
+        ProjectionExpressions::DirectionalLight(self.orthographic_projection.clone())
+    }
+}
+
+impl DirectionalLightShadingShaderGenerator {
     pub fn new(
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
-        shadow_map: Option<SampledTexture>,
+        shadow_map: SampledTexture,
     ) -> Self {
-        Self {
-            for_vertex: DirectionalLightVertexShaderGenerator::new(
+        let active_light_ptr_expr_in_vertex_function =
+            LightShaderGenerator::generate_active_light_ptr_expr(
                 vertex_function,
                 lights_struct_var,
                 active_light_idx_var,
-            ),
-            for_fragment: shadow_map.map(|shadow_map| {
-                DirectionalLightFragmentShaderGenerator::new(
-                    fragment_function,
-                    lights_struct_var,
-                    active_light_idx_var,
-                    shadow_map,
-                )
-            }),
+            );
+
+        let active_light_ptr_expr_in_fragment_function =
+            LightShaderGenerator::generate_active_light_ptr_expr(
+                fragment_function,
+                lights_struct_var,
+                active_light_idx_var,
+            );
+
+        Self {
+            active_light_ptr_expr_in_vertex_function,
+            active_light_ptr_expr_in_fragment_function,
+            shadow_map,
         }
     }
 
@@ -2412,22 +2607,12 @@ impl DirectionalLightShaderGenerator {
                 let tmp = 2.0 * cross(quaternion.xyz, vector);
                 return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
             }
-
-            fn transformCameraSpacePositionToDirectionalLightClipSpace(
-                cameraToLightRotationQuaternion: vec4<f32>,
-                orthographicTranslation: vec3<f32>,
-                orthographicScaling: vec3<f32>,
-                cameraSpacePosition: vec3<f32>
-            ) -> vec3<f32> {
-                let lightSpacePosition = rotateVectorWithQuaternion(cameraToLightRotationQuaternion, cameraSpacePosition);
-                return (lightSpacePosition + orthographicTranslation) * orthographicScaling;
-            }
         ",
         )
         .unwrap()
         .import_to_module(module);
 
-        let light_clip_space_transformation_function = source_code.functions[1];
+        let rotate_vector_with_quaternion = source_code.functions[0];
 
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
@@ -2439,114 +2624,31 @@ impl DirectionalLightShaderGenerator {
             )
             .unwrap();
 
-        let light_clip_space_position_expr = SourceCode::generate_call_named(
+        let camera_to_light_space_rotation_quaternion_expr =
+            LightShaderGenerator::generate_named_field_access_expr(
+                vertex_function,
+                "cameraToLightSpaceRotationQuaternion",
+                self.active_light_ptr_expr_in_vertex_function,
+                0,
+            );
+
+        let light_space_position_expr = SourceCode::generate_call_named(
             vertex_function,
-            "lightClipSpacePosition",
-            light_clip_space_transformation_function,
+            "lightSpacePosition",
+            rotate_vector_with_quaternion,
             vec![
-                self.for_vertex.camera_to_light_space_rotation_quaternion,
-                self.for_vertex.orthographic_projection.translation,
-                self.for_vertex.orthographic_projection.scaling,
+                camera_to_light_space_rotation_quaternion_expr,
                 camera_space_position_expr,
             ],
         );
 
         DirectionalLightVertexOutputFieldIndices {
-            light_clip_position: output_struct_builder.add_field_with_perspective_interpolation(
-                "lightClipSpacePosition",
+            light_space_position: output_struct_builder.add_field_with_perspective_interpolation(
+                "lightSpacePosition",
                 vec3_type,
                 VECTOR_3_SIZE,
-                light_clip_space_position_expr,
+                light_space_position_expr,
             ),
-        }
-    }
-
-    fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
-        self.for_vertex.get_projection_to_light_clip_space()
-    }
-}
-
-impl DirectionalLightVertexShaderGenerator {
-    pub fn new(
-        vertex_function: &mut Function,
-        lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
-    ) -> Self {
-        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
-            vertex_function,
-            lights_struct_var,
-            active_light_idx_var,
-        );
-
-        let camera_to_light_space_rotation_quaternion =
-            LightShaderGenerator::generate_named_field_access_expr(
-                vertex_function,
-                "cameraToLightSpaceRotationQuaternion",
-                active_light_ptr_expr,
-                0,
-            );
-
-        let orthographic_translation = LightShaderGenerator::generate_named_field_access_expr(
-            vertex_function,
-            "lightOrthographicTranslation",
-            active_light_ptr_expr,
-            3,
-        );
-
-        let orthographic_scaling = LightShaderGenerator::generate_named_field_access_expr(
-            vertex_function,
-            "lightOrthographicScaling",
-            active_light_ptr_expr,
-            4,
-        );
-
-        let orthographic_projection = DirectionalLightProjectionExpressions {
-            translation: orthographic_translation,
-            scaling: orthographic_scaling,
-        };
-
-        Self {
-            camera_to_light_space_rotation_quaternion,
-            orthographic_projection,
-        }
-    }
-
-    pub fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
-        ProjectionExpressions::DirectionalLight(self.orthographic_projection.clone())
-    }
-}
-
-impl DirectionalLightFragmentShaderGenerator {
-    pub fn new(
-        fragment_function: &mut Function,
-        lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
-        shadow_map: SampledTexture,
-    ) -> Self {
-        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
-            fragment_function,
-            lights_struct_var,
-            active_light_idx_var,
-        );
-
-        let camera_space_direction = LightShaderGenerator::generate_named_field_access_expr(
-            fragment_function,
-            "cameraSpaceLightDirection",
-            active_light_ptr_expr,
-            1,
-        );
-
-        let radiance = LightShaderGenerator::generate_named_field_access_expr(
-            fragment_function,
-            "lightRadiance",
-            active_light_ptr_expr,
-            2,
-        );
-
-        Self {
-            camera_space_direction,
-            radiance,
-            shadow_map,
         }
     }
 
@@ -2554,15 +2656,146 @@ impl DirectionalLightFragmentShaderGenerator {
         &self,
         module: &mut Module,
         fragment_function: &mut Function,
-        light_clip_space_position_expr: Handle<Expression>,
+        camera_clip_space_position_expr: Handle<Expression>,
+        light_space_position_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
+        let determine_cascade_idx_body = match MAX_SHADOW_MAP_CASCADES {
+            1 => "cascadeIdx = 0;",
+            2 => {
+                "if depth < partitionDepths.x {
+                     cascadeIdx = 0;
+                 } else {
+                     cascadeIdx = 1;
+                 }"
+            }
+            3 => {
+                "if depth < partitionDepths.x {
+                     cascadeIdx = 0;
+                 } else if depth < partitionDepths.y {
+                     cascadeIdx = 1;
+                 } else {
+                     cascadeIdx = 2;
+                 }"
+            }
+            4 => {
+                "if depth < partitionDepths.x {
+                     cascadeIdx = 0;
+                 } else if depth < partitionDepths.y {
+                     cascadeIdx = 1;
+                 } else if depth < partitionDepths.z {
+                     cascadeIdx = 2;
+                 } else {
+                     cascadeIdx = 3;
+                 }"
+            }
+            5 => {
+                "if depth < partitionDepths.x {
+                     cascadeIdx = 0;
+                 } else if depth < partitionDepths.y {
+                     cascadeIdx = 1;
+                 } else if depth < partitionDepths.z {
+                     cascadeIdx = 2;
+                 } else if depth < partitionDepths.w {
+                     cascadeIdx = 3;
+                 } else {
+                     cascadeIdx = 4;
+                 }"
+            }
+            _ => panic!("MAX_SHADOW_MAP_CASCADES outside of supported range [1, 5]"),
+        };
+
+        let source_code = SourceCode::from_wgsl_source(
+            &format!("\
+            fn determineCascadeIdx(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {{
+                var cascadeIdx: i32;
+                let depth = cameraClipSpacePosition.z;
+                {}
+                return cascadeIdx;
+            }}
+
+            fn applyOrthographicProjectionToPosition(
+                orthographicTranslation: vec3<f32>,
+                orthographicScaling: vec3<f32>,
+                position: vec3<f32>
+            ) -> vec3<f32> {{
+                return (position + orthographicTranslation) * orthographicScaling;
+            }}
+        ", determine_cascade_idx_body),
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let determine_cascade_idx = source_code.functions[0];
+        let apply_orthographic_projection_to_position = source_code.functions[1];
+
+        let camera_space_direction_expr = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
+            "cameraSpaceLightDirection",
+            self.active_light_ptr_expr_in_fragment_function,
+            1,
+        );
+
+        let radiance_expr = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
+            "lightRadiance",
+            self.active_light_ptr_expr_in_fragment_function,
+            2,
+        );
+
+        let partition_depths_expr = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
+            "partitionDepths",
+            self.active_light_ptr_expr_in_fragment_function,
+            4,
+        );
+
+        let cascade_idx_expr = SourceCode::generate_call_named(
+            fragment_function,
+            "cascadeIdx",
+            determine_cascade_idx,
+            vec![partition_depths_expr, camera_clip_space_position_expr],
+        );
+
+        let orthographic_transform_ptr_expr =
+            DirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
+                fragment_function,
+                self.active_light_ptr_expr_in_fragment_function,
+                cascade_idx_expr,
+            );
+
+        let orthographic_translation_expr = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
+            "lightOrthographicTranslation",
+            orthographic_transform_ptr_expr,
+            0,
+        );
+
+        let orthographic_scaling_expr = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
+            "lightOrthographicScaling",
+            orthographic_transform_ptr_expr,
+            1,
+        );
+
+        let light_clip_position_expr = SourceCode::generate_call_named(
+            fragment_function,
+            "lightClipSpacePosition",
+            apply_orthographic_projection_to_position,
+            vec![
+                orthographic_translation_expr,
+                orthographic_scaling_expr,
+                light_space_position_expr,
+            ],
+        );
+
         // The value returned from the comparison sampling is 0.0 if the
         // fragment is occluded and 1.0 otherwise
-        let light_access_factor_expr = self.shadow_map.generate_shadow_map_sampling_expr(
+        let light_access_factor_expr = self.shadow_map.generate_cascaded_shadow_map_sampling_expr(
             &mut module.types,
             &mut module.constants,
             fragment_function,
-            light_clip_space_position_expr,
+            light_clip_position_expr,
+            cascade_idx_expr,
         );
 
         let (light_direction_expr, attenuated_radiance_expr) =
@@ -2572,7 +2805,7 @@ impl DirectionalLightFragmentShaderGenerator {
                         function,
                         Expression::Unary {
                             op: UnaryOperator::Negate,
-                            expr: self.camera_space_direction,
+                            expr: camera_space_direction_expr,
                         },
                     ),
                     include_expr_in_func(
@@ -2580,7 +2813,7 @@ impl DirectionalLightFragmentShaderGenerator {
                         Expression::Binary {
                             op: BinaryOperator::Multiply,
                             left: light_access_factor_expr,
-                            right: self.radiance,
+                            right: radiance_expr,
                         },
                     ),
                 )
@@ -2969,8 +3202,8 @@ impl SampledTexture {
     ) -> Self {
         let (texture_type_const, sampler_type_const) = match texture_type {
             TextureType::Image => (IMAGE_TEXTURE_TYPE, IMAGE_TEXTURE_SAMPLER_TYPE),
-            TextureType::Depth => (DEPTH_TEXTURE_TYPE, COMPARISON_SAMPLER_TYPE),
             TextureType::DepthCubemap => (DEPTH_CUBEMAP_TEXTURE_TYPE, COMPARISON_SAMPLER_TYPE),
+            TextureType::DepthArray => (DEPTH_TEXTURE_ARRAY_TYPE, COMPARISON_SAMPLER_TYPE),
         };
 
         let texture_type = insert_in_arena(types, texture_type_const);
@@ -3018,6 +3251,7 @@ impl SampledTexture {
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
+        array_index_expr: Option<Handle<Expression>>,
         depth_reference_expr: Option<Handle<Expression>>,
     ) -> Handle<Expression> {
         let texture_var_expr =
@@ -3034,7 +3268,7 @@ impl SampledTexture {
                     sampler: sampler_var_expr,
                     gather: None,
                     coordinate: texture_coord_expr,
-                    array_index: None,
+                    array_index: array_index_expr,
                     offset: None,
                     level: SampleLevel::Auto,
                     depth_ref: depth_reference_expr,
@@ -3053,7 +3287,7 @@ impl SampledTexture {
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let sampling_expr = self.generate_sampling_expr(function, texture_coord_expr, None);
+        let sampling_expr = self.generate_sampling_expr(function, texture_coord_expr, None, None);
 
         emit_in_func(function, |function| {
             include_expr_in_func(function, swizzle_xyz_expr(sampling_expr))
@@ -3061,15 +3295,16 @@ impl SampledTexture {
     }
 
     /// Generates and returns an expression comparison sampling the depth
-    /// texture with texture coordinates converted from the x- and y-component
-    /// of the given light clip space position and the z-component as the
-    /// reference depth.
-    pub fn generate_shadow_map_sampling_expr(
+    /// texture with the given index in the shadow map texture array with
+    /// texture coordinates converted from the x- and y-component of the given
+    /// light clip space position and the z-component as the reference depth.
+    pub fn generate_cascaded_shadow_map_sampling_expr(
         &self,
         types: &mut UniqueArena<Type>,
         constants: &mut Arena<Constant>,
         function: &mut Function,
         light_clip_position_expr: Handle<Expression>,
+        cascade_idx_expr: Handle<Expression>,
     ) -> Handle<Expression> {
         let vec2_type = insert_in_arena(types, VECTOR_2_TYPE);
 
@@ -3167,7 +3402,12 @@ impl SampledTexture {
             (texture_coords_expr, depth_reference_expr)
         });
 
-        self.generate_sampling_expr(function, texture_coords_expr, Some(depth_reference_expr))
+        self.generate_sampling_expr(
+            function,
+            texture_coords_expr,
+            Some(cascade_idx_expr),
+            Some(depth_reference_expr),
+        )
     }
 }
 
@@ -3762,31 +4002,6 @@ impl SourceCode {
     }
 
     /// Generates the code calling a function with the given handle with the
-    /// given argument expressions.
-    ///
-    /// # Returns
-    /// The return value expression.
-    pub fn generate_call(
-        block: &mut Block,
-        expressions: &mut Arena<Expression>,
-        function: Handle<Function>,
-        arguments: Vec<Handle<Expression>>,
-    ) -> Handle<Expression> {
-        let return_expr = append_to_arena(expressions, Expression::CallResult(function));
-
-        push_to_block(
-            block,
-            Statement::Call {
-                function,
-                arguments,
-                result: Some(return_expr),
-            },
-        );
-
-        return_expr
-    }
-
-    /// Generates the code calling a function with the given handle with the
     /// given argument expressions, assigning the given name to the return
     /// expression.
     ///
@@ -3894,19 +4109,6 @@ fn swizzle_xyz_expr(expr: Handle<Expression>) -> Expression {
             SwizzleComponent::X,
             SwizzleComponent::Y,
             SwizzleComponent::Z,
-            SwizzleComponent::X,
-        ],
-    }
-}
-
-fn swizzle_xy_expr(expr: Handle<Expression>) -> Expression {
-    Expression::Swizzle {
-        size: VectorSize::Bi,
-        vector: expr,
-        pattern: [
-            SwizzleComponent::X,
-            SwizzleComponent::Y,
-            SwizzleComponent::X,
             SwizzleComponent::X,
         ],
     }
@@ -4020,8 +4222,8 @@ mod test {
 
     use crate::scene::{
         BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
-        FixedTextureMaterial, GlobalAmbientColorMaterial, LightSpaceDepthMaterial,
-        TexturedBlinnPhongMaterial, VertexColorMaterial,
+        FixedTextureMaterial, GlobalAmbientColorMaterial, TexturedBlinnPhongMaterial,
+        VertexColorMaterial,
     };
 
     use super::*;
@@ -4116,9 +4318,9 @@ mod test {
         match validator.validate(module) {
             Ok(module_info) => module_info,
             Err(err) => {
-                eprintln!("{}", err);
-                dbg!(err);
                 dbg!(module);
+                dbg!(&err);
+                eprintln!("{}", err);
                 panic!("Shader validation failed")
             }
         }
@@ -4128,7 +4330,15 @@ mod test {
     fn parse() {
         match wgsl_in::parse_str(
             "
-            var<push_constant> pc: f32;
+            struct Uniform {
+                a: array<f32, 5>
+            }
+
+            var<uniform> u: Uniform;
+
+            fn test(a: vec3<f32>) -> f32 {
+                return a[0];
+            }
             ",
         ) {
             Ok(module) => {
@@ -4512,27 +4722,6 @@ mod test {
             ],
             Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
             TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_light_space_depth_shader_with_directional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MINIMAL_MESH_INPUT),
-            Some(&DIRECTIONAL_LIGHT_INPUT),
-            &[&MODEL_VIEW_TRANSFORM_INPUT],
-            Some(&MaterialShaderInput::LightSpaceDepth),
-            LightSpaceDepthMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;

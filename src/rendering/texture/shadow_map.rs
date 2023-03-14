@@ -4,14 +4,10 @@ use crate::{geometry::CubemapFace, rendering::CoreRenderingSystem};
 use anyhow::Result;
 use std::{num::NonZeroU32, path::Path};
 
-/// Texture for storing the depths of the closest vertices to a light source,
-/// used for shadow mapping.
-#[derive(Debug)]
-pub struct ShadowMapTexture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
-}
+/// Index representing a cascade in a cascaded shadow map.
+pub type CascadeIdx = u32;
+
+pub const SHADOW_MAP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 /// Texture array for storing the depths of the closest vertices to an
 /// omnidirectional light source, used for shadow mapping. Each of the six
@@ -26,137 +22,16 @@ pub struct ShadowCubemapTexture {
     sampler: wgpu::Sampler,
 }
 
-impl ShadowMapTexture {
-    pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-
-    /// Creates a new shadow map texture with the given width and height in
-    /// texels.
-    pub fn new(core_system: &CoreRenderingSystem, width: u32, height: u32, label: &str) -> Self {
-        let device = core_system.device();
-
-        let texture_size = wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = Self::create_texture(device, texture_size, label);
-
-        let view = Self::create_view(&texture);
-
-        let sampler = Self::create_sampler(device);
-
-        Self {
-            texture,
-            view,
-            sampler,
-        }
-    }
-
-    /// Returns a view into the shadow map texture.
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
-    }
-
-    /// Returns a sampler for the shadow map texture.
-    pub fn sampler(&self) -> &wgpu::Sampler {
-        &self.sampler
-    }
-
-    /// Creates the bind group layout entry for this texture type, assigned to
-    /// the given binding.
-    pub const fn create_texture_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Depth,
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        }
-    }
-
-    /// Creates the bind group layout entry for this texture's sampler type,
-    /// assigned to the given binding.
-    pub const fn create_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-            count: None,
-        }
-    }
-
-    /// Creates the bind group entry for this texture, assigned to the given
-    /// binding.
-    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::TextureView(self.view()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's sampler, assigned to the
-    /// given binding.
-    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.sampler()),
-        }
-    }
-
-    /// Saves the texture as a grayscale image at the given output path. The
-    /// image file format is automatically determined from the file extension.
-    pub fn save_as_image_file<P: AsRef<Path>>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        output_path: P,
-    ) -> Result<()> {
-        super::save_depth_texture_as_image_file(core_system, &self.texture, 0, output_path)
-    }
-
-    fn create_texture(device: &wgpu::Device, size: wgpu::Extent3d, label: &str) -> wgpu::Texture {
-        device.create_texture(&wgpu::TextureDescriptor {
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: Self::FORMAT,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::COPY_SRC,
-            label: Some(label),
-            view_formats: &[],
-        })
-    }
-
-    fn create_view(texture: &wgpu::Texture) -> wgpu::TextureView {
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
-    fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
-        device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            // The result of the comparison sampling will be 1.0 if the
-            // reference depth is less than or equal to the sampled depth
-            // (meaning that the fragment is not occluded), and 0.0 otherwise.
-            compare: Some(wgpu::CompareFunction::LessEqual),
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            ..Default::default()
-        })
-    }
+/// Texture array for storing the depths of the closest vertices to a
+/// directional light source, used for shadow mapping. Each of the textures in
+/// the array stores depths for a separate range of view distances (a partition
+/// of the view frustum, referred to as a cascade).
+#[derive(Debug)]
+pub struct CascadedShadowMapTexture {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    cascade_views: Vec<wgpu::TextureView>,
+    sampler: wgpu::Sampler,
 }
 
 impl ShadowCubemapTexture {
@@ -171,7 +46,7 @@ impl ShadowCubemapTexture {
             depth_or_array_layers: 6,
         };
 
-        let texture = ShadowMapTexture::create_texture(device, texture_size, label);
+        let texture = create_shadow_map_texture(device, texture_size, label);
 
         let view = Self::create_view(&texture);
 
@@ -184,7 +59,7 @@ impl ShadowCubemapTexture {
             Self::create_face_view(&texture, CubemapFace::NegativeZ),
         ];
 
-        let sampler = ShadowMapTexture::create_sampler(device);
+        let sampler = create_shadow_map_sampler(device);
 
         Self {
             texture,
@@ -257,8 +132,9 @@ impl ShadowCubemapTexture {
         }
     }
 
-    /// Saves the texture as a grayscale image at the given output path. The
-    /// image file format is automatically determined from the file extension.
+    /// Saves the specified face texture as a grayscale image at the given
+    /// output path. The image file format is automatically determined from the
+    /// file extension.
     pub fn save_face_as_image_file<P: AsRef<Path>>(
         &self,
         core_system: &CoreRenderingSystem,
@@ -288,4 +164,182 @@ impl ShadowCubemapTexture {
             ..Default::default()
         })
     }
+}
+
+impl CascadedShadowMapTexture {
+    /// Creates a new cascaded shadow map texture array using the given
+    /// resolution as the width and height in texels of each of the `n_cascades`
+    /// cascade textures.
+    pub fn new(
+        core_system: &CoreRenderingSystem,
+        resolution: u32,
+        n_cascades: u32,
+        label: &str,
+    ) -> Self {
+        assert!(n_cascades > 0);
+
+        let device = core_system.device();
+
+        let texture_size = wgpu::Extent3d {
+            width: resolution,
+            height: resolution,
+            depth_or_array_layers: n_cascades,
+        };
+
+        let texture = create_shadow_map_texture(device, texture_size, label);
+
+        let view = Self::create_view(&texture);
+
+        let cascade_views = (0..n_cascades)
+            .into_iter()
+            .map(|cascade_idx| Self::create_cascade_view(&texture, cascade_idx))
+            .collect();
+
+        let sampler = create_shadow_map_sampler(device);
+
+        Self {
+            texture,
+            view,
+            cascade_views,
+            sampler,
+        }
+    }
+
+    /// Returns the number of cascades in the shadow map.
+    pub fn n_cascades(&self) -> u32 {
+        u32::try_from(self.cascade_views.len()).unwrap()
+    }
+
+    /// Returns a view into the full cascaded shadow map texture array.
+    pub fn view(&self) -> &wgpu::TextureView {
+        &self.view
+    }
+
+    /// Returns a view into the texture for the given cascade in the shadow map.
+    pub fn cascade_view(&self, cascade_idx: CascadeIdx) -> &wgpu::TextureView {
+        &self.cascade_views[cascade_idx as usize]
+    }
+
+    /// Returns a sampler for the full shadow cubemap texture array.
+    pub fn sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
+    }
+
+    /// Creates the bind group layout entry for this texture type, assigned to
+    /// the given binding.
+    pub const fn create_texture_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        }
+    }
+
+    /// Creates the bind group layout entry for this texture's sampler type,
+    /// assigned to the given binding.
+    pub const fn create_sampler_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+            count: None,
+        }
+    }
+
+    /// Creates the bind group entry for this texture, assigned to the given
+    /// binding.
+    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(self.view()),
+        }
+    }
+
+    /// Creates the bind group entry for this texture's sampler, assigned to the
+    /// given binding.
+    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(self.sampler()),
+        }
+    }
+
+    /// Saves the specified cascade texture as a grayscale image at the given
+    /// output path. The image file format is automatically determined from the
+    /// file extension.
+    pub fn save_cascade_as_image_file<P: AsRef<Path>>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        cascade_idx: u32,
+        output_path: P,
+    ) -> Result<()> {
+        super::save_depth_texture_as_image_file(
+            core_system,
+            &self.texture,
+            cascade_idx,
+            output_path,
+        )
+    }
+
+    fn create_view(texture: &wgpu::Texture) -> wgpu::TextureView {
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        })
+    }
+
+    fn create_cascade_view(texture: &wgpu::Texture, cascade_idx: u32) -> wgpu::TextureView {
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            base_array_layer: cascade_idx,
+            array_layer_count: Some(NonZeroU32::new(1).unwrap()),
+            ..Default::default()
+        })
+    }
+}
+
+fn create_shadow_map_texture(
+    device: &wgpu::Device,
+    size: wgpu::Extent3d,
+    label: &str,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: SHADOW_MAP_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::COPY_SRC,
+        label: Some(label),
+        view_formats: &[],
+    })
+}
+
+fn create_shadow_map_sampler(device: &wgpu::Device) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        // The result of the comparison sampling will be 1.0 if the
+        // reference depth is less than or equal to the sampled depth
+        // (meaning that the fragment is not occluded), and 0.0 otherwise.
+        compare: Some(wgpu::CompareFunction::LessEqual),
+        lod_min_clamp: 0.0,
+        lod_max_clamp: 100.0,
+        ..Default::default()
+    })
 }

@@ -25,14 +25,15 @@ pub use instance::InstanceFeatureManager;
 pub use light::{
     DirectionComp, DirectionalLight, DirectionalLightComp, LightDirection, LightID, LightStorage,
     LightType, Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp,
+    MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
     DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
-    FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, LightSpaceDepthComp,
-    LightSpaceDepthMaterial, MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-    MaterialPropertyTextureSetID, MaterialSpecification, RGBColor, TexturedBlinnPhongComp,
-    TexturedBlinnPhongMaterial, VertexColorComp, VertexColorMaterial,
+    FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID,
+    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+    MaterialSpecification, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
+    VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
@@ -154,7 +155,6 @@ impl Scene {
             &mut instance_feature_manager,
         );
         TexturedBlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
-        LightSpaceDepthMaterial::register(&mut material_library);
     }
 }
 
