@@ -23,7 +23,7 @@ pub use graph::{
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    DirectionComp, EmissionExtentComp, LightDirection, LightID, LightStorage, LightType,
+    AngularExtentComp, DirectionComp, EmissionExtentComp, LightDirection, LightID, LightStorage,
     Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp, UnidirectionalLight,
     UnidirectionalLightComp, MAX_SHADOW_MAP_CASCADES,
 };

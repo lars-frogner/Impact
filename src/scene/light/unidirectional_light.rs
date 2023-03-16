@@ -1,10 +1,13 @@
 //! Unidirectional light sources.
 
 use crate::{
-    geometry::{AxisAlignedBox, Frustum, OrthographicTransform, Sphere, UpperExclusiveBounds},
+    geometry::{
+        Angle, AxisAlignedBox, Degrees, Frustum, OrthographicTransform, Sphere,
+        UpperExclusiveBounds,
+    },
     rendering::{fre, CascadeIdx},
     scene::{
-        DirectionComp, EmissionExtentComp, LightDirection, LightStorage, Radiance, RadianceComp,
+        AngularExtentComp, DirectionComp, LightDirection, LightStorage, Radiance, RadianceComp,
         RenderResourcesDesynchronized, SceneCamera, UnidirectionalLightComp,
     },
 };
@@ -21,14 +24,14 @@ use std::{iter, sync::RwLock};
 /// struct and associated shader code to meet uniform padding requirements.
 pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
 
-/// An unidirectional light source represented by a camera space direction, an RGB
-/// radiance and an extent. The struct also includes a rotation quaternion that
-/// defines the orientation of the light's local coordinate system with respect
-/// to camera space, orthographic transformations that map the light's space to
-/// clip space in such a way as to include all objects in the scene that may
-/// cast shadows inside or into specific cascades (partitions) of the camera
-/// view frustum, and the camera clip space depths representing the boundaries
-/// between the cascades.
+/// An unidirectional light source represented by a camera space direction, an
+/// RGB radiance and an angular extent. The struct also includes a rotation
+/// quaternion that defines the orientation of the light's local coordinate
+/// system with respect to camera space, orthographic transformations that map
+/// the light's space to clip space in such a way as to include all objects in
+/// the scene that may cast shadows inside or into specific cascades
+/// (partitions) of the camera view frustum, and the camera clip space depths
+/// representing the boundaries between the cascades.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -45,10 +48,10 @@ pub struct UnidirectionalLight {
     camera_space_direction: LightDirection,
     // Padding to obtain 16-byte alignment for next field
     near_partition_depth: fre,
-    // Radiance and extent are treated as a single 4-component vector in the
-    // shader
+    // Radiance and angular radius are treated as a single 4-component vector in
+    // the shader
     radiance: Radiance,
-    emission_extent: fre,
+    tan_angular_radius: fre,
     orthographic_transforms: [OrthographicTranslationAndScaling; MAX_SHADOW_MAP_CASCADES_USIZE],
     partition_depths: [fre; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
     // Padding to make size multiple of 16-bytes
@@ -73,7 +76,7 @@ impl UnidirectionalLight {
     fn new(
         camera_space_direction: LightDirection,
         radiance: Radiance,
-        emission_extent: fre,
+        angular_extent: impl Angle<fre>,
     ) -> Self {
         Self {
             camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
@@ -82,7 +85,7 @@ impl UnidirectionalLight {
             camera_space_direction,
             near_partition_depth: 0.0,
             radiance,
-            emission_extent,
+            tan_angular_radius: fre::tan(0.5 * angular_extent.radians()),
             orthographic_transforms: [OrthographicTranslationAndScaling::zeroed();
                 MAX_SHADOW_MAP_CASCADES_USIZE],
             partition_depths: [0.0; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
@@ -260,7 +263,7 @@ impl UnidirectionalLight {
             components,
             |direction: &DirectionComp,
              radiance: &RadianceComp,
-             emission_extent: Option<&EmissionExtentComp>|
+             angular_extent: Option<&AngularExtentComp>|
              -> UnidirectionalLightComp {
                 let unidirectional_light = Self::new(
                     // The view transform contains no scaling, so the direction remains normalized
@@ -268,7 +271,7 @@ impl UnidirectionalLight {
                         view_transform.transform_vector(&direction.0.cast()),
                     ),
                     radiance.0,
-                    emission_extent.map_or(0.0, |extent| extent.0),
+                    angular_extent.map_or(Degrees(0.0), |angle| angle.0),
                 );
                 let id = light_storage.add_unidirectional_light(unidirectional_light);
 

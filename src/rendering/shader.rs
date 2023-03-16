@@ -1548,7 +1548,7 @@ impl ShaderGenerator {
                             offset: VECTOR_4_SIZE,
                         },
                         StructMember {
-                            name: new_name("radianceAndExtent"),
+                            name: new_name("radianceAndTanAngularRadius"),
                             ty: vec4_type,
                             binding: None,
                             offset: 2 * VECTOR_4_SIZE,
@@ -2786,20 +2786,25 @@ impl UnidirectionalLightShadingShaderGenerator {
             1,
         );
 
-        let radiance_and_extent_expr = LightShaderGenerator::generate_named_field_access_expr(
+        let radiance_and_tan_angular_radius_expr =
+            LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
-            "lightRadianceAndExtent",
+                "lightRadianceAndTanAngularRadius",
             self.active_light_ptr_expr_in_fragment_function,
             2,
         );
 
-        let (radiance_expr, emission_extent_expr) = emit_in_func(fragment_function, |function| {
+        let (radiance_expr, tan_angular_radius_expr) =
+            emit_in_func(fragment_function, |function| {
             (
-                include_expr_in_func(function, swizzle_xyz_expr(radiance_and_extent_expr)),
+                    include_expr_in_func(
+                        function,
+                        swizzle_xyz_expr(radiance_and_tan_angular_radius_expr),
+                    ),
                 include_expr_in_func(
                     function,
                     Expression::AccessIndex {
-                        base: radiance_and_extent_expr,
+                            base: radiance_and_tan_angular_radius_expr,
                         index: 3,
                     },
                 ),
@@ -2841,13 +2846,35 @@ impl UnidirectionalLightShadingShaderGenerator {
             1,
         );
 
-        let world_to_light_clip_space_scale_expr = emit_in_func(fragment_function, |function| {
-            include_expr_in_func(
+        let (world_to_light_clip_space_xy_scale_expr, world_to_light_clip_space_z_scale_expr) =
+            emit_in_func(fragment_function, |function| {
+                let world_to_light_clip_space_xy_scale_expr = include_expr_in_func(
                 function,
                 Expression::AccessIndex {
                     base: orthographic_scaling_expr,
                     index: 0,
                 },
+                );
+
+                let orthographic_scale_z_expr = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: orthographic_scaling_expr,
+                        index: 2,
+                    },
+                );
+
+                let world_to_light_clip_space_z_scale_expr = include_expr_in_func(
+                    function,
+                    Expression::Unary {
+                        op: UnaryOperator::Negate,
+                        expr: orthographic_scale_z_expr,
+                    },
+                );
+
+                (
+                    world_to_light_clip_space_xy_scale_expr,
+                    world_to_light_clip_space_z_scale_expr,
             )
         });
 
@@ -2868,8 +2895,9 @@ impl UnidirectionalLightShadingShaderGenerator {
             .generate_light_access_factor_expr_for_cascaded_shadow_map(
                 module,
                 fragment_function,
-                emission_extent_expr,
-                world_to_light_clip_space_scale_expr,
+                tan_angular_radius_expr,
+                world_to_light_clip_space_xy_scale_expr,
+                world_to_light_clip_space_z_scale_expr,
                 camera_clip_position_expr,
                 light_clip_position_expr,
                 cascade_idx_expr,
@@ -3511,8 +3539,9 @@ impl SampledTexture {
         &self,
         module: &mut Module,
         function: &mut Function,
-        emission_extent_expr: Handle<Expression>,
-        world_to_light_clip_space_scale_expr: Handle<Expression>,
+        tan_angular_radius_expr: Handle<Expression>,
+        world_to_light_clip_space_xy_scale_expr: Handle<Expression>,
+        world_to_light_clip_space_z_scale_expr: Handle<Expression>,
         camera_clip_position_expr: Handle<Expression>,
         light_clip_position_expr: Handle<Expression>,
         cascade_idx_expr: Handle<Expression>,
@@ -3622,8 +3651,9 @@ impl SampledTexture {
         self.generate_pcss_light_access_factor_expr_for_cascaded_shadow_map(
             module,
             function,
-            emission_extent_expr,
-            world_to_light_clip_space_scale_expr,
+            tan_angular_radius_expr,
+            world_to_light_clip_space_xy_scale_expr,
+            world_to_light_clip_space_z_scale_expr,
             camera_clip_position_expr,
             texture_coord_expr,
             depth_reference_expr,
@@ -3635,8 +3665,9 @@ impl SampledTexture {
         &self,
         module: &mut Module,
         function: &mut Function,
-        emission_extent_expr: Handle<Expression>,
-        world_to_light_clip_space_scale_expr: Handle<Expression>,
+        tan_angular_radius_expr: Handle<Expression>,
+        world_to_light_clip_space_xy_scale_expr: Handle<Expression>,
+        world_to_light_clip_space_z_scale_expr: Handle<Expression>,
         camera_clip_position_expr: Handle<Expression>,
         texture_coord_expr: Handle<Expression>,
         depth_reference_expr: Handle<Expression>,
@@ -3666,13 +3697,14 @@ impl SampledTexture {
                 shadowMapTexture: texture_depth_2d_array,
                 pointSampler: sampler,
                 array_index: i32,
-                emissionExtent: f32,
+                tanAngularRadius: f32,
                 vogelDiskBaseAngle: f32,
-                worldSpaceToLightClipSpaceScale: f32,
+                worldSpaceToLightClipSpaceXYScale: f32,
+                worldSpaceToLightClipSpaceZScale: f32,
                 centerTextureCoords: vec2<f32>,
                 referenceDepth: f32,
             ) -> f32 {
-                let diskRadius: f32 = 0.4 * worldSpaceToLightClipSpaceScale;
+                let diskRadius: f32 = 0.4 * worldSpaceToLightClipSpaceXYScale;
                 let sampleCount: u32 = 8u;
 
                 let inverseSqrtSampleCount = inverseSqrt(f32(sampleCount));
@@ -3694,9 +3726,9 @@ impl SampledTexture {
 
                 if (occludingDepthCount > 0.0) {
                     averageOccludingDepth /= occludingDepthCount;
-                    return max(minPenumbraExtent, emissionExtent * (referenceDepth - averageOccludingDepth) / averageOccludingDepth);
+                    return max(minPenumbraExtent, tanAngularRadius * (referenceDepth - averageOccludingDepth) / worldSpaceToLightClipSpaceZScale);
                 } else {
-                    return minPenumbraExtent;
+                    return -1.0;
                 }
             }
 
@@ -3705,16 +3737,16 @@ impl SampledTexture {
                 comparisonSampler: sampler_comparison,
                 array_index: i32,
                 vogelDiskBaseAngle: f32,
-                worldSpaceToLightClipSpaceScale: f32,
+                worldSpaceToLightClipSpaceXYScale: f32,
                 worldSpaceDiskRadius: f32,
                 centerTextureCoords: vec2<f32>,
                 referenceDepth: f32,
             ) -> f32 {
-                let sample_density = 600.0;
+                let sample_density = 800.0;
 
-                let sampleCount = u32(clamp(worldSpaceDiskRadius * sample_density, 3.0, 32.0));
+                let sampleCount = u32(clamp(worldSpaceDiskRadius * sample_density, 3.0, 64.0));
 
-                let diskRadius = worldSpaceDiskRadius * worldSpaceToLightClipSpaceScale;
+                let diskRadius = worldSpaceDiskRadius * worldSpaceToLightClipSpaceXYScale;
 
                 let invSampleCount = 1.0 / f32(sampleCount);
                 let inverseSqrtSampleCount = sqrt(invSampleCount);
@@ -3736,8 +3768,9 @@ impl SampledTexture {
                 pointSampler: sampler,
                 comparisonSampler: sampler_comparison,
                 array_index: i32,
-                emissionExtent: f32,
-                worldSpaceToLightClipSpaceScale: f32,
+                tanAngularRadius: f32,
+                worldSpaceToLightClipSpaceXYScale: f32,
+                worldSpaceToLightClipSpaceZScale: f32,
                 cameraClipSpacePosition: vec4<f32>,
                 centerTextureCoords: vec2<f32>,
                 referenceDepth: f32,
@@ -3748,19 +3781,24 @@ impl SampledTexture {
                     shadowMapTexture,
                     pointSampler,
                     array_index,
-                    emissionExtent,
+                    tanAngularRadius,
                     vogelDiskBaseAngle,
-                    worldSpaceToLightClipSpaceScale,
+                    worldSpaceToLightClipSpaceXYScale,
+                    worldSpaceToLightClipSpaceZScale,
                     centerTextureCoords,
                     referenceDepth,
                 );
+
+                if (shadowPenumbraExtent < 0.0) {
+                    return 1.0;
+                }
 
                 return computeVogelDiskComparisonSampleAverage(
                     shadowMapTexture,
                     comparisonSampler,
                     array_index,
                     vogelDiskBaseAngle,
-                    worldSpaceToLightClipSpaceScale,
+                    worldSpaceToLightClipSpaceXYScale,
                     shadowPenumbraExtent,
                     centerTextureCoords,
                     referenceDepth,
@@ -3801,8 +3839,9 @@ impl SampledTexture {
                 sampler_var_expr,
                 comparison_sampler_var_expr,
                 array_idx_expr,
-                emission_extent_expr,
-                world_to_light_clip_space_scale_expr,
+                tan_angular_radius_expr,
+                world_to_light_clip_space_xy_scale_expr,
+                world_to_light_clip_space_z_scale_expr,
                 camera_clip_position_expr,
                 texture_coord_expr,
                 depth_reference_expr,

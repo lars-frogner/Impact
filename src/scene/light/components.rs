@@ -1,6 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
 use crate::{
+    geometry::Degrees,
     rendering::fre,
     scene::{LightDirection, LightID, Radiance},
 };
@@ -42,6 +43,12 @@ pub struct RadianceComp(pub Radiance);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct EmissionExtentComp(pub fre);
+
+/// [`Component`](impact_ecs::component::Component) for light source entities
+/// that have an angular extent, and thus produce soft shadows.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct AngularExtentComp(pub Degrees<fre>);
 
 /// Marker [`Component`](impact_ecs::component::Component) for light source
 /// entities that have a omnidirectional distribution of radiance.
