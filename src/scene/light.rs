@@ -5,8 +5,8 @@ mod point_light;
 mod unidirectional_light;
 
 pub use components::{
-    DirectionComp, EmissionExtentComp, Omnidirectional, PointLightComp, RadianceComp,
-    UnidirectionalLightComp,
+    AngularExtentComp, DirectionComp, EmissionExtentComp, Omnidirectional, PointLightComp,
+    RadianceComp, UnidirectionalLightComp,
 };
 pub use point_light::PointLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};

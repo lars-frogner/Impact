@@ -5,7 +5,7 @@ use crate::{
     physics::PositionComp,
     rendering::fre,
     scene::{
-        LightStorage, Omnidirectional, PointLightComp, Radiance, RadianceComp,
+        EmissionExtentComp, LightStorage, Omnidirectional, PointLightComp, Radiance, RadianceComp,
         RenderResourcesDesynchronized, SceneCamera,
     },
 };
@@ -16,11 +16,11 @@ use nalgebra::{
 };
 use std::sync::RwLock;
 
-/// An point light source represented by a camera space position and an RGB
-/// radiance. The struct also includes a rotation quaternion that defines the
-/// orientation of the light's local coordinate system with respect to camera
-/// space, and a near and far distance restricting the distance range in which
-/// the light can cast shadows.
+/// An point light source represented by a camera space position, an RGB
+/// radiance and an extent. The struct also includes a rotation quaternion that
+/// defines the orientation of the light's local coordinate system with respect
+/// to camera space, and a near and far distance restricting the distance range
+/// in which the light can cast shadows.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -37,11 +37,12 @@ pub struct PointLight {
     camera_space_position: Point3<fre>,
     // Padding to obtain 16-byte alignment for next field
     _padding_1: fre,
+    // Radiance and emission radius are treated as a single 4-component vector
+    // in the shader
     radiance: Radiance,
-    // Padding to obtain 16-byte alignment for next field (the `near_distance`
-    // and `inverse_distance_span` fields are accessed as a struct in a single
-    // field in the shader)
-    _padding_2: fre,
+    emission_radius: fre,
+    // The `near_distance` and `inverse_distance_span` fields are accessed as a
+    // struct in a single field in the shader
     near_distance: fre,
     inverse_distance_span: fre,
     // Padding to make size multiple of 16-bytes
@@ -53,13 +54,13 @@ impl PointLight {
     const MIN_NEAR_DISTANCE: fre = 1e-2;
     const MAX_FAR_DISTANCE: fre = fre::INFINITY;
 
-    fn new(camera_space_position: Point3<fre>, radiance: Radiance) -> Self {
+    fn new(camera_space_position: Point3<fre>, radiance: Radiance, emission_extent: f32) -> Self {
         Self {
             camera_to_light_space_rotation: UnitQuaternion::identity(),
             camera_space_position,
             _padding_1: 0.0,
             radiance,
-            _padding_2: 0.0,
+            emission_radius: 0.5 * emission_extent,
             near_distance: 0.0,
             inverse_distance_span: 0.0,
             far_distance: 0.0,
@@ -200,10 +201,14 @@ impl PointLight {
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
-            |position: &PositionComp, radiance: &RadianceComp| -> PointLightComp {
+            |position: &PositionComp,
+             radiance: &RadianceComp,
+             emission_extent: Option<&EmissionExtentComp>|
+             -> PointLightComp {
                 let point_light = Self::new(
                     view_transform.transform_point(&position.0.cast()),
                     radiance.0,
+                    emission_extent.map_or(0.0, |extent| extent.0),
                 );
                 let id = light_storage.add_point_light(point_light);
 

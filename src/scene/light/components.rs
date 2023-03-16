@@ -39,7 +39,7 @@ pub struct DirectionComp(pub LightDirection);
 pub struct RadianceComp(pub Radiance);
 
 /// [`Component`](impact_ecs::component::Component) for light source entities
-/// that have an extent.
+/// that have a physical extent, and thus produce soft shadows.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct EmissionExtentComp(pub fre);

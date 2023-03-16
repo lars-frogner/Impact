@@ -44,12 +44,13 @@ struct UniformRenderBufferManagerWithLightIDs {
 impl LightRenderBufferManager {
     const POINT_LIGHT_BINDING: u32 = 0;
     const POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 1;
-    const POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 2;
+    const POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 2;
+    const POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 3;
 
-    const UNIDIRECTIONAL_LIGHT_BINDING: u32 = 3;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 4;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 5;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 6;
+    const UNIDIRECTIONAL_LIGHT_BINDING: u32 = 4;
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 5;
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 6;
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 7;
 
     const LIGHT_IDX_PUSH_CONSTANT_RANGE_START: u32 = 0;
     const LIGHT_IDX_PUSH_CONSTANT_RANGE_END: u32 =
@@ -354,6 +355,9 @@ impl LightRenderBufferManager {
                 ShadowCubemapTexture::create_texture_bind_group_layout_entry(
                     Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 ),
+                ShadowCubemapTexture::create_sampler_bind_group_layout_entry(
+                    Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                ),
                 ShadowCubemapTexture::create_comparison_sampler_bind_group_layout_entry(
                     Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
                 ),
@@ -372,6 +376,8 @@ impl LightRenderBufferManager {
             entries: &[
                 point_light_shadow_map_texture
                     .create_texture_bind_group_entry(Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING),
+                point_light_shadow_map_texture
+                    .create_sampler_bind_group_entry(Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING),
                 point_light_shadow_map_texture.create_comparison_sampler_bind_group_entry(
                     Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
                 ),
@@ -431,6 +437,7 @@ impl LightRenderBufferManager {
                 .max_uniform_count() as u64,
             shadow_map_texture_and_sampler_binding: (
                 Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
+                Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
                 Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
             ),
         })

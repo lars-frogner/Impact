@@ -291,10 +291,14 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 )),
                 None,
             ) => {
+                let camera_clip_position_expr =
+                    fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
+
                 let (light_dir_expr, light_radiance_expr) = point_light_shader_generator
                     .generate_fragment_shading_code(
                         module,
                         fragment_function,
+                        camera_clip_position_expr,
                         position_expr,
                         normal_vector_expr,
                     );

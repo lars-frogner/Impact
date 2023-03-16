@@ -19,6 +19,7 @@ pub struct ShadowCubemapTexture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     face_views: [wgpu::TextureView; 6],
+    sampler: wgpu::Sampler,
     comparison_sampler: wgpu::Sampler,
 }
 
@@ -60,12 +61,14 @@ impl ShadowCubemapTexture {
             Self::create_face_view(&texture, CubemapFace::NegativeZ),
         ];
 
+        let sampler = create_shadow_map_sampler(device);
         let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
         Self {
             texture,
             view,
             face_views,
+            sampler,
             comparison_sampler,
         }
     }
@@ -78,6 +81,11 @@ impl ShadowCubemapTexture {
     /// Returns a view into the given face of the shadow cubemap texture.
     pub fn face_view(&self, face: CubemapFace) -> &wgpu::TextureView {
         &self.face_views[face.as_idx_usize()]
+    }
+
+    /// Returns a sampler for the shadow map texture.
+    pub fn sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
     }
 
     /// Returns a comparison sampler for the shadow map texture.
@@ -102,6 +110,19 @@ impl ShadowCubemapTexture {
         }
     }
 
+    /// Creates the bind group layout entry for this texture's sampler type,
+    /// assigned to the given binding.
+    pub const fn create_sampler_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            count: None,
+        }
+    }
+
     /// Creates the bind group layout entry for this texture's comparison sampler type,
     /// assigned to the given binding.
     pub const fn create_comparison_sampler_bind_group_layout_entry(
@@ -121,6 +142,15 @@ impl ShadowCubemapTexture {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::TextureView(self.view()),
+        }
+    }
+
+    /// Creates the bind group entry for this texture's sampler, assigned to the
+    /// given binding.
+    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(self.sampler()),
         }
     }
 
