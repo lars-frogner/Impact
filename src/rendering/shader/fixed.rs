@@ -168,7 +168,8 @@ impl<'a> FixedTextureShaderGenerator<'a> {
             "color",
             bind_group,
             color_texture_binding,
-            color_sampler_binding,
+            Some(color_sampler_binding),
+            None,
         );
 
         let color_sampling_expr = color_texture.generate_sampling_expr(
@@ -178,6 +179,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
                     .texture_coords
                     .expect("No `texture_coords` passed to fixed texture fragment shader"),
             ),
+            None,
             None,
             None,
         );

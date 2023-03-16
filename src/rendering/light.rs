@@ -44,11 +44,12 @@ struct UniformRenderBufferManagerWithLightIDs {
 impl LightRenderBufferManager {
     const POINT_LIGHT_BINDING: u32 = 0;
     const POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 1;
-    const POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 2;
+    const POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 2;
 
     const DIRECTIONAL_LIGHT_BINDING: u32 = 3;
     const DIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 4;
     const DIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 5;
+    const DIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 6;
 
     const LIGHT_IDX_PUSH_CONSTANT_RANGE_START: u32 = 0;
     const LIGHT_IDX_PUSH_CONSTANT_RANGE_END: u32 =
@@ -347,8 +348,8 @@ impl LightRenderBufferManager {
                 ShadowCubemapTexture::create_texture_bind_group_layout_entry(
                     Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 ),
-                ShadowCubemapTexture::create_sampler_bind_group_layout_entry(
-                    Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                ShadowCubemapTexture::create_comparison_sampler_bind_group_layout_entry(
+                    Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
                 ),
             ],
             label: Some("Point light shadow cubemap bind group layout"),
@@ -365,8 +366,9 @@ impl LightRenderBufferManager {
             entries: &[
                 point_light_shadow_map_texture
                     .create_texture_bind_group_entry(Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING),
-                point_light_shadow_map_texture
-                    .create_sampler_bind_group_entry(Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING),
+                point_light_shadow_map_texture.create_comparison_sampler_bind_group_entry(
+                    Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
+                ),
             ],
             label: Some("Point light shadow cubemap bind group"),
         })
@@ -382,6 +384,9 @@ impl LightRenderBufferManager {
                 ),
                 CascadedShadowMapTexture::create_sampler_bind_group_layout_entry(
                     Self::DIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                ),
+                CascadedShadowMapTexture::create_comparison_sampler_bind_group_layout_entry(
+                    Self::DIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
                 ),
             ],
             label: Some("Directional light shadow map bind group layout"),
@@ -402,6 +407,9 @@ impl LightRenderBufferManager {
                 directional_light_shadow_map_texture.create_sampler_bind_group_entry(
                     Self::DIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
                 ),
+                directional_light_shadow_map_texture.create_comparison_sampler_bind_group_entry(
+                    Self::DIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
+                ),
             ],
             label: Some("Directional light shadow map bind group"),
         })
@@ -417,7 +425,7 @@ impl LightRenderBufferManager {
                 .max_uniform_count() as u64,
             shadow_map_texture_and_sampler_binding: (
                 Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
             ),
         })
     }
@@ -430,9 +438,10 @@ impl LightRenderBufferManager {
             max_light_count: directional_light_render_buffer_manager
                 .manager()
                 .max_uniform_count() as u64,
-            shadow_map_texture_and_sampler_binding: (
+            shadow_map_texture_and_sampler_bindings: (
                 Self::DIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 Self::DIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                Self::DIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
             ),
         })
     }

@@ -138,8 +138,9 @@ pub struct DirectionalLightShaderInput {
     pub uniform_binding: u32,
     /// Maximum number of lights in the uniform buffer.
     pub max_light_count: u64,
-    /// Bind group bindings of the shadow map texture and sampler.
-    pub shadow_map_texture_and_sampler_binding: (u32, u32),
+    /// Bind group bindings of the shadow map texture, sampler and comparison
+    /// sampler, respectively.
+    pub shadow_map_texture_and_sampler_bindings: (u32, u32, u32),
 }
 
 /// Shader generator for any kind of material.
@@ -267,6 +268,7 @@ pub enum LightVertexOutputFieldIndices {
 #[derive(Clone, Debug)]
 pub struct DirectionalLightVertexOutputFieldIndices {
     pub light_space_position: usize,
+    pub light_space_normal_vector: usize,
 }
 
 /// Indices of any fields holding the properties of a
@@ -320,7 +322,8 @@ pub struct StructBuilder {
 #[derive(Clone, Debug)]
 pub struct SampledTexture {
     texture_var: Handle<GlobalVariable>,
-    sampler_var: Handle<GlobalVariable>,
+    sampler_var: Option<Handle<GlobalVariable>>,
+    comparison_sampler_var: Option<Handle<GlobalVariable>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -432,7 +435,7 @@ const IMAGE_TEXTURE_TYPE: Type = Type {
     },
 };
 
-const IMAGE_TEXTURE_SAMPLER_TYPE: Type = Type {
+const SAMPLER_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Sampler { comparison: false },
 };
@@ -1420,7 +1423,7 @@ impl ShaderGenerator {
         if has_material {
             // If we have a material, we will do shading that involves the
             // shadow cubemap
-            let (shadow_map_texture_binding, shadow_map_sampler_binding) =
+            let (shadow_map_texture_binding, shadow_map_comparison_sampler_binding) =
                 light_shader_input.shadow_map_texture_and_sampler_binding;
 
             let shadow_map = SampledTexture::declare(
@@ -1430,7 +1433,8 @@ impl ShaderGenerator {
                 "shadowMap",
                 *bind_group_idx,
                 shadow_map_texture_binding,
-                shadow_map_sampler_binding,
+                None,
+                Some(shadow_map_comparison_sampler_binding),
             );
 
             *bind_group_idx += 1;
@@ -1544,8 +1548,8 @@ impl ShaderGenerator {
                             offset: VECTOR_4_SIZE,
                         },
                         StructMember {
-                            name: new_name("radiance"),
-                            ty: vec3_type,
+                            name: new_name("radianceAndExtent"),
+                            ty: vec4_type,
                             binding: None,
                             offset: 2 * VECTOR_4_SIZE,
                         },
@@ -1651,8 +1655,11 @@ impl ShaderGenerator {
 
             // If we have a material, we will do shading that involves the
             // shadow map
-            let (shadow_map_texture_binding, shadow_map_sampler_binding) =
-                light_shader_input.shadow_map_texture_and_sampler_binding;
+            let (
+                shadow_map_texture_binding,
+                shadow_map_sampler_binding,
+                shadow_map_comparison_sampler_binding,
+            ) = light_shader_input.shadow_map_texture_and_sampler_bindings;
 
             let shadow_map = SampledTexture::declare(
                 &mut module.types,
@@ -1661,7 +1668,8 @@ impl ShaderGenerator {
                 "cascadedShadowMap",
                 *bind_group_idx,
                 shadow_map_texture_binding,
-                shadow_map_sampler_binding,
+                Some(shadow_map_sampler_binding),
+                Some(shadow_map_comparison_sampler_binding),
             );
 
             *bind_group_idx += 1;
@@ -2379,7 +2387,7 @@ impl PointLightShadingShaderGenerator {
                 // Add an offset to the fragment position along the fragment
                 // normal to avoid shadow acne. The offset increases as the
                 // light becomes less perpendicular to the surface.
-                let offsetFragmentDisplacement = -lightDisplacement + fragmentNormal * clamp(1.0 - output.lightDirectionDotNormalVector, 1e-2, 1.0) * 5e-3 / inverseDistanceSpan;
+                let offsetFragmentDisplacement = -lightDisplacement + fragmentNormal * clamp(1.0 - output.lightDirectionDotNormalVector, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
 
                 output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
                 output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
@@ -2428,13 +2436,12 @@ impl PointLightShadingShaderGenerator {
                 )
             });
 
-        // The value returned from the comparison sampling is 0.0 if the
-        // fragment is occluded and 1.0 otherwise
-        let light_access_factor_expr = self.shadow_map.generate_sampling_expr(
+        let light_access_factor_expr = self.shadow_map.generate_2x2_pcf_sampling_expr(
+            &mut module.constants,
             fragment_function,
             texture_coord_expr,
+            depth_reference_expr,
             None,
-            Some(depth_reference_expr),
         );
 
         emit_in_func(fragment_function, |function| {
@@ -2624,6 +2631,14 @@ impl DirectionalLightShadingShaderGenerator {
             )
             .unwrap();
 
+        let camera_space_normal_vector_expr = output_struct_builder
+            .get_field_expr(
+                mesh_output_field_indices
+                    .normal_vector
+                    .expect("Missing normal vector for shading with directional light"),
+            )
+            .unwrap();
+
         let camera_to_light_space_rotation_quaternion_expr =
             LightShaderGenerator::generate_named_field_access_expr(
                 vertex_function,
@@ -2642,6 +2657,16 @@ impl DirectionalLightShadingShaderGenerator {
             ],
         );
 
+        let light_space_normal_vector_expr = SourceCode::generate_call_named(
+            vertex_function,
+            "lightSpaceNormalVector",
+            rotate_vector_with_quaternion,
+            vec![
+                camera_to_light_space_rotation_quaternion_expr,
+                camera_space_normal_vector_expr,
+            ],
+        );
+
         DirectionalLightVertexOutputFieldIndices {
             light_space_position: output_struct_builder.add_field_with_perspective_interpolation(
                 "lightSpacePosition",
@@ -2649,6 +2674,13 @@ impl DirectionalLightShadingShaderGenerator {
                 VECTOR_3_SIZE,
                 light_space_position_expr,
             ),
+            light_space_normal_vector: output_struct_builder
+                .add_field_with_perspective_interpolation(
+                    "lightSpaceNormalVector",
+                    vec3_type,
+                    VECTOR_3_SIZE,
+                    light_space_normal_vector_expr,
+                ),
         }
     }
 
@@ -2656,8 +2688,9 @@ impl DirectionalLightShadingShaderGenerator {
         &self,
         module: &mut Module,
         fragment_function: &mut Function,
-        camera_clip_space_position_expr: Handle<Expression>,
+        camera_clip_position_expr: Handle<Expression>,
         light_space_position_expr: Handle<Expression>,
+        light_space_normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
         let determine_cascade_idx_body = match MAX_SHADOW_MAP_CASCADES {
             1 => "cascadeIdx = 0;",
@@ -2713,6 +2746,14 @@ impl DirectionalLightShadingShaderGenerator {
                 return cascadeIdx;
             }}
 
+            fn applyNormalBias(
+                lightSpacePosition: vec3<f32>,
+                lightSpaceNormalVector: vec3<f32>
+            ) -> vec3<f32> {{
+                let lightDirectionDotNormalVector = -lightSpaceNormalVector.z;
+                return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * 1e-1;
+            }}
+
             fn applyOrthographicProjectionToPosition(
                 orthographicTranslation: vec3<f32>,
                 orthographicScaling: vec3<f32>,
@@ -2720,13 +2761,23 @@ impl DirectionalLightShadingShaderGenerator {
             ) -> vec3<f32> {{
                 return (position + orthographicTranslation) * orthographicScaling;
             }}
+
+            fn computeLightClipSpacePosition(
+                orthographicTranslation: vec3<f32>,
+                orthographicScaling: vec3<f32>,
+                lightSpacePosition: vec3<f32>,
+                lightSpaceNormalVector: vec3<f32>,
+            ) -> vec3<f32> {{
+                let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector);
+                return applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
+            }}
         ", determine_cascade_idx_body),
         )
         .unwrap()
         .import_to_module(module);
 
         let determine_cascade_idx = source_code.functions[0];
-        let apply_orthographic_projection_to_position = source_code.functions[1];
+        let compute_light_clip_space_position = source_code.functions[3];
 
         let camera_space_direction_expr = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
@@ -2735,12 +2786,25 @@ impl DirectionalLightShadingShaderGenerator {
             1,
         );
 
-        let radiance_expr = LightShaderGenerator::generate_named_field_access_expr(
+        let radiance_and_extent_expr = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
-            "lightRadiance",
+            "lightRadianceAndExtent",
             self.active_light_ptr_expr_in_fragment_function,
             2,
         );
+
+        let (radiance_expr, emission_extent_expr) = emit_in_func(fragment_function, |function| {
+            (
+                include_expr_in_func(function, swizzle_xyz_expr(radiance_and_extent_expr)),
+                include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: radiance_and_extent_expr,
+                        index: 3,
+                    },
+                ),
+            )
+        });
 
         let partition_depths_expr = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
@@ -2753,7 +2817,7 @@ impl DirectionalLightShadingShaderGenerator {
             fragment_function,
             "cascadeIdx",
             determine_cascade_idx,
-            vec![partition_depths_expr, camera_clip_space_position_expr],
+            vec![partition_depths_expr, camera_clip_position_expr],
         );
 
         let orthographic_transform_ptr_expr =
@@ -2777,26 +2841,39 @@ impl DirectionalLightShadingShaderGenerator {
             1,
         );
 
+        let world_to_light_clip_space_scale_expr = emit_in_func(fragment_function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: orthographic_scaling_expr,
+                    index: 0,
+                },
+            )
+        });
+
         let light_clip_position_expr = SourceCode::generate_call_named(
             fragment_function,
             "lightClipSpacePosition",
-            apply_orthographic_projection_to_position,
+            compute_light_clip_space_position,
             vec![
                 orthographic_translation_expr,
                 orthographic_scaling_expr,
                 light_space_position_expr,
+                light_space_normal_vector_expr,
             ],
         );
 
-        // The value returned from the comparison sampling is 0.0 if the
-        // fragment is occluded and 1.0 otherwise
-        let light_access_factor_expr = self.shadow_map.generate_cascaded_shadow_map_sampling_expr(
-            &mut module.types,
-            &mut module.constants,
-            fragment_function,
-            light_clip_position_expr,
-            cascade_idx_expr,
-        );
+        let light_access_factor_expr = self
+            .shadow_map
+            .generate_light_access_factor_expr_for_cascaded_shadow_map(
+                module,
+                fragment_function,
+                emission_extent_expr,
+                world_to_light_clip_space_scale_expr,
+                camera_clip_position_expr,
+                light_clip_position_expr,
+                cascade_idx_expr,
+            );
 
         let (light_direction_expr, attenuated_radiance_expr) =
             emit_in_func(fragment_function, |function| {
@@ -3185,12 +3262,11 @@ impl StructBuilder {
 }
 
 impl SampledTexture {
-    /// Generates code declaring global variables for a texture
-    /// and sampler with the given name root, group and bindings.
+    /// Generates code declaring global variables for a texture and samplers
+    /// with the given name root, group and bindings.
     ///
     /// # Returns
-    /// A new [`SampledTexture`] with handles to the declared
-    /// variables.
+    /// A new [`SampledTexture`] with handles to the declared variables.
     pub fn declare(
         types: &mut UniqueArena<Type>,
         global_variables: &mut Arena<GlobalVariable>,
@@ -3198,16 +3274,16 @@ impl SampledTexture {
         name: &'static str,
         group: u32,
         texture_binding: u32,
-        sampler_binding: u32,
+        sampler_binding: Option<u32>,
+        comparison_sampler_binding: Option<u32>,
     ) -> Self {
-        let (texture_type_const, sampler_type_const) = match texture_type {
-            TextureType::Image => (IMAGE_TEXTURE_TYPE, IMAGE_TEXTURE_SAMPLER_TYPE),
-            TextureType::DepthCubemap => (DEPTH_CUBEMAP_TEXTURE_TYPE, COMPARISON_SAMPLER_TYPE),
-            TextureType::DepthArray => (DEPTH_TEXTURE_ARRAY_TYPE, COMPARISON_SAMPLER_TYPE),
+        let texture_type_const = match texture_type {
+            TextureType::Image => IMAGE_TEXTURE_TYPE,
+            TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
+            TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };
 
         let texture_type = insert_in_arena(types, texture_type_const);
-        let sampler_type = insert_in_arena(types, sampler_type_const);
 
         let texture_var = append_to_arena(
             global_variables,
@@ -3223,60 +3299,100 @@ impl SampledTexture {
             },
         );
 
-        let sampler_var = append_to_arena(
-            global_variables,
-            GlobalVariable {
-                name: Some(format!("{}Sampler", name)),
-                space: AddressSpace::Handle,
-                binding: Some(ResourceBinding {
-                    group,
-                    binding: sampler_binding,
-                }),
-                ty: sampler_type,
-                init: None,
-            },
-        );
+        let sampler_var = sampler_binding.map(|sampler_binding| {
+            let sampler_type = insert_in_arena(types, SAMPLER_TYPE);
+
+            append_to_arena(
+                global_variables,
+                GlobalVariable {
+                    name: Some(format!("{}Sampler", name)),
+                    space: AddressSpace::Handle,
+                    binding: Some(ResourceBinding {
+                        group,
+                        binding: sampler_binding,
+                    }),
+                    ty: sampler_type,
+                    init: None,
+                },
+            )
+        });
+
+        let comparison_sampler_var = comparison_sampler_binding.map(|comparison_sampler_binding| {
+            let comparison_sampler_type = insert_in_arena(types, COMPARISON_SAMPLER_TYPE);
+
+            append_to_arena(
+                global_variables,
+                GlobalVariable {
+                    name: Some(format!("{}ComparisonSampler", name)),
+                    space: AddressSpace::Handle,
+                    binding: Some(ResourceBinding {
+                        group,
+                        binding: comparison_sampler_binding,
+                    }),
+                    ty: comparison_sampler_type,
+                    init: None,
+                },
+            )
+        });
 
         Self {
             texture_var,
             sampler_var,
+            comparison_sampler_var,
         }
     }
 
-    /// Generates and returns an expression sampling the texture at the texture
-    /// coordinates specified by the given expression. If sampling a depth
-    /// texture, a reference depth must also be provided for the comparison
-    /// sampling.
+    /// Generates and returns an expression sampling the texture at the given
+    /// texture coordinates. If sampling a depth texture, a reference depth must
+    /// also be provided for the comparison sampling. If an array index is
+    /// provided, it will be used to select the texture to sample from the
+    /// texture array. If `gather` is not [`None`], the specified component of
+    /// the texture will be sampled in the 2x2 grid of texels surrounding the
+    /// texture coordinates, and the returned expression is a vec4 containing
+    /// the samples.
     pub fn generate_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
         array_index_expr: Option<Handle<Expression>>,
         depth_reference_expr: Option<Handle<Expression>>,
+        gather: Option<SwizzleComponent>,
     ) -> Handle<Expression> {
         let texture_var_expr =
             include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
 
-        let sampler_var_expr =
-            include_expr_in_func(function, Expression::GlobalVariable(self.sampler_var));
+        let sampler_var_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(if depth_reference_expr.is_some() {
+                self.comparison_sampler_var
+                    .expect("Missing comparison sampler for sampling with depth reference")
+            } else {
+                self.sampler_var
+                    .expect("Missing sampler for sampling without depth reference")
+            }),
+        );
 
-        let image_sampling_expr = emit_in_func(function, |function| {
+        let sampling_expr = emit_in_func(function, |function| {
             include_expr_in_func(
                 function,
                 Expression::ImageSample {
                     image: texture_var_expr,
                     sampler: sampler_var_expr,
-                    gather: None,
+                    gather,
                     coordinate: texture_coord_expr,
                     array_index: array_index_expr,
                     offset: None,
-                    level: SampleLevel::Auto,
+                    level: if gather.is_none() {
+                        SampleLevel::Auto
+                    } else {
+                        SampleLevel::Zero
+                    },
                     depth_ref: depth_reference_expr,
                 },
             )
         });
 
-        image_sampling_expr
+        sampling_expr
     }
 
     /// Generates and returns an expression sampling the texture at
@@ -3287,7 +3403,8 @@ impl SampledTexture {
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let sampling_expr = self.generate_sampling_expr(function, texture_coord_expr, None, None);
+        let sampling_expr =
+            self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
 
         emit_in_func(function, |function| {
             include_expr_in_func(function, swizzle_xyz_expr(sampling_expr))
@@ -3295,30 +3412,130 @@ impl SampledTexture {
     }
 
     /// Generates and returns an expression comparison sampling the depth
-    /// texture with the given index in the shadow map texture array with
-    /// texture coordinates converted from the x- and y-component of the given
-    /// light clip space position and the z-component as the reference depth.
-    pub fn generate_cascaded_shadow_map_sampling_expr(
+    /// texture at the 2x2 texels adjacent to the given texture coordinates and
+    /// averaging the four binary comparison results.
+    pub fn generate_2x2_pcf_sampling_expr(
         &self,
-        types: &mut UniqueArena<Type>,
         constants: &mut Arena<Constant>,
         function: &mut Function,
+        texture_coord_expr: Handle<Expression>,
+        depth_reference_expr: Handle<Expression>,
+        array_index_expr: Option<Handle<Expression>>,
+    ) -> Handle<Expression> {
+        let vec4_of_samples_expr = self.generate_sampling_expr(
+            function,
+            texture_coord_expr,
+            array_index_expr,
+            Some(depth_reference_expr),
+            Some(SwizzleComponent::X),
+        );
+
+        let quarter_constant_expr = include_expr_in_func(
+            function,
+            Expression::Constant(define_constant_if_missing(
+                constants,
+                float32_constant(0.25),
+            )),
+        );
+
+        emit_in_func(function, |function| {
+            let sample_1_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: vec4_of_samples_expr,
+                    index: 0,
+                },
+            );
+            let sample_2_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: vec4_of_samples_expr,
+                    index: 1,
+                },
+            );
+            let sample_3_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: vec4_of_samples_expr,
+                    index: 2,
+                },
+            );
+            let sample_4_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: vec4_of_samples_expr,
+                    index: 3,
+                },
+            );
+            let sample_1_plus_2_expr = include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: sample_1_expr,
+                    right: sample_2_expr,
+                },
+            );
+            let sample_1_plus_2_plus_3_expr = include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: sample_1_plus_2_expr,
+                    right: sample_3_expr,
+                },
+            );
+            let sample_sum_expr = include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Add,
+                    left: sample_1_plus_2_plus_3_expr,
+                    right: sample_4_expr,
+                },
+            );
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: sample_sum_expr,
+                    right: quarter_constant_expr,
+                },
+            )
+        })
+    }
+
+    /// Generates and returns an expression for the fraction of light reaching
+    /// the fragment based on sampling of the specified shadow map cascade
+    /// around the texture coordinates converted from the x- and y-component of
+    /// the given light clip space position, using the z-component as the
+    /// reference depth.
+    pub fn generate_light_access_factor_expr_for_cascaded_shadow_map(
+        &self,
+        module: &mut Module,
+        function: &mut Function,
+        emission_extent_expr: Handle<Expression>,
+        world_to_light_clip_space_scale_expr: Handle<Expression>,
+        camera_clip_position_expr: Handle<Expression>,
         light_clip_position_expr: Handle<Expression>,
         cascade_idx_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let vec2_type = insert_in_arena(types, VECTOR_2_TYPE);
+        let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
 
         let unity_constant_expr = include_expr_in_func(
             function,
-            Expression::Constant(define_constant_if_missing(constants, float32_constant(1.0))),
+            Expression::Constant(define_constant_if_missing(
+                &mut module.constants,
+                float32_constant(1.0),
+            )),
         );
 
         let half_constant_expr = include_expr_in_func(
             function,
-            Expression::Constant(define_constant_if_missing(constants, float32_constant(0.5))),
+            Expression::Constant(define_constant_if_missing(
+                &mut module.constants,
+                float32_constant(0.5),
+            )),
         );
 
-        let (texture_coords_expr, depth_reference_expr) = emit_in_func(function, |function| {
+        let (texture_coord_expr, depth_reference_expr) = emit_in_func(function, |function| {
             // Map x [-1, 1] to u [0, 1]
 
             let light_clip_position_x_expr = include_expr_in_func(
@@ -3402,11 +3619,194 @@ impl SampledTexture {
             (texture_coords_expr, depth_reference_expr)
         });
 
-        self.generate_sampling_expr(
+        self.generate_pcss_light_access_factor_expr_for_cascaded_shadow_map(
+            module,
             function,
-            texture_coords_expr,
-            Some(cascade_idx_expr),
-            Some(depth_reference_expr),
+            emission_extent_expr,
+            world_to_light_clip_space_scale_expr,
+            camera_clip_position_expr,
+            texture_coord_expr,
+            depth_reference_expr,
+            cascade_idx_expr,
+        )
+    }
+
+    fn generate_pcss_light_access_factor_expr_for_cascaded_shadow_map(
+        &self,
+        module: &mut Module,
+        function: &mut Function,
+        emission_extent_expr: Handle<Expression>,
+        world_to_light_clip_space_scale_expr: Handle<Expression>,
+        camera_clip_position_expr: Handle<Expression>,
+        texture_coord_expr: Handle<Expression>,
+        depth_reference_expr: Handle<Expression>,
+        array_idx_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let source_code = SourceCode::from_wgsl_source(
+            "\
+            // Returns a random number between 0 and 1 based on the pixel coordinates
+            fn generateInterleavedGradientNoiseFactor(cameraClipSpacePosition: vec4<f32>) -> f32 {
+                let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
+                return fract(magic.z * fract(dot(magic.xy, cameraClipSpacePosition.xy)));
+            }
+
+            fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2<f32> {
+                let goldenAngle: f32 = 2.4;
+                let radius = sqrt(f32(sampleIdx) + 0.5) * inverseSqrtSampleCount;
+                let angle = baseAngle + goldenAngle * f32(sampleIdx);
+                return vec2<f32>(radius * cos(angle), radius * sin(angle));
+            }
+
+            fn computeVogelDiskBaseAngle(cameraClipSpacePosition: vec4<f32>) -> f32 {
+                // Multiply with 2 * pi to get random angle
+                return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraClipSpacePosition);
+            }
+
+            fn computeShadowPenumbraExtent(
+                shadowMapTexture: texture_depth_2d_array,
+                pointSampler: sampler,
+                array_index: i32,
+                emissionExtent: f32,
+                vogelDiskBaseAngle: f32,
+                worldSpaceToLightClipSpaceScale: f32,
+                centerTextureCoords: vec2<f32>,
+                referenceDepth: f32,
+            ) -> f32 {
+                let diskRadius: f32 = 0.4 * worldSpaceToLightClipSpaceScale;
+                let sampleCount: u32 = 8u;
+
+                let inverseSqrtSampleCount = inverseSqrt(f32(sampleCount));
+
+                var averageOccludingDepth: f32 = 0.0;
+                var occludingDepthCount: f32 = 0.0;
+
+                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
+                    let sampleTextureCoords = centerTextureCoords + diskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
+                    let sampledDepth = textureSample(shadowMapTexture, pointSampler, sampleTextureCoords, array_index);
+
+                    if (sampledDepth < referenceDepth) {
+                        averageOccludingDepth += sampledDepth;
+                        occludingDepthCount += 1.0;
+                    }
+                }
+
+                let minPenumbraExtent = 0.01;
+
+                if (occludingDepthCount > 0.0) {
+                    averageOccludingDepth /= occludingDepthCount;
+                    return max(minPenumbraExtent, emissionExtent * (referenceDepth - averageOccludingDepth) / averageOccludingDepth);
+                } else {
+                    return minPenumbraExtent;
+                }
+            }
+
+            fn computeVogelDiskComparisonSampleAverage(
+                shadowMapTexture: texture_depth_2d_array,
+                comparisonSampler: sampler_comparison,
+                array_index: i32,
+                vogelDiskBaseAngle: f32,
+                worldSpaceToLightClipSpaceScale: f32,
+                worldSpaceDiskRadius: f32,
+                centerTextureCoords: vec2<f32>,
+                referenceDepth: f32,
+            ) -> f32 {
+                let sample_density = 600.0;
+
+                let sampleCount = u32(clamp(worldSpaceDiskRadius * sample_density, 3.0, 32.0));
+
+                let diskRadius = worldSpaceDiskRadius * worldSpaceToLightClipSpaceScale;
+
+                let invSampleCount = 1.0 / f32(sampleCount);
+                let inverseSqrtSampleCount = sqrt(invSampleCount);
+
+                var sampleAverage: f32 = 0.0;
+
+                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
+                    let sampleTextureCoords = centerTextureCoords + diskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
+                    sampleAverage += textureSampleCompare(shadowMapTexture, comparisonSampler, sampleTextureCoords, array_index, referenceDepth);
+                }
+
+                sampleAverage *= invSampleCount;
+
+                return sampleAverage;
+            }
+
+            fn computePCSSLightAccessFactor(
+                shadowMapTexture: texture_depth_2d_array,
+                pointSampler: sampler,
+                comparisonSampler: sampler_comparison,
+                array_index: i32,
+                emissionExtent: f32,
+                worldSpaceToLightClipSpaceScale: f32,
+                cameraClipSpacePosition: vec4<f32>,
+                centerTextureCoords: vec2<f32>,
+                referenceDepth: f32,
+            ) -> f32 {
+                let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraClipSpacePosition);
+                
+                let shadowPenumbraExtent = computeShadowPenumbraExtent(
+                    shadowMapTexture,
+                    pointSampler,
+                    array_index,
+                    emissionExtent,
+                    vogelDiskBaseAngle,
+                    worldSpaceToLightClipSpaceScale,
+                    centerTextureCoords,
+                    referenceDepth,
+                );
+
+                return computeVogelDiskComparisonSampleAverage(
+                    shadowMapTexture,
+                    comparisonSampler,
+                    array_index,
+                    vogelDiskBaseAngle,
+                    worldSpaceToLightClipSpaceScale,
+                    shadowPenumbraExtent,
+                    centerTextureCoords,
+                    referenceDepth,
+                );
+            }
+        ",
+        )
+        .unwrap()
+        .import_to_module(module);
+
+        let compute_pcss_light_access_factor = source_code.functions[5];
+
+        let texture_var_expr =
+            include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
+
+        let sampler_var_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(
+                self.sampler_var
+                    .expect("Missing sampler for PCSS shadow mapping"),
+            ),
+        );
+
+        let comparison_sampler_var_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(
+                self.comparison_sampler_var
+                    .expect("Missing comparison sampler for PCSS shadow mapping"),
+            ),
+        );
+
+        SourceCode::generate_call_named(
+            function,
+            "lightAccessFactor",
+            compute_pcss_light_access_factor,
+            vec![
+                texture_var_expr,
+                sampler_var_expr,
+                comparison_sampler_var_expr,
+                array_idx_expr,
+                emission_extent_expr,
+                world_to_light_clip_space_scale_expr,
+                camera_clip_position_expr,
+                texture_coord_expr,
+                depth_reference_expr,
+            ],
         )
     }
 }
@@ -4310,7 +4710,7 @@ mod test {
         LightShaderInput::DirectionalLight(DirectionalLightShaderInput {
             uniform_binding: 3,
             max_light_count: 20,
-            shadow_map_texture_and_sampler_binding: (4, 5),
+            shadow_map_texture_and_sampler_bindings: (4, 5, 6),
         });
 
     fn validate_module(module: &Module) -> ModuleInfo {
@@ -4330,14 +4730,36 @@ mod test {
     fn parse() {
         match wgsl_in::parse_str(
             "
-            struct Uniform {
-                a: array<f32, 5>
+            fn generateVogelDiskSampleCoords(invSqrtSampleCount: f32, baseAngle: f32, sampleIdx: u32) -> vec2<f32> {
+                let goldenAngle: f32 = 2.4;
+                let radius = sqrt(sampleIdx + 0.5) * invSqrtSampleCount;
+                let angle = baseAngle + goldenAngle * sampleIdx;
+                return vec2<f32>(radius * cos(angle), radius * sin(angle));
             }
 
-            var<uniform> u: Uniform;
+            fn computeVogelDiskComparisonSampleAverage(
+                shadowMapTexture: texture_depth_2d_array,
+                comparisonSampler: sampler_comparison,
+                array_index: i32,
+                //sampleCount: u32,
+                //diskRadius: f32,
+                centerTextureCoords: vec2<f32>,
+                referenceDepth: f32,
+            ) -> f32 {
+                let sampleCount: u32 = 16u;
+                let diskRadius: f32 = 0.01;
 
-            fn test(a: vec3<f32>) -> f32 {
-                return a[0];
+                let invSqrtSampleCount = inverseSqrt(sampleCount);
+                var sampleAverage: f32 = 0.0;
+
+                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
+                    let sampleTextureCoords = centerTextureCoords + diskRadius * generateVogelDiskSampleCoords(invSqrtSampleCount, 0.0, sampleIdx);
+                    sampleAverage += textureSampleCompare(shadowMapTexture, comparisonSampler, sampleTextureCoords, array_index, referenceDepth);
+                }
+
+                sampleAverage /= sampleCount;
+
+                return sampleAverage;
             }
             ",
         ) {

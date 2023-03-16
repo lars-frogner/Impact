@@ -1042,20 +1042,7 @@ impl RenderPassSpecification {
     }
 
     fn determine_depth_stencil_state(&self) -> Option<wgpu::DepthStencilState> {
-        if let Some(shadow_map_id) = self.shadow_map_usage.get_shadow_map_to_clear_or_update() {
-            let bias = match shadow_map_id {
-                // Biasing is applied manually in shader for point lights,
-                // because the biasing specified here is applied to the depth
-                // outputted from the vertex shader rather than the updated
-                // depth outputted from the fragment shader
-                ShadowMapIdentifier::ForPointLight(_) => wgpu::DepthBiasState::default(),
-                ShadowMapIdentifier::ForDirectionalLight(_) => wgpu::DepthBiasState {
-                    constant: 8,
-                    slope_scale: 1.5,
-                    clamp: 0.0,
-                },
-            };
-
+        if self.shadow_map_usage.is_clear_or_update() {
             // For modifying the shadow map we have to set it as the depth
             // map for the pipeline
             Some(wgpu::DepthStencilState {
@@ -1063,7 +1050,8 @@ impl RenderPassSpecification {
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
-                bias,
+                // Biasing is applied manually in shader
+                bias: wgpu::DepthBiasState::default(),
             })
         } else if !self.depth_map_usage.is_none() {
             let depth_write_enabled = self.depth_map_usage.make_writeable();

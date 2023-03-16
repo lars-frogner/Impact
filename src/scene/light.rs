@@ -5,7 +5,8 @@ mod directional_light;
 mod point_light;
 
 pub use components::{
-    DirectionComp, DirectionalLightComp, Omnidirectional, PointLightComp, RadianceComp,
+    DirectionComp, DirectionalLightComp, EmissionExtentComp, Omnidirectional, PointLightComp,
+    RadianceComp,
 };
 pub use directional_light::{DirectionalLight, MAX_SHADOW_MAP_CASCADES};
 pub use point_light::PointLight;

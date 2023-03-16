@@ -19,7 +19,7 @@ pub struct ShadowCubemapTexture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     face_views: [wgpu::TextureView; 6],
-    sampler: wgpu::Sampler,
+    comparison_sampler: wgpu::Sampler,
 }
 
 /// Texture array for storing the depths of the closest vertices to a
@@ -32,6 +32,7 @@ pub struct CascadedShadowMapTexture {
     view: wgpu::TextureView,
     cascade_views: Vec<wgpu::TextureView>,
     sampler: wgpu::Sampler,
+    comparison_sampler: wgpu::Sampler,
 }
 
 impl ShadowCubemapTexture {
@@ -59,13 +60,13 @@ impl ShadowCubemapTexture {
             Self::create_face_view(&texture, CubemapFace::NegativeZ),
         ];
 
-        let sampler = create_shadow_map_sampler(device);
+        let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
         Self {
             texture,
             view,
             face_views,
-            sampler,
+            comparison_sampler,
         }
     }
 
@@ -79,9 +80,9 @@ impl ShadowCubemapTexture {
         &self.face_views[face.as_idx_usize()]
     }
 
-    /// Returns a sampler for the full shadow cubemap texture.
-    pub fn sampler(&self) -> &wgpu::Sampler {
-        &self.sampler
+    /// Returns a comparison sampler for the shadow map texture.
+    pub fn comparison_sampler(&self) -> &wgpu::Sampler {
+        &self.comparison_sampler
     }
 
     /// Creates the bind group layout entry for this texture type, assigned to
@@ -101,9 +102,9 @@ impl ShadowCubemapTexture {
         }
     }
 
-    /// Creates the bind group layout entry for this texture's sampler type,
+    /// Creates the bind group layout entry for this texture's comparison sampler type,
     /// assigned to the given binding.
-    pub const fn create_sampler_bind_group_layout_entry(
+    pub const fn create_comparison_sampler_bind_group_layout_entry(
         binding: u32,
     ) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
@@ -123,12 +124,15 @@ impl ShadowCubemapTexture {
         }
     }
 
-    /// Creates the bind group entry for this texture's sampler, assigned to the
+    /// Creates the bind group entry for this texture's comparison sampler, assigned to the
     /// given binding.
-    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+    pub fn create_comparison_sampler_bind_group_entry(
+        &self,
+        binding: u32,
+    ) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
-            resource: wgpu::BindingResource::Sampler(self.sampler()),
+            resource: wgpu::BindingResource::Sampler(self.comparison_sampler()),
         }
     }
 
@@ -196,12 +200,14 @@ impl CascadedShadowMapTexture {
             .collect();
 
         let sampler = create_shadow_map_sampler(device);
+        let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
         Self {
             texture,
             view,
             cascade_views,
             sampler,
+            comparison_sampler,
         }
     }
 
@@ -220,9 +226,14 @@ impl CascadedShadowMapTexture {
         &self.cascade_views[cascade_idx as usize]
     }
 
-    /// Returns a sampler for the full shadow cubemap texture array.
+    /// Returns a sampler for the shadow map texture.
     pub fn sampler(&self) -> &wgpu::Sampler {
         &self.sampler
+    }
+
+    /// Returns a comparison sampler for the shadow map texture.
+    pub fn comparison_sampler(&self) -> &wgpu::Sampler {
+        &self.comparison_sampler
     }
 
     /// Creates the bind group layout entry for this texture type, assigned to
@@ -250,6 +261,19 @@ impl CascadedShadowMapTexture {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            count: None,
+        }
+    }
+
+    /// Creates the bind group layout entry for this texture's comparison
+    /// sampler type, assigned to the given binding.
+    pub const fn create_comparison_sampler_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
             count: None,
         }
@@ -270,6 +294,18 @@ impl CascadedShadowMapTexture {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::Sampler(self.sampler()),
+        }
+    }
+
+    /// Creates the bind group entry for this texture's comparison sampler,
+    /// assigned to the given binding.
+    pub fn create_comparison_sampler_bind_group_entry(
+        &self,
+        binding: u32,
+    ) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(self.comparison_sampler()),
         }
     }
 
@@ -331,8 +367,23 @@ fn create_shadow_map_sampler(device: &wgpu::Device) -> wgpu::Sampler {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        compare: None,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: 100.0,
+        ..Default::default()
+    })
+}
+
+fn create_shadow_map_comparison_sampler(device: &wgpu::Device) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
         mipmap_filter: wgpu::FilterMode::Nearest,
         // The result of the comparison sampling will be 1.0 if the
         // reference depth is less than or equal to the sampled depth

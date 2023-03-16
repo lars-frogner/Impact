@@ -1,6 +1,9 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
-use crate::scene::{LightDirection, LightID, Radiance};
+use crate::{
+    rendering::fre,
+    scene::{LightDirection, LightID, Radiance},
+};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -33,6 +36,12 @@ pub struct DirectionComp(pub LightDirection);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RadianceComp(pub Radiance);
+
+/// [`Component`](impact_ecs::component::Component) for light source entities
+/// that have an extent.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct EmissionExtentComp(pub fre);
 
 /// Marker [`Component`](impact_ecs::component::Component) for light source
 /// entities that have a omnidirectional distribution of radiance.

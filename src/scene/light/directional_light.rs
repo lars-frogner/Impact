@@ -4,8 +4,8 @@ use crate::{
     geometry::{AxisAlignedBox, Frustum, OrthographicTransform, Sphere, UpperExclusiveBounds},
     rendering::{fre, CascadeIdx},
     scene::{
-        DirectionComp, DirectionalLightComp, LightDirection, LightStorage, Radiance, RadianceComp,
-        RenderResourcesDesynchronized, SceneCamera,
+        DirectionComp, DirectionalLightComp, EmissionExtentComp, LightDirection, LightStorage,
+        Radiance, RadianceComp, RenderResourcesDesynchronized, SceneCamera,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -17,14 +17,14 @@ use std::{iter, sync::RwLock};
 /// directional lights.
 ///
 /// # Warning
-/// Increasing this above 5 will require changes to the [`DirectionalLight`]
+/// Increasing this above 4 will require changes to the [`DirectionalLight`]
 /// struct and associated shader code to meet uniform padding requirements.
 pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
 
-/// An directional light source represented by a camera space direction and an
-/// RGB radiance. The struct also includes a rotation quaternion that defines
-/// the orientation of the light's local coordinate system with respect to
-/// camera space, orthographic transformations that map the light's space to
+/// An unidirectional light source represented by a camera space direction, an RGB
+/// radiance and an extent. The struct also includes a rotation quaternion that
+/// defines the orientation of the light's local coordinate system with respect
+/// to camera space, orthographic transformations that map the light's space to
 /// clip space in such a way as to include all objects in the scene that may
 /// cast shadows inside or into specific cascades (partitions) of the camera
 /// view frustum, and the camera clip space depths representing the boundaries
@@ -45,13 +45,15 @@ pub struct DirectionalLight {
     camera_space_direction: LightDirection,
     // Padding to obtain 16-byte alignment for next field
     near_partition_depth: fre,
+    // Radiance and extent are treated as a single 4-component vector in the
+    // shader
     radiance: Radiance,
-    // Padding to obtain 16-byte alignment for next field
-    far_partition_depth: fre,
+    emission_extent: fre,
     orthographic_transforms: [OrthographicTranslationAndScaling; MAX_SHADOW_MAP_CASCADES_USIZE],
     partition_depths: [fre; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
     // Padding to make size multiple of 16-bytes
-    _padding_3: [fre; 5 - MAX_SHADOW_MAP_CASCADES_USIZE],
+    far_partition_depth: fre,
+    _padding_3: [fre; 4 - MAX_SHADOW_MAP_CASCADES_USIZE],
 }
 
 #[repr(C)]
@@ -68,7 +70,11 @@ struct OrthographicTranslationAndScaling {
 const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
 
 impl DirectionalLight {
-    fn new(camera_space_direction: LightDirection, radiance: Radiance) -> Self {
+    fn new(
+        camera_space_direction: LightDirection,
+        radiance: Radiance,
+        emission_extent: fre,
+    ) -> Self {
         Self {
             camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
                 &camera_space_direction,
@@ -76,11 +82,12 @@ impl DirectionalLight {
             camera_space_direction,
             near_partition_depth: 0.0,
             radiance,
-            far_partition_depth: 0.0,
+            emission_extent,
             orthographic_transforms: [OrthographicTranslationAndScaling::zeroed();
                 MAX_SHADOW_MAP_CASCADES_USIZE],
             partition_depths: [0.0; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
-            _padding_3: [0.0; 5 - MAX_SHADOW_MAP_CASCADES_USIZE],
+            far_partition_depth: 0.0,
+            _padding_3: [0.0; 4 - MAX_SHADOW_MAP_CASCADES_USIZE],
         }
     }
 
@@ -251,13 +258,17 @@ impl DirectionalLight {
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
-            |direction: &DirectionComp, radiance: &RadianceComp| -> DirectionalLightComp {
+            |direction: &DirectionComp,
+             radiance: &RadianceComp,
+             emission_extent: Option<&EmissionExtentComp>|
+             -> DirectionalLightComp {
                 let directional_light = Self::new(
                     // The view transform contains no scaling, so the direction remains normalized
                     LightDirection::new_unchecked(
                         view_transform.transform_vector(&direction.0.cast()),
                     ),
                     radiance.0,
+                    emission_extent.map_or(0.0, |extent| extent.0),
                 );
                 let id = light_storage.add_directional_light(directional_light);
 
@@ -311,6 +322,14 @@ impl OrthographicTranslationAndScaling {
             OrthographicTransform::compute_orthographic_translation_and_scaling(
                 left, right, bottom, top, near, far,
             );
+
+        // Use same scaling in x- and y-direction so that projected shadow map
+        // texels are always square
+        if self.scaling.x < self.scaling.y {
+            self.scaling.y = self.scaling.x;
+        } else {
+            self.scaling.x = self.scaling.y;
+        }
     }
 
     fn compute_aabb(&self) -> AxisAlignedBox<fre> {

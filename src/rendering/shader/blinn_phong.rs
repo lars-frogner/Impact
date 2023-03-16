@@ -322,18 +322,23 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     directional_light_input_field_indices,
                 )),
             ) => {
-                let camera_clip_space_position_expr =
+                let camera_clip_position_expr =
                     fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
                 let light_space_position_expr = fragment_input_struct
                     .get_field_expr(directional_light_input_field_indices.light_space_position);
 
+                let light_space_normal_vector_expr = fragment_input_struct.get_field_expr(
+                    directional_light_input_field_indices.light_space_normal_vector,
+                );
+
                 let (light_dir_expr, light_radiance_expr) = directional_light_shader_generator
                     .generate_fragment_shading_code(
                         module,
                         fragment_function,
-                        camera_clip_space_position_expr,
+                        camera_clip_position_expr,
                         light_space_position_expr,
+                        light_space_normal_vector_expr,
                     );
 
                 SourceCode::generate_call_named(
@@ -426,7 +431,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             "diffuseColor",
             bind_group,
             diffuse_texture_binding,
-            diffuse_sampler_binding,
+            Some(diffuse_sampler_binding),
+            None,
         );
 
         let texture_coord_expr = fragment_input_struct.get_field_expr(
@@ -447,7 +453,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     "specularColor",
                     bind_group,
                     specular_texture_binding,
-                    specular_sampler_binding,
+                    Some(specular_sampler_binding),
+                    None,
                 );
 
                 specular_color_texture
