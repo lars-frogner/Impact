@@ -26,10 +26,10 @@ pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
-    DirectionalLightShaderInput, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-    GlobalAmbientColorShaderInput, InstanceFeatureShaderInput, LightShaderInput,
-    MaterialShaderInput, MeshShaderInput, ModelViewTransformShaderInput, PointLightShaderInput,
-    Shader, ShaderGenerator,
+    FixedColorFeatureShaderInput, FixedTextureShaderInput, GlobalAmbientColorShaderInput,
+    InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
+    ModelViewTransformShaderInput, PointLightShaderInput, Shader, ShaderGenerator,
+    UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{CascadeIdx, DepthTexture, ImageTexture, MultisampledRenderTargetTexture};
@@ -76,9 +76,9 @@ pub struct RenderingConfig {
     /// The width and height of each face of the point light shadow cubemap in
     /// number of texels.
     pub point_light_shadow_map_resolution: u32,
-    /// The width and height of the directional light shadow map in number of
+    /// The width and height of the unidirectional light shadow map in number of
     /// texels.
-    pub directional_light_shadow_map_resolution: u32,
+    pub unidirectional_light_shadow_map_resolution: u32,
 }
 
 #[derive(Debug)]
@@ -86,7 +86,7 @@ struct Screenshotter {
     screenshot_save_requested: AtomicBool,
     depth_map_save_requested: AtomicBool,
     point_light_shadow_map_save_requested: AtomicBool,
-    directional_light_shadow_map_save_requested: AtomicBool,
+    unidirectional_light_shadow_map_save_requested: AtomicBool,
 }
 
 impl RenderingSystem {
@@ -202,7 +202,7 @@ impl RenderingSystem {
             )?;
 
         self.screenshotter
-            .save_directional_light_shadow_map_if_requested(
+            .save_unidirectional_light_shadow_map_if_requested(
                 &self.core_system,
                 &self.render_resource_manager,
             )?;
@@ -271,9 +271,9 @@ impl RenderingSystem {
         self.screenshotter.request_point_light_shadow_map_save();
     }
 
-    pub fn request_directional_light_shadow_map_save(&self) {
+    pub fn request_unidirectional_light_shadow_map_save(&self) {
         self.screenshotter
-            .request_directional_light_shadow_map_save();
+            .request_unidirectional_light_shadow_map_save();
     }
 
     /// Marks the render resources as being out of sync with the source data.
@@ -351,7 +351,7 @@ impl Default for RenderingConfig {
             polygon_mode: wgpu::PolygonMode::Fill,
             multisampling_sample_count: 1,
             point_light_shadow_map_resolution: 1024,
-            directional_light_shadow_map_resolution: 1024,
+            unidirectional_light_shadow_map_resolution: 1024,
         }
     }
 }
@@ -362,7 +362,7 @@ impl Screenshotter {
             screenshot_save_requested: AtomicBool::new(false),
             depth_map_save_requested: AtomicBool::new(false),
             point_light_shadow_map_save_requested: AtomicBool::new(false),
-            directional_light_shadow_map_save_requested: AtomicBool::new(false),
+            unidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
         }
     }
 
@@ -380,8 +380,8 @@ impl Screenshotter {
             .store(true, Ordering::Release);
     }
 
-    fn request_directional_light_shadow_map_save(&self) {
-        self.directional_light_shadow_map_save_requested
+    fn request_unidirectional_light_shadow_map_save(&self) {
+        self.unidirectional_light_shadow_map_save_requested
             .store(true, Ordering::Release);
     }
 
@@ -456,13 +456,13 @@ impl Screenshotter {
         }
     }
 
-    fn save_directional_light_shadow_map_if_requested(
+    fn save_unidirectional_light_shadow_map_if_requested(
         &self,
         core_system: &CoreRenderingSystem,
         render_resource_manager: &RwLock<RenderResourceManager>,
     ) -> Result<()> {
         if self
-            .directional_light_shadow_map_save_requested
+            .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
             if let Some(light_buffer_manager) = render_resource_manager
@@ -473,12 +473,12 @@ impl Screenshotter {
             {
                 for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
                     light_buffer_manager
-                        .directional_light_shadow_map_texture()
+                        .unidirectional_light_shadow_map_texture()
                         .save_cascade_as_image_file(
                             core_system,
                             cascade_idx,
                             format!(
-                                "directional_light_shadow_map_{}_{}.png",
+                                "unidirectional_light_shadow_map_{}_{}.png",
                                 Utc::now().to_rfc3339(),
                                 cascade_idx
                             ),

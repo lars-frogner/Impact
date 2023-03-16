@@ -23,9 +23,9 @@ pub use graph::{
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    DirectionComp, DirectionalLight, DirectionalLightComp, EmissionExtentComp, LightDirection,
-    LightID, LightStorage, LightType, Omnidirectional, PointLight, PointLightComp, Radiance,
-    RadianceComp, MAX_SHADOW_MAP_CASCADES,
+    DirectionComp, EmissionExtentComp, LightDirection, LightID, LightStorage, LightType,
+    Omnidirectional, PointLight, PointLightComp, Radiance, RadianceComp, UnidirectionalLight,
+    UnidirectionalLightComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
     BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
@@ -40,8 +40,8 @@ pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
 pub use systems::SyncLightPositionsAndDirectionsInStorage;
 pub use tasks::{
-    BoundDirectionalLightsAndBufferShadowCastingModelInstances,
-    BoundPointLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
+    BoundPointLightsAndBufferShadowCastingModelInstances,
+    BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
     SyncSceneCameraViewTransform,
 };
 

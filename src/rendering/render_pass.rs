@@ -127,7 +127,7 @@ enum ShadowMapUsage {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ShadowMapIdentifier {
-    ForDirectionalLight(CascadeIdx),
+    ForUnidirectionalLight(CascadeIdx),
     ForPointLight(CubemapFace),
 }
 
@@ -203,13 +203,13 @@ impl RenderPassManager {
 
         let point_light_ids =
             light_buffer_manager.map_or_else(|| &[], LightRenderBufferManager::point_light_ids);
-        let directional_light_ids = light_buffer_manager
-            .map_or_else(|| &[], LightRenderBufferManager::directional_light_ids);
+        let unidirectional_light_ids = light_buffer_manager
+            .map_or_else(|| &[], LightRenderBufferManager::unidirectional_light_ids);
 
         // Remove shading passes for lights that are no longer present
         self.light_shaded_model_shading_passes
             .retain(|light_id, _| {
-                point_light_ids.contains(light_id) || directional_light_ids.contains(light_id)
+                point_light_ids.contains(light_id) || unidirectional_light_ids.contains(light_id)
             });
 
         let all_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
@@ -369,7 +369,7 @@ impl RenderPassManager {
                             )?);
                         }
 
-                        for &light_id in directional_light_ids {
+                        for &light_id in unidirectional_light_ids {
                             let cascades_have_shadow_casting_model_instances: Vec<_> = (0
                                 ..MAX_SHADOW_MAP_CASCADES)
                                 .into_iter()
@@ -398,7 +398,7 @@ impl RenderPassManager {
                                                 render_resources,
                                                 shader_manager,
                                                 RenderPassSpecification::shadow_map_clearing_pass(
-                                                    ShadowMapIdentifier::ForDirectionalLight(
+                                                    ShadowMapIdentifier::ForUnidirectionalLight(
                                                         cascade_idx,
                                                     ),
                                                 ),
@@ -414,12 +414,12 @@ impl RenderPassManager {
                                 };
 
                             let light = LightInfo {
-                                light_type: LightType::DirectionalLight,
+                                light_type: LightType::UnidirectionalLight,
                                 light_id,
                             };
 
-                            // Create a directional light shadow map update pass
-                            // for each cascade for the new model
+                            // Create a unidirectional light shadow map update
+                            // pass for each cascade for the new model
 
                             passes
                                 .shadow_map_update_passes
@@ -438,7 +438,9 @@ impl RenderPassManager {
                                         RenderPassSpecification::shadow_map_update_pass(
                                             light,
                                             model_id,
-                                            ShadowMapIdentifier::ForDirectionalLight(cascade_idx),
+                                            ShadowMapIdentifier::ForUnidirectionalLight(
+                                                cascade_idx,
+                                            ),
                                         ),
                                         !cascades_have_shadow_casting_model_instances
                                             [cascade_idx as usize],
@@ -446,8 +448,8 @@ impl RenderPassManager {
                                 );
                             }
 
-                            // Create a directional light shading pass for the
-                            // new model
+                            // Create a unidirectional light shading pass for
+                            // the new model
                             passes.shading_passes.push(RenderPassRecorder::new(
                                 core_system,
                                 config,
@@ -483,7 +485,7 @@ impl RenderPassManager {
                                                             .as_instance_feature_buffer_range_id()
                                                             + face.as_idx_u32()
                                                     }
-                                                    ShadowMapIdentifier::ForDirectionalLight(
+                                                    ShadowMapIdentifier::ForUnidirectionalLight(
                                                         cascade_idx,
                                                     ) => {
                                                         light_id
@@ -744,7 +746,7 @@ impl RenderPassSpecification {
         if self.light.is_some() {
             let push_constant_range = if matches!(
                 self.shadow_map_usage,
-                ShadowMapUsage::Update(ShadowMapIdentifier::ForDirectionalLight(_))
+                ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(_))
             ) {
                 LightRenderBufferManager::light_idx_and_cascade_idx_push_constant_range()
             } else {
@@ -983,8 +985,8 @@ impl RenderPassSpecification {
                 ShadowMapIdentifier::ForPointLight(face) => light_buffer_manager
                     .point_light_shadow_map_texture()
                     .face_view(face),
-                ShadowMapIdentifier::ForDirectionalLight(cascade_idx) => light_buffer_manager
-                    .directional_light_shadow_map_texture()
+                ShadowMapIdentifier::ForUnidirectionalLight(cascade_idx) => light_buffer_manager
+                    .unidirectional_light_shadow_map_texture()
                     .cascade_view(cascade_idx),
             })
         } else {
@@ -1319,8 +1321,9 @@ impl RenderPassRecorder {
                     .set_light_idx_push_constant(&mut render_pass, light_type, light_id);
             }
 
-            if let ShadowMapUsage::Update(ShadowMapIdentifier::ForDirectionalLight(cascade_idx)) =
-                self.specification.shadow_map_usage
+            if let ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(
+                cascade_idx,
+            )) = self.specification.shadow_map_usage
             {
                 // Write the index of the cascade to use for this pass into the
                 // appropriate push constant range
@@ -1376,7 +1379,7 @@ impl RenderPassRecorder {
                                 .as_instance_feature_buffer_range_id()
                                 + face.as_idx_u32()
                         }
-                        ShadowMapIdentifier::ForDirectionalLight(cascade_idx) => {
+                        ShadowMapIdentifier::ForUnidirectionalLight(cascade_idx) => {
                             // Offset the light index with the cascade index to
                             // get the index for the range of transforms for the
                             // specific cascade

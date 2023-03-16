@@ -23,9 +23,9 @@ pub struct ShadowCubemapTexture {
 }
 
 /// Texture array for storing the depths of the closest vertices to a
-/// directional light source, used for shadow mapping. Each of the textures in
-/// the array stores depths for a separate range of view distances (a partition
-/// of the view frustum, referred to as a cascade).
+/// unidirectional light source, used for shadow mapping. Each of the textures
+/// in the array stores depths for a separate range of view distances (a
+/// partition of the view frustum, referred to as a cascade).
 #[derive(Debug)]
 pub struct CascadedShadowMapTexture {
     texture: wgpu::Texture,

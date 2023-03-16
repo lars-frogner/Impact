@@ -2,11 +2,11 @@
 
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
-    insert_in_arena, new_name, push_to_block, DirectionalLightShaderGenerator, InputStruct,
-    InputStructBuilder, LightShaderGenerator, LightVertexOutputFieldIndices,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, PointLightShaderGenerator, SampledTexture,
-    SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
-    VECTOR_4_TYPE,
+    insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
+    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
+    OutputStructBuilder, PointLightShaderGenerator, SampledTexture, SourceCode, TextureType,
+    UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
 
@@ -315,24 +315,26 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 )
             }
             (
-                LightShaderGenerator::DirectionalLight(
-                    DirectionalLightShaderGenerator::ForShading(directional_light_shader_generator),
+                LightShaderGenerator::UnidirectionalLight(
+                    UnidirectionalLightShaderGenerator::ForShading(
+                        unidirectional_light_shader_generator,
+                    ),
                 ),
-                Some(LightVertexOutputFieldIndices::DirectionalLight(
-                    directional_light_input_field_indices,
+                Some(LightVertexOutputFieldIndices::UnidirectionalLight(
+                    unidirectional_light_input_field_indices,
                 )),
             ) => {
                 let camera_clip_position_expr =
                     fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
                 let light_space_position_expr = fragment_input_struct
-                    .get_field_expr(directional_light_input_field_indices.light_space_position);
+                    .get_field_expr(unidirectional_light_input_field_indices.light_space_position);
 
                 let light_space_normal_vector_expr = fragment_input_struct.get_field_expr(
-                    directional_light_input_field_indices.light_space_normal_vector,
+                    unidirectional_light_input_field_indices.light_space_normal_vector,
                 );
 
-                let (light_dir_expr, light_radiance_expr) = directional_light_shader_generator
+                let (light_dir_expr, light_radiance_expr) = unidirectional_light_shader_generator
                     .generate_fragment_shading_code(
                         module,
                         fragment_function,

@@ -8,8 +8,8 @@ use crate::{
     num::Float,
     rendering::{fre, CascadeIdx},
     scene::{
-        DirectionalLight, InstanceFeatureManager, LightStorage, ModelID, PointLight, SceneCamera,
-        MAX_SHADOW_MAP_CASCADES,
+        InstanceFeatureManager, LightStorage, ModelID, PointLight, SceneCamera,
+        UnidirectionalLight, MAX_SHADOW_MAP_CASCADES,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -708,7 +708,7 @@ impl SceneGraph<fre> {
         }
     }
 
-    /// Goes through all directional lights in the given light storage and
+    /// Goes through all unidirectional lights in the given light storage and
     /// updates their orthographic transforms to encompass model instances that
     /// may cast visible shadows inside the corresponding cascades in the view
     /// frustum. Then the model to light transform of every such shadow casting
@@ -721,7 +721,7 @@ impl SceneGraph<fre> {
     /// calling this method, so that the ranges of model to light transforms in
     /// the model instance buffers come after the initial range containing model
     /// to camera transforms.
-    pub fn bound_directional_lights_and_buffer_shadow_casting_model_instances(
+    pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
         &self,
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
@@ -737,13 +737,15 @@ impl SceneGraph<fre> {
             let camera_space_bounding_sphere =
                 world_space_bounding_sphere.transformed(view_transform);
 
-            for (light_id, directional_light) in light_storage.directional_lights_with_ids_mut() {
-                directional_light.update_cascade_partition_depths(
+            for (light_id, unidirectional_light) in
+                light_storage.unidirectional_lights_with_ids_mut()
+            {
+                unidirectional_light.update_cascade_partition_depths(
                     camera_space_view_frustum,
                     &camera_space_bounding_sphere,
                 );
 
-                directional_light.bound_orthographic_transforms_to_cascaded_view_frustum(
+                unidirectional_light.bound_orthographic_transforms_to_cascaded_view_frustum(
                     camera_space_view_frustum,
                     &camera_space_bounding_sphere,
                 );
@@ -759,9 +761,9 @@ impl SceneGraph<fre> {
                         );
                     }
 
-                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_directional_light_cascade(
+                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
                         instance_feature_manager,
-                        directional_light,
+                        unidirectional_light,
                         cascade_idx,
                         root_node,
                         view_transform,
@@ -838,10 +840,10 @@ impl SceneGraph<fre> {
         }
     }
 
-    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_directional_light_cascade(
+    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        directional_light: &DirectionalLight,
+        unidirectional_light: &UnidirectionalLight,
         cascade_idx: CascadeIdx,
         group_node: &GroupNode<fre>,
         group_to_camera_transform: &NodeTransform<fre>,
@@ -857,13 +859,13 @@ impl SceneGraph<fre> {
                 let child_camera_space_bounding_sphere =
                     child_world_space_bounding_sphere.transformed(&child_group_to_camera_transform);
 
-                if directional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
+                if unidirectional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
                     cascade_idx,
                     &child_camera_space_bounding_sphere,
                 ) {
-                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_directional_light_cascade(
+                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
                         instance_feature_manager,
-                        directional_light,
+                        unidirectional_light,
                         cascade_idx,
                         child_group_node,
                         &child_group_to_camera_transform,
@@ -885,13 +887,13 @@ impl SceneGraph<fre> {
                 model_instance_world_space_bounding_sphere
                     .transformed(&model_instance_to_camera_transform);
 
-            if directional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
+            if unidirectional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
                 cascade_idx,
                 &model_instance_camera_space_bounding_sphere,
             ) {
                 let instance_model_light_transform =
                     InstanceModelLightTransform::with_model_light_transform(
-                        directional_light
+                        unidirectional_light
                             .create_transform_to_light_space(&model_instance_to_camera_transform),
                     );
 

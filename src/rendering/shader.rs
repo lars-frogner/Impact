@@ -114,7 +114,7 @@ pub struct ModelViewTransformShaderInput {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LightShaderInput {
     PointLight(PointLightShaderInput),
-    DirectionalLight(DirectionalLightShaderInput),
+    UnidirectionalLight(UnidirectionalLightShaderInput),
 }
 
 /// Input description for point light sources, specifying the bind group
@@ -129,11 +129,11 @@ pub struct PointLightShaderInput {
     pub shadow_map_texture_and_sampler_binding: (u32, u32),
 }
 
-/// Input description for directional light sources, specifying the bind group
-/// binding and the total size of the directional light uniform buffer as well
-/// as shadow map bindings.
+/// Input description for unidirectional light sources, specifying the bind
+/// group binding and the total size of the unidirectional light uniform buffer
+/// as well as shadow map bindings.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DirectionalLightShaderInput {
+pub struct UnidirectionalLightShaderInput {
     /// Bind group binding of the light uniform buffer.
     pub uniform_binding: u32,
     /// Maximum number of lights in the uniform buffer.
@@ -167,7 +167,7 @@ pub struct ModelViewTransformExpressions {
 pub enum ProjectionExpressions {
     Camera(CameraProjectionExpressions),
     PointLight(PointLightProjectionExpressions),
-    DirectionalLight(DirectionalLightProjectionExpressions),
+    UnidirectionalLight(UnidirectionalLightProjectionExpressions),
 }
 
 /// Handle to expression for the camera projection matrix.
@@ -182,9 +182,9 @@ pub struct CameraProjectionExpressions {
 pub struct PointLightProjectionExpressions;
 
 /// Handle to expressions for the orthographic transform components associated
-/// with a directional light.
+/// with a unidirectional light.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightProjectionExpressions {
+pub struct UnidirectionalLightProjectionExpressions {
     pub translation: Handle<Expression>,
     pub scaling: Handle<Expression>,
 }
@@ -193,7 +193,7 @@ pub struct DirectionalLightProjectionExpressions {
 #[derive(Clone, Debug)]
 pub enum LightShaderGenerator {
     PointLight(PointLightShaderGenerator),
-    DirectionalLight(DirectionalLightShaderGenerator),
+    UnidirectionalLight(UnidirectionalLightShaderGenerator),
 }
 
 /// Generator for shader code associated with a point light source.
@@ -203,11 +203,11 @@ pub enum PointLightShaderGenerator {
     ForShading(PointLightShadingShaderGenerator),
 }
 
-/// Generator for shader code associated with a directional light source.
+/// Generator for shader code associated with a unidirectional light source.
 #[derive(Clone, Debug)]
-pub enum DirectionalLightShaderGenerator {
-    ForShadowMapUpdate(DirectionalLightShadowMapUpdateShaderGenerator),
-    ForShading(DirectionalLightShadingShaderGenerator),
+pub enum UnidirectionalLightShaderGenerator {
+    ForShadowMapUpdate(UnidirectionalLightShadowMapUpdateShaderGenerator),
+    ForShading(UnidirectionalLightShadingShaderGenerator),
 }
 
 /// Generator for shader code for updating the shadow cubemap of a point light.
@@ -229,17 +229,17 @@ pub struct PointLightShadingShaderGenerator {
     pub shadow_map: SampledTexture,
 }
 
-/// Generator for shader code for updating the shadow map of a directional light
-/// source.
+/// Generator for shader code for updating the shadow map of a unidirectional
+/// light source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightShadowMapUpdateShaderGenerator {
-    pub orthographic_projection: DirectionalLightProjectionExpressions,
+pub struct UnidirectionalLightShadowMapUpdateShaderGenerator {
+    pub orthographic_projection: UnidirectionalLightProjectionExpressions,
 }
 
-/// Generator for shading a fragment with the light from a directional light
+/// Generator for shading a fragment with the light from a unidirectional light
 /// source.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightShadingShaderGenerator {
+pub struct UnidirectionalLightShadingShaderGenerator {
     pub active_light_ptr_expr_in_vertex_function: Handle<Expression>,
     pub active_light_ptr_expr_in_fragment_function: Handle<Expression>,
     pub shadow_map: SampledTexture,
@@ -260,13 +260,13 @@ pub struct MeshVertexOutputFieldIndices {
 /// relevant light type in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub enum LightVertexOutputFieldIndices {
-    DirectionalLight(DirectionalLightVertexOutputFieldIndices),
+    UnidirectionalLight(UnidirectionalLightVertexOutputFieldIndices),
 }
 
-/// Indices of the fields holding the various directional light related
+/// Indices of the fields holding the various unidirectional light related
 /// properties in the vertex shader output struct.
 #[derive(Clone, Debug)]
-pub struct DirectionalLightVertexOutputFieldIndices {
+pub struct UnidirectionalLightVertexOutputFieldIndices {
     pub light_space_position: usize,
     pub light_space_normal_vector: usize,
 }
@@ -1249,8 +1249,8 @@ impl ShaderGenerator {
                     has_material,
                 )
             }
-            LightShaderInput::DirectionalLight(light_shader_input) => {
-                Self::create_directional_light_shader_generator(
+            LightShaderInput::UnidirectionalLight(light_shader_input) => {
+                Self::create_unidirectional_light_shader_generator(
                     light_shader_input,
                     module,
                     vertex_function,
@@ -1460,14 +1460,14 @@ impl ShaderGenerator {
 
     /// Creates a generator of shader code for point lights.
     ///
-    /// This involves generating declarations for the directional light uniform
-    /// type, the type the directional light uniform buffer will be mapped to,
-    /// the global variable this is bound to, the global variables referring to
-    /// the shadow map texture and sampler if required, and expressions for the
-    /// fields of the light at the active index (which is set in a push
-    /// constant).
-    fn create_directional_light_shader_generator(
-        light_shader_input: &DirectionalLightShaderInput,
+    /// This involves generating declarations for the unidirectional light
+    /// uniform type, the type the unidirectional light uniform buffer will be
+    /// mapped to, the global variable this is bound to, the global variables
+    /// referring to the shadow map texture and sampler if required, and
+    /// expressions for the fields of the light at the active index (which is
+    /// set in a push constant).
+    fn create_unidirectional_light_shader_generator(
+        light_shader_input: &UnidirectionalLightShaderInput,
         module: &mut Module,
         vertex_function: &mut Function,
         fragment_function: &mut Function,
@@ -1532,7 +1532,7 @@ impl ShaderGenerator {
         let single_light_struct_type = insert_in_arena(
             &mut module.types,
             Type {
-                name: new_name("DirectionalLight"),
+                name: new_name("UnidirectionalLight"),
                 inner: TypeInner::Struct {
                     members: vec![
                         StructMember {
@@ -1600,7 +1600,7 @@ impl ShaderGenerator {
         let lights_struct_type = insert_in_arena(
             &mut module.types,
             Type {
-                name: new_name("DirectionalLights"),
+                name: new_name("UnidirectionalLights"),
                 inner: TypeInner::Struct {
                     members: vec![
                         StructMember {
@@ -1628,7 +1628,7 @@ impl ShaderGenerator {
         let lights_struct_var = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
-                name: new_name("directionalLights"),
+                name: new_name("unidirectionalLights"),
                 space: AddressSpace::Uniform,
                 binding: Some(ResourceBinding {
                     group: *bind_group_idx,
@@ -1674,7 +1674,7 @@ impl ShaderGenerator {
 
             *bind_group_idx += 1;
 
-            LightShaderGenerator::new_for_directional_light_shading(
+            LightShaderGenerator::new_for_unidirectional_light_shading(
                 vertex_function,
                 fragment_function,
                 lights_struct_var,
@@ -1720,7 +1720,7 @@ impl ShaderGenerator {
                 },
             );
 
-            LightShaderGenerator::new_for_directional_light_shadow_map_update(
+            LightShaderGenerator::new_for_unidirectional_light_shadow_map_update(
                 vertex_function,
                 lights_struct_var,
                 active_light_and_cascade_idx_var,
@@ -1851,8 +1851,8 @@ impl ProjectionExpressions {
                 .generate_clip_position_expr(module, vertex_function, position_expr),
             Self::PointLight(point_light_cubemap_projection) => point_light_cubemap_projection
                 .generate_clip_position_expr(module, vertex_function, position_expr),
-            Self::DirectionalLight(directional_light_orthographic_projection) => {
-                directional_light_orthographic_projection.generate_clip_position_expr(
+            Self::UnidirectionalLight(unidirectional_light_orthographic_projection) => {
+                unidirectional_light_orthographic_projection.generate_clip_position_expr(
                     module,
                     vertex_function,
                     position_expr,
@@ -1933,7 +1933,7 @@ impl PointLightProjectionExpressions {
     }
 }
 
-impl DirectionalLightProjectionExpressions {
+impl UnidirectionalLightProjectionExpressions {
     /// Generates an expression for the given position (as a vec3) projected
     /// with the orthographic projection in the vertex entry point function. The
     /// projected position will be a vec4 with w = 1.0;
@@ -2006,13 +2006,13 @@ impl LightShaderGenerator {
         ))
     }
 
-    pub fn new_for_directional_light_shadow_map_update(
+    pub fn new_for_unidirectional_light_shadow_map_update(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_and_cascade_idx_var: Handle<GlobalVariable>,
     ) -> Self {
-        Self::DirectionalLight(DirectionalLightShaderGenerator::ForShadowMapUpdate(
-            DirectionalLightShadowMapUpdateShaderGenerator::new(
+        Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShadowMapUpdate(
+            UnidirectionalLightShadowMapUpdateShaderGenerator::new(
                 vertex_function,
                 lights_struct_var,
                 active_light_and_cascade_idx_var,
@@ -2020,15 +2020,15 @@ impl LightShaderGenerator {
         ))
     }
 
-    pub fn new_for_directional_light_shading(
+    pub fn new_for_unidirectional_light_shading(
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: SampledTexture,
     ) -> Self {
-        Self::DirectionalLight(DirectionalLightShaderGenerator::ForShading(
-            DirectionalLightShadingShaderGenerator::new(
+        Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShading(
+            UnidirectionalLightShadingShaderGenerator::new(
                 vertex_function,
                 fragment_function,
                 lights_struct_var,
@@ -2043,10 +2043,10 @@ impl LightShaderGenerator {
             Self::PointLight(_) => Some(ProjectionExpressions::PointLight(
                 PointLightProjectionExpressions,
             )),
-            Self::DirectionalLight(DirectionalLightShaderGenerator::ForShadowMapUpdate(
+            Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShadowMapUpdate(
                 shader_generator,
             )) => Some(shader_generator.get_projection_to_light_clip_space()),
-            Self::DirectionalLight(_) => None,
+            Self::UnidirectionalLight(_) => None,
         }
     }
 
@@ -2058,9 +2058,9 @@ impl LightShaderGenerator {
         mesh_output_field_indices: &MeshVertexOutputFieldIndices,
     ) -> Option<LightVertexOutputFieldIndices> {
         match self {
-            Self::DirectionalLight(DirectionalLightShaderGenerator::ForShading(
+            Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShading(
                 shader_generator,
-            )) => Some(LightVertexOutputFieldIndices::DirectionalLight(
+            )) => Some(LightVertexOutputFieldIndices::UnidirectionalLight(
                 shader_generator.generate_vertex_output_code_for_shading(
                     module,
                     vertex_function,
@@ -2475,7 +2475,7 @@ impl PointLightShadingShaderGenerator {
     }
 }
 
-impl DirectionalLightShaderGenerator {
+impl UnidirectionalLightShaderGenerator {
     fn generate_single_orthographic_transform_ptr_expr(
         function: &mut Function,
         active_light_ptr_expr: Handle<Expression>,
@@ -2500,7 +2500,7 @@ impl DirectionalLightShaderGenerator {
     }
 }
 
-impl DirectionalLightShadowMapUpdateShaderGenerator {
+impl UnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn new(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
@@ -2537,7 +2537,7 @@ impl DirectionalLightShadowMapUpdateShaderGenerator {
         );
 
         let orthographic_transform_ptr_expr =
-            DirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
+            UnidirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
                 vertex_function,
                 active_light_ptr_expr,
                 active_cascade_idx_expr,
@@ -2557,7 +2557,7 @@ impl DirectionalLightShadowMapUpdateShaderGenerator {
             1,
         );
 
-        let orthographic_projection = DirectionalLightProjectionExpressions {
+        let orthographic_projection = UnidirectionalLightProjectionExpressions {
             translation: orthographic_translation,
             scaling: orthographic_scaling,
         };
@@ -2568,11 +2568,11 @@ impl DirectionalLightShadowMapUpdateShaderGenerator {
     }
 
     pub fn get_projection_to_light_clip_space(&self) -> ProjectionExpressions {
-        ProjectionExpressions::DirectionalLight(self.orthographic_projection.clone())
+        ProjectionExpressions::UnidirectionalLight(self.orthographic_projection.clone())
     }
 }
 
-impl DirectionalLightShadingShaderGenerator {
+impl UnidirectionalLightShadingShaderGenerator {
     pub fn new(
         vertex_function: &mut Function,
         fragment_function: &mut Function,
@@ -2607,7 +2607,7 @@ impl DirectionalLightShadingShaderGenerator {
         vertex_function: &mut Function,
         output_struct_builder: &mut OutputStructBuilder,
         mesh_output_field_indices: &MeshVertexOutputFieldIndices,
-    ) -> DirectionalLightVertexOutputFieldIndices {
+    ) -> UnidirectionalLightVertexOutputFieldIndices {
         let source_code = SourceCode::from_wgsl_source(
             "\
             fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
@@ -2627,7 +2627,7 @@ impl DirectionalLightShadingShaderGenerator {
             .get_field_expr(
                 mesh_output_field_indices
                     .position
-                    .expect("Missing position for shading with directional light"),
+                    .expect("Missing position for shading with unidirectional light"),
             )
             .unwrap();
 
@@ -2635,7 +2635,7 @@ impl DirectionalLightShadingShaderGenerator {
             .get_field_expr(
                 mesh_output_field_indices
                     .normal_vector
-                    .expect("Missing normal vector for shading with directional light"),
+                    .expect("Missing normal vector for shading with unidirectional light"),
             )
             .unwrap();
 
@@ -2667,7 +2667,7 @@ impl DirectionalLightShadingShaderGenerator {
             ],
         );
 
-        DirectionalLightVertexOutputFieldIndices {
+        UnidirectionalLightVertexOutputFieldIndices {
             light_space_position: output_struct_builder.add_field_with_perspective_interpolation(
                 "lightSpacePosition",
                 vec3_type,
@@ -2821,7 +2821,7 @@ impl DirectionalLightShadingShaderGenerator {
         );
 
         let orthographic_transform_ptr_expr =
-            DirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
+            UnidirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
                 fragment_function,
                 self.active_light_ptr_expr_in_fragment_function,
                 cascade_idx_expr,
@@ -4706,8 +4706,8 @@ mod test {
             shadow_map_texture_and_sampler_binding: (1, 2),
         });
 
-    const DIRECTIONAL_LIGHT_INPUT: LightShaderInput =
-        LightShaderInput::DirectionalLight(DirectionalLightShaderInput {
+    const UNIDIRECTIONAL_LIGHT_INPUT: LightShaderInput =
+        LightShaderInput::UnidirectionalLight(UnidirectionalLightShaderInput {
             uniform_binding: 3,
             max_light_count: 20,
             shadow_map_texture_and_sampler_bindings: (4, 5, 6),
@@ -4858,11 +4858,11 @@ mod test {
     }
 
     #[test]
-    fn building_directional_light_shadow_map_update_shader_works() {
+    fn building_unidirectional_light_shadow_map_update_shader_works() {
         let module = ShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
-            Some(&DIRECTIONAL_LIGHT_INPUT),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
@@ -5005,7 +5005,7 @@ mod test {
     }
 
     #[test]
-    fn building_blinn_phong_shader_with_directional_light_works() {
+    fn building_blinn_phong_shader_with_unidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5016,7 +5016,7 @@ mod test {
                     None,
                 ],
             }),
-            Some(&DIRECTIONAL_LIGHT_INPUT),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialShaderInput::BlinnPhong(None)),
             BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
@@ -5064,7 +5064,7 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_blinn_phong_shader_with_directional_light_works() {
+    fn building_diffuse_textured_blinn_phong_shader_with_unidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5075,7 +5075,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&DIRECTIONAL_LIGHT_INPUT),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
@@ -5126,7 +5126,7 @@ mod test {
     }
 
     #[test]
-    fn building_textured_blinn_phong_shader_with_directional_light_works() {
+    fn building_textured_blinn_phong_shader_with_unidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5137,7 +5137,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&DIRECTIONAL_LIGHT_INPUT),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,

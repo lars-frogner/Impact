@@ -4,8 +4,8 @@ use crate::{
     geometry::{AxisAlignedBox, Frustum, OrthographicTransform, Sphere, UpperExclusiveBounds},
     rendering::{fre, CascadeIdx},
     scene::{
-        DirectionComp, DirectionalLightComp, EmissionExtentComp, LightDirection, LightStorage,
-        Radiance, RadianceComp, RenderResourcesDesynchronized, SceneCamera,
+        DirectionComp, EmissionExtentComp, LightDirection, LightStorage, Radiance, RadianceComp,
+        RenderResourcesDesynchronized, SceneCamera, UnidirectionalLightComp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -14,10 +14,10 @@ use nalgebra::{Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, V
 use std::{iter, sync::RwLock};
 
 /// Maximum number of cascades supported in a cascaded shadow map for
-/// directional lights.
+/// unidirectional lights.
 ///
 /// # Warning
-/// Increasing this above 4 will require changes to the [`DirectionalLight`]
+/// Increasing this above 4 will require changes to the [`UnidirectionalLight`]
 /// struct and associated shader code to meet uniform padding requirements.
 pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
 
@@ -40,7 +40,7 @@ pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
 /// shader.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct DirectionalLight {
+pub struct UnidirectionalLight {
     camera_to_light_space_rotation: UnitQuaternion<fre>,
     camera_space_direction: LightDirection,
     // Padding to obtain 16-byte alignment for next field
@@ -69,7 +69,7 @@ struct OrthographicTranslationAndScaling {
 
 const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
 
-impl DirectionalLight {
+impl UnidirectionalLight {
     fn new(
         camera_space_direction: LightDirection,
         radiance: Radiance,
@@ -235,9 +235,9 @@ impl DirectionalLight {
 
     /// Checks if the entity-to-be with the given components has the right
     /// components for this light source, and if so, adds the corresponding
-    /// [`DirectionalLight`] to the light storage and adds a
-    /// [`DirectionalLightComp`] with the light's ID to the entity.
-    pub fn add_directional_light_component_for_entity(
+    /// [`UnidirectionalLight`] to the light storage and adds a
+    /// [`UnidirectionalLightComp`] with the light's ID to the entity.
+    pub fn add_unidirectional_light_component_for_entity(
         scene_camera: &RwLock<Option<SceneCamera<fre>>>,
         light_storage: &RwLock<LightStorage>,
         components: &mut ArchetypeComponentStorage,
@@ -261,8 +261,8 @@ impl DirectionalLight {
             |direction: &DirectionComp,
              radiance: &RadianceComp,
              emission_extent: Option<&EmissionExtentComp>|
-             -> DirectionalLightComp {
-                let directional_light = Self::new(
+             -> UnidirectionalLightComp {
+                let unidirectional_light = Self::new(
                     // The view transform contains no scaling, so the direction remains normalized
                     LightDirection::new_unchecked(
                         view_transform.transform_vector(&direction.0.cast()),
@@ -270,28 +270,28 @@ impl DirectionalLight {
                     radiance.0,
                     emission_extent.map_or(0.0, |extent| extent.0),
                 );
-                let id = light_storage.add_directional_light(directional_light);
+                let id = light_storage.add_unidirectional_light(unidirectional_light);
 
-                DirectionalLightComp { id }
+                UnidirectionalLightComp { id }
             },
-            ![DirectionalLightComp]
+            ![UnidirectionalLightComp]
         );
     }
 
-    /// Checks if the given entity has a [`DirectionalLightComp`], and if so,
-    /// removes the assocated [`DirectionalLight`] from the given
+    /// Checks if the given entity has a [`UnidirectionalLightComp`], and if so,
+    /// removes the assocated [`UnidirectionalLight`] from the given
     /// [`LightStorage`].
     pub fn remove_light_from_storage(
         light_storage: &RwLock<LightStorage>,
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        if let Some(directional_light) = entity.get_component::<DirectionalLightComp>() {
-            let light_id = directional_light.access().id;
+        if let Some(unidirectional_light) = entity.get_component::<UnidirectionalLightComp>() {
+            let light_id = unidirectional_light.access().id;
             light_storage
                 .write()
                 .unwrap()
-                .remove_directional_light(light_id);
+                .remove_unidirectional_light(light_id);
             desynchronized.set_yes();
         }
     }

@@ -17,11 +17,11 @@ pub struct PointLightComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that
-/// have a [`DirectionalLight`](crate::scene::DirectionalLight).
+/// have a [`UnidirectionalLight`](crate::scene::UnidirectionalLight).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct DirectionalLightComp {
-    /// The ID of the entity's [`DirectionalLight`](crate::scene::DirectionalLight).
+pub struct UnidirectionalLightComp {
+    /// The ID of the entity's [`UnidirectionalLight`](crate::scene::UnidirectionalLight).
     pub id: LightID,
 }
 

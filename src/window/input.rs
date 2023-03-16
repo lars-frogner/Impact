@@ -48,7 +48,7 @@ pub enum KeyboardInputAction {
     SaveScreenshot,
     SaveDepthMap,
     SavePointLightShadowMap,
-    SaveDirectionalLightShadowMap,
+    SaveUnidirectionalLightShadowMap,
     Exit,
 }
 
@@ -190,13 +190,13 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
-                    KeyboardInputAction::SaveDirectionalLightShadowMap => {
+                    KeyboardInputAction::SaveUnidirectionalLightShadowMap => {
                         if state == &ElementState::Released {
                             world
                                 .renderer()
                                 .read()
                                 .unwrap()
-                                .request_directional_light_shadow_map_save();
+                                .request_unidirectional_light_shadow_map_save();
                         }
                         Ok(HandlingResult::Handled)
                     }
@@ -251,7 +251,7 @@ impl Default for KeyActionMap {
             SaveScreenshot => F12,
             SaveDepthMap => F11,
             SavePointLightShadowMap => F10,
-            SaveDirectionalLightShadowMap => F9,
+            SaveUnidirectionalLightShadowMap => F9,
             Exit => Escape
         ))
     }

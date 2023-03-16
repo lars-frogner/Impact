@@ -148,27 +148,27 @@ define_task!(
 define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
     /// [`SceneGraph`](crate::scene::SceneGraph) to determine which model
-    /// instances may cast a visible shadows for each directional light, bounds
-    /// the light's orthographic projection to encompass these and buffer their
-    /// model to light transforms for shadow mapping.
-    [pub] BoundDirectionalLightsAndBufferShadowCastingModelInstances,
+    /// instances may cast a visible shadows for each unidirectional light,
+    /// bounds the light's orthographic projection to encompass these and buffer
+    /// their model to light transforms for shadow mapping.
+    [pub] BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
         SyncLightPositionsAndDirectionsInStorage,
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Bounding directional lights and buffering shadow casting model instances"; {
+        with_debug_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
             let scene = world.scene().read().unwrap();
             let maybe_scene_camera = scene.scene_camera().read().unwrap();
             let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
-                anyhow!("Tried to bound directional lights without scene camera")
+                anyhow!("Tried to bound unidirectional lights without scene camera")
             })?;
 
             scene.scene_graph()
                 .read()
                 .unwrap()
-                .bound_directional_lights_and_buffer_shadow_casting_model_instances(
+                .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                     &mut scene.light_storage().write().unwrap(),
                     &mut scene.instance_feature_manager().write().unwrap(),
                     scene_camera,
@@ -196,7 +196,7 @@ impl Scene {
         task_scheduler.register_task(BufferVisibleModelInstances)?;
         task_scheduler.register_task(SyncLightPositionsAndDirectionsInStorage)?;
         task_scheduler.register_task(BoundPointLightsAndBufferShadowCastingModelInstances)?;
-        task_scheduler.register_task(BoundDirectionalLightsAndBufferShadowCastingModelInstances)
+        task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)
     }
 
     /// Identifies scene-related errors that need special

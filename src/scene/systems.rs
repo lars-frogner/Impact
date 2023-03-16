@@ -5,8 +5,8 @@ use crate::{
     physics::{AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp, Static},
     rendering::RenderingTag,
     scene::{
-        CameraNodeID, DirectionComp, DirectionalLightComp, GroupNodeID, LightDirection,
-        ModelInstanceNodeID, PointLightComp, SceneGraphNodeComp, SyncSceneCameraViewTransform,
+        CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
+        PointLightComp, SceneGraphNodeComp, SyncSceneCameraViewTransform, UnidirectionalLightComp,
     },
     world::World,
 };
@@ -121,10 +121,10 @@ define_task!(
             );
 
             query!(
-                ecs_world, |directional_light: &DirectionalLightComp, direction: &DirectionComp| {
-                    let light_id = directional_light.id;
+                ecs_world, |unidirectional_light: &UnidirectionalLightComp, direction: &DirectionComp| {
+                    let light_id = unidirectional_light.id;
                     light_storage
-                        .directional_light_mut(light_id)
+                        .unidirectional_light_mut(light_id)
                         .set_camera_space_direction(LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast())));
                 }
             );

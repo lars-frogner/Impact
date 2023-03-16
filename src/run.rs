@@ -14,9 +14,9 @@ use crate::{
     },
     rendering::{Assets, TextureID},
     scene::{
-        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp, FixedColorComp,
-        LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional, PerspectiveCameraComp,
-        RadianceComp, ScalingComp, Scene,
+        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp, EmissionExtentComp,
+        FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional,
+        PerspectiveCameraComp, RadianceComp, ScalingComp, Scene,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -294,6 +294,7 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entities((
             &DirectionComp(LightDirection::new_normalize(vector![0.6, -1.0, 1.0])),
             &RadianceComp(vector![1.0, 1.0, 1.0] * 0.4),
+            &EmissionExtentComp(0.5),
         ))
         .unwrap();
 
