@@ -14,9 +14,9 @@ use crate::{
     },
     rendering::{Assets, TextureID},
     scene::{
-        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp, EmissionExtentComp,
-        FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional,
-        PerspectiveCameraComp, RadianceComp, ScalingComp, Scene,
+        AngularExtentComp, BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp,
+        EmissionExtentComp, FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository,
+        Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp, Scene,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -80,13 +80,15 @@ async fn init_world(window: Window) -> Result<World> {
     let mut assets = Assets::new();
     let mut mesh_repository = MeshRepository::new();
 
-    // let tree_texture = ImageTexture::from_path(&core_system, "assets/happy-tree.png", id!("Tree texture")?;
     assets.image_textures.insert(
-        TextureID(hash32!("Tree texture")),
-        ImageTexture::from_bytes(
+        TextureID(hash32!("Wood texture")),
+        ImageTexture::from_path(&core_system, "assets/Wood049_4K-JPG/Wood049_4K_Color.jpg")?,
+    );
+    assets.image_textures.insert(
+        TextureID(hash32!("Plaster texture")),
+        ImageTexture::from_path(
             &core_system,
-            include_bytes!("../assets/happy-tree.png"),
-            "Tree texture",
+            "assets/PaintedPlaster017_4K-JPG/PaintedPlaster017_4K_Color.jpg",
         )?,
     );
 
@@ -101,6 +103,13 @@ async fn init_world(window: Window) -> Result<World> {
         .add_mesh(
             MeshID(hash64!("Box mesh")),
             TriangleMesh::create_box(1.0, 1.0, 1.0),
+        )
+        .unwrap();
+
+    mesh_repository
+        .add_mesh(
+            MeshID(hash64!("Pole mesh")),
+            TriangleMesh::create_cylinder(10.0, 1.0, 100),
         )
         .unwrap();
 
@@ -142,14 +151,14 @@ async fn init_world(window: Window) -> Result<World> {
             .create_entities(
                 model_comps
                     .combined_with((
-                        &PositionComp(Point3::new(0.0, -0.5, 5.0)),
+                        &PositionComp(Point3::new(6.3, 6.5 - 1.7, 3.7)),
                         &ScalingComp(1.0),
                         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-                        &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(2.0))),
+                        &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
                         &BlinnPhongComp {
-                            diffuse: vector![0.3, 0.3, 0.5],
-                            specular: vector![0.6, 0.6, 0.6],
-                            shininess: 13.0,
+                            diffuse: vector![0.05, 0.05, 0.1],
+                            specular: vector![0.6, 0.6, 0.9],
+                            shininess: 25.0,
                         },
                     ))
                     .unwrap(),
@@ -165,8 +174,8 @@ async fn init_world(window: Window) -> Result<World> {
             .create_entities(
                 model_comps
                     .combined_with((
-                        &PositionComp(Point3::new(-4.0, -0.5, 0.0)),
-                        &ScalingComp(0.1),
+                        &PositionComp(Point3::new(-1.0, 1.5, 8.0)),
+                        &ScalingComp(0.17),
                         &OrientationComp(Orientation::from_axis_angle(
                             &Vector3::x_axis(),
                             -PI / 2.0 + 0.4,
@@ -176,7 +185,7 @@ async fn init_world(window: Window) -> Result<World> {
                             Degrees(-2.3),
                         )),
                         &BlinnPhongComp {
-                            diffuse: vector![0.7, 0.3, 0.5],
+                            diffuse: vector![0.8, 0.4, 0.3],
                             specular: vector![0.3, 0.3, 0.3],
                             shininess: 3.0,
                         },
@@ -189,9 +198,38 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
-            &PositionComp(Point3::new(4.0, 0.0, -1.0)),
+            &PositionComp(Point3::new(-6.0, -1.0, 4.0)),
+            &ScalingComp(2.0),
             &BlinnPhongComp {
-                diffuse: vector![0.4, 0.6, 0.4],
+                diffuse: vector![0.7, 0.7, 0.3],
+                specular: vector![0.8, 0.8, 0.8],
+                shininess: 21.0,
+            },
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &MeshComp::new(MeshID(hash64!("Box mesh"))),
+            &PositionComp(Point3::new(-6.0, 1.0, 4.0)),
+            &ScalingComp(2.0),
+            &OrientationComp(Orientation::identity()),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.3))),
+            &BlinnPhongComp {
+                diffuse: vector![0.7, 0.3, 0.7],
+                specular: vector![0.8, 0.8, 0.8],
+                shininess: 16.0,
+            },
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &MeshComp::new(MeshID(hash64!("Pole mesh"))),
+            &PositionComp(Point3::new(6.0, 0.5, 4.0)),
+            &ScalingComp(1.0),
+            &BlinnPhongComp {
+                diffuse: vector![0.4, 0.4, 0.6],
                 specular: vector![0.3, 0.3, 0.3],
                 shininess: 6.0,
             },
@@ -202,12 +240,12 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Plane mesh"))),
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
-            &ScalingComp(30.0),
+            &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
             &DiffuseTexturedBlinnPhongComp {
-                diffuse: TextureID(hash32!("Tree texture")),
-                specular: vector![0.3, 0.3, 0.3],
-                shininess: 6.0,
+                diffuse: TextureID(hash32!("Wood texture")),
+                specular: vector![0.6, 0.6, 0.6],
+                shininess: 12.0,
             },
         ))
         .unwrap();
@@ -215,13 +253,13 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Plane mesh"))),
-            &PositionComp(Point3::new(15.0, 0.0, 0.0)),
-            &ScalingComp(30.0),
+            &PositionComp(Point3::new(25.0, 0.0, 0.0)),
+            &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
-            &BlinnPhongComp {
-                diffuse: vector![0.4, 0.4, 0.4],
+            &DiffuseTexturedBlinnPhongComp {
+                diffuse: TextureID(hash32!("Plaster texture")),
                 specular: vector![0.3, 0.3, 0.3],
-                shininess: 6.0,
+                shininess: 4.0,
             },
         ))
         .unwrap();
@@ -229,13 +267,13 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Plane mesh"))),
-            &PositionComp(Point3::new(-15.0, 0.0, 0.0)),
-            &ScalingComp(30.0),
+            &PositionComp(Point3::new(-25.0, 0.0, 0.0)),
+            &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
-            &BlinnPhongComp {
-                diffuse: vector![0.4, 0.4, 0.4],
+            &DiffuseTexturedBlinnPhongComp {
+                diffuse: TextureID(hash32!("Plaster texture")),
                 specular: vector![0.3, 0.3, 0.3],
-                shininess: 6.0,
+                shininess: 4.0,
             },
         ))
         .unwrap();
@@ -243,13 +281,13 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Plane mesh"))),
-            &PositionComp(Point3::new(0.0, 0.0, 15.0)),
-            &ScalingComp(30.0),
+            &PositionComp(Point3::new(0.0, 0.0, 25.0)),
+            &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
-            &BlinnPhongComp {
-                diffuse: vector![0.4, 0.4, 0.4],
+            &DiffuseTexturedBlinnPhongComp {
+                diffuse: TextureID(hash32!("Plaster texture")),
                 specular: vector![0.3, 0.3, 0.3],
-                shininess: 6.0,
+                shininess: 4.0,
             },
         ))
         .unwrap();
@@ -268,33 +306,43 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
+    // world
+    //     .create_entities((
+    //         &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
+    //         &ScalingComp(0.2),
+    //         &PositionComp(Point3::new(0.0, 1.0, -2.0)),
+    //         &RadianceComp(vector![1.0, 1.0, 1.0] * 15.0),
+    //         &FixedColorComp(vector![1.0, 1.0, 1.0]),
+    //         &Omnidirectional,
+    //     ))
+    //     .unwrap();
+
     world
         .create_entities((
             &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
-            &ScalingComp(0.2),
-            &PositionComp(Point3::new(0.0, 1.0, -2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 15.0),
+            &ScalingComp(0.7),
+            &PositionComp(Point3::new(0.0, 9.0, 2.0)),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 50.0),
             &FixedColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,
+            &EmissionExtentComp(0.7),
         ))
         .unwrap();
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
-            &ScalingComp(0.2),
-            &PositionComp(Point3::new(2.0, 5.0, 2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 30.0),
-            &FixedColorComp(vector![1.0, 1.0, 1.0]),
-            &Omnidirectional,
-        ))
-        .unwrap();
-
-    world
-        .create_entities((
-            &DirectionComp(LightDirection::new_normalize(vector![0.6, -1.0, 1.0])),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 0.4),
-            &EmissionExtentComp(0.5),
+            &[
+                DirectionComp(LightDirection::new_normalize(vector![-0.3, -0.7, 1.0])),
+                DirectionComp(LightDirection::new_normalize(vector![0.6, -0.4, 1.0])),
+            ],
+            &[
+                RadianceComp(vector![1.0, 1.0, 1.0] * 0.2),
+                RadianceComp(vector![1.0, 1.0, 1.0] * 0.15),
+            ],
+            &[
+                AngularExtentComp(Degrees(2.0)),
+                AngularExtentComp(Degrees(2.0)),
+            ],
         ))
         .unwrap();
 
