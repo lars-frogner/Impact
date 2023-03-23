@@ -286,6 +286,19 @@ impl Archetype {
         ))
     }
 
+    fn new_from_sorted_component_ids(component_ids: &[ComponentID]) -> Result<Self> {
+        if !component_ids.is_empty() {
+            // Verify that no component is represented multiple times
+            let duplicates_exist = (1..component_ids.len())
+                .any(|idx| component_ids[idx..].contains(&component_ids[idx - 1]));
+            if duplicates_exist {
+                bail!("Duplicate component ID when constructing archetype");
+            }
+        }
+
+        Ok(Self::new_from_sorted_component_ids_unchecked(component_ids))
+    }
+
     fn new_from_sorted_component_ids_unchecked(component_ids: &[ComponentID]) -> Self {
         let id = Self::create_id_from_sorted_component_ids(component_ids);
         let component_ids = component_ids.iter().cloned().collect();
@@ -1181,7 +1194,7 @@ where
     /// Returns an error if:
     /// - The given array is empty.
     /// - The same component type occurs more than once in the array.
-    pub fn try_from_single_instances<const N: usize>(
+    pub fn try_from_array_of_single_instances<const N: usize>(
         component_arrays: [SingleInstance<A>; N],
     ) -> Result<Self> {
         if component_arrays.is_empty() {
@@ -1203,6 +1216,41 @@ where
         component_ids.sort();
 
         let archetype = Archetype::new_from_sorted_component_id_arr(component_ids)?;
+
+        Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
+            archetype,
+            component_arrays
+                .into_iter()
+                .map(SingleInstance::into_inner)
+                .collect(),
+            1,
+        )))
+    }
+
+    /// Converts the given [`Vec`] of [`SingleInstance`] wrapped
+    /// [`ComponentArray`]s into a `SingleInstance` wrapped
+    /// [`ArchetypeComponents`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The given vector is empty.
+    /// - The same component type occurs more than once in the vector.
+    pub fn try_from_vec_of_single_instances(
+        component_arrays: Vec<SingleInstance<A>>,
+    ) -> Result<Self> {
+        if component_arrays.is_empty() {
+            bail!("Tried to create empty single instance `ArchetypeComponents`");
+        }
+
+        let mut component_ids: Vec<_> = component_arrays
+            .iter()
+            .map(|array| array.component_id())
+            .collect();
+
+        // Make sure components IDs are sorted before determining archetype
+        component_ids.sort();
+
+        let archetype = Archetype::new_from_sorted_component_ids(&component_ids)?;
 
         Ok(SingleInstance::new_unchecked(ArchetypeComponents::new(
             archetype,
@@ -1445,7 +1493,8 @@ mod test {
     #[test]
     #[should_panic]
     fn converting_to_empty_single_instance_archetype_view_fails() {
-        SingleInstance::<ArchetypeComponentView<'_>>::try_from_single_instances([]).unwrap();
+        SingleInstance::<ArchetypeComponentView<'_>>::try_from_array_of_single_instances([])
+            .unwrap();
     }
 
     #[test]
@@ -1461,10 +1510,11 @@ mod test {
         assert_eq!(view.component_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
-        let view = SingleInstance::<ArchetypeComponentView<'_>>::try_from_single_instances([
-            (&Marked).single_instance_view(),
-        ])
-        .unwrap();
+        let view =
+            SingleInstance::<ArchetypeComponentView<'_>>::try_from_array_of_single_instances([
+                (&Marked).single_instance_view(),
+            ])
+            .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
         assert_eq!(view.component_count(), 1);
@@ -1477,10 +1527,11 @@ mod test {
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
-        let view = SingleInstance::<ArchetypeComponentView<'_>>::try_from_single_instances([
-            (&BYTE).single_instance_view(),
-        ])
-        .unwrap();
+        let view =
+            SingleInstance::<ArchetypeComponentView<'_>>::try_from_array_of_single_instances([
+                (&BYTE).single_instance_view(),
+            ])
+            .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
         assert_eq!(view.component_count(), 1);
@@ -1496,11 +1547,12 @@ mod test {
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
         assert_eq!(view.components_of_type::<Position>(), &[POS]);
 
-        let view = SingleInstance::<ArchetypeComponentView<'_>>::try_from_single_instances([
-            (&BYTE).single_instance_view(),
-            (&POS).single_instance_view(),
-        ])
-        .unwrap();
+        let view =
+            SingleInstance::<ArchetypeComponentView<'_>>::try_from_array_of_single_instances([
+                (&BYTE).single_instance_view(),
+                (&POS).single_instance_view(),
+            ])
+            .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
         assert_eq!(view.component_count(), 1);
@@ -1522,12 +1574,13 @@ mod test {
         assert_eq!(view.components_of_type::<Position>(), &[POS]);
         assert_eq!(view.components_of_type::<Rectangle>(), &[RECT]);
 
-        let view = SingleInstance::<ArchetypeComponentView<'_>>::try_from_single_instances([
-            (&BYTE).single_instance_view(),
-            (&POS).single_instance_view(),
-            (&RECT).single_instance_view(),
-        ])
-        .unwrap();
+        let view =
+            SingleInstance::<ArchetypeComponentView<'_>>::try_from_array_of_single_instances([
+                (&BYTE).single_instance_view(),
+                (&POS).single_instance_view(),
+                (&RECT).single_instance_view(),
+            ])
+            .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
         assert_eq!(view.component_count(), 1);
