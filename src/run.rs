@@ -14,8 +14,9 @@ use crate::{
     },
     rendering::{Assets, TextureID},
     scene::{
-        AngularExtentComp, BlinnPhongComp, DiffuseTexturedBlinnPhongComp, DirectionComp,
-        EmissionExtentComp, FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository,
+        AngularExtentComp, BlinnPhongShininessComp, BlinnPhongSpecularColorComp, DirectionComp,
+        EmissionExtentComp, FixedColorComp, LambertianDiffuseColorComp,
+        LambertianDiffuseTextureComp, LightDirection, MeshComp, MeshID, MeshRepository,
         Omnidirectional, PerspectiveCameraComp, RadianceComp, ScalingComp, Scene,
     },
     window::InputHandler,
@@ -155,11 +156,9 @@ async fn init_world(window: Window) -> Result<World> {
                         &ScalingComp(1.0),
                         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
                         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-                        &BlinnPhongComp {
-                            diffuse: vector![0.05, 0.05, 0.1],
-                            specular: vector![0.6, 0.6, 0.9],
-                            shininess: 25.0,
-                        },
+                        &LambertianDiffuseColorComp(vector![0.05, 0.05, 0.1]),
+                        &BlinnPhongSpecularColorComp(vector![0.6, 0.6, 0.9]),
+                        &BlinnPhongShininessComp(25.0),
                     ))
                     .unwrap(),
             )
@@ -184,11 +183,9 @@ async fn init_world(window: Window) -> Result<World> {
                             Vector3::y_axis(),
                             Degrees(-2.3),
                         )),
-                        &BlinnPhongComp {
-                            diffuse: vector![0.8, 0.4, 0.3],
-                            specular: vector![0.3, 0.3, 0.3],
-                            shininess: 3.0,
-                        },
+                        &LambertianDiffuseColorComp(vector![0.8, 0.4, 0.3]),
+                        &BlinnPhongSpecularColorComp(vector![0.3, 0.3, 0.3]),
+                        &BlinnPhongShininessComp(3.0),
                     ))
                     .unwrap(),
             )
@@ -200,11 +197,9 @@ async fn init_world(window: Window) -> Result<World> {
             &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
             &PositionComp(Point3::new(-6.0, -1.0, 4.0)),
             &ScalingComp(2.0),
-            &BlinnPhongComp {
-                diffuse: vector![0.7, 0.7, 0.3],
-                specular: vector![0.8, 0.8, 0.8],
-                shininess: 21.0,
-            },
+            &LambertianDiffuseColorComp(vector![0.7, 0.7, 0.3]),
+            &BlinnPhongSpecularColorComp(vector![0.8, 0.8, 0.8]),
+            &BlinnPhongShininessComp(21.0),
         ))
         .unwrap();
 
@@ -215,11 +210,9 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(2.0),
             &OrientationComp(Orientation::identity()),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.3))),
-            &BlinnPhongComp {
-                diffuse: vector![0.7, 0.3, 0.7],
-                specular: vector![0.8, 0.8, 0.8],
-                shininess: 16.0,
-            },
+            &LambertianDiffuseColorComp(vector![0.7, 0.3, 0.7]),
+            &BlinnPhongSpecularColorComp(vector![0.8, 0.8, 0.8]),
+            &BlinnPhongShininessComp(16.0),
         ))
         .unwrap();
 
@@ -228,11 +221,9 @@ async fn init_world(window: Window) -> Result<World> {
             &MeshComp::new(MeshID(hash64!("Pole mesh"))),
             &PositionComp(Point3::new(6.0, 0.5, 4.0)),
             &ScalingComp(1.0),
-            &BlinnPhongComp {
-                diffuse: vector![0.4, 0.4, 0.6],
-                specular: vector![0.3, 0.3, 0.3],
-                shininess: 6.0,
-            },
+            &LambertianDiffuseColorComp(vector![0.4, 0.4, 0.6]),
+            &BlinnPhongSpecularColorComp(vector![0.3, 0.3, 0.3]),
+            &BlinnPhongShininessComp(6.0),
         ))
         .unwrap();
 
@@ -242,11 +233,9 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
-            &DiffuseTexturedBlinnPhongComp {
-                diffuse: TextureID(hash32!("Wood texture")),
-                specular: vector![0.6, 0.6, 0.6],
-                shininess: 12.0,
-            },
+            &LambertianDiffuseTextureComp(TextureID(hash32!("Wood texture"))),
+            &BlinnPhongSpecularColorComp(vector![0.6, 0.6, 0.6]),
+            &BlinnPhongShininessComp(12.0),
         ))
         .unwrap();
 
@@ -256,11 +245,9 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
-            &DiffuseTexturedBlinnPhongComp {
-                diffuse: TextureID(hash32!("Plaster texture")),
-                specular: vector![0.3, 0.3, 0.3],
-                shininess: 4.0,
-            },
+            &LambertianDiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
+            &BlinnPhongSpecularColorComp(vector![0.3, 0.3, 0.3]),
+            &BlinnPhongShininessComp(4.0),
         ))
         .unwrap();
 
@@ -270,11 +257,9 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(-25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
-            &DiffuseTexturedBlinnPhongComp {
-                diffuse: TextureID(hash32!("Plaster texture")),
-                specular: vector![0.3, 0.3, 0.3],
-                shininess: 4.0,
-            },
+            &LambertianDiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
+            &BlinnPhongSpecularColorComp(vector![0.3, 0.3, 0.3]),
+            &BlinnPhongShininessComp(4.0),
         ))
         .unwrap();
 
@@ -284,11 +269,9 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, 0.0, 25.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
-            &DiffuseTexturedBlinnPhongComp {
-                diffuse: TextureID(hash32!("Plaster texture")),
-                specular: vector![0.3, 0.3, 0.3],
-                shininess: 4.0,
-            },
+            &LambertianDiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
+            &BlinnPhongSpecularColorComp(vector![0.3, 0.3, 0.3]),
+            &BlinnPhongShininessComp(4.0),
         ))
         .unwrap();
 

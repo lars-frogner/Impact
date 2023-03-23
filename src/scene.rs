@@ -28,11 +28,12 @@ pub use light::{
     UnidirectionalLight, UnidirectionalLightComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
-    BlinnPhongComp, BlinnPhongMaterial, DiffuseTexturedBlinnPhongComp,
-    DiffuseTexturedBlinnPhongMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
-    FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID,
-    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-    MaterialSpecification, RGBColor, TexturedBlinnPhongComp, TexturedBlinnPhongMaterial,
+    BlinnPhongMaterial, BlinnPhongShininessComp, BlinnPhongSpecularColorComp,
+    BlinnPhongSpecularTextureComp, DiffuseTexturedBlinnPhongMaterial, FixedColorComp,
+    FixedColorMaterial, FixedMaterialResources, FixedTextureComp, FixedTextureMaterial,
+    GlobalAmbientColorMaterial, LambertianDiffuseColorComp, LambertianDiffuseTextureComp,
+    MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+    MaterialPropertyTextureSetID, MaterialSpecification, RGBColor, TexturedBlinnPhongMaterial,
     VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};

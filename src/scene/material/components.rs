@@ -45,27 +45,23 @@ pub struct FixedTextureComp(pub TextureID);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct BlinnPhongComp {
-    pub diffuse: RGBColor,
-    pub specular: RGBColor,
-    pub shininess: fre,
-}
+pub struct LambertianDiffuseColorComp(pub RGBColor);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct DiffuseTexturedBlinnPhongComp {
-    pub specular: RGBColor,
-    pub diffuse: TextureID,
-    pub shininess: fre,
-}
+pub struct LambertianDiffuseTextureComp(pub TextureID);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct TexturedBlinnPhongComp {
-    pub diffuse: TextureID,
-    pub specular: TextureID,
-    pub shininess: fre,
-}
+pub struct BlinnPhongSpecularColorComp(pub RGBColor);
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct BlinnPhongSpecularTextureComp(pub TextureID);
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct BlinnPhongShininessComp(pub fre);
 
 impl MaterialComp {
     /// Creates a new component representing a material with the given
