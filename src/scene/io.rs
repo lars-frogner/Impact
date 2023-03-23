@@ -4,11 +4,8 @@ use crate::{
     geometry::{
         TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
-    rendering::{fre, Assets, CoreRenderingSystem, RenderingSystem},
-    scene::{
-        BlinnPhongComp, DiffuseTexturedBlinnPhongComp, MeshComp, MeshRepository,
-        TexturedBlinnPhongComp, VertexColorComp,
-    },
+    rendering::{fre, RenderingSystem},
+    scene::{MeshComp, MeshRepository, VertexColorComp},
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -23,6 +20,11 @@ use std::{
     sync::RwLock,
 };
 use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
+
+use super::material::{
+    BlinnPhongShininessComp, BlinnPhongSpecularColorComp, BlinnPhongSpecularTextureComp,
+    LambertianDiffuseColorComp, LambertianDiffuseTextureComp,
+};
 
 /// Reads the Wavefront OBJ file at the given path and any associated MTL
 /// material files and returns the set of components representing the mesh and
@@ -66,9 +68,9 @@ where
         let mesh_component = ComponentStorage::from_single_instance_view(&MeshComp { id: mesh_id });
 
         let components = if let Some(material_idx) = material_id {
-            let material_component = match material_components.entry(material_idx) {
+            let material_components = match material_components.entry(material_idx) {
                 Entry::Vacant(entry) => entry
-                    .insert(create_material_component_from_tobj_material(
+                    .insert(create_material_components_from_tobj_material(
                         renderer,
                         &obj_file_path_string,
                         &materials[material_idx],
@@ -77,22 +79,26 @@ where
                 Entry::Occupied(entry) => entry.get().clone(),
             };
 
-            SingleInstance::<ArchetypeComponentStorage>::try_from_single_instances([
-                mesh_component,
-                material_component,
-            ])
+            let mut components = material_components;
+            components.push(mesh_component);
+
+            SingleInstance::<ArchetypeComponentStorage>::try_from_vec_of_single_instances(
+                components,
+            )
             .unwrap()
         } else if mesh_has_vertex_colors {
             let material_component = ComponentStorage::from_single_instance_view(&VertexColorComp);
 
-            SingleInstance::<ArchetypeComponentStorage>::try_from_single_instances([
+            SingleInstance::<ArchetypeComponentStorage>::try_from_array_of_single_instances([
                 mesh_component,
                 material_component,
             ])
             .unwrap()
         } else {
-            SingleInstance::<ArchetypeComponentStorage>::try_from_single_instances([mesh_component])
-                .unwrap()
+            SingleInstance::<ArchetypeComponentStorage>::try_from_array_of_single_instances([
+                mesh_component,
+            ])
+            .unwrap()
         };
 
         model_components.push(components);
@@ -151,11 +157,11 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
     )
 }
 
-fn create_material_component_from_tobj_material(
+fn create_material_components_from_tobj_material(
     renderer: &RwLock<RenderingSystem>,
     obj_file_path: impl AsRef<str>,
     material: &ObjMaterial,
-) -> Result<SingleInstance<ComponentStorage>> {
+) -> Result<Vec<SingleInstance<ComponentStorage>>> {
     let obj_file_path = obj_file_path.as_ref();
 
     if !material.dissolve_texture.is_empty() {
@@ -197,84 +203,44 @@ fn create_material_component_from_tobj_material(
             &material.ambient
         );
     }
-    if material.specular_texture.is_empty() {
-        if material.diffuse_texture.is_empty() {
-            Ok(create_blinn_phong_material_component_from_tobj_material(
-                material,
-            ))
-        } else {
-            let renderer = renderer.read().unwrap();
-            let mut assets = renderer.assets().write().unwrap();
-            create_diffuse_textured_blinn_phong_material_component_from_tobj_material(
-                renderer.core_system(),
-                &mut assets,
-                material,
-            )
-        }
-    } else if material.diffuse_texture.is_empty() {
-        log::warn!(
-            "Warning: Unsupported MTL material referenced in {}: \
-             material `{}` uses a texture for specular color but not for diffuse -  falling back to fixed specular color of {:?} instead",
-             obj_file_path,
-             &material.name,
-            &material.specular
-        );
-        Ok(create_blinn_phong_material_component_from_tobj_material(
-            material,
-        ))
+
+    let mut components = Vec::with_capacity(3);
+
+    if material.diffuse_texture.is_empty() {
+        components.push(ComponentStorage::from_single_instance_view(
+            &LambertianDiffuseColorComp(material.diffuse.into()),
+        ));
     } else {
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
-        create_textured_blinn_phong_material_component_from_tobj_material(
-            renderer.core_system(),
-            &mut assets,
-            material,
-        )
+
+        let diffuse_texture_id = assets
+            .load_image_texture_from_path(renderer.core_system(), &material.diffuse_texture)?;
+
+        components.push(ComponentStorage::from_single_instance_view(
+            &LambertianDiffuseTextureComp(diffuse_texture_id),
+        ));
     }
-}
 
-fn create_blinn_phong_material_component_from_tobj_material(
-    material: &ObjMaterial,
-) -> SingleInstance<ComponentStorage> {
-    ComponentStorage::from_single_instance_view(&BlinnPhongComp {
-        diffuse: material.diffuse.into(),
-        specular: material.specular.into(),
-        shininess: material.shininess,
-    })
-}
+    if material.specular_texture.is_empty() {
+        components.push(ComponentStorage::from_single_instance_view(
+            &BlinnPhongSpecularColorComp(material.specular.into()),
+        ));
+    } else {
+        let renderer = renderer.read().unwrap();
+        let mut assets = renderer.assets().write().unwrap();
 
-fn create_diffuse_textured_blinn_phong_material_component_from_tobj_material(
-    core_system: &CoreRenderingSystem,
-    assets: &mut Assets,
-    material: &ObjMaterial,
-) -> Result<SingleInstance<ComponentStorage>> {
-    let diffuse_texture_id =
-        assets.load_image_texture_from_path(core_system, &material.diffuse_texture)?;
+        let specular_texture_id = assets
+            .load_image_texture_from_path(renderer.core_system(), &material.specular_texture)?;
 
-    Ok(ComponentStorage::from_single_instance_view(
-        &DiffuseTexturedBlinnPhongComp {
-            diffuse: diffuse_texture_id,
-            specular: material.specular.into(),
-            shininess: material.shininess,
-        },
-    ))
-}
+        components.push(ComponentStorage::from_single_instance_view(
+            &BlinnPhongSpecularTextureComp(specular_texture_id),
+        ));
+    }
 
-fn create_textured_blinn_phong_material_component_from_tobj_material(
-    core_system: &CoreRenderingSystem,
-    assets: &mut Assets,
-    material: &ObjMaterial,
-) -> Result<SingleInstance<ComponentStorage>> {
-    let diffuse_texture_id =
-        assets.load_image_texture_from_path(core_system, &material.diffuse_texture)?;
-    let specular_texture_id =
-        assets.load_image_texture_from_path(core_system, &material.specular_texture)?;
+    components.push(ComponentStorage::from_single_instance_view(
+        &BlinnPhongShininessComp(material.shininess),
+    ));
 
-    Ok(ComponentStorage::from_single_instance_view(
-        &TexturedBlinnPhongComp {
-            diffuse: diffuse_texture_id,
-            specular: specular_texture_id,
-            shininess: material.shininess,
-        },
-    ))
+    Ok(components)
 }
