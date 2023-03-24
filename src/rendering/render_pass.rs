@@ -128,7 +128,7 @@ enum ShadowMapUsage {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ShadowMapIdentifier {
     ForUnidirectionalLight(CascadeIdx),
-    ForPointLight(CubemapFace),
+    ForOmnidirectionalLight(CubemapFace),
 }
 
 #[derive(Debug)]
@@ -201,15 +201,16 @@ impl RenderPassManager {
     ) -> Result<()> {
         let light_buffer_manager = render_resources.get_light_buffer_manager();
 
-        let point_light_ids =
-            light_buffer_manager.map_or_else(|| &[], LightRenderBufferManager::point_light_ids);
+        let omnidirectional_light_ids = light_buffer_manager
+            .map_or_else(|| &[], LightRenderBufferManager::omnidirectional_light_ids);
         let unidirectional_light_ids = light_buffer_manager
             .map_or_else(|| &[], LightRenderBufferManager::unidirectional_light_ids);
 
         // Remove shading passes for lights that are no longer present
         self.light_shaded_model_shading_passes
             .retain(|light_id, _| {
-                point_light_ids.contains(light_id) || unidirectional_light_ids.contains(light_id)
+                omnidirectional_light_ids.contains(light_id)
+                    || unidirectional_light_ids.contains(light_id)
             });
 
         let all_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
@@ -287,7 +288,7 @@ impl RenderPassManager {
                                 no_visible_instances,
                             )?);
 
-                        for &light_id in point_light_ids {
+                        for &light_id in omnidirectional_light_ids {
                             let faces_have_shadow_casting_model_instances: Vec<_> =
                                 CubemapFace::all()
                                     .into_iter()
@@ -301,40 +302,41 @@ impl RenderPassManager {
                                     })
                                     .collect();
 
-                            let passes =
-                                match self.light_shaded_model_shading_passes.entry(light_id) {
-                                    Entry::Occupied(entry) => entry.into_mut(),
-                                    Entry::Vacant(entry) => {
-                                        let mut shadow_map_clearing_passes = Vec::with_capacity(6);
+                            let passes = match self
+                                .light_shaded_model_shading_passes
+                                .entry(light_id)
+                            {
+                                Entry::Occupied(entry) => entry.into_mut(),
+                                Entry::Vacant(entry) => {
+                                    let mut shadow_map_clearing_passes = Vec::with_capacity(6);
 
-                                        for face in CubemapFace::all() {
-                                            shadow_map_clearing_passes
-                                                .push(RenderPassRecorder::new(
-                                                core_system,
-                                                config,
-                                                render_resources,
-                                                shader_manager,
-                                                RenderPassSpecification::shadow_map_clearing_pass(
-                                                    ShadowMapIdentifier::ForPointLight(face),
-                                                ),
-                                                false,
-                                            )?);
-                                        }
-
-                                        entry.insert(LightShadedModelShadingPasses {
-                                            shadow_map_clearing_passes,
-                                            ..Default::default()
-                                        })
+                                    for face in CubemapFace::all() {
+                                        shadow_map_clearing_passes.push(RenderPassRecorder::new(
+                                            core_system,
+                                            config,
+                                            render_resources,
+                                            shader_manager,
+                                            RenderPassSpecification::shadow_map_clearing_pass(
+                                                ShadowMapIdentifier::ForOmnidirectionalLight(face),
+                                            ),
+                                            false,
+                                        )?);
                                     }
-                                };
+
+                                    entry.insert(LightShadedModelShadingPasses {
+                                        shadow_map_clearing_passes,
+                                        ..Default::default()
+                                    })
+                                }
+                            };
 
                             let light = LightInfo {
-                                light_type: LightType::PointLight,
+                                light_type: LightType::OmnidirectionalLight,
                                 light_id,
                             };
 
-                            // Create a point light shadow map update pass for
-                            // each cubemap face for the new model
+                            // Create an omnidirectional light shadow map update
+                            // pass for each cubemap face for the new model
 
                             passes.shadow_map_update_passes.push(Vec::with_capacity(6));
 
@@ -350,13 +352,14 @@ impl RenderPassManager {
                                     RenderPassSpecification::shadow_map_update_pass(
                                         light,
                                         model_id,
-                                        ShadowMapIdentifier::ForPointLight(face),
+                                        ShadowMapIdentifier::ForOmnidirectionalLight(face),
                                     ),
                                     !faces_have_shadow_casting_model_instances[face.as_idx_usize()],
                                 )?);
                             }
 
-                            // Create a point light shading pass for the new model
+                            // Create an omnidirectional light shading pass for
+                            // the new model
                             passes.shading_passes.push(RenderPassRecorder::new(
                                 core_system,
                                 config,
@@ -480,19 +483,19 @@ impl RenderPassManager {
                                                 recorder.specification.shadow_map_usage
                                             {
                                                 match shadow_map_id {
-                                                    ShadowMapIdentifier::ForPointLight(face) => {
-                                                        light_id
-                                                            .as_instance_feature_buffer_range_id()
-                                                            + face.as_idx_u32()
-                                                    }
-                                                    ShadowMapIdentifier::ForUnidirectionalLight(
-                                                        cascade_idx,
-                                                    ) => {
-                                                        light_id
-                                                            .as_instance_feature_buffer_range_id()
-                                                            + cascade_idx
-                                                    }
+                                                ShadowMapIdentifier::ForOmnidirectionalLight(
+                                                    face,
+                                                ) => {
+                                                    light_id.as_instance_feature_buffer_range_id()
+                                                        + face.as_idx_u32()
                                                 }
+                                                ShadowMapIdentifier::ForUnidirectionalLight(
+                                                    cascade_idx,
+                                                ) => {
+                                                    light_id.as_instance_feature_buffer_range_id()
+                                                        + cascade_idx
+                                                }
+                                            }
                                             } else {
                                                 unreachable!()
                                             };
@@ -982,8 +985,8 @@ impl RenderPassSpecification {
                 .expect("Missing light render buffer manager for shadow mapping render pass");
 
             Some(match shadow_map_id {
-                ShadowMapIdentifier::ForPointLight(face) => light_buffer_manager
-                    .point_light_shadow_map_texture()
+                ShadowMapIdentifier::ForOmnidirectionalLight(face) => light_buffer_manager
+                    .omnidirectional_light_shadow_map_texture()
                     .face_view(face),
                 ShadowMapIdentifier::ForUnidirectionalLight(cascade_idx) => light_buffer_manager
                     .unidirectional_light_shadow_map_texture()
@@ -1033,7 +1036,8 @@ impl RenderPassSpecification {
     }
 
     fn determine_front_face(&self) -> wgpu::FrontFace {
-        if let ShadowMapUsage::Update(ShadowMapIdentifier::ForPointLight(_)) = self.shadow_map_usage
+        if let ShadowMapUsage::Update(ShadowMapIdentifier::ForOmnidirectionalLight(_)) =
+            self.shadow_map_usage
         {
             // The cubemap projection does not flip the z-axis, so the front
             // faces will have the opposite winding order compared to normal
@@ -1368,7 +1372,7 @@ impl RenderPassRecorder {
                     // that have been written to the range dedicated for the
                     // active light in the transform buffer
                     let buffer_range_id = match shadow_map_id {
-                        ShadowMapIdentifier::ForPointLight(face) => {
+                        ShadowMapIdentifier::ForOmnidirectionalLight(face) => {
                             // Offset the light index with the face index to get
                             // the index for the range of transforms for the
                             // specific cubemap face

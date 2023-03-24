@@ -1,14 +1,14 @@
 //! Management of lights.
 
 mod components;
-mod point_light;
+mod omnidirectional_light;
 mod unidirectional_light;
 
 pub use components::{
-    AngularExtentComp, DirectionComp, EmissionExtentComp, Omnidirectional, PointLightComp,
-    RadianceComp, UnidirectionalLightComp,
+    AngularExtentComp, DirectionComp, EmissionExtentComp, Omnidirectional,
+    OmnidirectionalLightComp, RadianceComp, UnidirectionalLightComp,
 };
-pub use point_light::PointLight;
+pub use omnidirectional_light::OmnidirectionalLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};
 
 use crate::{
@@ -32,18 +32,18 @@ pub struct LightID(u32);
 /// A type of light source.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LightType {
-    PointLight,
+    OmnidirectionalLight,
     UnidirectionalLight,
 }
 
 type LightUniformBuffer<L> = UniformBuffer<LightID, L>;
-type PointLightUniformBuffer = LightUniformBuffer<PointLight>;
+type OmnidirectionalLightUniformBuffer = LightUniformBuffer<OmnidirectionalLight>;
 type UnidirectionalLightUniformBuffer = LightUniformBuffer<UnidirectionalLight>;
 
 /// Container for all light sources in a scene.
 #[derive(Debug)]
 pub struct LightStorage {
-    point_light_buffer: PointLightUniformBuffer,
+    omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer,
     unidirectional_light_buffer: UnidirectionalLightUniformBuffer,
     light_id_counter: u32,
 }
@@ -71,7 +71,7 @@ impl LightStorage {
     /// Creates a new empty light storage.
     pub fn new() -> Self {
         Self {
-            point_light_buffer: PointLightUniformBuffer::with_capacity(
+            omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer::with_capacity(
                 Self::INITIAL_LIGHT_CAPACITY,
             ),
             unidirectional_light_buffer: UnidirectionalLightUniformBuffer::with_capacity(
@@ -82,9 +82,9 @@ impl LightStorage {
     }
 
     /// Returns a reference to the [`UniformBuffer`] holding all
-    /// [`PointLight`]s.
-    pub fn point_light_buffer(&self) -> &UniformBuffer<LightID, PointLight> {
-        &self.point_light_buffer
+    /// [`OmnidirectionalLight`]s.
+    pub fn omnidirectional_light_buffer(&self) -> &UniformBuffer<LightID, OmnidirectionalLight> {
+        &self.omnidirectional_light_buffer
     }
 
     /// Returns a reference to the [`UniformBuffer`] holding all
@@ -93,13 +93,17 @@ impl LightStorage {
         &self.unidirectional_light_buffer
     }
 
-    /// Adds the given [`PointLight`] to the storage.
+    /// Adds the given [`OmnidirectionalLight`] to the storage.
     ///
     /// # Returns
     /// A new [`LightID`] representing the added light source.
-    pub fn add_point_light(&mut self, point_light: PointLight) -> LightID {
+    pub fn add_omnidirectional_light(
+        &mut self,
+        omnidirectional_light: OmnidirectionalLight,
+    ) -> LightID {
         let light_id = self.create_new_light_id();
-        self.point_light_buffer.add_uniform(light_id, point_light);
+        self.omnidirectional_light_buffer
+            .add_uniform(light_id, omnidirectional_light);
         light_id
     }
 
@@ -117,12 +121,12 @@ impl LightStorage {
         light_id
     }
 
-    /// Removes the [`PointLight`] with the given ID from the storage.
+    /// Removes the [`OmnidirectionalLight`] with the given ID from the storage.
     ///
     /// # Panics
-    /// If no point light with the given ID exists.
-    pub fn remove_point_light(&mut self, light_id: LightID) {
-        self.point_light_buffer.remove_uniform(light_id);
+    /// If no omnidirectional light with the given ID exists.
+    pub fn remove_omnidirectional_light(&mut self, light_id: LightID) {
+        self.omnidirectional_light_buffer.remove_uniform(light_id);
     }
 
     /// Removes the [`UnidirectionalLight`] with the given ID from the storage.
@@ -133,14 +137,14 @@ impl LightStorage {
         self.unidirectional_light_buffer.remove_uniform(light_id);
     }
 
-    /// Returns a mutable reference to the [`PointLight`] with the given ID.
+    /// Returns a mutable reference to the [`OmnidirectionalLight`] with the given ID.
     ///
     /// # Panics
-    /// If no point light with the given ID exists.
-    pub fn point_light_mut(&mut self, light_id: LightID) -> &mut PointLight {
-        self.point_light_buffer
+    /// If no omnidirectional light with the given ID exists.
+    pub fn omnidirectional_light_mut(&mut self, light_id: LightID) -> &mut OmnidirectionalLight {
+        self.omnidirectional_light_buffer
             .get_uniform_mut(light_id)
-            .expect("Requested missing point light")
+            .expect("Requested missing omnidirectional light")
     }
 
     /// Returns a mutable reference to the [`UnidirectionalLight`] with the given
@@ -154,12 +158,13 @@ impl LightStorage {
             .expect("Requested missing unidirectional light")
     }
 
-    /// Returns an iterator over the point lights in the storage where each item
-    /// contains the light ID and a mutable reference to the light.
-    pub fn point_lights_with_ids_mut(
+    /// Returns an iterator over the omnidirectional lights in the storage where
+    /// each item contains the light ID and a mutable reference to the light.
+    pub fn omnidirectional_lights_with_ids_mut(
         &mut self,
-    ) -> impl Iterator<Item = (LightID, &mut PointLight)> {
-        self.point_light_buffer.valid_uniforms_with_ids_mut()
+    ) -> impl Iterator<Item = (LightID, &mut OmnidirectionalLight)> {
+        self.omnidirectional_light_buffer
+            .valid_uniforms_with_ids_mut()
     }
 
     /// Returns an iterator over the unidirectional lights in the storage where

@@ -4,9 +4,9 @@ use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
     insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
     LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, PointLightShaderGenerator, SampledTexture, SourceCode, TextureType,
-    UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    OmnidirectionalLightShaderGenerator, OutputStructBuilder, SampledTexture, SourceCode,
+    TextureType, UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE,
+    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
 
@@ -283,15 +283,17 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         let light_color_expr = match (light_shader_generator, light_input_field_indices) {
             (
-                LightShaderGenerator::PointLight(PointLightShaderGenerator::ForShading(
-                    point_light_shader_generator,
-                )),
+                LightShaderGenerator::OmnidirectionalLight(
+                    OmnidirectionalLightShaderGenerator::ForShading(
+                        omnidirectional_light_shader_generator,
+                    ),
+                ),
                 None,
             ) => {
                 let camera_clip_position_expr =
                     fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
-                let (light_dir_expr, light_radiance_expr) = point_light_shader_generator
+                let (light_dir_expr, light_radiance_expr) = omnidirectional_light_shader_generator
                     .generate_fragment_shading_code(
                         module,
                         fragment_function,

@@ -5,8 +5,8 @@ use crate::{
     physics::PositionComp,
     rendering::fre,
     scene::{
-        EmissionExtentComp, LightStorage, Omnidirectional, PointLightComp, Radiance, RadianceComp,
-        RenderResourcesDesynchronized, SceneCamera,
+        EmissionExtentComp, LightStorage, Omnidirectional, OmnidirectionalLightComp, Radiance,
+        RadianceComp, RenderResourcesDesynchronized, SceneCamera,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -16,7 +16,7 @@ use nalgebra::{
 };
 use std::sync::RwLock;
 
-/// An point light source represented by a camera space position, an RGB
+/// An omnidirectional light source represented by a camera space position, an RGB
 /// radiance and an extent. The struct also includes a rotation quaternion that
 /// defines the orientation of the light's local coordinate system with respect
 /// to camera space, and a near and far distance restricting the distance range
@@ -32,7 +32,7 @@ use std::sync::RwLock;
 /// shader.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct PointLight {
+pub struct OmnidirectionalLight {
     camera_to_light_space_rotation: UnitQuaternion<fre>,
     camera_space_position: Point3<fre>,
     // Padding to obtain 16-byte alignment for next field
@@ -50,7 +50,7 @@ pub struct PointLight {
     _padding_3: fre,
 }
 
-impl PointLight {
+impl OmnidirectionalLight {
     const MIN_NEAR_DISTANCE: fre = 1e-2;
     const MAX_FAR_DISTANCE: fre = fre::INFINITY;
 
@@ -178,9 +178,9 @@ impl PointLight {
 
     /// Checks if the entity-to-be with the given components has the right
     /// components for this light source, and if so, adds the corresponding
-    /// [`PointLight`] to the light storage and adds a [`PointLightComp`] with
+    /// [`OmnidirectionalLight`] to the light storage and adds a [`OmnidirectionalLightComp`] with
     /// the light's ID to the entity.
-    pub fn add_point_light_component_for_entity(
+    pub fn add_omnidirectional_light_component_for_entity(
         scene_camera: &RwLock<Option<SceneCamera<fre>>>,
         light_storage: &RwLock<LightStorage>,
         components: &mut ArchetypeComponentStorage,
@@ -204,31 +204,34 @@ impl PointLight {
             |position: &PositionComp,
              radiance: &RadianceComp,
              emission_extent: Option<&EmissionExtentComp>|
-             -> PointLightComp {
-                let point_light = Self::new(
+             -> OmnidirectionalLightComp {
+                let omnidirectional_light = Self::new(
                     view_transform.transform_point(&position.0.cast()),
                     radiance.0,
                     emission_extent.map_or(0.0, |extent| extent.0),
                 );
-                let id = light_storage.add_point_light(point_light);
+                let id = light_storage.add_omnidirectional_light(omnidirectional_light);
 
-                PointLightComp { id }
+                OmnidirectionalLightComp { id }
             },
             [Omnidirectional],
-            ![PointLightComp]
+            ![OmnidirectionalLightComp]
         );
     }
 
-    /// Checks if the given entity has a [`PointLightComp`], and if so, removes
-    /// the assocated [`PointLight`] from the given [`LightStorage`].
+    /// Checks if the given entity has a [`OmnidirectionalLightComp`], and if so, removes
+    /// the assocated [`OmnidirectionalLight`] from the given [`LightStorage`].
     pub fn remove_light_from_storage(
         light_storage: &RwLock<LightStorage>,
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        if let Some(point_light) = entity.get_component::<PointLightComp>() {
-            let light_id = point_light.access().id;
-            light_storage.write().unwrap().remove_point_light(light_id);
+        if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightComp>() {
+            let light_id = omnidirectional_light.access().id;
+            light_storage
+                .write()
+                .unwrap()
+                .remove_omnidirectional_light(light_id);
             desynchronized.set_yes();
         }
     }

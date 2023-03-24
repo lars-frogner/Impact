@@ -121,14 +121,15 @@ pub struct ModelViewTransformShaderInput {
 /// Shader input description for a specific light source type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LightShaderInput {
-    PointLight(PointLightShaderInput),
+    OmnidirectionalLight(OmnidirectionalLightShaderInput),
     UnidirectionalLight(UnidirectionalLightShaderInput),
 }
 
-/// Input description for point light sources, specifying the bind group
-/// binding and the total size of the point light uniform buffer.
+/// Input description for omnidirectional light sources, specifying the bind
+/// group binding and the total size of the omnidirectional light uniform
+/// buffer.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PointLightShaderInput {
+pub struct OmnidirectionalLightShaderInput {
     /// Bind group binding of the light uniform buffer.
     pub uniform_binding: u32,
     /// Maximum number of lights in the uniform buffer.
@@ -176,7 +177,7 @@ pub struct ModelViewTransformExpressions {
 #[derive(Clone, Debug)]
 pub enum ProjectionExpressions {
     Camera(CameraProjectionExpressions),
-    PointLight(PointLightProjectionExpressions),
+    OmnidirectionalLight(OmnidirectionalLightProjectionExpressions),
     UnidirectionalLight(UnidirectionalLightProjectionExpressions),
 }
 
@@ -189,7 +190,7 @@ pub struct CameraProjectionExpressions {
 /// Marker type with method for projecting points onto a face of a shadow
 /// cubemap.
 #[derive(Clone, Debug)]
-pub struct PointLightProjectionExpressions;
+pub struct OmnidirectionalLightProjectionExpressions;
 
 /// Handle to expressions for the orthographic transform components associated
 /// with a unidirectional light.
@@ -202,15 +203,15 @@ pub struct UnidirectionalLightProjectionExpressions {
 /// Generator for shader code associated with a light source.
 #[derive(Clone, Debug)]
 pub enum LightShaderGenerator {
-    PointLight(PointLightShaderGenerator),
+    OmnidirectionalLight(OmnidirectionalLightShaderGenerator),
     UnidirectionalLight(UnidirectionalLightShaderGenerator),
 }
 
-/// Generator for shader code associated with a point light source.
+/// Generator for shader code associated with an omnidirectional light source.
 #[derive(Clone, Debug)]
-pub enum PointLightShaderGenerator {
-    ForShadowMapUpdate(PointLightShadowMapUpdateShaderGenerator),
-    ForShading(PointLightShadingShaderGenerator),
+pub enum OmnidirectionalLightShaderGenerator {
+    ForShadowMapUpdate(OmnidirectionalLightShadowMapUpdateShaderGenerator),
+    ForShading(OmnidirectionalLightShadingShaderGenerator),
 }
 
 /// Generator for shader code associated with a unidirectional light source.
@@ -220,9 +221,10 @@ pub enum UnidirectionalLightShaderGenerator {
     ForShading(UnidirectionalLightShadingShaderGenerator),
 }
 
-/// Generator for shader code for updating the shadow cubemap of a point light.
+/// Generator for shader code for updating the shadow cubemap of an
+/// omnidirectional light.
 #[derive(Clone, Debug)]
-pub struct PointLightShadowMapUpdateShaderGenerator {
+pub struct OmnidirectionalLightShadowMapUpdateShaderGenerator {
     pub near_distance: Handle<Expression>,
     pub inverse_distance_span: Handle<Expression>,
 }
@@ -230,7 +232,7 @@ pub struct PointLightShadowMapUpdateShaderGenerator {
 /// Generator for shader code for shading a fragment with the light from a point
 /// light.
 #[derive(Clone, Debug)]
-pub struct PointLightShadingShaderGenerator {
+pub struct OmnidirectionalLightShadingShaderGenerator {
     pub camera_to_light_space_rotation_quaternion: Handle<Expression>,
     pub camera_space_position: Handle<Expression>,
     pub radiance: Handle<Expression>,
@@ -1264,8 +1266,8 @@ impl ShaderGenerator {
         has_material: bool,
     ) -> LightShaderGenerator {
         match light_shader_input {
-            LightShaderInput::PointLight(light_shader_input) => {
-                Self::create_point_light_shader_generator(
+            LightShaderInput::OmnidirectionalLight(light_shader_input) => {
+                Self::create_omnidirectional_light_shader_generator(
                     light_shader_input,
                     module,
                     fragment_function,
@@ -1287,15 +1289,16 @@ impl ShaderGenerator {
         }
     }
 
-    /// Creates a generator of shader code for point lights.
+    /// Creates a generator of shader code for omnidirectional lights.
     ///
-    /// This involves generating declarations for the point light uniform type,
-    /// the type the point light uniform buffer will be mapped to, the global
-    /// variable this is bound to, the global variables referring to the shadow
-    /// map texture and sampler if required, and expressions for the fields of
-    /// the light at the active index (which is set in a push constant).
-    fn create_point_light_shader_generator(
-        light_shader_input: &PointLightShaderInput,
+    /// This involves generating declarations for the omnidirectional light
+    /// uniform type, the type the omnidirectional light uniform buffer will be
+    /// mapped to, the global variable this is bound to, the global variables
+    /// referring to the shadow map texture and sampler if required, and
+    /// expressions for the fields of the light at the active index (which is
+    /// set in a push constant).
+    fn create_omnidirectional_light_shader_generator(
+        light_shader_input: &OmnidirectionalLightShaderInput,
         module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
@@ -1340,7 +1343,7 @@ impl ShaderGenerator {
         let single_light_struct_type = insert_in_arena(
             &mut module.types,
             Type {
-                name: new_name("PointLight"),
+                name: new_name("OmnidirectionalLight"),
                 inner: TypeInner::Struct {
                     members: vec![
                         StructMember {
@@ -1393,7 +1396,7 @@ impl ShaderGenerator {
         let lights_struct_type = insert_in_arena(
             &mut module.types,
             Type {
-                name: new_name("PointLights"),
+                name: new_name("OmnidirectionalLights"),
                 inner: TypeInner::Struct {
                     members: vec![
                         StructMember {
@@ -1421,7 +1424,7 @@ impl ShaderGenerator {
         let lights_struct_var = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
-                name: new_name("pointLights"),
+                name: new_name("omnidirectionalLights"),
                 space: AddressSpace::Uniform,
                 binding: Some(ResourceBinding {
                     group: *bind_group_idx,
@@ -1467,7 +1470,7 @@ impl ShaderGenerator {
 
             *bind_group_idx += 1;
 
-            LightShaderGenerator::new_for_point_light_shading(
+            LightShaderGenerator::new_for_omnidirectional_light_shading(
                 fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
@@ -1478,7 +1481,7 @@ impl ShaderGenerator {
             // cubemap space position in the fragment shader
             *vertex_attribute_requirements |= VertexAttributeSet::POSITION;
 
-            LightShaderGenerator::new_for_point_light_shadow_map_update(
+            LightShaderGenerator::new_for_omnidirectional_light_shadow_map_update(
                 fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
@@ -1486,7 +1489,7 @@ impl ShaderGenerator {
         }
     }
 
-    /// Creates a generator of shader code for point lights.
+    /// Creates a generator of shader code for omnidirectional lights.
     ///
     /// This involves generating declarations for the unidirectional light
     /// uniform type, the type the unidirectional light uniform buffer will be
@@ -1893,8 +1896,13 @@ impl ProjectionExpressions {
         match self {
             Self::Camera(camera_projection_matrix) => camera_projection_matrix
                 .generate_clip_position_expr(module, vertex_function, position_expr),
-            Self::PointLight(point_light_cubemap_projection) => point_light_cubemap_projection
-                .generate_clip_position_expr(module, vertex_function, position_expr),
+            Self::OmnidirectionalLight(omnidirectional_light_cubemap_projection) => {
+                omnidirectional_light_cubemap_projection.generate_clip_position_expr(
+                    module,
+                    vertex_function,
+                    position_expr,
+                )
+            }
             Self::UnidirectionalLight(unidirectional_light_orthographic_projection) => {
                 unidirectional_light_orthographic_projection.generate_clip_position_expr(
                     module,
@@ -1936,7 +1944,7 @@ impl CameraProjectionExpressions {
     }
 }
 
-impl PointLightProjectionExpressions {
+impl OmnidirectionalLightProjectionExpressions {
     #[allow(clippy::unused_self)]
     pub fn generate_clip_position_expr(
         &self,
@@ -2016,13 +2024,13 @@ impl UnidirectionalLightProjectionExpressions {
 }
 
 impl LightShaderGenerator {
-    pub fn new_for_point_light_shadow_map_update(
+    pub fn new_for_omnidirectional_light_shadow_map_update(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
     ) -> Self {
-        Self::PointLight(PointLightShaderGenerator::ForShadowMapUpdate(
-            PointLightShadowMapUpdateShaderGenerator::new(
+        Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShadowMapUpdate(
+            OmnidirectionalLightShadowMapUpdateShaderGenerator::new(
                 fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
@@ -2030,14 +2038,14 @@ impl LightShaderGenerator {
         ))
     }
 
-    pub fn new_for_point_light_shading(
+    pub fn new_for_omnidirectional_light_shading(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
         active_light_idx_var: Handle<GlobalVariable>,
         shadow_map: SampledTexture,
     ) -> Self {
-        Self::PointLight(PointLightShaderGenerator::ForShading(
-            PointLightShadingShaderGenerator::new(
+        Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShading(
+            OmnidirectionalLightShadingShaderGenerator::new(
                 fragment_function,
                 lights_struct_var,
                 active_light_idx_var,
@@ -2080,8 +2088,8 @@ impl LightShaderGenerator {
 
     pub fn get_projection_to_light_clip_space(&self) -> Option<ProjectionExpressions> {
         match self {
-            Self::PointLight(_) => Some(ProjectionExpressions::PointLight(
-                PointLightProjectionExpressions,
+            Self::OmnidirectionalLight(_) => Some(ProjectionExpressions::OmnidirectionalLight(
+                OmnidirectionalLightProjectionExpressions,
             )),
             Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShadowMapUpdate(
                 shader_generator,
@@ -2115,7 +2123,7 @@ impl LightShaderGenerator {
     pub fn has_fragment_output(&self) -> bool {
         matches!(
             self,
-            Self::PointLight(PointLightShaderGenerator::ForShadowMapUpdate(_))
+            Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShadowMapUpdate(_))
         )
     }
 
@@ -2126,9 +2134,11 @@ impl LightShaderGenerator {
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
-        if let Self::PointLight(PointLightShaderGenerator::ForShadowMapUpdate(
-            shadow_map_update_shader_generator,
-        )) = self
+        if let Self::OmnidirectionalLight(
+            OmnidirectionalLightShaderGenerator::ForShadowMapUpdate(
+                shadow_map_update_shader_generator,
+            ),
+        ) = self
         {
             shadow_map_update_shader_generator.generate_fragment_output_code(
                 module,
@@ -2225,7 +2235,7 @@ impl LightShaderGenerator {
     }
 }
 
-impl PointLightShadowMapUpdateShaderGenerator {
+impl OmnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
@@ -2290,7 +2300,7 @@ impl PointLightShadowMapUpdateShaderGenerator {
         let position_expr = fragment_input_struct.get_field_expr(
             mesh_input_field_indices
                 .position
-                .expect("Missing position for point light shadow map update"),
+                .expect("Missing position for omnidirectional light shadow map update"),
         );
 
         let depth = SourceCode::generate_call_named(
@@ -2317,7 +2327,7 @@ impl PointLightShadowMapUpdateShaderGenerator {
     }
 }
 
-impl PointLightShadingShaderGenerator {
+impl OmnidirectionalLightShadingShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
@@ -4961,8 +4971,8 @@ mod test {
             uniform_binding: 0,
         });
 
-    const POINT_LIGHT_INPUT: LightShaderInput =
-        LightShaderInput::PointLight(PointLightShaderInput {
+    const OMNIDIRECTIONAL_LIGHT_INPUT: LightShaderInput =
+        LightShaderInput::OmnidirectionalLight(OmnidirectionalLightShaderInput {
             uniform_binding: 0,
             max_light_count: 20,
             shadow_map_texture_and_sampler_binding: (1, 2, 3),
@@ -5099,11 +5109,11 @@ mod test {
     }
 
     #[test]
-    fn building_point_light_shadow_map_update_shader_works() {
+    fn building_omnidirectional_light_shadow_map_update_shader_works() {
         let module = ShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
@@ -5239,7 +5249,7 @@ mod test {
     }
 
     #[test]
-    fn building_blinn_phong_shader_with_point_light_works() {
+    fn building_blinn_phong_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5250,7 +5260,7 @@ mod test {
                     None,
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
             Some(&MaterialShaderInput::BlinnPhong(None)),
             BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
@@ -5295,7 +5305,7 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_blinn_phong_shader_with_point_light_works() {
+    fn building_diffuse_textured_blinn_phong_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5306,7 +5316,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
@@ -5357,7 +5367,7 @@ mod test {
     }
 
     #[test]
-    fn building_textured_blinn_phong_shader_with_point_light_works() {
+    fn building_textured_blinn_phong_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5368,7 +5378,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
@@ -5419,7 +5429,7 @@ mod test {
     }
 
     #[test]
-    fn building_lambertian_ggx_microfacet_shader_with_point_light_works() {
+    fn building_lambertian_ggx_microfacet_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5430,7 +5440,7 @@ mod test {
                     None,
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[&MODEL_VIEW_TRANSFORM_INPUT, &MICROFACET_FEATURE_INPUT],
             Some(&LAMBERTIAN_GGX_MICROFACET_INPUT),
             MicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
@@ -5475,7 +5485,8 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_lambertian_ggx_microfacet_shader_with_point_light_works() {
+    fn building_diffuse_textured_lambertian_ggx_microfacet_shader_with_omnidirectional_light_works()
+    {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5486,7 +5497,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT,
@@ -5538,7 +5549,7 @@ mod test {
     }
 
     #[test]
-    fn building_textured_lambertian_ggx_microfacet_shader_with_point_light_works() {
+    fn building_textured_lambertian_ggx_microfacet_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5549,7 +5560,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 2),
                 ],
             }),
-            Some(&POINT_LIGHT_INPUT),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_MICROFACET_FEATURE_INPUT,

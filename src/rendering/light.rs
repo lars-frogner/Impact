@@ -6,11 +6,12 @@ use crate::{
         buffer::{self, UniformBufferable},
         texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{UniformRenderBufferManager, UniformTransferResult},
-        CascadeIdx, CoreRenderingSystem, LightShaderInput, PointLightShaderInput, RenderingConfig,
-        UnidirectionalLightShaderInput,
+        CascadeIdx, CoreRenderingSystem, LightShaderInput, OmnidirectionalLightShaderInput,
+        RenderingConfig, UnidirectionalLightShaderInput,
     },
     scene::{
-        LightID, LightStorage, LightType, PointLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES,
+        LightID, LightStorage, LightType, OmnidirectionalLight, UnidirectionalLight,
+        MAX_SHADOW_MAP_CASCADES,
     },
 };
 use impact_utils::ConstStringHash64;
@@ -21,17 +22,17 @@ use std::mem;
 /// shadow map textures.
 #[derive(Debug)]
 pub struct LightRenderBufferManager {
-    point_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
+    omnidirectional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     unidirectional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
-    point_light_shadow_map_texture: ShadowCubemapTexture,
+    omnidirectional_light_shadow_map_texture: ShadowCubemapTexture,
     unidirectional_light_shadow_map_texture: CascadedShadowMapTexture,
     light_bind_group_layout: wgpu::BindGroupLayout,
     light_bind_group: wgpu::BindGroup,
-    point_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
-    point_light_shadow_map_bind_group: wgpu::BindGroup,
+    omnidirectional_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
+    omnidirectional_light_shadow_map_bind_group: wgpu::BindGroup,
     unidirectional_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
     unidirectional_light_shadow_map_bind_group: wgpu::BindGroup,
-    point_light_shader_input: LightShaderInput,
+    omnidirectional_light_shader_input: LightShaderInput,
     unidirectional_light_shader_input: LightShaderInput,
 }
 
@@ -42,10 +43,10 @@ struct UniformRenderBufferManagerWithLightIDs {
 }
 
 impl LightRenderBufferManager {
-    const POINT_LIGHT_BINDING: u32 = 0;
-    const POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 1;
-    const POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 2;
-    const POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 3;
+    const OMNIDIRECTIONAL_LIGHT_BINDING: u32 = 0;
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 1;
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 2;
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 3;
 
     const UNIDIRECTIONAL_LIGHT_BINDING: u32 = 4;
     const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 5;
@@ -67,10 +68,10 @@ impl LightRenderBufferManager {
         light_storage: &LightStorage,
         config: &RenderingConfig,
     ) -> Self {
-        let point_light_render_buffer_manager =
+        let omnidirectional_light_render_buffer_manager =
             UniformRenderBufferManagerWithLightIDs::for_uniform_buffer(
                 core_system,
-                light_storage.point_light_buffer(),
+                light_storage.omnidirectional_light_buffer(),
             );
         let unidirectional_light_render_buffer_manager =
             UniformRenderBufferManagerWithLightIDs::for_uniform_buffer(
@@ -78,10 +79,10 @@ impl LightRenderBufferManager {
                 light_storage.unidirectional_light_buffer(),
             );
 
-        let point_light_shadow_map_texture = ShadowCubemapTexture::new(
+        let omnidirectional_light_shadow_map_texture = ShadowCubemapTexture::new(
             core_system,
-            config.point_light_shadow_map_resolution,
-            "Point light shadow cubemap texture",
+            config.omnidirectional_light_shadow_map_resolution,
+            "Omnidirectional light shadow cubemap texture",
         );
 
         let unidirectional_light_shadow_map_texture = CascadedShadowMapTexture::new(
@@ -95,19 +96,20 @@ impl LightRenderBufferManager {
 
         let light_bind_group = Self::create_light_bind_group(
             core_system.device(),
-            &point_light_render_buffer_manager,
+            &omnidirectional_light_render_buffer_manager,
             &unidirectional_light_render_buffer_manager,
             &light_bind_group_layout,
         );
 
-        let point_light_shadow_map_bind_group_layout =
-            Self::create_point_light_shadow_map_bind_group_layout(core_system.device());
+        let omnidirectional_light_shadow_map_bind_group_layout =
+            Self::create_omnidirectional_light_shadow_map_bind_group_layout(core_system.device());
 
-        let point_light_shadow_map_bind_group = Self::create_point_light_shadow_map_bind_group(
-            core_system.device(),
-            &point_light_shadow_map_texture,
-            &point_light_shadow_map_bind_group_layout,
-        );
+        let omnidirectional_light_shadow_map_bind_group =
+            Self::create_omnidirectional_light_shadow_map_bind_group(
+                core_system.device(),
+                &omnidirectional_light_shadow_map_texture,
+                &omnidirectional_light_shadow_map_bind_group_layout,
+            );
 
         let unidirectional_light_shadow_map_bind_group_layout =
             Self::create_unidirectional_light_shadow_map_bind_group_layout(core_system.device());
@@ -119,33 +121,34 @@ impl LightRenderBufferManager {
                 &unidirectional_light_shadow_map_bind_group_layout,
             );
 
-        let point_light_shader_input =
-            Self::create_point_light_shader_input(&point_light_render_buffer_manager);
+        let omnidirectional_light_shader_input = Self::create_omnidirectional_light_shader_input(
+            &omnidirectional_light_render_buffer_manager,
+        );
 
         let unidirectional_light_shader_input = Self::create_unidirectional_light_shader_input(
             &unidirectional_light_render_buffer_manager,
         );
 
         Self {
-            point_light_render_buffer_manager,
+            omnidirectional_light_render_buffer_manager,
             unidirectional_light_render_buffer_manager,
-            point_light_shadow_map_texture,
+            omnidirectional_light_shadow_map_texture,
             unidirectional_light_shadow_map_texture,
             light_bind_group_layout,
             light_bind_group,
-            point_light_shadow_map_bind_group_layout,
-            point_light_shadow_map_bind_group,
+            omnidirectional_light_shadow_map_bind_group_layout,
+            omnidirectional_light_shadow_map_bind_group,
             unidirectional_light_shadow_map_bind_group_layout,
             unidirectional_light_shadow_map_bind_group,
-            point_light_shader_input,
+            omnidirectional_light_shader_input,
             unidirectional_light_shader_input,
         }
     }
 
-    /// Returns the slice of IDs of all the [`PointLight`]s currently residing
-    /// in the point light render buffer.
-    pub fn point_light_ids(&self) -> &[LightID] {
-        self.point_light_render_buffer_manager.light_ids()
+    /// Returns the slice of IDs of all the [`OmnidirectionalLight`]s currently residing
+    /// in the omnidirectional light render buffer.
+    pub fn omnidirectional_light_ids(&self) -> &[LightID] {
+        self.omnidirectional_light_render_buffer_manager.light_ids()
     }
 
     /// Returns the slice of IDs of all the [`UnidirectionalLight`]s currently
@@ -154,9 +157,10 @@ impl LightRenderBufferManager {
         self.unidirectional_light_render_buffer_manager.light_ids()
     }
 
-    /// Returns a reference to the shadow cubemap texture for point lights.
-    pub fn point_light_shadow_map_texture(&self) -> &ShadowCubemapTexture {
-        &self.point_light_shadow_map_texture
+    /// Returns a reference to the shadow cubemap texture for omnidirectional
+    /// lights.
+    pub fn omnidirectional_light_shadow_map_texture(&self) -> &ShadowCubemapTexture {
+        &self.omnidirectional_light_shadow_map_texture
     }
 
     /// Returns a reference to the cascaded shadow map texture for
@@ -184,7 +188,9 @@ impl LightRenderBufferManager {
         light_type: LightType,
     ) -> &wgpu::BindGroupLayout {
         match light_type {
-            LightType::PointLight => &self.point_light_shadow_map_bind_group_layout,
+            LightType::OmnidirectionalLight => {
+                &self.omnidirectional_light_shadow_map_bind_group_layout
+            }
             LightType::UnidirectionalLight => {
                 &self.unidirectional_light_shadow_map_bind_group_layout
             }
@@ -195,7 +201,7 @@ impl LightRenderBufferManager {
     /// type.
     pub fn shadow_map_bind_group_for_light_type(&self, light_type: LightType) -> &wgpu::BindGroup {
         match light_type {
-            LightType::PointLight => &self.point_light_shadow_map_bind_group,
+            LightType::OmnidirectionalLight => &self.omnidirectional_light_shadow_map_bind_group,
             LightType::UnidirectionalLight => &self.unidirectional_light_shadow_map_bind_group,
         }
     }
@@ -204,7 +210,7 @@ impl LightRenderBufferManager {
     /// a shader.
     pub fn shader_input_for_light_type(&self, light_type: LightType) -> &LightShaderInput {
         match light_type {
-            LightType::PointLight => &self.point_light_shader_input,
+            LightType::OmnidirectionalLight => &self.omnidirectional_light_shader_input,
             LightType::UnidirectionalLight => &self.unidirectional_light_shader_input,
         }
     }
@@ -243,7 +249,7 @@ impl LightRenderBufferManager {
         light_id: LightID,
     ) {
         let light_idx = match light_type {
-            LightType::PointLight => &self.point_light_render_buffer_manager,
+            LightType::OmnidirectionalLight => &self.omnidirectional_light_render_buffer_manager,
             LightType::UnidirectionalLight => &self.unidirectional_light_render_buffer_manager,
         }
         .find_idx_of_light_with_id(light_id)
@@ -279,9 +285,12 @@ impl LightRenderBufferManager {
         core_system: &CoreRenderingSystem,
         light_storage: &LightStorage,
     ) {
-        let point_light_transfer_result = self
-            .point_light_render_buffer_manager
-            .transfer_uniforms_to_render_buffer(core_system, light_storage.point_light_buffer());
+        let omnidirectional_light_transfer_result = self
+            .omnidirectional_light_render_buffer_manager
+            .transfer_uniforms_to_render_buffer(
+                core_system,
+                light_storage.omnidirectional_light_buffer(),
+            );
 
         let unidirectional_light_transfer_result = self
             .unidirectional_light_render_buffer_manager
@@ -290,20 +299,22 @@ impl LightRenderBufferManager {
                 light_storage.unidirectional_light_buffer(),
             );
 
-        if point_light_transfer_result == UniformTransferResult::CreatedNewBuffer
+        if omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
             || unidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
         {
             // Recreate light bind group and shader input
             self.light_bind_group = Self::create_light_bind_group(
                 core_system.device(),
-                &self.point_light_render_buffer_manager,
+                &self.omnidirectional_light_render_buffer_manager,
                 &self.unidirectional_light_render_buffer_manager,
                 &self.light_bind_group_layout,
             );
 
-            if point_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
-                self.point_light_shader_input =
-                    Self::create_point_light_shader_input(&self.point_light_render_buffer_manager);
+            if omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+                self.omnidirectional_light_shader_input =
+                    Self::create_omnidirectional_light_shader_input(
+                        &self.omnidirectional_light_render_buffer_manager,
+                    );
             }
 
             if unidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
@@ -318,7 +329,9 @@ impl LightRenderBufferManager {
     fn create_light_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                PointLight::create_bind_group_layout_entry(Self::POINT_LIGHT_BINDING),
+                OmnidirectionalLight::create_bind_group_layout_entry(
+                    Self::OMNIDIRECTIONAL_LIGHT_BINDING,
+                ),
                 UnidirectionalLight::create_bind_group_layout_entry(
                     Self::UNIDIRECTIONAL_LIGHT_BINDING,
                 ),
@@ -329,16 +342,16 @@ impl LightRenderBufferManager {
 
     fn create_light_bind_group(
         device: &wgpu::Device,
-        point_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
+        omnidirectional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
         unidirectional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
-                point_light_render_buffer_manager
+                omnidirectional_light_render_buffer_manager
                     .manager()
-                    .create_bind_group_entry(Self::POINT_LIGHT_BINDING),
+                    .create_bind_group_entry(Self::OMNIDIRECTIONAL_LIGHT_BINDING),
                 unidirectional_light_render_buffer_manager
                     .manager()
                     .create_bind_group_entry(Self::UNIDIRECTIONAL_LIGHT_BINDING),
@@ -347,42 +360,45 @@ impl LightRenderBufferManager {
         })
     }
 
-    fn create_point_light_shadow_map_bind_group_layout(
+    fn create_omnidirectional_light_shadow_map_bind_group_layout(
         device: &wgpu::Device,
     ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 ShadowCubemapTexture::create_texture_bind_group_layout_entry(
-                    Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
+                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 ),
                 ShadowCubemapTexture::create_sampler_bind_group_layout_entry(
-                    Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
                 ),
                 ShadowCubemapTexture::create_comparison_sampler_bind_group_layout_entry(
-                    Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
+                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
                 ),
             ],
-            label: Some("Point light shadow cubemap bind group layout"),
+            label: Some("Omnidirectional light shadow cubemap bind group layout"),
         })
     }
 
-    fn create_point_light_shadow_map_bind_group(
+    fn create_omnidirectional_light_shadow_map_bind_group(
         device: &wgpu::Device,
-        point_light_shadow_map_texture: &ShadowCubemapTexture,
+        omnidirectional_light_shadow_map_texture: &ShadowCubemapTexture,
         layout: &wgpu::BindGroupLayout,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
-                point_light_shadow_map_texture
-                    .create_texture_bind_group_entry(Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING),
-                point_light_shadow_map_texture
-                    .create_sampler_bind_group_entry(Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING),
-                point_light_shadow_map_texture.create_comparison_sampler_bind_group_entry(
-                    Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
+                omnidirectional_light_shadow_map_texture.create_texture_bind_group_entry(
+                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 ),
+                omnidirectional_light_shadow_map_texture.create_sampler_bind_group_entry(
+                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                ),
+                omnidirectional_light_shadow_map_texture
+                    .create_comparison_sampler_bind_group_entry(
+                        Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
+                    ),
             ],
-            label: Some("Point light shadow cubemap bind group"),
+            label: Some("Omnidirectional light shadow cubemap bind group"),
         })
     }
 
@@ -427,18 +443,18 @@ impl LightRenderBufferManager {
         })
     }
 
-    fn create_point_light_shader_input(
-        point_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
+    fn create_omnidirectional_light_shader_input(
+        omnidirectional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
     ) -> LightShaderInput {
-        LightShaderInput::PointLight(PointLightShaderInput {
-            uniform_binding: Self::POINT_LIGHT_BINDING,
-            max_light_count: point_light_render_buffer_manager
+        LightShaderInput::OmnidirectionalLight(OmnidirectionalLightShaderInput {
+            uniform_binding: Self::OMNIDIRECTIONAL_LIGHT_BINDING,
+            max_light_count: omnidirectional_light_render_buffer_manager
                 .manager()
                 .max_uniform_count() as u64,
             shadow_map_texture_and_sampler_binding: (
-                Self::POINT_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                Self::POINT_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                Self::POINT_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
+                Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
+                Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
+                Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
             ),
         })
     }
@@ -515,8 +531,8 @@ impl UniformRenderBufferManagerWithLightIDs {
     }
 }
 
-impl UniformBufferable for PointLight {
-    const ID: ConstStringHash64 = ConstStringHash64::new("Point light");
+impl UniformBufferable for OmnidirectionalLight {
+    const ID: ConstStringHash64 = ConstStringHash64::new("Omnidirectional light");
 
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
         buffer::create_uniform_buffer_bind_group_layout_entry(

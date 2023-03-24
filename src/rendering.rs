@@ -29,8 +29,8 @@ pub use shader::{
     DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput, FixedTextureShaderInput,
     GlobalAmbientColorShaderInput, InstanceFeatureShaderInput, LightShaderInput,
     MaterialShaderInput, MeshShaderInput, MicrofacetFeatureShaderInput, MicrofacetShadingModel,
-    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, PointLightShaderInput, Shader,
-    ShaderGenerator, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
+    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, OmnidirectionalLightShaderInput,
+    Shader, ShaderGenerator, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{CascadeIdx, DepthTexture, ImageTexture, MultisampledRenderTargetTexture};
@@ -74,9 +74,9 @@ pub struct RenderingConfig {
     pub polygon_mode: wgpu::PolygonMode,
     /// The number of samples to use for multisampling anti-aliasing.
     pub multisampling_sample_count: u32,
-    /// The width and height of each face of the point light shadow cubemap in
-    /// number of texels.
-    pub point_light_shadow_map_resolution: u32,
+    /// The width and height of each face of the omnidirectional light shadow
+    /// cubemap in number of texels.
+    pub omnidirectional_light_shadow_map_resolution: u32,
     /// The width and height of the unidirectional light shadow map in number of
     /// texels.
     pub unidirectional_light_shadow_map_resolution: u32,
@@ -86,7 +86,7 @@ pub struct RenderingConfig {
 struct Screenshotter {
     screenshot_save_requested: AtomicBool,
     depth_map_save_requested: AtomicBool,
-    point_light_shadow_map_save_requested: AtomicBool,
+    omnidirectional_light_shadow_map_save_requested: AtomicBool,
     unidirectional_light_shadow_map_save_requested: AtomicBool,
 }
 
@@ -197,7 +197,7 @@ impl RenderingSystem {
             .save_depth_map_if_requested(&self.core_system, &self.depth_texture)?;
 
         self.screenshotter
-            .save_point_light_shadow_map_if_requested(
+            .save_omnidirectional_light_shadow_map_if_requested(
                 &self.core_system,
                 &self.render_resource_manager,
             )?;
@@ -268,8 +268,9 @@ impl RenderingSystem {
         self.screenshotter.request_depth_map_save();
     }
 
-    pub fn request_point_light_shadow_map_save(&self) {
-        self.screenshotter.request_point_light_shadow_map_save();
+    pub fn request_omnidirectional_light_shadow_map_save(&self) {
+        self.screenshotter
+            .request_omnidirectional_light_shadow_map_save();
     }
 
     pub fn request_unidirectional_light_shadow_map_save(&self) {
@@ -351,7 +352,7 @@ impl Default for RenderingConfig {
             cull_mode: Some(wgpu::Face::Back),
             polygon_mode: wgpu::PolygonMode::Fill,
             multisampling_sample_count: 1,
-            point_light_shadow_map_resolution: 1024,
+            omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
         }
     }
@@ -362,7 +363,7 @@ impl Screenshotter {
         Self {
             screenshot_save_requested: AtomicBool::new(false),
             depth_map_save_requested: AtomicBool::new(false),
-            point_light_shadow_map_save_requested: AtomicBool::new(false),
+            omnidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
             unidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
         }
     }
@@ -376,8 +377,8 @@ impl Screenshotter {
         self.depth_map_save_requested.store(true, Ordering::Release);
     }
 
-    fn request_point_light_shadow_map_save(&self) {
-        self.point_light_shadow_map_save_requested
+    fn request_omnidirectional_light_shadow_map_save(&self) {
+        self.omnidirectional_light_shadow_map_save_requested
             .store(true, Ordering::Release);
     }
 
@@ -420,13 +421,13 @@ impl Screenshotter {
         }
     }
 
-    fn save_point_light_shadow_map_if_requested(
+    fn save_omnidirectional_light_shadow_map_if_requested(
         &self,
         core_system: &CoreRenderingSystem,
         render_resource_manager: &RwLock<RenderResourceManager>,
     ) -> Result<()> {
         if self
-            .point_light_shadow_map_save_requested
+            .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
             if let Some(light_buffer_manager) = render_resource_manager
@@ -437,12 +438,12 @@ impl Screenshotter {
             {
                 for face in CubemapFace::all() {
                     light_buffer_manager
-                        .point_light_shadow_map_texture()
+                        .omnidirectional_light_shadow_map_texture()
                         .save_face_as_image_file(
                             core_system,
                             face,
                             format!(
-                                "point_light_shadow_map_{}_{:?}.png",
+                                "omnidirectional_light_shadow_map_{}_{:?}.png",
                                 Utc::now().to_rfc3339(),
                                 face
                             ),
