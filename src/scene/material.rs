@@ -4,6 +4,7 @@ mod ambient_color;
 mod blinn_phong;
 mod components;
 mod fixed;
+mod microfacet;
 mod vertex_color;
 
 pub use ambient_color::GlobalAmbientColorMaterial;
@@ -12,9 +13,13 @@ pub use blinn_phong::{
 };
 pub use components::{
     DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
-    RoughnessComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
+    MicrofacetDiffuseReflection, MicrofacetSpecularReflection, RoughnessComp, SpecularColorComp,
+    SpecularTextureComp, VertexColorComp,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
+pub use microfacet::{
+    DiffuseTexturedMicrofacetMaterial, MicrofacetMaterial, TexturedMicrofacetMaterial,
+};
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{

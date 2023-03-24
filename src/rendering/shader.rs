@@ -3,11 +3,16 @@
 mod ambient_color;
 mod blinn_phong;
 mod fixed;
+mod microfacet;
 mod vertex_color;
 
 pub use ambient_color::GlobalAmbientColorShaderInput;
 pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
+pub use microfacet::{
+    DiffuseMicrofacetShadingModel, MicrofacetFeatureShaderInput, MicrofacetShadingModel,
+    MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
+};
 
 use crate::{
     geometry::{
@@ -23,6 +28,7 @@ use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices}
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
 };
+use microfacet::{MicrofacetShaderGenerator, MicrofacetVertexOutputFieldIndices};
 use naga::{
     AddressSpace, Arena, ArraySize, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant,
     ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
@@ -85,6 +91,7 @@ pub enum InstanceFeatureShaderInput {
     ModelViewTransform(ModelViewTransformShaderInput),
     FixedColorMaterial(FixedColorFeatureShaderInput),
     BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
+    MicrofacetMaterial(MicrofacetFeatureShaderInput),
     /// For convenience in unit tests.
     #[cfg(test)]
     None,
@@ -97,6 +104,7 @@ pub enum MaterialShaderInput {
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(Option<BlinnPhongTextureShaderInput>),
+    Microfacet((MicrofacetShadingModel, Option<MicrofacetTextureShaderInput>)),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -152,6 +160,7 @@ pub enum MaterialShaderGenerator<'a> {
     FixedColor(FixedColorShaderGenerator<'a>),
     FixedTexture(FixedTextureShaderGenerator<'a>),
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
+    Microfacet(MicrofacetShaderGenerator<'a>),
 }
 
 /// Handles to expressions for accessing the rotational, translational and
@@ -279,6 +288,7 @@ pub struct UnidirectionalLightVertexOutputFieldIndices {
 pub enum MaterialVertexOutputFieldIndices {
     FixedColor(FixedColorVertexOutputFieldIdx),
     BlinnPhong(BlinnPhongVertexOutputFieldIndices),
+    Microfacet(MicrofacetVertexOutputFieldIndices),
     None,
 }
 
@@ -808,6 +818,7 @@ impl ShaderGenerator {
         let mut model_view_transform_shader_input = None;
         let mut fixed_color_feature_shader_input = None;
         let mut blinn_phong_feature_shader_input = None;
+        let mut microfacet_feature_shader_input = None;
 
         for &instance_feature_shader_input in instance_feature_shader_inputs {
             match instance_feature_shader_input {
@@ -825,6 +836,10 @@ impl ShaderGenerator {
                     let old = blinn_phong_feature_shader_input.replace(shader_input);
                     assert!(old.is_none());
                 }
+                InstanceFeatureShaderInput::MicrofacetMaterial(shader_input) => {
+                    let old = microfacet_feature_shader_input.replace(shader_input);
+                    assert!(old.is_none());
+                }
                 #[cfg(test)]
                 InstanceFeatureShaderInput::None => {}
             }
@@ -838,28 +853,40 @@ impl ShaderGenerator {
         let material_shader_builder = match (
             fixed_color_feature_shader_input,
             blinn_phong_feature_shader_input,
+            microfacet_feature_shader_input,
             material_shader_input,
         ) {
-            (None, None, None) => None,
-            (None, None, Some(MaterialShaderInput::GlobalAmbientColor(input))) => {
+            (None, None, None, None) => None,
+            (None, None, None, Some(MaterialShaderInput::GlobalAmbientColor(input))) => {
                 Some(MaterialShaderGenerator::GlobalAmbientColor(
                     GlobalAmbientColorShaderGenerator::new(input),
                 ))
             }
-            (Some(feature_input), None, Some(MaterialShaderInput::Fixed(None))) => Some(
+            (Some(feature_input), None, None, Some(MaterialShaderInput::Fixed(None))) => Some(
                 MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input)),
             ),
-            (None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
+            (None, None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
                 Some(MaterialShaderGenerator::FixedTexture(
                     FixedTextureShaderGenerator::new(texture_input),
                 ))
             }
-            (None, Some(feature_input), Some(MaterialShaderInput::BlinnPhong(texture_input))) => {
-                Some(MaterialShaderGenerator::BlinnPhong(
-                    BlinnPhongShaderGenerator::new(feature_input, texture_input.as_ref()),
-                ))
-            }
-            (None, None, Some(MaterialShaderInput::VertexColor)) => {
+            (
+                None,
+                Some(feature_input),
+                None,
+                Some(MaterialShaderInput::BlinnPhong(texture_input)),
+            ) => Some(MaterialShaderGenerator::BlinnPhong(
+                BlinnPhongShaderGenerator::new(feature_input, texture_input.as_ref()),
+            )),
+            (
+                None,
+                None,
+                Some(feature_input),
+                Some(MaterialShaderInput::Microfacet((model, texture_input))),
+            ) => Some(MaterialShaderGenerator::Microfacet(
+                MicrofacetShaderGenerator::new(model, feature_input, texture_input.as_ref()),
+            )),
+            (None, None, None, Some(MaterialShaderInput::VertexColor)) => {
                 Some(MaterialShaderGenerator::VertexColor)
             }
             input => {
@@ -1735,7 +1762,7 @@ impl MaterialShaderInput {
     pub fn requires_lights(&self) -> bool {
         match self {
             Self::GlobalAmbientColor(_) | Self::VertexColor | Self::Fixed(_) => false,
-            Self::BlinnPhong(_) => true,
+            Self::BlinnPhong(_) | Self::Microfacet(_) => true,
         }
     }
 }
@@ -1761,6 +1788,9 @@ impl<'a> MaterialShaderGenerator<'a> {
                 builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
             ),
             Self::BlinnPhong(builder) => MaterialVertexOutputFieldIndices::BlinnPhong(
+                builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
+            ),
+            Self::Microfacet(builder) => MaterialVertexOutputFieldIndices::Microfacet(
                 builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
             ),
             _ => MaterialVertexOutputFieldIndices::None,
@@ -1822,6 +1852,19 @@ impl<'a> MaterialShaderGenerator<'a> {
             (
                 Self::BlinnPhong(generator),
                 MaterialVertexOutputFieldIndices::BlinnPhong(material_input_field_indices),
+            ) => generator.generate_fragment_code(
+                module,
+                fragment_function,
+                bind_group_idx,
+                fragment_input_struct,
+                mesh_input_field_indices,
+                light_input_field_indices,
+                material_input_field_indices,
+                light_shader_generator,
+            ),
+            (
+                Self::Microfacet(generator),
+                MaterialVertexOutputFieldIndices::Microfacet(material_input_field_indices),
             ) => generator.generate_fragment_code(
                 module,
                 fragment_function,
@@ -4796,9 +4839,9 @@ mod test {
     #![allow(clippy::dbg_macro)]
 
     use crate::scene::{
-        BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
-        FixedTextureMaterial, GlobalAmbientColorMaterial, TexturedBlinnPhongMaterial,
-        VertexColorMaterial,
+        BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, DiffuseTexturedMicrofacetMaterial,
+        FixedColorMaterial, FixedTextureMaterial, GlobalAmbientColorMaterial, MicrofacetMaterial,
+        TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial, VertexColorMaterial,
     };
 
     use super::*;
@@ -4850,12 +4893,7 @@ mod test {
             shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
         });
 
-    const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
-        MaterialShaderInput::GlobalAmbientColor(GlobalAmbientColorShaderInput {
-            uniform_binding: 0,
-        });
-
-    const DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =
+    const DIFFUSE_TEXTURED_BLINN_PHONG_INPUT: MaterialShaderInput =
         MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings: (0, 1),
             specular_texture_and_sampler_bindings: None,
@@ -4868,11 +4906,60 @@ mod test {
             shininess_location: MATERIAL_VERTEX_BINDING_START,
         });
 
-    const TEXTURED_BLINN_PHONG_TEXTURE_INPUT: MaterialShaderInput =
+    const TEXTURED_BLINN_PHONG_INPUT: MaterialShaderInput =
         MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
             diffuse_texture_and_sampler_bindings: (0, 1),
             specular_texture_and_sampler_bindings: Some((2, 3)),
         }));
+
+    const MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
+        InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+            diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+            roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+        });
+
+    const LAMBERTIAN_GGX_MICROFACET_INPUT: MaterialShaderInput = MaterialShaderInput::Microfacet((
+        MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+        None,
+    ));
+
+    const DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
+        InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+            diffuse_color_location: None,
+            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+            roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+        });
+
+    const DIFFUSE_TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT: MaterialShaderInput =
+        MaterialShaderInput::Microfacet((
+            MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+            Some(MicrofacetTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: (0, 1),
+                specular_texture_and_sampler_bindings: None,
+            }),
+        ));
+
+    const TEXTURED_MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
+        InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+            diffuse_color_location: None,
+            specular_color_location: None,
+            roughness_location: MATERIAL_VERTEX_BINDING_START,
+        });
+
+    const TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT: MaterialShaderInput =
+        MaterialShaderInput::Microfacet((
+            MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+            Some(MicrofacetTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: (0, 1),
+                specular_texture_and_sampler_bindings: Some((2, 3)),
+            }),
+        ));
+
+    const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
+        MaterialShaderInput::GlobalAmbientColor(GlobalAmbientColorShaderInput {
+            uniform_binding: 0,
+        });
 
     const POINT_LIGHT_INPUT: LightShaderInput =
         LightShaderInput::PointLight(PointLightShaderInput {
@@ -5224,7 +5311,7 @@ mod test {
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
-            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_INPUT),
             DiffuseTexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
@@ -5255,7 +5342,7 @@ mod test {
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
-            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_INPUT),
             DiffuseTexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
@@ -5286,7 +5373,7 @@ mod test {
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
-            Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            Some(&TEXTURED_BLINN_PHONG_INPUT),
             TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
@@ -5317,8 +5404,189 @@ mod test {
                 &MODEL_VIEW_TRANSFORM_INPUT,
                 &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
             ],
-            Some(&TEXTURED_BLINN_PHONG_TEXTURE_INPUT),
+            Some(&TEXTURED_BLINN_PHONG_INPUT),
             TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_lambertian_ggx_microfacet_shader_with_point_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                ],
+            }),
+            Some(&POINT_LIGHT_INPUT),
+            &[&MODEL_VIEW_TRANSFORM_INPUT, &MICROFACET_FEATURE_INPUT],
+            Some(&LAMBERTIAN_GGX_MICROFACET_INPUT),
+            MicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_lambertian_ggx_microfacet_shader_with_unidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[&MODEL_VIEW_TRANSFORM_INPUT, &MICROFACET_FEATURE_INPUT],
+            Some(&LAMBERTIAN_GGX_MICROFACET_INPUT),
+            MicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_diffuse_textured_lambertian_ggx_microfacet_shader_with_point_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            Some(&POINT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT,
+            ],
+            Some(&DIFFUSE_TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
+            DiffuseTexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_diffuse_textured_lambertian_ggx_microfacet_shader_with_unidirectional_light_works()
+    {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT,
+            ],
+            Some(&DIFFUSE_TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
+            DiffuseTexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_ggx_microfacet_shader_with_point_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            Some(&POINT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &TEXTURED_MICROFACET_FEATURE_INPUT,
+            ],
+            Some(&TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
+            TexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_ggx_microfacet_shader_with_unidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &TEXTURED_MICROFACET_FEATURE_INPUT,
+            ],
+            Some(&TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
+            TexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
         )
         .unwrap()
         .0;

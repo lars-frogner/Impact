@@ -29,11 +29,12 @@ pub use light::{
 };
 pub use material::{
     BlinnPhongMaterial, DiffuseColorComp, DiffuseTextureComp, DiffuseTexturedBlinnPhongMaterial,
-    FixedColorComp, FixedColorMaterial, FixedMaterialResources, FixedTextureComp,
-    FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID, MaterialLibrary,
-    MaterialPropertyTextureSet, MaterialPropertyTextureSetID, MaterialSpecification, RGBColor,
-    RoughnessComp, SpecularColorComp, SpecularTextureComp, TexturedBlinnPhongMaterial,
-    VertexColorComp, VertexColorMaterial,
+    DiffuseTexturedMicrofacetMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
+    FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID,
+    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetMaterial,
+    MicrofacetSpecularReflection, RGBColor, RoughnessComp, SpecularColorComp, SpecularTextureComp,
+    TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial, VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{MeshID, MeshRepository};
 pub use model::ModelID;
@@ -155,6 +156,12 @@ impl Scene {
             &mut instance_feature_manager,
         );
         TexturedBlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
+        MicrofacetMaterial::register(&mut material_library, &mut instance_feature_manager);
+        DiffuseTexturedMicrofacetMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+        TexturedMicrofacetMaterial::register(&mut material_library, &mut instance_feature_manager);
     }
 }
 

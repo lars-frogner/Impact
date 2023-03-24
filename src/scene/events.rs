@@ -4,10 +4,11 @@ use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera},
     physics::{OrientationComp, PositionComp},
     scene::{
-        self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, FixedColorMaterial,
-        FixedTextureMaterial, MaterialComp, MeshComp, ModelID, ModelInstanceNodeID, PointLight,
-        ScalingComp, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial, UnidirectionalLight,
-        VertexColorMaterial,
+        self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial,
+        DiffuseTexturedMicrofacetMaterial, FixedColorMaterial, FixedTextureMaterial, MaterialComp,
+        MeshComp, MicrofacetMaterial, ModelID, ModelInstanceNodeID, PointLight, ScalingComp, Scene,
+        SceneGraphNodeComp, TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial,
+        UnidirectionalLight, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -142,6 +143,26 @@ impl Scene {
         );
 
         TexturedBlinnPhongMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            self.material_library(),
+            components,
+            desynchronized,
+        );
+
+        MicrofacetMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            components,
+            desynchronized,
+        );
+
+        DiffuseTexturedMicrofacetMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            self.material_library(),
+            components,
+            desynchronized,
+        );
+
+        TexturedMicrofacetMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
             components,
