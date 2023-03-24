@@ -393,10 +393,10 @@ impl<F: Float> TriangleMesh<F> {
 
         // Bottom cap
         for _ in 0..n_circumference_vertices - 1 {
-            indices.extend_from_slice(&[idx, 1, idx + 1]);
+            indices.extend_from_slice(&[1, idx, idx + 1]);
             idx += 1;
         }
-        indices.extend_from_slice(&[idx, 1, idx - n_circumference_vertices + 1]);
+        indices.extend_from_slice(&[1, idx, idx - n_circumference_vertices + 1]);
 
         Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
     }
