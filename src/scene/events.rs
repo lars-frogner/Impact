@@ -6,9 +6,9 @@ use crate::{
     scene::{
         self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial,
         DiffuseTexturedMicrofacetMaterial, FixedColorMaterial, FixedTextureMaterial, MaterialComp,
-        MeshComp, MicrofacetMaterial, ModelID, ModelInstanceNodeID, PointLight, ScalingComp, Scene,
-        SceneGraphNodeComp, TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial,
-        UnidirectionalLight, VertexColorMaterial,
+        MeshComp, MicrofacetMaterial, ModelID, ModelInstanceNodeID, OmnidirectionalLight,
+        ScalingComp, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
+        TexturedMicrofacetMaterial, UnidirectionalLight, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -96,7 +96,7 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        PointLight::add_point_light_component_for_entity(
+        OmnidirectionalLight::add_omnidirectional_light_component_for_entity(
             self.scene_camera(),
             self.light_storage(),
             components,
@@ -250,7 +250,11 @@ impl Scene {
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        PointLight::remove_light_from_storage(self.light_storage(), entity, desynchronized);
+        OmnidirectionalLight::remove_light_from_storage(
+            self.light_storage(),
+            entity,
+            desynchronized,
+        );
         UnidirectionalLight::remove_light_from_storage(
             self.light_storage(),
             entity,

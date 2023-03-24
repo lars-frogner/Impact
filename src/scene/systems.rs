@@ -6,7 +6,8 @@ use crate::{
     rendering::RenderingTag,
     scene::{
         CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
-        PointLightComp, SceneGraphNodeComp, SyncSceneCameraViewTransform, UnidirectionalLightComp,
+        OmnidirectionalLightComp, SceneGraphNodeComp, SyncSceneCameraViewTransform,
+        UnidirectionalLightComp,
     },
     world::World,
 };
@@ -112,10 +113,10 @@ define_task!(
                 });
 
             query!(
-                ecs_world, |point_light: &PointLightComp, position: &PositionComp| {
-                    let light_id = point_light.id;
+                ecs_world, |omnidirectional_light: &OmnidirectionalLightComp, position: &PositionComp| {
+                    let light_id = omnidirectional_light.id;
                     light_storage
-                        .point_light_mut(light_id)
+                        .omnidirectional_light_mut(light_id)
                         .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
                 }
             );

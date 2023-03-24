@@ -5,7 +5,7 @@ use crate::{
     define_task,
     rendering::RenderingTag,
     scene::{
-        BoundPointLightsAndBufferShadowCastingModelInstances,
+        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
         SyncLightPositionsAndDirectionsInStorage, SyncSceneCameraViewTransform,
     },
@@ -115,7 +115,7 @@ define_task!(
     SyncLightRenderBuffers,
     depends_on = [
         SyncLightPositionsAndDirectionsInStorage,
-        BoundPointLightsAndBufferShadowCastingModelInstances,
+        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
     execute_on = [RenderingTag],
@@ -203,7 +203,7 @@ define_task!(
     SyncInstanceFeatureBuffers,
     depends_on = [
         BufferVisibleModelInstances,
-        BoundPointLightsAndBufferShadowCastingModelInstances,
+        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
     execute_on = [RenderingTag],

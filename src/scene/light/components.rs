@@ -9,11 +9,11 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
 /// [`Component`](impact_ecs::component::Component) for entities that
-/// have a [`PointLight`](crate::scene::PointLight).
+/// have a [`OmnidirectionalLight`](crate::scene::OmnidirectionalLight).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct PointLightComp {
-    /// The ID of the entity's [`PointLight`](crate::scene::PointLight).
+pub struct OmnidirectionalLightComp {
+    /// The ID of the entity's [`OmnidirectionalLight`](crate::scene::OmnidirectionalLight).
     pub id: LightID,
 }
 
@@ -51,7 +51,7 @@ pub struct EmissionExtentComp(pub fre);
 pub struct AngularExtentComp(pub Degrees<fre>);
 
 /// Marker [`Component`](impact_ecs::component::Component) for light source
-/// entities that have a omnidirectional distribution of radiance.
+/// entities that have an omnidirectional distribution of radiance.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct Omnidirectional;

@@ -8,7 +8,7 @@ use crate::{
     num::Float,
     rendering::{fre, CascadeIdx},
     scene::{
-        InstanceFeatureManager, LightStorage, ModelID, PointLight, SceneCamera,
+        InstanceFeatureManager, LightStorage, ModelID, OmnidirectionalLight, SceneCamera,
         UnidirectionalLight, MAX_SHADOW_MAP_CASCADES,
     },
 };
@@ -636,21 +636,21 @@ impl<F: Float> SceneGraph<F> {
 }
 
 impl SceneGraph<fre> {
-    /// Goes through all point lights in the given light storage and updates
-    /// their cubemap orientations and distance spans to encompass all model
-    /// instances that may cast visible shadows in a way that preserves quality
-    /// and efficiency. Then the model to cubemap face space transform of every
-    /// such shadow casting model instance is computed for the relevant cube
-    /// faces of each light and copied to the model's instance transform buffer
-    /// in new ranges dedicated to the faces of the cubemap of the particular
-    /// light.
+    /// Goes through all omnidirectional lights in the given light storage and
+    /// updates their cubemap orientations and distance spans to encompass all
+    /// model instances that may cast visible shadows in a way that preserves
+    /// quality and efficiency. Then the model to cubemap face space transform
+    /// of every such shadow casting model instance is computed for the relevant
+    /// cube faces of each light and copied to the model's instance transform
+    /// buffer in new ranges dedicated to the faces of the cubemap of the
+    /// particular light.
     ///
     /// # Warning
     /// Make sure to [`buffer_transforms_of_visible_model_instances`] before
     /// calling this method, so that the ranges of model to cubemap face
     /// transforms in the model instance buffers come after the initial range
     /// containing model to camera transforms.
-    pub fn bound_point_lights_and_buffer_shadow_casting_model_instances(
+    pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
         &self,
         light_storage: &mut LightStorage,
         instance_feature_manager: &mut InstanceFeatureManager,
@@ -666,12 +666,14 @@ impl SceneGraph<fre> {
             let camera_space_bounding_sphere =
                 world_space_bounding_sphere.transformed(view_transform);
 
-            for (light_id, point_light) in light_storage.point_lights_with_ids_mut() {
+            for (light_id, omnidirectional_light) in
+                light_storage.omnidirectional_lights_with_ids_mut()
+            {
                 let camera_space_aabb_for_visible_models = camera_space_bounding_sphere
                     .compute_aabb()
                     .union_with(&camera_space_view_frustum.compute_aabb());
 
-                point_light.orient_and_scale_cubemap_for_shadow_casting_models(
+                omnidirectional_light.orient_and_scale_cubemap_for_shadow_casting_models(
                     &camera_space_bounding_sphere,
                     camera_space_aabb_for_visible_models.as_ref(),
                 );
@@ -688,15 +690,15 @@ impl SceneGraph<fre> {
                     }
 
                     let camera_space_face_frustum =
-                        point_light.compute_camera_space_frustum_for_face(face);
+                        omnidirectional_light.compute_camera_space_frustum_for_face(face);
 
-                    if PointLight::camera_space_frustum_for_face_may_contain_visible_models(
+                    if OmnidirectionalLight::camera_space_frustum_for_face_may_contain_visible_models(
                         camera_space_aabb_for_visible_models.as_ref(),
                         &camera_space_face_frustum,
                     ) {
-                        self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+                        self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
                             instance_feature_manager,
-                            point_light,
+                            omnidirectional_light,
                             face,
                             &camera_space_face_frustum,
                             root_node,
@@ -773,10 +775,10 @@ impl SceneGraph<fre> {
         }
     }
 
-    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+    fn buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        point_light: &PointLight,
+        omnidirectional_light: &OmnidirectionalLight,
         face: CubemapFace,
         camera_space_face_frustum: &Frustum<fre>,
         group_node: &GroupNode<fre>,
@@ -796,9 +798,9 @@ impl SceneGraph<fre> {
                 if !camera_space_face_frustum
                     .sphere_lies_outside(&child_camera_space_bounding_sphere)
                 {
-                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_point_light_cubemap_face(
+                    self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
                         instance_feature_manager,
-                        point_light,
+                        omnidirectional_light,
                         face,
                         camera_space_face_frustum,
                         child_group_node,
@@ -826,7 +828,7 @@ impl SceneGraph<fre> {
             {
                 let instance_model_light_transform =
                     InstanceModelLightTransform::with_model_light_transform(
-                        point_light.create_transform_to_positive_z_cubemap_face_space(
+                        omnidirectional_light.create_transform_to_positive_z_cubemap_face_space(
                             face,
                             &model_instance_to_camera_transform,
                         ),
