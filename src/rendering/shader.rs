@@ -359,9 +359,8 @@ pub struct SourceCode {
 /// Handles to functions and named types imported into a [`Module`].
 #[derive(Clone, Debug)]
 pub struct SourceCodeHandles {
-    /// Handles to imported functions, in the order in which they are defined in
-    /// the code.
-    pub functions: Vec<Handle<Function>>,
+    /// Handles to imported functions, where the keys are the function names.
+    pub functions: HashMap<String, Handle<Function>>,
     /// Handles to imported named types, where the keys are the type names.
     pub types: HashMap<String, Handle<Type>>,
 }
@@ -1064,9 +1063,6 @@ impl ShaderGenerator {
         .unwrap()
         .import_to_module(module);
 
-        let rotation_function = source_code.functions[0];
-        let transformation_function = source_code.functions[1];
-
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -1123,7 +1119,7 @@ impl ShaderGenerator {
         let position_expr = SourceCode::generate_call_named(
             vertex_function,
             "cameraSpacePosition",
-            transformation_function,
+            source_code.functions["transformPosition"],
             vec![
                 model_view_transform.rotation_quaternion,
                 model_view_transform.translation_vector,
@@ -1177,7 +1173,7 @@ impl ShaderGenerator {
             let normal_vector_expr = SourceCode::generate_call_named(
                 vertex_function,
                 "cameraSpaceNormalVector",
-                rotation_function,
+                source_code.functions["rotateVectorWithQuaternion"],
                 vec![
                     model_view_transform.rotation_quaternion,
                     input_model_normal_vector_expr,
@@ -1927,12 +1923,10 @@ impl PointLightProjectionExpressions {
         .unwrap()
         .import_to_module(module);
 
-        let projection_function = source_code.functions[0];
-
         SourceCode::generate_call_named(
             vertex_function,
             "lightClipSpacePosition",
-            projection_function,
+            source_code.functions["applyCubemapFaceProjection"],
             vec![position_expr],
         )
     }
@@ -1962,12 +1956,10 @@ impl UnidirectionalLightProjectionExpressions {
         .unwrap()
         .import_to_module(module);
 
-        let projection_function = source_code.functions[0];
-
         let light_clip_space_position_expr = SourceCode::generate_call_named(
             vertex_function,
             "lightClipSpacePosition",
-            projection_function,
+            source_code.functions["applyOrthographicProjectionToPosition"],
             vec![self.translation, self.scaling, position_expr],
         );
 
@@ -2250,8 +2242,6 @@ impl PointLightShadowMapUpdateShaderGenerator {
         .unwrap()
         .import_to_module(module);
 
-        let compute_depth = source_code.functions[0];
-
         let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
 
         let position_expr = fragment_input_struct.get_field_expr(
@@ -2263,7 +2253,7 @@ impl PointLightShadowMapUpdateShaderGenerator {
         let depth = SourceCode::generate_call_named(
             fragment_function,
             "fragmentDepth",
-            compute_depth,
+            source_code.functions["computeShadowMapFragmentDepth"],
             vec![
                 self.near_distance,
                 self.inverse_distance_span,
@@ -2419,12 +2409,10 @@ impl PointLightShadingShaderGenerator {
         .unwrap()
         .import_to_module(module);
 
-        let compute_light_quantities = source_code.functions[1];
-
         let light_quantities = SourceCode::generate_call_named(
             fragment_function,
             "lightQuantities",
-            compute_light_quantities,
+            source_code.functions["computeLightQuantities"],
             vec![
                 self.camera_space_position,
                 self.radiance,
@@ -2642,8 +2630,6 @@ impl UnidirectionalLightShadingShaderGenerator {
         .unwrap()
         .import_to_module(module);
 
-        let rotate_vector_with_quaternion = source_code.functions[0];
-
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
         let camera_space_position_expr = output_struct_builder
@@ -2673,7 +2659,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         let light_space_position_expr = SourceCode::generate_call_named(
             vertex_function,
             "lightSpacePosition",
-            rotate_vector_with_quaternion,
+            source_code.functions["rotateVectorWithQuaternion"],
             vec![
                 camera_to_light_space_rotation_quaternion_expr,
                 camera_space_position_expr,
@@ -2683,7 +2669,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         let light_space_normal_vector_expr = SourceCode::generate_call_named(
             vertex_function,
             "lightSpaceNormalVector",
-            rotate_vector_with_quaternion,
+            source_code.functions["rotateVectorWithQuaternion"],
             vec![
                 camera_to_light_space_rotation_quaternion_expr,
                 camera_space_normal_vector_expr,
@@ -2799,9 +2785,6 @@ impl UnidirectionalLightShadingShaderGenerator {
         .unwrap()
         .import_to_module(module);
 
-        let determine_cascade_idx = source_code.functions[0];
-        let compute_light_clip_space_position = source_code.functions[3];
-
         let camera_space_direction_expr = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "cameraSpaceLightDirection",
@@ -2844,7 +2827,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         let cascade_idx_expr = SourceCode::generate_call_named(
             fragment_function,
             "cascadeIdx",
-            determine_cascade_idx,
+            source_code.functions["determineCascadeIdx"],
             vec![partition_depths_expr, camera_clip_position_expr],
         );
 
@@ -2904,7 +2887,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         let light_clip_position_expr = SourceCode::generate_call_named(
             fragment_function,
             "lightClipSpacePosition",
-            compute_light_clip_space_position,
+            source_code.functions["computeLightClipSpacePosition"],
             vec![
                 orthographic_translation_expr,
                 orthographic_scaling_expr,
@@ -3778,8 +3761,6 @@ impl SampledTexture {
         .unwrap()
         .import_to_module(module);
 
-        let compute_pcss_light_access_factor = source_code.functions[7];
-
         let texture_var_expr =
             include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
 
@@ -3802,7 +3783,7 @@ impl SampledTexture {
         SourceCode::generate_call_named(
             function,
             "lightAccessFactor",
-            compute_pcss_light_access_factor,
+            source_code.functions["computePCSSLightAccessFactor"],
             vec![
                 texture_var_expr,
                 sampler_var_expr,
@@ -3963,8 +3944,6 @@ impl SampledTexture {
         .unwrap()
         .import_to_module(module);
 
-        let compute_pcss_light_access_factor = source_code.functions[5];
-
         let texture_var_expr =
             include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
 
@@ -3987,7 +3966,7 @@ impl SampledTexture {
         SourceCode::generate_call_named(
             function,
             "lightAccessFactor",
-            compute_pcss_light_access_factor,
+            source_code.functions["computePCSSLightAccessFactor"],
             vec![
                 texture_var_expr,
                 sampler_var_expr,
@@ -4576,9 +4555,12 @@ impl SourceCode {
     pub fn import_to_module(&self, module: &mut Module) -> SourceCodeHandles {
         let mut importer = ModuleImporter::new(&self.module, module);
 
-        let mut function_handles = Vec::with_capacity(self.module.functions.len());
-        for (function, _) in self.module.functions.iter() {
-            function_handles.push(importer.import_function(function).unwrap());
+        let mut function_handles = HashMap::with_capacity(self.module.functions.len());
+        for (function, func) in self.module.functions.iter() {
+            function_handles.insert(
+                func.name.as_ref().unwrap().to_string(),
+                importer.import_function(function).unwrap(),
+            );
         }
 
         let mut type_handles = HashMap::with_capacity(self.module.types.len());

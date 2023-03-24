@@ -205,9 +205,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         .unwrap()
         .import_to_module(module);
 
-        let view_direction_function = source_code.functions[0];
-        let light_color_function = source_code.functions[1];
-
         let light_shader_generator =
             light_shader_generator.expect("Missing light for Blinn-Phong shading");
 
@@ -280,7 +277,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let view_dir_expr = SourceCode::generate_call_named(
             fragment_function,
             "viewDirection",
-            view_direction_function,
+            source_code.functions["computeViewDirection"],
             vec![position_expr],
         );
 
@@ -306,7 +303,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 SourceCode::generate_call_named(
                     fragment_function,
                     "lightColor",
-                    light_color_function,
+                    source_code.functions["computeBlinnPhongColor"],
                     vec![
                         view_dir_expr,
                         normal_vector_expr,
@@ -350,7 +347,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 SourceCode::generate_call_named(
                     fragment_function,
                     "lightColor",
-                    light_color_function,
+                    source_code.functions["computeBlinnPhongColor"],
                     vec![
                         view_dir_expr,
                         normal_vector_expr,
