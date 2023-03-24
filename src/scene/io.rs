@@ -5,7 +5,10 @@ use crate::{
         TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
     rendering::{fre, RenderingSystem},
-    scene::{MeshComp, MeshRepository, VertexColorComp},
+    scene::{
+        DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshRepository, RoughnessComp,
+        SpecularColorComp, SpecularTextureComp, VertexColorComp,
+    },
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -20,11 +23,6 @@ use std::{
     sync::RwLock,
 };
 use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
-
-use super::material::{
-    BlinnPhongShininessComp, BlinnPhongSpecularColorComp, BlinnPhongSpecularTextureComp,
-    LambertianDiffuseColorComp, LambertianDiffuseTextureComp,
-};
 
 /// Reads the Wavefront OBJ file at the given path and any associated MTL
 /// material files and returns the set of components representing the mesh and
@@ -208,7 +206,7 @@ fn create_material_components_from_tobj_material(
 
     if material.diffuse_texture.is_empty() {
         components.push(ComponentStorage::from_single_instance_view(
-            &LambertianDiffuseColorComp(material.diffuse.into()),
+            &DiffuseColorComp(material.diffuse.into()),
         ));
     } else {
         let renderer = renderer.read().unwrap();
@@ -218,13 +216,13 @@ fn create_material_components_from_tobj_material(
             .load_image_texture_from_path(renderer.core_system(), &material.diffuse_texture)?;
 
         components.push(ComponentStorage::from_single_instance_view(
-            &LambertianDiffuseTextureComp(diffuse_texture_id),
+            &DiffuseTextureComp(diffuse_texture_id),
         ));
     }
 
     if material.specular_texture.is_empty() {
         components.push(ComponentStorage::from_single_instance_view(
-            &BlinnPhongSpecularColorComp(material.specular.into()),
+            &SpecularColorComp(material.specular.into()),
         ));
     } else {
         let renderer = renderer.read().unwrap();
@@ -234,12 +232,12 @@ fn create_material_components_from_tobj_material(
             .load_image_texture_from_path(renderer.core_system(), &material.specular_texture)?;
 
         components.push(ComponentStorage::from_single_instance_view(
-            &BlinnPhongSpecularTextureComp(specular_texture_id),
+            &SpecularTextureComp(specular_texture_id),
         ));
     }
 
     components.push(ComponentStorage::from_single_instance_view(
-        &BlinnPhongShininessComp(material.shininess),
+        &RoughnessComp::from_blinn_phong_shininess(material.shininess),
     ));
 
     Ok(components)

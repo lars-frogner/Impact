@@ -45,23 +45,24 @@ pub struct FixedTextureComp(pub TextureID);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct LambertianDiffuseColorComp(pub RGBColor);
+pub struct DiffuseColorComp(pub RGBColor);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct LambertianDiffuseTextureComp(pub TextureID);
+pub struct DiffuseTextureComp(pub TextureID);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct BlinnPhongSpecularColorComp(pub RGBColor);
+pub struct SpecularColorComp(pub RGBColor);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct BlinnPhongSpecularTextureComp(pub TextureID);
+pub struct SpecularTextureComp(pub TextureID);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct BlinnPhongShininessComp(pub fre);
+pub struct RoughnessComp(pub fre);
+
 
 impl MaterialComp {
     /// Creates a new component representing a material with the given
@@ -103,4 +104,19 @@ impl MaterialComp {
             Some(self.material_property_texture_set_id)
         }
     }
+}
+
+impl RoughnessComp {
+    /// Converts the roughness into a corresponding shininess exponent for
+    /// Blinn-Phong specular reflection.
+    pub fn from_blinn_phong_shininess(shininess: fre) -> Self {
+        Self(fre::ln(8192.0 / shininess) / fre::ln(8192.0))
+    }
+
+    /// Converts the given shininess exponent for Blinn-Phong specular
+    /// reflection into a corresponding roughness.
+    pub fn to_blinn_phong_shininess(&self) -> fre {
+        fre::powf(8192.0, 1.0 - self.0)
+    }
+
 }
