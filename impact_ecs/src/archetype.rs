@@ -1359,6 +1359,14 @@ impl_archetype_conversion!((C1, C2, C3, C4, C5));
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6));
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7));
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15));
+impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16));
 
 #[cfg(test)]
 mod test {
