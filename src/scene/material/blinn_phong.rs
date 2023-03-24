@@ -11,8 +11,8 @@ use crate::{
     scene::{
         DiffuseColorComp, DiffuseTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
         MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-        MaterialSpecification, RGBColor, RenderResourcesDesynchronized, RoughnessComp,
-        SpecularColorComp, SpecularTextureComp,
+        MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection, RGBColor,
+        RenderResourcesDesynchronized, RoughnessComp, SpecularColorComp, SpecularTextureComp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -108,17 +108,17 @@ impl BlinnPhongMaterial {
             let material = BlinnPhongMaterial {
                 diffuse_color: diffuse_color
                     .map_or_else(RGBColor::zeros, |diffuse_color| diffuse_color.0),
-                    specular_color: specular_color
-                        .map_or_else(RGBColor::zeros, |specular_color| specular_color.0),
+                specular_color: specular_color
+                    .map_or_else(RGBColor::zeros, |specular_color| specular_color.0),
                 shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
-                };
+            };
 
-                let feature_id = instance_feature_manager
+            let feature_id = instance_feature_manager
                 .get_storage_mut::<BlinnPhongMaterial>()
-                    .expect("Missing storage for BlinnPhongMaterial features")
-                    .add_feature(&material);
+                .expect("Missing storage for BlinnPhongMaterial features")
+                .add_feature(&material);
 
-                MaterialComp::new(*BLINN_PHONG_MATERIAL_ID, Some(feature_id), None)
+            MaterialComp::new(*BLINN_PHONG_MATERIAL_ID, Some(feature_id), None)
         }
 
         setup!(
@@ -139,7 +139,9 @@ impl BlinnPhongMaterial {
                 )
             },
             ![
-                MaterialComp
+                MaterialComp,
+                MicrofacetDiffuseReflection,
+                MicrofacetSpecularReflection
             ]
         );
 
@@ -161,7 +163,9 @@ impl BlinnPhongMaterial {
                 )
             },
             ![
-                MaterialComp
+                MaterialComp,
+                MicrofacetDiffuseReflection,
+                MicrofacetSpecularReflection
             ]
         );
     }
@@ -248,9 +252,9 @@ impl DiffuseTexturedBlinnPhongMaterial {
                 )
             },
             ![
-                MaterialComp
-                LambertianDiffuseColorComp,
-                BlinnPhongSpecularTextureComp
+                MaterialComp,
+                MicrofacetDiffuseReflection,
+                MicrofacetSpecularReflection
             ]
         );
     }
@@ -337,9 +341,9 @@ impl TexturedBlinnPhongMaterial {
                 )
             },
             ![
-                MaterialComp
-                LambertianDiffuseColorComp,
-                BlinnPhongSpecularColorComp
+                MaterialComp,
+                MicrofacetDiffuseReflection,
+                MicrofacetSpecularReflection
             ]
         );
     }

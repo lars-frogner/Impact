@@ -26,10 +26,11 @@ pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput, CameraShaderInput,
-    FixedColorFeatureShaderInput, FixedTextureShaderInput, GlobalAmbientColorShaderInput,
-    InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
-    ModelViewTransformShaderInput, PointLightShaderInput, Shader, ShaderGenerator,
-    UnidirectionalLightShaderInput,
+    DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput, FixedTextureShaderInput,
+    GlobalAmbientColorShaderInput, InstanceFeatureShaderInput, LightShaderInput,
+    MaterialShaderInput, MeshShaderInput, MicrofacetFeatureShaderInput, MicrofacetShadingModel,
+    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, PointLightShaderInput, Shader,
+    ShaderGenerator, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{CascadeIdx, DepthTexture, ImageTexture, MultisampledRenderTargetTexture};

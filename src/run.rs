@@ -15,7 +15,8 @@ use crate::{
     rendering::{Assets, TextureID},
     scene::{
         AngularExtentComp, DiffuseColorComp, DiffuseTextureComp, DirectionComp, EmissionExtentComp,
-        FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository, Omnidirectional,
+        FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository,
+        MicrofacetDiffuseReflection, MicrofacetSpecularReflection, Omnidirectional,
         PerspectiveCameraComp, RadianceComp, RoughnessComp, ScalingComp, Scene, SpecularColorComp,
     },
     window::InputHandler,
@@ -155,9 +156,11 @@ async fn init_world(window: Window) -> Result<World> {
                         &ScalingComp(1.0),
                         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
                         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-                        &DiffuseColorComp(vector![0.05, 0.05, 0.1]),
-                        &SpecularColorComp(vector![0.6, 0.6, 0.9]),
-                        &RoughnessComp(0.65),
+                        &DiffuseColorComp(vector![0.2, 0.3, 0.7]),
+                        &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
+                        &RoughnessComp(0.4),
+                        &MicrofacetDiffuseReflection,
+                        &MicrofacetSpecularReflection,
                     ))
                     .unwrap(),
             )
@@ -183,8 +186,8 @@ async fn init_world(window: Window) -> Result<World> {
                             Degrees(-2.3),
                         )),
                         &DiffuseColorComp(vector![0.8, 0.4, 0.3]),
-                        &SpecularColorComp(vector![0.3, 0.3, 0.3]),
-                        &RoughnessComp(0.85),
+                        &RoughnessComp(0.9),
+                        &MicrofacetDiffuseReflection,
                     ))
                     .unwrap(),
             )
@@ -196,12 +199,9 @@ async fn init_world(window: Window) -> Result<World> {
             &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
             &PositionComp(Point3::new(-6.0, -1.0, 4.0)),
             &ScalingComp(2.0),
-            &DiffuseColorComp(vector![0.7, 0.7, 0.3]),
-            &SpecularColorComp(vector![0.8, 0.8, 0.8]),
-            &RoughnessComp(0.65),
-        ))
-        .unwrap();
-
+            &SpecularColorComp::GOLD,
+            &RoughnessComp(0.4),
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -212,9 +212,11 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(2.0),
             &OrientationComp(Orientation::identity()),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.3))),
-            &DiffuseColorComp(vector![0.7, 0.3, 0.7]),
-            &SpecularColorComp(vector![0.8, 0.8, 0.8]),
-            &RoughnessComp(0.7),
+            &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
+            &DiffuseColorComp(vector![0.2, 0.8, 0.4]),
+            &RoughnessComp(0.55),
+            &MicrofacetDiffuseReflection,
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -223,9 +225,9 @@ async fn init_world(window: Window) -> Result<World> {
             &MeshComp::new(MeshID(hash64!("Pole mesh"))),
             &PositionComp(Point3::new(6.0, 0.5, 4.0)),
             &ScalingComp(1.0),
-            &DiffuseColorComp(vector![0.4, 0.4, 0.6]),
-            &SpecularColorComp(vector![0.3, 0.3, 0.3]),
-            &RoughnessComp(0.8),
+            &SpecularColorComp::IRON,
+            &RoughnessComp(0.5),
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -236,8 +238,10 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
             &DiffuseTextureComp(TextureID(hash32!("Wood texture"))),
-            &SpecularColorComp(vector![0.6, 0.6, 0.6]),
-            &RoughnessComp(0.75),
+            &SpecularColorComp::in_range_of(SpecularColorComp::LIVING_TISSUE, 100.0),
+            &RoughnessComp(0.85),
+            &MicrofacetDiffuseReflection,
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -248,8 +252,10 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
             &DiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
-            &SpecularColorComp(vector![0.3, 0.3, 0.3]),
-            &RoughnessComp(0.85),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
+            &RoughnessComp(0.75),
+            &MicrofacetDiffuseReflection,
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -260,8 +266,10 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
             &DiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
-            &SpecularColorComp(vector![0.3, 0.3, 0.3]),
-            &RoughnessComp(0.85),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
+            &RoughnessComp(0.75),
+            &MicrofacetDiffuseReflection,
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -272,8 +280,10 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
             &DiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
-            &SpecularColorComp(vector![0.3, 0.3, 0.3]),
-            &RoughnessComp(0.85),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
+            &RoughnessComp(0.75),
+            &MicrofacetDiffuseReflection,
+            &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
@@ -307,7 +317,7 @@ async fn init_world(window: Window) -> Result<World> {
             &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
             &ScalingComp(0.7),
             &PositionComp(Point3::new(0.0, 9.0, 2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 50.0),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 60.0),
             &FixedColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,
             &EmissionExtentComp(0.7),
@@ -318,11 +328,11 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entities((
             &[
                 DirectionComp(LightDirection::new_normalize(vector![-0.3, -0.7, 1.0])),
-                DirectionComp(LightDirection::new_normalize(vector![0.6, -0.4, 1.0])),
+                DirectionComp(LightDirection::new_normalize(vector![0.6, -0.3, 1.0])),
             ],
             &[
-                RadianceComp(vector![1.0, 1.0, 1.0] * 0.2),
-                RadianceComp(vector![1.0, 1.0, 1.0] * 0.15),
+                RadianceComp(vector![1.0, 1.0, 1.0] * 0.25),
+                RadianceComp(vector![1.0, 1.0, 1.0] * 0.20),
             ],
             &[
                 AngularExtentComp(Degrees(2.0)),
