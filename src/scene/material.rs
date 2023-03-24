@@ -11,9 +11,8 @@ pub use blinn_phong::{
     BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, TexturedBlinnPhongMaterial,
 };
 pub use components::{
-    BlinnPhongShininessComp, BlinnPhongSpecularColorComp, BlinnPhongSpecularTextureComp,
-    FixedColorComp, FixedTextureComp, LambertianDiffuseColorComp, LambertianDiffuseTextureComp,
-    MaterialComp, VertexColorComp,
+    DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
+    RoughnessComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
 pub use vertex_color::VertexColorMaterial;

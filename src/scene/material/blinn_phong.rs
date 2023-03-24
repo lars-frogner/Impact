@@ -9,11 +9,10 @@ use crate::{
         InstanceFeatureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
     },
     scene::{
-        BlinnPhongShininessComp, BlinnPhongSpecularColorComp, BlinnPhongSpecularTextureComp,
-        InstanceFeatureManager, LambertianDiffuseColorComp, LambertianDiffuseTextureComp,
-        MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-        MaterialPropertyTextureSetID, MaterialSpecification, RGBColor,
-        RenderResourcesDesynchronized,
+        DiffuseColorComp, DiffuseTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
+        MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+        MaterialSpecification, RGBColor, RenderResourcesDesynchronized, RoughnessComp,
+        SpecularColorComp, SpecularTextureComp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -75,9 +74,7 @@ impl BlinnPhongMaterial {
 
     /// Registers this material as a feature type in the given
     /// instance feature manager and adds the material specification
-    /// to the given material library. Because this material uses no
-    /// textures, the same material specification can be used for all
-    /// instances using the material.
+    /// to the given material library.
     pub fn register(
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
@@ -102,34 +99,69 @@ impl BlinnPhongMaterial {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
+        fn execute_setup(
+            instance_feature_manager: &mut InstanceFeatureManager,
+            diffuse_color: Option<&DiffuseColorComp>,
+            specular_color: Option<&SpecularColorComp>,
+            roughness: Option<&RoughnessComp>,
+        ) -> MaterialComp {
+            let material = BlinnPhongMaterial {
+                diffuse_color: diffuse_color
+                    .map_or_else(RGBColor::zeros, |diffuse_color| diffuse_color.0),
+                    specular_color: specular_color
+                        .map_or_else(RGBColor::zeros, |specular_color| specular_color.0),
+                shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
+                };
+
+                let feature_id = instance_feature_manager
+                .get_storage_mut::<BlinnPhongMaterial>()
+                    .expect("Missing storage for BlinnPhongMaterial features")
+                    .add_feature(&material);
+
+                MaterialComp::new(*BLINN_PHONG_MATERIAL_ID, Some(feature_id), None)
+        }
+
         setup!(
             {
                 desynchronized.set_yes();
                 let mut instance_feature_manager = instance_feature_manager.write().unwrap();
             },
             components,
-            |diffuse_color: &LambertianDiffuseColorComp,
-             specular_color: Option<&BlinnPhongSpecularColorComp>,
-             shininess: Option<&BlinnPhongShininessComp>|
+            |diffuse_color: &DiffuseColorComp,
+             specular_color: Option<&SpecularColorComp>,
+             roughness: Option<&RoughnessComp>|
              -> MaterialComp {
-                let material = Self {
-                    diffuse_color: diffuse_color.0,
-                    specular_color: specular_color
-                        .map_or_else(RGBColor::zeros, |specular_color| specular_color.0),
-                    shininess: shininess.map_or(0.0, |shininess| shininess.0),
-                };
-
-                let feature_id = instance_feature_manager
-                    .get_storage_mut::<Self>()
-                    .expect("Missing storage for BlinnPhongMaterial features")
-                    .add_feature(&material);
-
-                MaterialComp::new(*BLINN_PHONG_MATERIAL_ID, Some(feature_id), None)
+                execute_setup(
+                    &mut instance_feature_manager,
+                    Some(diffuse_color),
+                    specular_color,
+                    roughness,
+                )
             },
             ![
-                MaterialComp,
-                LambertianDiffuseTextureComp,
-                BlinnPhongSpecularTextureComp
+                MaterialComp
+            ]
+        );
+
+        setup!(
+            {
+                desynchronized.set_yes();
+                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
+            },
+            components,
+            |diffuse_color: Option<&DiffuseColorComp>,
+             specular_color: &SpecularColorComp,
+             roughness: Option<&RoughnessComp>|
+             -> MaterialComp {
+                execute_setup(
+                    &mut instance_feature_manager,
+                    diffuse_color,
+                    Some(specular_color),
+                    roughness,
+                )
+            },
+            ![
+                MaterialComp
             ]
         );
     }
@@ -184,9 +216,9 @@ impl DiffuseTexturedBlinnPhongMaterial {
                 let mut material_library = material_library.write().unwrap();
             },
             components,
-            |diffuse_texture: &LambertianDiffuseTextureComp,
-             specular_color: Option<&BlinnPhongSpecularColorComp>,
-             shininess: Option<&BlinnPhongShininessComp>|
+            |diffuse_texture: &DiffuseTextureComp,
+             specular_color: Option<&SpecularColorComp>,
+             roughness: Option<&RoughnessComp>|
              -> MaterialComp {
                 let texture_ids = [diffuse_texture.0];
 
@@ -200,7 +232,8 @@ impl DiffuseTexturedBlinnPhongMaterial {
                 let material = Self {
                     specular_color: specular_color
                         .map_or_else(RGBColor::zeros, |specular_color| specular_color.0),
-                    shininess: shininess.map_or(0.0, |shininess| shininess.0),
+                    shininess: roughness
+                        .map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
                 };
 
                 let feature_id = instance_feature_manager
@@ -215,7 +248,7 @@ impl DiffuseTexturedBlinnPhongMaterial {
                 )
             },
             ![
-                MaterialComp,
+                MaterialComp
                 LambertianDiffuseColorComp,
                 BlinnPhongSpecularTextureComp
             ]
@@ -274,9 +307,9 @@ impl TexturedBlinnPhongMaterial {
                 let mut material_library = material_library.write().unwrap();
             },
             components,
-            |diffuse_texture: &LambertianDiffuseTextureComp,
-             specular_texture: &BlinnPhongSpecularTextureComp,
-             shininess: Option<&BlinnPhongShininessComp>|
+            |diffuse_texture: &DiffuseTextureComp,
+             specular_texture: &SpecularTextureComp,
+             roughness: Option<&RoughnessComp>|
              -> MaterialComp {
                 let texture_ids = [diffuse_texture.0, specular_texture.0];
 
@@ -288,7 +321,8 @@ impl TexturedBlinnPhongMaterial {
                     .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
                 let material = Self {
-                    shininess: shininess.map_or(0.0, |shininess| shininess.0),
+                    shininess: roughness
+                        .map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
                 };
 
                 let feature_id = instance_feature_manager
@@ -303,7 +337,7 @@ impl TexturedBlinnPhongMaterial {
                 )
             },
             ![
-                MaterialComp,
+                MaterialComp
                 LambertianDiffuseColorComp,
                 BlinnPhongSpecularColorComp
             ]
