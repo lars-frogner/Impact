@@ -122,6 +122,22 @@ impl World {
         )
     }
 
+    /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
+    /// file at the given path and returns the component representing the mesh of
+    /// the model in the file. The mesh is added to the mesh repository.
+    ///
+    /// # Errors
+    /// Returns an error if the file can not be found or loaded as a mesh.
+    pub fn load_mesh_from_ply_file<P>(
+        &self,
+        ply_file_path: P,
+    ) -> Result<SingleInstance<ArchetypeComponentStorage>>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        io::load_mesh_from_ply_file(self.scene.read().unwrap().mesh_repository(), ply_file_path)
+    }
+
     pub fn create_entities<A, E>(
         &self,
         components: impl TryInto<ArchetypeComponents<A>, Error = E>,
