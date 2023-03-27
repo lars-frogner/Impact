@@ -5,7 +5,10 @@ mod components;
 pub use components::{BoxMeshComp, CylinderMeshComp, MeshComp, PlaneMeshComp, SphereMeshComp};
 
 use crate::{
-    geometry::TriangleMesh, num::Float, rendering::fre, scene::RenderResourcesDesynchronized,
+    geometry::{TriangleMesh, VertexAttributeSet},
+    num::Float,
+    rendering::fre,
+    scene::{MaterialComp, MaterialLibrary, RenderResourcesDesynchronized},
 };
 use anyhow::{anyhow, Result};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -41,6 +44,12 @@ impl<F: Float> MeshRepository<F> {
     /// [`None`] if the mesh is not present.
     pub fn get_mesh(&self, mesh_id: MeshID) -> Option<&TriangleMesh<F>> {
         self.meshes.get(&mesh_id)
+    }
+
+    /// Returns a mutable reference to the [`TriangleMesh`] with the given ID,
+    /// or [`None`] if the mesh is not present.
+    pub fn get_mesh_mut(&mut self, mesh_id: MeshID) -> Option<&mut TriangleMesh<F>> {
+        self.meshes.get_mut(&mesh_id)
     }
 
     /// Whether a mesh with the given ID exists in the repository.
@@ -175,5 +184,43 @@ impl TriangleMesh<fre> {
         );
 
         Ok(())
+    }
+
+    /// Checks if the entity-to-be with the given components has a material
+    /// component and a component for a mesh that misses vertex attributes
+    /// required by the material, and if so, generates the missing vertex
+    /// attributes if possible.
+    pub fn generate_missing_vertex_properties(
+        mesh_repository: &RwLock<MeshRepository<fre>>,
+        material_library: &MaterialLibrary,
+        components: &ArchetypeComponentStorage,
+    ) {
+        setup!(components, |mesh: &MeshComp, material: &MaterialComp| {
+            let material_specification = material_library
+                .get_material_specification(material.material_id)
+                .expect("Missing material in library for material component");
+
+            let vertex_attribute_requirements =
+                material_specification.vertex_attribute_requirements();
+
+            if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
+                let mesh_repository_readonly = mesh_repository.read().unwrap();
+                let mesh_readonly = mesh_repository_readonly
+                    .get_mesh(mesh.id)
+                    .expect("Missing mesh in repository for mesh component");
+
+                if !mesh_readonly.has_normal_vectors() {
+                    log::info!("Generating normal vectors for mesh {}", mesh.id);
+
+                    drop(mesh_repository_readonly); // Release read lock
+                    let mut mesh_repository_writable = mesh_repository.write().unwrap();
+
+                    mesh_repository_writable
+                        .get_mesh_mut(mesh.id)
+                        .unwrap()
+                        .generate_smooth_normal_vectors();
+                }
+            }
+        });
     }
 }

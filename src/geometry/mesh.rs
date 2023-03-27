@@ -165,6 +165,21 @@ impl<F: Float> TriangleMesh<F> {
         }
     }
 
+    /// Returns the number of vertices in the mesh.
+    pub fn n_vertices(&self) -> usize {
+        self.positions.len()
+    }
+
+    /// Returns the number of vertex indices in the mesh.
+    pub fn n_indices(&self) -> usize {
+        self.indices.len()
+    }
+
+    /// Returns the number of triangles in the mesh.
+    pub fn n_triangles(&self) -> usize {
+        self.n_indices() / 3
+    }
+
     /// Returns a slice with the positions of the mesh vertices.
     pub fn positions(&self) -> &[VertexPosition<F>] {
         &self.positions
@@ -257,6 +272,34 @@ impl<F: Float> TriangleMesh<F> {
         self.compute_aabb()
             .as_ref()
             .map(Sphere::bounding_sphere_from_aabb)
+    }
+
+    /// Computes new vertex normal vectors for the mesh. Each vertex normal
+    /// vector is computed as the average direction of the normals of the
+    /// triangles that the vertex is a part of.
+    pub fn generate_smooth_normal_vectors(&mut self) {
+        let mut summed_normal_vectors = vec![Vector3::zeros(); self.n_vertices()];
+
+        for indices in self.indices.chunks_exact(3) {
+            let idx0 = indices[0] as usize;
+            let idx1 = indices[1] as usize;
+            let idx2 = indices[2] as usize;
+
+            let p0 = &self.positions[idx0].0;
+            let p1 = &self.positions[idx1].0;
+            let p2 = &self.positions[idx2].0;
+
+            let face_normal_vector = UnitVector3::new_normalize((p1 - p0).cross(&(p2 - p0)));
+
+            summed_normal_vectors[idx0] += face_normal_vector.as_ref();
+            summed_normal_vectors[idx1] += face_normal_vector.as_ref();
+            summed_normal_vectors[idx2] += face_normal_vector.as_ref();
+        }
+
+        self.normal_vectors = summed_normal_vectors
+            .into_iter()
+            .map(|vector| VertexNormalVector(UnitVector3::new_normalize(vector)))
+            .collect();
     }
 
     /// Forgets any recorded changes to the vertex positions.

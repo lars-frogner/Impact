@@ -44,11 +44,15 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
     ) -> Result<RenderResourcesDesynchronized> {
         let mut desynchronized = RenderResourcesDesynchronized::No;
+
         self.add_mesh_component_for_entity(components, &mut desynchronized)?;
         self.add_camera_component_for_entity(window, components, &mut desynchronized)?;
         self.add_light_component_for_entity(components, &mut desynchronized);
         self.add_material_component_for_entity(components, &mut desynchronized);
         self.add_model_instance_node_component_for_entity(components, &mut desynchronized);
+
+        self.generate_missing_vertex_properties_for_mesh(components);
+
         Ok(desynchronized)
     }
 
@@ -56,10 +60,12 @@ impl Scene {
     /// the given entity is removed.
     pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) -> RenderResourcesDesynchronized {
         let mut desynchronized = RenderResourcesDesynchronized::No;
+
         self.remove_model_instance_node_for_entity(entity, &mut desynchronized);
         self.remove_material_features_for_entity(entity, &mut desynchronized);
         self.remove_light_for_entity(entity, &mut desynchronized);
         self.remove_camera_for_entity(entity, &mut desynchronized);
+
         desynchronized
     }
 
@@ -242,6 +248,14 @@ impl Scene {
                 ))
             },
             ![SceneGraphNodeComp::<ModelInstanceNodeID>]
+        );
+    }
+
+    fn generate_missing_vertex_properties_for_mesh(&self, components: &ArchetypeComponentStorage) {
+        TriangleMesh::generate_missing_vertex_properties(
+            self.mesh_repository(),
+            &self.material_library().read().unwrap(),
+            components,
         );
     }
 
