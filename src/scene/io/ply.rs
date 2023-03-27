@@ -5,14 +5,11 @@ use crate::{
         TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
     rendering::fre,
-    scene::{MeshComp, MeshRepository},
+    scene::{MeshComp, MeshID, MeshRepository},
 };
 use anyhow::{bail, Result};
 use bytemuck::{Pod, Zeroable};
-use impact_ecs::{
-    archetype::ArchetypeComponentStorage,
-    component::{ComponentStorage, SingleInstance},
-};
+use impact_utils::hash64;
 use nalgebra::{point, vector, UnitVector3};
 use ply_rs::{
     parser::Parser,
@@ -30,35 +27,35 @@ struct PlyVertex {
 struct PlyTriangleVertexIndices([u32; 3]);
 
 /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
-/// file at the given path and returns the component representing the mesh of
-/// the model in the file. The mesh is added to the mesh repository.
+/// file at the given path and adds it to the mesh repository if it does not
+/// already exist.
+///
+/// # Returns
+/// The [`MeshComp`] representing the mesh.
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file<P>(
     mesh_repository: &RwLock<MeshRepository<fre>>,
     ply_file_path: P,
-) -> Result<SingleInstance<ArchetypeComponentStorage>>
+) -> Result<MeshComp>
 where
     P: AsRef<Path> + Debug,
 {
     let ply_file_path = ply_file_path.as_ref();
 
-    let mesh = read_mesh_from_ply_file(ply_file_path)?;
+    let mesh_id = MeshID(hash64!(ply_file_path.to_string_lossy()));
 
-    let mesh_id = mesh_repository
-        .write()
-        .unwrap()
-        .add_named_mesh_unless_present(ply_file_path.to_string_lossy(), mesh);
+    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+        let mesh = read_mesh_from_ply_file(ply_file_path)?;
 
-    let mesh_component = ComponentStorage::from_single_instance_view(&MeshComp { id: mesh_id });
+        mesh_repository
+            .write()
+            .unwrap()
+            .add_mesh_unless_present(mesh_id, mesh);
+    }
 
-    Ok(
-        SingleInstance::<ArchetypeComponentStorage>::try_from_array_of_single_instances([
-            mesh_component,
-        ])
-        .unwrap(),
-    )
+    Ok(MeshComp { id: mesh_id })
 }
 
 pub fn read_mesh_from_ply_file<P>(ply_file_path: P) -> Result<TriangleMesh<fre>>
