@@ -1,7 +1,7 @@
 //! Event handling related to scenes.
 
 use crate::{
-    geometry::{OrthographicCamera, PerspectiveCamera},
+    geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
     physics::{OrientationComp, PositionComp},
     scene::{
         self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial,
@@ -44,6 +44,7 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
     ) -> Result<RenderResourcesDesynchronized> {
         let mut desynchronized = RenderResourcesDesynchronized::No;
+        self.add_mesh_component_for_entity(components, &mut desynchronized)?;
         self.add_camera_component_for_entity(window, components, &mut desynchronized)?;
         self.add_light_component_for_entity(components, &mut desynchronized);
         self.add_material_component_for_entity(components, &mut desynchronized);
@@ -67,6 +68,18 @@ impl Scene {
             scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_size.0, new_size.1));
         }
         RenderResourcesDesynchronized::Yes
+    }
+
+    fn add_mesh_component_for_entity(
+        &self,
+        components: &mut ArchetypeComponentStorage,
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) -> Result<()> {
+        TriangleMesh::add_mesh_component_for_entity(
+            self.mesh_repository(),
+            components,
+            desynchronized,
+        )
     }
 
     fn add_camera_component_for_entity(

@@ -15,7 +15,7 @@ mod systems;
 mod tasks;
 
 pub use camera::{OrthographicCameraComp, PerspectiveCameraComp, SceneCamera};
-pub use components::{MeshComp, ScalingComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
+pub use components::{ScalingComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
     create_model_to_world_transform, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
@@ -36,7 +36,9 @@ pub use material::{
     MicrofacetSpecularReflection, RGBColor, RoughnessComp, SpecularColorComp, SpecularTextureComp,
     TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial, VertexColorComp, VertexColorMaterial,
 };
-pub use mesh::{MeshID, MeshRepository};
+pub use mesh::{
+    BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
+};
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
 pub use systems::SyncLightPositionsAndDirectionsInStorage;
@@ -73,12 +75,12 @@ pub struct SceneConfig {
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new(mesh_repository: MeshRepository<fre>) -> Self {
+    pub fn new() -> Self {
         let config = SceneConfig::default();
 
         let scene = Self {
             config,
-            mesh_repository: RwLock::new(mesh_repository),
+            mesh_repository: RwLock::new(MeshRepository::new()),
             material_library: RwLock::new(MaterialLibrary::new()),
             light_storage: RwLock::new(LightStorage::new()),
             instance_feature_manager: RwLock::new(InstanceFeatureManager::new()),
@@ -162,6 +164,12 @@ impl Scene {
             &mut instance_feature_manager,
         );
         TexturedMicrofacetMaterial::register(&mut material_library, &mut instance_feature_manager);
+    }
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

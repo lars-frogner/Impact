@@ -7,24 +7,24 @@ use super::{
 use crate::{
     control::{Controllable, RollFreeCameraOrientationController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::TriangleMesh,
     physics::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
     rendering::{Assets, TextureID},
     scene::{
-        AngularExtentComp, DiffuseColorComp, DiffuseTextureComp, DirectionComp, EmissionExtentComp,
-        FixedColorComp, LightDirection, MeshComp, MeshID, MeshRepository,
+        AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
+        DirectionComp, EmissionExtentComp, FixedColorComp, LightDirection,
         MicrofacetDiffuseReflection, MicrofacetSpecularReflection, Omnidirectional,
-        PerspectiveCameraComp, RadianceComp, RoughnessComp, ScalingComp, Scene, SpecularColorComp,
+        PerspectiveCameraComp, PlaneMeshComp, RadianceComp, RoughnessComp, ScalingComp,
+        SpecularColorComp, SphereMeshComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
     world::World,
 };
 use anyhow::Result;
-use impact_utils::{hash32, hash64};
+use impact_utils::hash32;
 use nalgebra::{vector, Point3, Vector3};
 use std::f64::consts::PI;
 
@@ -79,7 +79,6 @@ async fn init_world(window: Window) -> Result<World> {
     let core_system = CoreRenderingSystem::new(&window).await?;
 
     let mut assets = Assets::new();
-    let mut mesh_repository = MeshRepository::new();
 
     assets.image_textures.insert(
         TextureID(hash32!("Wood texture")),
@@ -93,41 +92,6 @@ async fn init_world(window: Window) -> Result<World> {
         )?,
     );
 
-    mesh_repository
-        .add_mesh(
-            MeshID(hash64!("Plane mesh")),
-            TriangleMesh::create_plane(1.0, 1.0),
-        )
-        .unwrap();
-
-    mesh_repository
-        .add_mesh(
-            MeshID(hash64!("Box mesh")),
-            TriangleMesh::create_box(1.0, 1.0, 1.0),
-        )
-        .unwrap();
-
-    mesh_repository
-        .add_mesh(
-            MeshID(hash64!("Pole mesh")),
-            TriangleMesh::create_cylinder(10.0, 1.0, 100),
-        )
-        .unwrap();
-
-    mesh_repository
-        .add_mesh(
-            MeshID(hash64!("Cylinder mesh")),
-            TriangleMesh::create_cylinder(1.0, 1.0, 100),
-        )
-        .unwrap();
-
-    mesh_repository
-        .add_mesh(
-            MeshID(hash64!("Sphere mesh")),
-            TriangleMesh::create_sphere(100),
-        )
-        .unwrap();
-
     let vertical_field_of_view = Degrees(70.0);
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
@@ -137,15 +101,27 @@ async fn init_world(window: Window) -> Result<World> {
     let orientation_controller =
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
-    let scene = Scene::new(mesh_repository);
     let world = World::new(
         window,
-        scene,
         renderer,
         simulator,
         Some(Box::new(motion_controller)),
         Some(Box::new(orientation_controller)),
     );
+
+    world
+        .create_entities((
+            &PerspectiveCameraComp::new(
+                vertical_field_of_view,
+                UpperExclusiveBounds::new(0.1, 100.0),
+            ),
+            &PositionComp(Point3::new(0.0, 2.0, -8.0)),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
+            &VelocityComp(Vector3::zeros()),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+            &Controllable,
+        ))
+        .unwrap();
 
     for model_comps in world.load_models_from_obj_file("assets/bunny.obj").unwrap() {
         world
@@ -196,7 +172,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
+            &SphereMeshComp::new(100),
             &PositionComp(Point3::new(-6.0, -1.0, 4.0)),
             &ScalingComp(2.0),
             &SpecularColorComp::GOLD,
@@ -207,7 +183,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Box mesh"))),
+            &BoxMeshComp::UNIT_CUBE,
             &PositionComp(Point3::new(-6.0, 1.0, 4.0)),
             &ScalingComp(2.0),
             &OrientationComp(Orientation::identity()),
@@ -222,7 +198,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Pole mesh"))),
+            &CylinderMeshComp::new(10.0, 1.0, 100),
             &PositionComp(Point3::new(6.0, 0.5, 4.0)),
             &ScalingComp(1.0),
             &SpecularColorComp::IRON,
@@ -233,7 +209,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Plane mesh"))),
+            &PlaneMeshComp::UNIT_PLANE,
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
@@ -247,7 +223,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Plane mesh"))),
+            &PlaneMeshComp::UNIT_PLANE,
             &PositionComp(Point3::new(25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
@@ -261,7 +237,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Plane mesh"))),
+            &PlaneMeshComp::UNIT_PLANE,
             &PositionComp(Point3::new(-25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
@@ -275,7 +251,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Plane mesh"))),
+            &PlaneMeshComp::UNIT_PLANE,
             &PositionComp(Point3::new(0.0, 0.0, 25.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
@@ -287,23 +263,9 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
-    world
-        .create_entities((
-            &PerspectiveCameraComp::new(
-                vertical_field_of_view,
-                UpperExclusiveBounds::new(0.1, 100.0),
-            ),
-            &PositionComp(Point3::new(0.0, 2.0, -8.0)),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
-            &VelocityComp(Vector3::zeros()),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-            &Controllable,
-        ))
-        .unwrap();
-
     // world
     //     .create_entities((
-    //         &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
+    //         &SphereMeshComp::new(40),
     //         &ScalingComp(0.2),
     //         &PositionComp(Point3::new(0.0, 1.0, -2.0)),
     //         &RadianceComp(vector![1.0, 1.0, 1.0] * 15.0),
@@ -314,7 +276,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &MeshComp::new(MeshID(hash64!("Sphere mesh"))),
+            &SphereMeshComp::new(25),
             &ScalingComp(0.7),
             &PositionComp(Point3::new(0.0, 9.0, 2.0)),
             &RadianceComp(vector![1.0, 1.0, 1.0] * 60.0),
