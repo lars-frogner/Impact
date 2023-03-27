@@ -6,7 +6,7 @@ use crate::{
     },
     rendering::{fre, RenderingSystem},
     scene::{
-        DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshRepository, RoughnessComp,
+        DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshID, MeshRepository, RoughnessComp,
         SpecularColorComp, SpecularTextureComp, VertexColorComp,
     },
 };
@@ -15,6 +15,7 @@ use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentStorage, SingleInstance},
 };
+use impact_utils::hash64;
 use nalgebra::{point, vector, UnitVector3};
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -55,14 +56,22 @@ where
     for model in models {
         let material_id = model.mesh.material_id;
 
-        let mesh = create_mesh_from_tobj_mesh(model.mesh);
-        let mesh_has_vertex_colors = mesh.has_colors();
+        let mesh_has_vertex_colors = !model.mesh.vertex_color.is_empty();
 
-        let mesh_name = format!("{} @ {}", &model.name, &obj_file_path_string);
-        let mesh_id = mesh_repository
-            .write()
-            .unwrap()
-            .add_named_mesh_unless_present(mesh_name, mesh);
+        let mesh_id = MeshID(hash64!(format!(
+            "{} @ {}",
+            &model.name, &obj_file_path_string
+        )));
+
+        if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+            let mesh = create_mesh_from_tobj_mesh(model.mesh);
+
+            mesh_repository
+                .write()
+                .unwrap()
+                .add_mesh_unless_present(mesh_id, mesh);
+        }
+
         let mesh_component = ComponentStorage::from_single_instance_view(&MeshComp { id: mesh_id });
 
         let components = if let Some(material_idx) = material_id {
