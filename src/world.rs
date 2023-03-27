@@ -4,7 +4,7 @@ use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     physics::PhysicsSimulator,
     rendering::RenderingSystem,
-    scene::{io, Scene},
+    scene::{io, MeshComp, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
@@ -43,7 +43,6 @@ impl World {
     /// Creates a new world data container.
     pub fn new(
         window: Window,
-        scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
@@ -54,7 +53,7 @@ impl World {
             window: Arc::clone(&window),
             user_interface: RwLock::new(UserInterface::new(window)),
             ecs_world: RwLock::new(ECSWorld::new()),
-            scene: RwLock::new(scene),
+            scene: RwLock::new(Scene::new()),
             renderer: RwLock::new(renderer),
             simulator: RwLock::new(simulator),
             motion_controller: motion_controller.map(Mutex::new),

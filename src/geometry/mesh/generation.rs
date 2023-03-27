@@ -30,7 +30,7 @@ macro_rules! texcoord {
 
 impl<F: Float> TriangleMesh<F> {
     /// Creates a mesh representing a flat plane centered at
-    /// the origin with the given horizontal extents
+    /// the origin with the given horizontal extents.
     ///
     /// # Panics
     /// If any of the given extents are negative.
@@ -76,27 +76,27 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Creates a mesh representing a box with the given extents, centered at
     /// the origin and with the width, height and depth axes aligned with the
-    /// x-, y- and z-axis respectively.
+    /// x-, y- and z-axis.
     ///
     /// # Panics
     /// If any of the given extents are negative.
-    pub fn create_box(width: F, height: F, depth: F) -> Self {
+    pub fn create_box(extent_x: F, extent_y: F, extent_z: F) -> Self {
         assert!(
-            width >= F::ZERO,
-            "Tried to create box mesh with negative width"
+            extent_x >= F::ZERO,
+            "Tried to create box mesh with negative x-extent"
         );
         assert!(
-            height >= F::ZERO,
-            "Tried to create box mesh with negative height"
+            extent_y >= F::ZERO,
+            "Tried to create box mesh with negative y-extent"
         );
         assert!(
-            depth >= F::ZERO,
-            "Tried to create box mesh with negative depth"
+            extent_z >= F::ZERO,
+            "Tried to create box mesh with negative z-extent"
         );
 
-        let hw = width / F::TWO;
-        let hh = height / F::TWO;
-        let hd = depth / F::TWO;
+        let hw = extent_x / F::TWO;
+        let hh = extent_y / F::TWO;
+        let hd = extent_z / F::TWO;
 
         let mut positions = Vec::with_capacity(24);
         let mut normal_vectors = Vec::with_capacity(24);
@@ -180,10 +180,10 @@ impl<F: Float> TriangleMesh<F> {
     /// # Panics
     /// - If any of the given extents are negative.
     /// - If `n_circumference_vertices` is smaller than 2.
-    pub fn create_cylinder(length: F, diameter: F, n_circumference_vertices: usize) -> Self {
+    pub fn create_cylinder(extent_y: F, diameter: F, n_circumference_vertices: usize) -> Self {
         assert!(
-            length >= F::ZERO,
-            "Tried to create cylinder mesh with negative length"
+            extent_y >= F::ZERO,
+            "Tried to create cylinder mesh with negative y-extent"
         );
         assert!(
             diameter >= F::ZERO,
@@ -194,7 +194,7 @@ impl<F: Float> TriangleMesh<F> {
             "Tried to create cylinder mesh with fewer than two vertices around circumference"
         );
 
-        let half_length = length / F::TWO;
+        let half_length = extent_y / F::TWO;
         let radius = diameter / F::TWO;
 
         let mut positions = Vec::with_capacity(4 * n_circumference_vertices + 2);
