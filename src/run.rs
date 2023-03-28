@@ -115,7 +115,7 @@ async fn init_world(window: Window) -> Result<World> {
                 vertical_field_of_view,
                 UpperExclusiveBounds::new(0.1, 100.0),
             ),
-            &PositionComp(Point3::new(0.0, 2.0, -8.0)),
+            &PositionComp(Point3::new(0.0, 2.0, -9.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
             &VelocityComp(Vector3::zeros()),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
@@ -123,73 +123,80 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
-    for model_comps in world.load_models_from_obj_file("assets/bunny.obj").unwrap() {
-        world
-            .create_entities(
-                model_comps
-                    .combined_with((
-                        &PositionComp(Point3::new(6.3, 6.5 - 1.7, 3.7)),
-                        &ScalingComp(1.0),
-                        &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
-                        &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-                        &DiffuseColorComp(vector![0.2, 0.3, 0.7]),
-                        &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
-                        &RoughnessComp(0.4),
-                        &MicrofacetDiffuseReflection,
-                        &MicrofacetSpecularReflection,
-                    ))
-                    .unwrap(),
-            )
-            .unwrap();
-    }
-
-    for model_comps in world
-        .load_models_from_obj_file("assets/teapot.obj")
-        .unwrap()
-    {
-        world
-            .create_entities(
-                model_comps
-                    .combined_with((
-                        &PositionComp(Point3::new(-1.0, 1.5, 8.0)),
-                        &ScalingComp(0.17),
-                        &OrientationComp(Orientation::from_axis_angle(
-                            &Vector3::x_axis(),
-                            -PI / 2.0 + 0.4,
-                        )),
-                        &AngularVelocityComp(AngularVelocity::new(
-                            Vector3::y_axis(),
-                            Degrees(-2.3),
-                        )),
-                        &DiffuseColorComp(vector![0.8, 0.4, 0.3]),
-                        &RoughnessComp(0.9),
-                        &MicrofacetDiffuseReflection,
-                    ))
-                    .unwrap(),
-            )
-            .unwrap();
-    }
+    // world
+    //     .create_entities((
+    //         &world.load_mesh_from_ply_file("assets/happy.ply").unwrap(),
+    //         &PositionComp(Point3::new(6.0, 4.3, 4.0)),
+    //         &ScalingComp(20.0),
+    //         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), -PI / 4.0)),
+    //         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.0))),
+    //         &SpecularColorComp::ALUMINUM,
+    //         &RoughnessComp(0.3),
+    //         &MicrofacetSpecularReflection,
+    //     ))
+    //     .unwrap();
 
     world
         .create_entities((
-            &SphereMeshComp::new(100),
-            &PositionComp(Point3::new(-6.0, -1.0, 4.0)),
-            &ScalingComp(2.0),
-            &SpecularColorComp::GOLD,
+            &world.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
+            &PositionComp(Point3::new(0.0, 1.5, 11.0)),
+            &ScalingComp(0.06),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
+            &DiffuseColorComp(vector![0.2, 0.3, 0.7]),
+            &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
             &RoughnessComp(0.4),
+            &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
     world
         .create_entities((
+            &CylinderMeshComp::new(10.0, 0.6, 100),
+            &PositionComp(Point3::new(7.0, 0.5, 5.0)),
+            &ScalingComp(1.0),
+            &SpecularColorComp::IRON,
+            &RoughnessComp(0.5),
+            &MicrofacetSpecularReflection,
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &world.load_mesh_from_obj_file("assets/abstract_object.obj")?,
+            &PositionComp(Point3::new(7.0, 7.7, 5.0)),
+            &ScalingComp(0.02),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.0)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.0))),
+            &SpecularColorComp::COPPER,
+            &RoughnessComp(0.35),
+            &MicrofacetSpecularReflection,
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &world.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
+            &PositionComp(Point3::new(-1.0, 9.0, 9.0)),
+            &ScalingComp(0.035),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), 0.4)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(-1.3))),
+            &DiffuseColorComp(vector![0.8, 0.4, 0.3]),
+            &RoughnessComp(0.95),
+            &MicrofacetDiffuseReflection,
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
             &BoxMeshComp::UNIT_CUBE,
-            &PositionComp(Point3::new(-6.0, 1.0, 4.0)),
+            &PositionComp(Point3::new(-9.0, -1.0, 5.0)),
             &ScalingComp(2.0),
             &OrientationComp(Orientation::identity()),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.3))),
-            &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             &DiffuseColorComp(vector![0.2, 0.8, 0.4]),
+            &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
             &RoughnessComp(0.55),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
@@ -198,11 +205,26 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entities((
-            &CylinderMeshComp::new(10.0, 1.0, 100),
-            &PositionComp(Point3::new(6.0, 0.5, 4.0)),
-            &ScalingComp(1.0),
-            &SpecularColorComp::IRON,
-            &RoughnessComp(0.5),
+            &SphereMeshComp::new(100),
+            &PositionComp(Point3::new(-9.0, 2.0, 5.0)),
+            &ScalingComp(4.0),
+            &DiffuseColorComp(vector![0.4, 0.3, 0.8]),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 0.5),
+            &RoughnessComp(0.7),
+            &MicrofacetDiffuseReflection,
+            &MicrofacetSpecularReflection,
+        ))
+        .unwrap();
+
+    world
+        .create_entities((
+            &world.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
+            &PositionComp(Point3::new(-9.0, 5.8, 5.0)),
+            &ScalingComp(0.016),
+            &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), 0.7)),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::x_axis(), Degrees(0.7))),
+            &SpecularColorComp::GOLD,
+            &RoughnessComp(0.4),
             &MicrofacetSpecularReflection,
         ))
         .unwrap();

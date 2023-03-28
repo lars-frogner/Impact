@@ -121,9 +121,25 @@ impl World {
         )
     }
 
-    /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
-    /// file at the given path and adds it to the mesh repository if it does not
-    /// already exist.
+    /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
+    /// to the mesh repository if it does not already exist. If there are multiple
+    /// meshes in the file, they are merged into a single mesh.
+    ///
+    /// # Returns
+    /// The [`MeshComp`] representing the mesh.
+    ///
+    /// # Errors
+    /// Returns an error if the file can not be found or loaded as a mesh.
+    pub fn load_mesh_from_obj_file<P>(&self, obj_file_path: P) -> Result<MeshComp>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        io::load_mesh_from_obj_file(self.scene.read().unwrap().mesh_repository(), obj_file_path)
+    }
+
+    /// Reads the PLY (Polygon File Format, also called Stanford Triangle
+    /// Format) file at the given path and adds the contained mesh to the mesh
+    /// repository if it does not already exist.
     ///
     /// # Returns
     /// The [`MeshComp`] representing the mesh.

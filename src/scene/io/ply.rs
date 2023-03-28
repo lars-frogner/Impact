@@ -27,8 +27,8 @@ struct PlyVertex {
 struct PlyTriangleVertexIndices([u32; 3]);
 
 /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
-/// file at the given path and adds it to the mesh repository if it does not
-/// already exist.
+/// file at the given path and adds the contained mesh to the mesh repository if
+/// it does not already exist.
 ///
 /// # Returns
 /// The [`MeshComp`] representing the mesh.
