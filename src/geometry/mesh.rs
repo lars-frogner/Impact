@@ -300,6 +300,49 @@ impl<F: Float> TriangleMesh<F> {
             .into_iter()
             .map(|vector| VertexNormalVector(UnitVector3::new_normalize(vector)))
             .collect();
+
+        self.normal_vector_change_tracker.notify_count_change();
+    }
+
+    /// Merges the given mesh into this mesh.
+    ///
+    /// # Panics
+    /// If the two meshes do not have the same set of vertex attributes.
+    pub fn merge_with(&mut self, other: &Self) {
+        let original_n_indices = self.n_indices();
+        let original_n_vertices = self.n_vertices();
+
+        if self.has_positions() {
+            assert!(other.has_positions());
+            self.positions.extend_from_slice(&other.positions);
+            self.position_change_tracker.notify_count_change();
+
+            self.indices.extend_from_slice(&other.indices);
+            self.index_change_tracker.notify_count_change();
+        }
+
+        if self.has_colors() {
+            assert!(other.has_colors());
+            self.colors.extend_from_slice(&other.colors);
+            self.color_change_tracker.notify_count_change();
+        }
+
+        if self.has_normal_vectors() {
+            assert!(other.has_normal_vectors());
+            self.normal_vectors.extend_from_slice(&other.normal_vectors);
+            self.normal_vector_change_tracker.notify_count_change();
+        }
+
+        if self.has_texture_coords() {
+            assert!(other.has_texture_coords());
+            self.texture_coords.extend_from_slice(&other.texture_coords);
+            self.texture_coord_change_tracker.notify_count_change();
+        }
+
+        let offset = u32::try_from(original_n_vertices).unwrap();
+        for idx in &mut self.indices[original_n_indices..] {
+            *idx += offset;
+        }
     }
 
     /// Forgets any recorded changes to the vertex positions.
