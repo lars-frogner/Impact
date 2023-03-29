@@ -17,7 +17,7 @@ pub use microfacet::{
 use crate::{
     geometry::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
-        VertexTextureCoords, N_VERTEX_ATTRIBUTES,
+        VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
     rendering::{fre, CoreRenderingSystem},
     scene::MAX_SHADOW_MAP_CASCADES,
@@ -263,10 +263,14 @@ pub struct UnidirectionalLightShadingShaderGenerator {
 #[derive(Clone, Debug)]
 pub struct MeshVertexOutputFieldIndices {
     pub clip_position: usize,
+    /// Camera space position.
     pub position: Option<usize>,
     pub color: Option<usize>,
+    /// Camera space normal vector.
     pub normal_vector: Option<usize>,
     pub texture_coords: Option<usize>,
+    /// Quaternion for rotation from tangent space to camera space.
+    pub tangent_space_quaternion: Option<usize>,
 }
 
 /// Indices of the fields holding the various light related properties for the
@@ -1052,7 +1056,9 @@ impl ShaderGenerator {
     /// model view and projection transformations is generated here. Other
     /// vertex attributes are included in the output struct as required by the
     /// material. If the vertex position or normal vector is required, this is
-    /// transformed to camera space before assigned to the output struct.
+    /// transformed to camera space before assigned to the output struct. If the
+    /// tangent space quaternion is needed, this is rotated with the model view
+    /// rotation before assigned to the output struct
     ///
     /// # Returns
     /// Because the output struct may have to include material properties, its
@@ -1077,6 +1083,10 @@ impl ShaderGenerator {
             fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
                 let tmp = 2.0 * cross(quaternion.xyz, vector);
                 return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
+            }
+
+            fn multiplyQuaternions(q1: vec4<f32>, q2: vec4<f32>) -> vec4<f32> {
+                return vec4<f32>(q2.w * q1.xyz + q1.w * q2.xyz + cross(q2.xyz, q1.xyz), q2.w * q1.w - dot(q2.xyz, q1.xyz));
             }
 
             fn transformPosition(
@@ -1145,6 +1155,20 @@ impl ShaderGenerator {
             None
         };
 
+        let input_tangent_to_model_space_quaternion_expr =
+            if requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION) {
+                Some(Self::add_vertex_attribute_input_argument::<
+                    VertexTangentSpaceQuaternion<fre>,
+                >(
+                    vertex_function,
+                    mesh_shader_input,
+                    new_name("tangentToModelSpaceRotationQuaternion"),
+                    vec4_type,
+                )?)
+            } else {
+                None
+            };
+
         let position_expr = SourceCode::generate_call_named(
             vertex_function,
             "cameraSpacePosition",
@@ -1174,6 +1198,7 @@ impl ShaderGenerator {
             color: None,
             normal_vector: None,
             texture_coords: None,
+            tangent_space_quaternion: None,
         };
 
         if requirements.contains(VertexAttributeSet::POSITION) {
@@ -1226,6 +1251,29 @@ impl ShaderGenerator {
                     vec2_type,
                     VECTOR_2_SIZE,
                     input_texture_coord_expr,
+                ),
+            );
+        }
+
+        if let Some(input_tangent_to_model_space_quaternion_expr) =
+            input_tangent_to_model_space_quaternion_expr
+        {
+            let tangent_space_quaternion_expr = SourceCode::generate_call_named(
+                vertex_function,
+                "tangentToCameraSpaceQuaternion",
+                source_code.functions["multiplyQuaternions"],
+                vec![
+                    model_view_transform.rotation_quaternion,
+                    input_tangent_to_model_space_quaternion_expr,
+                ],
+            );
+
+            output_field_indices.tangent_space_quaternion = Some(
+                output_struct_builder.add_field_with_perspective_interpolation(
+                    "tangentToCameraSpaceQuaternion",
+                    vec4_type,
+                    VECTOR_4_SIZE,
+                    tangent_space_quaternion_expr,
                 ),
             );
         }
@@ -4876,7 +4924,7 @@ mod test {
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {
-        locations: [Some(MESH_VERTEX_BINDING_START), None, None, None],
+        locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
     };
 
     const FIXED_COLOR_FEATURE_INPUT: InstanceFeatureShaderInput =
@@ -5181,6 +5229,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START + 1),
                     None,
                     None,
+                    None,
                 ],
             }),
             None,
@@ -5230,6 +5279,7 @@ mod test {
                     None,
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
                 ],
             }),
             None,
@@ -5257,6 +5307,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START),
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
                     None,
                 ],
             }),
@@ -5286,6 +5337,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     None,
+                    None,
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
@@ -5314,6 +5366,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
@@ -5345,6 +5398,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
@@ -5376,6 +5430,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
@@ -5407,6 +5462,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
@@ -5438,6 +5494,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     None,
+                    None,
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
@@ -5465,6 +5522,7 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START),
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
                     None,
                 ],
             }),
@@ -5495,6 +5553,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
@@ -5527,6 +5586,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
@@ -5558,6 +5618,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
@@ -5589,6 +5650,7 @@ mod test {
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),

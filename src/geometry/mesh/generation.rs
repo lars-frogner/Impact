@@ -70,6 +70,7 @@ impl<F: Float> TriangleMesh<F> {
             Vec::new(),
             normal_vectors,
             texture_coords,
+            Vec::new(),
             indices,
         )
     }
@@ -169,7 +170,14 @@ impl<F: Float> TriangleMesh<F> {
         normal_vectors.extend_from_slice(&[normal![Vector3::z_axis()]; 4]);
         add_face_indices();
 
-        Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
+        Self::new(
+            positions,
+            Vec::new(),
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a cylinder with the given length and
@@ -292,7 +300,14 @@ impl<F: Float> TriangleMesh<F> {
             5,
         ]);
 
-        Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
+        Self::new(
+            positions,
+            Vec::new(),
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 
     /// Creates a mesh representing a sphere with diameter 1.0, centered at the
@@ -398,6 +413,13 @@ impl<F: Float> TriangleMesh<F> {
         }
         indices.extend_from_slice(&[1, idx, idx - n_circumference_vertices + 1]);
 
-        Self::new(positions, Vec::new(), normal_vectors, Vec::new(), indices)
+        Self::new(
+            positions,
+            Vec::new(),
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
     }
 }

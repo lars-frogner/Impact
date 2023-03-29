@@ -8,7 +8,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, UnitVector3, Vector2, Vector3};
+use nalgebra::{Matrix3x2, Point3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use std::fmt::{Debug, Display};
 
 use super::{AxisAlignedBox, Point};
@@ -46,6 +46,12 @@ pub struct VertexNormalVector<F: Float>(pub UnitVector3<F>);
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VertexTextureCoords<F: Float>(pub Vector2<F>);
 
+/// The rotation quaternion from local tangent space to model space at a vertex
+/// position.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct VertexTangentSpaceQuaternion<F: Float>(pub UnitQuaternion<F>);
+
 bitflags! {
     /// Bitflag encoding a set of [`VertexAttribute`]s.
     pub struct VertexAttributeSet: u32 {
@@ -53,6 +59,7 @@ bitflags! {
         const COLOR = 0b00000010;
         const NORMAL_VECTOR = 0b00000100;
         const TEXTURE_COORDS = 0b00001000;
+        const TANGENT_SPACE_QUATERNION = 0b00010000;
     }
 }
 
@@ -67,16 +74,18 @@ pub struct TriangleMesh<F: Float> {
     colors: Vec<VertexColor<F>>,
     normal_vectors: Vec<VertexNormalVector<F>>,
     texture_coords: Vec<VertexTextureCoords<F>>,
+    tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
     indices: Vec<u32>,
     position_change_tracker: CollectionChangeTracker,
     color_change_tracker: CollectionChangeTracker,
     normal_vector_change_tracker: CollectionChangeTracker,
     texture_coord_change_tracker: CollectionChangeTracker,
+    tangent_space_quaternion_change_tracker: CollectionChangeTracker,
     index_change_tracker: CollectionChangeTracker,
 }
 
 /// The total number of supported vertex attribute types.
-pub const N_VERTEX_ATTRIBUTES: usize = 4;
+pub const N_VERTEX_ATTRIBUTES: usize = 5;
 
 /// The bitflag of each individual vertex attribute, ordered according to
 /// [`VertexAttribute::GLOBAL_INDEX`].
@@ -85,12 +94,18 @@ pub const VERTEX_ATTRIBUTE_FLAGS: [VertexAttributeSet; N_VERTEX_ATTRIBUTES] = [
     VertexAttributeSet::COLOR,
     VertexAttributeSet::NORMAL_VECTOR,
     VertexAttributeSet::TEXTURE_COORDS,
+    VertexAttributeSet::TANGENT_SPACE_QUATERNION,
 ];
 
 /// The name of each individual vertex attribute, ordered according to
 /// [`VertexAttribute::GLOBAL_INDEX`].
-pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] =
-    ["position", "color", "normal vector", "texture coords"];
+pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
+    "position",
+    "color",
+    "normal vector",
+    "texture coords",
+    "tangent space quaternion",
+];
 
 impl<F: Float> VertexAttribute for VertexPosition<F> {
     const GLOBAL_INDEX: usize = 0;
@@ -106,6 +121,10 @@ impl<F: Float> VertexAttribute for VertexNormalVector<F> {
 
 impl<F: Float> VertexAttribute for VertexTextureCoords<F> {
     const GLOBAL_INDEX: usize = 3;
+}
+
+impl<F: Float> VertexAttribute for VertexTangentSpaceQuaternion<F> {
+    const GLOBAL_INDEX: usize = 4;
 }
 
 impl Display for VertexAttributeSet {
@@ -127,13 +146,15 @@ impl<F: Float> TriangleMesh<F> {
     /// Creates a new mesh described by the given vertex attributes and indices.
     ///
     /// # Panics
-    /// If the length of `colors`, `normal_vectors` and `texture_coords` are
-    /// neither zero nor equal to the length of `positions`.
+    /// If the length of `colors`, `normal_vectors`, `texture_coords` and
+    /// `tangent_space_quaternions` are neither zero nor equal to the length of
+    /// `positions`.
     pub fn new(
         positions: Vec<VertexPosition<F>>,
         colors: Vec<VertexColor<F>>,
         normal_vectors: Vec<VertexNormalVector<F>>,
         texture_coords: Vec<VertexTextureCoords<F>>,
+        tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
         indices: Vec<u32>,
     ) -> Self {
         let n_vertices = positions.len();
@@ -150,17 +171,23 @@ impl<F: Float> TriangleMesh<F> {
             texture_coords.is_empty() || texture_coords.len() == n_vertices,
             "Mismatching number of texture coordinates and positions in mesh"
         );
+        assert!(
+            tangent_space_quaternions.is_empty() || tangent_space_quaternions.len() == n_vertices,
+            "Mismatching number of tangent space quaternions and positions in mesh"
+        );
 
         Self {
             positions,
             colors,
             normal_vectors,
             texture_coords,
+            tangent_space_quaternions,
             indices,
             position_change_tracker: CollectionChangeTracker::default(),
             color_change_tracker: CollectionChangeTracker::default(),
             normal_vector_change_tracker: CollectionChangeTracker::default(),
             texture_coord_change_tracker: CollectionChangeTracker::default(),
+            tangent_space_quaternion_change_tracker: CollectionChangeTracker::default(),
             index_change_tracker: CollectionChangeTracker::default(),
         }
     }
@@ -200,6 +227,11 @@ impl<F: Float> TriangleMesh<F> {
         &self.texture_coords
     }
 
+    /// Returns a slice with the tangent space quaternions of the mesh vertices.
+    pub fn tangent_space_quaternions(&self) -> &[VertexTangentSpaceQuaternion<F>] {
+        &self.tangent_space_quaternions
+    }
+
     /// Returns a slice with the vertex indices describing the faces of the
     /// mesh.
     pub fn indices(&self) -> &[u32] {
@@ -226,6 +258,11 @@ impl<F: Float> TriangleMesh<F> {
         !self.texture_coords.is_empty()
     }
 
+    /// Whether the vertices have associated tangent space quaternions.
+    pub fn has_tangent_space_quaternions(&self) -> bool {
+        !self.tangent_space_quaternions.is_empty()
+    }
+
     /// Returns the kind of change that has been made to the vertex positions
     /// since the last reset of change tracking.
     pub fn position_change(&self) -> CollectionChange {
@@ -248,6 +285,12 @@ impl<F: Float> TriangleMesh<F> {
     /// coordinates since the last reset of change tracking.
     pub fn texture_coord_change(&self) -> CollectionChange {
         self.texture_coord_change_tracker.change()
+    }
+
+    /// Returns the kind of change that has been made to the vertex tangent
+    /// space quaternions since the last reset of change tracking.
+    pub fn tangent_space_quaternion_change(&self) -> CollectionChange {
+        self.tangent_space_quaternion_change_tracker.change()
     }
 
     /// Returns the kind of change that has been made to the mesh
@@ -277,7 +320,12 @@ impl<F: Float> TriangleMesh<F> {
     /// Computes new vertex normal vectors for the mesh. Each vertex normal
     /// vector is computed as the average direction of the normals of the
     /// triangles that the vertex is a part of.
+    ///
+    /// # Panics
+    /// If the mesh misses positions.
     pub fn generate_smooth_normal_vectors(&mut self) {
+        assert!(self.has_positions());
+
         let mut summed_normal_vectors = vec![Vector3::zeros(); self.n_vertices()];
 
         for indices in self.indices.chunks_exact(3) {
@@ -302,6 +350,102 @@ impl<F: Float> TriangleMesh<F> {
             .collect();
 
         self.normal_vector_change_tracker.notify_count_change();
+    }
+
+    /// Computes new tangent space quaternions for the mesh using the texture
+    /// coordinates and normal vectors. For each vertex, the averages of the
+    /// tangent and bitangent vectors for the triangles that the vertex is a
+    /// part of is computed, and the basis formed by the tangent, bitangent and
+    /// normal vector is orthogonalized. The quaternion is computed from the
+    /// rotation matrix consisting of the three basis vectors as columns.
+    ///
+    /// # Panics
+    /// If the mesh misses positions, normal vectors or texture coordinates.
+    pub fn generate_smooth_tangent_space_quaternions(&mut self) {
+        assert!(self.has_positions());
+        assert!(self.has_normal_vectors());
+        assert!(self.has_texture_coords());
+
+        let mut summed_tangent_and_bitangent_vectors = vec![Matrix3x2::zeros(); self.n_vertices()];
+
+        for indices in self.indices.chunks_exact(3) {
+            let idx0 = indices[0] as usize;
+            let idx1 = indices[1] as usize;
+            let idx2 = indices[2] as usize;
+
+            let p0 = &self.positions[idx0].0;
+            let p1 = &self.positions[idx1].0;
+            let p2 = &self.positions[idx2].0;
+
+            let uv0 = &self.texture_coords[idx0].0;
+            let uv1 = &self.texture_coords[idx1].0;
+            let uv2 = &self.texture_coords[idx2].0;
+
+            // Solve set of equations for unnormalized tangent and bitangent
+            // vectors
+
+            let q1 = p1 - p0;
+            let q2 = p2 - p0;
+
+            let st1 = uv1 - uv0;
+            let st2 = uv2 - uv0;
+
+            let tangent_and_bitangent =
+                Matrix3x2::from_columns(&[q1 * st2.y - q2 * st1.y, q2 * st1.x - q1 * st2.x])
+                    / (st1.x * st2.y - st2.x * st1.y);
+
+            // The unnormalized tangent and bitangent will have the same
+            // normalization factor for each triangle, so there is no need to
+            // normalize them before aggregating them as long as we perform
+            // normalization after aggregation
+            summed_tangent_and_bitangent_vectors[idx0] += tangent_and_bitangent;
+            summed_tangent_and_bitangent_vectors[idx1] += tangent_and_bitangent;
+            summed_tangent_and_bitangent_vectors[idx2] += tangent_and_bitangent;
+        }
+
+        self.tangent_space_quaternions.clear();
+        self.tangent_space_quaternions.reserve(self.n_vertices());
+
+        for (summed_tangent_and_bitangent, normal) in summed_tangent_and_bitangent_vectors
+            .into_iter()
+            .zip(self.normal_vectors.iter())
+        {
+            let summed_tangent = summed_tangent_and_bitangent.column(0);
+            let summed_bitangent = summed_tangent_and_bitangent.column(1);
+
+            // Use Gram-Schmidt to make the summed tangent and bitangent
+            // orthogonal to the normal vector and each other, then normalize
+
+            let orthogonal_tangent =
+                summed_tangent - normal.0.as_ref() * normal.0.dot(&summed_tangent);
+
+            let inv_orthogonal_tangent_squared_length =
+                F::ONE / orthogonal_tangent.magnitude_squared();
+
+            let orthogonal_bitangent = summed_bitangent
+                - normal.0.as_ref() * normal.0.dot(&summed_bitangent)
+                - orthogonal_tangent
+                    * (orthogonal_tangent.dot(&summed_bitangent)
+                        * inv_orthogonal_tangent_squared_length);
+
+            let tangent = UnitVector3::new_unchecked(
+                orthogonal_tangent * F::sqrt(inv_orthogonal_tangent_squared_length),
+            );
+
+            let bitangent = UnitVector3::new_normalize(orthogonal_bitangent);
+
+            self.tangent_space_quaternions
+                .push(VertexTangentSpaceQuaternion(
+                    UnitQuaternion::from_basis_unchecked(&[
+                        tangent.into_inner(),
+                        bitangent.into_inner(),
+                        normal.0.into_inner(),
+                    ]),
+                ));
+        }
+
+        self.tangent_space_quaternion_change_tracker
+            .notify_count_change();
     }
 
     /// Merges the given mesh into this mesh.
@@ -339,6 +483,14 @@ impl<F: Float> TriangleMesh<F> {
             self.texture_coord_change_tracker.notify_count_change();
         }
 
+        if self.has_tangent_space_quaternions() {
+            assert!(other.has_tangent_space_quaternions());
+            self.tangent_space_quaternions
+                .extend_from_slice(&other.tangent_space_quaternions);
+            self.tangent_space_quaternion_change_tracker
+                .notify_count_change();
+        }
+
         let offset = u32::try_from(original_n_vertices).unwrap();
         for idx in &mut self.indices[original_n_indices..] {
             *idx += offset;
@@ -365,6 +517,11 @@ impl<F: Float> TriangleMesh<F> {
         self.texture_coord_change_tracker.reset();
     }
 
+    /// Forgets any recorded changes to the vertex tangent space quaternions.
+    pub fn reset_tangent_space_quaternion_change_tracking(&self) {
+        self.tangent_space_quaternion_change_tracker.reset();
+    }
+
     /// Forgets any recorded changes to the vertices.
     pub fn reset_index_change_tracking(&self) {
         self.index_change_tracker.reset();
@@ -376,6 +533,7 @@ impl<F: Float> TriangleMesh<F> {
         self.reset_color_change_tracking();
         self.reset_normal_vector_change_tracking();
         self.reset_texture_coord_change_tracking();
+        self.reset_tangent_space_quaternion_change_tracking();
         self.reset_index_change_tracking();
     }
 }

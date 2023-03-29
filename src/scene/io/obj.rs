@@ -203,6 +203,7 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
         colors,
         normal_vectors,
         texture_coords,
+        Vec::new(),
         mesh.indices,
     )
 }

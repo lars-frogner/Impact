@@ -26,8 +26,8 @@ pub use instance::{
 };
 pub use mesh::{
     TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector,
-    VertexPosition, VertexTextureCoords, N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS,
-    VERTEX_ATTRIBUTE_NAMES,
+    VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
+    VERTEX_ATTRIBUTE_FLAGS, VERTEX_ATTRIBUTE_NAMES,
 };
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;
