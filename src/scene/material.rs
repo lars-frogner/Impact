@@ -9,9 +9,7 @@ mod vertex_color;
 
 pub use ambient_color::GlobalAmbientColorMaterial;
 pub use blinn_phong::{
-    ColorTexturedBlinnPhongMaterial, ParallaxMappedColorTexturedBlinnPhongMaterial,
-    ParallaxMappedSingleUniformColorBlinnPhongMaterial,
-    ParallaxMappedUniformColorBlinnPhongMaterial, SingleUniformColorBlinnPhongMaterial,
+    ColorTexturedBlinnPhongMaterial, SingleUniformColorBlinnPhongMaterial,
     UniformColorBlinnPhongMaterial,
 };
 pub use components::{

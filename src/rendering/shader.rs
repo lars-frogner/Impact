@@ -5285,7 +5285,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5329,7 +5329,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5373,7 +5373,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5417,7 +5417,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5461,7 +5461,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5505,7 +5505,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5550,7 +5550,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5595,7 +5595,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5639,7 +5639,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5683,7 +5683,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: None,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(

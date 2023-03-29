@@ -31,7 +31,7 @@ pub struct BlinnPhongFeatureShaderInput {
     /// Vertex attribute location for the instance feature representing the
     /// height scale for parallax mapping, or [`None`] parallax mapping is not
     /// used.
-    pub parallax_height_scale_location: Option<u32>,
+    pub parallax_height_scale_location: u32,
 }
 
 /// Input description specifying the bindings of textures
@@ -69,7 +69,7 @@ pub struct BlinnPhongVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     shininess: usize,
-    parallax_height_scale: Option<usize>,
+    parallax_height_scale: usize,
 }
 
 impl<'a> BlinnPhongShaderGenerator<'a> {
@@ -124,17 +124,12 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             F32_WIDTH,
         );
 
-        let input_parallax_height_scale_field_idx = self
-            .feature_input
-            .parallax_height_scale_location
-            .map(|location| {
-                input_struct_builder.add_field(
-                    "parallaxHeightScale",
-                    float_type,
-                    location,
-                    F32_WIDTH,
-                )
-            });
+        let input_parallax_height_scale_field_idx = input_struct_builder.add_field(
+            "parallaxHeightScale",
+            float_type,
+            self.feature_input.parallax_height_scale_location,
+            F32_WIDTH,
+        );
 
         let input_struct =
             input_struct_builder.generate_input_code(&mut module.types, vertex_function);
@@ -147,11 +142,19 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 input_struct.get_field_expr(input_shininess_field_idx),
             );
 
+        let output_parallax_height_scale_field_idx = vertex_output_struct_builder
+            .add_field_with_perspective_interpolation(
+                "parallaxHeightScale",
+                float_type,
+                F32_WIDTH,
+                input_struct.get_field_expr(input_parallax_height_scale_field_idx),
+            );
+
         let mut indices = BlinnPhongVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
             shininess: output_shininess_field_idx,
-            parallax_height_scale: None,
+            parallax_height_scale: output_parallax_height_scale_field_idx,
         };
 
         if let Some(idx) = input_diffuse_color_field_idx {
@@ -171,17 +174,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     "specularColor",
                     vec3_type,
                     VECTOR_3_SIZE,
-                    input_struct.get_field_expr(idx),
-                ),
-            );
-        }
-
-        if let Some(idx) = input_parallax_height_scale_field_idx {
-            indices.parallax_height_scale = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "parallaxHeightScale",
-                    float_type,
-                    F32_WIDTH,
                     input_struct.get_field_expr(idx),
                 ),
             );

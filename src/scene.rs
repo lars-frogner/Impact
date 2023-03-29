@@ -33,10 +33,7 @@ pub use material::{
     FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID,
     MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
     MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetMaterial,
-    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
-    ParallaxMappedColorTexturedBlinnPhongMaterial,
-    ParallaxMappedSingleUniformColorBlinnPhongMaterial,
-    ParallaxMappedUniformColorBlinnPhongMaterial, RGBColor, RoughnessComp,
+    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
     SingleUniformColorBlinnPhongMaterial, SpecularColorComp, SpecularTextureComp,
     TexturedMicrofacetMaterial, UniformColorBlinnPhongMaterial, VertexColorComp,
     VertexColorMaterial,
@@ -161,23 +158,11 @@ impl Scene {
             &mut material_library,
             &mut instance_feature_manager,
         );
-        ParallaxMappedUniformColorBlinnPhongMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
         SingleUniformColorBlinnPhongMaterial::register(
             &mut material_library,
             &mut instance_feature_manager,
         );
-        ParallaxMappedSingleUniformColorBlinnPhongMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
         ColorTexturedBlinnPhongMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        ParallaxMappedColorTexturedBlinnPhongMaterial::register(
             &mut material_library,
             &mut instance_feature_manager,
         );
