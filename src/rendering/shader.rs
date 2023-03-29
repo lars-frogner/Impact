@@ -103,7 +103,7 @@ pub enum MaterialShaderInput {
     GlobalAmbientColor(GlobalAmbientColorShaderInput),
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
-    BlinnPhong(Option<BlinnPhongTextureShaderInput>),
+    BlinnPhong(BlinnPhongTextureShaderInput),
     Microfacet((MicrofacetShadingModel, Option<MicrofacetTextureShaderInput>)),
 }
 
@@ -882,7 +882,7 @@ impl ShaderGenerator {
                 None,
                 Some(MaterialShaderInput::BlinnPhong(texture_input)),
             ) => Some(MaterialShaderGenerator::BlinnPhong(
-                BlinnPhongShaderGenerator::new(feature_input, texture_input.as_ref()),
+                BlinnPhongShaderGenerator::new(feature_input, texture_input),
             )),
             (
                 None,
@@ -4897,9 +4897,9 @@ mod test {
     #![allow(clippy::dbg_macro)]
 
     use crate::scene::{
-        BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial, DiffuseTexturedMicrofacetMaterial,
-        FixedColorMaterial, FixedTextureMaterial, GlobalAmbientColorMaterial, MicrofacetMaterial,
-        TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial, VertexColorMaterial,
+        DiffuseTexturedMicrofacetMaterial, FixedColorMaterial, FixedTextureMaterial,
+        GlobalAmbientColorMaterial, MicrofacetMaterial, TexturedMicrofacetMaterial,
+        VertexColorMaterial,
     };
 
     use super::*;
@@ -4935,39 +4935,6 @@ mod test {
     const FIXED_TEXTURE_INPUT: MaterialShaderInput =
         MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings: (0, 1),
-        }));
-
-    const BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-            shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-        });
-
-    const DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            diffuse_color_location: None,
-            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-            shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-        });
-
-    const DIFFUSE_TEXTURED_BLINN_PHONG_INPUT: MaterialShaderInput =
-        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
-            diffuse_texture_and_sampler_bindings: (0, 1),
-            specular_texture_and_sampler_bindings: None,
-        }));
-
-    const TEXTURED_BLINN_PHONG_FEATURE_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-            diffuse_color_location: None,
-            specular_color_location: None,
-            shininess_location: MATERIAL_VERTEX_BINDING_START,
-        });
-
-    const TEXTURED_BLINN_PHONG_INPUT: MaterialShaderInput =
-        MaterialShaderInput::BlinnPhong(Some(BlinnPhongTextureShaderInput {
-            diffuse_texture_and_sampler_bindings: (0, 1),
-            specular_texture_and_sampler_bindings: Some((2, 3)),
         }));
 
     const MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
@@ -5299,7 +5266,7 @@ mod test {
     }
 
     #[test]
-    fn building_blinn_phong_shader_with_omnidirectional_light_works() {
+    fn building_uniform_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5312,9 +5279,24 @@ mod test {
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
-            Some(&MaterialShaderInput::BlinnPhong(None)),
-            BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_height_scale_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5328,7 +5310,7 @@ mod test {
     }
 
     #[test]
-    fn building_blinn_phong_shader_with_unidirectional_light_works() {
+    fn building_uniform_diffuse_specular_blinn_phong_shader_with_unidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5341,9 +5323,24 @@ mod test {
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
-            &[&MODEL_VIEW_TRANSFORM_INPUT, &BLINN_PHONG_FEATURE_INPUT],
-            Some(&MaterialShaderInput::BlinnPhong(None)),
-            BlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_height_scale_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5357,7 +5354,184 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_blinn_phong_shader_with_omnidirectional_light_works() {
+    fn building_uniform_diffuse_blinn_phong_shader_with_omnidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: None,
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_diffuse_blinn_phong_shader_with_unidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: None,
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_specular_blinn_phong_shader_with_omnidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_specular_blinn_phong_shader_with_unidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_diffuse_uniform_specular_blinn_phong_shader_with_omnidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5372,10 +5546,22 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: None,
+                }),
             ],
-            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_INPUT),
-            DiffuseTexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5389,7 +5575,8 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_blinn_phong_shader_with_unidirectional_light_works() {
+    fn building_textured_diffuse_uniform_specular_blinn_phong_shader_with_unidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5404,10 +5591,22 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &DIFFUSE_TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: None,
+                }),
             ],
-            Some(&DIFFUSE_TEXTURED_BLINN_PHONG_INPUT),
-            DiffuseTexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5421,7 +5620,7 @@ mod test {
     }
 
     #[test]
-    fn building_textured_blinn_phong_shader_with_omnidirectional_light_works() {
+    fn building_textured_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5436,10 +5635,22 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    shininess_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_height_scale_location: None,
+                }),
             ],
-            Some(&TEXTURED_BLINN_PHONG_INPUT),
-            TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: Some((2, 3)),
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5453,7 +5664,7 @@ mod test {
     }
 
     #[test]
-    fn building_textured_blinn_phong_shader_with_unidirectional_light_works() {
+    fn building_textured_diffuse_specular_blinn_phong_shader_with_unidirectional_light_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5468,10 +5679,22 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &TEXTURED_BLINN_PHONG_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    shininess_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_height_scale_location: None,
+                }),
             ],
-            Some(&TEXTURED_BLINN_PHONG_INPUT),
-            TexturedBlinnPhongMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: Some((2, 3)),
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;

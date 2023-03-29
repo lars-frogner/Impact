@@ -4,11 +4,14 @@ use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
     physics::{OrientationComp, PositionComp},
     scene::{
-        self, BlinnPhongMaterial, DiffuseTexturedBlinnPhongMaterial,
-        DiffuseTexturedMicrofacetMaterial, FixedColorMaterial, FixedTextureMaterial, MaterialComp,
-        MeshComp, MicrofacetMaterial, ModelID, ModelInstanceNodeID, OmnidirectionalLight,
-        ScalingComp, Scene, SceneGraphNodeComp, TexturedBlinnPhongMaterial,
-        TexturedMicrofacetMaterial, UnidirectionalLight, VertexColorMaterial,
+        self, ColorTexturedBlinnPhongMaterial, DiffuseTexturedMicrofacetMaterial,
+        FixedColorMaterial, FixedTextureMaterial, MaterialComp, MeshComp, MicrofacetMaterial,
+        ModelID, ModelInstanceNodeID, OmnidirectionalLight,
+        ParallaxMappedColorTexturedBlinnPhongMaterial,
+        ParallaxMappedSingleUniformColorBlinnPhongMaterial,
+        ParallaxMappedUniformColorBlinnPhongMaterial, ScalingComp, Scene, SceneGraphNodeComp,
+        SingleUniformColorBlinnPhongMaterial, TexturedMicrofacetMaterial, UnidirectionalLight,
+        UniformColorBlinnPhongMaterial, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -148,20 +151,42 @@ impl Scene {
             desynchronized,
         );
 
-        BlinnPhongMaterial::add_material_component_for_entity(
+        UniformColorBlinnPhongMaterial::add_material_component_for_entity(
+            self.material_library(),
             self.instance_feature_manager(),
             components,
             desynchronized,
         );
 
-        DiffuseTexturedBlinnPhongMaterial::add_material_component_for_entity(
+        ParallaxMappedUniformColorBlinnPhongMaterial::add_material_component_for_entity(
+            self.material_library(),
+            self.instance_feature_manager(),
+            components,
+            desynchronized,
+        );
+
+        SingleUniformColorBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
             components,
             desynchronized,
         );
 
-        TexturedBlinnPhongMaterial::add_material_component_for_entity(
+        ParallaxMappedSingleUniformColorBlinnPhongMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            self.material_library(),
+            components,
+            desynchronized,
+        );
+
+        ColorTexturedBlinnPhongMaterial::add_material_component_for_entity(
+            self.instance_feature_manager(),
+            self.material_library(),
+            components,
+            desynchronized,
+        );
+
+        ParallaxMappedColorTexturedBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
             components,

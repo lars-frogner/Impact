@@ -55,6 +55,18 @@ pub struct MicrofacetDiffuseReflection;
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MicrofacetSpecularReflection;
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct NormalMapComp(pub TextureID);
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct ParallaxMapComp {
+    pub normal_map_texture_id: TextureID,
+    pub height_map_texture_id: TextureID,
+    pub height_scale: fre,
+}
+
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a material.
 #[repr(C)]
