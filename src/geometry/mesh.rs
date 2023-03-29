@@ -107,6 +107,14 @@ pub const VERTEX_ATTRIBUTE_NAMES: [&str; N_VERTEX_ATTRIBUTES] = [
     "tangent space quaternion",
 ];
 
+impl VertexAttributeSet {
+    pub const FOR_LIGHT_SHADING: Self = Self::POSITION.union(Self::NORMAL_VECTOR);
+    pub const FOR_TEXTURED_LIGHT_SHADING: Self =
+        Self::FOR_LIGHT_SHADING.union(Self::TEXTURE_COORDS);
+    pub const FOR_BUMP_MAPPED_SHADING: Self =
+        Self::FOR_TEXTURED_LIGHT_SHADING.union(Self::TANGENT_SPACE_QUATERNION);
+}
+
 impl<F: Float> VertexAttribute for VertexPosition<F> {
     const GLOBAL_INDEX: usize = 0;
 }

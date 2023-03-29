@@ -28,13 +28,18 @@ pub use light::{
     RadianceComp, UnidirectionalLight, UnidirectionalLightComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
-    BlinnPhongMaterial, DiffuseColorComp, DiffuseTextureComp, DiffuseTexturedBlinnPhongMaterial,
+    ColorTexturedBlinnPhongMaterial, DiffuseColorComp, DiffuseTextureComp,
     DiffuseTexturedMicrofacetMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
     FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID,
     MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
     MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetMaterial,
-    MicrofacetSpecularReflection, RGBColor, RoughnessComp, SpecularColorComp, SpecularTextureComp,
-    TexturedBlinnPhongMaterial, TexturedMicrofacetMaterial, VertexColorComp, VertexColorMaterial,
+    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
+    ParallaxMappedColorTexturedBlinnPhongMaterial,
+    ParallaxMappedSingleUniformColorBlinnPhongMaterial,
+    ParallaxMappedUniformColorBlinnPhongMaterial, RGBColor, RoughnessComp,
+    SingleUniformColorBlinnPhongMaterial, SpecularColorComp, SpecularTextureComp,
+    TexturedMicrofacetMaterial, UniformColorBlinnPhongMaterial, VertexColorComp,
+    VertexColorMaterial,
 };
 pub use mesh::{
     BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
@@ -152,12 +157,30 @@ impl Scene {
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);
-        BlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
-        DiffuseTexturedBlinnPhongMaterial::register(
+        UniformColorBlinnPhongMaterial::register(
             &mut material_library,
             &mut instance_feature_manager,
         );
-        TexturedBlinnPhongMaterial::register(&mut material_library, &mut instance_feature_manager);
+        ParallaxMappedUniformColorBlinnPhongMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+        SingleUniformColorBlinnPhongMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+        ParallaxMappedSingleUniformColorBlinnPhongMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+        ColorTexturedBlinnPhongMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+        ParallaxMappedColorTexturedBlinnPhongMaterial::register(
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
         MicrofacetMaterial::register(&mut material_library, &mut instance_feature_manager);
         DiffuseTexturedMicrofacetMaterial::register(
             &mut material_library,
