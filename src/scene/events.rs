@@ -6,10 +6,7 @@ use crate::{
     scene::{
         self, ColorTexturedBlinnPhongMaterial, DiffuseTexturedMicrofacetMaterial,
         FixedColorMaterial, FixedTextureMaterial, MaterialComp, MeshComp, MicrofacetMaterial,
-        ModelID, ModelInstanceNodeID, OmnidirectionalLight,
-        ParallaxMappedColorTexturedBlinnPhongMaterial,
-        ParallaxMappedSingleUniformColorBlinnPhongMaterial,
-        ParallaxMappedUniformColorBlinnPhongMaterial, ScalingComp, Scene, SceneGraphNodeComp,
+        ModelID, ModelInstanceNodeID, OmnidirectionalLight, ScalingComp, Scene, SceneGraphNodeComp,
         SingleUniformColorBlinnPhongMaterial, TexturedMicrofacetMaterial, UnidirectionalLight,
         UniformColorBlinnPhongMaterial, VertexColorMaterial,
     },
@@ -158,13 +155,6 @@ impl Scene {
             desynchronized,
         );
 
-        ParallaxMappedUniformColorBlinnPhongMaterial::add_material_component_for_entity(
-            self.material_library(),
-            self.instance_feature_manager(),
-            components,
-            desynchronized,
-        );
-
         SingleUniformColorBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
@@ -172,21 +162,7 @@ impl Scene {
             desynchronized,
         );
 
-        ParallaxMappedSingleUniformColorBlinnPhongMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
-            self.material_library(),
-            components,
-            desynchronized,
-        );
-
         ColorTexturedBlinnPhongMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
-            self.material_library(),
-            components,
-            desynchronized,
-        );
-
-        ParallaxMappedColorTexturedBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
             self.material_library(),
             components,

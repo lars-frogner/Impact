@@ -23,7 +23,8 @@ use lazy_static::lazy_static;
 use std::sync::RwLock;
 
 /// Material using the Blinn-Phong reflection model, with fixed diffuse and
-/// specular colors and fixed shininess.
+/// specular colors and fixed shininess. Also includes a fixed height scale that
+/// is needed if the material uses parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -34,21 +35,12 @@ pub struct UniformColorBlinnPhongMaterial {
     diffuse_color: RGBColor,
     specular_color: RGBColor,
     shininess: fre,
-}
-
-/// Variant of [`UniformColorBlinnPhongMaterial`] that also includes a fixed
-/// height scale to use in parallax mapping.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct ParallaxMappedUniformColorBlinnPhongMaterial {
-    diffuse_color: RGBColor,
-    specular_color: RGBColor,
-    shininess: fre,
-    height_scale: fre,
+    parallax_height_scale: fre,
 }
 
 /// Material using the Blinn-Phong reflection model, with fixed diffuse or
-/// specular color and fixed shininess.
+/// specular color and fixed shininess. Also includes a fixed height scale that
+/// is needed if the material uses parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -58,20 +50,12 @@ pub struct ParallaxMappedUniformColorBlinnPhongMaterial {
 pub struct SingleUniformColorBlinnPhongMaterial {
     color: RGBColor,
     shininess: fre,
-}
-
-/// Variant of [`SingleUniformColorBlinnPhongMaterial`] that also includes a fixed
-/// height scale to use in parallax mapping.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct ParallaxMappedSingleUniformColorBlinnPhongMaterial {
-    color: RGBColor,
-    shininess: fre,
-    height_scale: fre,
+    parallax_height_scale: fre,
 }
 
 /// Material using the Blinn-Phong reflection model, with textured diffuse
-/// and/or specular colors and fixed shininess.
+/// and/or specular colors and fixed shininess. Also includes a fixed height
+/// scale that is needed if the material uses parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -80,15 +64,7 @@ pub struct ParallaxMappedSingleUniformColorBlinnPhongMaterial {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct ColorTexturedBlinnPhongMaterial {
     shininess: fre,
-}
-
-/// Variant of [`ColorTexturedBlinnPhongMaterial`] that also includes a fixed
-/// height scale to use in parallax mapping.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct ParallaxMappedColorTexturedBlinnPhongMaterial {
-    shininess: fre,
-    height_scale: fre,
+    parallax_height_scale: fre,
 }
 
 lazy_static! {
@@ -187,6 +163,20 @@ impl UniformColorBlinnPhongMaterial {
                     height_map_texture_and_sampler_bindings: None,
                 },
             ),
+            (
+                *PARALLAX_MAPPED_UNIFORM_COLORED_BLINN_PHONG_MATERIAL_ID,
+                VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: Some(
+                        MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
+                    ),
+                    height_map_texture_and_sampler_bindings: Some(
+                        MaterialPropertyTextureManager::get_texture_and_sampler_bindings(1),
+                    ),
+                },
+            ),
         ] {
             let specification = MaterialSpecification::new(
                 vertex_attribute_requirements,
@@ -216,8 +206,17 @@ impl UniformColorBlinnPhongMaterial {
             specular_color: &SpecularColorComp,
             roughness: Option<&RoughnessComp>,
             normal_map: Option<&NormalMapComp>,
+            parallax_map: Option<&ParallaxMapComp>,
         ) -> MaterialComp {
-            let (material_id, texture_ids) = if let Some(normal_map) = normal_map {
+            let (material_id, texture_ids) = if let Some(parallax_map) = parallax_map {
+                (
+                    *PARALLAX_MAPPED_UNIFORM_COLORED_BLINN_PHONG_MATERIAL_ID,
+                    vec![
+                        parallax_map.normal_map_texture_id,
+                        parallax_map.height_map_texture_id,
+                    ],
+                )
+            } else if let Some(normal_map) = normal_map {
                 (
                     *NORMAL_MAPPED_UNIFORM_COLORED_BLINN_PHONG_MATERIAL_ID,
                     vec![normal_map.0],
@@ -245,6 +244,8 @@ impl UniformColorBlinnPhongMaterial {
                 diffuse_color: diffuse_color.0,
                 specular_color: specular_color.0,
                 shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
+                parallax_height_scale: parallax_map
+                    .map_or(0.0, |parallax_map| parallax_map.height_scale),
             };
 
             let feature_id = instance_feature_manager
@@ -264,7 +265,8 @@ impl UniformColorBlinnPhongMaterial {
             |diffuse_color: &DiffuseColorComp,
              specular_color: &SpecularColorComp,
              roughness: Option<&RoughnessComp>,
-             normal_map: Option<&NormalMapComp>|
+             normal_map: Option<&NormalMapComp>,
+             parallax_map: Option<&ParallaxMapComp>|
              -> MaterialComp {
                 execute_setup(
                     material_library,
@@ -273,117 +275,6 @@ impl UniformColorBlinnPhongMaterial {
                     specular_color,
                     roughness,
                     normal_map,
-                )
-            },
-            ![
-                MaterialComp,
-                DiffuseTextureComp,
-                SpecularTextureComp,
-                ParallaxMapComp,
-                MicrofacetDiffuseReflection,
-                MicrofacetSpecularReflection
-            ]
-        );
-    }
-}
-
-impl ParallaxMappedUniformColorBlinnPhongMaterial {
-    /// Registers this material as a feature type in the given instance feature
-    /// manager and adds the material specifications for the variants of the
-    /// material to the given material library.
-    pub fn register(
-        material_library: &mut MaterialLibrary,
-        instance_feature_manager: &mut InstanceFeatureManager,
-    ) {
-        instance_feature_manager.register_feature_type::<Self>();
-
-        let specification = MaterialSpecification::new(
-            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
-            None,
-            vec![Self::FEATURE_TYPE_ID],
-            MaterialShaderInput::BlinnPhong(BlinnPhongTextureShaderInput {
-                diffuse_texture_and_sampler_bindings: None,
-                specular_texture_and_sampler_bindings: None,
-                normal_map_texture_and_sampler_bindings: Some(
-                    MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
-                ),
-                height_map_texture_and_sampler_bindings: Some(
-                    MaterialPropertyTextureManager::get_texture_and_sampler_bindings(1),
-                ),
-            }),
-        );
-        material_library.add_material_specification(
-            *PARALLAX_MAPPED_UNIFORM_COLORED_BLINN_PHONG_MATERIAL_ID,
-            specification,
-        );
-    }
-
-    /// Checks if the entity-to-be with the given components has the components
-    /// for a variant of this material, and if so, adds the appropriate material
-    /// property texture set to the material library if not present, registers
-    /// the material in the given instance feature manager and adds the
-    /// appropriate material component to the entity.
-    pub fn add_material_component_for_entity(
-        material_library: &RwLock<MaterialLibrary>,
-        instance_feature_manager: &RwLock<InstanceFeatureManager>,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        fn execute_setup(
-            material_library: &mut MaterialLibrary,
-            instance_feature_manager: &mut InstanceFeatureManager,
-            diffuse_color: &DiffuseColorComp,
-            specular_color: &SpecularColorComp,
-            roughness: Option<&RoughnessComp>,
-            parallax_map: &ParallaxMapComp,
-        ) -> MaterialComp {
-            let material_id = *PARALLAX_MAPPED_UNIFORM_COLORED_BLINN_PHONG_MATERIAL_ID;
-
-            let texture_ids = [
-                parallax_map.normal_map_texture_id,
-                parallax_map.height_map_texture_id,
-            ];
-
-            let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
-
-            // Add a new texture set if none with the same textures already exist
-            material_library
-                .material_property_texture_set_entry(texture_set_id)
-                .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
-
-            let material = ParallaxMappedUniformColorBlinnPhongMaterial {
-                diffuse_color: diffuse_color.0,
-                specular_color: specular_color.0,
-                shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
-                height_scale: parallax_map.height_scale,
-            };
-
-            let feature_id = instance_feature_manager
-                .get_storage_mut::<ParallaxMappedUniformColorBlinnPhongMaterial>()
-                .expect("Missing storage for ParallaxMappedUniformColorBlinnPhongMaterial features")
-                .add_feature(&material);
-
-            MaterialComp::new(material_id, Some(feature_id), Some(texture_set_id))
-        }
-
-        setup!(
-            {
-                desynchronized.set_yes();
-                let mut material_library = material_library.write().unwrap();
-                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-            },
-            components,
-            |diffuse_color: &DiffuseColorComp,
-             specular_color: &SpecularColorComp,
-             roughness: Option<&RoughnessComp>,
-             parallax_map: &ParallaxMapComp|
-             -> MaterialComp {
-                execute_setup(
-                    &mut material_library,
-                    &mut instance_feature_manager,
-                    diffuse_color,
-                    specular_color,
-                    roughness,
                     parallax_map,
                 )
             },
@@ -391,7 +282,6 @@ impl ParallaxMappedUniformColorBlinnPhongMaterial {
                 MaterialComp,
                 DiffuseTextureComp,
                 SpecularTextureComp,
-                NormalMapComp,
                 MicrofacetDiffuseReflection,
                 MicrofacetSpecularReflection
             ]
@@ -506,193 +396,6 @@ impl SingleUniformColorBlinnPhongMaterial {
                     height_map_texture_and_sampler_bindings: None,
                 },
             ),
-        ] {
-            let specification = MaterialSpecification::new(
-                vertex_attribute_requirements,
-                None,
-                vec![Self::FEATURE_TYPE_ID],
-                MaterialShaderInput::BlinnPhong(texture_shader_input),
-            );
-            material_library.add_material_specification(material_id, specification);
-        }
-    }
-
-    /// Checks if the entity-to-be with the given components has the components
-    /// for a variant of this material, and if so, adds the appropriate material
-    /// property texture set to the material library if not present, registers
-    /// the material in the given instance feature manager and adds the
-    /// appropriate material component to the entity.
-    pub fn add_material_component_for_entity(
-        instance_feature_manager: &RwLock<InstanceFeatureManager>,
-        material_library: &RwLock<MaterialLibrary>,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        fn execute_setup(
-            material_library: &RwLock<MaterialLibrary>,
-            instance_feature_manager: &mut InstanceFeatureManager,
-            diffuse_color: Option<&DiffuseColorComp>,
-            specular_color: Option<&SpecularColorComp>,
-            diffuse_texture: Option<&DiffuseTextureComp>,
-            specular_texture: Option<&SpecularTextureComp>,
-            roughness: Option<&RoughnessComp>,
-            normal_map: Option<&NormalMapComp>,
-        ) -> MaterialComp {
-            let (material_id, texture_ids, color) = match (
-                diffuse_color,
-                specular_color,
-                diffuse_texture,
-                specular_texture,
-                normal_map,
-            ) {
-                (Some(diffuse_color), None, None, None, None) => (
-                    *UNIFORM_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
-                    Vec::new(),
-                    diffuse_color.0,
-                ),
-                (None, Some(specular_color), None, None, None) => (
-                    *UNIFORM_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    Vec::new(),
-                    specular_color.0,
-                ),
-                (Some(diffuse_color), None, None, Some(specular_texture), None) => (
-                    *UNIFORM_DIFFUSE_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![specular_texture.0],
-                    diffuse_color.0,
-                ),
-                (None, Some(specular_color), Some(diffuse_texture), None, None) => (
-                    *UNIFORM_SPECULAR_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
-                    vec![diffuse_texture.0],
-                    specular_color.0,
-                ),
-                (Some(diffuse_color), None, None, None, Some(normal_map)) => (
-                    *NORMAL_MAPPED_UNIFORM_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
-                    vec![normal_map.0],
-                    diffuse_color.0,
-                ),
-                (None, Some(specular_color), None, None, Some(normal_map)) => (
-                    *NORMAL_MAPPED_UNIFORM_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![normal_map.0],
-                    specular_color.0,
-                ),
-                (Some(diffuse_color), None, None, Some(specular_texture), Some(normal_map)) => (
-                    *NORMAL_MAPPED_UNIFORM_DIFFUSE_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![specular_texture.0, normal_map.0],
-                    diffuse_color.0,
-                ),
-                (None, Some(specular_color), Some(diffuse_texture), None, Some(normal_map)) => (
-                    *NORMAL_MAPPED_UNIFORM_SPECULAR_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
-                    vec![diffuse_texture.0, normal_map.0],
-                    specular_color.0,
-                ),
-                components => panic!("Invalid combination of material components for SingleUniformColorBlinnPhongMaterial: {:?}", components),
-            };
-
-            let texture_set_id = if !texture_ids.is_empty() {
-                let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
-
-                // Add a new texture set if none with the same textures already exist
-                material_library
-                    .write()
-                    .unwrap()
-                    .material_property_texture_set_entry(texture_set_id)
-                    .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
-
-                Some(texture_set_id)
-            } else {
-                None
-            };
-
-            let material = SingleUniformColorBlinnPhongMaterial {
-                color,
-                shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
-            };
-
-            let feature_id = instance_feature_manager
-                .get_storage_mut::<SingleUniformColorBlinnPhongMaterial>()
-                .expect("Missing storage for SingleUniformColorBlinnPhongMaterial features")
-                .add_feature(&material);
-
-            MaterialComp::new(material_id, Some(feature_id), texture_set_id)
-        }
-
-        setup!(
-            {
-                desynchronized.set_yes();
-                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-            },
-            components,
-            |diffuse_color: &DiffuseColorComp,
-             specular_texture: Option<&SpecularTextureComp>,
-             roughness: Option<&RoughnessComp>,
-             normal_map: Option<&NormalMapComp>|
-             -> MaterialComp {
-                execute_setup(
-                    material_library,
-                    &mut instance_feature_manager,
-                    Some(diffuse_color),
-                    None,
-                    None,
-                    specular_texture,
-                    roughness,
-                    normal_map,
-                )
-            },
-            ![
-                MaterialComp,
-                SpecularColorComp,
-                DiffuseTextureComp,
-                ParallaxMapComp,
-                MicrofacetDiffuseReflection,
-                MicrofacetSpecularReflection
-            ]
-        );
-
-        setup!(
-            {
-                desynchronized.set_yes();
-                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-            },
-            components,
-            |specular_color: &SpecularColorComp,
-             diffuse_texture: Option<&DiffuseTextureComp>,
-             roughness: Option<&RoughnessComp>,
-             normal_map: Option<&NormalMapComp>|
-             -> MaterialComp {
-                execute_setup(
-                    material_library,
-                    &mut instance_feature_manager,
-                    None,
-                    Some(specular_color),
-                    diffuse_texture,
-                    None,
-                    roughness,
-                    normal_map,
-                )
-            },
-            ![
-                MaterialComp,
-                DiffuseColorComp,
-                SpecularTextureComp,
-                ParallaxMapComp,
-                MicrofacetDiffuseReflection,
-                MicrofacetSpecularReflection
-            ]
-        );
-    }
-}
-
-impl ParallaxMappedSingleUniformColorBlinnPhongMaterial {
-    /// Registers this material as a feature type in the given instance feature
-    /// manager and adds the material specifications for the variants of the
-    /// material to the given material library.
-    pub fn register(
-        material_library: &mut MaterialLibrary,
-        instance_feature_manager: &mut InstanceFeatureManager,
-    ) {
-        instance_feature_manager.register_feature_type::<Self>();
-
-        for (material_id, vertex_attribute_requirements, texture_shader_input) in [
             (
                 *PARALLAX_MAPPED_UNIFORM_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
                 VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
@@ -776,85 +479,138 @@ impl ParallaxMappedSingleUniformColorBlinnPhongMaterial {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         fn execute_setup(
-            material_library: &mut MaterialLibrary,
+            material_library: &RwLock<MaterialLibrary>,
             instance_feature_manager: &mut InstanceFeatureManager,
             diffuse_color: Option<&DiffuseColorComp>,
             specular_color: Option<&SpecularColorComp>,
             diffuse_texture: Option<&DiffuseTextureComp>,
             specular_texture: Option<&SpecularTextureComp>,
             roughness: Option<&RoughnessComp>,
-            parallax_map: &ParallaxMapComp,
+            normal_map: Option<&NormalMapComp>,
+            parallax_map: Option<&ParallaxMapComp>,
         ) -> MaterialComp {
             let (material_id, texture_ids, color) = match (
                 diffuse_color,
                 specular_color,
                 diffuse_texture,
                 specular_texture,
+                normal_map,
+                parallax_map
             ) {
-                (Some(diffuse_color), None, None, None) => (
+                (Some(diffuse_color), None, None, None, None, None) => (
+                    *UNIFORM_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
+                    Vec::new(),
+                    diffuse_color.0,
+                ),
+                (None, Some(specular_color), None, None, None, None) => (
+                    *UNIFORM_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    Vec::new(),
+                    specular_color.0,
+                ),
+                (Some(diffuse_color), None, None, Some(specular_texture), None, None) => (
+                    *UNIFORM_DIFFUSE_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![specular_texture.0],
+                    diffuse_color.0,
+                ),
+                (None, Some(specular_color), Some(diffuse_texture), None, None, None) => (
+                    *UNIFORM_SPECULAR_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
+                    vec![diffuse_texture.0],
+                    specular_color.0,
+                ),
+                (Some(diffuse_color), None, None, None, Some(normal_map), None) => (
+                    *NORMAL_MAPPED_UNIFORM_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
+                    vec![normal_map.0],
+                    diffuse_color.0,
+                ),
+                (None, Some(specular_color), None, None, Some(normal_map), None) => (
+                    *NORMAL_MAPPED_UNIFORM_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![normal_map.0],
+                    specular_color.0,
+                ),
+                (Some(diffuse_color), None, None, Some(specular_texture), Some(normal_map), None) => (
+                    *NORMAL_MAPPED_UNIFORM_DIFFUSE_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![specular_texture.0, normal_map.0],
+                    diffuse_color.0,
+                ),
+                (None, Some(specular_color), Some(diffuse_texture), None, Some(normal_map), None) => (
+                    *NORMAL_MAPPED_UNIFORM_SPECULAR_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
+                    vec![diffuse_texture.0, normal_map.0],
+                    specular_color.0,
+                ),
+                (Some(diffuse_color), None, None, None, _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_UNIFORM_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
                     vec![parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                     diffuse_color.0,
                 ),
-                (None, Some(specular_color), None, None) => (
+                (None, Some(specular_color), None, None, _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_UNIFORM_SPECULAR_BLINN_PHONG_MATERIAL_ID,
                     vec![parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                     specular_color.0,
                 ),
-                (Some(diffuse_color), None, None, Some(specular_texture)) => (
+                (Some(diffuse_color), None, None, Some(specular_texture), _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_UNIFORM_DIFFUSE_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
                     vec![specular_texture.0, parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                     diffuse_color.0,
                 ),
-                (None, Some(specular_color), Some(diffuse_texture), None) => (
+                (None, Some(specular_color), Some(diffuse_texture), None, _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_UNIFORM_SPECULAR_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
                     vec![diffuse_texture.0, parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                     specular_color.0,
                 ),
-                components => panic!("Invalid combination of material components for ParallaxMappedSingleUniformColorBlinnPhongMaterial: {:?}", components),
+                components => panic!("Invalid combination of material components for SingleUniformColorBlinnPhongMaterial: {:?}", components),
             };
 
-            let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
+            let texture_set_id = if !texture_ids.is_empty() {
+                let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
 
-            // Add a new texture set if none with the same textures already exist
-            material_library
-                .material_property_texture_set_entry(texture_set_id)
-                .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
+                // Add a new texture set if none with the same textures already exist
+                material_library
+                    .write()
+                    .unwrap()
+                    .material_property_texture_set_entry(texture_set_id)
+                    .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
 
-            let material = ParallaxMappedSingleUniformColorBlinnPhongMaterial {
+                Some(texture_set_id)
+            } else {
+                None
+            };
+
+            let material = SingleUniformColorBlinnPhongMaterial {
                 color,
                 shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
-                height_scale: parallax_map.height_scale,
+                parallax_height_scale: parallax_map
+                    .map_or(0.0, |parallax_map| parallax_map.height_scale),
             };
 
             let feature_id = instance_feature_manager
-                .get_storage_mut::<ParallaxMappedSingleUniformColorBlinnPhongMaterial>()
-                .expect("Missing storage for ParallaxMappedSingleUniformColorBlinnPhongMaterial features")
+                .get_storage_mut::<SingleUniformColorBlinnPhongMaterial>()
+                .expect("Missing storage for SingleUniformColorBlinnPhongMaterial features")
                 .add_feature(&material);
 
-            MaterialComp::new(material_id, Some(feature_id), Some(texture_set_id))
+            MaterialComp::new(material_id, Some(feature_id), texture_set_id)
         }
 
         setup!(
             {
                 desynchronized.set_yes();
-                let mut material_library = material_library.write().unwrap();
                 let mut instance_feature_manager = instance_feature_manager.write().unwrap();
             },
             components,
             |diffuse_color: &DiffuseColorComp,
              specular_texture: Option<&SpecularTextureComp>,
              roughness: Option<&RoughnessComp>,
-             parallax_map: &ParallaxMapComp|
+             normal_map: Option<&NormalMapComp>,
+             parallax_map: Option<&ParallaxMapComp>|
              -> MaterialComp {
                 execute_setup(
-                    &mut material_library,
+                    material_library,
                     &mut instance_feature_manager,
                     Some(diffuse_color),
                     None,
                     None,
                     specular_texture,
                     roughness,
+                    normal_map,
                     parallax_map,
                 )
             },
@@ -862,7 +618,6 @@ impl ParallaxMappedSingleUniformColorBlinnPhongMaterial {
                 MaterialComp,
                 SpecularColorComp,
                 DiffuseTextureComp,
-                NormalMapComp,
                 MicrofacetDiffuseReflection,
                 MicrofacetSpecularReflection
             ]
@@ -871,23 +626,24 @@ impl ParallaxMappedSingleUniformColorBlinnPhongMaterial {
         setup!(
             {
                 desynchronized.set_yes();
-                let mut material_library = material_library.write().unwrap();
                 let mut instance_feature_manager = instance_feature_manager.write().unwrap();
             },
             components,
             |specular_color: &SpecularColorComp,
              diffuse_texture: Option<&DiffuseTextureComp>,
              roughness: Option<&RoughnessComp>,
-             parallax_map: &ParallaxMapComp|
+             normal_map: Option<&NormalMapComp>,
+             parallax_map: Option<&ParallaxMapComp>|
              -> MaterialComp {
                 execute_setup(
-                    &mut material_library,
+                    material_library,
                     &mut instance_feature_manager,
                     None,
                     Some(specular_color),
                     diffuse_texture,
                     None,
                     roughness,
+                    normal_map,
                     parallax_map,
                 )
             },
@@ -895,7 +651,6 @@ impl ParallaxMappedSingleUniformColorBlinnPhongMaterial {
                 MaterialComp,
                 DiffuseColorComp,
                 SpecularTextureComp,
-                NormalMapComp,
                 MicrofacetDiffuseReflection,
                 MicrofacetSpecularReflection
             ]
@@ -1046,162 +801,6 @@ impl ColorTexturedBlinnPhongMaterial {
                     ),
                 },
             ),
-        ] {
-            let specification = MaterialSpecification::new(
-                vertex_attribute_requirements,
-                None,
-                vec![Self::FEATURE_TYPE_ID],
-                MaterialShaderInput::BlinnPhong(texture_shader_input),
-            );
-            material_library.add_material_specification(material_id, specification);
-        }
-    }
-
-    /// Checks if the entity-to-be with the given components has the components
-    /// for a variant of this material, and if so, adds the appropriate material
-    /// property texture set to the material library if not present, registers
-    /// the material in the given instance feature manager and adds the
-    /// appropriate material component to the entity.
-    pub fn add_material_component_for_entity(
-        instance_feature_manager: &RwLock<InstanceFeatureManager>,
-        material_library: &RwLock<MaterialLibrary>,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        fn execute_setup(
-            material_library: &mut MaterialLibrary,
-            instance_feature_manager: &mut InstanceFeatureManager,
-            diffuse_texture: Option<&DiffuseTextureComp>,
-            specular_texture: Option<&SpecularTextureComp>,
-            roughness: Option<&RoughnessComp>,
-            normal_map: Option<&NormalMapComp>,
-        ) -> MaterialComp {
-            let (material_id, texture_ids) = match (
-                diffuse_texture,
-                specular_texture,
-                normal_map,
-            ) {
-                (Some(diffuse_texture), None, None) => (
-                    *TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
-                    vec![diffuse_texture.0],
-                ),
-                (None, Some(specular_texture), None) => (
-                    *TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![specular_texture.0],
-                ),
-                (Some(diffuse_texture), Some(specular_texture), None) => (
-                    *TEXTURED_DIFFUSE_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![diffuse_texture.0, specular_texture.0],
-                ),
-                (Some(diffuse_texture), None, Some(normal_map)) => (
-                    *NORMAL_MAPPED_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
-                    vec![diffuse_texture.0, normal_map.0],
-                ),
-                (None, Some(specular_texture), Some(normal_map)) => (
-                    *NORMAL_MAPPED_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![specular_texture.0, normal_map.0],
-                ),
-                (Some(diffuse_texture), Some(specular_texture), Some(normal_map)) => (
-                    *NORMAL_MAPPED_TEXTURED_DIFFUSE_SPECULAR_BLINN_PHONG_MATERIAL_ID,
-                    vec![diffuse_texture.0, specular_texture.0, normal_map.0],
-                ),
-                components => panic!("Invalid combination of material components for ColorTexturedBlinnPhongMaterial: {:?}", components),
-            };
-
-            let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
-
-            // Add a new texture set if none with the same textures already exist
-            material_library
-                .material_property_texture_set_entry(texture_set_id)
-                .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
-
-            let material = ColorTexturedBlinnPhongMaterial {
-                shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
-            };
-
-            let feature_id = instance_feature_manager
-                .get_storage_mut::<ColorTexturedBlinnPhongMaterial>()
-                .expect("Missing storage for ColorTexturedBlinnPhongMaterial features")
-                .add_feature(&material);
-
-            MaterialComp::new(material_id, Some(feature_id), Some(texture_set_id))
-        }
-
-        setup!(
-            {
-                desynchronized.set_yes();
-                let mut material_library = material_library.write().unwrap();
-                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-            },
-            components,
-            |diffuse_texture: &DiffuseTextureComp,
-             specular_texture: Option<&SpecularTextureComp>,
-             roughness: Option<&RoughnessComp>,
-             normal_map: Option<&NormalMapComp>|
-             -> MaterialComp {
-                execute_setup(
-                    &mut material_library,
-                    &mut instance_feature_manager,
-                    Some(diffuse_texture),
-                    specular_texture,
-                    roughness,
-                    normal_map,
-                )
-            },
-            ![
-                MaterialComp,
-                DiffuseColorComp,
-                SpecularColorComp,
-                ParallaxMapComp,
-                MicrofacetDiffuseReflection,
-                MicrofacetSpecularReflection
-            ]
-        );
-
-        setup!(
-            {
-                desynchronized.set_yes();
-                let mut material_library = material_library.write().unwrap();
-                let mut instance_feature_manager = instance_feature_manager.write().unwrap();
-            },
-            components,
-            |specular_texture: &SpecularTextureComp,
-             roughness: Option<&RoughnessComp>,
-             normal_map: Option<&NormalMapComp>|
-             -> MaterialComp {
-                execute_setup(
-                    &mut material_library,
-                    &mut instance_feature_manager,
-                    None,
-                    Some(specular_texture),
-                    roughness,
-                    normal_map,
-                )
-            },
-            ![
-                MaterialComp,
-                DiffuseColorComp,
-                DiffuseTextureComp,
-                SpecularColorComp,
-                ParallaxMapComp,
-                MicrofacetDiffuseReflection,
-                MicrofacetSpecularReflection
-            ]
-        );
-    }
-}
-
-impl ParallaxMappedColorTexturedBlinnPhongMaterial {
-    /// Registers this material as a feature type in the given instance feature
-    /// manager and adds the material specifications for the variants of the
-    /// material to the given material library.
-    pub fn register(
-        material_library: &mut MaterialLibrary,
-        instance_feature_manager: &mut InstanceFeatureManager,
-    ) {
-        instance_feature_manager.register_feature_type::<Self>();
-
-        for (material_id, vertex_attribute_requirements, texture_shader_input) in [
             (
                 *PARALLAX_MAPPED_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
                 VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
@@ -1280,25 +879,52 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
             diffuse_texture: Option<&DiffuseTextureComp>,
             specular_texture: Option<&SpecularTextureComp>,
             roughness: Option<&RoughnessComp>,
-            parallax_map: &ParallaxMapComp,
+            normal_map: Option<&NormalMapComp>,
+            parallax_map: Option<&ParallaxMapComp>,
         ) -> MaterialComp {
             let (material_id, texture_ids) = match (
                 diffuse_texture,
                 specular_texture,
+                normal_map,
+                parallax_map,
             ) {
-                (Some(diffuse_texture), None) => (
+                (Some(diffuse_texture), None, None, None) => (
+                    *TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
+                    vec![diffuse_texture.0],
+                ),
+                (None, Some(specular_texture), None, None) => (
+                    *TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![specular_texture.0],
+                ),
+                (Some(diffuse_texture), Some(specular_texture), None, None) => (
+                    *TEXTURED_DIFFUSE_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![diffuse_texture.0, specular_texture.0],
+                ),
+                (Some(diffuse_texture), None, Some(normal_map), None) => (
+                    *NORMAL_MAPPED_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
+                    vec![diffuse_texture.0, normal_map.0],
+                ),
+                (None, Some(specular_texture), Some(normal_map), None) => (
+                    *NORMAL_MAPPED_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![specular_texture.0, normal_map.0],
+                ),
+                (Some(diffuse_texture), Some(specular_texture), Some(normal_map), None) => (
+                    *NORMAL_MAPPED_TEXTURED_DIFFUSE_SPECULAR_BLINN_PHONG_MATERIAL_ID,
+                    vec![diffuse_texture.0, specular_texture.0, normal_map.0],
+                ),
+                (Some(diffuse_texture), None, _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_TEXTURED_DIFFUSE_BLINN_PHONG_MATERIAL_ID,
                     vec![diffuse_texture.0, parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                 ),
-                (None, Some(specular_texture)) => (
+                (None, Some(specular_texture), _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_TEXTURED_SPECULAR_BLINN_PHONG_MATERIAL_ID,
                     vec![specular_texture.0, parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                 ),
-                (Some(diffuse_texture), Some(specular_texture)) => (
+                (Some(diffuse_texture), Some(specular_texture), _, Some(parallax_map)) => (
                     *PARALLAX_MAPPED_TEXTURED_DIFFUSE_SPECULAR_BLINN_PHONG_MATERIAL_ID,
                     vec![diffuse_texture.0, specular_texture.0, parallax_map.normal_map_texture_id, parallax_map.height_map_texture_id],
                 ),
-                components => panic!("Invalid combination of material components for ParallaxMappedColorTexturedBlinnPhongMaterial: {:?}", components),
+                components => panic!("Invalid combination of material components for ColorTexturedBlinnPhongMaterial: {:?}", components),
             };
 
             let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
@@ -1308,16 +934,15 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
                 .material_property_texture_set_entry(texture_set_id)
                 .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
 
-            let material = ParallaxMappedColorTexturedBlinnPhongMaterial {
+            let material = ColorTexturedBlinnPhongMaterial {
                 shininess: roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess()),
-                height_scale: parallax_map.height_scale,
+                parallax_height_scale: parallax_map
+                    .map_or(0.0, |parallax_map| parallax_map.height_scale),
             };
 
             let feature_id = instance_feature_manager
-                .get_storage_mut::<ParallaxMappedColorTexturedBlinnPhongMaterial>()
-                .expect(
-                    "Missing storage for ParallaxMappedColorTexturedBlinnPhongMaterial features",
-                )
+                .get_storage_mut::<ColorTexturedBlinnPhongMaterial>()
+                .expect("Missing storage for ColorTexturedBlinnPhongMaterial features")
                 .add_feature(&material);
 
             MaterialComp::new(material_id, Some(feature_id), Some(texture_set_id))
@@ -1333,7 +958,8 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
             |diffuse_texture: &DiffuseTextureComp,
              specular_texture: Option<&SpecularTextureComp>,
              roughness: Option<&RoughnessComp>,
-             parallax_map: &ParallaxMapComp|
+             normal_map: Option<&NormalMapComp>,
+             parallax_map: Option<&ParallaxMapComp>|
              -> MaterialComp {
                 execute_setup(
                     &mut material_library,
@@ -1341,6 +967,7 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
                     Some(diffuse_texture),
                     specular_texture,
                     roughness,
+                    normal_map,
                     parallax_map,
                 )
             },
@@ -1348,7 +975,6 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
                 MaterialComp,
                 DiffuseColorComp,
                 SpecularColorComp,
-                NormalMapComp,
                 MicrofacetDiffuseReflection,
                 MicrofacetSpecularReflection
             ]
@@ -1363,7 +989,8 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
             components,
             |specular_texture: &SpecularTextureComp,
              roughness: Option<&RoughnessComp>,
-             parallax_map: &ParallaxMapComp|
+             normal_map: Option<&NormalMapComp>,
+             parallax_map: Option<&ParallaxMapComp>|
              -> MaterialComp {
                 execute_setup(
                     &mut material_library,
@@ -1371,6 +998,7 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
                     None,
                     Some(specular_texture),
                     roughness,
+                    normal_map,
                     parallax_map,
                 )
             },
@@ -1379,7 +1007,6 @@ impl ParallaxMappedColorTexturedBlinnPhongMaterial {
                 DiffuseColorComp,
                 DiffuseTextureComp,
                 SpecularColorComp,
-                NormalMapComp,
                 MicrofacetDiffuseReflection,
                 MicrofacetSpecularReflection
             ]
@@ -1393,28 +1020,13 @@ impl_InstanceFeature!(
         MATERIAL_VERTEX_BINDING_START => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-        parallax_height_scale_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    ParallaxMappedUniformColorBlinnPhongMaterial,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
         MATERIAL_VERTEX_BINDING_START + 3 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-        parallax_height_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
+        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
     })
 );
 
@@ -1423,27 +1035,13 @@ impl_InstanceFeature!(
     wgpu::vertex_attr_array![
         MATERIAL_VERTEX_BINDING_START => Float32x3,
         MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: None,
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-        parallax_height_scale_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    ParallaxMappedSingleUniformColorBlinnPhongMaterial,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
         MATERIAL_VERTEX_BINDING_START + 2 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
         diffuse_color_location: None,
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-        parallax_height_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );
 
@@ -1451,25 +1049,12 @@ impl_InstanceFeature!(
     ColorTexturedBlinnPhongMaterial,
     wgpu::vertex_attr_array![
         MATERIAL_VERTEX_BINDING_START => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: None,
-        specular_color_location: None,
-        shininess_location: MATERIAL_VERTEX_BINDING_START,
-        parallax_height_scale_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    ParallaxMappedColorTexturedBlinnPhongMaterial,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32,
         MATERIAL_VERTEX_BINDING_START + 1 => Float32,
     ],
     InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
         diffuse_color_location: None,
         specular_color_location: None,
         shininess_location: MATERIAL_VERTEX_BINDING_START,
-        parallax_height_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
     })
 );
