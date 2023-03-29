@@ -3,8 +3,8 @@
 use crate::{
     geometry::{
         CollectionChange, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor,
-        VertexNormalVector, VertexPosition, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
-        VERTEX_ATTRIBUTE_FLAGS,
+        VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords,
+        N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS,
     },
     rendering::{
         buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
@@ -39,10 +39,10 @@ impl MeshRenderBufferManager {
         mesh: &TriangleMesh<fre>,
     ) -> Self {
         let mut available_attributes = VertexAttributeSet::empty();
-        let mut vertex_buffers = [None, None, None, None];
-        let mut vertex_buffer_layouts = [None, None, None, None];
+        let mut vertex_buffers = [None, None, None, None, None];
+        let mut vertex_buffer_layouts = [None, None, None, None, None];
         let mut shader_input = MeshShaderInput {
-            locations: [None, None, None, None],
+            locations: [None, None, None, None, None],
         };
 
         Self::add_vertex_attribute_if_available(
@@ -81,6 +81,15 @@ impl MeshRenderBufferManager {
             mesh_id,
             mesh.texture_coords(),
         );
+        Self::add_vertex_attribute_if_available(
+            core_system,
+            &mut available_attributes,
+            &mut vertex_buffers,
+            &mut vertex_buffer_layouts,
+            &mut shader_input,
+            mesh_id,
+            mesh.tangent_space_quaternions(),
+        );
 
         let indices = mesh.indices();
         let n_indices = indices.len();
@@ -111,6 +120,11 @@ impl MeshRenderBufferManager {
             core_system,
             mesh.texture_coords(),
             mesh.texture_coord_change(),
+        );
+        self.sync_vertex_buffer(
+            core_system,
+            mesh.tangent_space_quaternions(),
+            mesh.tangent_space_quaternion_change(),
         );
 
         self.sync_index_buffer(core_system, mesh.indices(), mesh.index_change());
@@ -382,5 +396,14 @@ impl VertexBufferable for VertexTextureCoords<fre> {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             Self::BINDING_LOCATION => Float32x2,
+        ]);
+}
+
+impl VertexBufferable for VertexTangentSpaceQuaternion<fre> {
+    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 4;
+
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+            Self::BINDING_LOCATION => Float32x4,
         ]);
 }

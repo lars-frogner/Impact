@@ -221,6 +221,26 @@ impl TriangleMesh<fre> {
                         .generate_smooth_normal_vectors();
                 }
             }
+
+            if vertex_attribute_requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
+            {
+                let mesh_repository_readonly = mesh_repository.read().unwrap();
+                let mesh_readonly = mesh_repository_readonly
+                    .get_mesh(mesh.id)
+                    .expect("Missing mesh in repository for mesh component");
+
+                if !mesh_readonly.has_tangent_space_quaternions() {
+                    log::info!("Generating tangent space quaternions for mesh {}", mesh.id);
+
+                    drop(mesh_repository_readonly); // Release read lock
+                    let mut mesh_repository_writable = mesh_repository.write().unwrap();
+
+                    mesh_repository_writable
+                        .get_mesh_mut(mesh.id)
+                        .unwrap()
+                        .generate_smooth_tangent_space_quaternions();
+                }
+            }
         });
     }
 }
