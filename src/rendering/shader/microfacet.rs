@@ -8,7 +8,7 @@ use super::{
     TextureType, UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE,
     VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
+use naga::{Expression, Function, LocalVariable, MathFunction, Module, Statement};
 
 /// Describes the combination of models used for diffuse and specular reflection
 /// as part of a microfacet based reflection model.
@@ -521,53 +521,151 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 .expect("Missing position for microfacet shading"),
         );
 
-        let normal_vector_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .normal_vector
-                .expect("Missing normal vector for microfacet shading"),
-        );
-
         let fixed_roughness_value_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.roughness);
 
-        let (diffuse_texture_color_expr, specular_texture_color_expr, roughness_texture_value_expr) =
-            Self::generate_texture_fragment_code(
-                self.texture_input,
-                module,
-                fragment_function,
-                bind_group_idx,
-                fragment_input_struct,
-                mesh_input_field_indices,
+        let (bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+            let texture_coord_expr = fragment_input_struct.get_field_expr(
+                mesh_input_field_indices
+                    .texture_coords
+                    .expect("No `texture_coords` passed to textured microfacet fragment shader"),
             );
 
-        let diffuse_color_expr = diffuse_texture_color_expr.or_else(|| {
-            material_input_field_indices
-                .diffuse_color
-                .map(|idx| fragment_input_struct.get_field_expr(idx))
-        });
+            let bind_group = *bind_group_idx;
+            *bind_group_idx += 1;
 
-        let specular_color_expr = specular_texture_color_expr.or_else(|| {
-            material_input_field_indices
-                .specular_color
-                .map(|idx| fragment_input_struct.get_field_expr(idx))
-        });
+            (bind_group, Some(texture_coord_expr))
+        } else {
+            (*bind_group_idx, None)
+        };
 
-        let roughness_expr = roughness_texture_value_expr.map_or(
-            fixed_roughness_value_expr,
-            |roughness_texture_value_expr| {
-                // Use fixed roughness as scale for roughness sampled from texture
-                emit_in_func(fragment_function, |function| {
-                    include_expr_in_func(
-                        function,
-                        Expression::Binary {
-                            op: naga::BinaryOperator::Multiply,
-                            left: fixed_roughness_value_expr,
-                            right: roughness_texture_value_expr,
-                        },
+        let diffuse_color_expr = self
+            .texture_input
+            .diffuse_texture_and_sampler_bindings
+            .map(|(diffuse_texture_binding, diffuse_sampler_binding)| {
+                let diffuse_color_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "diffuseColor",
+                    bind_group,
+                    diffuse_texture_binding,
+                    Some(diffuse_sampler_binding),
+                    None,
+                );
+
+                diffuse_color_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+            })
+            .or_else(|| {
+                material_input_field_indices
+                    .diffuse_color
+                    .map(|idx| fragment_input_struct.get_field_expr(idx))
+            });
+
+        let specular_color_expr = self
+            .texture_input
+            .specular_texture_and_sampler_bindings
+            .map(|(specular_texture_binding, specular_sampler_binding)| {
+                let specular_color_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "specularColor",
+                    bind_group,
+                    specular_texture_binding,
+                    Some(specular_sampler_binding),
+                    None,
+                );
+
+                specular_color_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+            })
+            .or_else(|| {
+                material_input_field_indices
+                    .specular_color
+                    .map(|idx| fragment_input_struct.get_field_expr(idx))
+            });
+
+        let roughness_expr = self
+            .texture_input
+            .roughness_texture_and_sampler_bindings
+            .map_or(
+                fixed_roughness_value_expr,
+                |(roughness_texture_binding, roughness_sampler_binding)| {
+                    let roughness_texture = SampledTexture::declare(
+                        &mut module.types,
+                        &mut module.global_variables,
+                        TextureType::Depth,
+                        "roughness",
+                        bind_group,
+                        roughness_texture_binding,
+                        Some(roughness_sampler_binding),
+                        None,
+                    );
+
+                    let roughness_texture_value_expr = roughness_texture.generate_sampling_expr(
+                        fragment_function,
+                        texture_coord_expr.unwrap(),
+                        None,
+                        None,
+                        None,
+                    );
+
+                    // Use fixed roughness as scale for roughness sampled from texture
+                    emit_in_func(fragment_function, |function| {
+                        include_expr_in_func(
+                            function,
+                            Expression::Binary {
+                                op: naga::BinaryOperator::Multiply,
+                                left: fixed_roughness_value_expr,
+                                right: roughness_texture_value_expr,
+                            },
+                        )
+                    })
+                },
+            );
+
+        let normal_vector_expr = self
+            .texture_input
+            .normal_map_texture_and_sampler_bindings
+            .map_or_else(
+                || {
+                    fragment_input_struct.get_field_expr(
+                        mesh_input_field_indices
+                            .normal_vector
+                            .expect("Missing normal vector for microfacet shading"),
                     )
-                })
-            },
-        );
+                },
+                |(normal_map_texture_binding, normal_map_sampler_binding)| {
+                    let normal_map_texture = SampledTexture::declare(
+                        &mut module.types,
+                        &mut module.global_variables,
+                        TextureType::Image,
+                        "normalMap",
+                        bind_group,
+                        normal_map_texture_binding,
+                        Some(normal_map_sampler_binding),
+                        None,
+                    );
+
+                    let tangent_space_normal_expr = normal_map_texture
+                        .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+
+                    let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+                        mesh_input_field_indices.tangent_space_quaternion.expect(
+                            "Missing tangent space quaternion for microfacet normal mapping",
+                        ),
+                    );
+
+                    SourceCode::generate_call_named(
+                        fragment_function,
+                        "lightColor",
+                        source_code.functions["rotateVectorWithQuaternion"],
+                        vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
+                    )
+                },
+            );
 
         let color_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
@@ -770,108 +868,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
+}
 
-    fn generate_texture_fragment_code(
-        texture_input: &MicrofacetTextureShaderInput,
-        module: &mut Module,
-        fragment_function: &mut Function,
-        bind_group_idx: &mut u32,
-        fragment_input_struct: &InputStruct,
-        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    ) -> (
-        Option<Handle<Expression>>,
-        Option<Handle<Expression>>,
-        Option<Handle<Expression>>,
-    ) {
-        if texture_input.diffuse_texture_and_sampler_bindings.is_none()
-            && texture_input
-                .specular_texture_and_sampler_bindings
-                .is_none()
-            && texture_input
-                .roughness_texture_and_sampler_bindings
-                .is_none()
-            && texture_input
-                .normal_map_texture_and_sampler_bindings
-                .is_none()
-            && texture_input
-                .height_map_texture_and_sampler_bindings
-                .is_none()
-        {
-            return (None, None, None);
-        }
-
-        let bind_group = *bind_group_idx;
-        *bind_group_idx += 1;
-
-        let texture_coord_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .texture_coords
-                .expect("No `texture_coords` passed to textured microfacet fragment shader"),
-        );
-
-        let diffuse_color_sampling_expr = texture_input.diffuse_texture_and_sampler_bindings.map(
-            |(diffuse_texture_binding, diffuse_sampler_binding)| {
-                let diffuse_color_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image,
-                    "diffuseColor",
-                    bind_group,
-                    diffuse_texture_binding,
-                    Some(diffuse_sampler_binding),
-                    None,
-                );
-
-                diffuse_color_texture
-                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
-            },
-        );
-
-        let specular_color_sampling_expr = texture_input.specular_texture_and_sampler_bindings.map(
-            |(specular_texture_binding, specular_sampler_binding)| {
-                let specular_color_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image,
-                    "specularColor",
-                    bind_group,
-                    specular_texture_binding,
-                    Some(specular_sampler_binding),
-                    None,
-                );
-
-                specular_color_texture
-                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
-            },
-        );
-
-        let roughness_sampling_expr = texture_input.roughness_texture_and_sampler_bindings.map(
-            |(roughness_texture_binding, roughness_sampler_binding)| {
-                let roughness_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Depth,
-                    "roughness",
-                    bind_group,
-                    roughness_texture_binding,
-                    Some(roughness_sampler_binding),
-                    None,
-                );
-
-                roughness_texture.generate_sampling_expr(
-                    fragment_function,
-                    texture_coord_expr,
-                    None,
-                    None,
-                    None,
-                )
-            },
-        );
-
-        (
-            diffuse_color_sampling_expr,
-            specular_color_sampling_expr,
-            roughness_sampling_expr,
-        )
+impl MicrofacetTextureShaderInput {
+    fn is_empty(&self) -> bool {
+        self.diffuse_texture_and_sampler_bindings.is_none()
+            && self.specular_texture_and_sampler_bindings.is_none()
+            && self.roughness_texture_and_sampler_bindings.is_none()
+            && self.normal_map_texture_and_sampler_bindings.is_none()
+            && self.height_map_texture_and_sampler_bindings.is_none()
     }
 }
