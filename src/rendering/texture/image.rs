@@ -14,7 +14,7 @@ cfg_if::cfg_if! {
 
 /// A texture representing a 2D image.
 #[derive(Debug)]
-pub struct ImageTexture {
+pub struct ColorImageTexture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
@@ -27,7 +27,7 @@ pub struct MultisampledRenderTargetTexture {
     view: wgpu::TextureView,
 }
 
-impl ImageTexture {
+impl ColorImageTexture {
     /// Creates a texture for the image file at the given path.
     ///
     /// # Errors

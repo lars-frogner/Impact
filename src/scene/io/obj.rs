@@ -265,8 +265,10 @@ fn create_material_components_from_tobj_material(
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
-        let diffuse_texture_id = assets
-            .load_image_texture_from_path(renderer.core_system(), &material.diffuse_texture)?;
+        let diffuse_texture_id = assets.load_color_image_texture_from_path(
+            renderer.core_system(),
+            &material.diffuse_texture,
+        )?;
 
         components.push(ComponentStorage::from_single_instance_view(
             &DiffuseTextureComp(diffuse_texture_id),
@@ -281,8 +283,10 @@ fn create_material_components_from_tobj_material(
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
-        let specular_texture_id = assets
-            .load_image_texture_from_path(renderer.core_system(), &material.specular_texture)?;
+        let specular_texture_id = assets.load_color_image_texture_from_path(
+            renderer.core_system(),
+            &material.specular_texture,
+        )?;
 
         components.push(ComponentStorage::from_single_instance_view(
             &SpecularTextureComp(specular_texture_id),

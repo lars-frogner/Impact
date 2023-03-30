@@ -72,7 +72,7 @@ pub struct FixedMaterialResources {
 /// Specifies a set of textures used for textured material properties.
 #[derive(Clone, Debug)]
 pub struct MaterialPropertyTextureSet {
-    image_texture_ids: Vec<TextureID>,
+    color_image_texture_ids: Vec<TextureID>,
 }
 
 /// Container for material specifications and material property texture sets.
@@ -168,14 +168,16 @@ impl MaterialPropertyTextureSet {
     ///
     /// # Panics
     /// If the given list of texture IDs is empty.
-    pub fn new(image_texture_ids: Vec<TextureID>) -> Self {
-        assert!(!image_texture_ids.is_empty());
-        Self { image_texture_ids }
+    pub fn new(color_image_texture_ids: Vec<TextureID>) -> Self {
+        assert!(!color_image_texture_ids.is_empty());
+        Self {
+            color_image_texture_ids,
+        }
     }
 
     /// Returns the IDs of the image textures in the texture set.
-    pub fn image_texture_ids(&self) -> &[TextureID] {
-        &self.image_texture_ids
+    pub fn color_image_texture_ids(&self) -> &[TextureID] {
+        &self.color_image_texture_ids
     }
 }
 
