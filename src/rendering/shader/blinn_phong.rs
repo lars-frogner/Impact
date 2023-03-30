@@ -8,7 +8,7 @@ use super::{
     TextureType, UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE,
     VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
+use naga::{Expression, Function, LocalVariable, MathFunction, Module, Statement};
 
 /// Input description specifying the vertex attribute locations of fixed
 /// Blinn-Phong material properties.
@@ -194,6 +194,11 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
     ) {
         let source_code = SourceCode::from_wgsl_source(
             "\
+            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
+                let tmp = 2.0 * cross(quaternion.xyz, vector);
+                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
+            }
+
             fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
                 return normalize(-vertexPosition);
             }
@@ -252,36 +257,112 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 .expect("Missing position for Blinn-Phong shading"),
         );
 
-        let normal_vector_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .normal_vector
-                .expect("Missing normal vector for Blinn-Phong shading"),
-        );
-
         let shininess_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.shininess);
 
-        let (diffuse_texture_color_expr, specular_texture_color_expr) =
-            Self::generate_texture_fragment_code(
-                self.texture_input,
-                module,
-                fragment_function,
-                bind_group_idx,
-                fragment_input_struct,
-                mesh_input_field_indices,
+        let (bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+            let texture_coord_expr = fragment_input_struct.get_field_expr(
+                mesh_input_field_indices
+                    .texture_coords
+                    .expect("No `texture_coords` passed to textured Blinn-Phong fragment shader"),
             );
 
-        let diffuse_color_expr = diffuse_texture_color_expr.or_else(|| {
-            material_input_field_indices
-                .diffuse_color
-                .map(|idx| fragment_input_struct.get_field_expr(idx))
-        });
+            let bind_group = *bind_group_idx;
+            *bind_group_idx += 1;
 
-        let specular_color_expr = specular_texture_color_expr.or_else(|| {
-            material_input_field_indices
-                .specular_color
-                .map(|idx| fragment_input_struct.get_field_expr(idx))
-        });
+            (bind_group, Some(texture_coord_expr))
+        } else {
+            (*bind_group_idx, None)
+        };
+
+        let diffuse_color_expr = self
+            .texture_input
+            .diffuse_texture_and_sampler_bindings
+            .map(|(diffuse_texture_binding, diffuse_sampler_binding)| {
+                let diffuse_color_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "diffuseColor",
+                    bind_group,
+                    diffuse_texture_binding,
+                    Some(diffuse_sampler_binding),
+                    None,
+                );
+
+                diffuse_color_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+            })
+            .or_else(|| {
+                material_input_field_indices
+                    .diffuse_color
+                    .map(|idx| fragment_input_struct.get_field_expr(idx))
+            });
+
+        let specular_color_expr = self
+            .texture_input
+            .specular_texture_and_sampler_bindings
+            .map(|(specular_texture_binding, specular_sampler_binding)| {
+                let specular_color_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "specularColor",
+                    bind_group,
+                    specular_texture_binding,
+                    Some(specular_sampler_binding),
+                    None,
+                );
+
+                specular_color_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+            })
+            .or_else(|| {
+                material_input_field_indices
+                    .specular_color
+                    .map(|idx| fragment_input_struct.get_field_expr(idx))
+            });
+
+        let normal_vector_expr = self
+            .texture_input
+            .normal_map_texture_and_sampler_bindings
+            .map_or_else(
+                || {
+                    fragment_input_struct.get_field_expr(
+                        mesh_input_field_indices
+                            .normal_vector
+                            .expect("Missing normal vector for Blinn-Phong shading"),
+                    )
+                },
+                |(normal_map_texture_binding, normal_map_sampler_binding)| {
+                    let normal_map_texture = SampledTexture::declare(
+                        &mut module.types,
+                        &mut module.global_variables,
+                        TextureType::Image,
+                        "normalMap",
+                        bind_group,
+                        normal_map_texture_binding,
+                        Some(normal_map_sampler_binding),
+                        None,
+                    );
+
+                    let tangent_space_normal_expr = normal_map_texture
+                        .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+
+                    let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+                        mesh_input_field_indices.tangent_space_quaternion.expect(
+                            "Missing tangent space quaternion for Blinn-Phong normal mapping",
+                        ),
+                    );
+
+                    SourceCode::generate_call_named(
+                        fragment_function,
+                        "lightColor",
+                        source_code.functions["rotateVectorWithQuaternion"],
+                        vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
+                    )
+                },
+            );
 
         let color_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
@@ -463,91 +544,13 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
     }
+}
 
-    fn generate_texture_fragment_code(
-        texture_input: &BlinnPhongTextureShaderInput,
-        module: &mut Module,
-        fragment_function: &mut Function,
-        bind_group_idx: &mut u32,
-        fragment_input_struct: &InputStruct,
-        mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    ) -> (Option<Handle<Expression>>, Option<Handle<Expression>>) {
-        if texture_input.diffuse_texture_and_sampler_bindings.is_none()
-            && texture_input
-                .specular_texture_and_sampler_bindings
-                .is_none()
-            && texture_input
-                .normal_map_texture_and_sampler_bindings
-                .is_none()
-            && texture_input
-                .height_map_texture_and_sampler_bindings
-                .is_none()
-        {
-            return (None, None);
-        }
-
-        let bind_group = *bind_group_idx;
-        *bind_group_idx += 1;
-
-        let texture_coord_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .texture_coords
-                .expect("No `texture_coords` passed to textured Blinn-Phong fragment shader"),
-        );
-
-        let diffuse_color_sampling_expr = texture_input.diffuse_texture_and_sampler_bindings.map(
-            |(diffuse_texture_binding, diffuse_sampler_binding)| {
-                let diffuse_color_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image,
-                    "diffuseColor",
-                    bind_group,
-                    diffuse_texture_binding,
-                    Some(diffuse_sampler_binding),
-                    None,
-                );
-
-                diffuse_color_texture
-                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
-            },
-        );
-
-        let specular_color_sampling_expr = texture_input.specular_texture_and_sampler_bindings.map(
-            |(specular_texture_binding, specular_sampler_binding)| {
-                let specular_color_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image,
-                    "specularColor",
-                    bind_group,
-                    specular_texture_binding,
-                    Some(specular_sampler_binding),
-                    None,
-                );
-
-                specular_color_texture
-                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
-            },
-        );
-
-        let tangent_space_normal_sampling_expr = texture_input
-            .normal_map_texture_and_sampler_bindings
-            .map(|(normal_map_texture_binding, normal_map_sampler_binding)| {
-                let normal_map_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image,
-                    "normalMap",
-                    bind_group,
-                    normal_map_texture_binding,
-                    Some(normal_map_sampler_binding),
-                    None,
-                );
-
-                normal_map_texture.generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
-            });
-
-        (diffuse_color_sampling_expr, specular_color_sampling_expr)
+impl BlinnPhongTextureShaderInput {
+    fn is_empty(&self) -> bool {
+        self.diffuse_texture_and_sampler_bindings.is_none()
+            && self.specular_texture_and_sampler_bindings.is_none()
+            && self.normal_map_texture_and_sampler_bindings.is_none()
+            && self.height_map_texture_and_sampler_bindings.is_none()
     }
 }
