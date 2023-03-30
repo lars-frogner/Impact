@@ -47,6 +47,13 @@ pub struct SpecularTextureComp(pub TextureID);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RoughnessComp(pub fre);
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct RoughnessTextureComp {
+    pub texture_id: TextureID,
+    pub roughness_scale: fre,
+}
+
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MicrofacetDiffuseReflection;

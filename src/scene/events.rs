@@ -4,11 +4,10 @@ use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
     physics::{OrientationComp, PositionComp},
     scene::{
-        self, ColorTexturedBlinnPhongMaterial, DiffuseTexturedMicrofacetMaterial,
-        FixedColorMaterial, FixedTextureMaterial, MaterialComp, MeshComp, MicrofacetMaterial,
-        ModelID, ModelInstanceNodeID, OmnidirectionalLight, ScalingComp, Scene, SceneGraphNodeComp,
-        SingleUniformColorBlinnPhongMaterial, TexturedMicrofacetMaterial, UnidirectionalLight,
-        UniformColorBlinnPhongMaterial, VertexColorMaterial,
+        self, add_blinn_phong_material_component_for_entity,
+        add_microfacet_material_component_for_entity, FixedColorMaterial, FixedTextureMaterial,
+        MaterialComp, MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ScalingComp,
+        Scene, SceneGraphNodeComp, UnidirectionalLight, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -148,43 +147,16 @@ impl Scene {
             desynchronized,
         );
 
-        UniformColorBlinnPhongMaterial::add_material_component_for_entity(
+        add_blinn_phong_material_component_for_entity(
             self.material_library(),
             self.instance_feature_manager(),
             components,
             desynchronized,
         );
 
-        SingleUniformColorBlinnPhongMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
+        add_microfacet_material_component_for_entity(
             self.material_library(),
-            components,
-            desynchronized,
-        );
-
-        ColorTexturedBlinnPhongMaterial::add_material_component_for_entity(
             self.instance_feature_manager(),
-            self.material_library(),
-            components,
-            desynchronized,
-        );
-
-        MicrofacetMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
-            components,
-            desynchronized,
-        );
-
-        DiffuseTexturedMicrofacetMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
-            self.material_library(),
-            components,
-            desynchronized,
-        );
-
-        TexturedMicrofacetMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
-            self.material_library(),
             components,
             desynchronized,
         );

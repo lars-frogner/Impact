@@ -104,7 +104,7 @@ pub enum MaterialShaderInput {
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(BlinnPhongTextureShaderInput),
-    Microfacet((MicrofacetShadingModel, Option<MicrofacetTextureShaderInput>)),
+    Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -347,6 +347,7 @@ pub struct SampledTexture {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextureType {
     Image,
+    Depth,
     DepthCubemap,
     DepthArray,
 }
@@ -449,6 +450,15 @@ const IMAGE_TEXTURE_TYPE: Type = Type {
             kind: ScalarKind::Float,
             multi: false,
         },
+    },
+};
+
+const DEPTH_TEXTURE_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Image {
+        dim: ImageDimension::D2,
+        arrayed: false,
+        class: ImageClass::Depth { multi: false },
     },
 };
 
@@ -890,7 +900,7 @@ impl ShaderGenerator {
                 Some(feature_input),
                 Some(MaterialShaderInput::Microfacet((model, texture_input))),
             ) => Some(MaterialShaderGenerator::Microfacet(
-                MicrofacetShaderGenerator::new(model, feature_input, texture_input.as_ref()),
+                MicrofacetShaderGenerator::new(model, feature_input, texture_input),
             )),
             (None, None, None, Some(MaterialShaderInput::VertexColor)) => {
                 Some(MaterialShaderGenerator::VertexColor)
@@ -3414,6 +3424,7 @@ impl SampledTexture {
     ) -> Self {
         let texture_type_const = match texture_type {
             TextureType::Image => IMAGE_TEXTURE_TYPE,
+            TextureType::Depth => DEPTH_TEXTURE_TYPE,
             TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };
@@ -4897,9 +4908,7 @@ mod test {
     #![allow(clippy::dbg_macro)]
 
     use crate::scene::{
-        DiffuseTexturedMicrofacetMaterial, FixedColorMaterial, FixedTextureMaterial,
-        GlobalAmbientColorMaterial, MicrofacetMaterial, TexturedMicrofacetMaterial,
-        VertexColorMaterial,
+        FixedColorMaterial, FixedTextureMaterial, GlobalAmbientColorMaterial, VertexColorMaterial,
     };
 
     use super::*;
@@ -4936,50 +4945,6 @@ mod test {
         MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings: (0, 1),
         }));
-
-    const MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-            diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-            roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-        });
-
-    const LAMBERTIAN_GGX_MICROFACET_INPUT: MaterialShaderInput = MaterialShaderInput::Microfacet((
-        MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-        None,
-    ));
-
-    const DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-            diffuse_color_location: None,
-            specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-            roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-        });
-
-    const DIFFUSE_TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT: MaterialShaderInput =
-        MaterialShaderInput::Microfacet((
-            MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-            Some(MicrofacetTextureShaderInput {
-                diffuse_texture_and_sampler_bindings: (0, 1),
-                specular_texture_and_sampler_bindings: None,
-            }),
-        ));
-
-    const TEXTURED_MICROFACET_FEATURE_INPUT: InstanceFeatureShaderInput =
-        InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-            diffuse_color_location: None,
-            specular_color_location: None,
-            roughness_location: MATERIAL_VERTEX_BINDING_START,
-        });
-
-    const TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT: MaterialShaderInput =
-        MaterialShaderInput::Microfacet((
-            MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-            Some(MicrofacetTextureShaderInput {
-                diffuse_texture_and_sampler_bindings: (0, 1),
-                specular_texture_and_sampler_bindings: Some((2, 3)),
-            }),
-        ));
 
     const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
         MaterialShaderInput::GlobalAmbientColor(GlobalAmbientColorShaderInput {
@@ -5708,7 +5673,8 @@ mod test {
     }
 
     #[test]
-    fn building_lambertian_ggx_microfacet_shader_with_omnidirectional_light_works() {
+    fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5721,9 +5687,26 @@ mod test {
                 ],
             }),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[&MODEL_VIEW_TRANSFORM_INPUT, &MICROFACET_FEATURE_INPUT],
-            Some(&LAMBERTIAN_GGX_MICROFACET_INPUT),
-            MicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5737,7 +5720,8 @@ mod test {
     }
 
     #[test]
-    fn building_lambertian_ggx_microfacet_shader_with_unidirectional_light_works() {
+    fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5750,9 +5734,26 @@ mod test {
                 ],
             }),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
-            &[&MODEL_VIEW_TRANSFORM_INPUT, &MICROFACET_FEATURE_INPUT],
-            Some(&LAMBERTIAN_GGX_MICROFACET_INPUT),
-            MicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5766,7 +5767,54 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_lambertian_ggx_microfacet_shader_with_omnidirectional_light_works()
+    fn building_uniform_ggx_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_ggx_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works()
     {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
@@ -5775,17 +5823,31 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START),
                     None,
                     Some(MESH_VERTEX_BINDING_START + 1),
-                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
                     None,
                 ],
             }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
             ],
-            Some(&DIFFUSE_TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
-            DiffuseTexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5799,8 +5861,239 @@ mod test {
     }
 
     #[test]
-    fn building_diffuse_textured_lambertian_ggx_microfacet_shader_with_unidirectional_light_works()
-    {
+    fn building_uniform_ggx_diffuse_microfacet_shader_with_omnidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: None,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_ggx_diffuse_microfacet_shader_with_unidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: None,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_ggx_specular_microfacet_shader_with_omnidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_ggx_specular_microfacet_shader_with_unidirectional_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_uniform_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_uniform_ggx_specular_microfacet_shader_with_unidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5815,10 +6108,24 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &DIFFUSE_TEXTURED_MICROFACET_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
             ],
-            Some(&DIFFUSE_TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
-            DiffuseTexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5832,7 +6139,8 @@ mod test {
     }
 
     #[test]
-    fn building_textured_lambertian_ggx_microfacet_shader_with_omnidirectional_light_works() {
+    fn building_textured_ggx_diffuse_uniform_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5847,10 +6155,24 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &TEXTURED_MICROFACET_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
             ],
-            Some(&TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
-            TexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;
@@ -5864,7 +6186,8 @@ mod test {
     }
 
     #[test]
-    fn building_textured_lambertian_ggx_microfacet_shader_with_unidirectional_light_works() {
+    fn building_textured_ggx_diffuse_uniform_ggx_specular_microfacet_shader_with_unidirectional_light_works(
+    ) {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
@@ -5879,10 +6202,212 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &TEXTURED_MICROFACET_FEATURE_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                }),
             ],
-            Some(&TEXTURED_LAMBERTIAN_GGX_MICROFACET_INPUT),
-            TexturedMicrofacetMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: Some((2, 3)),
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: Some((2, 3)),
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_ggx_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: Some((2, 3)),
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_ggx_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
+                ],
+            }),
+            Some(&UNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                    specular_texture_and_sampler_bindings: Some((2, 3)),
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
         )
         .unwrap()
         .0;

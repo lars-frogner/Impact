@@ -10,52 +10,41 @@ use super::{
 };
 use naga::{Expression, Function, Handle, LocalVariable, MathFunction, Module, Statement};
 
-/// Input description specifying the vertex attribute locations
-/// of Blinn-Phong material properties, reqired for generating a
-/// shader for a [`BlinnPhongMaterial`](crate::scene::BlinnPhongMaterial),
-/// [`DiffuseTexturedBlinnPhongMaterial`](crate::scene::DiffuseTexturedBlinnPhongMaterial)
-/// or a [`TexturedBlinnPhongMaterial`](crate::scene::TexturedBlinnPhongMaterial).
+/// Input description specifying the vertex attribute locations of fixed
+/// Blinn-Phong material properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlinnPhongFeatureShaderInput {
-    /// Vertex attribute location for the instance feature
-    /// representing diffuse color. If [`None`], diffuse
-    /// color is obtained from a texture instead.
+    /// Vertex attribute location for the instance feature representing diffuse
+    /// color.
     pub diffuse_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature
-    /// representing specular color. If [`None`], specular
-    /// color is obtained from a texture instead.
+    /// Vertex attribute location for the instance feature representing specular
+    /// color.
     pub specular_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature
-    /// representing shininess.
+    /// Vertex attribute location for the instance feature representing
+    /// shininess.
     pub shininess_location: u32,
     /// Vertex attribute location for the instance feature representing the
-    /// height scale for parallax mapping, or [`None`] parallax mapping is not
-    /// used.
+    /// height scale for parallax mapping.
     pub parallax_height_scale_location: u32,
 }
 
-/// Input description specifying the bindings of textures
-/// for Blinn-Phong properties, required for generating a
-/// shader for a
-/// [`DiffuseTexturedBlinnPhongMaterial`](crate::scene::DiffuseTexturedBlinnPhongMaterial)
-/// or a [`TexturedBlinnPhongMaterial`](crate::scene::TexturedBlinnPhongMaterial).
+/// Input description specifying the bindings of textures for Blinn-Phong
+/// material properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlinnPhongTextureShaderInput {
     /// Bind group bindings of the diffuse color texture and
     /// its sampler.
     pub diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
     /// Bind group bindings of the specular color texture and
-    /// its sampler. If [`None`], specular color is an instance
-    /// feature instead.
+    /// its sampler.
     pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the normal map texture and its sampler.
     pub normal_map_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the height map texture and its sampler.
     pub height_map_texture_and_sampler_bindings: Option<(u32, u32)>,
 }
 
-/// Shader generator for a
-/// [`BlinnPhongMaterial`](crate::scene::BlinnPhongMaterial),
-/// [`DiffuseTexturedBlinnPhongMaterial`](crate::scene::DiffuseTexturedBlinnPhongMaterial)
-/// or a [`TexturedBlinnPhongMaterial`](crate::scene::TexturedBlinnPhongMaterial).
+/// Shader generator for a Blinn-Phong material.
 #[derive(Clone, Debug)]
 pub struct BlinnPhongShaderGenerator<'a> {
     feature_input: &'a BlinnPhongFeatureShaderInput,

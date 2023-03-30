@@ -28,15 +28,18 @@ pub use light::{
     RadianceComp, UnidirectionalLight, UnidirectionalLightComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
-    ColorTexturedBlinnPhongMaterial, DiffuseColorComp, DiffuseTextureComp,
-    DiffuseTexturedMicrofacetMaterial, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
-    FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial, MaterialComp, MaterialID,
-    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetMaterial,
+    add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
+    DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedColorMaterial,
+    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial,
+    MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+    MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
     MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
-    SingleUniformColorBlinnPhongMaterial, SpecularColorComp, SpecularTextureComp,
-    TexturedMicrofacetMaterial, UniformColorBlinnPhongMaterial, VertexColorComp,
-    VertexColorMaterial,
+    RoughnessTextureComp, SpecularColorComp, SpecularTextureComp,
+    TexturedColorBlinnPhongMaterialFeature, TexturedColorMicrofacetMaterialFeature,
+    UniformColorBlinnPhongMaterialFeature, UniformColorMicrofacetMaterialFeature,
+    UniformDiffuseBlinnPhongMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
+    UniformSpecularBlinnPhongMaterialFeature, UniformSpecularMicrofacetMaterialFeature,
+    VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{
     BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
@@ -147,6 +150,18 @@ impl Scene {
         let mut material_library = self.material_library.write().unwrap();
         let mut instance_feature_manager = self.instance_feature_manager.write().unwrap();
 
+        instance_feature_manager.register_feature_type::<UniformColorBlinnPhongMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformDiffuseBlinnPhongMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformSpecularBlinnPhongMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedColorBlinnPhongMaterialFeature>();
+
+        instance_feature_manager.register_feature_type::<UniformColorMicrofacetMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformDiffuseMicrofacetMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformSpecularMicrofacetMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedColorMicrofacetMaterialFeature>();
+
         GlobalAmbientColorMaterial::register(
             &mut material_library,
             self.config.global_ambient_color,
@@ -154,24 +169,6 @@ impl Scene {
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);
-        UniformColorBlinnPhongMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        SingleUniformColorBlinnPhongMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        ColorTexturedBlinnPhongMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        MicrofacetMaterial::register(&mut material_library, &mut instance_feature_manager);
-        DiffuseTexturedMicrofacetMaterial::register(
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
-        TexturedMicrofacetMaterial::register(&mut material_library, &mut instance_feature_manager);
     }
 }
 

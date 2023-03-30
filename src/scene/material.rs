@@ -9,17 +9,20 @@ mod vertex_color;
 
 pub use ambient_color::GlobalAmbientColorMaterial;
 pub use blinn_phong::{
-    ColorTexturedBlinnPhongMaterial, SingleUniformColorBlinnPhongMaterial,
-    UniformColorBlinnPhongMaterial,
+    add_blinn_phong_material_component_for_entity, TexturedColorBlinnPhongMaterialFeature,
+    UniformColorBlinnPhongMaterialFeature, UniformDiffuseBlinnPhongMaterialFeature,
+    UniformSpecularBlinnPhongMaterialFeature,
 };
 pub use components::{
     DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
     MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
-    RoughnessComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
+    RoughnessComp, RoughnessTextureComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
 pub use microfacet::{
-    DiffuseTexturedMicrofacetMaterial, MicrofacetMaterial, TexturedMicrofacetMaterial,
+    add_microfacet_material_component_for_entity, TexturedColorMicrofacetMaterialFeature,
+    UniformColorMicrofacetMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
+    UniformSpecularMicrofacetMaterialFeature,
 };
 pub use vertex_color::VertexColorMaterial;
 
