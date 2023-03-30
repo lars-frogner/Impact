@@ -43,52 +43,45 @@ pub enum SpecularMicrofacetShadingModel {
 }
 
 /// Input description specifying the vertex attribute locations of microfacet
-/// material properties, reqired for generating a shader for a
-/// [`MicrofacetMaterial`](crate::scene::MicrofacetMaterial), a
-/// [`DiffuseTexturedMicrofacetMaterial`](crate::scene::DiffuseTexturedMicrofacetMaterial)
-/// or a
-/// [`TexturedMicrofacetMaterial`](crate::scene::TexturedMicrofacetMaterial).
+/// material properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MicrofacetFeatureShaderInput {
-    /// Vertex attribute location for the instance feature
-    /// representing diffuse color. If [`None`], diffuse
-    /// color is obtained from a texture instead.
+    /// Vertex attribute location for the instance feature representing diffuse
+    /// color.
     pub diffuse_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature
-    /// representing specular color. If [`None`], specular
-    /// color is obtained from a texture instead.
+    /// Vertex attribute location for the instance feature representing specular
+    /// color.
     pub specular_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature
-    /// representing roughness.
+    /// Vertex attribute location for the instance feature representing
+    /// roughness.
     pub roughness_location: u32,
+    /// Vertex attribute location for the instance feature representing the
+    /// height scale for parallax mapping.
+    pub parallax_height_scale_location: u32,
 }
 
-/// Input description specifying the bindings of textures
-/// for microfacet properties, required for generating a
-/// shader for a
-/// [`DiffuseTexturedMicrofacetMaterial`](crate::scene::DiffuseTexturedMicrofacetMaterial)
-/// or a [`TexturedMicrofacetMaterial`](crate::scene::TexturedMicrofacetMaterial).
+/// Input description specifying the bindings of textures for microfacet
+/// properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MicrofacetTextureShaderInput {
-    /// Bind group bindings of the diffuse color texture and
-    /// its sampler.
-    pub diffuse_texture_and_sampler_bindings: (u32, u32),
-    /// Bind group bindings of the specular color texture and
-    /// its sampler. If [`None`], specular color is an instance
-    /// feature instead.
+    /// Bind group bindings of the diffuse color texture and its sampler.
+    pub diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the specular color texture and its sampler.
     pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the roughness texture and its sampler.
+    pub roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the normal map texture and its sampler.
+    pub normal_map_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the height map texture and its sampler.
+    pub height_map_texture_and_sampler_bindings: Option<(u32, u32)>,
 }
 
-/// Shader generator for a
-/// [`MicrofacetMaterial`](crate::scene::MicrofacetMaterial), a
-/// [`DiffuseTexturedMicrofacetMaterial`](crate::scene::DiffuseTexturedMicrofacetMaterial)
-/// or a
-/// [`TexturedMicrofacetMaterial`](crate::scene::TexturedMicrofacetMaterial).
+/// Shader generator for a microfacet material.
 #[derive(Clone, Debug)]
 pub struct MicrofacetShaderGenerator<'a> {
     model: &'a MicrofacetShadingModel,
     feature_input: &'a MicrofacetFeatureShaderInput,
-    texture_input: Option<&'a MicrofacetTextureShaderInput>,
+    texture_input: &'a MicrofacetTextureShaderInput,
 }
 
 /// Indices of the fields holding the various microfacet properties in the
@@ -98,6 +91,7 @@ pub struct MicrofacetVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     roughness: usize,
+    parallax_height_scale: usize,
 }
 
 impl MicrofacetShadingModel {
@@ -127,7 +121,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
     pub fn new(
         model: &'a MicrofacetShadingModel,
         feature_input: &'a MicrofacetFeatureShaderInput,
-        texture_input: Option<&'a MicrofacetTextureShaderInput>,
+        texture_input: &'a MicrofacetTextureShaderInput,
     ) -> Self {
         Self {
             model,
@@ -174,6 +168,13 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             F32_WIDTH,
         );
 
+        let input_parallax_height_scale_field_idx = input_struct_builder.add_field(
+            "parallaxHeightScale",
+            float_type,
+            self.feature_input.parallax_height_scale_location,
+            F32_WIDTH,
+        );
+
         let input_struct =
             input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
@@ -185,10 +186,19 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 input_struct.get_field_expr(input_roughness_field_idx),
             );
 
+        let output_parallax_height_scale_field_idx = vertex_output_struct_builder
+            .add_field_with_perspective_interpolation(
+                "parallaxHeightScale",
+                float_type,
+                F32_WIDTH,
+                input_struct.get_field_expr(input_parallax_height_scale_field_idx),
+            );
+
         let mut indices = MicrofacetVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
             roughness: output_roughness_field_idx,
+            parallax_height_scale: output_parallax_height_scale_field_idx,
         };
 
         if let Some(idx) = input_diffuse_color_field_idx {
@@ -246,7 +256,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             fn computeNoDiffuseGGXSpecularColor(
                 viewDirection: vec3<f32>,
                 normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
                 specularColor: vec3<f32>,
                 roughness: f32,
                 lightDirection: vec3<f32>,
@@ -359,7 +368,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 viewDirection: vec3<f32>,
                 normalVector: vec3<f32>,
                 diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
                 roughness: f32,
                 lightDirection: vec3<f32>,
                 lightRadiance: vec3<f32>,
@@ -519,44 +527,47 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 .expect("Missing normal vector for microfacet shading"),
         );
 
-        let roughness_expr =
+        let fixed_roughness_value_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.roughness);
 
-        let (diffuse_color_expr, specular_color_expr) = if let Some(texture_input) =
-            self.texture_input
-        {
-            let (diffuse_color_expr, specular_color_expr) = Self::generate_texture_fragment_code(
-                texture_input,
+        let (diffuse_texture_color_expr, specular_texture_color_expr, roughness_texture_value_expr) =
+            Self::generate_texture_fragment_code(
+                self.texture_input,
                 module,
                 fragment_function,
                 bind_group_idx,
                 fragment_input_struct,
                 mesh_input_field_indices,
             );
-            (
-                diffuse_color_expr,
-                specular_color_expr.unwrap_or_else(|| {
-                    fragment_input_struct.get_field_expr(
-                        material_input_field_indices
-                            .specular_color
-                            .expect("Missing `specular_color` feature for microfacet material"),
+
+        let diffuse_color_expr = diffuse_texture_color_expr.or_else(|| {
+            material_input_field_indices
+                .diffuse_color
+                .map(|idx| fragment_input_struct.get_field_expr(idx))
+        });
+
+        let specular_color_expr = specular_texture_color_expr.or_else(|| {
+            material_input_field_indices
+                .specular_color
+                .map(|idx| fragment_input_struct.get_field_expr(idx))
+        });
+
+        let roughness_expr = roughness_texture_value_expr.map_or(
+            fixed_roughness_value_expr,
+            |roughness_texture_value_expr| {
+                // Use fixed roughness as scale for roughness sampled from texture
+                emit_in_func(fragment_function, |function| {
+                    include_expr_in_func(
+                        function,
+                        Expression::Binary {
+                            op: naga::BinaryOperator::Multiply,
+                            left: fixed_roughness_value_expr,
+                            right: roughness_texture_value_expr,
+                        },
                     )
-                }),
-            )
-        } else {
-            (
-                fragment_input_struct.get_field_expr(
-                    material_input_field_indices
-                        .diffuse_color
-                        .expect("Missing `diffuse_color` feature for microfacet material"),
-                ),
-                fragment_input_struct.get_field_expr(
-                    material_input_field_indices
-                        .specular_color
-                        .expect("Missing `specular_color` feature for microfacet material"),
-                ),
-            )
-        };
+                })
+            },
+        );
 
         let color_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
@@ -577,33 +588,79 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             vec![position_expr],
         );
 
-        let color_computation_function = match self.model {
-            MicrofacetShadingModel {
-                diffuse: DiffuseMicrofacetShadingModel::None,
-                specular: SpecularMicrofacetShadingModel::GGX,
-            } => source_code.functions["computeNoDiffuseGGXSpecularColor"],
-            MicrofacetShadingModel {
-                diffuse: DiffuseMicrofacetShadingModel::Lambertian,
-                specular: SpecularMicrofacetShadingModel::GGX,
-            } => source_code.functions["computeLambertianDiffuseGGXSpecularColor"],
-            MicrofacetShadingModel {
-                diffuse: DiffuseMicrofacetShadingModel::GGX,
-                specular: SpecularMicrofacetShadingModel::GGX,
-            } => source_code.functions["computeGGXDiffuseGGXSpecularColor"],
-            MicrofacetShadingModel {
-                diffuse: DiffuseMicrofacetShadingModel::GGX,
-                specular: SpecularMicrofacetShadingModel::None,
-            } => source_code.functions["computeGGXDiffuseNoSpecularColor"],
-            MicrofacetShadingModel {
-                diffuse: DiffuseMicrofacetShadingModel::None,
-                specular: SpecularMicrofacetShadingModel::None,
-            } => panic!("Microfacet shading with no diffuse and no specular BRDF not supported"),
-            MicrofacetShadingModel {
-                diffuse: DiffuseMicrofacetShadingModel::Lambertian,
-                specular: SpecularMicrofacetShadingModel::None,
-            } => panic!(
-                "Microfacet shading with Lambertian diffuse and no specular BRDF not supported"
+        let compute_color = |fragment_function, light_dir_expr, light_radiance_expr| match (
+            self.model,
+            diffuse_color_expr,
+            specular_color_expr,
+        ) {
+            (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(diffuse_color_expr), None) => {
+                SourceCode::generate_call_named(
+                    fragment_function,
+                    "lightColor",
+                    source_code.functions["computeGGXDiffuseNoSpecularColor"],
+                    vec![
+                        view_dir_expr,
+                        normal_vector_expr,
+                        diffuse_color_expr,
+                        roughness_expr,
+                        light_dir_expr,
+                        light_radiance_expr,
+                    ],
+                )
+            }
+            (&MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR, None, Some(specular_color_expr)) => {
+                SourceCode::generate_call_named(
+                    fragment_function,
+                    "lightColor",
+                    source_code.functions["computeNoDiffuseGGXSpecularColor"],
+                    vec![
+                        view_dir_expr,
+                        normal_vector_expr,
+                        specular_color_expr,
+                        roughness_expr,
+                        light_dir_expr,
+                        light_radiance_expr,
+                    ],
+                )
+            }
+            (
+                &MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                Some(diffuse_color_expr),
+                Some(specular_color_expr),
+            ) => SourceCode::generate_call_named(
+                fragment_function,
+                "lightColor",
+                source_code.functions["computeLambertianDiffuseGGXSpecularColor"],
+                vec![
+                    view_dir_expr,
+                    normal_vector_expr,
+                    diffuse_color_expr,
+                    specular_color_expr,
+                    roughness_expr,
+                    light_dir_expr,
+                    light_radiance_expr,
+                ],
             ),
+            (
+                &MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                Some(diffuse_color_expr),
+                Some(specular_color_expr),
+            ) => SourceCode::generate_call_named(
+                fragment_function,
+                "lightColor",
+                source_code.functions["computeGGXDiffuseGGXSpecularColor"],
+                vec![
+                    view_dir_expr,
+                    normal_vector_expr,
+                    diffuse_color_expr,
+                    specular_color_expr,
+                    roughness_expr,
+                    light_dir_expr,
+                    light_radiance_expr,
+                ],
+            ),
+            (_, None, None) => panic!("No diffuse or specular color for microfacet shader"),
+            _ => panic!("Invalid combinations of microfacet shading models"),
         };
 
         let light_color_expr = match (light_shader_generator, light_input_field_indices) {
@@ -627,20 +684,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         normal_vector_expr,
                     );
 
-                SourceCode::generate_call_named(
-                    fragment_function,
-                    "lightColor",
-                    color_computation_function,
-                    vec![
-                        view_dir_expr,
-                        normal_vector_expr,
-                        diffuse_color_expr,
-                        specular_color_expr,
-                        roughness_expr,
-                        light_dir_expr,
-                        light_radiance_expr,
-                    ],
-                )
+                compute_color(fragment_function, light_dir_expr, light_radiance_expr)
             }
             (
                 LightShaderGenerator::UnidirectionalLight(
@@ -671,20 +715,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         light_space_normal_vector_expr,
                     );
 
-                SourceCode::generate_call_named(
-                    fragment_function,
-                    "lightColor",
-                    color_computation_function,
-                    vec![
-                        view_dir_expr,
-                        normal_vector_expr,
-                        diffuse_color_expr,
-                        specular_color_expr,
-                        roughness_expr,
-                        light_dir_expr,
-                        light_radiance_expr,
-                    ],
-                )
+                compute_color(fragment_function, light_dir_expr, light_radiance_expr)
             }
             _ => {
                 panic!("Invalid variant of light shader generator and/or light vertex output field indices for microfacet shading");
@@ -747,32 +778,54 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    ) -> (Handle<Expression>, Option<Handle<Expression>>) {
+    ) -> (
+        Option<Handle<Expression>>,
+        Option<Handle<Expression>>,
+        Option<Handle<Expression>>,
+    ) {
+        if texture_input.diffuse_texture_and_sampler_bindings.is_none()
+            && texture_input
+                .specular_texture_and_sampler_bindings
+                .is_none()
+            && texture_input
+                .roughness_texture_and_sampler_bindings
+                .is_none()
+            && texture_input
+                .normal_map_texture_and_sampler_bindings
+                .is_none()
+            && texture_input
+                .height_map_texture_and_sampler_bindings
+                .is_none()
+        {
+            return (None, None, None);
+        }
+
         let bind_group = *bind_group_idx;
         *bind_group_idx += 1;
-
-        let (diffuse_texture_binding, diffuse_sampler_binding) =
-            texture_input.diffuse_texture_and_sampler_bindings;
-
-        let diffuse_color_texture = SampledTexture::declare(
-            &mut module.types,
-            &mut module.global_variables,
-            TextureType::Image,
-            "diffuseColor",
-            bind_group,
-            diffuse_texture_binding,
-            Some(diffuse_sampler_binding),
-            None,
-        );
 
         let texture_coord_expr = fragment_input_struct.get_field_expr(
             mesh_input_field_indices
                 .texture_coords
-                .expect("No `texture_coords` passed to fixed texture fragment shader"),
+                .expect("No `texture_coords` passed to textured microfacet fragment shader"),
         );
 
-        let diffuse_color_sampling_expr =
-            diffuse_color_texture.generate_rgb_sampling_expr(fragment_function, texture_coord_expr);
+        let diffuse_color_sampling_expr = texture_input.diffuse_texture_and_sampler_bindings.map(
+            |(diffuse_texture_binding, diffuse_sampler_binding)| {
+                let diffuse_color_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "diffuseColor",
+                    bind_group,
+                    diffuse_texture_binding,
+                    Some(diffuse_sampler_binding),
+                    None,
+                );
+
+                diffuse_color_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr)
+            },
+        );
 
         let specular_color_sampling_expr = texture_input.specular_texture_and_sampler_bindings.map(
             |(specular_texture_binding, specular_sampler_binding)| {
@@ -792,6 +845,33 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             },
         );
 
-        (diffuse_color_sampling_expr, specular_color_sampling_expr)
+        let roughness_sampling_expr = texture_input.roughness_texture_and_sampler_bindings.map(
+            |(roughness_texture_binding, roughness_sampler_binding)| {
+                let roughness_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Depth,
+                    "roughness",
+                    bind_group,
+                    roughness_texture_binding,
+                    Some(roughness_sampler_binding),
+                    None,
+                );
+
+                roughness_texture.generate_sampling_expr(
+                    fragment_function,
+                    texture_coord_expr,
+                    None,
+                    None,
+                    None,
+                )
+            },
+        );
+
+        (
+            diffuse_color_sampling_expr,
+            specular_color_sampling_expr,
+            roughness_sampling_expr,
+        )
     }
 }
