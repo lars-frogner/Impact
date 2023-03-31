@@ -639,7 +639,7 @@ fn execute_material_setup(
 
     if let Some(specular_texture) = specular_texture {
         assert!(
-            diffuse_color.is_none(),
+            specular_color.is_none(),
             "Tried to create microfacet material with both uniform and textured specular color"
         );
 
@@ -671,7 +671,7 @@ fn execute_material_setup(
 
     if let Some(normal_map) = normal_map {
         assert!(
-            diffuse_color.is_none(),
+            parallax_map.is_none(),
             "Tried to create microfacet material that uses both normal mapping and parallax mapping"
         );
 
