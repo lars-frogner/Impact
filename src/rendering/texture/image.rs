@@ -14,8 +14,8 @@ cfg_if::cfg_if! {
 
 /// A texture representing a 2D image.
 #[derive(Debug)]
-pub struct ColorImageTexture {
-    texture: wgpu::Texture,
+pub struct ImageTexture {
+    _texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
@@ -27,7 +27,13 @@ pub struct MultisampledRenderTargetTexture {
     view: wgpu::TextureView,
 }
 
-impl ColorImageTexture {
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum ColorType {
+    Rgba,
+    Grayscale,
+}
+
+impl ImageTexture {
     /// Creates a texture for the image file at the given path.
     ///
     /// # Errors
@@ -42,11 +48,11 @@ impl ColorImageTexture {
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
-        Self::from_image(core_system, &image, &image_path.to_string_lossy())
+        Self::from_image(core_system, image, &image_path.to_string_lossy())
     }
 
-    /// Creates a texture for the image file represented by the given
-    /// raw byte buffer.
+    /// Creates a texture for the image file represented by the given raw byte
+    /// buffer.
     ///
     /// # Errors
     /// Returns an error if:
@@ -58,7 +64,7 @@ impl ColorImageTexture {
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(core_system, &image, label)
+        Self::from_image(core_system, image, label)
     }
 
     /// Creates a texture for the given loaded image.
@@ -67,27 +73,42 @@ impl ColorImageTexture {
     /// Returns an error if the image width or height is zero.
     pub fn from_image(
         core_system: &CoreRenderingSystem,
-        image: &DynamicImage,
+        image: DynamicImage,
         label: &str,
     ) -> Result<Self> {
         let (width, height) = image.dimensions();
-        Ok(Self::from_rgba_bytes(
-            core_system,
-            &image.to_rgba8(),
-            (
-                NonZeroU32::new(width).ok_or_else(|| anyhow!("Image width is zero"))?,
-                NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?,
-            ),
-            label,
-        ))
+        let width = NonZeroU32::new(width).ok_or_else(|| anyhow!("Image width is zero"))?;
+        let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
+
+        Ok(if image.color().has_color() {
+            Self::new(
+                core_system,
+                &image.into_rgba8(),
+                ColorType::Rgba,
+                width,
+                height,
+                label,
+            )
+        } else {
+            Self::new(
+                core_system,
+                &image.into_luma8(),
+                ColorType::Grayscale,
+                width,
+                height,
+                label,
+            )
+        })
     }
 
-    /// Creates a texture for the image represented by the given
-    /// RGBA byte buffer and dimensions.
-    fn from_rgba_bytes(
+    /// Creates a texture for the image represented by the given byte buffer,
+    /// color type and dimensions.
+    fn new(
         core_system: &CoreRenderingSystem,
-        rgba_buffer: &[u8],
-        (width, height): (NonZeroU32, NonZeroU32),
+        byte_buffer: &[u8],
+        color_type: ColorType,
+        width: NonZeroU32,
+        height: NonZeroU32,
         label: &str,
     ) -> Self {
         let device = core_system.device();
@@ -98,15 +119,21 @@ impl ColorImageTexture {
             depth_or_array_layers: 1,
         };
 
-        let texture = Self::create_empty_rgba8_texture(device, texture_size, label);
-        Self::write_data_to_texture(core_system.queue(), &texture, rgba_buffer, texture_size);
+        let texture = Self::create_empty_image_texture(device, color_type, texture_size, label);
+        Self::write_data_to_image_texture(
+            core_system.queue(),
+            &texture,
+            byte_buffer,
+            color_type,
+            texture_size,
+        );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = Self::create_sampler(device);
 
         Self {
-            texture,
+            _texture: texture,
             view,
             sampler,
         }
@@ -122,8 +149,8 @@ impl ColorImageTexture {
         &self.sampler
     }
 
-    /// Creates the bind group layout entry for this texture type,
-    /// assigned to the given binding.
+    /// Creates the bind group layout entry for this texture type, assigned to
+    /// the given binding.
     pub const fn create_texture_bind_group_layout_entry(
         binding: u32,
     ) -> wgpu::BindGroupLayoutEntry {
@@ -139,8 +166,8 @@ impl ColorImageTexture {
         }
     }
 
-    /// Creates the bind group layout entry for this texture's sampler
-    /// type, assigned to the given binding.
+    /// Creates the bind group layout entry for this texture's sampler type,
+    /// assigned to the given binding.
     pub const fn create_sampler_bind_group_layout_entry(
         binding: u32,
     ) -> wgpu::BindGroupLayoutEntry {
@@ -154,8 +181,8 @@ impl ColorImageTexture {
         }
     }
 
-    /// Creates the bind group entry for this texture,
-    /// assigned to the given binding.
+    /// Creates the bind group entry for this texture, assigned to the given
+    /// binding.
     pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
@@ -163,8 +190,8 @@ impl ColorImageTexture {
         }
     }
 
-    /// Creates the bind group entry for this texture's sampler,
-    /// assigned to the given binding.
+    /// Creates the bind group entry for this texture's sampler, assigned to the
+    /// given binding.
     pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
@@ -172,20 +199,10 @@ impl ColorImageTexture {
         }
     }
 
-    /// Saves the texture as a color image at the given output path. The image
-    /// file format is automatically determined from the file extension.
-    pub fn save_as_image_file<P: AsRef<Path>>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        output_path: P,
-    ) -> Result<()> {
-        super::save_color_texture_as_image_file(core_system, &self.texture, output_path)
-    }
-
-    /// Creates a new [`wgpu::Texture`] configured to hold 2D image data
-    /// in RGBA8 format.
-    fn create_empty_rgba8_texture(
+    /// Creates a new [`wgpu::Texture`] configured to hold 2D image data.
+    fn create_empty_image_texture(
         device: &wgpu::Device,
+        color_type: ColorType,
         texture_size: wgpu::Extent3d,
         label: &str,
     ) -> wgpu::Texture {
@@ -194,17 +211,18 @@ impl ColorImageTexture {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: color_type.texture_format(),
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             label: Some(label),
             view_formats: &[],
         })
     }
 
-    fn write_data_to_texture(
+    fn write_data_to_image_texture(
         queue: &wgpu::Queue,
         texture: &wgpu::Texture,
-        rgba_buffer: &[u8],
+        byte_buffer: &[u8],
+        color_type: ColorType,
         texture_size: wgpu::Extent3d,
     ) {
         queue.write_texture(
@@ -214,10 +232,10 @@ impl ColorImageTexture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            rgba_buffer,
+            byte_buffer,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * texture_size.width),
+                bytes_per_row: NonZeroU32::new(color_type.n_bytes() * texture_size.width),
                 rows_per_image: NonZeroU32::new(texture_size.height),
             },
             texture_size,
@@ -230,8 +248,8 @@ impl ColorImageTexture {
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         })
     }
@@ -286,5 +304,21 @@ impl MultisampledRenderTargetTexture {
             label: Some(label),
             view_formats: &[],
         })
+    }
+}
+
+impl ColorType {
+    fn n_bytes(&self) -> u32 {
+        match self {
+            Self::Rgba => 4,
+            Self::Grayscale => 1,
+        }
+    }
+
+    fn texture_format(&self) -> wgpu::TextureFormat {
+        match self {
+            Self::Rgba => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Self::Grayscale => wgpu::TextureFormat::R8Unorm,
+        }
     }
 }

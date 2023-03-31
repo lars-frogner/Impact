@@ -80,17 +80,12 @@ async fn init_world(window: Window) -> Result<World> {
 
     let mut assets = Assets::new();
 
-    assets.image_textures.insert(
-        TextureID(hash32!("Wood texture")),
-        ImageTexture::from_path(&core_system, "assets/Wood049_4K-JPG/Wood049_4K_Color.jpg")?,
-    );
-    assets.image_textures.insert(
-        TextureID(hash32!("Plaster texture")),
-        ImageTexture::from_path(
-            &core_system,
-            "assets/PaintedPlaster017_4K-JPG/PaintedPlaster017_4K_Color.jpg",
-        )?,
-    );
+    let wood_texture_id = assets
+        .load_image_texture_from_path(&core_system, "assets/Wood049_4K-JPG/Wood049_4K_Color.jpg")?;
+    let plaster_texture_id = assets.load_image_texture_from_path(
+        &core_system,
+        "assets/PaintedPlaster017_4K-JPG/PaintedPlaster017_4K_Color.jpg",
+    )?;
 
     let vertical_field_of_view = Degrees(70.0);
     let renderer = RenderingSystem::new(core_system, assets).await?;
@@ -235,7 +230,7 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
-            &DiffuseTextureComp(TextureID(hash32!("Wood texture"))),
+            &DiffuseTextureComp(wood_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::LIVING_TISSUE, 100.0),
             &RoughnessComp(0.85),
             &MicrofacetDiffuseReflection,
@@ -249,7 +244,7 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
-            &DiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
+            &DiffuseTextureComp(plaster_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
             &RoughnessComp(0.75),
             &MicrofacetDiffuseReflection,
@@ -263,7 +258,7 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(-25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
-            &DiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
+            &DiffuseTextureComp(plaster_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
             &RoughnessComp(0.75),
             &MicrofacetDiffuseReflection,
@@ -277,7 +272,7 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, 0.0, 25.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
-            &DiffuseTextureComp(TextureID(hash32!("Plaster texture"))),
+            &DiffuseTextureComp(plaster_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
             &RoughnessComp(0.75),
             &MicrofacetDiffuseReflection,
