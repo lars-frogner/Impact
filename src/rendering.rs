@@ -33,7 +33,7 @@ pub use shader::{
     Shader, ShaderGenerator, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
-pub use texture::{CascadeIdx, ColorImageTexture, DepthTexture, MultisampledRenderTargetTexture};
+pub use texture::{CascadeIdx, DepthTexture, ImageTexture, MultisampledRenderTargetTexture};
 
 use self::resource::RenderResourceManager;
 use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::ControlFlow};
