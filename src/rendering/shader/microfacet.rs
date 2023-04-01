@@ -247,9 +247,13 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         material_input_field_indices: &MicrofacetVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
     ) {
+        // TODO: Diffuse microfacet BRDF evaluates to zero when
+        // viewDirectionDotNormalVector <= 0, which may happen for visible
+        // fragments when using normal mapping, leading to dark artifacts
         let source_code = SourceCode::from_wgsl_source(
             "\
             fn convertNormalMapColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
+                // May require normalization depending on filtering
                 return 2.0 * (color - 0.5);
             }
 
@@ -272,23 +276,21 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             ) -> vec3<f32> {
                 let halfVector = normalize((lightDirection + viewDirection));
 
-                let lightDirectionDotNormalVector = dot(lightDirection, normalVector);
-                let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
-                let lightDirectionDotHalfVector = dot(lightDirection, halfVector);
-                let viewDirectionDotHalfVector = dot(viewDirection, halfVector);
+                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
+                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
+                let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
                 let normalVectorDotHalfVector = dot(normalVector, halfVector);
 
                 let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
                     specularColor,
-                    lightDirectionDotNormalVector,
-                    viewDirectionDotNormalVector,
-                    lightDirectionDotHalfVector,
-                    viewDirectionDotHalfVector,
+                    clampedLightDirectionDotNormalVector,
+                    clampedViewDirectionDotNormalVector,
+                    clampedLightDirectionDotHalfVector,
                     normalVectorDotHalfVector,
                     roughness,
                 );
 
-                return computeColor(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, lightDirectionDotNormalVector, lightRadiance);
+                return computeColor(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
             }
 
             fn computeLambertianDiffuseGGXSpecularColor(
@@ -302,10 +304,9 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             ) -> vec3<f32> {
                 let halfVector = normalize((lightDirection + viewDirection));
 
-                let lightDirectionDotNormalVector = dot(lightDirection, normalVector);
-                let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
-                let lightDirectionDotHalfVector = dot(lightDirection, halfVector);
-                let viewDirectionDotHalfVector = dot(viewDirection, halfVector);
+                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
+                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
+                let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
                 let normalVectorDotHalfVector = dot(normalVector, halfVector);
 
                 // The Lambertian BRDF (diffuseColor / pi) must be scaled to
@@ -315,21 +316,20 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let diffuseBRDFTimesPi = diffuseColor
                     * computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
                           specularColor,
-                          lightDirectionDotNormalVector,
-                          viewDirectionDotNormalVector
+                          clampedLightDirectionDotNormalVector,
+                          clampedViewDirectionDotNormalVector
                     );
 
                 let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
                     specularColor,
-                    lightDirectionDotNormalVector,
-                    viewDirectionDotNormalVector,
-                    lightDirectionDotHalfVector,
-                    viewDirectionDotHalfVector,
+                    clampedLightDirectionDotNormalVector,
+                    clampedViewDirectionDotNormalVector,
+                    clampedLightDirectionDotHalfVector,
                     normalVectorDotHalfVector,
                     roughness,
                 );
 
-                return computeColor(diffuseBRDFTimesPi, specularBRDFTimesPi, lightDirectionDotNormalVector, lightRadiance);
+                return computeColor(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
             }
 
             fn computeGGXDiffuseGGXSpecularColor(
@@ -343,18 +343,17 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             ) -> vec3<f32> {
                 let halfVector = normalize((lightDirection + viewDirection));
 
-                let lightDirectionDotNormalVector = dot(lightDirection, normalVector);
-                let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
+                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
+                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
                 let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
-                let lightDirectionDotHalfVector = dot(lightDirection, halfVector);
-                let viewDirectionDotHalfVector = dot(viewDirection, halfVector);
+                let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
                 let normalVectorDotHalfVector = dot(normalVector, halfVector);
 
                 let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
                     diffuseColor,
                     specularColor,
-                    lightDirectionDotNormalVector,
-                    viewDirectionDotNormalVector,
+                    clampedLightDirectionDotNormalVector,
+                    clampedViewDirectionDotNormalVector,
                     lightDirectionDotViewDirection,
                     normalVectorDotHalfVector,
                     roughness,
@@ -362,15 +361,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
 
                 let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
                     specularColor,
-                    lightDirectionDotNormalVector,
-                    viewDirectionDotNormalVector,
-                    lightDirectionDotHalfVector,
-                    viewDirectionDotHalfVector,
+                    clampedLightDirectionDotNormalVector,
+                    clampedViewDirectionDotNormalVector,
+                    clampedLightDirectionDotHalfVector,
                     normalVectorDotHalfVector,
                     roughness,
                 );
 
-                return computeColor(diffuseBRDFTimesPi, specularBRDFTimesPi, lightDirectionDotNormalVector, lightRadiance);
+                return computeColor(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
             }
 
             fn computeGGXDiffuseNoSpecularColor(
@@ -383,8 +381,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             ) -> vec3<f32> {
                 let halfVector = normalize((lightDirection + viewDirection));
 
-                let lightDirectionDotNormalVector = dot(lightDirection, normalVector);
-                let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
+                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
+                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
                 let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
                 let normalVectorDotHalfVector = dot(normalVector, halfVector);
 
@@ -393,63 +391,60 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
                     diffuseColor,
                     zero,
-                    lightDirectionDotNormalVector,
-                    viewDirectionDotNormalVector,
+                    clampedLightDirectionDotNormalVector,
+                    clampedViewDirectionDotNormalVector,
                     lightDirectionDotViewDirection,
                     normalVectorDotHalfVector,
                     roughness,
                 );
 
-                return computeColor(diffuseBRDFTimesPi, zero, lightDirectionDotNormalVector, lightRadiance);
+                return computeColor(diffuseBRDFTimesPi, zero, clampedLightDirectionDotNormalVector, lightRadiance);
             }
 
-            fn computeFresnelReflectanceIncidenceFactor(lightDirectionDotNormalVector: f32) -> f32 {
-                let oneMinusLDotN = 1.0 - max(0.0, lightDirectionDotNormalVector);
+            fn computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector: f32) -> f32 {
+                let oneMinusLDotN = 1.0 - max(0.0, clampedLightDirectionDotNormalVector);
                 return oneMinusLDotN * oneMinusLDotN * oneMinusLDotN * oneMinusLDotN * oneMinusLDotN;
             }
 
             // Computes Fresnel reflectance using the Schlick approximation.
             fn computeFresnelReflectance(
                 specularColor: vec3<f32>,
-                lightDirectionDotNormalVector: f32,
+                clampedLightDirectionDotNormalVector: f32,
             ) -> vec3<f32> {
-                return specularColor + (1.0 - specularColor) * computeFresnelReflectanceIncidenceFactor(lightDirectionDotNormalVector);
+                return specularColor + (1.0 - specularColor) * computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector);
             }
 
             // Evaluates (approximately) the Smith height-correlated
             // masking-shadowing function divided by (4 *
-            // lightDirectionDotNormalVector * viewDirectionDotNormalVector)
-            // (Hammon 2017).
+            // abs(lightDirectionDotNormalVector) *
+            // abs(viewDirectionDotNormalVector)) (Hammon 2017).
             fn computeScaledGGXMaskingShadowingFactor(
-                lightDirectionDotHalfVector: f32,
-                viewDirectionDotHalfVector: f32,
-                lightDirectionDotNormalVector: f32,
-                viewDirectionDotNormalVector: f32,
+                clampedLightDirectionDotNormalVector: f32,
+                clampedViewDirectionDotNormalVector: f32,
                 roughness: f32,
             ) -> f32 {
-                return f32(lightDirectionDotHalfVector > 0.0) * f32(viewDirectionDotHalfVector > 0.0) 
-                    * 0.5 / mix(
-                        2.0 * lightDirectionDotNormalVector * viewDirectionDotNormalVector,
-                        lightDirectionDotNormalVector + viewDirectionDotNormalVector,
+                return 0.5 / (mix(
+                        2.0 * clampedLightDirectionDotNormalVector * clampedViewDirectionDotNormalVector,
+                        clampedLightDirectionDotNormalVector + clampedViewDirectionDotNormalVector,
                         roughness
-                    );
+                    ) + 1e-6);
             }
 
             // Evaluates the GGX distribution multiplied by pi.
             fn evaluateGGXDistributionTimesPi(normalVectorDotHalfVector: f32, roughness: f32) -> f32 {
                 let roughnessSquared = roughness * roughness;
                 let denom = 1.0 + normalVectorDotHalfVector * normalVectorDotHalfVector * (roughnessSquared - 1.0);
-                return f32(normalVectorDotHalfVector > 0.0) * roughnessSquared / (denom * denom + 1e-10);
+                return f32(normalVectorDotHalfVector > 0.0) * roughnessSquared / (denom * denom + 1e-6);
             }
 
             fn computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
                 specularColor: vec3<f32>,
-                lightDirectionDotNormalVector: f32,
-                viewDirectionDotNormalVector: f32,
+                clampedLightDirectionDotNormalVector: f32,
+                clampedViewDirectionDotNormalVector: f32,
             ) -> vec3<f32> {
                 return 1.05 * (1.0 - specularColor) 
-                * (1.0 - computeFresnelReflectanceIncidenceFactor(lightDirectionDotNormalVector)) 
-                * (1.0 - computeFresnelReflectanceIncidenceFactor(viewDirectionDotNormalVector));
+                * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector)) 
+                * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedViewDirectionDotNormalVector));
             }
 
             // Evaluates a fit to the diffuse BRDF derived from microfacet
@@ -458,25 +453,25 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             fn computeDiffuseGGXBRDFTimesPi(
                 diffuseColor: vec3<f32>,
                 specularColor: vec3<f32>,
-                lightDirectionDotNormalVector: f32,
-                viewDirectionDotNormalVector: f32,
+                clampedLightDirectionDotNormalVector: f32,
+                clampedViewDirectionDotNormalVector: f32,
                 lightDirectionDotViewDirection: f32,
                 normalVectorDotHalfVector: f32,
                 roughness: f32,
             ) -> vec3<f32> {
                 let diffuseBRDFSmoothComponent = computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
                     specularColor,
-                    lightDirectionDotNormalVector,
-                    viewDirectionDotNormalVector
+                    clampedLightDirectionDotNormalVector,
+                    clampedViewDirectionDotNormalVector
                );
 
                 let halfOnePlusLightDirectionDotViewDirection = 0.5 * (1.0 + lightDirectionDotViewDirection);
                 let diffuseBRDFRoughComponent = halfOnePlusLightDirectionDotViewDirection * (0.9 - 0.4 * halfOnePlusLightDirectionDotViewDirection)
-                    * (0.5 + normalVectorDotHalfVector) / (normalVectorDotHalfVector + 1e-10);
+                    * (1.0 + 0.5 / (normalVectorDotHalfVector + 1e-6));
 
                 let diffuseBRDFMultiComponent = 0.3641 * roughness;
 
-                return f32(lightDirectionDotNormalVector > 0.0) * f32(viewDirectionDotNormalVector > 0.0)
+                return f32(clampedViewDirectionDotNormalVector > 0.0)
                     * diffuseColor
                     * (
                           (1.0 - roughness) * diffuseBRDFSmoothComponent
@@ -487,19 +482,16 @@ impl<'a> MicrofacetShaderGenerator<'a> {
 
             fn computeSpecularGGXBRDFTimesPi(
                 specularColor: vec3<f32>,
-                lightDirectionDotNormalVector: f32,
-                viewDirectionDotNormalVector: f32,
-                lightDirectionDotHalfVector: f32,
-                viewDirectionDotHalfVector: f32,
+                clampedLightDirectionDotNormalVector: f32,
+                clampedViewDirectionDotNormalVector: f32,
+                clampedLightDirectionDotHalfVector: f32,
                 normalVectorDotHalfVector: f32,
                 roughness: f32,
             ) -> vec3<f32> {
-                return computeFresnelReflectance(specularColor, lightDirectionDotHalfVector)
+                return computeFresnelReflectance(specularColor, clampedLightDirectionDotHalfVector)
                     * computeScaledGGXMaskingShadowingFactor(
-                          lightDirectionDotHalfVector,
-                          viewDirectionDotHalfVector,
-                          lightDirectionDotNormalVector,
-                          viewDirectionDotNormalVector,
+                          clampedLightDirectionDotNormalVector,
+                          clampedViewDirectionDotNormalVector,
                           roughness
                     )
                     * evaluateGGXDistributionTimesPi(normalVectorDotHalfVector, roughness);
@@ -508,10 +500,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             fn computeColor(
                 diffuseBRDFTimesPi: vec3<f32>,
                 specularBRDFTimesPi: vec3<f32>,
-                lightDirectionDotNormalVector: f32,
+                clampedLightDirectionDotNormalVector: f32,
                 lightRadiance: vec3<f32>,
             ) -> vec3<f32> {
-                return (diffuseBRDFTimesPi + specularBRDFTimesPi) * max(0.0, lightDirectionDotNormalVector) * lightRadiance;
+                return (diffuseBRDFTimesPi + specularBRDFTimesPi) * clampedLightDirectionDotNormalVector * lightRadiance;
             }
         ",
         )
