@@ -249,6 +249,15 @@ impl<'a> MicrofacetShaderGenerator<'a> {
     ) {
         let source_code = SourceCode::from_wgsl_source(
             "\
+            fn convertNormalMapColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
+                return 2.0 * (color - 0.5);
+            }
+
+            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
+                let tmp = 2.0 * cross(quaternion.xyz, vector);
+                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
+            }
+
             fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
                 return normalize(-vertexPosition);
             }
@@ -644,8 +653,15 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         None,
                     );
 
-                    let tangent_space_normal_expr = normal_map_texture
+                    let normal_map_color_expr = normal_map_texture
                         .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+
+                    let tangent_space_normal_expr = SourceCode::generate_call_named(
+                        fragment_function,
+                        "tangentSpaceNormalVector",
+                        source_code.functions["convertNormalMapColorToNormalVector"],
+                        vec![normal_map_color_expr],
+                    );
 
                     let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
                         mesh_input_field_indices.tangent_space_quaternion.expect(
@@ -655,7 +671,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
 
                     SourceCode::generate_call_named(
                         fragment_function,
-                        "lightColor",
+                        "normalVector",
                         source_code.functions["rotateVectorWithQuaternion"],
                         vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
                     )
