@@ -3547,6 +3547,28 @@ impl SampledTexture {
         })
     }
 
+    /// Generates and returns an expression sampling the texture at
+    /// the texture coordinates specified by the given expression,
+    /// and extracting the red value of the sampled RGBA color.
+    pub fn generate_red_sampling_expr(
+        &self,
+        function: &mut Function,
+        texture_coord_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let sampling_expr =
+            self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
+
+        emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: sampling_expr,
+                    index: 0,
+                },
+            )
+        })
+    }
+
     /// Generates and returns an expression for the fraction of light reaching
     /// the fragment based on sampling of the specified shadow map cascade
     /// around the texture coordinates converted from the x- and y-component of

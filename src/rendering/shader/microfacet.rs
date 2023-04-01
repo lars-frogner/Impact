@@ -596,7 +596,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     let roughness_texture = SampledTexture::declare(
                         &mut module.types,
                         &mut module.global_variables,
-                        TextureType::Depth,
+                        TextureType::Image,
                         "roughness",
                         bind_group,
                         roughness_texture_binding,
@@ -604,13 +604,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         None,
                     );
 
-                    let roughness_texture_value_expr = roughness_texture.generate_sampling_expr(
-                        fragment_function,
-                        texture_coord_expr.unwrap(),
-                        None,
-                        None,
-                        None,
-                    );
+                    let roughness_texture_value_expr = roughness_texture
+                        .generate_red_sampling_expr(fragment_function, texture_coord_expr.unwrap());
 
                     // Use fixed roughness as scale for roughness sampled from texture
                     emit_in_func(fragment_function, |function| {

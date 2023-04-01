@@ -131,6 +131,15 @@ impl RoughnessComp {
     }
 }
 
+impl RoughnessTextureComp {
+    pub fn unscaled(texture_id: TextureID) -> Self {
+        Self {
+            texture_id,
+            roughness_scale: 1.0,
+        }
+    }
+}
+
 impl MaterialComp {
     /// Creates a new component representing a material with the given
     /// IDs for the [`MaterialSpecification`](crate::scene::MaterialSpecification)
