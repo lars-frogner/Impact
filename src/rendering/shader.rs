@@ -347,7 +347,6 @@ pub struct SampledTexture {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextureType {
     Image,
-    Depth,
     DepthCubemap,
     DepthArray,
 }
@@ -450,15 +449,6 @@ const IMAGE_TEXTURE_TYPE: Type = Type {
             kind: ScalarKind::Float,
             multi: false,
         },
-    },
-};
-
-const DEPTH_TEXTURE_TYPE: Type = Type {
-    name: None,
-    inner: TypeInner::Image {
-        dim: ImageDimension::D2,
-        arrayed: false,
-        class: ImageClass::Depth { multi: false },
     },
 };
 
@@ -3425,7 +3415,6 @@ impl SampledTexture {
     ) -> Self {
         let texture_type_const = match texture_type {
             TextureType::Image => IMAGE_TEXTURE_TYPE,
-            TextureType::Depth => DEPTH_TEXTURE_TYPE,
             TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };
