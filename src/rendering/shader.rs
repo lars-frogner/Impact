@@ -1095,8 +1095,9 @@ impl ShaderGenerator {
                 return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
             }
 
-            fn multiplyQuaternions(q1: vec4<f32>, q2: vec4<f32>) -> vec4<f32> {
-                return vec4<f32>(q2.w * q1.xyz + q1.w * q2.xyz + cross(q2.xyz, q1.xyz), q2.w * q1.w - dot(q2.xyz, q1.xyz));
+            fn multiplyAndNormalizeQuaternions(q1: vec4<f32>, q2: vec4<f32>) -> vec4<f32> {
+                let product = vec4<f32>(q1.w * q2.xyz + q2.w * q1.xyz + cross(q1.xyz, q2.xyz), q1.w * q2.w - dot(q1.xyz, q2.xyz));
+                return normalize(product);
             }
 
             fn transformPosition(
@@ -1271,7 +1272,7 @@ impl ShaderGenerator {
             let tangent_space_quaternion_expr = SourceCode::generate_call_named(
                 vertex_function,
                 "tangentToCameraSpaceQuaternion",
-                source_code.functions["multiplyQuaternions"],
+                source_code.functions["multiplyAndNormalizeQuaternions"],
                 vec![
                     model_view_transform.rotation_quaternion,
                     input_tangent_to_model_space_quaternion_expr,
