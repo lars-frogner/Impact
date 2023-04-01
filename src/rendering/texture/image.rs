@@ -1,7 +1,7 @@
 //! Textures representing 2D images.
 
 use crate::rendering::CoreRenderingSystem;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use image::{self, DynamicImage, GenericImageView};
 use std::num::NonZeroU32;
 
@@ -27,53 +27,74 @@ pub struct MultisampledRenderTargetTexture {
     view: wgpu::TextureView,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+/// A color space for pixel values.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ColorSpace {
+    Linear,
+    Srgb,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ColorType {
-    Rgba,
-    Grayscale,
+    Rgba8(ColorSpace),
+    Grayscale8,
 }
 
 impl ImageTexture {
-    /// Creates a texture for the image file at the given path.
+    /// Creates a texture for the image file at the given path, assuming that
+    /// the pixel values use the given color space.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The image file can not be read or decoded.
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
+    /// - The image is grayscale and the given color space is not linear.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_path(
         core_system: &CoreRenderingSystem,
         image_path: impl AsRef<Path>,
+        color_space: ColorSpace,
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
-        Self::from_image(core_system, image, &image_path.to_string_lossy())
+        Self::from_image(
+            core_system,
+            image,
+            color_space,
+            &image_path.to_string_lossy(),
+        )
     }
 
     /// Creates a texture for the image file represented by the given raw byte
-    /// buffer.
+    /// buffer, assuming that the pixel values use the given color space.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
+    /// - The image is grayscale and the given color space is not linear.
     pub fn from_bytes(
         core_system: &CoreRenderingSystem,
         byte_buffer: &[u8],
+        color_space: ColorSpace,
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(core_system, image, label)
+        Self::from_image(core_system, image, color_space, label)
     }
 
-    /// Creates a texture for the given loaded image.
+    /// Creates a texture for the given loaded image, assuming that the pixel
+    /// values use the given color space.
     ///
     /// # Errors
-    /// Returns an error if the image width or height is zero.
+    /// Returns an error if:
+    /// - The image width or height is zero.
+    /// - The image is grayscale and the given color space is not linear.
     pub fn from_image(
         core_system: &CoreRenderingSystem,
         image: DynamicImage,
+        color_space: ColorSpace,
         label: &str,
     ) -> Result<Self> {
         let (width, height) = image.dimensions();
@@ -84,16 +105,23 @@ impl ImageTexture {
             Self::new(
                 core_system,
                 &image.into_rgba8(),
-                ColorType::Rgba,
+                ColorType::Rgba8(color_space),
                 width,
                 height,
                 label,
             )
         } else {
+            if color_space != ColorSpace::Linear {
+                bail!(
+                    "Unsupported color space {:?} for grayscale image {}",
+                    color_space,
+                    label
+                );
+            }
             Self::new(
                 core_system,
                 &image.into_luma8(),
-                ColorType::Grayscale,
+                ColorType::Grayscale8,
                 width,
                 height,
                 label,
@@ -310,15 +338,16 @@ impl MultisampledRenderTargetTexture {
 impl ColorType {
     fn n_bytes(&self) -> u32 {
         match self {
-            Self::Rgba => 4,
-            Self::Grayscale => 1,
+            Self::Rgba8(_) => 4,
+            Self::Grayscale8 => 1,
         }
     }
 
     fn texture_format(&self) -> wgpu::TextureFormat {
         match self {
-            Self::Rgba => wgpu::TextureFormat::Rgba8UnormSrgb,
-            Self::Grayscale => wgpu::TextureFormat::R8Unorm,
+            Self::Rgba8(ColorSpace::Linear) => wgpu::TextureFormat::Rgba8Unorm,
+            Self::Rgba8(ColorSpace::Srgb) => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Self::Grayscale8 => wgpu::TextureFormat::R8Unorm,
         }
     }
 }
