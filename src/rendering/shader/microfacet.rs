@@ -293,6 +293,12 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 return computeColor(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
             }
 
+            fn computeGGXRoughnessFromSampledRoughness(sampledRoughness: f32, roughnessScale: f32) -> f32 {
+                // Square sampled roughness (assumed perceptually linear) to get
+                // GGX roughness, then apply scaling
+                return sampledRoughness * sampledRoughness * roughnessScale;
+            }
+
             fn computeLambertianDiffuseGGXSpecularColor(
                 viewDirection: vec3<f32>,
                 normalVector: vec3<f32>,
@@ -608,17 +614,13 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     let roughness_texture_value_expr = roughness_texture
                         .generate_red_sampling_expr(fragment_function, texture_coord_expr.unwrap());
 
+                    SourceCode::generate_call_named(
+                        fragment_function,
+                        "ggxRoughness",
+                        source_code.functions["computeGGXRoughnessFromSampledRoughness"],
                     // Use fixed roughness as scale for roughness sampled from texture
-                    emit_in_func(fragment_function, |function| {
-                        include_expr_in_func(
-                            function,
-                            Expression::Binary {
-                                op: naga::BinaryOperator::Multiply,
-                                left: fixed_roughness_value_expr,
-                                right: roughness_texture_value_expr,
-                            },
+                        vec![roughness_texture_value_expr, fixed_roughness_value_expr],
                         )
-                    })
                 },
             );
 
