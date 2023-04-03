@@ -2,7 +2,7 @@
 
 use crate::{geometry::Sphere, num::Float};
 use approx::AbsDiffEq;
-use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3};
+use nalgebra::{vector, Point3, Similarity3, UnitQuaternion, UnitVector3};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -45,9 +45,30 @@ pub enum IntersectsPlane {
 }
 
 impl<F: Float> Plane<F> {
+    /// The xy-coordinate plane, with the positive halfspace being the space of
+    /// positive z-coordinates.
+    pub const XY_PLANE: Self = Self::new(
+        UnitVector3::new_unchecked(vector![F::ZERO, F::ZERO, F::ONE]),
+        F::ZERO,
+    );
+
+    /// The yz-coordinate plane, with the positive halfspace being the space of
+    /// positive x-coordinates.
+    pub const YZ_PLANE: Self = Self::new(
+        UnitVector3::new_unchecked(vector![F::ONE, F::ZERO, F::ZERO]),
+        F::ZERO,
+    );
+
+    /// The xz-coordinate plane, with the positive halfspace being the space of
+    /// positive y-coordinates.
+    pub const XZ_PLANE: Self = Self::new(
+        UnitVector3::new_unchecked(vector![F::ZERO, F::ONE, F::ZERO]),
+        F::ZERO,
+    );
+
     /// Creates a new plane defined by the given unit normal
     /// vector and displacement.
-    pub fn new(unit_normal: UnitVector3<F>, displacement: F) -> Self {
+    pub const fn new(unit_normal: UnitVector3<F>, displacement: F) -> Self {
         Self {
             unit_normal,
             displacement,
