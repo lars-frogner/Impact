@@ -225,7 +225,7 @@ impl Scene {
     }
 
     fn generate_missing_vertex_properties_for_mesh(&self, components: &ArchetypeComponentStorage) {
-        TriangleMesh::generate_missing_vertex_properties(
+        TriangleMesh::generate_missing_vertex_properties_for_material(
             self.mesh_repository(),
             &self.material_library().read().unwrap(),
             components,

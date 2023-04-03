@@ -5,10 +5,12 @@ mod components;
 pub use components::{BoxMeshComp, CylinderMeshComp, MeshComp, PlaneMeshComp, SphereMeshComp};
 
 use crate::{
-    geometry::{TriangleMesh, VertexAttributeSet},
+    geometry::{PlanarTextureProjection, TextureProjection, TriangleMesh, VertexAttributeSet},
     num::Float,
     rendering::fre,
-    scene::{MaterialComp, MaterialLibrary, RenderResourcesDesynchronized},
+    scene::{
+        MaterialComp, MaterialLibrary, PlanarTextureProjectionComp, RenderResourcesDesynchronized,
+    },
 };
 use anyhow::{anyhow, Result};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -86,99 +88,220 @@ impl<F: Float> MeshRepository<F> {
 
 impl TriangleMesh<fre> {
     /// Checks if the entity-to-be with the given components has a component
-    /// representing a mesh, and if so, adds the appropriate material property
-    /// generates or loads the mesh and adds it to the mesh repository if not
-    /// present, then adds the appropriate mesh component to the entity.
+    /// representing a mesh, and if so, generates the mesh and adds it to the
+    /// mesh repository if not present, then adds the appropriate mesh component
+    /// to the entity.
     pub fn add_mesh_component_for_entity(
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        setup!(
-            components,
-            |plane_mesh: &PlaneMeshComp| -> MeshComp {
-                let mesh_id = plane_mesh.generate_id();
+        fn create_projection_label(projection: Option<&impl TextureProjection<fre>>) -> String {
+            projection
+                .as_ref()
+                .map_or("None".to_string(), |projection| projection.identifier())
+        }
 
-                if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
-                    let mesh = Self::create_plane(plane_mesh.extent_x, plane_mesh.extent_z);
+        fn execute_setup_for_plane_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            plane_mesh: &PlaneMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = plane_mesh.generate_id(create_projection_label(projection));
 
-                    mesh_repository
-                        .write()
-                        .unwrap()
-                        .add_mesh_unless_present(mesh_id, mesh);
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_plane(plane_mesh.extent_x, plane_mesh.extent_z);
 
-                    desynchronized.set_yes();
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
                 }
 
-                MeshComp::new(mesh_id)
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        fn execute_setup_for_box_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            box_mesh: &BoxMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = box_mesh.generate_id(create_projection_label(projection));
+
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_box(
+                    box_mesh.extent_x,
+                    box_mesh.extent_y,
+                    box_mesh.extent_z,
+                );
+
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
+                }
+
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        fn execute_setup_for_cylinder_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            cylinder_mesh: &CylinderMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = cylinder_mesh.generate_id(create_projection_label(projection));
+
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_cylinder(
+                    cylinder_mesh.extent_y,
+                    cylinder_mesh.diameter,
+                    cylinder_mesh.n_circumference_vertices as usize,
+                );
+
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
+                }
+
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        fn execute_setup_for_sphere_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            sphere_mesh: &SphereMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = sphere_mesh.generate_id(create_projection_label(projection));
+
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_sphere(sphere_mesh.n_rings as usize);
+
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
+                }
+
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        setup!(
+            components,
+            |plane_mesh: &PlaneMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_plane_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        plane_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_plane_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        plane_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
+                }
             },
             ![MeshComp]
         );
 
         setup!(
             components,
-            |box_mesh: &BoxMeshComp| -> MeshComp {
-                let mesh_id = box_mesh.generate_id();
-
-                if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
-                    let mesh =
-                        Self::create_box(box_mesh.extent_x, box_mesh.extent_y, box_mesh.extent_z);
-
-                    mesh_repository
-                        .write()
-                        .unwrap()
-                        .add_mesh_unless_present(mesh_id, mesh);
-
-                    desynchronized.set_yes();
+            |box_mesh: &BoxMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_box_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        box_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_box_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        box_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
                 }
-
-                MeshComp::new(mesh_id)
             },
             ![MeshComp]
         );
 
         setup!(
             components,
-            |cylinder_mesh: &CylinderMeshComp| -> MeshComp {
-                let mesh_id = cylinder_mesh.generate_id();
-
-                if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
-                    let mesh = Self::create_cylinder(
-                        cylinder_mesh.extent_y,
-                        cylinder_mesh.diameter,
-                        cylinder_mesh.n_circumference_vertices as usize,
-                    );
-
-                    mesh_repository
-                        .write()
-                        .unwrap()
-                        .add_mesh_unless_present(mesh_id, mesh);
-
-                    desynchronized.set_yes();
+            |cylinder_mesh: &CylinderMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_cylinder_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        cylinder_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_cylinder_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        cylinder_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
                 }
-
-                MeshComp::new(mesh_id)
             },
             ![MeshComp]
         );
 
         setup!(
             components,
-            |sphere_mesh: &SphereMeshComp| -> MeshComp {
-                let mesh_id = sphere_mesh.generate_id();
-
-                if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
-                    let mesh = Self::create_sphere(sphere_mesh.n_rings as usize);
-
-                    mesh_repository
-                        .write()
-                        .unwrap()
-                        .add_mesh_unless_present(mesh_id, mesh);
-
-                    desynchronized.set_yes();
+            |sphere_mesh: &SphereMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_sphere_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        sphere_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_sphere_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        sphere_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
                 }
-
-                MeshComp::new(mesh_id)
             },
             ![MeshComp]
         );
@@ -190,7 +313,7 @@ impl TriangleMesh<fre> {
     /// component and a component for a mesh that misses vertex attributes
     /// required by the material, and if so, generates the missing vertex
     /// attributes if possible.
-    pub fn generate_missing_vertex_properties(
+    pub fn generate_missing_vertex_properties_for_material(
         mesh_repository: &RwLock<MeshRepository<fre>>,
         material_library: &MaterialLibrary,
         components: &ArchetypeComponentStorage,

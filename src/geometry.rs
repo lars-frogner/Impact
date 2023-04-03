@@ -11,6 +11,7 @@ mod oriented_box;
 mod plane;
 mod projection;
 mod sphere;
+mod texture_projection;
 mod tracking;
 mod uniform;
 
@@ -33,6 +34,7 @@ pub use oriented_box::OrientedBox;
 pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
 pub use sphere::Sphere;
+pub use texture_projection::{PlanarTextureProjection, TextureProjection};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 pub use uniform::UniformBuffer;
 
