@@ -19,18 +19,11 @@ macro_rules! normal {
     };
 }
 
-macro_rules! texcoord {
-    [$u:expr, $v:expr] => {
-        $crate::geometry::VertexTextureCoords(nalgebra::vector![$u, $v])
-    };
-    ($coords:expr) => {
-        $crate::geometry::VertexTextureCoords($coords)
-    };
-}
-
 impl<F: Float> TriangleMesh<F> {
-    /// Creates a mesh representing a flat plane centered at
-    /// the origin with the given horizontal extents.
+    /// Creates a mesh representing a flat plane centered at the origin with the
+    /// given horizontal extents.
+    ///
+    /// The generated mesh will contain positions and normal vectors.
     ///
     /// # Panics
     /// If any of the given extents are negative.
@@ -56,20 +49,13 @@ impl<F: Float> TriangleMesh<F> {
 
         let normal_vectors = vec![normal![Vector3::y_axis()]; 4];
 
-        let texture_coords = vec![
-            texcoord![F::ZERO, F::ONE],
-            texcoord![F::ONE, F::ONE],
-            texcoord![F::ONE, F::ZERO],
-            texcoord![F::ZERO, F::ZERO],
-        ];
-
         let indices = vec![0, 3, 1, 1, 3, 2];
 
         Self::new(
             positions,
             Vec::new(),
             normal_vectors,
-            texture_coords,
+            Vec::new(),
             Vec::new(),
             indices,
         )
@@ -78,6 +64,8 @@ impl<F: Float> TriangleMesh<F> {
     /// Creates a mesh representing a box with the given extents, centered at
     /// the origin and with the width, height and depth axes aligned with the
     /// x-, y- and z-axis.
+    ///
+    /// The generated mesh will contain positions and normal vectors.
     ///
     /// # Panics
     /// If any of the given extents are negative.
@@ -184,6 +172,8 @@ impl<F: Float> TriangleMesh<F> {
     /// diameter, centered at the origin and with the length axis aligned with
     /// the y-axis. `n_circumference_vertices` is the number of vertices to use
     /// for representing a circular cross-section of the cylinder.
+    ///
+    /// The generated mesh will contain positions and normal vectors.
     ///
     /// # Panics
     /// - If any of the given extents are negative.
@@ -315,6 +305,8 @@ impl<F: Float> TriangleMesh<F> {
     /// that vertices will be generated around. The number of vertices that will
     /// be generated around each ring increases in proportion to `n_rings` to
     /// maintain an approximately uniform resolution.
+    ///
+    /// The generated mesh will contain positions and normal vectors.
     ///
     /// # Panics
     /// - If `n_rings` is zero.

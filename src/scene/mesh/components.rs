@@ -5,6 +5,7 @@ use crate::rendering::fre;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use impact_utils::hash64;
+use std::fmt::Display;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose mesh is
 /// an axis-aligned horizontal plane centered on the origin, whose front face is
@@ -84,11 +85,12 @@ impl PlaneMeshComp {
         Self { extent_x, extent_z }
     }
 
-    /// Generates a [`MeshID`] for the mesh of this component.
-    pub fn generate_id(&self) -> MeshID {
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Plane mesh {{ extent_x = {}, extent_z = {} }}",
-            self.extent_x, self.extent_z
+            "Plane mesh {{ extent_x = {}, extent_z = {}, projection = {} }}",
+            self.extent_x, self.extent_z, projection_label
         )))
     }
 }
@@ -109,11 +111,12 @@ impl BoxMeshComp {
         }
     }
 
-    /// Generates a [`MeshID`] for the mesh of this component.
-    pub fn generate_id(&self) -> MeshID {
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Box mesh {{ extent_x = {}, extent_y = {}, extent_z = {} }}",
-            self.extent_x, self.extent_y, self.extent_z
+            "Box mesh {{ extent_x = {}, extent_y = {}, extent_z = {}, projection = {} }}",
+            self.extent_x, self.extent_y, self.extent_z, projection_label
         )))
     }
 }
@@ -129,11 +132,12 @@ impl CylinderMeshComp {
         }
     }
 
-    /// Generates a [`MeshID`] for the mesh of this component.
-    pub fn generate_id(&self) -> MeshID {
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Cylinder mesh {{ extent_y = {}, diameter = {}, n_circumference_vertices = {} }}",
-            self.extent_y, self.diameter, self.n_circumference_vertices
+            "Cylinder mesh {{ extent_y = {}, diameter = {}, n_circumference_vertices = {}, projection = {} }}",
+            self.extent_y, self.diameter, self.n_circumference_vertices, projection_label
         )))
     }
 }
@@ -145,11 +149,12 @@ impl SphereMeshComp {
         Self { n_rings }
     }
 
-    /// Generates a [`MeshID`] for the mesh of this component.
-    pub fn generate_id(&self) -> MeshID {
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Sphere mesh {{ n_rings = {} }}",
-            self.n_rings
+            "Sphere mesh {{ n_rings = {}, projection = {} }}",
+            self.n_rings, projection_label
         )))
     }
 }

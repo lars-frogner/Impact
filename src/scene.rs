@@ -13,6 +13,7 @@ mod model;
 mod shader;
 mod systems;
 mod tasks;
+mod texture_projection;
 
 pub use camera::{OrthographicCameraComp, PerspectiveCameraComp, SceneCamera};
 pub use components::{ScalingComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
@@ -52,6 +53,7 @@ pub use tasks::{
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
     SyncSceneCameraViewTransform,
 };
+pub use texture_projection::PlanarTextureProjectionComp;
 
 use crate::rendering::fre;
 use nalgebra::vector;

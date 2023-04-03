@@ -16,8 +16,9 @@ use crate::{
         AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
         DirectionComp, EmissionExtentComp, FixedColorComp, LightDirection,
         MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, Omnidirectional,
-        ParallaxMapComp, PerspectiveCameraComp, PlaneMeshComp, RadianceComp, RoughnessComp,
-        RoughnessTextureComp, ScalingComp, SpecularColorComp, SphereMeshComp,
+        ParallaxMapComp, PerspectiveCameraComp, PlanarTextureProjectionComp, PlaneMeshComp,
+        RadianceComp, RoughnessComp, RoughnessTextureComp, ScalingComp, SpecularColorComp,
+        SphereMeshComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -242,6 +243,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &PlaneMeshComp::UNIT_PLANE,
+            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
@@ -257,9 +259,13 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &PlaneMeshComp::UNIT_PLANE,
-            &PositionComp(Point3::new(25.0, 0.0, 0.0)),
+            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &PositionComp(Point3::new(25.0, 5.0, 0.0)),
             &ScalingComp(50.0),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
+            &OrientationComp(
+                Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
+                    * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
+            ),
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
             &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
@@ -272,9 +278,13 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &PlaneMeshComp::UNIT_PLANE,
-            &PositionComp(Point3::new(-25.0, 0.0, 0.0)),
+            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &PositionComp(Point3::new(-25.0, 5.0, 0.0)),
             &ScalingComp(50.0),
-            &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
+            &OrientationComp(
+                Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
+                    * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
+            ),
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
             &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
@@ -287,7 +297,8 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entities((
             &PlaneMeshComp::UNIT_PLANE,
-            &PositionComp(Point3::new(0.0, 0.0, 25.0)),
+            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &PositionComp(Point3::new(0.0, 5.0, 25.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
             &DiffuseTextureComp(bricks_color_texture_id),

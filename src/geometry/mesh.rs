@@ -3,7 +3,7 @@
 mod generation;
 
 use crate::{
-    geometry::{CollectionChange, CollectionChangeTracker, Sphere},
+    geometry::{CollectionChange, CollectionChangeTracker, Sphere, TextureProjection},
     num::Float,
 };
 use bitflags::bitflags;
@@ -358,6 +358,24 @@ impl<F: Float> TriangleMesh<F> {
             .collect();
 
         self.normal_vector_change_tracker.notify_count_change();
+    }
+
+    /// Uses the given projection to compute new texture coordinates for the
+    /// mesh.
+    ///
+    /// # Panics
+    /// If the mesh misses positions.
+    pub fn generate_texture_coords(&mut self, projection: &impl TextureProjection<F>) {
+        assert!(self.has_positions());
+
+        self.texture_coords.clear();
+        self.texture_coords.reserve(self.n_vertices());
+
+        for position in &self.positions {
+            self.texture_coords.push(VertexTextureCoords(
+                projection.project_position(&position.0),
+            ));
+        }
     }
 
     /// Computes new tangent space quaternions for the mesh using the texture
