@@ -9,6 +9,7 @@ mod vertex_color;
 pub use ambient_color::GlobalAmbientColorShaderInput;
 pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
+use lazy_static::lazy_static;
 pub use microfacet::{
     DiffuseMicrofacetShadingModel, MicrofacetFeatureShaderInput, MicrofacetShadingModel,
     MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
@@ -37,14 +38,8 @@ use naga::{
     Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator,
     UniqueArena, VectorSize,
 };
-use std::{borrow::Cow, collections::HashMap, hash::Hash, mem, vec};
+use std::{borrow::Cow, collections::HashMap, fs, hash::Hash, mem, path::Path, vec};
 use vertex_color::VertexColorShaderGenerator;
-
-cfg_if::cfg_if! {
-    if #[cfg(not(target_arch = "wasm32"))] {
-        use std::{fs, path::Path};
-    }
-}
 
 /// A graphics shader program.
 #[derive(Debug)]
@@ -367,9 +362,13 @@ pub struct ModuleImporter<'a, 'b> {
 
 /// A set of shader functions and types defined in source code that can be
 /// imported into an existing [`Module`].
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceCode {
     module: Module,
+    available_functions: HashMap<String, Handle<Function>>,
+    available_named_types: HashMap<String, Handle<Type>>,
+    used_functions: HashMap<String, Handle<Function>>,
+    used_types: HashMap<String, Handle<Type>>,
 }
 
 /// Handles to functions and named types imported into a [`Module`].
@@ -479,6 +478,17 @@ const DEPTH_TEXTURE_ARRAY_TYPE: Type = Type {
         class: ImageClass::Depth { multi: false },
     },
 };
+
+lazy_static! {
+    pub static ref SHADER_SOURCE_LIB: SourceCode = SourceCode::from_wgsl_source(concat!(
+        include_str!("../../shader/util.wgsl"),
+        include_str!("../../shader/light.wgsl"),
+        include_str!("../../shader/normal_map.wgsl"),
+        include_str!("../../shader/blinn_phong.wgsl"),
+        include_str!("../../shader/microfacet.wgsl")
+    ))
+    .unwrap_or_else(|err| panic!("Error when including shader source library: {}", err));
+}
 
 impl Shader {
     /// Creates a new shader by reading the source from the given file.
@@ -643,6 +653,8 @@ impl ShaderGenerator {
         let mut vertex_function = Function::default();
         let mut fragment_function = Function::default();
 
+        let mut source_code_lib = SHADER_SOURCE_LIB.clone();
+
         // Caution: The order in which the shader generators use and increment
         // the bind group index must match the order in which the bind groups
         // are set in `RenderPassRecorder::record_render_pass`, that is:
@@ -701,6 +713,7 @@ impl ShaderGenerator {
                 mesh_shader_input,
                 vertex_attribute_requirements,
                 &mut module,
+                &mut source_code_lib,
                 &mut vertex_function,
                 &model_view_transform,
                 projection,
@@ -711,6 +724,7 @@ impl ShaderGenerator {
                 light_shader_generator.as_ref().and_then(|light| {
                     light.generate_vertex_output_code_for_shading(
                         &mut module,
+                        &mut source_code_lib,
                         &mut vertex_function,
                         &mut vertex_output_struct_builder,
                         &mesh_vertex_output_field_indices,
@@ -733,6 +747,7 @@ impl ShaderGenerator {
 
             material_shader_generator.generate_fragment_code(
                 &mut module,
+                &mut source_code_lib,
                 &mut fragment_function,
                 &mut bind_group_idx,
                 &fragment_input_struct,
@@ -759,6 +774,7 @@ impl ShaderGenerator {
 
                         light_shader_generator.generate_fragment_output_code(
                             &mut module,
+                            &mut source_code_lib,
                             &mut fragment_function,
                             &fragment_input_struct,
                             &mesh_vertex_output_field_indices,
@@ -1074,35 +1090,11 @@ impl ShaderGenerator {
         mesh_shader_input: &MeshShaderInput,
         requirements: VertexAttributeSet,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
         model_view_transform: &ModelViewTransformExpressions,
         projection: ProjectionExpressions,
     ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
-                let tmp = 2.0 * cross(quaternion.xyz, vector);
-                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
-            }
-
-            fn multiplyAndNormalizeQuaternions(q1: vec4<f32>, q2: vec4<f32>) -> vec4<f32> {
-                let product = vec4<f32>(q1.w * q2.xyz + q2.w * q1.xyz + cross(q1.xyz, q2.xyz), q1.w * q2.w - dot(q1.xyz, q2.xyz));
-                return normalize(product);
-            }
-
-            fn transformPosition(
-                rotationQuaternion: vec4<f32>,
-                translation: vec3<f32>,
-                scaling: f32,
-                position: vec3<f32>
-            ) -> vec3<f32> {
-                return rotateVectorWithQuaternion(rotationQuaternion, scaling * position) + translation;
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -1170,10 +1162,10 @@ impl ShaderGenerator {
                 None
             };
 
-        let position_expr = SourceCode::generate_call_named(
+        let position_expr = source_code_lib.generate_function_call(
+            module,
             vertex_function,
-            "cameraSpacePosition",
-            source_code.functions["transformPosition"],
+            "transformPosition",
             vec![
                 model_view_transform.rotation_quaternion,
                 model_view_transform.translation_vector,
@@ -1184,8 +1176,12 @@ impl ShaderGenerator {
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
-        let clip_position_expr =
-            projection.generate_clip_position_expr(module, vertex_function, position_expr);
+        let clip_position_expr = projection.generate_clip_position_expr(
+            module,
+            source_code_lib,
+            vertex_function,
+            position_expr,
+        );
         let output_clip_position_field_idx = output_struct_builder.add_builtin_position_field(
             "clipSpacePosition",
             vec4_type,
@@ -1225,10 +1221,10 @@ impl ShaderGenerator {
         }
 
         if let Some(input_model_normal_vector_expr) = input_model_normal_vector_expr {
-            let normal_vector_expr = SourceCode::generate_call_named(
+            let normal_vector_expr = source_code_lib.generate_function_call(
+                module,
                 vertex_function,
-                "cameraSpaceNormalVector",
-                source_code.functions["rotateVectorWithQuaternion"],
+                "rotateVectorWithQuaternion",
                 vec![
                     model_view_transform.rotation_quaternion,
                     input_model_normal_vector_expr,
@@ -1259,10 +1255,10 @@ impl ShaderGenerator {
         if let Some(input_tangent_to_model_space_quaternion_expr) =
             input_tangent_to_model_space_quaternion_expr
         {
-            let tangent_space_quaternion_expr = SourceCode::generate_call_named(
+            let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
+                module,
                 vertex_function,
-                "tangentToCameraSpaceQuaternion",
-                source_code.functions["multiplyAndNormalizeQuaternions"],
+                "multiplyAndNormalizeQuaternions",
                 vec![
                     model_view_transform.rotation_quaternion,
                     input_tangent_to_model_space_quaternion_expr,
@@ -1864,6 +1860,7 @@ impl<'a> MaterialShaderGenerator<'a> {
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
@@ -1906,6 +1903,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 MaterialVertexOutputFieldIndices::BlinnPhong(material_input_field_indices),
             ) => generator.generate_fragment_code(
                 module,
+                source_code_lib,
                 fragment_function,
                 bind_group_idx,
                 fragment_input_struct,
@@ -1919,6 +1917,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 MaterialVertexOutputFieldIndices::Microfacet(material_input_field_indices),
             ) => generator.generate_fragment_code(
                 module,
+                source_code_lib,
                 fragment_function,
                 bind_group_idx,
                 fragment_input_struct,
@@ -1939,6 +1938,7 @@ impl ProjectionExpressions {
     pub fn generate_clip_position_expr(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
@@ -1948,6 +1948,7 @@ impl ProjectionExpressions {
             Self::OmnidirectionalLight(omnidirectional_light_cubemap_projection) => {
                 omnidirectional_light_cubemap_projection.generate_clip_position_expr(
                     module,
+                    source_code_lib,
                     vertex_function,
                     position_expr,
                 )
@@ -1955,6 +1956,7 @@ impl ProjectionExpressions {
             Self::UnidirectionalLight(unidirectional_light_orthographic_projection) => {
                 unidirectional_light_orthographic_projection.generate_clip_position_expr(
                     module,
+                    source_code_lib,
                     vertex_function,
                     position_expr,
                 )
@@ -1998,35 +2000,14 @@ impl OmnidirectionalLightProjectionExpressions {
     pub fn generate_clip_position_expr(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn applyCubemapFaceProjection(
-                position: vec3<f32>,
-            ) -> vec4<f32> {
-                // It is important not to perform perspective division manually
-                // here, because the homogeneous vector should be interpolated
-                // first.
-
-                return vec4<f32>(
-                    position.xy,
-                    // This component does not matter, as we compute the proper
-                    // depth in the fragment shader
-                    position.z,
-                    position.z,
-                );
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
-        SourceCode::generate_call_named(
+        source_code_lib.generate_function_call(
+            module,
             vertex_function,
-            "lightClipSpacePosition",
-            source_code.functions["applyCubemapFaceProjection"],
+            "applyCubemapFaceProjectionToPosition",
             vec![position_expr],
         )
     }
@@ -2039,27 +2020,14 @@ impl UnidirectionalLightProjectionExpressions {
     pub fn generate_clip_position_expr(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn applyOrthographicProjectionToPosition(
-                orthographicTranslation: vec3<f32>,
-                orthographicScaling: vec3<f32>,
-                position: vec3<f32>
-            ) -> vec3<f32> {
-                return (position + orthographicTranslation) * orthographicScaling;
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
-        let light_clip_space_position_expr = SourceCode::generate_call_named(
+        let light_clip_space_position_expr = source_code_lib.generate_function_call(
+            module,
             vertex_function,
-            "lightClipSpacePosition",
-            source_code.functions["applyOrthographicProjectionToPosition"],
+            "applyOrthographicProjectionToPosition",
             vec![self.translation, self.scaling, position_expr],
         );
 
@@ -2150,6 +2118,7 @@ impl LightShaderGenerator {
     pub fn generate_vertex_output_code_for_shading(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
         output_struct_builder: &mut OutputStructBuilder,
         mesh_output_field_indices: &MeshVertexOutputFieldIndices,
@@ -2160,6 +2129,7 @@ impl LightShaderGenerator {
             )) => Some(LightVertexOutputFieldIndices::UnidirectionalLight(
                 shader_generator.generate_vertex_output_code_for_shading(
                     module,
+                    source_code_lib,
                     vertex_function,
                     output_struct_builder,
                     mesh_output_field_indices,
@@ -2179,6 +2149,7 @@ impl LightShaderGenerator {
     pub fn generate_fragment_output_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
@@ -2191,6 +2162,7 @@ impl LightShaderGenerator {
         {
             shadow_map_update_shader_generator.generate_fragment_output_code(
                 module,
+                source_code_lib,
                 fragment_function,
                 fragment_input_struct,
                 mesh_input_field_indices,
@@ -2325,25 +2297,11 @@ impl OmnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn generate_fragment_output_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn computeShadowMapFragmentDepth(
-                nearDistance: f32,
-                inverseDistanceSpan: f32,
-                cubemapSpaceFragmentPosition: vec3<f32>,
-            ) -> f32 {
-                // Compute distance between fragment and light and scale to [0, 1] range
-                return (length(cubemapSpaceFragmentPosition) - nearDistance) * inverseDistanceSpan;
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
 
         let position_expr = fragment_input_struct.get_field_expr(
@@ -2352,10 +2310,10 @@ impl OmnidirectionalLightShadowMapUpdateShaderGenerator {
                 .expect("Missing position for omnidirectional light shadow map update"),
         );
 
-        let depth = SourceCode::generate_call_named(
+        let depth = source_code_lib.generate_function_call(
+            module,
             fragment_function,
-            "fragmentDepth",
-            source_code.functions["computeShadowMapFragmentDepth"],
+            "computeShadowMapFragmentDepthOmniLight",
             vec![
                 self.near_distance,
                 self.inverse_distance_span,
@@ -2458,63 +2416,18 @@ impl OmnidirectionalLightShadingShaderGenerator {
     pub fn generate_fragment_shading_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         camera_clip_position_expr: Handle<Expression>,
         position_expr: Handle<Expression>,
         normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            struct LightQuantities {
-                lightDirection: vec3<f32>,
-                lightDirectionDotNormalVector: f32,
-                attenuatedLightRadiance: vec3<f32>,
-                lightSpaceFragmentDisplacement: vec3<f32>,
-                normalizedDistance: f32,
-            }
+        source_code_lib.use_type(module, "LightQuantitiesOmniLight");
 
-            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
-                let tmp = 2.0 * cross(quaternion.xyz, vector);
-                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
-            }
-
-            fn computeLightQuantities(
-                lightPosition: vec3<f32>,
-                lightRadiance: vec3<f32>,
-                cameraToLightSpaceRotationQuaternion: vec4<f32>,
-                nearDistance: f32,
-                inverseDistanceSpan: f32,
-                fragmentPosition: vec3<f32>,
-                fragmentNormal: vec3<f32>,
-            ) -> LightQuantities {
-                var output: LightQuantities;
-
-                let lightDisplacement = lightPosition - fragmentPosition;
-                let inverseSquaredDistance = 1.0 / dot(lightDisplacement, lightDisplacement);
-                output.lightDirection = lightDisplacement * sqrt(inverseSquaredDistance);
-                output.lightDirectionDotNormalVector = dot(output.lightDirection, fragmentNormal);
-                
-                output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
-
-                // Add an offset to the fragment position along the fragment
-                // normal to avoid shadow acne. The offset increases as the
-                // light becomes less perpendicular to the surface.
-                let offsetFragmentDisplacement = -lightDisplacement + fragmentNormal * clamp(1.0 - output.lightDirectionDotNormalVector, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
-
-                output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
-                output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
-
-                return output;
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
-        let light_quantities = SourceCode::generate_call_named(
+        let light_quantities = source_code_lib.generate_function_call(
+            module,
             fragment_function,
-            "lightQuantities",
-            source_code.functions["computeLightQuantities"],
+            "computeLightQuantitiesOmniLight",
             vec![
                 self.camera_space_position,
                 self.radiance,
@@ -2550,6 +2463,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
             .shadow_map
             .generate_light_access_factor_expr_for_shadow_cubemap(
                 module,
+                source_code_lib,
                 fragment_function,
                 self.emission_radius,
                 camera_clip_position_expr,
@@ -2717,21 +2631,11 @@ impl UnidirectionalLightShadingShaderGenerator {
     pub fn generate_vertex_output_code_for_shading(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
         output_struct_builder: &mut OutputStructBuilder,
         mesh_output_field_indices: &MeshVertexOutputFieldIndices,
     ) -> UnidirectionalLightVertexOutputFieldIndices {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
-                let tmp = 2.0 * cross(quaternion.xyz, vector);
-                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
         let camera_space_position_expr = output_struct_builder
@@ -2758,20 +2662,20 @@ impl UnidirectionalLightShadingShaderGenerator {
                 0,
             );
 
-        let light_space_position_expr = SourceCode::generate_call_named(
+        let light_space_position_expr = source_code_lib.generate_function_call(
+            module,
             vertex_function,
-            "lightSpacePosition",
-            source_code.functions["rotateVectorWithQuaternion"],
+            "rotateVectorWithQuaternion",
             vec![
                 camera_to_light_space_rotation_quaternion_expr,
                 camera_space_position_expr,
             ],
         );
 
-        let light_space_normal_vector_expr = SourceCode::generate_call_named(
+        let light_space_normal_vector_expr = source_code_lib.generate_function_call(
+            module,
             vertex_function,
-            "lightSpaceNormalVector",
-            source_code.functions["rotateVectorWithQuaternion"],
+            "rotateVectorWithQuaternion",
             vec![
                 camera_to_light_space_rotation_quaternion_expr,
                 camera_space_normal_vector_expr,
@@ -2798,95 +2702,12 @@ impl UnidirectionalLightShadingShaderGenerator {
     pub fn generate_fragment_shading_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         camera_clip_position_expr: Handle<Expression>,
         light_space_position_expr: Handle<Expression>,
         light_space_normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
-        let determine_cascade_idx_body = match MAX_SHADOW_MAP_CASCADES {
-            1 => "cascadeIdx = 0;",
-            2 => {
-                "if depth < partitionDepths.x {
-                     cascadeIdx = 0;
-                 } else {
-                     cascadeIdx = 1;
-                 }"
-            }
-            3 => {
-                "if depth < partitionDepths.x {
-                     cascadeIdx = 0;
-                 } else if depth < partitionDepths.y {
-                     cascadeIdx = 1;
-                 } else {
-                     cascadeIdx = 2;
-                 }"
-            }
-            4 => {
-                "if depth < partitionDepths.x {
-                     cascadeIdx = 0;
-                 } else if depth < partitionDepths.y {
-                     cascadeIdx = 1;
-                 } else if depth < partitionDepths.z {
-                     cascadeIdx = 2;
-                 } else {
-                     cascadeIdx = 3;
-                 }"
-            }
-            5 => {
-                "if depth < partitionDepths.x {
-                     cascadeIdx = 0;
-                 } else if depth < partitionDepths.y {
-                     cascadeIdx = 1;
-                 } else if depth < partitionDepths.z {
-                     cascadeIdx = 2;
-                 } else if depth < partitionDepths.w {
-                     cascadeIdx = 3;
-                 } else {
-                     cascadeIdx = 4;
-                 }"
-            }
-            _ => panic!("MAX_SHADOW_MAP_CASCADES outside of supported range [1, 5]"),
-        };
-
-        let source_code = SourceCode::from_wgsl_source(
-            &format!("\
-            fn determineCascadeIdx(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {{
-                var cascadeIdx: i32;
-                let depth = cameraClipSpacePosition.z;
-                {}
-                return cascadeIdx;
-            }}
-
-            fn applyNormalBias(
-                lightSpacePosition: vec3<f32>,
-                lightSpaceNormalVector: vec3<f32>
-            ) -> vec3<f32> {{
-                let lightDirectionDotNormalVector = -lightSpaceNormalVector.z;
-                return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * 1e-1;
-            }}
-
-            fn applyOrthographicProjectionToPosition(
-                orthographicTranslation: vec3<f32>,
-                orthographicScaling: vec3<f32>,
-                position: vec3<f32>
-            ) -> vec3<f32> {{
-                return (position + orthographicTranslation) * orthographicScaling;
-            }}
-
-            fn computeLightClipSpacePosition(
-                orthographicTranslation: vec3<f32>,
-                orthographicScaling: vec3<f32>,
-                lightSpacePosition: vec3<f32>,
-                lightSpaceNormalVector: vec3<f32>,
-            ) -> vec3<f32> {{
-                let biasedLightSpacePosition = applyNormalBias(lightSpacePosition, lightSpaceNormalVector);
-                return applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
-            }}
-        ", determine_cascade_idx_body),
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let camera_space_direction_expr = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
             "cameraSpaceLightDirection",
@@ -2926,10 +2747,10 @@ impl UnidirectionalLightShadingShaderGenerator {
             4,
         );
 
-        let cascade_idx_expr = SourceCode::generate_call_named(
+        let cascade_idx_expr = source_code_lib.generate_function_call(
+            module,
             fragment_function,
-            "cascadeIdx",
-            source_code.functions["determineCascadeIdx"],
+            &format!("determineCascadeIdxMax{}", MAX_SHADOW_MAP_CASCADES),
             vec![partition_depths_expr, camera_clip_position_expr],
         );
 
@@ -2986,10 +2807,10 @@ impl UnidirectionalLightShadingShaderGenerator {
                 )
             });
 
-        let light_clip_position_expr = SourceCode::generate_call_named(
+        let light_clip_position_expr = source_code_lib.generate_function_call(
+            module,
             fragment_function,
-            "lightClipSpacePosition",
-            source_code.functions["computeLightClipSpacePosition"],
+            "computeUniLightClipSpacePosition",
             vec![
                 orthographic_translation_expr,
                 orthographic_scaling_expr,
@@ -3002,6 +2823,7 @@ impl UnidirectionalLightShadingShaderGenerator {
             .shadow_map
             .generate_light_access_factor_expr_for_cascaded_shadow_map(
                 module,
+                source_code_lib,
                 fragment_function,
                 tan_angular_radius_expr,
                 world_to_light_clip_space_xy_scale_expr,
@@ -3595,6 +3417,7 @@ impl SampledTexture {
     pub fn generate_light_access_factor_expr_for_shadow_cubemap(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         function: &mut Function,
         emission_radius_expr: Handle<Expression>,
         camera_clip_position_expr: Handle<Expression>,
@@ -3603,6 +3426,7 @@ impl SampledTexture {
     ) -> Handle<Expression> {
         self.generate_pcss_light_access_factor_expr_for_shadow_cubemap(
             module,
+            source_code_lib,
             function,
             emission_radius_expr,
             camera_clip_position_expr,
@@ -3619,6 +3443,7 @@ impl SampledTexture {
     pub fn generate_light_access_factor_expr_for_cascaded_shadow_map(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         function: &mut Function,
         tan_angular_radius_expr: Handle<Expression>,
         world_to_light_clip_space_xy_scale_expr: Handle<Expression>,
@@ -3731,6 +3556,7 @@ impl SampledTexture {
 
         self.generate_pcss_light_access_factor_expr_for_cascaded_shadow_map(
             module,
+            source_code_lib,
             function,
             tan_angular_radius_expr,
             world_to_light_clip_space_xy_scale_expr,
@@ -3745,164 +3571,13 @@ impl SampledTexture {
     fn generate_pcss_light_access_factor_expr_for_shadow_cubemap(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         function: &mut Function,
         emission_radius_expr: Handle<Expression>,
         camera_clip_position_expr: Handle<Expression>,
         light_space_fragment_displacement_expr: Handle<Expression>,
         depth_reference_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            // Returns a random number between 0 and 1 based on the pixel coordinates
-            fn generateInterleavedGradientNoiseFactor(cameraClipSpacePosition: vec4<f32>) -> f32 {
-                let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
-                return fract(magic.z * fract(dot(magic.xy, cameraClipSpacePosition.xy)));
-            }
-
-            fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2<f32> {
-                let goldenAngle: f32 = 2.4;
-                let radius = sqrt(f32(sampleIdx) + 0.5) * inverseSqrtSampleCount;
-                let angle = baseAngle + goldenAngle * f32(sampleIdx);
-                return vec2<f32>(radius * cos(angle), radius * sin(angle));
-            }
-
-            fn computeVogelDiskBaseAngle(cameraClipSpacePosition: vec4<f32>) -> f32 {
-                // Multiply with 2 * pi to get random angle
-                return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraClipSpacePosition);
-            }
-
-            fn findPerpendicularVector(vector: vec3<f32>) -> vec3<f32> {
-                let shifted_signs = sign(vector) + 0.5;
-                let sign_xz = sign(shifted_signs.x * shifted_signs.z);
-                let sign_yz = sign(shifted_signs.y * shifted_signs.z);
-                return vec3<f32>(sign_xz * vector.z, sign_yz * vector.z, -sign_xz * vector.x - sign_yz * vector.y);
-            }
-
-            fn generateSampleDisplacement(
-                displacement: vec3<f32>,
-                displacementNormalDirection: vec3<f32>,
-                displacementBinormalDirection: vec3<f32>,
-                sampleOnPerpendicularDisk: vec2<f32>,
-            ) -> vec3<f32> {
-                return displacement + sampleOnPerpendicularDisk.x * displacementNormalDirection + sampleOnPerpendicularDisk.y * displacementBinormalDirection;
-            }
-
-            fn computeShadowPenumbraExtent(
-                shadowMapTexture: texture_depth_cube,
-                pointSampler: sampler,
-                emissionRadius: f32,
-                vogelDiskBaseAngle: f32,
-                displacement: vec3<f32>,
-                displacementNormalDirection: vec3<f32>,
-                displacementBinormalDirection: vec3<f32>,
-                referenceDepth: f32,
-            ) -> f32 {
-                let sampleDiskRadius: f32 = 0.4;
-                let sampleCount: u32 = 8u;
-
-                let inverseSqrtSampleCount = inverseSqrt(f32(sampleCount));
-
-                var averageOccludingDepth: f32 = 0.0;
-                var occludingDepthCount: f32 = 0.0;
-
-                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-                    let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
-                    let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
-
-                    let sampledDepth = textureSample(shadowMapTexture, pointSampler, sampleDisplacement);
-
-                    if (sampledDepth < referenceDepth) {
-                        averageOccludingDepth += sampledDepth;
-                        occludingDepthCount += 1.0;
-                    }
-                }
-
-                let minPenumbraExtent = 0.01;
-
-                if (occludingDepthCount > 0.0) {
-                    averageOccludingDepth /= occludingDepthCount;
-                    return max(minPenumbraExtent, emissionRadius * (referenceDepth - averageOccludingDepth) / averageOccludingDepth);
-                } else {
-                    return -1.0;
-                }
-            }
-
-            fn computeVogelDiskComparisonSampleAverage(
-                shadowMapTexture: texture_depth_cube,
-                comparisonSampler: sampler_comparison,
-                vogelDiskBaseAngle: f32,
-                sampleDiskRadius: f32,
-                displacement: vec3<f32>,
-                displacementNormalDirection: vec3<f32>,
-                displacementBinormalDirection: vec3<f32>,
-                referenceDepth: f32,
-            ) -> f32 {
-                let sample_density = 800.0;
-
-                let sampleCount = u32(clamp(sampleDiskRadius * sample_density, 3.0, 64.0));
-
-                let invSampleCount = 1.0 / f32(sampleCount);
-                let inverseSqrtSampleCount = sqrt(invSampleCount);
-
-                var sampleAverage: f32 = 0.0;
-
-                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-                    let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
-                    let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
-
-                    sampleAverage += textureSampleCompare(shadowMapTexture, comparisonSampler, sampleDisplacement, referenceDepth);
-                }
-
-                sampleAverage *= invSampleCount;
-
-                return sampleAverage;
-            }
-
-            fn computePCSSLightAccessFactor(
-                shadowMapTexture: texture_depth_cube,
-                pointSampler: sampler,
-                comparisonSampler: sampler_comparison,
-                emissionRadius: f32,
-                cameraClipSpacePosition: vec4<f32>,
-                lightSpaceFragmentDisplacement: vec3<f32>,
-                referenceDepth: f32,
-            ) -> f32 {
-                let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraClipSpacePosition);
-
-                let displacementNormalDirection = normalize(findPerpendicularVector(lightSpaceFragmentDisplacement));
-                let displacementBinormalDirection = normalize(cross(lightSpaceFragmentDisplacement, displacementNormalDirection));
-                
-                let shadowPenumbraExtent = computeShadowPenumbraExtent(
-                    shadowMapTexture,
-                    pointSampler,
-                    emissionRadius,
-                    vogelDiskBaseAngle,
-                    lightSpaceFragmentDisplacement,
-                    displacementNormalDirection,
-                    displacementBinormalDirection,
-                    referenceDepth,
-                );
-
-                if (shadowPenumbraExtent < 0.0) {
-                    return 1.0;
-                }
-
-                return computeVogelDiskComparisonSampleAverage(
-                    shadowMapTexture,
-                    comparisonSampler,
-                    vogelDiskBaseAngle,
-                    shadowPenumbraExtent,
-                    lightSpaceFragmentDisplacement,
-                    displacementNormalDirection,
-                    displacementBinormalDirection,
-                    referenceDepth,
-                );
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let texture_var_expr =
             include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
 
@@ -3922,10 +3597,10 @@ impl SampledTexture {
             ),
         );
 
-        SourceCode::generate_call_named(
+        source_code_lib.generate_function_call(
+            module,
             function,
-            "lightAccessFactor",
-            source_code.functions["computePCSSLightAccessFactor"],
+            "computePCSSLightAccessFactorOmniLight",
             vec![
                 texture_var_expr,
                 sampler_var_expr,
@@ -3941,6 +3616,7 @@ impl SampledTexture {
     fn generate_pcss_light_access_factor_expr_for_cascaded_shadow_map(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         function: &mut Function,
         tan_angular_radius_expr: Handle<Expression>,
         world_to_light_clip_space_xy_scale_expr: Handle<Expression>,
@@ -3950,142 +3626,6 @@ impl SampledTexture {
         depth_reference_expr: Handle<Expression>,
         array_idx_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            // Returns a random number between 0 and 1 based on the pixel coordinates
-            fn generateInterleavedGradientNoiseFactor(cameraClipSpacePosition: vec4<f32>) -> f32 {
-                let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
-                return fract(magic.z * fract(dot(magic.xy, cameraClipSpacePosition.xy)));
-            }
-
-            fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2<f32> {
-                let goldenAngle: f32 = 2.4;
-                let radius = sqrt(f32(sampleIdx) + 0.5) * inverseSqrtSampleCount;
-                let angle = baseAngle + goldenAngle * f32(sampleIdx);
-                return vec2<f32>(radius * cos(angle), radius * sin(angle));
-            }
-
-            fn computeVogelDiskBaseAngle(cameraClipSpacePosition: vec4<f32>) -> f32 {
-                // Multiply with 2 * pi to get random angle
-                return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraClipSpacePosition);
-            }
-
-            fn computeShadowPenumbraExtent(
-                shadowMapTexture: texture_depth_2d_array,
-                pointSampler: sampler,
-                array_index: i32,
-                tanAngularRadius: f32,
-                vogelDiskBaseAngle: f32,
-                worldSpaceToLightClipSpaceXYScale: f32,
-                worldSpaceToLightClipSpaceZScale: f32,
-                centerTextureCoords: vec2<f32>,
-                referenceDepth: f32,
-            ) -> f32 {
-                let diskRadius: f32 = 0.4 * worldSpaceToLightClipSpaceXYScale;
-                let sampleCount: u32 = 8u;
-
-                let inverseSqrtSampleCount = inverseSqrt(f32(sampleCount));
-
-                var averageOccludingDepth: f32 = 0.0;
-                var occludingDepthCount: f32 = 0.0;
-
-                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-                    let sampleTextureCoords = centerTextureCoords + diskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
-                    let sampledDepth = textureSample(shadowMapTexture, pointSampler, sampleTextureCoords, array_index);
-
-                    if (sampledDepth < referenceDepth) {
-                        averageOccludingDepth += sampledDepth;
-                        occludingDepthCount += 1.0;
-                    }
-                }
-
-                let minPenumbraExtent = 0.01;
-
-                if (occludingDepthCount > 0.0) {
-                    averageOccludingDepth /= occludingDepthCount;
-                    return max(minPenumbraExtent, tanAngularRadius * (referenceDepth - averageOccludingDepth) / worldSpaceToLightClipSpaceZScale);
-                } else {
-                    return -1.0;
-                }
-            }
-
-            fn computeVogelDiskComparisonSampleAverage(
-                shadowMapTexture: texture_depth_2d_array,
-                comparisonSampler: sampler_comparison,
-                array_index: i32,
-                vogelDiskBaseAngle: f32,
-                worldSpaceToLightClipSpaceXYScale: f32,
-                worldSpaceDiskRadius: f32,
-                centerTextureCoords: vec2<f32>,
-                referenceDepth: f32,
-            ) -> f32 {
-                let sample_density = 800.0;
-
-                let sampleCount = u32(clamp(worldSpaceDiskRadius * sample_density, 3.0, 64.0));
-
-                let diskRadius = worldSpaceDiskRadius * worldSpaceToLightClipSpaceXYScale;
-
-                let invSampleCount = 1.0 / f32(sampleCount);
-                let inverseSqrtSampleCount = sqrt(invSampleCount);
-
-                var sampleAverage: f32 = 0.0;
-
-                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-                    let sampleTextureCoords = centerTextureCoords + diskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
-                    sampleAverage += textureSampleCompare(shadowMapTexture, comparisonSampler, sampleTextureCoords, array_index, referenceDepth);
-                }
-
-                sampleAverage *= invSampleCount;
-
-                return sampleAverage;
-            }
-
-            fn computePCSSLightAccessFactor(
-                shadowMapTexture: texture_depth_2d_array,
-                pointSampler: sampler,
-                comparisonSampler: sampler_comparison,
-                array_index: i32,
-                tanAngularRadius: f32,
-                worldSpaceToLightClipSpaceXYScale: f32,
-                worldSpaceToLightClipSpaceZScale: f32,
-                cameraClipSpacePosition: vec4<f32>,
-                centerTextureCoords: vec2<f32>,
-                referenceDepth: f32,
-            ) -> f32 {
-                let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraClipSpacePosition);
-                
-                let shadowPenumbraExtent = computeShadowPenumbraExtent(
-                    shadowMapTexture,
-                    pointSampler,
-                    array_index,
-                    tanAngularRadius,
-                    vogelDiskBaseAngle,
-                    worldSpaceToLightClipSpaceXYScale,
-                    worldSpaceToLightClipSpaceZScale,
-                    centerTextureCoords,
-                    referenceDepth,
-                );
-
-                if (shadowPenumbraExtent < 0.0) {
-                    return 1.0;
-                }
-
-                return computeVogelDiskComparisonSampleAverage(
-                    shadowMapTexture,
-                    comparisonSampler,
-                    array_index,
-                    vogelDiskBaseAngle,
-                    worldSpaceToLightClipSpaceXYScale,
-                    shadowPenumbraExtent,
-                    centerTextureCoords,
-                    referenceDepth,
-                );
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let texture_var_expr =
             include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
 
@@ -4105,10 +3645,10 @@ impl SampledTexture {
             ),
         );
 
-        SourceCode::generate_call_named(
+        source_code_lib.generate_function_call(
+            module,
             function,
-            "lightAccessFactor",
-            source_code.functions["computePCSSLightAccessFactor"],
+            "computePCSSLightAccessFactorUniLight",
             vec![
                 texture_var_expr,
                 sampler_var_expr,
@@ -4687,62 +4227,120 @@ impl SourceCode {
     /// Returns an error if the string contains invalid source code.
     pub fn from_wgsl_source(source: &str) -> Result<Self> {
         let module = naga::front::wgsl::parse_str(source)?;
-        Ok(Self { module })
+
+        let available_functions = module
+            .functions
+            .iter()
+            .map(|(function_handle, function)| {
+                (function.name.as_ref().unwrap().to_string(), function_handle)
+            })
+            .collect();
+
+        let available_named_types = module
+            .types
+            .iter()
+            .filter_map(|(type_handle, ty)| {
+                ty.name
+                    .as_ref()
+                    .map(|type_name| (type_name.to_string(), type_handle))
+            })
+            .collect();
+
+        Ok(Self {
+            module,
+            available_functions,
+            available_named_types,
+            used_functions: HashMap::new(),
+            used_types: HashMap::new(),
+        })
     }
 
-    /// Imports the functions and named types into the given module.
-    ///
-    /// # Returns
-    /// The handles to the imported functions and types.
-    pub fn import_to_module(&self, module: &mut Module) -> SourceCodeHandles {
-        let mut importer = ModuleImporter::new(&self.module, module);
-
-        let mut function_handles = HashMap::with_capacity(self.module.functions.len());
-        for (function, func) in self.module.functions.iter() {
-            function_handles.insert(
-                func.name.as_ref().unwrap().to_string(),
-                importer.import_function(function).unwrap(),
-            );
-        }
-
-        let mut type_handles = HashMap::with_capacity(self.module.types.len());
-        for (type_handle, ty) in self.module.types.iter() {
-            if let Some(name) = ty.name.as_ref() {
-                type_handles.insert(name.to_string(), importer.import_type(type_handle));
-            }
-        }
-
-        SourceCodeHandles {
-            functions: function_handles,
-            types: type_handles,
-        }
-    }
-
-    /// Generates the code calling a function with the given handle with the
-    /// given argument expressions, assigning the given name to the return
-    /// expression.
+    /// Generates the code calling the function with the given name with the
+    /// given argument expressions within the given parent function. The called
+    /// function will be imported to the given module if it has not already been
+    /// imported.
     ///
     /// # Returns
     /// The return value expression.
-    pub fn generate_call_named(
-        function: &mut Function,
-        name: impl ToString,
-        function_handle: Handle<Function>,
+    ///
+    /// # Panics
+    /// If no function with the requested name exists in the source code.
+    ///
+    /// # Warning
+    /// As the handles of previously imported functions are cached, calling this
+    /// method on the same [`SourceCode`] instance with multiple [`Module`]s may
+    /// cause incorrect functions to be called.
+    pub fn generate_function_call(
+        &mut self,
+        module: &mut Module,
+        parent_function: &mut Function,
+        function_name: &str,
         arguments: Vec<Handle<Expression>>,
     ) -> Handle<Expression> {
-        let return_expr =
-            include_named_expr_in_func(function, name, Expression::CallResult(function_handle));
+        let imported_function_handle = *self
+            .used_functions
+            .entry(function_name.to_string())
+            .or_insert_with(|| {
+                let original_function_handle = *self
+                    .available_functions
+                    .get(&function_name.to_string())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Requested missing function from shader library: {}",
+                            function_name
+                        )
+                    });
+
+                let mut importer = ModuleImporter::new(&self.module, module);
+                importer.import_function(original_function_handle).unwrap()
+            });
+
+        let return_expr = include_expr_in_func(
+            parent_function,
+            Expression::CallResult(imported_function_handle),
+        );
 
         push_to_block(
-            &mut function.body,
+            &mut parent_function.body,
             Statement::Call {
-                function: function_handle,
+                function: imported_function_handle,
                 arguments,
                 result: Some(return_expr),
             },
         );
 
         return_expr
+    }
+
+    /// Returns the handle for the type with the given name. The requested type
+    /// will be imported to the given module if it has not already been
+    /// imported.
+    ///
+    /// # Panics
+    /// If no type with the requested name exists in the source code.
+    ///
+    /// # Warning
+    /// As the handles of previously imported types are cached, calling this
+    /// method on the same [`SourceCode`] instance with multiple [`Module`]s may
+    /// cause incorrect types to be returned.
+    pub fn use_type(&mut self, module: &mut Module, type_name: &str) -> Handle<Type> {
+        let imported_type_handle =
+            *self
+                .used_types
+                .entry(type_name.to_string())
+                .or_insert_with(|| {
+                    let original_type_handle = *self
+                        .available_named_types
+                        .get(&type_name.to_string())
+                        .unwrap_or_else(|| {
+                            panic!("Requested missing type from shader library: {}", type_name)
+                        });
+
+                    let mut importer = ModuleImporter::new(&self.module, module);
+                    importer.import_type(original_type_handle)
+                });
+
+        imported_type_handle
     }
 }
 
@@ -6438,6 +6036,190 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_with_normal_mapping_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    Some(MESH_VERTEX_BINDING_START + 3),
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: Some((0, 1)),
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_with_parallax_mapping_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    Some(MESH_VERTEX_BINDING_START + 3),
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: Some((0, 1)),
+                },
+            )),
+            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_and_normal_mapping_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    Some(MESH_VERTEX_BINDING_START + 3),
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: Some((0, 1)),
+                    height_map_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_and_parallax_mapping_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    Some(MESH_VERTEX_BINDING_START + 3),
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    diffuse_texture_and_sampler_bindings: None,
+                    specular_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                    normal_map_texture_and_sampler_bindings: None,
+                    height_map_texture_and_sampler_bindings: Some((0, 1)),
+                },
+            ))),
+            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
         )
         .unwrap()
         .0;
