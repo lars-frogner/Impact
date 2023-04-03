@@ -69,9 +69,8 @@ pub struct NormalMapComp(pub TextureID);
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ParallaxMapComp {
-    pub normal_map_texture_id: TextureID,
     pub height_map_texture_id: TextureID,
-    pub height_scale: fre,
+    pub displacement_scale: fre,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that
@@ -136,6 +135,15 @@ impl RoughnessTextureComp {
         Self {
             texture_id,
             roughness_scale: 1.0,
+        }
+    }
+}
+
+impl ParallaxMapComp {
+    pub fn new(height_map_texture_id: TextureID, displacement_scale: fre) -> Self {
+        Self {
+            height_map_texture_id,
+            displacement_scale,
         }
     }
 }

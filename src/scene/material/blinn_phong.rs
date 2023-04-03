@@ -33,7 +33,7 @@ pub struct UniformColorBlinnPhongMaterialFeature {
     diffuse_color: RGBColor,
     specular_color: RGBColor,
     shininess: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Fixed material properties for a Blinn-Phong material with uniform diffuse
@@ -47,7 +47,7 @@ pub struct UniformColorBlinnPhongMaterialFeature {
 pub struct UniformDiffuseBlinnPhongMaterialFeature {
     diffuse_color: RGBColor,
     shininess: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Fixed material properties for a Blinn-Phong material with uniform specular
@@ -61,7 +61,7 @@ pub struct UniformDiffuseBlinnPhongMaterialFeature {
 pub struct UniformSpecularBlinnPhongMaterialFeature {
     specular_color: RGBColor,
     shininess: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Fixed material properties for a Blinn-Phong material with no uniform color.
@@ -73,7 +73,7 @@ pub struct UniformSpecularBlinnPhongMaterialFeature {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedColorBlinnPhongMaterialFeature {
     shininess: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Checks if the entity-to-be with the given components has the components for
@@ -244,7 +244,8 @@ fn execute_material_setup(
 
     let shininess = roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess());
 
-    let parallax_height_scale = parallax_map.map_or(0.0, |parallax_map| parallax_map.height_scale);
+    let parallax_displacement_scale =
+        parallax_map.map_or(0.0, |parallax_map| parallax_map.displacement_scale);
 
     let (feature_type_id, feature_id) = match (diffuse_color, specular_color) {
         (Some(diffuse_color), Some(specular_color)) => {
@@ -257,7 +258,7 @@ fn execute_material_setup(
                     diffuse_color,
                     specular_color,
                     shininess,
-                    parallax_height_scale,
+                    parallax_displacement_scale,
                 ),
             )
         }
@@ -270,7 +271,7 @@ fn execute_material_setup(
                     instance_feature_manager,
                     diffuse_color,
                     shininess,
-                    parallax_height_scale,
+                    parallax_displacement_scale,
                 ),
             )
         }
@@ -283,7 +284,7 @@ fn execute_material_setup(
                     instance_feature_manager,
                     specular_color,
                     shininess,
-                    parallax_height_scale,
+                    parallax_displacement_scale,
                 ),
             )
         }
@@ -292,7 +293,7 @@ fn execute_material_setup(
             TexturedColorBlinnPhongMaterialFeature::add_feature(
                 instance_feature_manager,
                 shininess,
-                parallax_height_scale,
+                parallax_displacement_scale,
             ),
         ),
     };
@@ -359,11 +360,6 @@ fn execute_material_setup(
 
         vertex_attribute_requirements |= VertexAttributeSet::FOR_BUMP_MAPPED_SHADING;
 
-        texture_shader_input.normal_map_texture_and_sampler_bindings = Some(
-            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
-        );
-        texture_ids.push(parallax_map.normal_map_texture_id);
-
         texture_shader_input.height_map_texture_and_sampler_bindings = Some(
             MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
         );
@@ -409,7 +405,7 @@ impl UniformColorBlinnPhongMaterialFeature {
         diffuse_color: &DiffuseColorComp,
         specular_color: &SpecularColorComp,
         shininess: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -418,7 +414,7 @@ impl UniformColorBlinnPhongMaterialFeature {
                 diffuse_color: diffuse_color.0,
                 specular_color: specular_color.0,
                 shininess,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -428,7 +424,7 @@ impl UniformDiffuseBlinnPhongMaterialFeature {
         instance_feature_manager: &mut InstanceFeatureManager,
         diffuse_color: &DiffuseColorComp,
         shininess: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -436,7 +432,7 @@ impl UniformDiffuseBlinnPhongMaterialFeature {
             .add_feature(&Self {
                 diffuse_color: diffuse_color.0,
                 shininess,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -446,7 +442,7 @@ impl UniformSpecularBlinnPhongMaterialFeature {
         instance_feature_manager: &mut InstanceFeatureManager,
         specular_color: &SpecularColorComp,
         shininess: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -454,7 +450,7 @@ impl UniformSpecularBlinnPhongMaterialFeature {
             .add_feature(&Self {
                 specular_color: specular_color.0,
                 shininess,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -463,14 +459,14 @@ impl TexturedColorBlinnPhongMaterialFeature {
     fn add_feature(
         instance_feature_manager: &mut InstanceFeatureManager,
         shininess: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
             .expect("Missing storage for TexturedColorBlinnPhongMaterial features")
             .add_feature(&Self {
                 shininess,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -487,7 +483,7 @@ impl_InstanceFeature!(
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
     })
 );
 
@@ -502,7 +498,7 @@ impl_InstanceFeature!(
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: None,
         shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );
 
@@ -517,7 +513,7 @@ impl_InstanceFeature!(
         diffuse_color_location: None,
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );
 
@@ -531,6 +527,6 @@ impl_InstanceFeature!(
         diffuse_color_location: None,
         specular_color_location: None,
         shininess_location: MATERIAL_VERTEX_BINDING_START,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
     })
 );

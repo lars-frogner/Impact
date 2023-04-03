@@ -2,15 +2,9 @@
 
 use crate::rendering::CoreRenderingSystem;
 use anyhow::{anyhow, bail, Result};
+use image::io::Reader as ImageReader;
 use image::{self, DynamicImage, GenericImageView};
-use std::num::NonZeroU32;
-
-cfg_if::cfg_if! {
-    if #[cfg(not(target_arch = "wasm32"))] {
-        use std::path::Path;
-        use image::io::Reader as ImageReader;
-    }
-}
+use std::{num::NonZeroU32, path::Path};
 
 /// A texture representing a 2D image.
 #[derive(Debug)]
@@ -50,7 +44,6 @@ impl ImageTexture {
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
     /// - The image is grayscale and the given color space is not linear.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_path(
         core_system: &CoreRenderingSystem,
         image_path: impl AsRef<Path>,

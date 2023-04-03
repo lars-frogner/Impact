@@ -3478,6 +3478,33 @@ impl SampledTexture {
         }
     }
 
+    /// Generates and returns expressions for the texture and sampler
+    /// (respectively) in the given function. `use_comparison_sampler` specifies
+    /// whether the returned sampler should be a comparison sampler.
+    ///
+    /// # Panics
+    /// If the requested sampler type is not available.
+    pub fn generate_texture_and_sampler_expressions(
+        &self,
+        function: &mut Function,
+        use_comparison_sampler: bool,
+    ) -> (Handle<Expression>, Handle<Expression>) {
+        let texture_var_expr =
+            include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
+
+        let sampler_var_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(if use_comparison_sampler {
+                self.comparison_sampler_var
+                    .expect("Missing requested comparison sampler")
+            } else {
+                self.sampler_var.expect("Missing requested sampler")
+            }),
+        );
+
+        (texture_var_expr, sampler_var_expr)
+    }
+
     /// Generates and returns an expression sampling the texture at the given
     /// texture coordinates. If sampling a depth texture, a reference depth must
     /// also be provided for the comparison sampling. If an array index is
@@ -3494,19 +3521,8 @@ impl SampledTexture {
         depth_reference_expr: Option<Handle<Expression>>,
         gather: Option<SwizzleComponent>,
     ) -> Handle<Expression> {
-        let texture_var_expr =
-            include_expr_in_func(function, Expression::GlobalVariable(self.texture_var));
-
-        let sampler_var_expr = include_expr_in_func(
-            function,
-            Expression::GlobalVariable(if depth_reference_expr.is_some() {
-                self.comparison_sampler_var
-                    .expect("Missing comparison sampler for sampling with depth reference")
-            } else {
-                self.sampler_var
-                    .expect("Missing sampler for sampling without depth reference")
-            }),
-        );
+        let (texture_var_expr, sampler_var_expr) =
+            self.generate_texture_and_sampler_expressions(function, depth_reference_expr.is_some());
 
         let sampling_expr = emit_in_func(function, |function| {
             include_expr_in_func(
@@ -3547,13 +3563,15 @@ impl SampledTexture {
         })
     }
 
-    /// Generates and returns an expression sampling the texture at
-    /// the texture coordinates specified by the given expression,
-    /// and extracting the red value of the sampled RGBA color.
-    pub fn generate_red_sampling_expr(
+    /// Generates and returns an expression sampling the texture at the texture
+    /// coordinates specified by the given expression, and extracting the
+    /// specified channel of the sampled RGBA color (channel index 0 is red, 3
+    /// is alpha).
+    pub fn generate_single_channel_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
+        channel_index: u32,
     ) -> Handle<Expression> {
         let sampling_expr =
             self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
@@ -3563,7 +3581,7 @@ impl SampledTexture {
                 function,
                 Expression::AccessIndex {
                     base: sampling_expr,
-                    index: 0,
+                    index: channel_index,
                 },
             )
         })
@@ -5262,7 +5280,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5306,7 +5324,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5350,7 +5368,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5394,7 +5412,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5438,7 +5456,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5482,7 +5500,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5527,7 +5545,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5572,7 +5590,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5616,7 +5634,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5660,7 +5678,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5705,7 +5723,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5752,7 +5770,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5799,7 +5817,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5846,7 +5864,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5892,7 +5910,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5938,7 +5956,7 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5984,7 +6002,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6030,7 +6048,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6077,7 +6095,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6124,7 +6142,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6171,7 +6189,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6218,7 +6236,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6265,7 +6283,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6312,7 +6330,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6359,7 +6377,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6406,7 +6424,7 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((

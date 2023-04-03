@@ -56,8 +56,8 @@ pub struct MicrofacetFeatureShaderInput {
     /// roughness.
     pub roughness_location: u32,
     /// Vertex attribute location for the instance feature representing the
-    /// height scale for parallax mapping.
-    pub parallax_height_scale_location: u32,
+    /// displacement scale for parallax mapping.
+    pub parallax_displacement_scale_location: u32,
 }
 
 /// Input description specifying the bindings of textures for microfacet
@@ -91,7 +91,7 @@ pub struct MicrofacetVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     roughness: usize,
-    parallax_height_scale: usize,
+    parallax_displacement_scale: usize,
 }
 
 impl MicrofacetShadingModel {
@@ -168,10 +168,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             F32_WIDTH,
         );
 
-        let input_parallax_height_scale_field_idx = input_struct_builder.add_field(
-            "parallaxHeightScale",
+        let input_parallax_displacement_scale_field_idx = input_struct_builder.add_field(
+            "parallaxDisplacementScale",
             float_type,
-            self.feature_input.parallax_height_scale_location,
+            self.feature_input.parallax_displacement_scale_location,
             F32_WIDTH,
         );
 
@@ -186,19 +186,19 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 input_struct.get_field_expr(input_roughness_field_idx),
             );
 
-        let output_parallax_height_scale_field_idx = vertex_output_struct_builder
+        let output_parallax_displacement_scale_field_idx = vertex_output_struct_builder
             .add_field_with_perspective_interpolation(
-                "parallaxHeightScale",
+                "parallaxDisplacementScale",
                 float_type,
                 F32_WIDTH,
-                input_struct.get_field_expr(input_parallax_height_scale_field_idx),
+                input_struct.get_field_expr(input_parallax_displacement_scale_field_idx),
             );
 
         let mut indices = MicrofacetVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
             roughness: output_roughness_field_idx,
-            parallax_height_scale: output_parallax_height_scale_field_idx,
+            parallax_displacement_scale: output_parallax_displacement_scale_field_idx,
         };
 
         if let Some(idx) = input_diffuse_color_field_idx {
@@ -262,8 +262,72 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
             }
 
+            fn rotateVectorWithInverseOfQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
+                let tmp = 2.0 * cross(quaternion.xyz, vector);
+                return vector - quaternion.w * tmp + cross(quaternion.xyz, tmp);
+            }
+
             fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
                 return normalize(-vertexPosition);
+            }
+
+            fn computeParallaxMappedTextureCoordinates(
+                heightTexture: texture_2d<f32>,
+                heightSampler: sampler,
+                displacementScale: f32,
+                originalTextureCoordinates: vec2<f32>,
+                tangentToCameraSpaceRotationQuaternion: vec4<f32>,
+                cameraSpaceViewDirection: vec3<f32>,
+            ) -> vec2<f32> {
+                let tangentSpaceViewDirection = rotateVectorWithInverseOfQuaternion(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
+
+                let layerDepth = displacementScale / mix(64.0, 8.0, max(0.0, tangentSpaceViewDirection.z));
+
+                let textureCoordOffsetVector = tangentSpaceViewDirection.xy * (layerDepth / tangentSpaceViewDirection.z);
+
+                var currentDepth = 0.0;
+                var prevTextureCoords = originalTextureCoordinates;
+                var currentTextureCoords = originalTextureCoordinates;
+
+                let sampledHeight = textureSample(heightTexture, heightSampler, currentTextureCoords).r;
+                var currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
+                var prevSampledDepth = currentSampledDepth;
+
+                while currentSampledDepth > currentDepth {
+                    prevTextureCoords = currentTextureCoords;
+                    prevSampledDepth = currentSampledDepth;
+
+                    currentTextureCoords -= textureCoordOffsetVector;
+                    currentDepth += layerDepth;
+
+                    let sampledHeight = textureSample(heightTexture, heightSampler, currentTextureCoords).r;
+                    currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
+                }
+
+                let currentDepthDiff = currentSampledDepth - currentDepth;
+                let prevDepthDiff = prevSampledDepth - (currentDepth - layerDepth);
+
+                let interpWeightForZeroDepthDiff = currentDepthDiff / (currentDepthDiff - prevDepthDiff);
+
+                return mix(currentTextureCoords, prevTextureCoords, interpWeightForZeroDepthDiff);
+            }
+
+            fn obtainNormalFromHeightMap(
+                heightTexture: texture_2d<f32>,
+                heightSampler: sampler,
+                textureCoords: vec2<f32>,
+            ) -> vec3<f32> {
+                let textureDims = textureDimensions(heightTexture);
+                
+                let offsetU = vec2<f32>(1.0 / f32(textureDims.x), 0.0);
+                let offsetV = vec2<f32>(0.0, 1.0 / f32(textureDims.y));
+
+                let heightDownU = textureSample(heightTexture, heightSampler, textureCoords - offsetU).r;
+                let heightUpU = textureSample(heightTexture, heightSampler, textureCoords + offsetU).r;
+                let heightDownV = textureSample(heightTexture, heightSampler, textureCoords - offsetV).r;
+                let heightUpV = textureSample(heightTexture, heightSampler, textureCoords + offsetV).r;
+                
+                return normalize(vec3<f32>(heightDownU - heightUpU, heightDownV - heightUpV, 2.0));
             }
 
             fn computeNoDiffuseGGXSpecularColor(
@@ -531,7 +595,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         let fixed_roughness_value_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.roughness);
 
-        let (bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+        let view_dir_expr = SourceCode::generate_call_named(
+            fragment_function,
+            "viewDirection",
+            source_code.functions["computeViewDirection"],
+            vec![position_expr],
+        );
+
+        let (bind_group, mut texture_coord_expr) = if !self.texture_input.is_empty() {
             let texture_coord_expr = fragment_input_struct.get_field_expr(
                 mesh_input_field_indices
                     .texture_coords
@@ -545,6 +616,111 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         } else {
             (*bind_group_idx, None)
         };
+
+        let normal_vector_expr =
+            if let Some((height_map_texture_binding, height_map_sampler_binding)) =
+                self.texture_input.height_map_texture_and_sampler_bindings
+            {
+                let height_map_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "heightMap",
+                    bind_group,
+                    height_map_texture_binding,
+                    Some(height_map_sampler_binding),
+                    None,
+                );
+
+                let (height_map_texture_expr, height_map_sampler_expr) = height_map_texture
+                    .generate_texture_and_sampler_expressions(fragment_function, false);
+
+                let parallax_displacement_scale_expr = fragment_input_struct
+                    .get_field_expr(material_input_field_indices.parallax_displacement_scale);
+
+                let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .tangent_space_quaternion
+                        .expect("Missing tangent space quaternion for microfacet parallax mapping"),
+                );
+
+                texture_coord_expr = Some(SourceCode::generate_call_named(
+                    fragment_function,
+                    "parallaxMappedTextureCoords",
+                    source_code.functions["computeParallaxMappedTextureCoordinates"],
+                    vec![
+                        height_map_texture_expr,
+                        height_map_sampler_expr,
+                        parallax_displacement_scale_expr,
+                        texture_coord_expr.unwrap(),
+                        tangent_space_quaternion_expr,
+                        view_dir_expr,
+                    ],
+                ));
+
+                let tangent_space_normal_vector_expr = SourceCode::generate_call_named(
+                    fragment_function,
+                    "tangentSpaceNormalVector",
+                    source_code.functions["obtainNormalFromHeightMap"],
+                    vec![
+                        height_map_texture_expr,
+                        height_map_sampler_expr,
+                        texture_coord_expr.unwrap(),
+                    ],
+                );
+
+                SourceCode::generate_call_named(
+                    fragment_function,
+                    "normalVector",
+                    source_code.functions["rotateVectorWithQuaternion"],
+                    vec![
+                        tangent_space_quaternion_expr,
+                        tangent_space_normal_vector_expr,
+                    ],
+                )
+            } else if let Some((normal_map_texture_binding, normal_map_sampler_binding)) =
+                self.texture_input.normal_map_texture_and_sampler_bindings
+            {
+                let normal_map_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "normalMap",
+                    bind_group,
+                    normal_map_texture_binding,
+                    Some(normal_map_sampler_binding),
+                    None,
+                );
+
+                let normal_map_color_expr = normal_map_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+
+                let tangent_space_normal_expr = SourceCode::generate_call_named(
+                    fragment_function,
+                    "tangentSpaceNormalVector",
+                    source_code.functions["convertNormalMapColorToNormalVector"],
+                    vec![normal_map_color_expr],
+                );
+
+                let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .tangent_space_quaternion
+                        .expect("Missing tangent space quaternion for microfacet normal mapping"),
+                );
+
+                SourceCode::generate_call_named(
+                    fragment_function,
+                    "normalVector",
+                    source_code.functions["rotateVectorWithQuaternion"],
+                    vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
+                )
+            } else {
+                fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .normal_vector
+                        .expect("Missing normal vector for microfacet shading"),
+                )
+            };
 
         let diffuse_color_expr = self
             .texture_input
@@ -612,62 +788,18 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     );
 
                     let roughness_texture_value_expr = roughness_texture
-                        .generate_red_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+                        .generate_single_channel_sampling_expr(
+                            fragment_function,
+                            texture_coord_expr.unwrap(),
+                            0,
+                        );
 
                     SourceCode::generate_call_named(
                         fragment_function,
                         "ggxRoughness",
                         source_code.functions["computeGGXRoughnessFromSampledRoughness"],
-                    // Use fixed roughness as scale for roughness sampled from texture
+                        // Use fixed roughness as scale for roughness sampled from texture
                         vec![roughness_texture_value_expr, fixed_roughness_value_expr],
-                        )
-                },
-            );
-
-        let normal_vector_expr = self
-            .texture_input
-            .normal_map_texture_and_sampler_bindings
-            .map_or_else(
-                || {
-                    fragment_input_struct.get_field_expr(
-                        mesh_input_field_indices
-                            .normal_vector
-                            .expect("Missing normal vector for microfacet shading"),
-                    )
-                },
-                |(normal_map_texture_binding, normal_map_sampler_binding)| {
-                    let normal_map_texture = SampledTexture::declare(
-                        &mut module.types,
-                        &mut module.global_variables,
-                        TextureType::Image,
-                        "normalMap",
-                        bind_group,
-                        normal_map_texture_binding,
-                        Some(normal_map_sampler_binding),
-                        None,
-                    );
-
-                    let normal_map_color_expr = normal_map_texture
-                        .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
-
-                    let tangent_space_normal_expr = SourceCode::generate_call_named(
-                        fragment_function,
-                        "tangentSpaceNormalVector",
-                        source_code.functions["convertNormalMapColorToNormalVector"],
-                        vec![normal_map_color_expr],
-                    );
-
-                    let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
-                        mesh_input_field_indices.tangent_space_quaternion.expect(
-                            "Missing tangent space quaternion for microfacet normal mapping",
-                        ),
-                    );
-
-                    SourceCode::generate_call_named(
-                        fragment_function,
-                        "normalVector",
-                        source_code.functions["rotateVectorWithQuaternion"],
-                        vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
                     )
                 },
             );
@@ -682,13 +814,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     init: None,
                 },
             )),
-        );
-
-        let view_dir_expr = SourceCode::generate_call_named(
-            fragment_function,
-            "viewDirection",
-            source_code.functions["computeViewDirection"],
-            vec![position_expr],
         );
 
         let compute_color = |fragment_function, light_dir_expr, light_radiance_expr| match (

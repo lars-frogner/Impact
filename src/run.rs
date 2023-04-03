@@ -2,7 +2,7 @@
 
 use super::{
     geometry::{Degrees, UpperExclusiveBounds},
-    rendering::{CoreRenderingSystem, ImageTexture, RenderingSystem},
+    rendering::{CoreRenderingSystem, RenderingSystem},
 };
 use crate::{
     control::{Controllable, RollFreeCameraOrientationController, SemiDirectionalMotionController},
@@ -11,20 +11,19 @@ use crate::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{Assets, TextureID},
+    rendering::{Assets, ColorSpace},
     scene::{
         AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
         DirectionComp, EmissionExtentComp, FixedColorComp, LightDirection,
-        MicrofacetDiffuseReflection, MicrofacetSpecularReflection, Omnidirectional,
-        PerspectiveCameraComp, PlaneMeshComp, RadianceComp, RoughnessComp, ScalingComp,
-        SpecularColorComp, SphereMeshComp,
+        MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, Omnidirectional,
+        ParallaxMapComp, PerspectiveCameraComp, PlaneMeshComp, RadianceComp, RoughnessComp,
+        RoughnessTextureComp, ScalingComp, SpecularColorComp, SphereMeshComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
     world::World,
 };
 use anyhow::Result;
-use impact_utils::hash32;
 use nalgebra::{vector, Point3, Vector3};
 use std::f64::consts::PI;
 
@@ -80,11 +79,40 @@ async fn init_world(window: Window) -> Result<World> {
 
     let mut assets = Assets::new();
 
-    let wood_texture_id = assets
-        .load_image_texture_from_path(&core_system, "assets/Wood049_4K-JPG/Wood049_4K_Color.jpg")?;
-    let plaster_texture_id = assets.load_image_texture_from_path(
+    let bricks_color_texture_id = assets.load_image_texture_from_path(
         &core_system,
-        "assets/PaintedPlaster017_4K-JPG/PaintedPlaster017_4K_Color.jpg",
+        "assets/Bricks059_4K-JPG/Bricks059_4K_Color.jpg",
+        ColorSpace::Srgb,
+    )?;
+
+    let bricks_roughness_texture_id = assets.load_image_texture_from_path(
+        &core_system,
+        "assets/Bricks059_4K-JPG/Bricks059_4K_Roughness.jpg",
+        ColorSpace::Linear,
+    )?;
+
+    let bricks_height_texture_id = assets.load_image_texture_from_path(
+        &core_system,
+        "assets/Bricks059_4K-JPG/Bricks059_4K_Displacement.jpg",
+        ColorSpace::Linear,
+    )?;
+
+    let wood_floor_color_texture_id = assets.load_image_texture_from_path(
+        &core_system,
+        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Color.jpg",
+        ColorSpace::Srgb,
+    )?;
+
+    let wood_floor_roughness_texture_id = assets.load_image_texture_from_path(
+        &core_system,
+        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Roughness.jpg",
+        ColorSpace::Linear,
+    )?;
+
+    let wood_floor_normal_texture_id = assets.load_image_texture_from_path(
+        &core_system,
+        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_NormalDX.jpg",
+        ColorSpace::Linear,
     )?;
 
     let vertical_field_of_view = Degrees(70.0);
@@ -117,19 +145,6 @@ async fn init_world(window: Window) -> Result<World> {
             &Controllable,
         ))
         .unwrap();
-
-    // world
-    //     .create_entities((
-    //         &world.load_mesh_from_ply_file("assets/happy.ply").unwrap(),
-    //         &PositionComp(Point3::new(6.0, 4.3, 4.0)),
-    //         &ScalingComp(20.0),
-    //         &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), -PI / 4.0)),
-    //         &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.0))),
-    //         &SpecularColorComp::ALUMINUM,
-    //         &RoughnessComp(0.3),
-    //         &MicrofacetSpecularReflection,
-    //     ))
-    //     .unwrap();
 
     world
         .create_entities((
@@ -230,9 +245,10 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
-            &DiffuseTextureComp(wood_texture_id),
+            &DiffuseTextureComp(wood_floor_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::LIVING_TISSUE, 100.0),
-            &RoughnessComp(0.85),
+            &RoughnessTextureComp::unscaled(wood_floor_roughness_texture_id),
+            &NormalMapComp(wood_floor_normal_texture_id),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
@@ -244,9 +260,10 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0)),
-            &DiffuseTextureComp(plaster_texture_id),
-            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
-            &RoughnessComp(0.75),
+            &DiffuseTextureComp(bricks_color_texture_id),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
+            &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
+            &ParallaxMapComp::new(bricks_height_texture_id, 0.02),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
@@ -258,9 +275,10 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(-25.0, 0.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0)),
-            &DiffuseTextureComp(plaster_texture_id),
-            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
-            &RoughnessComp(0.75),
+            &DiffuseTextureComp(bricks_color_texture_id),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
+            &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
+            &ParallaxMapComp::new(bricks_height_texture_id, 0.02),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
@@ -272,24 +290,26 @@ async fn init_world(window: Window) -> Result<World> {
             &PositionComp(Point3::new(0.0, 0.0, 25.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
-            &DiffuseTextureComp(plaster_texture_id),
-            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 80.0),
-            &RoughnessComp(0.75),
+            &DiffuseTextureComp(bricks_color_texture_id),
+            &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
+            &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
+            &ParallaxMapComp::new(bricks_height_texture_id, 0.02),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
         .unwrap();
 
-    // world
-    //     .create_entities((
-    //         &SphereMeshComp::new(40),
-    //         &ScalingComp(0.2),
-    //         &PositionComp(Point3::new(0.0, 1.0, -2.0)),
-    //         &RadianceComp(vector![1.0, 1.0, 1.0] * 15.0),
-    //         &FixedColorComp(vector![1.0, 1.0, 1.0]),
-    //         &Omnidirectional,
-    //     ))
-    //     .unwrap();
+    world
+        .create_entities((
+            &SphereMeshComp::new(25),
+            &ScalingComp(0.7),
+            &PositionComp(Point3::new(-15.0, 11.0, 7.0)),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
+            &FixedColorComp(vector![1.0, 1.0, 1.0]),
+            &Omnidirectional,
+            &EmissionExtentComp(0.7),
+        ))
+        .unwrap();
 
     world
         .create_entities((
