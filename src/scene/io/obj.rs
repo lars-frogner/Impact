@@ -4,7 +4,7 @@ use crate::{
     geometry::{
         TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
-    rendering::{fre, ColorSpace, RenderingSystem},
+    rendering::{fre, ImageTextureConfig, RenderingSystem},
     scene::{
         DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshID, MeshRepository, RoughnessComp,
         SpecularColorComp, SpecularTextureComp, VertexColorComp,
@@ -268,7 +268,7 @@ fn create_material_components_from_tobj_material(
         let diffuse_texture_id = assets.load_image_texture_from_path(
             renderer.core_system(),
             &material.diffuse_texture,
-            ColorSpace::Srgb,
+            ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
@@ -287,7 +287,7 @@ fn create_material_components_from_tobj_material(
         let specular_texture_id = assets.load_image_texture_from_path(
             renderer.core_system(),
             &material.specular_texture,
-            ColorSpace::Srgb,
+            ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(

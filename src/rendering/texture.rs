@@ -4,7 +4,9 @@ mod depth;
 mod image;
 mod shadow_map;
 
-pub use self::image::{ColorSpace, ImageTexture, MultisampledRenderTargetTexture};
+pub use self::image::{
+    ColorSpace, ImageTexture, ImageTextureConfig, MultisampledRenderTargetTexture,
+};
 pub use depth::DepthTexture;
 pub use shadow_map::{
     CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,

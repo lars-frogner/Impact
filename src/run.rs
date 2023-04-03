@@ -11,7 +11,7 @@ use crate::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{Assets, ColorSpace},
+    rendering::{Assets, ImageTextureConfig},
     scene::{
         AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
         DirectionComp, EmissionExtentComp, FixedColorComp, LightDirection,
@@ -83,37 +83,37 @@ async fn init_world(window: Window) -> Result<World> {
     let bricks_color_texture_id = assets.load_image_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Color.jpg",
-        ColorSpace::Srgb,
+        ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
     )?;
 
     let bricks_roughness_texture_id = assets.load_image_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Roughness.jpg",
-        ColorSpace::Linear,
+        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
     let bricks_height_texture_id = assets.load_image_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Displacement.jpg",
-        ColorSpace::Linear,
+        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
     let wood_floor_color_texture_id = assets.load_image_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Color.jpg",
-        ColorSpace::Srgb,
+        ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
     )?;
 
     let wood_floor_roughness_texture_id = assets.load_image_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Roughness.jpg",
-        ColorSpace::Linear,
+        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
     let wood_floor_normal_texture_id = assets.load_image_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_NormalDX.jpg",
-        ColorSpace::Linear,
+        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
     let vertical_field_of_view = Degrees(70.0);

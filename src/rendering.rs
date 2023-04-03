@@ -34,7 +34,8 @@ pub use shader::{
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
-    CascadeIdx, ColorSpace, DepthTexture, ImageTexture, MultisampledRenderTargetTexture,
+    CascadeIdx, ColorSpace, DepthTexture, ImageTexture, ImageTextureConfig,
+    MultisampledRenderTargetTexture,
 };
 
 use self::resource::RenderResourceManager;
