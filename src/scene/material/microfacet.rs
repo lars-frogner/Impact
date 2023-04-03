@@ -34,7 +34,7 @@ pub struct UniformColorMicrofacetMaterialFeature {
     diffuse_color: RGBColor,
     specular_color: RGBColor,
     roughness: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Fixed material properties for a microfacet material with uniform diffuse
@@ -48,7 +48,7 @@ pub struct UniformColorMicrofacetMaterialFeature {
 pub struct UniformDiffuseMicrofacetMaterialFeature {
     diffuse_color: RGBColor,
     roughness: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Fixed material properties for a microfacet material with uniform specular
@@ -62,7 +62,7 @@ pub struct UniformDiffuseMicrofacetMaterialFeature {
 pub struct UniformSpecularMicrofacetMaterialFeature {
     specular_color: RGBColor,
     roughness: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Fixed material properties for a microfacet material with no uniform color.
@@ -74,7 +74,7 @@ pub struct UniformSpecularMicrofacetMaterialFeature {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedColorMicrofacetMaterialFeature {
     roughness: fre,
-    parallax_height_scale: fre,
+    parallax_displacement_scale: fre,
 }
 
 /// Checks if the entity-to-be with the given components has the components for
@@ -556,7 +556,8 @@ fn execute_material_setup(
         1.0
     };
 
-    let parallax_height_scale = parallax_map.map_or(0.0, |parallax_map| parallax_map.height_scale);
+    let parallax_displacement_scale =
+        parallax_map.map_or(0.0, |parallax_map| parallax_map.displacement_scale);
 
     let (feature_type_id, feature_id) = match (diffuse_color, specular_color) {
         (Some(diffuse_color), Some(specular_color)) => {
@@ -569,7 +570,7 @@ fn execute_material_setup(
                     diffuse_color,
                     specular_color,
                     roughness_value,
-                    parallax_height_scale,
+                    parallax_displacement_scale,
                 ),
             )
         }
@@ -582,7 +583,7 @@ fn execute_material_setup(
                     instance_feature_manager,
                     diffuse_color,
                     roughness_value,
-                    parallax_height_scale,
+                    parallax_displacement_scale,
                 ),
             )
         }
@@ -595,7 +596,7 @@ fn execute_material_setup(
                     instance_feature_manager,
                     specular_color,
                     roughness_value,
-                    parallax_height_scale,
+                    parallax_displacement_scale,
                 ),
             )
         }
@@ -604,7 +605,7 @@ fn execute_material_setup(
             TexturedColorMicrofacetMaterialFeature::add_feature(
                 instance_feature_manager,
                 roughness_value,
-                parallax_height_scale,
+                parallax_displacement_scale,
             ),
         ),
     };
@@ -688,11 +689,6 @@ fn execute_material_setup(
 
         vertex_attribute_requirements |= VertexAttributeSet::FOR_BUMP_MAPPED_SHADING;
 
-        texture_shader_input.normal_map_texture_and_sampler_bindings = Some(
-            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
-        );
-        texture_ids.push(parallax_map.normal_map_texture_id);
-
         texture_shader_input.height_map_texture_and_sampler_bindings = Some(
             MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
         );
@@ -744,7 +740,7 @@ impl UniformColorMicrofacetMaterialFeature {
         diffuse_color: &DiffuseColorComp,
         specular_color: &SpecularColorComp,
         roughness: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -753,7 +749,7 @@ impl UniformColorMicrofacetMaterialFeature {
                 diffuse_color: diffuse_color.0,
                 specular_color: specular_color.0,
                 roughness,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -763,7 +759,7 @@ impl UniformDiffuseMicrofacetMaterialFeature {
         instance_feature_manager: &mut InstanceFeatureManager,
         diffuse_color: &DiffuseColorComp,
         roughness: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -771,7 +767,7 @@ impl UniformDiffuseMicrofacetMaterialFeature {
             .add_feature(&Self {
                 diffuse_color: diffuse_color.0,
                 roughness,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -781,7 +777,7 @@ impl UniformSpecularMicrofacetMaterialFeature {
         instance_feature_manager: &mut InstanceFeatureManager,
         specular_color: &SpecularColorComp,
         roughness: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
@@ -789,7 +785,7 @@ impl UniformSpecularMicrofacetMaterialFeature {
             .add_feature(&Self {
                 specular_color: specular_color.0,
                 roughness,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -798,14 +794,14 @@ impl TexturedColorMicrofacetMaterialFeature {
     fn add_feature(
         instance_feature_manager: &mut InstanceFeatureManager,
         roughness: fre,
-        parallax_height_scale: fre,
+        parallax_displacement_scale: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
             .expect("Missing storage for TexturedColorMicrofacetMaterial features")
             .add_feature(&Self {
                 roughness,
-                parallax_height_scale,
+                parallax_displacement_scale,
             })
     }
 }
@@ -822,7 +818,7 @@ impl_InstanceFeature!(
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
     })
 );
 
@@ -837,7 +833,7 @@ impl_InstanceFeature!(
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: None,
         roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );
 
@@ -852,7 +848,7 @@ impl_InstanceFeature!(
         diffuse_color_location: None,
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
     })
 );
 
@@ -866,6 +862,6 @@ impl_InstanceFeature!(
         diffuse_color_location: None,
         specular_color_location: None,
         roughness_location: MATERIAL_VERTEX_BINDING_START,
-        parallax_height_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
+        parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
     })
 );

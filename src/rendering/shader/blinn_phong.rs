@@ -24,8 +24,8 @@ pub struct BlinnPhongFeatureShaderInput {
     /// shininess.
     pub shininess_location: u32,
     /// Vertex attribute location for the instance feature representing the
-    /// height scale for parallax mapping.
-    pub parallax_height_scale_location: u32,
+    /// displacement scale for parallax mapping.
+    pub parallax_displacement_scale_location: u32,
 }
 
 /// Input description specifying the bindings of textures for Blinn-Phong
@@ -58,7 +58,7 @@ pub struct BlinnPhongVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     shininess: usize,
-    parallax_height_scale: usize,
+    parallax_displacement_scale: usize,
 }
 
 impl<'a> BlinnPhongShaderGenerator<'a> {
@@ -113,10 +113,10 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             F32_WIDTH,
         );
 
-        let input_parallax_height_scale_field_idx = input_struct_builder.add_field(
-            "parallaxHeightScale",
+        let input_parallax_displacement_scale_field_idx = input_struct_builder.add_field(
+            "parallaxDisplacementScale",
             float_type,
-            self.feature_input.parallax_height_scale_location,
+            self.feature_input.parallax_displacement_scale_location,
             F32_WIDTH,
         );
 
@@ -131,19 +131,19 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 input_struct.get_field_expr(input_shininess_field_idx),
             );
 
-        let output_parallax_height_scale_field_idx = vertex_output_struct_builder
+        let output_parallax_displacement_scale_field_idx = vertex_output_struct_builder
             .add_field_with_perspective_interpolation(
-                "parallaxHeightScale",
+                "parallaxDisplacementScale",
                 float_type,
                 F32_WIDTH,
-                input_struct.get_field_expr(input_parallax_height_scale_field_idx),
+                input_struct.get_field_expr(input_parallax_displacement_scale_field_idx),
             );
 
         let mut indices = BlinnPhongVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
             shininess: output_shininess_field_idx,
-            parallax_height_scale: output_parallax_height_scale_field_idx,
+            parallax_displacement_scale: output_parallax_displacement_scale_field_idx,
         };
 
         if let Some(idx) = input_diffuse_color_field_idx {
@@ -195,6 +195,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let source_code = SourceCode::from_wgsl_source(
             "\
             fn convertNormalMapColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
+                // May require normalization depending on filtering
                 return 2.0 * (color - 0.5);
             }
 
