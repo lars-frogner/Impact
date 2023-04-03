@@ -184,6 +184,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
@@ -192,64 +193,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         material_input_field_indices: &BlinnPhongVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
     ) {
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn convertNormalMapColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
-                // May require normalization depending on filtering
-                return 2.0 * (color - 0.5);
-            }
-
-            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
-                let tmp = 2.0 * cross(quaternion.xyz, vector);
-                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
-            }
-
-            fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
-                return normalize(-vertexPosition);
-            }
-
-            fn computeDiffuseBlinnPhongColor(
-                normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let diffuseFactor = max(0.0, dot(lightDirection, normalVector));
-                return lightRadiance * diffuseFactor * diffuseColor;
-            }
-
-            fn computeSpecularBlinnPhongColor(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                specularColor: vec3<f32>,
-                shininess: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let halfVector = normalize((lightDirection + viewDirection));
-                let specularFactor = pow(max(0.0, dot(halfVector, normalVector)), shininess);
-                return lightRadiance * specularFactor * specularColor;
-            }
-
-            fn computeBlinnPhongColor(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
-                shininess: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let halfVector = normalize((lightDirection + viewDirection));
-                let diffuseFactor = max(0.0, dot(lightDirection, normalVector));
-                let specularFactor = pow(max(0.0, dot(halfVector, normalVector)), shininess);
-                return lightRadiance * (diffuseFactor * diffuseColor + specularFactor * specularColor);
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let light_shader_generator =
             light_shader_generator.expect("Missing light for Blinn-Phong shading");
 
@@ -265,7 +208,14 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let shininess_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.shininess);
 
-        let (bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+        let view_dir_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "computeCameraSpaceViewDirection",
+            vec![position_expr],
+        );
+
+        let (bind_group, mut texture_coord_expr) = if !self.texture_input.is_empty() {
             let texture_coord_expr = fragment_input_struct.get_field_expr(
                 mesh_input_field_indices
                     .texture_coords
@@ -279,6 +229,111 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         } else {
             (*bind_group_idx, None)
         };
+
+        let normal_vector_expr =
+            if let Some((height_map_texture_binding, height_map_sampler_binding)) =
+                self.texture_input.height_map_texture_and_sampler_bindings
+            {
+                let height_map_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "heightMap",
+                    bind_group,
+                    height_map_texture_binding,
+                    Some(height_map_sampler_binding),
+                    None,
+                );
+
+                let (height_map_texture_expr, height_map_sampler_expr) = height_map_texture
+                    .generate_texture_and_sampler_expressions(fragment_function, false);
+
+                let parallax_displacement_scale_expr = fragment_input_struct
+                    .get_field_expr(material_input_field_indices.parallax_displacement_scale);
+
+                let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices.tangent_space_quaternion.expect(
+                        "Missing tangent space quaternion for Blinn-Phong parallax mapping",
+                    ),
+                );
+
+                texture_coord_expr = Some(source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeParallaxMappedTextureCoordinates",
+                    vec![
+                        height_map_texture_expr,
+                        height_map_sampler_expr,
+                        parallax_displacement_scale_expr,
+                        texture_coord_expr.unwrap(),
+                        tangent_space_quaternion_expr,
+                        view_dir_expr,
+                    ],
+                ));
+
+                let tangent_space_normal_vector_expr = source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "obtainNormalFromHeightMap",
+                    vec![
+                        height_map_texture_expr,
+                        height_map_sampler_expr,
+                        texture_coord_expr.unwrap(),
+                    ],
+                );
+
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "rotateVectorWithQuaternion",
+                    vec![
+                        tangent_space_quaternion_expr,
+                        tangent_space_normal_vector_expr,
+                    ],
+                )
+            } else if let Some((normal_map_texture_binding, normal_map_sampler_binding)) =
+                self.texture_input.normal_map_texture_and_sampler_bindings
+            {
+                let normal_map_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "normalMap",
+                    bind_group,
+                    normal_map_texture_binding,
+                    Some(normal_map_sampler_binding),
+                    None,
+                );
+
+                let normal_map_color_expr = normal_map_texture
+                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+
+                let tangent_space_normal_expr = source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "convertNormalMapColorToNormalVector",
+                    vec![normal_map_color_expr],
+                );
+
+                let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .tangent_space_quaternion
+                        .expect("Missing tangent space quaternion for Blinn-Phong normal mapping"),
+                );
+
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "rotateVectorWithQuaternion",
+                    vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
+                )
+            } else {
+                fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .normal_vector
+                        .expect("Missing normal vector for Blinn-Phong shading"),
+                )
+            };
 
         let diffuse_color_expr = self
             .texture_input
@@ -328,54 +383,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     .map(|idx| fragment_input_struct.get_field_expr(idx))
             });
 
-        let normal_vector_expr = self
-            .texture_input
-            .normal_map_texture_and_sampler_bindings
-            .map_or_else(
-                || {
-                    fragment_input_struct.get_field_expr(
-                        mesh_input_field_indices
-                            .normal_vector
-                            .expect("Missing normal vector for Blinn-Phong shading"),
-                    )
-                },
-                |(normal_map_texture_binding, normal_map_sampler_binding)| {
-                    let normal_map_texture = SampledTexture::declare(
-                        &mut module.types,
-                        &mut module.global_variables,
-                        TextureType::Image,
-                        "normalMap",
-                        bind_group,
-                        normal_map_texture_binding,
-                        Some(normal_map_sampler_binding),
-                        None,
-                    );
-
-                    let normal_map_color_expr = normal_map_texture
-                        .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
-
-                    let tangent_space_normal_expr = SourceCode::generate_call_named(
-                        fragment_function,
-                        "tangentSpaceNormalVector",
-                        source_code.functions["convertNormalMapColorToNormalVector"],
-                        vec![normal_map_color_expr],
-                    );
-
-                    let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
-                        mesh_input_field_indices.tangent_space_quaternion.expect(
-                            "Missing tangent space quaternion for Blinn-Phong normal mapping",
-                        ),
-                    );
-
-                    SourceCode::generate_call_named(
-                        fragment_function,
-                        "normalVector",
-                        source_code.functions["rotateVectorWithQuaternion"],
-                        vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
-                    )
-                },
-            );
-
         let color_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
             Expression::LocalVariable(append_to_arena(
@@ -388,68 +395,10 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             )),
         );
 
-        let compute_color = |fragment_function, light_dir_expr, light_radiance_expr| match (
-            diffuse_color_expr,
-            specular_color_expr,
+        let (light_dir_expr, light_radiance_expr) = match (
+            light_shader_generator,
+            light_input_field_indices,
         ) {
-            (Some(diffuse_color_expr), None) => SourceCode::generate_call_named(
-                fragment_function,
-                "lightColor",
-                source_code.functions["computeDiffuseBlinnPhongColor"],
-                vec![
-                    normal_vector_expr,
-                    diffuse_color_expr,
-                    light_dir_expr,
-                    light_radiance_expr,
-                ],
-            ),
-            (None, Some(specular_color_expr)) => {
-                let view_dir_expr = SourceCode::generate_call_named(
-                    fragment_function,
-                    "viewDirection",
-                    source_code.functions["computeViewDirection"],
-                    vec![position_expr],
-                );
-                SourceCode::generate_call_named(
-                    fragment_function,
-                    "lightColor",
-                    source_code.functions["computeSpecularBlinnPhongColor"],
-                    vec![
-                        view_dir_expr,
-                        normal_vector_expr,
-                        specular_color_expr,
-                        shininess_expr,
-                        light_dir_expr,
-                        light_radiance_expr,
-                    ],
-                )
-            }
-            (Some(diffuse_color_expr), Some(specular_color_expr)) => {
-                let view_dir_expr = SourceCode::generate_call_named(
-                    fragment_function,
-                    "viewDirection",
-                    source_code.functions["computeViewDirection"],
-                    vec![position_expr],
-                );
-                SourceCode::generate_call_named(
-                    fragment_function,
-                    "lightColor",
-                    source_code.functions["computeBlinnPhongColor"],
-                    vec![
-                        view_dir_expr,
-                        normal_vector_expr,
-                        diffuse_color_expr,
-                        specular_color_expr,
-                        shininess_expr,
-                        light_dir_expr,
-                        light_radiance_expr,
-                    ],
-                )
-            }
-            (None, None) => panic!("No diffuse or specular color for Blinn-Phong shader"),
-        };
-
-        let light_color_expr = match (light_shader_generator, light_input_field_indices) {
             (
                 LightShaderGenerator::OmnidirectionalLight(
                     OmnidirectionalLightShaderGenerator::ForShading(
@@ -461,16 +410,14 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 let camera_clip_position_expr =
                     fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
-                let (light_dir_expr, light_radiance_expr) = omnidirectional_light_shader_generator
-                    .generate_fragment_shading_code(
-                        module,
-                        fragment_function,
-                        camera_clip_position_expr,
-                        position_expr,
-                        normal_vector_expr,
-                    );
-
-                compute_color(fragment_function, light_dir_expr, light_radiance_expr)
+                omnidirectional_light_shader_generator.generate_fragment_shading_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    camera_clip_position_expr,
+                    position_expr,
+                    normal_vector_expr,
+                )
             }
             (
                 LightShaderGenerator::UnidirectionalLight(
@@ -492,20 +439,61 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     unidirectional_light_input_field_indices.light_space_normal_vector,
                 );
 
-                let (light_dir_expr, light_radiance_expr) = unidirectional_light_shader_generator
-                    .generate_fragment_shading_code(
-                        module,
-                        fragment_function,
-                        camera_clip_position_expr,
-                        light_space_position_expr,
-                        light_space_normal_vector_expr,
-                    );
-
-                compute_color(fragment_function, light_dir_expr, light_radiance_expr)
+                unidirectional_light_shader_generator.generate_fragment_shading_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    camera_clip_position_expr,
+                    light_space_position_expr,
+                    light_space_normal_vector_expr,
+                )
             }
             _ => {
                 panic!("Invalid variant of light shader generator and/or light vertex output field indices for Blinn-Phong shading");
             }
+        };
+
+        let light_color_expr = match (diffuse_color_expr, specular_color_expr) {
+            (Some(diffuse_color_expr), None) => source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeDiffuseBlinnPhongColor",
+                vec![
+                    normal_vector_expr,
+                    diffuse_color_expr,
+                    light_dir_expr,
+                    light_radiance_expr,
+                ],
+            ),
+            (None, Some(specular_color_expr)) => source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeSpecularBlinnPhongColor",
+                vec![
+                    view_dir_expr,
+                    normal_vector_expr,
+                    specular_color_expr,
+                    shininess_expr,
+                    light_dir_expr,
+                    light_radiance_expr,
+                ],
+            ),
+            (Some(diffuse_color_expr), Some(specular_color_expr)) => source_code_lib
+                .generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeBlinnPhongColor",
+                    vec![
+                        view_dir_expr,
+                        normal_vector_expr,
+                        diffuse_color_expr,
+                        specular_color_expr,
+                        shininess_expr,
+                        light_dir_expr,
+                        light_radiance_expr,
+                    ],
+                ),
+            (None, None) => panic!("No diffuse or specular color for Blinn-Phong shader"),
         };
 
         push_to_block(

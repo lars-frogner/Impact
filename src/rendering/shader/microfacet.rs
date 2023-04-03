@@ -239,6 +239,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         fragment_input_struct: &InputStruct,
@@ -247,339 +248,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         material_input_field_indices: &MicrofacetVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
     ) {
-        // TODO: Diffuse microfacet BRDF evaluates to zero when
-        // viewDirectionDotNormalVector <= 0, which may happen for visible
-        // fragments when using normal mapping, leading to dark artifacts
-        let source_code = SourceCode::from_wgsl_source(
-            "\
-            fn convertNormalMapColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
-                // May require normalization depending on filtering
-                return 2.0 * (color - 0.5);
-            }
-
-            fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
-                let tmp = 2.0 * cross(quaternion.xyz, vector);
-                return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
-            }
-
-            fn rotateVectorWithInverseOfQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<f32> {
-                let tmp = 2.0 * cross(quaternion.xyz, vector);
-                return vector - quaternion.w * tmp + cross(quaternion.xyz, tmp);
-            }
-
-            fn computeViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
-                return normalize(-vertexPosition);
-            }
-
-            fn computeParallaxMappedTextureCoordinates(
-                heightTexture: texture_2d<f32>,
-                heightSampler: sampler,
-                displacementScale: f32,
-                originalTextureCoordinates: vec2<f32>,
-                tangentToCameraSpaceRotationQuaternion: vec4<f32>,
-                cameraSpaceViewDirection: vec3<f32>,
-            ) -> vec2<f32> {
-                let tangentSpaceViewDirection = rotateVectorWithInverseOfQuaternion(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
-
-                let layerDepth = displacementScale / mix(64.0, 8.0, max(0.0, tangentSpaceViewDirection.z));
-
-                let textureCoordOffsetVector = tangentSpaceViewDirection.xy * (layerDepth / tangentSpaceViewDirection.z);
-
-                var currentDepth = 0.0;
-                var prevTextureCoords = originalTextureCoordinates;
-                var currentTextureCoords = originalTextureCoordinates;
-
-                let sampledHeight = textureSample(heightTexture, heightSampler, currentTextureCoords).r;
-                var currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
-                var prevSampledDepth = currentSampledDepth;
-
-                while currentSampledDepth > currentDepth {
-                    prevTextureCoords = currentTextureCoords;
-                    prevSampledDepth = currentSampledDepth;
-
-                    currentTextureCoords -= textureCoordOffsetVector;
-                    currentDepth += layerDepth;
-
-                    let sampledHeight = textureSample(heightTexture, heightSampler, currentTextureCoords).r;
-                    currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
-                }
-
-                let currentDepthDiff = currentSampledDepth - currentDepth;
-                let prevDepthDiff = prevSampledDepth - (currentDepth - layerDepth);
-
-                let interpWeightForZeroDepthDiff = currentDepthDiff / (currentDepthDiff - prevDepthDiff);
-
-                return mix(currentTextureCoords, prevTextureCoords, interpWeightForZeroDepthDiff);
-            }
-
-            fn obtainNormalFromHeightMap(
-                heightTexture: texture_2d<f32>,
-                heightSampler: sampler,
-                textureCoords: vec2<f32>,
-            ) -> vec3<f32> {
-                let textureDims = textureDimensions(heightTexture);
-                
-                let offsetU = vec2<f32>(1.0 / f32(textureDims.x), 0.0);
-                let offsetV = vec2<f32>(0.0, 1.0 / f32(textureDims.y));
-
-                let heightDownU = textureSample(heightTexture, heightSampler, textureCoords - offsetU).r;
-                let heightUpU = textureSample(heightTexture, heightSampler, textureCoords + offsetU).r;
-                let heightDownV = textureSample(heightTexture, heightSampler, textureCoords - offsetV).r;
-                let heightUpV = textureSample(heightTexture, heightSampler, textureCoords + offsetV).r;
-                
-                return normalize(vec3<f32>(heightDownU - heightUpU, heightDownV - heightUpV, 2.0));
-            }
-
-            fn computeNoDiffuseGGXSpecularColor(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                specularColor: vec3<f32>,
-                roughness: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let halfVector = normalize((lightDirection + viewDirection));
-
-                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-                let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
-                let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
-                let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
-                    specularColor,
-                    clampedLightDirectionDotNormalVector,
-                    clampedViewDirectionDotNormalVector,
-                    clampedLightDirectionDotHalfVector,
-                    normalVectorDotHalfVector,
-                    roughness,
-                );
-
-                return computeColor(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
-            }
-
-            fn computeGGXRoughnessFromSampledRoughness(sampledRoughness: f32, roughnessScale: f32) -> f32 {
-                // Square sampled roughness (assumed perceptually linear) to get
-                // GGX roughness, then apply scaling
-                return sampledRoughness * sampledRoughness * roughnessScale;
-            }
-
-            fn computeLambertianDiffuseGGXSpecularColor(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
-                roughness: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let halfVector = normalize((lightDirection + viewDirection));
-
-                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-                let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
-                let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
-                // The Lambertian BRDF (diffuseColor / pi) must be scaled to
-                // account for some of the available light being specularly
-                // reflected rather than subsurface scattered (Shirley et al.
-                // 1997)
-                let diffuseBRDFTimesPi = diffuseColor
-                    * computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
-                          specularColor,
-                          clampedLightDirectionDotNormalVector,
-                          clampedViewDirectionDotNormalVector
-                    );
-
-                let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
-                    specularColor,
-                    clampedLightDirectionDotNormalVector,
-                    clampedViewDirectionDotNormalVector,
-                    clampedLightDirectionDotHalfVector,
-                    normalVectorDotHalfVector,
-                    roughness,
-                );
-
-                return computeColor(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
-            }
-
-            fn computeGGXDiffuseGGXSpecularColor(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
-                roughness: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let halfVector = normalize((lightDirection + viewDirection));
-
-                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-                let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
-                let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
-                let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
-                let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
-                    diffuseColor,
-                    specularColor,
-                    clampedLightDirectionDotNormalVector,
-                    clampedViewDirectionDotNormalVector,
-                    lightDirectionDotViewDirection,
-                    normalVectorDotHalfVector,
-                    roughness,
-                );
-
-                let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
-                    specularColor,
-                    clampedLightDirectionDotNormalVector,
-                    clampedViewDirectionDotNormalVector,
-                    clampedLightDirectionDotHalfVector,
-                    normalVectorDotHalfVector,
-                    roughness,
-                );
-
-                return computeColor(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
-            }
-
-            fn computeGGXDiffuseNoSpecularColor(
-                viewDirection: vec3<f32>,
-                normalVector: vec3<f32>,
-                diffuseColor: vec3<f32>,
-                roughness: f32,
-                lightDirection: vec3<f32>,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                let halfVector = normalize((lightDirection + viewDirection));
-
-                let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-                let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-                let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
-                let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
-                let zero = vec3<f32>(0.0, 0.0, 0.0);
-
-                let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
-                    diffuseColor,
-                    zero,
-                    clampedLightDirectionDotNormalVector,
-                    clampedViewDirectionDotNormalVector,
-                    lightDirectionDotViewDirection,
-                    normalVectorDotHalfVector,
-                    roughness,
-                );
-
-                return computeColor(diffuseBRDFTimesPi, zero, clampedLightDirectionDotNormalVector, lightRadiance);
-            }
-
-            fn computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector: f32) -> f32 {
-                let oneMinusLDotN = 1.0 - max(0.0, clampedLightDirectionDotNormalVector);
-                return oneMinusLDotN * oneMinusLDotN * oneMinusLDotN * oneMinusLDotN * oneMinusLDotN;
-            }
-
-            // Computes Fresnel reflectance using the Schlick approximation.
-            fn computeFresnelReflectance(
-                specularColor: vec3<f32>,
-                clampedLightDirectionDotNormalVector: f32,
-            ) -> vec3<f32> {
-                return specularColor + (1.0 - specularColor) * computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector);
-            }
-
-            // Evaluates (approximately) the Smith height-correlated
-            // masking-shadowing function divided by (4 *
-            // abs(lightDirectionDotNormalVector) *
-            // abs(viewDirectionDotNormalVector)) (Hammon 2017).
-            fn computeScaledGGXMaskingShadowingFactor(
-                clampedLightDirectionDotNormalVector: f32,
-                clampedViewDirectionDotNormalVector: f32,
-                roughness: f32,
-            ) -> f32 {
-                return 0.5 / (mix(
-                        2.0 * clampedLightDirectionDotNormalVector * clampedViewDirectionDotNormalVector,
-                        clampedLightDirectionDotNormalVector + clampedViewDirectionDotNormalVector,
-                        roughness
-                    ) + 1e-6);
-            }
-
-            // Evaluates the GGX distribution multiplied by pi.
-            fn evaluateGGXDistributionTimesPi(normalVectorDotHalfVector: f32, roughness: f32) -> f32 {
-                let roughnessSquared = roughness * roughness;
-                let denom = 1.0 + normalVectorDotHalfVector * normalVectorDotHalfVector * (roughnessSquared - 1.0);
-                return f32(normalVectorDotHalfVector > 0.0) * roughnessSquared / (denom * denom + 1e-6);
-            }
-
-            fn computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
-                specularColor: vec3<f32>,
-                clampedLightDirectionDotNormalVector: f32,
-                clampedViewDirectionDotNormalVector: f32,
-            ) -> vec3<f32> {
-                return 1.05 * (1.0 - specularColor) 
-                * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector)) 
-                * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedViewDirectionDotNormalVector));
-            }
-
-            // Evaluates a fit to the diffuse BRDF derived from microfacet
-            // theory using the GGX normal distribution and the Smith
-            // masking-shadowing function (Hammon 2017).
-            fn computeDiffuseGGXBRDFTimesPi(
-                diffuseColor: vec3<f32>,
-                specularColor: vec3<f32>,
-                clampedLightDirectionDotNormalVector: f32,
-                clampedViewDirectionDotNormalVector: f32,
-                lightDirectionDotViewDirection: f32,
-                normalVectorDotHalfVector: f32,
-                roughness: f32,
-            ) -> vec3<f32> {
-                let diffuseBRDFSmoothComponent = computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
-                    specularColor,
-                    clampedLightDirectionDotNormalVector,
-                    clampedViewDirectionDotNormalVector
-               );
-
-                let halfOnePlusLightDirectionDotViewDirection = 0.5 * (1.0 + lightDirectionDotViewDirection);
-                let diffuseBRDFRoughComponent = halfOnePlusLightDirectionDotViewDirection * (0.9 - 0.4 * halfOnePlusLightDirectionDotViewDirection)
-                    * (1.0 + 0.5 / (normalVectorDotHalfVector + 1e-6));
-
-                let diffuseBRDFMultiComponent = 0.3641 * roughness;
-
-                return f32(clampedViewDirectionDotNormalVector > 0.0)
-                    * diffuseColor
-                    * (
-                          (1.0 - roughness) * diffuseBRDFSmoothComponent
-                          + roughness * diffuseBRDFRoughComponent
-                          + diffuseColor * diffuseBRDFMultiComponent
-                      );
-            }
-
-            fn computeSpecularGGXBRDFTimesPi(
-                specularColor: vec3<f32>,
-                clampedLightDirectionDotNormalVector: f32,
-                clampedViewDirectionDotNormalVector: f32,
-                clampedLightDirectionDotHalfVector: f32,
-                normalVectorDotHalfVector: f32,
-                roughness: f32,
-            ) -> vec3<f32> {
-                return computeFresnelReflectance(specularColor, clampedLightDirectionDotHalfVector)
-                    * computeScaledGGXMaskingShadowingFactor(
-                          clampedLightDirectionDotNormalVector,
-                          clampedViewDirectionDotNormalVector,
-                          roughness
-                    )
-                    * evaluateGGXDistributionTimesPi(normalVectorDotHalfVector, roughness);
-            }
-
-            fn computeColor(
-                diffuseBRDFTimesPi: vec3<f32>,
-                specularBRDFTimesPi: vec3<f32>,
-                clampedLightDirectionDotNormalVector: f32,
-                lightRadiance: vec3<f32>,
-            ) -> vec3<f32> {
-                return (diffuseBRDFTimesPi + specularBRDFTimesPi) * clampedLightDirectionDotNormalVector * lightRadiance;
-            }
-        ",
-        )
-        .unwrap()
-        .import_to_module(module);
-
         let light_shader_generator =
             light_shader_generator.expect("Missing light for microfacet shading");
 
@@ -595,10 +263,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         let fixed_roughness_value_expr =
             fragment_input_struct.get_field_expr(material_input_field_indices.roughness);
 
-        let view_dir_expr = SourceCode::generate_call_named(
+        let view_dir_expr = source_code_lib.generate_function_call(
+            module,
             fragment_function,
-            "viewDirection",
-            source_code.functions["computeViewDirection"],
+            "computeCameraSpaceViewDirection",
             vec![position_expr],
         );
 
@@ -644,10 +312,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         .expect("Missing tangent space quaternion for microfacet parallax mapping"),
                 );
 
-                texture_coord_expr = Some(SourceCode::generate_call_named(
+                texture_coord_expr = Some(source_code_lib.generate_function_call(
+                    module,
                     fragment_function,
-                    "parallaxMappedTextureCoords",
-                    source_code.functions["computeParallaxMappedTextureCoordinates"],
+                    "computeParallaxMappedTextureCoordinates",
                     vec![
                         height_map_texture_expr,
                         height_map_sampler_expr,
@@ -658,10 +326,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     ],
                 ));
 
-                let tangent_space_normal_vector_expr = SourceCode::generate_call_named(
+                let tangent_space_normal_vector_expr = source_code_lib.generate_function_call(
+                    module,
                     fragment_function,
-                    "tangentSpaceNormalVector",
-                    source_code.functions["obtainNormalFromHeightMap"],
+                    "obtainNormalFromHeightMap",
                     vec![
                         height_map_texture_expr,
                         height_map_sampler_expr,
@@ -669,10 +337,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     ],
                 );
 
-                SourceCode::generate_call_named(
+                source_code_lib.generate_function_call(
+                    module,
                     fragment_function,
-                    "normalVector",
-                    source_code.functions["rotateVectorWithQuaternion"],
+                    "rotateVectorWithQuaternion",
                     vec![
                         tangent_space_quaternion_expr,
                         tangent_space_normal_vector_expr,
@@ -695,10 +363,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let normal_map_color_expr = normal_map_texture
                     .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
 
-                let tangent_space_normal_expr = SourceCode::generate_call_named(
+                let tangent_space_normal_expr = source_code_lib.generate_function_call(
+                    module,
                     fragment_function,
-                    "tangentSpaceNormalVector",
-                    source_code.functions["convertNormalMapColorToNormalVector"],
+                    "convertNormalMapColorToNormalVector",
                     vec![normal_map_color_expr],
                 );
 
@@ -708,10 +376,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         .expect("Missing tangent space quaternion for microfacet normal mapping"),
                 );
 
-                SourceCode::generate_call_named(
+                source_code_lib.generate_function_call(
+                    module,
                     fragment_function,
-                    "normalVector",
-                    source_code.functions["rotateVectorWithQuaternion"],
+                    "rotateVectorWithQuaternion",
                     vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
                 )
             } else {
@@ -794,10 +462,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                             0,
                         );
 
-                    SourceCode::generate_call_named(
+                    source_code_lib.generate_function_call(
+                        module,
                         fragment_function,
-                        "ggxRoughness",
-                        source_code.functions["computeGGXRoughnessFromSampledRoughness"],
+                        "computeGGXRoughnessFromSampledRoughness",
                         // Use fixed roughness as scale for roughness sampled from texture
                         vec![roughness_texture_value_expr, fixed_roughness_value_expr],
                     )
@@ -816,82 +484,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             )),
         );
 
-        let compute_color = |fragment_function, light_dir_expr, light_radiance_expr| match (
-            self.model,
-            diffuse_color_expr,
-            specular_color_expr,
+        let (light_dir_expr, light_radiance_expr) = match (
+            light_shader_generator,
+            light_input_field_indices,
         ) {
-            (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(diffuse_color_expr), None) => {
-                SourceCode::generate_call_named(
-                    fragment_function,
-                    "lightColor",
-                    source_code.functions["computeGGXDiffuseNoSpecularColor"],
-                    vec![
-                        view_dir_expr,
-                        normal_vector_expr,
-                        diffuse_color_expr,
-                        roughness_expr,
-                        light_dir_expr,
-                        light_radiance_expr,
-                    ],
-                )
-            }
-            (&MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR, None, Some(specular_color_expr)) => {
-                SourceCode::generate_call_named(
-                    fragment_function,
-                    "lightColor",
-                    source_code.functions["computeNoDiffuseGGXSpecularColor"],
-                    vec![
-                        view_dir_expr,
-                        normal_vector_expr,
-                        specular_color_expr,
-                        roughness_expr,
-                        light_dir_expr,
-                        light_radiance_expr,
-                    ],
-                )
-            }
-            (
-                &MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-                Some(diffuse_color_expr),
-                Some(specular_color_expr),
-            ) => SourceCode::generate_call_named(
-                fragment_function,
-                "lightColor",
-                source_code.functions["computeLambertianDiffuseGGXSpecularColor"],
-                vec![
-                    view_dir_expr,
-                    normal_vector_expr,
-                    diffuse_color_expr,
-                    specular_color_expr,
-                    roughness_expr,
-                    light_dir_expr,
-                    light_radiance_expr,
-                ],
-            ),
-            (
-                &MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
-                Some(diffuse_color_expr),
-                Some(specular_color_expr),
-            ) => SourceCode::generate_call_named(
-                fragment_function,
-                "lightColor",
-                source_code.functions["computeGGXDiffuseGGXSpecularColor"],
-                vec![
-                    view_dir_expr,
-                    normal_vector_expr,
-                    diffuse_color_expr,
-                    specular_color_expr,
-                    roughness_expr,
-                    light_dir_expr,
-                    light_radiance_expr,
-                ],
-            ),
-            (_, None, None) => panic!("No diffuse or specular color for microfacet shader"),
-            _ => panic!("Invalid combinations of microfacet shading models"),
-        };
-
-        let light_color_expr = match (light_shader_generator, light_input_field_indices) {
             (
                 LightShaderGenerator::OmnidirectionalLight(
                     OmnidirectionalLightShaderGenerator::ForShading(
@@ -903,16 +499,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let camera_clip_position_expr =
                     fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
-                let (light_dir_expr, light_radiance_expr) = omnidirectional_light_shader_generator
-                    .generate_fragment_shading_code(
-                        module,
-                        fragment_function,
-                        camera_clip_position_expr,
-                        position_expr,
-                        normal_vector_expr,
-                    );
-
-                compute_color(fragment_function, light_dir_expr, light_radiance_expr)
+                omnidirectional_light_shader_generator.generate_fragment_shading_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    camera_clip_position_expr,
+                    position_expr,
+                    normal_vector_expr,
+                )
             }
             (
                 LightShaderGenerator::UnidirectionalLight(
@@ -934,20 +528,89 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     unidirectional_light_input_field_indices.light_space_normal_vector,
                 );
 
-                let (light_dir_expr, light_radiance_expr) = unidirectional_light_shader_generator
-                    .generate_fragment_shading_code(
-                        module,
-                        fragment_function,
-                        camera_clip_position_expr,
-                        light_space_position_expr,
-                        light_space_normal_vector_expr,
-                    );
-
-                compute_color(fragment_function, light_dir_expr, light_radiance_expr)
+                unidirectional_light_shader_generator.generate_fragment_shading_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    camera_clip_position_expr,
+                    light_space_position_expr,
+                    light_space_normal_vector_expr,
+                )
             }
             _ => {
                 panic!("Invalid variant of light shader generator and/or light vertex output field indices for microfacet shading");
             }
+        };
+
+        let light_color_expr = match (self.model, diffuse_color_expr, specular_color_expr) {
+            (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(diffuse_color_expr), None) => {
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeGGXDiffuseNoSpecularColor",
+                    vec![
+                        view_dir_expr,
+                        normal_vector_expr,
+                        diffuse_color_expr,
+                        roughness_expr,
+                        light_dir_expr,
+                        light_radiance_expr,
+                    ],
+                )
+            }
+            (&MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR, None, Some(specular_color_expr)) => {
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeNoDiffuseGGXSpecularColor",
+                    vec![
+                        view_dir_expr,
+                        normal_vector_expr,
+                        specular_color_expr,
+                        roughness_expr,
+                        light_dir_expr,
+                        light_radiance_expr,
+                    ],
+                )
+            }
+            (
+                &MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                Some(diffuse_color_expr),
+                Some(specular_color_expr),
+            ) => source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeLambertianDiffuseGGXSpecularColor",
+                vec![
+                    view_dir_expr,
+                    normal_vector_expr,
+                    diffuse_color_expr,
+                    specular_color_expr,
+                    roughness_expr,
+                    light_dir_expr,
+                    light_radiance_expr,
+                ],
+            ),
+            (
+                &MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
+                Some(diffuse_color_expr),
+                Some(specular_color_expr),
+            ) => source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeGGXDiffuseGGXSpecularColor",
+                vec![
+                    view_dir_expr,
+                    normal_vector_expr,
+                    diffuse_color_expr,
+                    specular_color_expr,
+                    roughness_expr,
+                    light_dir_expr,
+                    light_radiance_expr,
+                ],
+            ),
+            (_, None, None) => panic!("No diffuse or specular color for microfacet shader"),
+            _ => panic!("Invalid combinations of microfacet shading models"),
         };
 
         push_to_block(
