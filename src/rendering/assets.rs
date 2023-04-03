@@ -1,6 +1,6 @@
 //! Management of rendering assets.
 
-use crate::rendering::{ColorSpace, CoreRenderingSystem, ImageTexture};
+use crate::rendering::{CoreRenderingSystem, ImageTexture, ImageTextureConfig};
 use anyhow::Result;
 use impact_utils::{hash32, stringhash32_newtype};
 use std::{
@@ -40,15 +40,11 @@ impl Assets {
         &mut self,
         core_system: &CoreRenderingSystem,
         image_path: impl AsRef<Path>,
-        color_space: ColorSpace,
+        config: ImageTextureConfig,
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(image_path.as_ref().to_string_lossy()));
         if let Entry::Vacant(entry) = self.image_textures.entry(texture_id) {
-            entry.insert(ImageTexture::from_path(
-                core_system,
-                image_path,
-                color_space,
-            )?);
+            entry.insert(ImageTexture::from_path(core_system, image_path, config)?);
         }
         Ok(texture_id)
     }

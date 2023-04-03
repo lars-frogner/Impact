@@ -14,6 +14,33 @@ pub struct ImageTexture {
     sampler: wgpu::Sampler,
 }
 
+/// Configuration for [`ImageTexture`]s.
+#[derive(Clone, Debug)]
+pub struct ImageTextureConfig {
+    /// The color space that the pixel values should be assumed to be stored in.
+    pub color_space: ColorSpace,
+    /// How addressing outside the [0, 1] range for the U texture coordinate
+    /// should be handled.
+    pub address_mode_u: wgpu::AddressMode,
+    /// How addressing outside the [0, 1] range for the V texture coordinate
+    /// should be handled.
+    pub address_mode_v: wgpu::AddressMode,
+}
+
+impl ImageTextureConfig {
+    pub const REPEATING_COLOR_TEXTRUE: Self = Self {
+        color_space: ColorSpace::Srgb,
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+    };
+
+    pub const REPEATING_NON_COLOR_TEXTRUE: Self = Self {
+        color_space: ColorSpace::Linear,
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+    };
+}
+
 /// A texture that can be used as a multisampled render target.
 #[derive(Debug)]
 pub struct MultisampledRenderTargetTexture {
@@ -35,59 +62,57 @@ enum ColorType {
 }
 
 impl ImageTexture {
-    /// Creates a texture for the image file at the given path, assuming that
-    /// the pixel values use the given color space.
+    /// Creates a texture for the image file at the given path, using the given
+    /// configuration parameters.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The image file can not be read or decoded.
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
-    /// - The image is grayscale and the given color space is not linear.
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
     pub fn from_path(
         core_system: &CoreRenderingSystem,
         image_path: impl AsRef<Path>,
-        color_space: ColorSpace,
+        config: ImageTextureConfig,
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
-        Self::from_image(
-            core_system,
-            image,
-            color_space,
-            &image_path.to_string_lossy(),
-        )
+        Self::from_image(core_system, image, config, &image_path.to_string_lossy())
     }
 
     /// Creates a texture for the image file represented by the given raw byte
-    /// buffer, assuming that the pixel values use the given color space.
+    /// buffer, using the given configuration parameters.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
-    /// - The image is grayscale and the given color space is not linear.
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
     pub fn from_bytes(
         core_system: &CoreRenderingSystem,
         byte_buffer: &[u8],
-        color_space: ColorSpace,
+        config: ImageTextureConfig,
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(core_system, image, color_space, label)
+        Self::from_image(core_system, image, config, label)
     }
 
-    /// Creates a texture for the given loaded image, assuming that the pixel
-    /// values use the given color space.
+    /// Creates a texture for the given loaded image, using the given
+    /// configuration parameters.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The image width or height is zero.
-    /// - The image is grayscale and the given color space is not linear.
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
     pub fn from_image(
         core_system: &CoreRenderingSystem,
         image: DynamicImage,
-        color_space: ColorSpace,
+        config: ImageTextureConfig,
         label: &str,
     ) -> Result<Self> {
         let (width, height) = image.dimensions();
@@ -98,38 +123,41 @@ impl ImageTexture {
             Self::new(
                 core_system,
                 &image.into_rgba8(),
-                ColorType::Rgba8(color_space),
                 width,
                 height,
+                ColorType::Rgba8(config.color_space),
+                config,
                 label,
             )
         } else {
-            if color_space != ColorSpace::Linear {
+            if config.color_space != ColorSpace::Linear {
                 bail!(
                     "Unsupported color space {:?} for grayscale image {}",
-                    color_space,
+                    config.color_space,
                     label
                 );
             }
             Self::new(
                 core_system,
                 &image.into_luma8(),
-                ColorType::Grayscale8,
                 width,
                 height,
+                ColorType::Grayscale8,
+                config,
                 label,
             )
         })
     }
 
     /// Creates a texture for the image represented by the given byte buffer,
-    /// color type and dimensions.
+    /// dimensions and color type, using the given configuration parameters.
     fn new(
         core_system: &CoreRenderingSystem,
         byte_buffer: &[u8],
-        color_type: ColorType,
         width: NonZeroU32,
         height: NonZeroU32,
+        color_type: ColorType,
+        config: ImageTextureConfig,
         label: &str,
     ) -> Self {
         let device = core_system.device();
@@ -151,7 +179,7 @@ impl ImageTexture {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let sampler = Self::create_sampler(device);
+        let sampler = Self::create_sampler(device, config.address_mode_u, config.address_mode_v);
 
         Self {
             _texture: texture,
@@ -263,10 +291,14 @@ impl ImageTexture {
         );
     }
 
-    fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
+    fn create_sampler(
+        device: &wgpu::Device,
+        address_mode_u: wgpu::AddressMode,
+        address_mode_v: wgpu::AddressMode,
+    ) -> wgpu::Sampler {
         device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_u,
+            address_mode_v,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Nearest,
