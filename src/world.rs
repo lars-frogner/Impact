@@ -2,8 +2,9 @@
 
 use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
+    geometry::TextureProjection,
     physics::PhysicsSimulator,
-    rendering::RenderingSystem,
+    rendering::{fre, RenderingSystem},
     scene::{io, MeshComp, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
@@ -137,6 +138,31 @@ impl World {
         io::load_mesh_from_obj_file(self.scene.read().unwrap().mesh_repository(), obj_file_path)
     }
 
+    /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
+    /// to the mesh repository if it does not already exist, after generating
+    /// texture coordinates for the mesh using the given projection. If there are
+    /// multiple meshes in the file, they are merged into a single mesh.
+    ///
+    /// # Returns
+    /// The [`MeshComp`] representing the mesh.
+    ///
+    /// # Errors
+    /// Returns an error if the file can not be found or loaded as a mesh.
+    pub fn load_mesh_from_obj_file_with_projection<P>(
+        &self,
+        obj_file_path: P,
+        projection: &impl TextureProjection<fre>,
+    ) -> Result<MeshComp>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        io::load_mesh_from_obj_file_with_projection(
+            self.scene.read().unwrap().mesh_repository(),
+            obj_file_path,
+            projection,
+        )
+    }
+
     /// Reads the PLY (Polygon File Format, also called Stanford Triangle
     /// Format) file at the given path and adds the contained mesh to the mesh
     /// repository if it does not already exist.
@@ -151,6 +177,31 @@ impl World {
         P: AsRef<Path> + Debug,
     {
         io::load_mesh_from_ply_file(self.scene.read().unwrap().mesh_repository(), ply_file_path)
+    }
+
+    /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
+    /// file at the given path and adds the contained mesh to the mesh repository if
+    /// it does not already exist, after generating texture coordinates for the mesh
+    /// using the given projection.
+    ///
+    /// # Returns
+    /// The [`MeshComp`] representing the mesh.
+    ///
+    /// # Errors
+    /// Returns an error if the file can not be found or loaded as a mesh.
+    pub fn load_mesh_from_ply_file_with_projection<P>(
+        &self,
+        ply_file_path: P,
+        projection: &impl TextureProjection<fre>,
+    ) -> Result<MeshComp>
+    where
+        P: AsRef<Path> + Debug,
+    {
+        io::load_mesh_from_ply_file_with_projection(
+            self.scene.read().unwrap().mesh_repository(),
+            ply_file_path,
+            projection,
+        )
     }
 
     pub fn create_entities<A, E>(

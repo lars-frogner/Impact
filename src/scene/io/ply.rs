@@ -2,7 +2,8 @@
 
 use crate::{
     geometry::{
-        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
+        TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
+        VertexTextureCoords,
     },
     rendering::fre,
     scene::{MeshComp, MeshID, MeshRepository},
@@ -48,6 +49,46 @@ where
 
     if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
         let mesh = read_mesh_from_ply_file(ply_file_path)?;
+
+        mesh_repository
+            .write()
+            .unwrap()
+            .add_mesh_unless_present(mesh_id, mesh);
+    }
+
+    Ok(MeshComp { id: mesh_id })
+}
+
+/// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
+/// file at the given path and adds the contained mesh to the mesh repository if
+/// it does not already exist, after generating texture coordinates for the mesh
+/// using the given projection.
+///
+/// # Returns
+/// The [`MeshComp`] representing the mesh.
+///
+/// # Errors
+/// Returns an error if the file can not be found or loaded as a mesh.
+pub fn load_mesh_from_ply_file_with_projection<P>(
+    mesh_repository: &RwLock<MeshRepository<fre>>,
+    ply_file_path: P,
+    projection: &impl TextureProjection<fre>,
+) -> Result<MeshComp>
+where
+    P: AsRef<Path> + Debug,
+{
+    let ply_file_path = ply_file_path.as_ref();
+
+    let mesh_id = MeshID(hash64!(format!(
+        "{} (projection = {})",
+        ply_file_path.to_string_lossy(),
+        projection.identifier()
+    )));
+
+    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+        let mut mesh = read_mesh_from_ply_file(ply_file_path)?;
+
+        mesh.generate_texture_coords(projection);
 
         mesh_repository
             .write()
