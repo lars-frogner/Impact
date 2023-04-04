@@ -11,7 +11,7 @@ fn computeParallaxMappedTextureCoordinates(
     tangentToCameraSpaceRotationQuaternion: vec4<f32>,
     cameraSpaceViewDirection: vec3<f32>,
 ) -> vec2<f32> {
-    let tangentSpaceViewDirection: vec3<f32> = rotateVectorWithInverseOfQuaternion(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
+    let tangentSpaceViewDirection: vec3<f32> = tranformVectorToTangentSpace(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
 
     var parallaxMappedTextureCoords: vec2<f32>;
 
