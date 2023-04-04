@@ -2,7 +2,8 @@
 
 use crate::{
     geometry::{
-        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
+        TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
+        VertexTextureCoords,
     },
     rendering::{fre, ImageTextureConfig, RenderingSystem},
     scene::{
@@ -147,6 +148,57 @@ where
         for model in models {
             mesh.merge_with(&create_mesh_from_tobj_mesh(model.mesh));
         }
+
+        mesh_repository
+            .write()
+            .unwrap()
+            .add_mesh_unless_present(mesh_id, mesh);
+    }
+
+    Ok(MeshComp { id: mesh_id })
+}
+
+/// Reads the Wavefront OBJ file at the given path and adds the contained mesh
+/// to the mesh repository if it does not already exist, after generating
+/// texture coordinates for the mesh using the given projection. If there are
+/// multiple meshes in the file, they are merged into a single mesh.
+///
+/// # Returns
+/// The [`MeshComp`] representing the mesh.
+///
+/// # Errors
+/// Returns an error if the file can not be found or loaded as a mesh.
+pub fn load_mesh_from_obj_file_with_projection<P>(
+    mesh_repository: &RwLock<MeshRepository<fre>>,
+    obj_file_path: P,
+    projection: &impl TextureProjection<fre>,
+) -> Result<MeshComp>
+where
+    P: AsRef<Path> + Debug,
+{
+    let obj_file_path = obj_file_path.as_ref();
+    let obj_file_path_string = obj_file_path.to_string_lossy();
+
+    let (mut models, _) = tobj::load_obj(obj_file_path, &GPU_LOAD_OPTIONS)?;
+
+    if models.is_empty() {
+        bail!("File {} does not contain any meshes", obj_file_path_string);
+    }
+
+    let mesh_id = MeshID(hash64!(format!(
+        "{} (projection = {})",
+        obj_file_path_string,
+        projection.identifier()
+    )));
+
+    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+        let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
+
+        for model in models {
+            mesh.merge_with(&create_mesh_from_tobj_mesh(model.mesh));
+        }
+
+        mesh.generate_texture_coords(projection);
 
         mesh_repository
             .write()
