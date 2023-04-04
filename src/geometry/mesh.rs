@@ -3,15 +3,16 @@
 mod generation;
 
 use crate::{
-    geometry::{CollectionChange, CollectionChangeTracker, Sphere, TextureProjection},
+    geometry::{
+        AxisAlignedBox, CollectionChange, CollectionChangeTracker, Point, Sphere, TextureProjection,
+    },
     num::Float,
 };
+use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix3x2, Point3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use std::fmt::{Debug, Display};
-
-use super::{AxisAlignedBox, Point};
 
 /// Represents a type of attribute associated with a mesh vertex.
 pub trait VertexAttribute: Sized {
@@ -47,7 +48,10 @@ pub struct VertexNormalVector<F: Float>(pub UnitVector3<F>);
 pub struct VertexTextureCoords<F: Float>(pub Vector2<F>);
 
 /// The rotation quaternion from local tangent space to model space at a vertex
-/// position.
+/// position. The handedness of the tangent basis is encoded in the sign of the
+/// real component (when it is negative, the basis is really left-handed and the
+/// y-component of the tangent space vector to transform to model space should
+/// be negated before applying the rotation to it).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VertexTangentSpaceQuaternion<F: Float>(pub UnitQuaternion<F>);
@@ -410,23 +414,51 @@ impl<F: Float> TriangleMesh<F> {
             // Solve set of equations for unnormalized tangent and bitangent
             // vectors
 
-            let q1 = p1 - p0;
-            let q2 = p2 - p0;
+            let q1;
+            let q2;
 
-            let st1 = uv1 - uv0;
-            let st2 = uv2 - uv0;
+            let mut st1 = uv1 - uv0;
+            let mut st2 = uv2 - uv0;
 
-            let tangent_and_bitangent =
-                Matrix3x2::from_columns(&[q1 * st2.y - q2 * st1.y, q2 * st1.x - q1 * st2.x])
-                    / (st1.x * st2.y - st2.x * st1.y);
+            // Switch which two triangle edges to use if the system of equations
+            // becomes degenerate with the current edges (required if the third
+            // edge is aligned with the u- or v-direction)
+            if abs_diff_eq!(st1.x, st2.x) || abs_diff_eq!(st1.y, st2.y) {
+                st1 = uv2 - uv1;
+                st2 = uv0 - uv1;
 
-            // The unnormalized tangent and bitangent will have the same
-            // normalization factor for each triangle, so there is no need to
-            // normalize them before aggregating them as long as we perform
-            // normalization after aggregation
-            summed_tangent_and_bitangent_vectors[idx0] += tangent_and_bitangent;
-            summed_tangent_and_bitangent_vectors[idx1] += tangent_and_bitangent;
-            summed_tangent_and_bitangent_vectors[idx2] += tangent_and_bitangent;
+                if abs_diff_eq!(st1.x, st2.x) || abs_diff_eq!(st1.y, st2.y) {
+                    st1 = uv0 - uv2;
+                    st2 = uv1 - uv2;
+
+                    q1 = p0 - p2;
+                    q2 = p1 - p2;
+                } else {
+                    q1 = p2 - p1;
+                    q2 = p0 - p1;
+                }
+            } else {
+                q1 = p1 - p0;
+                q2 = p2 - p0;
+            }
+
+            let inv_denom = F::ONE / (st1.x * st2.y - st2.x * st1.y);
+
+            // Skip the triangle altogether if no solution is possible (happens
+            // if the triangle is perpendicular to the UV-plane)
+            if inv_denom.is_finite() {
+                let tangent_and_bitangent =
+                    Matrix3x2::from_columns(&[q1 * st2.y - q2 * st1.y, q2 * st1.x - q1 * st2.x])
+                        * inv_denom;
+
+                // The unnormalized tangent and bitangent will have the same
+                // normalization factor for each triangle, so there is no need to
+                // normalize them before aggregating them as long as we perform
+                // normalization after aggregation
+                summed_tangent_and_bitangent_vectors[idx0] += tangent_and_bitangent;
+                summed_tangent_and_bitangent_vectors[idx1] += tangent_and_bitangent;
+                summed_tangent_and_bitangent_vectors[idx2] += tangent_and_bitangent;
+            }
         }
 
         self.tangent_space_quaternions.clear();
@@ -448,26 +480,70 @@ impl<F: Float> TriangleMesh<F> {
             let inv_orthogonal_tangent_squared_length =
                 F::ONE / orthogonal_tangent.magnitude_squared();
 
-            let orthogonal_bitangent = summed_bitangent
-                - normal.0.as_ref() * normal.0.dot(&summed_bitangent)
-                - orthogonal_tangent
-                    * (orthogonal_tangent.dot(&summed_bitangent)
-                        * inv_orthogonal_tangent_squared_length);
+            let tangent;
+            let mut bitangent;
+            let mut is_lefthanded = false;
 
-            let tangent = UnitVector3::new_unchecked(
-                orthogonal_tangent * F::sqrt(inv_orthogonal_tangent_squared_length),
-            );
+            if inv_orthogonal_tangent_squared_length.is_finite() {
+                let orthogonal_bitangent = summed_bitangent
+                    - normal.0.as_ref() * normal.0.dot(&summed_bitangent)
+                    - orthogonal_tangent
+                        * (orthogonal_tangent.dot(&summed_bitangent)
+                            * inv_orthogonal_tangent_squared_length);
 
-            let bitangent = UnitVector3::new_normalize(orthogonal_bitangent);
+                tangent = UnitVector3::new_unchecked(
+                    orthogonal_tangent * F::sqrt(inv_orthogonal_tangent_squared_length),
+                );
+
+                bitangent = UnitVector3::new_normalize(orthogonal_bitangent);
+
+                // Check if basis is left-handed
+                if tangent.cross(&bitangent).dot(&normal.0) < F::ZERO {
+                    // Make sure tangent, bitangent and normal form a
+                    // right-handed bases, as this is required for converting
+                    // the basis to a rotation quaternion. But we note the fact
+                    // that the system is really left-handed, so that we can
+                    // encode this into the quaternion.
+                    bitangent = -bitangent;
+                    is_lefthanded = true;
+                }
+            } else {
+                if abs_diff_ne!(normal.0.x.abs(), F::ONE) {
+                    tangent =
+                        UnitVector3::new_normalize(Vector3::x() - normal.0.as_ref() * normal.0.x);
+                } else {
+                    tangent =
+                        UnitVector3::new_normalize(Vector3::y() - normal.0.as_ref() * normal.0.y);
+                }
+
+                bitangent = UnitVector3::new_normalize(normal.0.cross(&tangent));
+            }
+
+            // Convert right-handed orthonormal basis vectors to rotation
+            // quaternion
+            let mut tangent_space_quaternion = UnitQuaternion::from_basis_unchecked(&[
+                tangent.into_inner(),
+                bitangent.into_inner(),
+                normal.0.into_inner(),
+            ])
+            .into_inner();
+
+            // Make sure real component is always positive initially (negating a
+            // quaternion gives same rotation)
+            if tangent_space_quaternion.w < F::ZERO {
+                tangent_space_quaternion = -tangent_space_quaternion;
+            }
+
+            // If we have a left-handed basis, negate the quaternion so that the
+            // real component is negative (but we still have the same rotation)
+            if is_lefthanded {
+                tangent_space_quaternion = -tangent_space_quaternion;
+            }
 
             self.tangent_space_quaternions
-                .push(VertexTangentSpaceQuaternion(
-                    UnitQuaternion::from_basis_unchecked(&[
-                        tangent.into_inner(),
-                        bitangent.into_inner(),
-                        normal.0.into_inner(),
-                    ]),
-                ));
+                .push(VertexTangentSpaceQuaternion(UnitQuaternion::new_unchecked(
+                    tangent_space_quaternion,
+                )));
         }
 
         self.tangent_space_quaternion_change_tracker

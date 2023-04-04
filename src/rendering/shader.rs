@@ -1258,7 +1258,7 @@ impl ShaderGenerator {
             let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
                 module,
                 vertex_function,
-                "multiplyAndNormalizeQuaternions",
+                "applyRotationToTangentSpaceQuaternion",
                 vec![
                     model_view_transform.rotation_quaternion,
                     input_tangent_to_model_space_quaternion_expr,

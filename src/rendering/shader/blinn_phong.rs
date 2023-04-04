@@ -251,10 +251,16 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 let parallax_displacement_scale_expr = fragment_input_struct
                     .get_field_expr(material_input_field_indices.parallax_displacement_scale);
 
-                let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
-                    mesh_input_field_indices.tangent_space_quaternion.expect(
+                let unnormalized_tangent_space_quaternion_expr = fragment_input_struct
+                    .get_field_expr(mesh_input_field_indices.tangent_space_quaternion.expect(
                         "Missing tangent space quaternion for Blinn-Phong parallax mapping",
-                    ),
+                    ));
+
+                let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "normalizeQuaternion",
+                    vec![unnormalized_tangent_space_quaternion_expr],
                 );
 
                 texture_coord_expr = Some(source_code_lib.generate_function_call(
@@ -285,7 +291,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                 source_code_lib.generate_function_call(
                     module,
                     fragment_function,
-                    "rotateVectorWithQuaternion",
+                    "tranformVectorFromTangentSpace",
                     vec![
                         tangent_space_quaternion_expr,
                         tangent_space_normal_vector_expr,
@@ -315,16 +321,24 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     vec![normal_map_color_expr],
                 );
 
-                let tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
-                    mesh_input_field_indices
-                        .tangent_space_quaternion
-                        .expect("Missing tangent space quaternion for Blinn-Phong normal mapping"),
+                let unnormalized_tangent_space_quaternion_expr = fragment_input_struct
+                    .get_field_expr(
+                        mesh_input_field_indices.tangent_space_quaternion.expect(
+                            "Missing tangent space quaternion for Blinn-Phong normal mapping",
+                        ),
+                    );
+
+                let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "normalizeQuaternion",
+                    vec![unnormalized_tangent_space_quaternion_expr],
                 );
 
                 source_code_lib.generate_function_call(
                     module,
                     fragment_function,
-                    "rotateVectorWithQuaternion",
+                    "tranformVectorFromTangentSpace",
                     vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
                 )
             } else {
