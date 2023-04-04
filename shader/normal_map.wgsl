@@ -7,41 +7,57 @@ fn computeParallaxMappedTextureCoordinates(
     heightTexture: texture_2d<f32>,
     heightSampler: sampler,
     displacementScale: f32,
-    originalTextureCoordinates: vec2<f32>,
+    originalTextureCoords: vec2<f32>,
     tangentToCameraSpaceRotationQuaternion: vec4<f32>,
     cameraSpaceViewDirection: vec3<f32>,
 ) -> vec2<f32> {
     let tangentSpaceViewDirection: vec3<f32> = rotateVectorWithInverseOfQuaternion(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
 
-    let layerDepth = displacementScale / mix(64.0, 8.0, max(0.0, tangentSpaceViewDirection.z));
+    var parallaxMappedTextureCoords: vec2<f32>;
 
-    let textureCoordOffsetVector = tangentSpaceViewDirection.xy * (layerDepth / tangentSpaceViewDirection.z);
+    if tangentSpaceViewDirection.z > 0.0 {
+        // Mip level must be explicit since it can not be computed automatically
+        // inside non-uniform control flow
+        let mipLevel = 0.0;
 
-    var currentDepth = 0.0;
-    var prevTextureCoords = originalTextureCoordinates;
-    var currentTextureCoords = originalTextureCoordinates;
+        let maxLayerCount = mix(64.0, 8.0, max(0.0, tangentSpaceViewDirection.z));
+        let layerDepth = displacementScale / maxLayerCount;
 
-    let sampledHeight = textureSample(heightTexture, heightSampler, currentTextureCoords).r;
-    var currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
-    var prevSampledDepth = currentSampledDepth;
+        let textureCoordOffsetVector = tangentSpaceViewDirection.xy * (layerDepth / tangentSpaceViewDirection.z);
 
-    while currentSampledDepth > currentDepth {
-        prevTextureCoords = currentTextureCoords;
-        prevSampledDepth = currentSampledDepth;
+        var currentLayerCount = 0.0;
+        var currentDepth = 0.0;
+        var prevTextureCoords = originalTextureCoords;
+        var currentTextureCoords = originalTextureCoords;
 
-        currentTextureCoords -= textureCoordOffsetVector;
-        currentDepth += layerDepth;
+        let sampledHeight = textureSampleLevel(heightTexture, heightSampler, currentTextureCoords, mipLevel).r;
+        var currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
+        var prevSampledDepth = currentSampledDepth;
 
-        let sampledHeight = textureSample(heightTexture, heightSampler, currentTextureCoords).r;
-        currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
+        while currentSampledDepth > currentDepth && currentLayerCount < maxLayerCount {
+            prevTextureCoords = currentTextureCoords;
+            prevSampledDepth = currentSampledDepth;
+
+            currentTextureCoords -= textureCoordOffsetVector;
+            currentDepth += layerDepth;
+
+            let sampledHeight = textureSampleLevel(heightTexture, heightSampler, currentTextureCoords, mipLevel).r;
+            currentSampledDepth = (1.0 - sampledHeight) * displacementScale;
+
+            currentLayerCount += 1.0;
+        }
+
+        let currentDepthDiff = currentSampledDepth - currentDepth;
+        let prevDepthDiff = prevSampledDepth - (currentDepth - layerDepth);
+
+        let interpWeightForZeroDepthDiff = currentDepthDiff / (currentDepthDiff - prevDepthDiff);
+
+        parallaxMappedTextureCoords = mix(currentTextureCoords, prevTextureCoords, interpWeightForZeroDepthDiff);
+    } else {
+        parallaxMappedTextureCoords = originalTextureCoords;
     }
 
-    let currentDepthDiff = currentSampledDepth - currentDepth;
-    let prevDepthDiff = prevSampledDepth - (currentDepth - layerDepth);
-
-    let interpWeightForZeroDepthDiff = currentDepthDiff / (currentDepthDiff - prevDepthDiff);
-
-    return mix(currentTextureCoords, prevTextureCoords, interpWeightForZeroDepthDiff);
+    return parallaxMappedTextureCoords;
 }
 
 fn obtainNormalFromHeightMap(
