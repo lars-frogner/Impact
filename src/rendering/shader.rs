@@ -280,7 +280,7 @@ pub enum LightVertexOutputFieldIndices {
 #[derive(Clone, Debug)]
 pub struct UnidirectionalLightVertexOutputFieldIndices {
     pub light_space_position: usize,
-    pub light_space_normal_vector: usize,
+    pub light_space_normal_vector: Option<usize>,
 }
 
 /// Indices of any fields holding the properties of a
@@ -1120,8 +1120,10 @@ impl ShaderGenerator {
             None
         };
 
-        let input_model_normal_vector_expr =
-            if requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
+        let input_model_normal_vector_expr = if requirements
+            .contains(VertexAttributeSet::NORMAL_VECTOR)
+            && !requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
+        {
                 Some(Self::add_vertex_attribute_input_argument::<
                     VertexNormalVector<fre>,
                 >(
@@ -2638,22 +2640,6 @@ impl UnidirectionalLightShadingShaderGenerator {
     ) -> UnidirectionalLightVertexOutputFieldIndices {
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
-        let camera_space_position_expr = output_struct_builder
-            .get_field_expr(
-                mesh_output_field_indices
-                    .position
-                    .expect("Missing position for shading with unidirectional light"),
-            )
-            .unwrap();
-
-        let camera_space_normal_vector_expr = output_struct_builder
-            .get_field_expr(
-                mesh_output_field_indices
-                    .normal_vector
-                    .expect("Missing normal vector for shading with unidirectional light"),
-            )
-            .unwrap();
-
         let camera_to_light_space_rotation_quaternion_expr =
             LightShaderGenerator::generate_named_field_access_expr(
                 vertex_function,
@@ -2661,6 +2647,14 @@ impl UnidirectionalLightShadingShaderGenerator {
                 self.active_light_ptr_expr_in_vertex_function,
                 0,
             );
+
+        let camera_space_position_expr = output_struct_builder
+            .get_field_expr(
+                mesh_output_field_indices
+                    .position
+                    .expect("Missing position for shading with unidirectional light"),
+            )
+            .unwrap();
 
         let light_space_position_expr = source_code_lib.generate_function_call(
             module,
@@ -2672,7 +2666,15 @@ impl UnidirectionalLightShadingShaderGenerator {
             ],
         );
 
-        let light_space_normal_vector_expr = source_code_lib.generate_function_call(
+        let light_space_normal_vector_expr =
+            mesh_output_field_indices
+                .normal_vector
+                .map(|normal_vector_idx| {
+                    let camera_space_normal_vector_expr = output_struct_builder
+                        .get_field_expr(normal_vector_idx)
+                        .unwrap();
+
+                    source_code_lib.generate_function_call(
             module,
             vertex_function,
             "rotateVectorWithQuaternion",
@@ -2680,7 +2682,8 @@ impl UnidirectionalLightShadingShaderGenerator {
                 camera_to_light_space_rotation_quaternion_expr,
                 camera_space_normal_vector_expr,
             ],
-        );
+                    )
+                });
 
         UnidirectionalLightVertexOutputFieldIndices {
             light_space_position: output_struct_builder.add_field_with_perspective_interpolation(
@@ -2689,12 +2692,15 @@ impl UnidirectionalLightShadingShaderGenerator {
                 VECTOR_3_SIZE,
                 light_space_position_expr,
             ),
-            light_space_normal_vector: output_struct_builder
-                .add_field_with_perspective_interpolation(
+            light_space_normal_vector: light_space_normal_vector_expr.map(
+                |light_space_normal_vector_expr| {
+                    output_struct_builder.add_field_with_perspective_interpolation(
                     "lightSpaceNormalVector",
                     vec3_type,
                     VECTOR_3_SIZE,
                     light_space_normal_vector_expr,
+                    )
+                },
                 ),
         }
     }
@@ -2704,9 +2710,10 @@ impl UnidirectionalLightShadingShaderGenerator {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
+        fragment_input_struct: &InputStruct,
+        light_input_field_indices: &UnidirectionalLightVertexOutputFieldIndices,
         camera_clip_position_expr: Handle<Expression>,
-        light_space_position_expr: Handle<Expression>,
-        light_space_normal_vector_expr: Handle<Expression>,
+        camera_space_normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
         let camera_space_direction_expr = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
@@ -2806,6 +2813,36 @@ impl UnidirectionalLightShadingShaderGenerator {
                     world_to_light_clip_space_z_scale_expr,
                 )
             });
+
+        let light_space_position_expr =
+            fragment_input_struct.get_field_expr(light_input_field_indices.light_space_position);
+
+        let light_space_normal_vector_expr = light_input_field_indices
+            .light_space_normal_vector
+            .map_or_else(
+                || {
+                    let camera_to_light_space_rotation_quaternion_expr =
+                        LightShaderGenerator::generate_named_field_access_expr(
+                            fragment_function,
+                            "cameraToLightSpaceRotationQuaternion",
+                            self.active_light_ptr_expr_in_fragment_function,
+                            0,
+                        );
+
+                    source_code_lib.generate_function_call(
+                        module,
+                        fragment_function,
+                        "rotateVectorWithQuaternion",
+                        vec![
+                            camera_to_light_space_rotation_quaternion_expr,
+                            camera_space_normal_vector_expr,
+                        ],
+                    )
+                },
+                |light_space_normal_vector_idx| {
+                    fragment_input_struct.get_field_expr(light_space_normal_vector_idx)
+                },
+            );
 
         let light_clip_position_expr = source_code_lib.generate_function_call(
             module,

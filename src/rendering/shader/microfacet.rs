@@ -535,20 +535,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let camera_clip_position_expr =
                     fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
 
-                let light_space_position_expr = fragment_input_struct
-                    .get_field_expr(unidirectional_light_input_field_indices.light_space_position);
-
-                let light_space_normal_vector_expr = fragment_input_struct.get_field_expr(
-                    unidirectional_light_input_field_indices.light_space_normal_vector,
-                );
-
                 unidirectional_light_shader_generator.generate_fragment_shading_code(
                     module,
                     source_code_lib,
                     fragment_function,
+                    fragment_input_struct,
+                    unidirectional_light_input_field_indices,
                     camera_clip_position_expr,
-                    light_space_position_expr,
-                    light_space_normal_vector_expr,
+                    normal_vector_expr,
                 )
             }
             _ => {
