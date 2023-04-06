@@ -1124,17 +1124,17 @@ impl ShaderGenerator {
             .contains(VertexAttributeSet::NORMAL_VECTOR)
             && !requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
         {
-                Some(Self::add_vertex_attribute_input_argument::<
-                    VertexNormalVector<fre>,
-                >(
-                    vertex_function,
-                    mesh_shader_input,
-                    new_name("modelSpaceNormalVector"),
-                    vec3_type,
-                )?)
-            } else {
-                None
-            };
+            Some(Self::add_vertex_attribute_input_argument::<
+                VertexNormalVector<fre>,
+            >(
+                vertex_function,
+                mesh_shader_input,
+                new_name("modelSpaceNormalVector"),
+                vec3_type,
+            )?)
+        } else {
+            None
+        };
 
         let input_texture_coord_expr = if requirements.contains(VertexAttributeSet::TEXTURE_COORDS)
         {
@@ -2675,13 +2675,13 @@ impl UnidirectionalLightShadingShaderGenerator {
                         .unwrap();
 
                     source_code_lib.generate_function_call(
-            module,
-            vertex_function,
-            "rotateVectorWithQuaternion",
-            vec![
-                camera_to_light_space_rotation_quaternion_expr,
-                camera_space_normal_vector_expr,
-            ],
+                        module,
+                        vertex_function,
+                        "rotateVectorWithQuaternion",
+                        vec![
+                            camera_to_light_space_rotation_quaternion_expr,
+                            camera_space_normal_vector_expr,
+                        ],
                     )
                 });
 
@@ -2695,13 +2695,13 @@ impl UnidirectionalLightShadingShaderGenerator {
             light_space_normal_vector: light_space_normal_vector_expr.map(
                 |light_space_normal_vector_expr| {
                     output_struct_builder.add_field_with_perspective_interpolation(
-                    "lightSpaceNormalVector",
-                    vec3_type,
-                    VECTOR_3_SIZE,
-                    light_space_normal_vector_expr,
+                        "lightSpaceNormalVector",
+                        vec3_type,
+                        VECTOR_3_SIZE,
+                        light_space_normal_vector_expr,
                     )
                 },
-                ),
+            ),
         }
     }
 
@@ -3698,6 +3698,147 @@ impl SampledTexture {
                 texture_coord_expr,
                 depth_reference_expr,
             ],
+        )
+    }
+}
+
+pub fn generate_fragment_normal_vector_and_texture_coord_expr(
+    module: &mut Module,
+    source_code_lib: &mut SourceCode,
+    fragment_function: &mut Function,
+    fragment_input_struct: &InputStruct,
+    mesh_input_field_indices: &MeshVertexOutputFieldIndices,
+    normal_map_texture_and_sampler_bindings: Option<(u32, u32)>,
+    height_map_texture_and_sampler_bindings: Option<(u32, u32)>,
+    parallax_displacement_scale_idx: usize,
+    bind_group: u32,
+    view_dir_expr: Handle<Expression>,
+    texture_coord_expr: Option<Handle<Expression>>,
+) -> (Handle<Expression>, Option<Handle<Expression>>) {
+    if let Some((height_map_texture_binding, height_map_sampler_binding)) =
+        height_map_texture_and_sampler_bindings
+    {
+        let height_map_texture = SampledTexture::declare(
+            &mut module.types,
+            &mut module.global_variables,
+            TextureType::Image,
+            "heightMap",
+            bind_group,
+            height_map_texture_binding,
+            Some(height_map_sampler_binding),
+            None,
+        );
+
+        let (height_map_texture_expr, height_map_sampler_expr) =
+            height_map_texture.generate_texture_and_sampler_expressions(fragment_function, false);
+
+        let parallax_displacement_scale_expr =
+            fragment_input_struct.get_field_expr(parallax_displacement_scale_idx);
+
+        let unnormalized_tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+            mesh_input_field_indices
+                .tangent_space_quaternion
+                .expect("Missing tangent space quaternion for parallax mapping"),
+        );
+
+        let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "normalizeQuaternion",
+            vec![unnormalized_tangent_space_quaternion_expr],
+        );
+
+        let parallax_mapped_texture_coord_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "computeParallaxMappedTextureCoordinates",
+            vec![
+                height_map_texture_expr,
+                height_map_sampler_expr,
+                parallax_displacement_scale_expr,
+                texture_coord_expr.unwrap(),
+                tangent_space_quaternion_expr,
+                view_dir_expr,
+            ],
+        );
+
+        let tangent_space_normal_vector_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "obtainNormalFromHeightMap",
+            vec![
+                height_map_texture_expr,
+                height_map_sampler_expr,
+                texture_coord_expr.unwrap(),
+            ],
+        );
+
+        (
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "tranformVectorFromTangentSpace",
+                vec![
+                    tangent_space_quaternion_expr,
+                    tangent_space_normal_vector_expr,
+                ],
+            ),
+            Some(parallax_mapped_texture_coord_expr),
+        )
+    } else if let Some((normal_map_texture_binding, normal_map_sampler_binding)) =
+        normal_map_texture_and_sampler_bindings
+    {
+        let normal_map_texture = SampledTexture::declare(
+            &mut module.types,
+            &mut module.global_variables,
+            TextureType::Image,
+            "normalMap",
+            bind_group,
+            normal_map_texture_binding,
+            Some(normal_map_sampler_binding),
+            None,
+        );
+
+        let normal_map_color_expr = normal_map_texture
+            .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+
+        let tangent_space_normal_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "convertNormalMapColorToNormalVector",
+            vec![normal_map_color_expr],
+        );
+
+        let unnormalized_tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
+            mesh_input_field_indices
+                .tangent_space_quaternion
+                .expect("Missing tangent space quaternion for normal mapping"),
+        );
+
+        let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "normalizeQuaternion",
+            vec![unnormalized_tangent_space_quaternion_expr],
+        );
+
+        (
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "tranformVectorFromTangentSpace",
+                vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
+            ),
+            texture_coord_expr,
+        )
+    } else {
+        (
+            fragment_input_struct.get_field_expr(
+                mesh_input_field_indices
+                    .normal_vector
+                    .expect("Missing normal vector for shading"),
+            ),
+            None,
         )
     }
 }
