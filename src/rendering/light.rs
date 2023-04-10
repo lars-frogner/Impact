@@ -6,11 +6,11 @@ use crate::{
         buffer::{self, UniformBufferable},
         texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{UniformRenderBufferManager, UniformTransferResult},
-        CascadeIdx, CoreRenderingSystem, LightShaderInput, OmnidirectionalLightShaderInput,
-        RenderingConfig, UnidirectionalLightShaderInput,
+        AmbientLightShaderInput, CascadeIdx, CoreRenderingSystem, LightShaderInput,
+        OmnidirectionalLightShaderInput, RenderingConfig, UnidirectionalLightShaderInput,
     },
     scene::{
-        LightID, LightStorage, LightType, OmnidirectionalLight, UnidirectionalLight,
+        AmbientLight, LightID, LightStorage, LightType, OmnidirectionalLight, UnidirectionalLight,
         MAX_SHADOW_MAP_CASCADES,
     },
 };
@@ -22,6 +22,7 @@ use std::mem;
 /// shadow map textures.
 #[derive(Debug)]
 pub struct LightRenderBufferManager {
+    ambient_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     omnidirectional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     unidirectional_light_render_buffer_manager: UniformRenderBufferManagerWithLightIDs,
     omnidirectional_light_shadow_map_texture: ShadowCubemapTexture,
@@ -32,6 +33,7 @@ pub struct LightRenderBufferManager {
     omnidirectional_light_shadow_map_bind_group: wgpu::BindGroup,
     unidirectional_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
     unidirectional_light_shadow_map_bind_group: wgpu::BindGroup,
+    ambient_light_shader_input: LightShaderInput,
     omnidirectional_light_shader_input: LightShaderInput,
     unidirectional_light_shader_input: LightShaderInput,
 }
@@ -43,15 +45,17 @@ struct UniformRenderBufferManagerWithLightIDs {
 }
 
 impl LightRenderBufferManager {
-    const OMNIDIRECTIONAL_LIGHT_BINDING: u32 = 0;
-    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 1;
-    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 2;
-    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 3;
+    const AMBIENT_LIGHT_BINDING: u32 = 0;
 
-    const UNIDIRECTIONAL_LIGHT_BINDING: u32 = 4;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 5;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 6;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 7;
+    const OMNIDIRECTIONAL_LIGHT_BINDING: u32 = 1;
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 2;
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 3;
+    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 4;
+
+    const UNIDIRECTIONAL_LIGHT_BINDING: u32 = 5;
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 6;
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 7;
+    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 8;
 
     pub const LIGHT_IDX_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<u32>() as u32;
     pub const CASCADE_IDX_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<CascadeIdx>() as u32;
@@ -63,6 +67,11 @@ impl LightRenderBufferManager {
         light_storage: &LightStorage,
         config: &RenderingConfig,
     ) -> Self {
+        let ambient_light_render_buffer_manager =
+            UniformRenderBufferManagerWithLightIDs::for_uniform_buffer(
+                core_system,
+                light_storage.ambient_light_buffer(),
+            );
         let omnidirectional_light_render_buffer_manager =
             UniformRenderBufferManagerWithLightIDs::for_uniform_buffer(
                 core_system,
@@ -91,6 +100,7 @@ impl LightRenderBufferManager {
 
         let light_bind_group = Self::create_light_bind_group(
             core_system.device(),
+            &ambient_light_render_buffer_manager,
             &omnidirectional_light_render_buffer_manager,
             &unidirectional_light_render_buffer_manager,
             &light_bind_group_layout,
@@ -116,6 +126,9 @@ impl LightRenderBufferManager {
                 &unidirectional_light_shadow_map_bind_group_layout,
             );
 
+        let ambient_light_shader_input =
+            Self::create_ambient_light_shader_input(&ambient_light_render_buffer_manager);
+
         let omnidirectional_light_shader_input = Self::create_omnidirectional_light_shader_input(
             &omnidirectional_light_render_buffer_manager,
         );
@@ -125,6 +138,7 @@ impl LightRenderBufferManager {
         );
 
         Self {
+            ambient_light_render_buffer_manager,
             omnidirectional_light_render_buffer_manager,
             unidirectional_light_render_buffer_manager,
             omnidirectional_light_shadow_map_texture,
@@ -135,9 +149,16 @@ impl LightRenderBufferManager {
             omnidirectional_light_shadow_map_bind_group,
             unidirectional_light_shadow_map_bind_group_layout,
             unidirectional_light_shadow_map_bind_group,
+            ambient_light_shader_input,
             omnidirectional_light_shader_input,
             unidirectional_light_shader_input,
         }
+    }
+
+    /// Returns the slice of IDs of all the [`AmbientLight`]s currently residing
+    /// in the ambient light render buffer.
+    pub fn ambient_light_ids(&self) -> &[LightID] {
+        self.ambient_light_render_buffer_manager.light_ids()
     }
 
     /// Returns the slice of IDs of all the [`OmnidirectionalLight`]s currently residing
@@ -177,27 +198,36 @@ impl LightRenderBufferManager {
     }
 
     /// Returns the bind group layout for the shadow map texture for the given
-    /// light type.
+    /// light type, or [`None`] if the light type does not use shadow mapping.
     pub fn shadow_map_bind_group_layout_for_light_type(
         &self,
         light_type: LightType,
-    ) -> &wgpu::BindGroupLayout {
+    ) -> Option<&wgpu::BindGroupLayout> {
         match light_type {
+            LightType::AmbientLight => None,
             LightType::OmnidirectionalLight => {
-                &self.omnidirectional_light_shadow_map_bind_group_layout
+                Some(&self.omnidirectional_light_shadow_map_bind_group_layout)
             }
             LightType::UnidirectionalLight => {
-                &self.unidirectional_light_shadow_map_bind_group_layout
+                Some(&self.unidirectional_light_shadow_map_bind_group_layout)
             }
         }
     }
 
     /// Returns the bind group for the shadow map texture for the given light
-    /// type.
-    pub fn shadow_map_bind_group_for_light_type(&self, light_type: LightType) -> &wgpu::BindGroup {
+    /// type, or [`None`] if the light type does not use shadow mapping.
+    pub fn shadow_map_bind_group_for_light_type(
+        &self,
+        light_type: LightType,
+    ) -> Option<&wgpu::BindGroup> {
         match light_type {
-            LightType::OmnidirectionalLight => &self.omnidirectional_light_shadow_map_bind_group,
-            LightType::UnidirectionalLight => &self.unidirectional_light_shadow_map_bind_group,
+            LightType::AmbientLight => None,
+            LightType::OmnidirectionalLight => {
+                Some(&self.omnidirectional_light_shadow_map_bind_group)
+            }
+            LightType::UnidirectionalLight => {
+                Some(&self.unidirectional_light_shadow_map_bind_group)
+            }
         }
     }
 
@@ -205,6 +235,7 @@ impl LightRenderBufferManager {
     /// a shader.
     pub fn shader_input_for_light_type(&self, light_type: LightType) -> &LightShaderInput {
         match light_type {
+            LightType::AmbientLight => &self.ambient_light_shader_input,
             LightType::OmnidirectionalLight => &self.omnidirectional_light_shader_input,
             LightType::UnidirectionalLight => &self.unidirectional_light_shader_input,
         }
@@ -217,6 +248,7 @@ impl LightRenderBufferManager {
     /// If no light with the given ID is present in the relevant uniform buffer.
     pub fn get_light_idx_push_constant(&self, light_type: LightType, light_id: LightID) -> u32 {
         let light_idx = match light_type {
+            LightType::AmbientLight => &self.ambient_light_render_buffer_manager,
             LightType::OmnidirectionalLight => &self.omnidirectional_light_render_buffer_manager,
             LightType::UnidirectionalLight => &self.unidirectional_light_render_buffer_manager,
         }
@@ -234,6 +266,10 @@ impl LightRenderBufferManager {
         core_system: &CoreRenderingSystem,
         light_storage: &LightStorage,
     ) {
+        let ambient_light_transfer_result = self
+            .ambient_light_render_buffer_manager
+            .transfer_uniforms_to_render_buffer(core_system, light_storage.ambient_light_buffer());
+
         let omnidirectional_light_transfer_result = self
             .omnidirectional_light_render_buffer_manager
             .transfer_uniforms_to_render_buffer(
@@ -248,16 +284,24 @@ impl LightRenderBufferManager {
                 light_storage.unidirectional_light_buffer(),
             );
 
-        if omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
+        if ambient_light_transfer_result == UniformTransferResult::CreatedNewBuffer
+            || omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
             || unidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
         {
             // Recreate light bind group and shader input
             self.light_bind_group = Self::create_light_bind_group(
                 core_system.device(),
+                &self.ambient_light_render_buffer_manager,
                 &self.omnidirectional_light_render_buffer_manager,
                 &self.unidirectional_light_render_buffer_manager,
                 &self.light_bind_group_layout,
             );
+
+            if ambient_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+                self.ambient_light_shader_input = Self::create_ambient_light_shader_input(
+                    &self.ambient_light_render_buffer_manager,
+                );
+            }
 
             if omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
                 self.omnidirectional_light_shader_input =
@@ -278,6 +322,7 @@ impl LightRenderBufferManager {
     fn create_light_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
+                AmbientLight::create_bind_group_layout_entry(Self::AMBIENT_LIGHT_BINDING),
                 OmnidirectionalLight::create_bind_group_layout_entry(
                     Self::OMNIDIRECTIONAL_LIGHT_BINDING,
                 ),
@@ -291,6 +336,7 @@ impl LightRenderBufferManager {
 
     fn create_light_bind_group(
         device: &wgpu::Device,
+        ambient_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
         omnidirectional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
         unidirectional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
         layout: &wgpu::BindGroupLayout,
@@ -298,6 +344,9 @@ impl LightRenderBufferManager {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
+                ambient_light_render_buffer_manager
+                    .manager()
+                    .create_bind_group_entry(Self::AMBIENT_LIGHT_BINDING),
                 omnidirectional_light_render_buffer_manager
                     .manager()
                     .create_bind_group_entry(Self::OMNIDIRECTIONAL_LIGHT_BINDING),
@@ -392,6 +441,17 @@ impl LightRenderBufferManager {
         })
     }
 
+    fn create_ambient_light_shader_input(
+        ambient_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
+    ) -> LightShaderInput {
+        LightShaderInput::AmbientLight(AmbientLightShaderInput {
+            uniform_binding: Self::AMBIENT_LIGHT_BINDING,
+            max_light_count: ambient_light_render_buffer_manager
+                .manager()
+                .max_uniform_count() as u64,
+        })
+    }
+
     fn create_omnidirectional_light_shader_input(
         omnidirectional_light_render_buffer_manager: &UniformRenderBufferManagerWithLightIDs,
     ) -> LightShaderInput {
@@ -400,7 +460,7 @@ impl LightRenderBufferManager {
             max_light_count: omnidirectional_light_render_buffer_manager
                 .manager()
                 .max_uniform_count() as u64,
-            shadow_map_texture_and_sampler_binding: (
+            shadow_map_texture_and_sampler_bindings: (
                 Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
                 Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
@@ -477,6 +537,17 @@ impl UniformRenderBufferManagerWithLightIDs {
 
         self.uniform_render_buffer_manager
             .transfer_uniforms_to_render_buffer(core_system, uniform_buffer)
+    }
+}
+
+impl UniformBufferable for AmbientLight {
+    const ID: ConstStringHash64 = ConstStringHash64::new("Ambient light");
+
+    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        buffer::create_uniform_buffer_bind_group_layout_entry(
+            binding,
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+        )
     }
 }
 

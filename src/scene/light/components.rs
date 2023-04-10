@@ -3,13 +3,22 @@
 use crate::{
     geometry::Degrees,
     rendering::fre,
-    scene::{LightDirection, LightID, Radiance},
+    scene::{Irradiance, LightDirection, LightID, Radiance},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a [`OmnidirectionalLight`](crate::scene::OmnidirectionalLight).
+/// [`Component`](impact_ecs::component::Component) for entities that have an
+/// [`AmbientLight`](crate::scene::AmbientLight).
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct AmbientLightComp {
+    /// The ID of the entity's [`AmbientLight`](crate::scene::AmbientLight).
+    pub id: LightID,
+}
+
+/// [`Component`](impact_ecs::component::Component) for entities that have an
+/// [`OmnidirectionalLight`](crate::scene::OmnidirectionalLight).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OmnidirectionalLightComp {
@@ -37,6 +46,13 @@ pub struct DirectionComp(pub LightDirection);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RadianceComp(pub Radiance);
+
+/// [`Component`](impact_ecs::component::Component) for entities that have a
+/// uniformly distributed [`Irradiance`] and thus can act as an ambient light
+/// source.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct UniformIrradianceComp(pub Irradiance);
 
 /// [`Component`](impact_ecs::component::Component) for light source entities
 /// that have a physical extent, and thus produce soft shadows.
