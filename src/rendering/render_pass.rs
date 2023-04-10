@@ -197,6 +197,8 @@ impl RenderPassManager {
     ) -> Result<()> {
         let light_buffer_manager = render_resources.get_light_buffer_manager();
 
+        let ambient_light_ids =
+            light_buffer_manager.map_or_else(|| &[], LightRenderBufferManager::ambient_light_ids);
         let omnidirectional_light_ids = light_buffer_manager
             .map_or_else(|| &[], LightRenderBufferManager::omnidirectional_light_ids);
         let unidirectional_light_ids = light_buffer_manager
@@ -205,7 +207,8 @@ impl RenderPassManager {
         // Remove shading passes for lights that are no longer present
         self.light_shaded_model_shading_passes
             .retain(|light_id, _| {
-                omnidirectional_light_ids.contains(light_id)
+                ambient_light_ids.contains(light_id)
+                    || omnidirectional_light_ids.contains(light_id)
                     || unidirectional_light_ids.contains(light_id)
             });
 
@@ -282,6 +285,34 @@ impl RenderPassManager {
                                 RenderPassSpecification::shading_prepass(model_id),
                                 no_visible_instances,
                             )?);
+
+                        for &light_id in ambient_light_ids {
+                            let passes = self
+                                .light_shaded_model_shading_passes
+                                .entry(light_id)
+                                .or_default();
+
+                            let light = LightInfo {
+                                light_type: LightType::AmbientLight,
+                                light_id,
+                            };
+
+                            // Create an ambient light shading pass for the new
+                            // model
+                            passes.shading_passes.push(RenderPassRecorder::new(
+                                core_system,
+                                config,
+                                render_resources,
+                                render_attachment_texture_manager,
+                                shader_manager,
+                                RenderPassSpecification::model_shading_pass_without_shadow_map(
+                                    Some(light),
+                                    model_id,
+                                    true,
+                                ),
+                                no_visible_instances,
+                            )?);
+                        }
 
                         for &light_id in omnidirectional_light_ids {
                             let faces_have_shadow_casting_model_instances: Vec<_> =
@@ -542,7 +573,7 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::model_shading_pass_without_shadow_map(
-                                    None, model_id,
+                                    None, model_id, false,
                                 ),
                                 no_visible_instances,
                             )?);
@@ -613,7 +644,11 @@ impl RenderPassSpecification {
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID without making use of a shadow map.
-    fn model_shading_pass_without_shadow_map(light: Option<LightInfo>, model_id: ModelID) -> Self {
+    fn model_shading_pass_without_shadow_map(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        update_depthmap: bool,
+    ) -> Self {
         let label = if let Some(light) = light {
             format!(
                 "Shading of model {} for light {} ({:?}) without shadow map",
@@ -627,7 +662,11 @@ impl RenderPassSpecification {
             clear_color: None,
             model_id: Some(model_id),
             use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::use_readonly(),
+            depth_map_usage: if update_depthmap {
+                DepthMapUsage::use_readwrite()
+            } else {
+                DepthMapUsage::use_readonly()
+            },
             light,
             shadow_map_usage: ShadowMapUsage::None,
             label,
@@ -922,7 +961,9 @@ impl RenderPassSpecification {
 
             if self.shadow_map_usage.is_use() {
                 layouts.push(
-                    light_buffer_manager.shadow_map_bind_group_layout_for_light_type(light_type),
+                    light_buffer_manager
+                        .shadow_map_bind_group_layout_for_light_type(light_type)
+                        .expect("Missing shadow map bind group layout for shading with shadow map"),
                 );
             }
 
@@ -1025,8 +1066,11 @@ impl RenderPassSpecification {
             bind_groups.push(light_buffer_manager.light_bind_group());
 
             if self.shadow_map_usage.is_use() {
-                bind_groups
-                    .push(light_buffer_manager.shadow_map_bind_group_for_light_type(light_type));
+                bind_groups.push(
+                    light_buffer_manager
+                        .shadow_map_bind_group_for_light_type(light_type)
+                        .expect("Missing shadow map bind group for shading with shadow map"),
+                );
             }
         }
 

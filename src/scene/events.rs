@@ -5,9 +5,10 @@ use crate::{
     physics::{OrientationComp, PositionComp},
     scene::{
         self, add_blinn_phong_material_component_for_entity,
-        add_microfacet_material_component_for_entity, FixedColorMaterial, FixedTextureMaterial,
-        MaterialComp, MaterialHandle, MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight,
-        ScalingComp, Scene, SceneGraphNodeComp, UnidirectionalLight, VertexColorMaterial,
+        add_microfacet_material_component_for_entity, AmbientLight, FixedColorMaterial,
+        FixedTextureMaterial, MaterialComp, MaterialHandle, MeshComp, ModelID, ModelInstanceNodeID,
+        OmnidirectionalLight, ScalingComp, Scene, SceneGraphNodeComp, UnidirectionalLight,
+        VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -114,6 +115,11 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
+        AmbientLight::add_ambient_light_component_for_entity(
+            self.light_storage(),
+            components,
+            desynchronized,
+        );
         OmnidirectionalLight::add_omnidirectional_light_component_for_entity(
             self.scene_camera(),
             self.light_storage(),
@@ -261,6 +267,7 @@ impl Scene {
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
+        AmbientLight::remove_light_from_storage(self.light_storage(), entity, desynchronized);
         OmnidirectionalLight::remove_light_from_storage(
             self.light_storage(),
             entity,

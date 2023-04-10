@@ -24,9 +24,10 @@ pub use graph::{
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    AngularExtentComp, DirectionComp, EmissionExtentComp, LightDirection, LightID, LightStorage,
-    LightType, Omnidirectional, OmnidirectionalLight, OmnidirectionalLightComp, Radiance,
-    RadianceComp, UnidirectionalLight, UnidirectionalLightComp, MAX_SHADOW_MAP_CASCADES,
+    AmbientLight, AmbientLightComp, AngularExtentComp, DirectionComp, EmissionExtentComp,
+    Irradiance, LightDirection, LightID, LightStorage, LightType, Omnidirectional,
+    OmnidirectionalLight, OmnidirectionalLightComp, Radiance, RadianceComp, UnidirectionalLight,
+    UnidirectionalLightComp, UniformIrradianceComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,

@@ -125,13 +125,24 @@ pub struct ModelViewTransformShaderInput {
 /// Shader input description for a specific light source type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LightShaderInput {
+    AmbientLight(AmbientLightShaderInput),
     OmnidirectionalLight(OmnidirectionalLightShaderInput),
     UnidirectionalLight(UnidirectionalLightShaderInput),
 }
 
+/// Input description for ambient light sources, specifying the bind group
+/// binding and the total size of the omnidirectional light uniform buffer.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AmbientLightShaderInput {
+    /// Bind group binding of the light uniform buffer.
+    pub uniform_binding: u32,
+    /// Maximum number of lights in the uniform buffer.
+    pub max_light_count: u64,
+}
+
 /// Input description for omnidirectional light sources, specifying the bind
-/// group binding and the total size of the omnidirectional light uniform
-/// buffer.
+/// group binding and the total size of the omnidirectional light uniform buffer
+/// as well as shadow map bindings.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OmnidirectionalLightShaderInput {
     /// Bind group binding of the light uniform buffer.
@@ -140,7 +151,7 @@ pub struct OmnidirectionalLightShaderInput {
     pub max_light_count: u64,
     /// Bind group bindings of the shadow map texture, sampler and comparison
     /// sampler, respectively.
-    pub shadow_map_texture_and_sampler_binding: (u32, u32, u32),
+    pub shadow_map_texture_and_sampler_bindings: (u32, u32, u32),
 }
 
 /// Input description for unidirectional light sources, specifying the bind
@@ -204,11 +215,20 @@ pub struct UnidirectionalLightProjectionExpressions {
     pub scaling: Handle<Expression>,
 }
 
+#[allow(clippy::enum_variant_names)]
 /// Generator for shader code associated with a light source.
 #[derive(Clone, Debug)]
 pub enum LightShaderGenerator {
+    AmbientLight(AmbientLightShaderGenerator),
     OmnidirectionalLight(OmnidirectionalLightShaderGenerator),
     UnidirectionalLight(UnidirectionalLightShaderGenerator),
+}
+
+/// Generator for shader code for shading a fragment with the light from an
+/// ambient light.
+#[derive(Clone, Debug)]
+pub struct AmbientLightShaderGenerator {
+    pub irradiance: Handle<Expression>,
 }
 
 /// Generator for shader code associated with an omnidirectional light source.
@@ -233,8 +253,8 @@ pub struct OmnidirectionalLightShadowMapUpdateShaderGenerator {
     pub inverse_distance_span: Handle<Expression>,
 }
 
-/// Generator for shader code for shading a fragment with the light from a point
-/// light.
+/// Generator for shader code for shading a fragment with the light from an
+/// omnidirectional light.
 #[derive(Clone, Debug)]
 pub struct OmnidirectionalLightShadingShaderGenerator {
     pub camera_to_light_space_rotation_quaternion: Handle<Expression>,
@@ -1427,6 +1447,15 @@ impl ShaderGenerator {
         has_material: bool,
     ) -> LightShaderGenerator {
         match light_shader_input {
+            LightShaderInput::AmbientLight(light_shader_input) => {
+                Self::create_ambient_light_shader_generator(
+                    light_shader_input,
+                    module,
+                    fragment_function,
+                    bind_group_idx,
+                    push_constant_fragment_expressions,
+                )
+            }
             LightShaderInput::OmnidirectionalLight(light_shader_input) => {
                 Self::create_omnidirectional_light_shader_generator(
                     light_shader_input,
@@ -1451,6 +1480,112 @@ impl ShaderGenerator {
                 )
             }
         }
+    }
+
+    /// Creates a generator of shader code for ambient lights.
+    ///
+    /// This involves generating declarations for the ambient light uniform
+    /// type, the type the ambient light uniform buffer will be mapped to, the
+    /// global variable this is bound to, and expressions for the fields of the
+    /// light at the active index (which is set in a push constant).
+    fn create_ambient_light_shader_generator(
+        light_shader_input: &AmbientLightShaderInput,
+        module: &mut Module,
+        fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+    ) -> LightShaderGenerator {
+        let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
+        let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
+
+        // The struct is padded to 16 byte alignment as required for uniforms
+        let single_light_struct_size = VECTOR_4_SIZE;
+
+        // The count at the beginning of the uniform buffer is padded to 16 bytes
+        let light_count_size = 16;
+
+        let single_light_struct_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("AmbientLight"),
+                inner: TypeInner::Struct {
+                    members: vec![StructMember {
+                        name: new_name("irradiance"),
+                        ty: vec3_type,
+                        binding: None,
+                        offset: 0,
+                    }],
+                    span: single_light_struct_size,
+                },
+            },
+        );
+
+        let max_light_count_constant = define_constant_if_missing(
+            &mut module.constants,
+            u32_constant(light_shader_input.max_light_count),
+        );
+
+        let light_array_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: single_light_struct_type,
+                    size: ArraySize::Constant(max_light_count_constant),
+                    stride: single_light_struct_size,
+                },
+            },
+        );
+
+        let lights_struct_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("AmbientLights"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("numLights"),
+                            ty: u32_type,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("lights"),
+                            ty: light_array_type,
+                            binding: None,
+                            offset: light_count_size,
+                        },
+                    ],
+                    span: single_light_struct_size
+                        .checked_mul(u32::try_from(light_shader_input.max_light_count).unwrap())
+                        .unwrap()
+                        .checked_add(light_count_size)
+                        .unwrap(),
+                },
+            },
+        );
+
+        let lights_struct_var = append_to_arena(
+            &mut module.global_variables,
+            GlobalVariable {
+                name: new_name("ambientLights"),
+                space: AddressSpace::Uniform,
+                binding: Some(ResourceBinding {
+                    group: *bind_group_idx,
+                    binding: light_shader_input.uniform_binding,
+                }),
+                ty: lights_struct_type,
+                init: None,
+            },
+        );
+
+        *bind_group_idx += 1;
+
+        LightShaderGenerator::new_for_ambient_light_shading(
+            fragment_function,
+            lights_struct_var,
+            push_constant_fragment_expressions,
+        )
     }
 
     /// Creates a generator of shader code for omnidirectional lights.
@@ -1609,7 +1744,7 @@ impl ShaderGenerator {
                 shadow_map_texture_binding,
                 shadow_map_sampler_binding,
                 shadow_map_comparison_sampler_binding,
-            ) = light_shader_input.shadow_map_texture_and_sampler_binding;
+            ) = light_shader_input.shadow_map_texture_and_sampler_bindings;
 
             let shadow_map = SampledTexture::declare(
                 &mut module.types,
@@ -2140,6 +2275,18 @@ impl UnidirectionalLightProjectionExpressions {
 }
 
 impl LightShaderGenerator {
+    pub fn new_for_ambient_light_shading(
+        fragment_function: &mut Function,
+        lights_struct_var: Handle<GlobalVariable>,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+    ) -> Self {
+        Self::AmbientLight(AmbientLightShaderGenerator::new(
+            fragment_function,
+            lights_struct_var,
+            push_constant_fragment_expressions,
+        ))
+    }
+
     pub fn new_for_omnidirectional_light_shadow_map_update(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
@@ -2212,7 +2359,7 @@ impl LightShaderGenerator {
             Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShadowMapUpdate(
                 shader_generator,
             )) => Some(shader_generator.get_projection_to_light_clip_space()),
-            Self::UnidirectionalLight(_) => None,
+            Self::UnidirectionalLight(_) | Self::AmbientLight(_) => None,
         }
     }
 
@@ -2333,6 +2480,29 @@ impl LightShaderGenerator {
                 },
             )
         })
+    }
+}
+
+impl AmbientLightShaderGenerator {
+    pub fn new(
+        fragment_function: &mut Function,
+        lights_struct_var: Handle<GlobalVariable>,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+    ) -> Self {
+        let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
+            fragment_function,
+            lights_struct_var,
+            push_constant_fragment_expressions,
+        );
+
+        let irradiance = LightShaderGenerator::generate_named_field_access_expr(
+            fragment_function,
+            "lightIrradiance",
+            active_light_ptr_expr,
+            0,
+        );
+
+        Self { irradiance }
     }
 }
 
@@ -4813,7 +4983,7 @@ mod test {
         LightShaderInput::OmnidirectionalLight(OmnidirectionalLightShaderInput {
             uniform_binding: 0,
             max_light_count: 20,
-            shadow_map_texture_and_sampler_binding: (1, 2, 3),
+            shadow_map_texture_and_sampler_bindings: (1, 2, 3),
         });
 
     const UNIDIRECTIONAL_LIGHT_INPUT: LightShaderInput =
