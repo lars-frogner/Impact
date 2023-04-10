@@ -6,11 +6,11 @@ use crate::{
     impl_InstanceFeature,
     rendering::{
         FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
-        MaterialPropertyTextureManager, MaterialShaderInput,
+        MaterialPropertyTextureManager, MaterialShaderInput, RenderAttachmentQuantitySet,
     },
     scene::{
-        FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,
-        MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+        FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
+        MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
         MaterialSpecification, RGBColor, RenderResourcesDesynchronized,
     },
 };
@@ -45,7 +45,10 @@ lazy_static! {
 }
 
 impl FixedColorMaterial {
-    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::empty();
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER: VertexAttributeSet =
+        VertexAttributeSet::empty();
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH: VertexAttributeSet =
+        Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER;
 
     /// Registers this material as a feature type in the given
     /// instance feature manager and adds the material specification
@@ -57,7 +60,10 @@ impl FixedColorMaterial {
         instance_feature_manager.register_feature_type::<Self>();
 
         let specification = MaterialSpecification::new(
-            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
             None,
             vec![Self::FEATURE_TYPE_ID],
             MaterialShaderInput::Fixed(None),
@@ -90,7 +96,10 @@ impl FixedColorMaterial {
                     .expect("Missing storage for FixedColorMaterial features")
                     .add_feature(&material);
 
-                MaterialComp::new(*FIXED_COLOR_MATERIAL_ID, Some(feature_id), None)
+                MaterialComp::new(
+                    MaterialHandle::new(*FIXED_COLOR_MATERIAL_ID, Some(feature_id), None),
+                    None,
+                )
             },
             ![MaterialComp]
         );
@@ -98,8 +107,10 @@ impl FixedColorMaterial {
 }
 
 impl FixedTextureMaterial {
-    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet =
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER: VertexAttributeSet =
         VertexAttributeSet::TEXTURE_COORDS;
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH: VertexAttributeSet =
+        Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER;
 
     const MATERIAL_SHADER_INPUT: MaterialShaderInput =
         MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
@@ -110,7 +121,10 @@ impl FixedTextureMaterial {
     /// Adds the material specification to the given material library.
     pub fn register(material_library: &mut MaterialLibrary) {
         let specification = MaterialSpecification::new(
-            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
             None,
             Vec::new(),
             Self::MATERIAL_SHADER_INPUT,
@@ -143,7 +157,10 @@ impl FixedTextureMaterial {
                     .material_property_texture_set_entry(texture_set_id)
                     .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
 
-                MaterialComp::new(*FIXED_TEXTURE_MATERIAL_ID, None, Some(texture_set_id))
+                MaterialComp::new(
+                    MaterialHandle::new(*FIXED_TEXTURE_MATERIAL_ID, None, Some(texture_set_id)),
+                    None,
+                )
             },
             ![MaterialComp]
         );

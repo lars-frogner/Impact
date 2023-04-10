@@ -269,7 +269,11 @@ async fn init_world(window: Window) -> Result<World> {
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
             &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
-            &ParallaxMapComp::new(bricks_height_texture_id, 0.02),
+            &ParallaxMapComp::new(
+                bricks_height_texture_id,
+                0.02,
+                vector![1.0 / 25.0, 1.0 / 25.0],
+            ),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
@@ -288,7 +292,11 @@ async fn init_world(window: Window) -> Result<World> {
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
             &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
-            &ParallaxMapComp::new(bricks_height_texture_id, 0.02),
+            &ParallaxMapComp::new(
+                bricks_height_texture_id,
+                0.02,
+                vector![1.0 / 25.0, 1.0 / 25.0],
+            ),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))
@@ -304,7 +312,11 @@ async fn init_world(window: Window) -> Result<World> {
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
             &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
-            &ParallaxMapComp::new(bricks_height_texture_id, 0.02),
+            &ParallaxMapComp::new(
+                bricks_height_texture_id,
+                0.02,
+                vector![1.0 / 25.0, 1.0 / 25.0],
+            ),
             &MicrofacetDiffuseReflection,
             &MicrofacetSpecularReflection,
         ))

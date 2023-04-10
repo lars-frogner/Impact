@@ -1,8 +1,3 @@
-fn convertNormalMapColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
-    // May require normalization depending on filtering
-    return 2.0 * (color - 0.5);
-}
-
 fn computeParallaxMappedTextureCoordinates(
     heightTexture: texture_2d<f32>,
     heightSampler: sampler,
@@ -11,7 +6,7 @@ fn computeParallaxMappedTextureCoordinates(
     tangentToCameraSpaceRotationQuaternion: vec4<f32>,
     cameraSpaceViewDirection: vec3<f32>,
 ) -> vec2<f32> {
-    let tangentSpaceViewDirection: vec3<f32> = tranformVectorToTangentSpace(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
+    let tangentSpaceViewDirection: vec3<f32> = transformVectorToTangentSpace(tangentToCameraSpaceRotationQuaternion, cameraSpaceViewDirection);
 
     var parallaxMappedTextureCoords: vec2<f32>;
 
@@ -63,7 +58,10 @@ fn computeParallaxMappedTextureCoordinates(
 fn obtainNormalFromHeightMap(
     heightTexture: texture_2d<f32>,
     heightSampler: sampler,
+    heightScale: f32,
+    uvPerDistance: vec2<f32>,
     textureCoords: vec2<f32>,
+    cameraSpacePosition: vec3<f32>,
 ) -> vec3<f32> {
     let textureDims = textureDimensions(heightTexture);
 
@@ -75,5 +73,9 @@ fn obtainNormalFromHeightMap(
     let heightDownV = textureSample(heightTexture, heightSampler, textureCoords - offsetV).r;
     let heightUpV = textureSample(heightTexture, heightSampler, textureCoords + offsetV).r;
 
-    return normalize(vec3<f32>(heightDownU - heightUpU, heightDownV - heightUpV, 2.0));
+    return -normalize(vec3<f32>(
+        (heightUpU - heightDownU) * heightScale * 0.5 * f32(textureDims.x) * uvPerDistance.x,
+        (heightUpV - heightDownV) * heightScale * 0.5 * f32(textureDims.y) * uvPerDistance.y,
+        -1.0,
+    ));
 }

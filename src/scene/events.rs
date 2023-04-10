@@ -6,8 +6,8 @@ use crate::{
     scene::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, FixedColorMaterial, FixedTextureMaterial,
-        MaterialComp, MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ScalingComp,
-        Scene, SceneGraphNodeComp, UnidirectionalLight, VertexColorMaterial,
+        MaterialComp, MaterialHandle, MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight,
+        ScalingComp, Scene, SceneGraphNodeComp, UnidirectionalLight, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -150,6 +150,7 @@ impl Scene {
         add_blinn_phong_material_component_for_entity(
             self.material_library(),
             self.instance_feature_manager(),
+            self.config.global_ambient_color,
             components,
             desynchronized,
         );
@@ -157,6 +158,7 @@ impl Scene {
         add_microfacet_material_component_for_entity(
             self.material_library(),
             self.instance_feature_manager(),
+            self.config.global_ambient_color,
             components,
             desynchronized,
         );
@@ -184,8 +186,8 @@ impl Scene {
              -> SceneGraphNodeComp::<ModelInstanceNodeID> {
                 let model_id = ModelID::for_mesh_and_material(
                     mesh.id,
-                    material.material_id,
-                    material.material_property_texture_set_id(),
+                    *material.material_handle(),
+                    material.prepass_material_handle().cloned(),
                 );
                 instance_feature_manager.register_instance(&material_library, model_id);
 
@@ -197,12 +199,21 @@ impl Scene {
                 let model_to_world_transform =
                     scene::create_model_to_world_transform(position, orientation, scaling);
 
-                let feature_ids = if let Some(feature_id) = material.material_property_feature_id()
+                let mut feature_ids = Vec::with_capacity(2);
+
+                // The main material feature comes first, followed by the
+                // prepass material feature (this order is also assumed
+                // elsewhere)
+                if let Some(feature_id) = material.material_handle().material_property_feature_id()
                 {
-                    vec![feature_id]
-                } else {
-                    Vec::new()
-                };
+                    feature_ids.push(feature_id);
+                }
+                if let Some(feature_id) = material
+                    .prepass_material_handle()
+                    .and_then(MaterialHandle::material_property_feature_id)
+                {
+                    feature_ids.push(feature_id);
+                }
 
                 // Panic on errors since returning an error could leave us
                 // in an inconsistent state
@@ -268,12 +279,27 @@ impl Scene {
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         if let Some(material) = entity.get_component::<MaterialComp>() {
-            if let Some(feature_id) = material.access().material_property_feature_id() {
+            let material = material.access();
+
+            if let Some(feature_id) = material.material_handle().material_property_feature_id() {
                 self.instance_feature_manager()
                     .write()
                     .unwrap()
                     .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
                     .expect("Missing storage for material feature")
+                    .remove_feature(feature_id);
+                desynchronized.set_yes();
+            }
+
+            if let Some(feature_id) = material
+                .prepass_material_handle()
+                .and_then(MaterialHandle::material_property_feature_id)
+            {
+                self.instance_feature_manager()
+                    .write()
+                    .unwrap()
+                    .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
+                    .expect("Missing storage for prepass material feature")
                     .remove_feature(feature_id);
                 desynchronized.set_yes();
             }

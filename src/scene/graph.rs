@@ -1204,7 +1204,10 @@ pub fn create_model_to_world_transform<F: Float>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{scene::MaterialID, scene::MeshID};
+    use crate::{
+        scene::MaterialID,
+        scene::{MaterialHandle, MeshID},
+    };
     use approx::assert_abs_diff_eq;
     use impact_utils::hash64;
     use nalgebra::{point, Point3, Rotation3, Scale3, Translation3, Vector3};
@@ -1239,7 +1242,11 @@ mod test {
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(
             MeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
-            MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
+            MaterialHandle::new(
+                MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
+                None,
+                None,
+            ),
             None,
         )
     }

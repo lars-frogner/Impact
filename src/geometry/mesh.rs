@@ -58,7 +58,7 @@ pub struct VertexTangentSpaceQuaternion<F: Float>(pub UnitQuaternion<F>);
 
 bitflags! {
     /// Bitflag encoding a set of [`VertexAttribute`]s.
-    pub struct VertexAttributeSet: u32 {
+    pub struct VertexAttributeSet: u8 {
         const POSITION = 0b00000001;
         const COLOR = 0b00000010;
         const NORMAL_VECTOR = 0b00000100;
@@ -115,8 +115,6 @@ impl VertexAttributeSet {
     pub const FOR_LIGHT_SHADING: Self = Self::POSITION.union(Self::NORMAL_VECTOR);
     pub const FOR_TEXTURED_LIGHT_SHADING: Self =
         Self::FOR_LIGHT_SHADING.union(Self::TEXTURE_COORDS);
-    pub const FOR_BUMP_MAPPED_SHADING: Self =
-        Self::FOR_TEXTURED_LIGHT_SHADING.union(Self::TANGENT_SPACE_QUATERNION);
 }
 
 impl<F: Float> VertexAttribute for VertexPosition<F> {

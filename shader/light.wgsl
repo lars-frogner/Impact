@@ -146,11 +146,11 @@ fn computePCSSLightAccessFactorOmniLight(
     pointSampler: sampler,
     comparisonSampler: sampler_comparison,
     emissionRadius: f32,
-    cameraClipSpacePosition: vec4<f32>,
+    cameraFramebufferPosition: vec4<f32>,
     lightSpaceFragmentDisplacement: vec3<f32>,
     referenceDepth: f32,
 ) -> f32 {
-    let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraClipSpacePosition);
+    let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraFramebufferPosition);
 
     let displacementNormalDirection = normalize(findPerpendicularVector(lightSpaceFragmentDisplacement));
     let displacementBinormalDirection = normalize(cross(lightSpaceFragmentDisplacement, displacementNormalDirection));
@@ -217,13 +217,13 @@ fn computeUniLightClipSpacePosition(
     return applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
 }
 
-fn determineCascadeIdxMax1(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {
+fn determineCascadeIdxMax1(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     return 0;
 }
  
-fn determineCascadeIdxMax2(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {
+fn determineCascadeIdxMax2(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     var cascadeIdx: i32;
-    let depth = cameraClipSpacePosition.z;
+    let depth = cameraFramebufferPosition.z;
     if depth < partitionDepths.x {
         cascadeIdx = 0;
     } else {
@@ -232,9 +232,9 @@ fn determineCascadeIdxMax2(partitionDepths: vec4<f32>, cameraClipSpacePosition: 
     return cascadeIdx;
 }
 
-fn determineCascadeIdxMax3(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {
+fn determineCascadeIdxMax3(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     var cascadeIdx: i32;
-    let depth = cameraClipSpacePosition.z;
+    let depth = cameraFramebufferPosition.z;
     if depth < partitionDepths.x {
         cascadeIdx = 0;
     } else if depth < partitionDepths.y {
@@ -245,9 +245,9 @@ fn determineCascadeIdxMax3(partitionDepths: vec4<f32>, cameraClipSpacePosition: 
     return cascadeIdx;
 }
 
-fn determineCascadeIdxMax4(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {
+fn determineCascadeIdxMax4(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     var cascadeIdx: i32;
-    let depth = cameraClipSpacePosition.z;
+    let depth = cameraFramebufferPosition.z;
     if depth < partitionDepths.x {
         cascadeIdx = 0;
     } else if depth < partitionDepths.y {
@@ -260,9 +260,9 @@ fn determineCascadeIdxMax4(partitionDepths: vec4<f32>, cameraClipSpacePosition: 
     return cascadeIdx;
 }
 
-fn determineCascadeIdxMax5(partitionDepths: vec4<f32>, cameraClipSpacePosition: vec4<f32>) -> i32 {
+fn determineCascadeIdxMax5(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     var cascadeIdx: i32;
-    let depth = cameraClipSpacePosition.z;
+    let depth = cameraFramebufferPosition.z;
     if depth < partitionDepths.x {
         cascadeIdx = 0;
     } else if depth < partitionDepths.y {
@@ -355,11 +355,11 @@ fn computePCSSLightAccessFactorUniLight(
     tanAngularRadius: f32,
     worldSpaceToLightClipSpaceXYScale: f32,
     worldSpaceToLightClipSpaceZScale: f32,
-    cameraClipSpacePosition: vec4<f32>,
+    cameraFramebufferPosition: vec4<f32>,
     centerTextureCoords: vec2<f32>,
     referenceDepth: f32,
 ) -> f32 {
-    let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraClipSpacePosition);
+    let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraFramebufferPosition);
 
     let shadowPenumbraExtent = computeShadowPenumbraExtentUniLight(
         shadowMapTexture,
@@ -392,9 +392,9 @@ fn computePCSSLightAccessFactorUniLight(
 // ***** Common shadow mapping utilities *****
 
 // Returns a random number between 0 and 1 based on the pixel coordinates
-fn generateInterleavedGradientNoiseFactor(cameraClipSpacePosition: vec4<f32>) -> f32 {
+fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4<f32>) -> f32 {
     let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
-    return fract(magic.z * fract(dot(magic.xy, cameraClipSpacePosition.xy)));
+    return fract(magic.z * fract(dot(magic.xy, cameraFramebufferPosition.xy)));
 }
 
 fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2<f32> {
@@ -404,8 +404,8 @@ fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sa
     return vec2<f32>(radius * cos(angle), radius * sin(angle));
 }
 
-fn computeVogelDiskBaseAngle(cameraClipSpacePosition: vec4<f32>) -> f32 {
+fn computeVogelDiskBaseAngle(cameraFramebufferPosition: vec4<f32>) -> f32 {
     // Multiply with 2 * pi to get random angle
-    return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraClipSpacePosition);
+    return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferPosition);
 }
 

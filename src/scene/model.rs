@@ -1,6 +1,6 @@
 //! Management of models.
 
-use crate::scene::{MaterialID, MaterialPropertyTextureSetID, MeshID};
+use crate::scene::{MaterialHandle, MeshID};
 use impact_utils::{self, Hash64};
 use std::{
     cmp,
@@ -10,34 +10,40 @@ use std::{
 
 /// Identifier for specific models.
 ///
-/// A model is uniquely defined by its mesh, material type and texture set.
+/// A model is uniquely defined by its mesh and material. If the material has an
+/// associated prepass material, that will also be part of the model definition.
 #[derive(Copy, Clone, Debug)]
 pub struct ModelID {
     mesh_id: MeshID,
-    material_id: MaterialID,
-    material_property_texture_set_id: Option<MaterialPropertyTextureSetID>,
+    material_handle: MaterialHandle,
+    prepass_material_handle: Option<MaterialHandle>,
     hash: Hash64,
 }
 
 impl ModelID {
-    /// Creates a new [`ModelID`] for the model comprised of the mesh, material
-    /// and, optionally, material property texture set with the given IDs.
+    /// Creates a new [`ModelID`] for the model comprised of the mesh and
+    /// material with an optional prepass material.
     pub fn for_mesh_and_material(
         mesh_id: MeshID,
-        material_id: MaterialID,
-        material_property_texture_set_id: Option<MaterialPropertyTextureSetID>,
+        material_handle: MaterialHandle,
+        prepass_material_handle: Option<MaterialHandle>,
     ) -> Self {
-        let mut hash =
-            impact_utils::compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
+        let mut hash = impact_utils::compute_hash_64_of_two_hash_64(
+            mesh_id.0.hash(),
+            material_handle.compute_hash(),
+        );
 
-        if let Some(texture_set_id) = material_property_texture_set_id {
-            hash = impact_utils::compute_hash_64_of_two_hash_64(hash, texture_set_id.0.hash());
+        if let Some(prepass_material_handle) = prepass_material_handle {
+            hash = impact_utils::compute_hash_64_of_two_hash_64(
+                hash,
+                prepass_material_handle.compute_hash(),
+            );
         }
 
         Self {
             mesh_id,
-            material_id,
-            material_property_texture_set_id,
+            material_handle,
+            prepass_material_handle,
             hash,
         }
     }
@@ -47,15 +53,15 @@ impl ModelID {
         self.mesh_id
     }
 
-    /// The ID of the model's material.
-    pub fn material_id(&self) -> MaterialID {
-        self.material_id
+    /// The handle for the model's material.
+    pub fn material_handle(&self) -> &MaterialHandle {
+        &self.material_handle
     }
 
-    /// The ID of the model's material propery texture set, or [`None`] if no
-    /// material properties are textured.
-    pub fn material_property_texture_set_id(&self) -> Option<MaterialPropertyTextureSetID> {
-        self.material_property_texture_set_id
+    /// The handle for the prepass material associated with the model's
+    /// material.
+    pub fn prepass_material_handle(&self) -> Option<&MaterialHandle> {
+        self.prepass_material_handle.as_ref()
     }
 }
 
@@ -63,8 +69,8 @@ impl fmt::Display for ModelID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{{mesh: {}, material: {}}}",
-            self.mesh_id, self.material_id
+            "{{mesh: {}, material: {:?}, prepass_material: {:?}}}",
+            self.mesh_id, &self.material_handle, &self.prepass_material_handle
         )
     }
 }

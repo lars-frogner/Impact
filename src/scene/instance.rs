@@ -137,12 +137,25 @@ impl InstanceFeatureManager {
     where
         InstanceModelViewTransform: InstanceFeature,
     {
-        let feature_type_ids = material_library
-            .get_material_specification(model_id.material_id())
-            .expect("Missing material specification for model material")
-            .instance_feature_type_ids();
+        let mut feature_type_ids = Vec::with_capacity(2);
 
-        self.register_instance_with_feature_type_ids(model_id, feature_type_ids);
+        feature_type_ids.extend_from_slice(
+            material_library
+                .get_material_specification(model_id.material_handle().material_id())
+                .expect("Missing material specification for model material")
+                .instance_feature_type_ids(),
+        );
+
+        if let Some(prepass_material_handle) = model_id.prepass_material_handle() {
+            feature_type_ids.extend_from_slice(
+                material_library
+                    .get_material_specification(prepass_material_handle.material_id())
+                    .expect("Missing material specification for model prepass material")
+                    .instance_feature_type_ids(),
+            );
+        }
+
+        self.register_instance_with_feature_type_ids(model_id, &feature_type_ids);
     }
 
     /// Informs the manager that an instance of the model with the
@@ -276,7 +289,7 @@ mod test {
     use crate::{
         impl_InstanceFeature,
         rendering::InstanceFeatureShaderInput,
-        scene::{MaterialID, MeshID},
+        scene::{MaterialHandle, MaterialID, MeshID},
     };
     use bytemuck::{Pod, Zeroable};
     use impact_utils::hash64;
@@ -301,7 +314,11 @@ mod test {
     fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
         ModelID::for_mesh_and_material(
             MeshID(hash64!(format!("Test mesh {}", tag.as_ref()))),
-            MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
+            MaterialHandle::new(
+                MaterialID(hash64!(format!("Test material {}", tag.as_ref()))),
+                None,
+                None,
+            ),
             None,
         )
     }

@@ -31,10 +31,10 @@ pub use light::{
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
     DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedColorMaterial,
-    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, GlobalAmbientColorMaterial,
-    MaterialComp, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-    MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
-    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
+    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle,
+    MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
+    NormalMapComp, ParallaxMapComp, ParallaxMappingPrepassMaterialFeature, RGBColor, RoughnessComp,
     RoughnessTextureComp, SpecularColorComp, SpecularTextureComp,
     TexturedColorBlinnPhongMaterialFeature, TexturedColorMicrofacetMaterialFeature,
     UniformColorBlinnPhongMaterialFeature, UniformColorMicrofacetMaterialFeature,
@@ -164,10 +164,8 @@ impl Scene {
             .register_feature_type::<UniformSpecularMicrofacetMaterialFeature>();
         instance_feature_manager.register_feature_type::<TexturedColorMicrofacetMaterialFeature>();
 
-        GlobalAmbientColorMaterial::register(
-            &mut material_library,
-            self.config.global_ambient_color,
-        );
+        instance_feature_manager.register_feature_type::<ParallaxMappingPrepassMaterialFeature>();
+
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);

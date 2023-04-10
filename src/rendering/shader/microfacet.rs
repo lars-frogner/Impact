@@ -1,13 +1,15 @@
 //! Generation of shaders for microfacet materials.
 
 use super::{
-    append_to_arena, append_unity_component_to_vec3, emit_in_func,
-    generate_fragment_normal_vector_and_texture_coord_expr, include_expr_in_func, insert_in_arena,
-    new_name, push_to_block, InputStruct, InputStructBuilder, LightShaderGenerator,
-    LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OmnidirectionalLightShaderGenerator, OutputStructBuilder, SampledTexture, SourceCode,
-    TextureType, UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE,
-    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
+    insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
+    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
+    OmnidirectionalLightShaderGenerator, OutputStructBuilder, PushConstantFieldExpressions,
+    SampledTexture, SourceCode, TextureType, UnidirectionalLightShaderGenerator, F32_TYPE,
+    F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+};
+use crate::rendering::{
+    RenderAttachmentQuantity, RenderAttachmentQuantitySet, RENDER_ATTACHMENT_BINDINGS,
 };
 use naga::{Expression, Function, LocalVariable, MathFunction, Module, Statement};
 
@@ -56,9 +58,6 @@ pub struct MicrofacetFeatureShaderInput {
     /// Vertex attribute location for the instance feature representing
     /// roughness.
     pub roughness_location: u32,
-    /// Vertex attribute location for the instance feature representing the
-    /// displacement scale for parallax mapping.
-    pub parallax_displacement_scale_location: u32,
 }
 
 /// Input description specifying the bindings of textures for microfacet
@@ -71,10 +70,6 @@ pub struct MicrofacetTextureShaderInput {
     pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
     /// Bind group bindings of the roughness texture and its sampler.
     pub roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
-    /// Bind group bindings of the normal map texture and its sampler.
-    pub normal_map_texture_and_sampler_bindings: Option<(u32, u32)>,
-    /// Bind group bindings of the height map texture and its sampler.
-    pub height_map_texture_and_sampler_bindings: Option<(u32, u32)>,
 }
 
 /// Shader generator for a microfacet material.
@@ -92,7 +87,6 @@ pub struct MicrofacetVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
     roughness: usize,
-    parallax_displacement_scale: usize,
 }
 
 impl MicrofacetShadingModel {
@@ -169,13 +163,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             F32_WIDTH,
         );
 
-        let input_parallax_displacement_scale_field_idx = input_struct_builder.add_field(
-            "parallaxDisplacementScale",
-            float_type,
-            self.feature_input.parallax_displacement_scale_location,
-            F32_WIDTH,
-        );
-
         let input_struct =
             input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
@@ -187,19 +174,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 input_struct.get_field_expr(input_roughness_field_idx),
             );
 
-        let output_parallax_displacement_scale_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "parallaxDisplacementScale",
-                float_type,
-                F32_WIDTH,
-                input_struct.get_field_expr(input_parallax_displacement_scale_field_idx),
-            );
-
         let mut indices = MicrofacetVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
             roughness: output_roughness_field_idx,
-            parallax_displacement_scale: output_parallax_displacement_scale_field_idx,
         };
 
         if let Some(idx) = input_diffuse_color_field_idx {
@@ -243,6 +221,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
+        input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
@@ -255,51 +235,131 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let position_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .position
-                .expect("Missing position for microfacet shading"),
-        );
+        let screen_space_texture_coord_expr = if input_render_attachment_quantities.is_empty() {
+            None
+        } else {
+            Some(source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "convertFramebufferPositionToScreenTextureCoords",
+                vec![push_constant_fragment_expressions.inverse_window_dimensions,
+                fragment_input_struct
+                        .get_field_expr(mesh_input_field_indices.framebuffer_position)],
+            ))
+        };
 
-        let fixed_roughness_value_expr =
-            fragment_input_struct.get_field_expr(material_input_field_indices.roughness);
+        let position_expr =
+            if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
+                let (position_texture_binding, position_sampler_binding) =
+                    RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
 
-        let view_dir_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "computeCameraSpaceViewDirection",
-            vec![position_expr],
-        );
+                let position_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "position",
+                    *bind_group_idx,
+                    position_texture_binding,
+                    Some(position_sampler_binding),
+                    None,
+                );
 
-        let (bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
-            let texture_coord_expr = fragment_input_struct.get_field_expr(
-                mesh_input_field_indices
-                    .texture_coords
-                    .expect("No `texture_coords` passed to textured microfacet fragment shader"),
+                *bind_group_idx += 1;
+
+                position_texture.generate_rgb_sampling_expr(
+                    fragment_function,
+                    screen_space_texture_coord_expr.unwrap(),
+                )
+            } else {
+                fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .position
+                        .expect("Missing position for microfacet shading"),
+                )
+            };
+
+        let normal_vector_expr = if input_render_attachment_quantities
+            .contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)
+        {
+            let (normal_vector_texture_binding, normal_vector_sampler_binding) =
+                RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::NormalVector as usize];
+
+            let normal_vector_texture = SampledTexture::declare(
+                &mut module.types,
+                &mut module.global_variables,
+                TextureType::Image,
+                "normalVector",
+                *bind_group_idx,
+                normal_vector_texture_binding,
+                Some(normal_vector_sampler_binding),
+                None,
             );
 
-            let bind_group = *bind_group_idx;
             *bind_group_idx += 1;
 
-            (bind_group, Some(texture_coord_expr))
+            let normal_color_expr = normal_vector_texture.generate_rgb_sampling_expr(
+                fragment_function,
+                screen_space_texture_coord_expr.unwrap(),
+            );
+
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "convertNormalColorToNormalizedNormalVector",
+                vec![normal_color_expr],
+            )
+        } else {
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "normalizeVector",
+                vec![fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .normal_vector
+                        .expect("Missing normal vector for microfacet shading"),
+                )],
+            )
+        };
+
+        let (material_texture_bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+            let texture_coord_expr = if input_render_attachment_quantities
+                .contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
+            {
+                let (texture_coord_texture_binding, texture_coord_sampler_binding) =
+                    RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::TextureCoords as usize];
+
+                let texture_coord_texture = SampledTexture::declare(
+                    &mut module.types,
+                    &mut module.global_variables,
+                    TextureType::Image,
+                    "textureCoord",
+                    *bind_group_idx,
+                    texture_coord_texture_binding,
+                    Some(texture_coord_sampler_binding),
+                    None,
+                );
+
+                *bind_group_idx += 1;
+
+                texture_coord_texture.generate_rg_sampling_expr(
+                    fragment_function,
+                    screen_space_texture_coord_expr.unwrap(),
+                )
+            } else {
+                fragment_input_struct.get_field_expr(
+                    mesh_input_field_indices
+                        .texture_coords
+                        .expect("Missing texture coordinates for microfacet shading"),
+                )
+            };
+
+            let material_texture_bind_group = *bind_group_idx;
+            *bind_group_idx += 1;
+
+            (material_texture_bind_group, Some(texture_coord_expr))
         } else {
             (*bind_group_idx, None)
         };
-
-        let (normal_vector_expr, texture_coord_expr) =
-            generate_fragment_normal_vector_and_texture_coord_expr(
-                module,
-                source_code_lib,
-                fragment_function,
-                fragment_input_struct,
-                mesh_input_field_indices,
-                self.texture_input.normal_map_texture_and_sampler_bindings,
-                self.texture_input.height_map_texture_and_sampler_bindings,
-                material_input_field_indices.parallax_displacement_scale,
-                bind_group,
-                view_dir_expr,
-                texture_coord_expr,
-            );
 
         let diffuse_color_expr = self
             .texture_input
@@ -310,7 +370,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     &mut module.global_variables,
                     TextureType::Image,
                     "diffuseColor",
-                    bind_group,
+                    material_texture_bind_group,
                     diffuse_texture_binding,
                     Some(diffuse_sampler_binding),
                     None,
@@ -334,7 +394,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     &mut module.global_variables,
                     TextureType::Image,
                     "specularColor",
-                    bind_group,
+                    material_texture_bind_group,
                     specular_texture_binding,
                     Some(specular_sampler_binding),
                     None,
@@ -349,6 +409,9 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     .map(|idx| fragment_input_struct.get_field_expr(idx))
             });
 
+        let fixed_roughness_value_expr =
+            fragment_input_struct.get_field_expr(material_input_field_indices.roughness);
+
         let roughness_expr = self
             .texture_input
             .roughness_texture_and_sampler_bindings
@@ -360,7 +423,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         &mut module.global_variables,
                         TextureType::Image,
                         "roughness",
-                        bind_group,
+                        material_texture_bind_group,
                         roughness_texture_binding,
                         Some(roughness_sampler_binding),
                         None,
@@ -407,14 +470,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 ),
                 None,
             ) => {
-                let camera_clip_position_expr =
-                    fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
+                let framebuffer_position_expr = fragment_input_struct
+                    .get_field_expr(mesh_input_field_indices.framebuffer_position);
 
                 omnidirectional_light_shader_generator.generate_fragment_shading_code(
                     module,
                     source_code_lib,
                     fragment_function,
-                    camera_clip_position_expr,
+                    framebuffer_position_expr,
                     position_expr,
                     normal_vector_expr,
                 )
@@ -429,8 +492,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     unidirectional_light_input_field_indices,
                 )),
             ) => {
-                let camera_clip_position_expr =
-                    fragment_input_struct.get_field_expr(mesh_input_field_indices.clip_position);
+                let framebuffer_position_expr = fragment_input_struct
+                    .get_field_expr(mesh_input_field_indices.framebuffer_position);
 
                 unidirectional_light_shader_generator.generate_fragment_shading_code(
                     module,
@@ -438,7 +501,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     fragment_function,
                     fragment_input_struct,
                     unidirectional_light_input_field_indices,
-                    camera_clip_position_expr,
+                    framebuffer_position_expr,
                     normal_vector_expr,
                 )
             }
@@ -446,6 +509,13 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 panic!("Invalid variant of light shader generator and/or light vertex output field indices for microfacet shading");
             }
         };
+
+        let view_dir_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "computeCameraSpaceViewDirection",
+            vec![position_expr],
+        );
 
         let light_color_expr = match (self.model, diffuse_color_expr, specular_color_expr) {
             (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(diffuse_color_expr), None) => {
@@ -573,7 +643,5 @@ impl MicrofacetTextureShaderInput {
         self.diffuse_texture_and_sampler_bindings.is_none()
             && self.specular_texture_and_sampler_bindings.is_none()
             && self.roughness_texture_and_sampler_bindings.is_none()
-            && self.normal_map_texture_and_sampler_bindings.is_none()
-            && self.height_map_texture_and_sampler_bindings.is_none()
     }
 }
