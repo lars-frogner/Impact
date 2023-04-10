@@ -31,6 +31,7 @@ define_task!(
                 renderer.core_system(),
                 renderer.config(),
                 render_resource_manager.synchronized(),
+                renderer.render_attachment_texture_manager(),
                 &mut shader_builder,
             )
         })

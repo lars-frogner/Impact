@@ -35,7 +35,9 @@ pub use shader::{
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
     CascadeIdx, ColorSpace, DepthTexture, ImageTexture, ImageTextureConfig,
-    MultisampledRenderTargetTexture,
+    MultisampledSurfaceTexture, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+    RenderAttachmentTextureManager, RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_FLAGS,
+    RENDER_ATTACHMENT_FORMATS,
 };
 
 use self::resource::RenderResourceManager;
@@ -63,8 +65,7 @@ pub struct RenderingSystem {
     assets: RwLock<Assets>,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
-    depth_texture: DepthTexture,
-    multisampled_render_target_texture: Option<MultisampledRenderTargetTexture>,
+    render_attachment_texture_manager: RenderAttachmentTextureManager,
     screenshotter: Screenshotter,
 }
 
@@ -99,22 +100,22 @@ impl RenderingSystem {
     pub async fn new(core_system: CoreRenderingSystem, assets: Assets) -> Result<Self> {
         let config = RenderingConfig::default();
 
-        let depth_texture = DepthTexture::new(&core_system, config.multisampling_sample_count);
+        let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
+            &core_system,
+            config.multisampling_sample_count,
+            RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+        );
 
-        let mut renderer = Self {
+        Ok(Self {
             core_system,
             config,
             assets: RwLock::new(assets),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
-            depth_texture,
-            multisampled_render_target_texture: None,
+            render_attachment_texture_manager,
             screenshotter: Screenshotter::new(),
-        };
-
-        renderer.recreate_multisampled_render_target_texture();
-
-        Ok(renderer)
+        })
     }
 
     /// Returns a reference to the core rendering system.
@@ -144,34 +145,20 @@ impl RenderingSystem {
         &self.render_pass_manager
     }
 
-    /// Returns a reference to the [`DepthTexture`].
-    pub fn depth_texture(&self) -> &DepthTexture {
-        &self.depth_texture
+    /// Returns a reference to the [`RenderAttachmentTextureManager`].
+    pub fn render_attachment_texture_manager(&self) -> &RenderAttachmentTextureManager {
+        &self.render_attachment_texture_manager
     }
 
-    /// Creates and presents a rendering of the current data in the pipelines.
+    /// Creates and presents a rendering using the current synchronized render
+    /// resources.
     ///
     /// # Errors
     /// Returns an error if:
-    /// - If the surface texture to render to can not be obtained.
-    /// - If recording a render pass fails.
+    /// - The surface texture to render to can not be obtained.
+    /// - Recording a render pass fails.
     pub fn render(&self) -> Result<()> {
         let surface_texture = self.core_system.surface().get_current_texture()?;
-        let surface_texture_view = Self::create_surface_texture_view(&surface_texture);
-
-        let (color_attachment_texture_view, color_attachment_resolve_target) =
-            if let Some(multisampled_render_target_texture) =
-                self.multisampled_render_target_texture.as_ref()
-            {
-                // If multisampling, use multisampled texture as render target
-                // and surface texture as resolve target
-                (
-                    multisampled_render_target_texture.view(),
-                    Some(&surface_texture_view),
-                )
-            } else {
-                (&surface_texture_view, None)
-            };
 
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
@@ -179,10 +166,10 @@ impl RenderingSystem {
             let render_resources_guard = self.render_resource_manager.read().unwrap();
             for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
                 render_pass_recorder.record_render_pass(
+                    &self.core_system,
                     render_resources_guard.synchronized(),
-                    color_attachment_texture_view,
-                    color_attachment_resolve_target,
-                    self.depth_texture.view(),
+                    &surface_texture,
+                    &self.render_attachment_texture_manager,
                     &mut command_encoder,
                 )?;
             }
@@ -196,8 +183,10 @@ impl RenderingSystem {
         self.screenshotter
             .save_screenshot_if_requested(&self.core_system, &surface_texture)?;
 
-        self.screenshotter
-            .save_depth_map_if_requested(&self.core_system, &self.depth_texture)?;
+        self.screenshotter.save_depth_map_if_requested(
+            &self.core_system,
+            self.render_attachment_texture_manager.depth_texture(),
+        )?;
 
         self.screenshotter
             .save_omnidirectional_light_shadow_map_if_requested(
@@ -216,11 +205,11 @@ impl RenderingSystem {
         Ok(())
     }
 
-    /// Sets a new size for the rendering surface.
+    /// Sets a new size for the rendering surface and assocated textures.
     pub fn resize_surface(&mut self, new_size: (u32, u32)) {
         self.core_system.resize_surface(new_size);
-        self.recreate_depth_texture();
-        self.recreate_multisampled_render_target_texture();
+        self.render_attachment_texture_manager
+            .recreate_textures(&self.core_system, self.config.multisampling_sample_count);
     }
 
     /// Toggles culling of triangle back faces in all render passes.
@@ -255,7 +244,7 @@ impl RenderingSystem {
     }
 
     pub fn toggle_4x_msaa(&mut self) {
-        let sample_count = if self.multisampled_render_target_texture.is_none() {
+        let sample_count = if self.config.multisampling_sample_count == 1 {
             4
         } else {
             1
@@ -302,12 +291,6 @@ impl RenderingSystem {
         }
     }
 
-    fn create_surface_texture_view(surface_texture: &wgpu::SurfaceTexture) -> wgpu::TextureView {
-        surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
     fn create_render_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render encoder"),
@@ -320,8 +303,8 @@ impl RenderingSystem {
 
             self.config.multisampling_sample_count = sample_count;
 
-            self.recreate_depth_texture();
-            self.recreate_multisampled_render_target_texture();
+            self.render_attachment_texture_manager
+                .recreate_multisampled_textures(&self.core_system, sample_count);
 
             // Remove all render pass recorders so that they will be recreated with
             // the updated configuration
@@ -329,22 +312,6 @@ impl RenderingSystem {
                 .write()
                 .unwrap()
                 .clear_model_render_pass_recorders();
-        }
-    }
-
-    fn recreate_depth_texture(&mut self) {
-        self.depth_texture =
-            DepthTexture::new(&self.core_system, self.config.multisampling_sample_count);
-    }
-
-    fn recreate_multisampled_render_target_texture(&mut self) {
-        self.multisampled_render_target_texture.take();
-
-        if self.config.multisampling_sample_count > 1 {
-            self.multisampled_render_target_texture = Some(MultisampledRenderTargetTexture::new(
-                &self.core_system,
-                self.config.multisampling_sample_count,
-            ));
         }
     }
 }

@@ -41,13 +41,6 @@ impl ImageTextureConfig {
     };
 }
 
-/// A texture that can be used as a multisampled render target.
-#[derive(Debug)]
-pub struct MultisampledRenderTargetTexture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-}
-
 /// A color space for pixel values.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ColorSpace {
@@ -304,58 +297,6 @@ impl ImageTexture {
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
-        })
-    }
-}
-
-impl MultisampledRenderTargetTexture {
-    /// Creates a texture corresponding to the core system surface texture, but
-    /// with the given sample count for multisampling.
-    pub fn new(core_system: &CoreRenderingSystem, sample_count: u32) -> Self {
-        let texture = Self::create_empty_surface_texture(
-            core_system.device(),
-            core_system.surface_config(),
-            sample_count,
-            "Multisampled surface texture",
-        );
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        Self { texture, view }
-    }
-
-    /// Returns the multisampling sample count.
-    pub fn sample_count(&self) -> u32 {
-        self.texture.sample_count()
-    }
-
-    /// Returns a view into the texture.
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
-    }
-
-    /// Creates a new [`wgpu::Texture`] with the same dimensions and format as
-    /// the specified surface, but with the given sample count for
-    /// multisampling.
-    fn create_empty_surface_texture(
-        device: &wgpu::Device,
-        surface_config: &wgpu::SurfaceConfiguration,
-        sample_count: u32,
-        label: &str,
-    ) -> wgpu::Texture {
-        device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: surface_config.width,
-                height: surface_config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count,
-            dimension: wgpu::TextureDimension::D2,
-            format: surface_config.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            label: Some(label),
-            view_formats: &[],
         })
     }
 }

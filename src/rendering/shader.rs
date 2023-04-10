@@ -20,7 +20,7 @@ use crate::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
         VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
-    rendering::{fre, CoreRenderingSystem},
+    rendering::{fre, CoreRenderingSystem, RenderAttachmentQuantitySet},
     scene::MAX_SHADOW_MAP_CASCADES,
 };
 use ambient_color::GlobalAmbientColorShaderGenerator;
@@ -257,7 +257,7 @@ pub struct UnidirectionalLightShadingShaderGenerator {
 /// quantities in the vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct MeshVertexOutputFieldIndices {
-    pub clip_position: usize,
+    pub framebuffer_position: usize,
     /// Camera space position.
     pub position: Option<usize>,
     pub color: Option<usize>,
@@ -666,6 +666,7 @@ impl ShaderGenerator {
         instance_feature_shader_inputs: &[&InstanceFeatureShaderInput],
         material_shader_input: Option<&MaterialShaderInput>,
         mut vertex_attribute_requirements: VertexAttributeSet,
+        input_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Result<(Module, EntryPointNames)> {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
@@ -702,7 +703,8 @@ impl ShaderGenerator {
         // 2. Lights.
         // 3. Shadow map textures.
         // 4. Fixed material resources.
-        // 5. Material property textures.
+        // 5. Render attachment textures.
+        // 6. Material property textures.
         let mut bind_group_idx = 0;
 
         let camera_projection = camera_shader_input.map(|camera_shader_input| {
@@ -754,6 +756,7 @@ impl ShaderGenerator {
             Self::generate_vertex_code_for_vertex_attributes(
                 mesh_shader_input,
                 vertex_attribute_requirements,
+                input_render_attachment_quantities,
                 &mut module,
                 &mut source_code_lib,
                 &mut vertex_function,
@@ -792,6 +795,7 @@ impl ShaderGenerator {
                 &mut source_code_lib,
                 &mut fragment_function,
                 &mut bind_group_idx,
+                input_render_attachment_quantities,
                 &fragment_input_struct,
                 &mesh_vertex_output_field_indices,
                 light_vertex_output_field_indices.as_ref(),
@@ -1109,7 +1113,7 @@ impl ShaderGenerator {
     /// Only vertex attributes required by the material are included as input
     /// arguments.
     ///
-    /// The output struct always includes the clip space position, and the
+    /// The output struct always includes the @builtin(position) field, and the
     /// expression computing this by transforming the vertex position with the
     /// model view and projection transformations is generated here. Other
     /// vertex attributes are included in the output struct as required by the
@@ -1130,7 +1134,8 @@ impl ShaderGenerator {
     /// are available in the input mesh.
     fn generate_vertex_code_for_vertex_attributes(
         mesh_shader_input: &MeshShaderInput,
-        requirements: VertexAttributeSet,
+        vertex_attribute_requirements: VertexAttributeSet,
+        input_render_attachment_quantities: RenderAttachmentQuantitySet,
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
@@ -1149,7 +1154,8 @@ impl ShaderGenerator {
                 vec3_type,
             )?;
 
-        let input_color_expr = if requirements.contains(VertexAttributeSet::COLOR) {
+        let input_color_expr = if vertex_attribute_requirements.contains(VertexAttributeSet::COLOR)
+        {
             Some(
                 Self::add_vertex_attribute_input_argument::<VertexColor<fre>>(
                     vertex_function,
@@ -1162,9 +1168,10 @@ impl ShaderGenerator {
             None
         };
 
-        let input_model_normal_vector_expr = if requirements
+        let input_model_normal_vector_expr = if vertex_attribute_requirements
             .contains(VertexAttributeSet::NORMAL_VECTOR)
-            && !requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
+            && !input_render_attachment_quantities
+                .contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)
         {
             Some(Self::add_vertex_attribute_input_argument::<
                 VertexNormalVector<fre>,
@@ -1178,7 +1185,10 @@ impl ShaderGenerator {
             None
         };
 
-        let input_texture_coord_expr = if requirements.contains(VertexAttributeSet::TEXTURE_COORDS)
+        let input_texture_coord_expr = if vertex_attribute_requirements
+            .contains(VertexAttributeSet::TEXTURE_COORDS)
+            && !input_render_attachment_quantities
+                .contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
         {
             Some(Self::add_vertex_attribute_input_argument::<
                 VertexTextureCoords<fre>,
@@ -1192,8 +1202,9 @@ impl ShaderGenerator {
             None
         };
 
-        let input_tangent_to_model_space_quaternion_expr =
-            if requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION) {
+        let input_tangent_to_model_space_quaternion_expr = if vertex_attribute_requirements
+            .contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
+        {
                 Some(Self::add_vertex_attribute_input_argument::<
                     VertexTangentSpaceQuaternion<fre>,
                 >(
@@ -1220,21 +1231,21 @@ impl ShaderGenerator {
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
-        let clip_position_expr = projection.generate_clip_position_expr(
+        let projected_position_expr = projection.generate_projected_position_expr(
             module,
             source_code_lib,
             vertex_function,
             position_expr,
         );
-        let output_clip_position_field_idx = output_struct_builder.add_builtin_position_field(
-            "clipSpacePosition",
+        let framebuffer_position_field_idx = output_struct_builder.add_builtin_position_field(
+            "projectedPosition",
             vec4_type,
             VECTOR_4_SIZE,
-            clip_position_expr,
+            projected_position_expr,
         );
 
         let mut output_field_indices = MeshVertexOutputFieldIndices {
-            clip_position: output_clip_position_field_idx,
+            framebuffer_position: framebuffer_position_field_idx,
             position: None,
             color: None,
             normal_vector: None,
@@ -1242,7 +1253,9 @@ impl ShaderGenerator {
             tangent_space_quaternion: None,
         };
 
-        if requirements.contains(VertexAttributeSet::POSITION) {
+        if vertex_attribute_requirements.contains(VertexAttributeSet::POSITION)
+            && !input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION)
+        {
             output_field_indices.position = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "position",
@@ -1881,6 +1894,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
+        input_render_attachment_quantities: RenderAttachmentQuantitySet,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
@@ -1924,6 +1938,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 source_code_lib,
                 fragment_function,
                 bind_group_idx,
+                input_render_attachment_quantities,
                 fragment_input_struct,
                 mesh_input_field_indices,
                 light_input_field_indices,
@@ -1938,6 +1953,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 source_code_lib,
                 fragment_function,
                 bind_group_idx,
+                input_render_attachment_quantities,
                 fragment_input_struct,
                 mesh_input_field_indices,
                 light_input_field_indices,
@@ -1953,7 +1969,7 @@ impl ProjectionExpressions {
     /// Generates an expression for the given position (as a vec3) projected
     /// with the projection in the vertex entry point function. The projected
     /// position will be a vec4.
-    pub fn generate_clip_position_expr(
+    pub fn generate_projected_position_expr(
         &self,
         module: &mut Module,
         source_code_lib: &mut SourceCode,
@@ -1962,9 +1978,9 @@ impl ProjectionExpressions {
     ) -> Handle<Expression> {
         match self {
             Self::Camera(camera_projection_matrix) => camera_projection_matrix
-                .generate_clip_position_expr(module, vertex_function, position_expr),
+                .generate_projected_position_expr(module, vertex_function, position_expr),
             Self::OmnidirectionalLight(omnidirectional_light_cubemap_projection) => {
-                omnidirectional_light_cubemap_projection.generate_clip_position_expr(
+                omnidirectional_light_cubemap_projection.generate_projected_position_expr(
                     module,
                     source_code_lib,
                     vertex_function,
@@ -1972,7 +1988,7 @@ impl ProjectionExpressions {
                 )
             }
             Self::UnidirectionalLight(unidirectional_light_orthographic_projection) => {
-                unidirectional_light_orthographic_projection.generate_clip_position_expr(
+                unidirectional_light_orthographic_projection.generate_projected_position_expr(
                     module,
                     source_code_lib,
                     vertex_function,
@@ -1987,7 +2003,7 @@ impl CameraProjectionExpressions {
     /// Generates an expression for the given position (as a vec3) projected
     /// with the projection matrix in the vertex entry point function. The
     /// projected position will be a vec4.
-    pub fn generate_clip_position_expr(
+    pub fn generate_projected_position_expr(
         &self,
         module: &mut Module,
         vertex_function: &mut Function,
@@ -2015,7 +2031,7 @@ impl CameraProjectionExpressions {
 
 impl OmnidirectionalLightProjectionExpressions {
     #[allow(clippy::unused_self)]
-    pub fn generate_clip_position_expr(
+    pub fn generate_projected_position_expr(
         &self,
         module: &mut Module,
         source_code_lib: &mut SourceCode,
@@ -2035,7 +2051,7 @@ impl UnidirectionalLightProjectionExpressions {
     /// Generates an expression for the given position (as a vec3) projected
     /// with the orthographic projection in the vertex entry point function. The
     /// projected position will be a vec4 with w = 1.0;
-    pub fn generate_clip_position_expr(
+    pub fn generate_projected_position_expr(
         &self,
         module: &mut Module,
         source_code_lib: &mut SourceCode,
@@ -2417,7 +2433,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
-        camera_clip_position_expr: Handle<Expression>,
+        framebuffer_position_expr: Handle<Expression>,
         position_expr: Handle<Expression>,
         normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
@@ -2465,7 +2481,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                 source_code_lib,
                 fragment_function,
                 self.emission_radius,
-                camera_clip_position_expr,
+                framebuffer_position_expr,
                 light_space_fragment_displacement_expr,
                 depth_reference_expr,
             );
@@ -2695,7 +2711,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         light_input_field_indices: &UnidirectionalLightVertexOutputFieldIndices,
-        camera_clip_position_expr: Handle<Expression>,
+        framebuffer_position_expr: Handle<Expression>,
         camera_space_normal_vector_expr: Handle<Expression>,
     ) -> (Handle<Expression>, Handle<Expression>) {
         let camera_space_direction_expr = LightShaderGenerator::generate_named_field_access_expr(
@@ -2741,7 +2757,7 @@ impl UnidirectionalLightShadingShaderGenerator {
             module,
             fragment_function,
             &format!("determineCascadeIdxMax{}", MAX_SHADOW_MAP_CASCADES),
-            vec![partition_depths_expr, camera_clip_position_expr],
+            vec![partition_depths_expr, framebuffer_position_expr],
         );
 
         let orthographic_transform_ptr_expr =
@@ -2848,7 +2864,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                 tan_angular_radius_expr,
                 world_to_light_clip_space_xy_scale_expr,
                 world_to_light_clip_space_z_scale_expr,
-                camera_clip_position_expr,
+                framebuffer_position_expr,
                 light_clip_position_expr,
                 cascade_idx_expr,
             );
@@ -3547,7 +3563,7 @@ impl SampledTexture {
         source_code_lib: &mut SourceCode,
         function: &mut Function,
         emission_radius_expr: Handle<Expression>,
-        camera_clip_position_expr: Handle<Expression>,
+        framebuffer_position_expr: Handle<Expression>,
         light_space_fragment_displacement_expr: Handle<Expression>,
         depth_reference_expr: Handle<Expression>,
     ) -> Handle<Expression> {
@@ -3556,7 +3572,7 @@ impl SampledTexture {
             source_code_lib,
             function,
             emission_radius_expr,
-            camera_clip_position_expr,
+            framebuffer_position_expr,
             light_space_fragment_displacement_expr,
             depth_reference_expr,
         )
@@ -3575,7 +3591,7 @@ impl SampledTexture {
         tan_angular_radius_expr: Handle<Expression>,
         world_to_light_clip_space_xy_scale_expr: Handle<Expression>,
         world_to_light_clip_space_z_scale_expr: Handle<Expression>,
-        camera_clip_position_expr: Handle<Expression>,
+        framebuffer_position_expr: Handle<Expression>,
         light_clip_position_expr: Handle<Expression>,
         cascade_idx_expr: Handle<Expression>,
     ) -> Handle<Expression> {
@@ -3688,7 +3704,7 @@ impl SampledTexture {
             tan_angular_radius_expr,
             world_to_light_clip_space_xy_scale_expr,
             world_to_light_clip_space_z_scale_expr,
-            camera_clip_position_expr,
+            framebuffer_position_expr,
             texture_coord_expr,
             depth_reference_expr,
             cascade_idx_expr,
@@ -3701,7 +3717,7 @@ impl SampledTexture {
         source_code_lib: &mut SourceCode,
         function: &mut Function,
         emission_radius_expr: Handle<Expression>,
-        camera_clip_position_expr: Handle<Expression>,
+        framebuffer_position_expr: Handle<Expression>,
         light_space_fragment_displacement_expr: Handle<Expression>,
         depth_reference_expr: Handle<Expression>,
     ) -> Handle<Expression> {
@@ -3733,7 +3749,7 @@ impl SampledTexture {
                 sampler_var_expr,
                 comparison_sampler_var_expr,
                 emission_radius_expr,
-                camera_clip_position_expr,
+                framebuffer_position_expr,
                 light_space_fragment_displacement_expr,
                 depth_reference_expr,
             ],
@@ -3748,7 +3764,7 @@ impl SampledTexture {
         tan_angular_radius_expr: Handle<Expression>,
         world_to_light_clip_space_xy_scale_expr: Handle<Expression>,
         world_to_light_clip_space_z_scale_expr: Handle<Expression>,
-        camera_clip_position_expr: Handle<Expression>,
+        framebuffer_position_expr: Handle<Expression>,
         texture_coord_expr: Handle<Expression>,
         depth_reference_expr: Handle<Expression>,
         array_idx_expr: Handle<Expression>,
@@ -3784,7 +3800,7 @@ impl SampledTexture {
                 tan_angular_radius_expr,
                 world_to_light_clip_space_xy_scale_expr,
                 world_to_light_clip_space_z_scale_expr,
-                camera_clip_position_expr,
+                framebuffer_position_expr,
                 texture_coord_expr,
                 depth_reference_expr,
             ],

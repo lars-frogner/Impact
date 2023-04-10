@@ -27,8 +27,10 @@ pub use microfacet::{
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{
-    geometry::{InstanceFeatureTypeID, VertexAttributeSet},
-    rendering::{fre, MaterialShaderInput, TextureID, UniformBufferable},
+    geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
+    rendering::{
+        fre, MaterialShaderInput, RenderAttachmentQuantitySet, TextureID, UniformBufferable,
+    },
 };
 use bytemuck::Zeroable;
 use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, StringHash64};
@@ -55,7 +57,8 @@ stringhash64_newtype!(
 /// resources.
 #[derive(Clone, Debug)]
 pub struct MaterialSpecification {
-    vertex_attribute_requirements: VertexAttributeSet,
+    input_render_attachment_quantities: RenderAttachmentQuantitySet,
+    output_render_attachment_quantities: RenderAttachmentQuantitySet,
     fixed_resources: Option<FixedMaterialResources>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     shader_input: MaterialShaderInput,
@@ -89,13 +92,15 @@ impl MaterialSpecification {
     /// Creates a new material specification with the given fixed resources and
     /// untextured material property types.
     pub fn new(
-        vertex_attribute_requirements: VertexAttributeSet,
+        input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet,
         fixed_resources: Option<FixedMaterialResources>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
         shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
-            vertex_attribute_requirements,
+            input_render_attachment_quantities,
+            output_render_attachment_quantities,
             fixed_resources,
             instance_feature_type_ids,
             shader_input,
@@ -103,9 +108,18 @@ impl MaterialSpecification {
     }
 
     /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
-    /// for rendering the material.
-    pub fn vertex_attribute_requirements(&self) -> VertexAttributeSet {
-        self.vertex_attribute_requirements
+    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
+    /// render attachment textures are required as input for rendering with the
+    /// material.
+    pub fn input_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
+        self.input_render_attachment_quantities
+    }
+
+    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
+    /// render attachment textures are written to when rendering with the
+    /// material.
+    pub fn output_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
+        self.output_render_attachment_quantities
     }
 
     /// Returns a reference to the [`FixedMaterialResources`] of the material,

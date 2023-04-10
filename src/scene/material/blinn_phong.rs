@@ -7,6 +7,7 @@ use crate::{
     rendering::{
         fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
         InstanceFeatureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
+        RenderAttachmentQuantitySet,
     },
     scene::{
         DiffuseColorComp, DiffuseTextureComp, InstanceFeatureManager, MaterialComp, MaterialID,

@@ -200,20 +200,6 @@ impl SynchronizedRenderResources {
         self.instance_feature_buffer_managers.get(&model_id)
     }
 
-    /// Returns the model instance transform render buffer manager for the given
-    /// model identifier if the model exists, otherwise returns [`None`].
-    pub fn get_instance_transform_buffer_manager(
-        &self,
-        model_id: ModelID,
-    ) -> Option<&InstanceFeatureRenderBufferManager> {
-        self.get_instance_feature_buffer_managers(model_id)
-            .map(|managers| {
-                managers
-                    .get(0)
-                    .expect("Missing transform render buffer manager for model")
-            })
-    }
-
     /// Returns a reference to the map of instance feature render buffer managers.
     pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureRenderBufferManagerMap {
         self.instance_feature_buffer_managers.as_ref()
