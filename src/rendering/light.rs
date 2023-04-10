@@ -53,13 +53,8 @@ impl LightRenderBufferManager {
     const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 6;
     const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 7;
 
-    const LIGHT_IDX_PUSH_CONSTANT_RANGE_START: u32 = 0;
-    const LIGHT_IDX_PUSH_CONSTANT_RANGE_END: u32 =
-        Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START + mem::size_of::<u32>() as u32;
-
-    const CASCADE_IDX_PUSH_CONSTANT_RANGE_START: u32 = Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_END;
-    const CASCADE_IDX_PUSH_CONSTANT_RANGE_END: u32 =
-        Self::CASCADE_IDX_PUSH_CONSTANT_RANGE_START + mem::size_of::<CascadeIdx>() as u32;
+    pub const LIGHT_IDX_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<u32>() as u32;
+    pub const CASCADE_IDX_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<CascadeIdx>() as u32;
 
     /// Creates a new manager with render buffers initialized from the given
     /// [`LightStorage`].
@@ -215,39 +210,12 @@ impl LightRenderBufferManager {
         }
     }
 
-    /// Returns the push constant range that will contain the light index after
-    /// [`set_light_idx_push_constant`] is called.
-    pub const fn light_idx_push_constant_range() -> wgpu::PushConstantRange {
-        wgpu::PushConstantRange {
-            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            range: Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START
-                ..Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_END,
-        }
-    }
-
-    /// Returns the push constant range that will contain the the light index
-    /// and cascade index after [`set_light_idx_push_constant`] and
-    /// [`set_cascade_idx_push_constant`] is called.
-    pub const fn light_idx_and_cascade_idx_push_constant_range() -> wgpu::PushConstantRange {
-        wgpu::PushConstantRange {
-            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            range: Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START
-                ..Self::CASCADE_IDX_PUSH_CONSTANT_RANGE_END,
-        }
-    }
-
-    /// Finds the index of the light with the given ID in the light type's
-    /// uniform buffer and writes it to the appropriate push constant range for
-    /// the given render pass.
+    /// Finds and returns the index of the light with the given ID in the light
+    /// type's uniform buffer, for use as a push constant.
     ///
     /// # Panics
     /// If no light with the given ID is present in the relevant uniform buffer.
-    pub fn set_light_idx_push_constant(
-        &self,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        light_type: LightType,
-        light_id: LightID,
-    ) {
+    pub fn get_light_idx_push_constant(&self, light_type: LightType, light_id: LightID) -> u32 {
         let light_idx = match light_type {
             LightType::OmnidirectionalLight => &self.omnidirectional_light_render_buffer_manager,
             LightType::UnidirectionalLight => &self.unidirectional_light_render_buffer_manager,
@@ -255,26 +223,7 @@ impl LightRenderBufferManager {
         .find_idx_of_light_with_id(light_id)
         .expect("Tried to set light index push constant for missing light");
 
-        let light_idx = u32::try_from(light_idx).unwrap();
-
-        render_pass.set_push_constants(
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-            Self::LIGHT_IDX_PUSH_CONSTANT_RANGE_START,
-            bytemuck::bytes_of(&light_idx),
-        );
-    }
-
-    /// Writes the given cascade index to the appropriate push constant range
-    /// for the given render pass.
-    pub fn set_cascade_idx_push_constant(
-        render_pass: &mut wgpu::RenderPass<'_>,
-        cascade_idx: CascadeIdx,
-    ) {
-        render_pass.set_push_constants(
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-            Self::CASCADE_IDX_PUSH_CONSTANT_RANGE_START,
-            bytemuck::bytes_of(&cascade_idx),
-        );
+        u32::try_from(light_idx).unwrap()
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data

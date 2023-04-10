@@ -742,23 +742,25 @@ impl RenderPassSpecification {
             })
     }
 
-    /// Obtains the push constant ranges involved in the render pass.
-    fn get_push_constant_ranges(&self) -> Vec<wgpu::PushConstantRange> {
-        let mut push_constant_ranges = Vec::with_capacity(1);
+    /// Obtains the push constant range involved in the render pass.
+    fn get_push_constant_range(&self) -> wgpu::PushConstantRange {
+        let mut size = CoreRenderingSystem::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE;
 
         if self.light.is_some() {
-            let push_constant_range = if matches!(
+            size += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
+
+            if matches!(
                 self.shadow_map_usage,
                 ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(_))
             ) {
-                LightRenderBufferManager::light_idx_and_cascade_idx_push_constant_range()
-            } else {
-                LightRenderBufferManager::light_idx_push_constant_range()
-            };
-            push_constant_ranges.push(push_constant_range);
+                size += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
+            }
         }
 
-        push_constant_ranges
+        wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            range: 0..size,
+        }
     }
 
     /// Obtains the vertex buffer layouts for the required mesh vertex
@@ -1138,7 +1140,7 @@ impl RenderPassRecorder {
                     vertex_attribute_requirements,
                 )?;
 
-            let push_constant_ranges = specification.get_push_constant_ranges();
+            let push_constant_range = specification.get_push_constant_range();
 
             let shader = shader_manager.obtain_shader(
                 core_system,
@@ -1153,7 +1155,7 @@ impl RenderPassRecorder {
             let pipeline_layout = Self::create_render_pipeline_layout(
                 core_system.device(),
                 &bind_group_layouts,
-                &push_constant_ranges,
+                &[push_constant_range],
                 &format!("{} render pipeline layout", &specification.label),
             );
 
@@ -1312,6 +1314,16 @@ impl RenderPassRecorder {
 
             render_pass.set_pipeline(pipeline);
 
+            let mut push_constant_offset = 0;
+
+            render_pass.set_push_constants(
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
+                push_constant_offset,
+                bytemuck::bytes_of(&core_system.get_inverse_window_dimensions_push_constant()),
+            );
+            push_constant_offset +=
+                CoreRenderingSystem::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE;
+
             if let Some(LightInfo {
                 light_type,
                 light_id,
@@ -1319,22 +1331,32 @@ impl RenderPassRecorder {
             {
                 // Write the index of the light to use for this pass into the
                 // appropriate push constant range
-                render_resources
+                render_pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    push_constant_offset,
+                    bytemuck::bytes_of(
+                        &render_resources
                     .get_light_buffer_manager()
                     .unwrap()
-                    .set_light_idx_push_constant(&mut render_pass, light_type, light_id);
+                            .get_light_idx_push_constant(light_type, light_id),
+                    ),
+                );
+                push_constant_offset += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
             }
 
+            #[allow(unused_assignments)]
             if let ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(
                 cascade_idx,
             )) = self.specification.shadow_map_usage
             {
                 // Write the index of the cascade to use for this pass into the
                 // appropriate push constant range
-                LightRenderBufferManager::set_cascade_idx_push_constant(
-                    &mut render_pass,
-                    cascade_idx,
+                render_pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    push_constant_offset,
+                    bytemuck::bytes_of(&cascade_idx),
                 );
+                push_constant_offset += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
             }
 
             for (index, &bind_group) in bind_groups.iter().enumerate() {

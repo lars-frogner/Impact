@@ -293,6 +293,30 @@ pub enum MaterialVertexOutputFieldIndices {
     None,
 }
 
+/// Helper for constructing a struct containing push constants.
+#[derive(Clone, Debug)]
+pub struct PushConstantStruct {
+    builder: StructBuilder,
+    field_indices: PushConstantFieldIndices,
+    global_variable: Option<Handle<GlobalVariable>>,
+}
+
+/// Indices of fields in the struct containing push constants.
+#[derive(Clone, Debug)]
+pub struct PushConstantFieldIndices {
+    inverse_window_dimensions: usize,
+    light_idx: Option<usize>,
+    cascade_idx: Option<usize>,
+}
+
+/// Expressions for accessing fields in the struct containing push constants.
+#[derive(Clone, Debug)]
+pub struct PushConstantFieldExpressions {
+    pub inverse_window_dimensions: Handle<Expression>,
+    pub light_idx: Option<Handle<Expression>>,
+    pub cascade_idx: Option<Handle<Expression>>,
+}
+
 /// Represents a struct passed as an argument to a shader
 /// entry point. Holds the handles for the expressions
 /// accessing each field of the struct.
@@ -655,6 +679,22 @@ impl ShaderGenerator {
 
         let mut source_code_lib = SHADER_SOURCE_LIB.clone();
 
+        let mut push_constant_struct = PushConstantStruct::new(&mut module);
+
+        if let Some(light_shader_input) = light_shader_input {
+            Self::add_light_push_constants(
+                light_shader_input,
+                &mut module,
+                &mut push_constant_struct,
+                material_shader_generator.is_some(),
+            );
+        }
+
+        let push_constant_vertex_expressions =
+            push_constant_struct.generate_expressions(&mut module, &mut vertex_function);
+        let push_constant_fragment_expressions =
+            push_constant_struct.generate_expressions(&mut module, &mut fragment_function);
+
         // Caution: The order in which the shader generators use and increment
         // the bind group index must match the order in which the bind groups
         // are set in `RenderPassRecorder::record_render_pass`, that is:
@@ -688,6 +728,8 @@ impl ShaderGenerator {
                 &mut fragment_function,
                 &mut bind_group_idx,
                 &mut vertex_attribute_requirements,
+                &push_constant_vertex_expressions,
+                &push_constant_fragment_expressions,
                 material_shader_generator.is_some(),
             )
         });
@@ -1301,6 +1343,31 @@ impl ShaderGenerator {
         }
     }
 
+    fn add_light_push_constants(
+        light_shader_input: &LightShaderInput,
+        module: &mut Module,
+        push_constant_struct: &mut PushConstantStruct,
+        has_material: bool,
+    ) {
+        let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
+
+        push_constant_struct.field_indices.light_idx = Some(
+            push_constant_struct
+                .builder
+                .add_field("activeLightIdx", u32_type, None, U32_WIDTH),
+        );
+
+        if matches!(light_shader_input, LightShaderInput::UnidirectionalLight(_)) && !has_material {
+            push_constant_struct.field_indices.cascade_idx =
+                Some(push_constant_struct.builder.add_field(
+                    "activeCascadeIdx",
+                    u32_type,
+                    None,
+                    U32_WIDTH,
+                ));
+        }
+    }
+
     /// Creates a generator of shader code for the light type in the given
     /// shader input.
     fn create_light_shader_generator(
@@ -1310,6 +1377,8 @@ impl ShaderGenerator {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         vertex_attribute_requirements: &mut VertexAttributeSet,
+        push_constant_vertex_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         has_material: bool,
     ) -> LightShaderGenerator {
         match light_shader_input {
@@ -1320,6 +1389,7 @@ impl ShaderGenerator {
                     fragment_function,
                     bind_group_idx,
                     vertex_attribute_requirements,
+                    push_constant_fragment_expressions,
                     has_material,
                 )
             }
@@ -1330,6 +1400,8 @@ impl ShaderGenerator {
                     vertex_function,
                     fragment_function,
                     bind_group_idx,
+                    push_constant_vertex_expressions,
+                    push_constant_fragment_expressions,
                     has_material,
                 )
             }
@@ -1350,6 +1422,7 @@ impl ShaderGenerator {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         vertex_attribute_requirements: &mut VertexAttributeSet,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         has_material: bool,
     ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
@@ -1484,17 +1557,6 @@ impl ShaderGenerator {
 
         *bind_group_idx += 1;
 
-        let active_light_idx_var = append_to_arena(
-            &mut module.global_variables,
-            GlobalVariable {
-                name: new_name("activeLightIdx"),
-                space: AddressSpace::PushConstant,
-                binding: None,
-                ty: u32_type,
-                init: None,
-            },
-        );
-
         if has_material {
             // If we have a material, we will do shading that involves the
             // shadow cubemap
@@ -1520,7 +1582,7 @@ impl ShaderGenerator {
             LightShaderGenerator::new_for_omnidirectional_light_shading(
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_fragment_expressions,
                 shadow_map,
             )
         } else {
@@ -1531,7 +1593,7 @@ impl ShaderGenerator {
             LightShaderGenerator::new_for_omnidirectional_light_shadow_map_update(
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_fragment_expressions,
             )
         }
     }
@@ -1550,6 +1612,8 @@ impl ShaderGenerator {
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
+        push_constant_vertex_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         has_material: bool,
     ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
@@ -1720,17 +1784,6 @@ impl ShaderGenerator {
         *bind_group_idx += 1;
 
         if has_material {
-            let active_light_idx_var = append_to_arena(
-                &mut module.global_variables,
-                GlobalVariable {
-                    name: new_name("activeLightIdx"),
-                    space: AddressSpace::PushConstant,
-                    binding: None,
-                    ty: u32_type,
-                    init: None,
-                },
-            );
-
             // If we have a material, we will do shading that involves the
             // shadow map
             let (
@@ -1756,52 +1809,15 @@ impl ShaderGenerator {
                 vertex_function,
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_vertex_expressions,
+                push_constant_fragment_expressions,
                 shadow_map,
             )
         } else {
-            // For updating the shadow map, we need the index of the cascade to
-            // update, which is provided in the same push constant range as the
-            // light index
-            let active_light_and_cascade_idx_struct_type = insert_in_arena(
-                &mut module.types,
-                Type {
-                    name: new_name("ActiveLightAndCascadeIdx"),
-                    inner: TypeInner::Struct {
-                        members: vec![
-                            StructMember {
-                                name: new_name("lightIdx"),
-                                ty: u32_type,
-                                binding: None,
-                                offset: 0,
-                            },
-                            StructMember {
-                                name: new_name("cascadeIdx"),
-                                ty: u32_type,
-                                binding: None,
-                                offset: U32_WIDTH,
-                            },
-                        ],
-                        span: 2 * U32_WIDTH,
-                    },
-                },
-            );
-
-            let active_light_and_cascade_idx_var = append_to_arena(
-                &mut module.global_variables,
-                GlobalVariable {
-                    name: new_name("activeLightAndCascadeIdx"),
-                    space: AddressSpace::PushConstant,
-                    binding: None,
-                    ty: active_light_and_cascade_idx_struct_type,
-                    init: None,
-                },
-            );
-
             LightShaderGenerator::new_for_unidirectional_light_shadow_map_update(
                 vertex_function,
                 lights_struct_var,
-                active_light_and_cascade_idx_var,
+                push_constant_vertex_expressions,
             )
         }
     }
@@ -2046,13 +2062,13 @@ impl LightShaderGenerator {
     pub fn new_for_omnidirectional_light_shadow_map_update(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
     ) -> Self {
         Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShadowMapUpdate(
             OmnidirectionalLightShadowMapUpdateShaderGenerator::new(
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_fragment_expressions,
             ),
         ))
     }
@@ -2060,14 +2076,14 @@ impl LightShaderGenerator {
     pub fn new_for_omnidirectional_light_shading(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShading(
             OmnidirectionalLightShadingShaderGenerator::new(
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_fragment_expressions,
                 shadow_map,
             ),
         ))
@@ -2076,13 +2092,13 @@ impl LightShaderGenerator {
     pub fn new_for_unidirectional_light_shadow_map_update(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_and_cascade_idx_var: Handle<GlobalVariable>,
+        push_constant_vertex_expressions: &PushConstantFieldExpressions,
     ) -> Self {
         Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShadowMapUpdate(
             UnidirectionalLightShadowMapUpdateShaderGenerator::new(
                 vertex_function,
                 lights_struct_var,
-                active_light_and_cascade_idx_var,
+                push_constant_vertex_expressions,
             ),
         ))
     }
@@ -2091,7 +2107,8 @@ impl LightShaderGenerator {
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_vertex_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShading(
@@ -2099,7 +2116,8 @@ impl LightShaderGenerator {
                 vertex_function,
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_vertex_expressions,
+                push_constant_fragment_expressions,
                 shadow_map,
             ),
         ))
@@ -2175,39 +2193,18 @@ impl LightShaderGenerator {
     fn generate_active_light_ptr_expr(
         function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_expressions: &PushConstantFieldExpressions,
     ) -> Handle<Expression> {
         let lights_struct_ptr_expr =
             include_expr_in_func(function, Expression::GlobalVariable(lights_struct_var));
 
-        let active_light_idx_expr =
-            Self::generate_active_light_idx_expr(function, active_light_idx_var);
-
         Self::generate_single_light_ptr_expr(
             function,
             lights_struct_ptr_expr,
-            active_light_idx_expr,
-        )
-    }
-
-    fn generate_active_light_idx_expr(
-        function: &mut Function,
-        active_light_idx_var: Handle<GlobalVariable>,
-    ) -> Handle<Expression> {
-        let active_light_idx_ptr_expr =
-            include_expr_in_func(function, Expression::GlobalVariable(active_light_idx_var));
-
-        let active_light_idx_expr = emit_in_func(function, |function| {
-            include_named_expr_in_func(
-                function,
-                "activeLightIdx",
-                Expression::Load {
-                    pointer: active_light_idx_ptr_expr,
-                },
+            push_constant_expressions
+                .light_idx
+                .expect("Missing light index push constant"),
             )
-        });
-
-        active_light_idx_expr
     }
 
     fn generate_single_light_ptr_expr(
@@ -2262,12 +2259,12 @@ impl OmnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
     ) -> Self {
         let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             fragment_function,
             lights_struct_var,
-            active_light_idx_var,
+            push_constant_fragment_expressions,
         );
 
         let distance_mapping = LightShaderGenerator::generate_field_access_ptr_expr(
@@ -2340,13 +2337,13 @@ impl OmnidirectionalLightShadingShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             fragment_function,
             lights_struct_var,
-            active_light_idx_var,
+            push_constant_fragment_expressions,
         );
 
         let camera_to_light_space_rotation_quaternion =
@@ -2533,27 +2530,8 @@ impl UnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn new(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_and_cascade_idx_var: Handle<GlobalVariable>,
+        push_constant_vertex_expressions: &PushConstantFieldExpressions,
     ) -> Self {
-        let active_light_and_cascade_idx_ptr_expr = include_expr_in_func(
-            vertex_function,
-            Expression::GlobalVariable(active_light_and_cascade_idx_var),
-        );
-
-        let active_light_idx_expr = LightShaderGenerator::generate_named_field_access_expr(
-            vertex_function,
-            "lightIdx",
-            active_light_and_cascade_idx_ptr_expr,
-            0,
-        );
-
-        let active_cascade_idx_expr = LightShaderGenerator::generate_named_field_access_expr(
-            vertex_function,
-            "cascadeIdx",
-            active_light_and_cascade_idx_ptr_expr,
-            1,
-        );
-
         let lights_struct_ptr_expr = include_expr_in_func(
             vertex_function,
             Expression::GlobalVariable(lights_struct_var),
@@ -2562,14 +2540,18 @@ impl UnidirectionalLightShadowMapUpdateShaderGenerator {
         let active_light_ptr_expr = LightShaderGenerator::generate_single_light_ptr_expr(
             vertex_function,
             lights_struct_ptr_expr,
-            active_light_idx_expr,
+            push_constant_vertex_expressions
+                .light_idx
+                .expect("Missing light index push constant"),
         );
 
         let orthographic_transform_ptr_expr =
             UnidirectionalLightShaderGenerator::generate_single_orthographic_transform_ptr_expr(
                 vertex_function,
                 active_light_ptr_expr,
-                active_cascade_idx_expr,
+                push_constant_vertex_expressions
+                    .cascade_idx
+                    .expect("Missing cascade index push constant"),
             );
 
         let orthographic_translation = LightShaderGenerator::generate_named_field_access_expr(
@@ -2606,21 +2588,22 @@ impl UnidirectionalLightShadingShaderGenerator {
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        active_light_idx_var: Handle<GlobalVariable>,
+        push_constant_vertex_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         let active_light_ptr_expr_in_vertex_function =
             LightShaderGenerator::generate_active_light_ptr_expr(
                 vertex_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_vertex_expressions,
             );
 
         let active_light_ptr_expr_in_fragment_function =
             LightShaderGenerator::generate_active_light_ptr_expr(
                 fragment_function,
                 lights_struct_var,
-                active_light_idx_var,
+                push_constant_fragment_expressions,
             );
 
         Self {
@@ -2892,6 +2875,113 @@ impl UnidirectionalLightShadingShaderGenerator {
             });
 
         (light_direction_expr, attenuated_radiance_expr)
+    }
+}
+
+impl PushConstantStruct {
+    fn new(module: &mut Module) -> Self {
+        let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
+
+        let mut builder = StructBuilder::new("PushConstants");
+
+        let inverse_window_dimensions_idx =
+            builder.add_field("inverseWindowDimensions", vec2_type, None, VECTOR_2_SIZE);
+
+        let field_indices = PushConstantFieldIndices {
+            inverse_window_dimensions: inverse_window_dimensions_idx,
+            light_idx: None,
+            cascade_idx: None,
+        };
+
+        Self {
+            builder,
+            field_indices,
+            global_variable: None,
+        }
+    }
+
+    fn generate_expressions(
+        &mut self,
+        module: &mut Module,
+        function: &mut Function,
+    ) -> PushConstantFieldExpressions {
+        let struct_var_ptr_expr = self.global_variable.get_or_insert_with(|| {
+            let struct_type = insert_in_arena(&mut module.types, self.builder.clone().into_type());
+
+            append_to_arena(
+                &mut module.global_variables,
+                GlobalVariable {
+                    name: new_name("pushConstants"),
+                    space: AddressSpace::PushConstant,
+                    binding: None,
+                    ty: struct_type,
+                    init: None,
+                },
+            )
+        });
+
+        let struct_ptr_expr =
+            include_expr_in_func(function, Expression::GlobalVariable(*struct_var_ptr_expr));
+
+        let inverse_window_dimensions_expr = emit_in_func(function, |function| {
+            let inverse_window_dimensions_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: struct_ptr_expr,
+                    index: self.field_indices.inverse_window_dimensions as u32,
+                },
+            );
+            include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: inverse_window_dimensions_ptr_expr,
+                },
+            )
+        });
+
+        let mut field_expressions = PushConstantFieldExpressions {
+            inverse_window_dimensions: inverse_window_dimensions_expr,
+            light_idx: None,
+            cascade_idx: None,
+        };
+
+        if let Some(light_idx) = self.field_indices.light_idx {
+            field_expressions.light_idx = Some(emit_in_func(function, |function| {
+                let light_idx_ptr_expr = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: struct_ptr_expr,
+                        index: light_idx as u32,
+                    },
+                );
+                include_expr_in_func(
+                    function,
+                    Expression::Load {
+                        pointer: light_idx_ptr_expr,
+                    },
+                )
+            }));
+        }
+
+        if let Some(cascade_idx) = self.field_indices.cascade_idx {
+            field_expressions.cascade_idx = Some(emit_in_func(function, |function| {
+                let cascade_idx_ptr_expr = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: struct_ptr_expr,
+                        index: cascade_idx as u32,
+                    },
+                );
+                include_expr_in_func(
+                    function,
+                    Expression::Load {
+                        pointer: cascade_idx_ptr_expr,
+                    },
+                )
+            }));
+        }
+
+        field_expressions
     }
 }
 

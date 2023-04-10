@@ -1,9 +1,9 @@
 //! Core rendering system.
 
-use crate::window::Window;
+use crate::{rendering::fre, window::Window};
 use anyhow::{anyhow, Result};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use std::num::NonZeroU32;
+use std::{mem, num::NonZeroU32};
 
 /// Represents the graphics device and the basic
 /// rendering entities whose configuration should not
@@ -20,6 +20,8 @@ pub struct CoreRenderingSystem {
 }
 
 impl CoreRenderingSystem {
+    pub const INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE: u32 = 2 * mem::size_of::<f32>() as u32;
+
     /// Initializes the core system for rendering to
     /// the given window.
     ///
@@ -74,6 +76,15 @@ impl CoreRenderingSystem {
     /// Initializes the rendering surface for presentation.
     pub fn initialize_surface(&self) {
         self.surface.configure(&self.device, &self.surface_config);
+    }
+
+    /// Returns the data for the push constant containing the reciprocals of the
+    /// window dimensions in pixels.
+    pub fn get_inverse_window_dimensions_push_constant(&self) -> [fre; 2] {
+        [
+            1.0 / (self.surface_config.width as fre),
+            1.0 / (self.surface_config.height as fre),
+        ]
     }
 
     async fn new_from_raw_window_handle(
