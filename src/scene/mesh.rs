@@ -320,11 +320,11 @@ impl TriangleMesh<fre> {
     ) {
         setup!(components, |mesh: &MeshComp, material: &MaterialComp| {
             let material_specification = material_library
-                .get_material_specification(material.material_id)
+                .get_material_specification(material.material_handle().material_id())
                 .expect("Missing material in library for material component");
 
             let vertex_attribute_requirements =
-                material_specification.vertex_attribute_requirements();
+                material_specification.vertex_attribute_requirements_for_mesh();
 
             if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
                 let mesh_repository_readonly = mesh_repository.read().unwrap();

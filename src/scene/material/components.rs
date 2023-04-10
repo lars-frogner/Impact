@@ -1,13 +1,12 @@
 //! [`Component`](impact_ecs::component::Component)s related to materials.
 
 use crate::{
-    geometry::InstanceFeatureID,
     rendering::{fre, TextureID},
-    scene::{MaterialID, MaterialPropertyTextureSetID, RGBColor},
+    scene::{MaterialHandle, RGBColor},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use nalgebra::vector;
+use nalgebra::{vector, Vector2};
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities
 /// using the colors of the mesh vertices.
@@ -71,6 +70,7 @@ pub struct NormalMapComp(pub TextureID);
 pub struct ParallaxMapComp {
     pub height_map_texture_id: TextureID,
     pub displacement_scale: fre,
+    pub uv_per_distance: Vector2<fre>,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that
@@ -78,16 +78,8 @@ pub struct ParallaxMapComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MaterialComp {
-    /// The ID of the entity's [`MaterialSpecification`](crate::scene::MaterialSpecification).
-    pub material_id: MaterialID,
-    /// The ID of the entry for the entity's per-instance material properties in
-    /// the [InstanceFeatureStorage](crate::geometry::InstanceFeatureStorage)
-    /// (may be N/A).
-    pub material_property_feature_id: InstanceFeatureID,
-    /// The ID of the entity's
-    /// [`MaterialPropertyTextureSet`](crate::scene::MaterialPropertyTextureSet)
-    /// (may represent an empty set).
-    pub material_property_texture_set_id: MaterialPropertyTextureSetID,
+    material_handle: MaterialHandle,
+    prepass_material_handle: MaterialHandle,
 }
 
 impl SpecularColorComp {
@@ -140,52 +132,55 @@ impl RoughnessTextureComp {
 }
 
 impl ParallaxMapComp {
-    pub fn new(height_map_texture_id: TextureID, displacement_scale: fre) -> Self {
+    pub fn new(
+        height_map_texture_id: TextureID,
+        displacement_scale: fre,
+        uv_per_distance: Vector2<fre>,
+    ) -> Self {
         Self {
             height_map_texture_id,
             displacement_scale,
+            uv_per_distance,
         }
     }
 }
 
 impl MaterialComp {
-    /// Creates a new component representing a material with the given
-    /// IDs for the [`MaterialSpecification`](crate::scene::MaterialSpecification)
-    /// and the per-instance material data (which is optional).
+    /// Creates a new component representing the material with the given handle
+    /// and (optionally) prepass material handle.
     pub fn new(
-        material_id: MaterialID,
-        material_property_feature_id: Option<InstanceFeatureID>,
-        material_property_texture_set_id: Option<MaterialPropertyTextureSetID>,
+        material_handle: MaterialHandle,
+        prepass_material_handle: Option<MaterialHandle>,
     ) -> Self {
-        let material_property_feature_id =
-            material_property_feature_id.unwrap_or_else(InstanceFeatureID::not_applicable);
-        let material_property_texture_set_id =
-            material_property_texture_set_id.unwrap_or_else(MaterialPropertyTextureSetID::empty);
+        assert!(!material_handle.is_not_applicable());
+
+        let prepass_material_handle = if let Some(prepass_material_handle) = prepass_material_handle
+        {
+            assert!(!material_handle.is_not_applicable());
+            prepass_material_handle
+        } else {
+            MaterialHandle::not_applicable()
+        };
+
         Self {
-            material_id,
-            material_property_feature_id,
-            material_property_texture_set_id,
+            material_handle,
+            prepass_material_handle,
         }
     }
 
-    /// Returns the ID of the entry for the entity's per-instance material
-    /// properties in the
-    /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage), or
-    /// [`None`] if there are no untextured per-instance material properties.
-    pub fn material_property_feature_id(&self) -> Option<InstanceFeatureID> {
-        if self.material_property_feature_id.is_not_applicable() {
-            None
-        } else {
-            Some(self.material_property_feature_id)
-        }
+    /// Returns a reference to the handle for the entity's material.
+    pub fn material_handle(&self) -> &MaterialHandle {
+        &self.material_handle
     }
 
-    /// Returns the ID of the material property texture set, or [`None`] if no material properties are textured.
-    pub fn material_property_texture_set_id(&self) -> Option<MaterialPropertyTextureSetID> {
-        if self.material_property_texture_set_id.is_empty() {
+    /// Returns a reference to the handle for the prepass material associated
+    /// with the entity's material, or [`None`] if the material has no prepass
+    /// material.
+    pub fn prepass_material_handle(&self) -> Option<&MaterialHandle> {
+        if self.prepass_material_handle.is_not_applicable() {
             None
         } else {
-            Some(self.material_property_texture_set_id)
+            Some(&self.prepass_material_handle)
         }
     }
 }

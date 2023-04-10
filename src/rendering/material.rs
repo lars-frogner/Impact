@@ -15,6 +15,7 @@ use std::borrow::Cow;
 /// Manager of render resources for a material type.
 #[derive(Debug)]
 pub struct MaterialRenderResourceManager {
+    vertex_attribute_requirements_for_shader: VertexAttributeSet,
     input_render_attachment_quantities: RenderAttachmentQuantitySet,
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
     fixed_resources: Option<FixedMaterialRenderResourceManager>,
@@ -56,6 +57,8 @@ impl MaterialRenderResourceManager {
             });
 
         Self {
+            vertex_attribute_requirements_for_shader: material_specification
+                .vertex_attribute_requirements_for_shader(),
             input_render_attachment_quantities: material_specification
                 .input_render_attachment_quantities(),
             output_render_attachment_quantities: material_specification
@@ -63,6 +66,12 @@ impl MaterialRenderResourceManager {
             fixed_resources,
             shader_input: material_specification.shader_input().clone(),
         }
+    }
+
+    /// Returns a [`VertexAttributeSet`] encoding the vertex attributes that
+    /// will be used in the material's shader.
+    pub fn vertex_attribute_requirements_for_shader(&self) -> VertexAttributeSet {
+        self.vertex_attribute_requirements_for_shader
     }
 
     /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose

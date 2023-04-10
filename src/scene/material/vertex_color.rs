@@ -2,9 +2,9 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::MaterialShaderInput,
+    rendering::{MaterialShaderInput, RenderAttachmentQuantitySet},
     scene::{
-        MaterialComp, MaterialID, MaterialLibrary, MaterialSpecification,
+        MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialSpecification,
         RenderResourcesDesynchronized, VertexColorComp,
     },
 };
@@ -24,13 +24,19 @@ lazy_static! {
 }
 
 impl VertexColorMaterial {
-    pub const VERTEX_ATTRIBUTE_REQUIREMENTS: VertexAttributeSet = VertexAttributeSet::COLOR;
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER: VertexAttributeSet =
+        VertexAttributeSet::COLOR;
+    pub const VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH: VertexAttributeSet =
+        Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER;
 
     /// Adds the material specification for this material to the given
     /// material library.
     pub fn register(material_library: &mut MaterialLibrary) {
         let specification = MaterialSpecification::new(
-            Self::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
+            Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
             None,
             Vec::new(),
             MaterialShaderInput::VertexColor,
@@ -47,7 +53,12 @@ impl VertexColorMaterial {
     ) {
         setup!(
             components,
-            || -> MaterialComp { MaterialComp::new(*VERTEX_COLOR_MATERIAL_ID, None, None) },
+            || -> MaterialComp {
+                MaterialComp::new(
+                    MaterialHandle::new(*VERTEX_COLOR_MATERIAL_ID, None, None),
+                    None,
+                )
+            },
             [VertexColorComp],
             ![MaterialComp]
         );

@@ -1,13 +1,12 @@
 //! Management of materials.
 
-mod ambient_color;
 mod blinn_phong;
 mod components;
 mod fixed;
 mod microfacet;
+mod prepass;
 mod vertex_color;
 
-pub use ambient_color::GlobalAmbientColorMaterial;
 pub use blinn_phong::{
     add_blinn_phong_material_component_for_entity, TexturedColorBlinnPhongMaterialFeature,
     UniformColorBlinnPhongMaterialFeature, UniformDiffuseBlinnPhongMaterialFeature,
@@ -24,6 +23,7 @@ pub use microfacet::{
     UniformColorMicrofacetMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
     UniformSpecularMicrofacetMaterialFeature,
 };
+pub use prepass::{create_prepass_material, ParallaxMappingPrepassMaterialFeature};
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{
@@ -32,8 +32,8 @@ use crate::{
         fre, MaterialShaderInput, RenderAttachmentQuantitySet, TextureID, UniformBufferable,
     },
 };
-use bytemuck::Zeroable;
-use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, StringHash64};
+use bytemuck::{Pod, Zeroable};
+use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, Hash64, StringHash64};
 use nalgebra::Vector3;
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -52,11 +52,31 @@ stringhash64_newtype!(
     [pub] MaterialPropertyTextureSetID
 );
 
-/// A material description specifying the set of untextured per-material
-/// properties (as instance features) and optionally some fixed material
+/// A handle for a material, containing the IDs for the pieces of data holding
+/// information about the material.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct MaterialHandle {
+    /// The ID of the material's [`MaterialSpecification`](crate::scene::MaterialSpecification).
+    material_id: MaterialID,
+    /// The ID of the entry for the material's per-instance material properties
+    /// in the [InstanceFeatureStorage](crate::geometry::InstanceFeatureStorage)
+    /// (may be N/A).
+    material_property_feature_id: InstanceFeatureID,
+    /// The ID of the material's
+    /// [`MaterialPropertyTextureSet`](crate::scene::MaterialPropertyTextureSet)
+    /// (may represent an empty set).
+    material_property_texture_set_id: MaterialPropertyTextureSetID,
+}
+
+/// A material description specifying a material's set of required vertex
+/// attributes, untextured per-material properties (as instance features),
+/// associated render attachments, shader input and optionally fixed material
 /// resources.
 #[derive(Clone, Debug)]
 pub struct MaterialSpecification {
+    vertex_attribute_requirements_for_mesh: VertexAttributeSet,
+    vertex_attribute_requirements_for_shader: VertexAttributeSet,
     input_render_attachment_quantities: RenderAttachmentQuantitySet,
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
     fixed_resources: Option<FixedMaterialResources>,
@@ -92,6 +112,8 @@ impl MaterialSpecification {
     /// Creates a new material specification with the given fixed resources and
     /// untextured material property types.
     pub fn new(
+        vertex_attribute_requirements_for_mesh: VertexAttributeSet,
+        vertex_attribute_requirements_for_shader: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         fixed_resources: Option<FixedMaterialResources>,
@@ -99,6 +121,8 @@ impl MaterialSpecification {
         shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
+            vertex_attribute_requirements_for_mesh,
+            vertex_attribute_requirements_for_shader,
             input_render_attachment_quantities,
             output_render_attachment_quantities,
             fixed_resources,
@@ -108,6 +132,17 @@ impl MaterialSpecification {
     }
 
     /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
+    /// to be available in any mesh using the material.
+    pub fn vertex_attribute_requirements_for_mesh(&self) -> VertexAttributeSet {
+        self.vertex_attribute_requirements_for_mesh
+    }
+
+    /// Returns a [`VertexAttributeSet`] encoding the vertex attributes that
+    /// will be used in the material's shader.
+    pub fn vertex_attribute_requirements_for_shader(&self) -> VertexAttributeSet {
+        self.vertex_attribute_requirements_for_shader
+    }
+
     /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
     /// render attachment textures are required as input for rendering with the
     /// material.
@@ -276,6 +311,18 @@ impl MaterialLibrary {
     }
 }
 
+impl MaterialID {
+    /// Creates an ID that does not represent a valid material.
+    pub fn not_applicable() -> Self {
+        Self(StringHash64::zeroed())
+    }
+
+    /// Returns `true` if this ID does not represent a valid material.
+    pub fn is_not_applicable(&self) -> bool {
+        self.0 == StringHash64::zeroed()
+    }
+}
+
 impl MaterialPropertyTextureSetID {
     /// Generates a material property texture set ID that will always be the same
     /// for a specific ordered set of texture IDs.
@@ -298,5 +345,80 @@ impl MaterialPropertyTextureSetID {
     /// Returns `true` if this ID represents an empty texture set.
     pub fn is_empty(&self) -> bool {
         self.0 == StringHash64::zeroed()
+    }
+}
+
+impl MaterialHandle {
+    /// Creates a new handle for a material with the given IDs for the
+    /// [`MaterialSpecification`](crate::scene::MaterialSpecification),
+    /// per-instance material data and textures (the latter two are optional) .
+    pub fn new(
+        material_id: MaterialID,
+        material_property_feature_id: Option<InstanceFeatureID>,
+        material_property_texture_set_id: Option<MaterialPropertyTextureSetID>,
+    ) -> Self {
+        let material_property_feature_id =
+            material_property_feature_id.unwrap_or_else(InstanceFeatureID::not_applicable);
+        let material_property_texture_set_id =
+            material_property_texture_set_id.unwrap_or_else(MaterialPropertyTextureSetID::empty);
+        Self {
+            material_id,
+            material_property_feature_id,
+            material_property_texture_set_id,
+        }
+    }
+
+    /// Creates a handle that does not represent a valid material.
+    pub fn not_applicable() -> Self {
+        Self {
+            material_id: MaterialID::not_applicable(),
+            material_property_feature_id: InstanceFeatureID::not_applicable(),
+            material_property_texture_set_id: MaterialPropertyTextureSetID::empty(),
+        }
+    }
+
+    /// Returns `true` if this handle does not represent a valid material.
+    pub fn is_not_applicable(&self) -> bool {
+        self.material_id.is_not_applicable()
+    }
+
+    /// Returns the ID of the material.
+    pub fn material_id(&self) -> MaterialID {
+        self.material_id
+    }
+
+    /// Returns the ID of the entry for the per-instance material properties in
+    /// the [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage),
+    /// or [`None`] if there are no untextured per-instance material properties.
+    pub fn material_property_feature_id(&self) -> Option<InstanceFeatureID> {
+        if self.material_property_feature_id.is_not_applicable() {
+            None
+        } else {
+            Some(self.material_property_feature_id)
+        }
+    }
+
+    /// Returns the ID of the material property texture set, or [`None`] if no
+    /// material properties are textured.
+    pub fn material_property_texture_set_id(&self) -> Option<MaterialPropertyTextureSetID> {
+        if self.material_property_texture_set_id.is_empty() {
+            None
+        } else {
+            Some(self.material_property_texture_set_id)
+        }
+    }
+
+    /// Computes a unique hash for this material handle.
+    pub fn compute_hash(&self) -> Hash64 {
+        let mut hash = self.material_id.0.hash();
+
+        if !self.material_property_texture_set_id.is_empty() {
+            hash = impact_utils::compute_hash_64_of_two_hash_64(
+                hash,
+                self.material_property_texture_set_id.0.hash(),
+            );
+        }
+
+        hash
     }
 }

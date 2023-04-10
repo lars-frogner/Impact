@@ -1,18 +1,20 @@
 //! Generation of graphics shaders.
 
-mod ambient_color;
 mod blinn_phong;
 mod fixed;
 mod microfacet;
+mod prepass;
 mod vertex_color;
 
-pub use ambient_color::GlobalAmbientColorShaderInput;
 pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
-use lazy_static::lazy_static;
 pub use microfacet::{
     DiffuseMicrofacetShadingModel, MicrofacetFeatureShaderInput, MicrofacetShadingModel,
     MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
+};
+pub use prepass::{
+    BumpMappingShaderInput, GlobalAmbientColorShaderInput, NormalMappingShaderInput,
+    ParallaxMappingFeatureShaderInput, ParallaxMappingShaderInput, PrepassShaderGenerator,
 };
 
 use crate::{
@@ -23,12 +25,12 @@ use crate::{
     rendering::{fre, CoreRenderingSystem, RenderAttachmentQuantitySet},
     scene::MAX_SHADOW_MAP_CASCADES,
 };
-use ambient_color::GlobalAmbientColorShaderGenerator;
 use anyhow::{anyhow, bail, Result};
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
 };
+use lazy_static::lazy_static;
 use microfacet::{MicrofacetShaderGenerator, MicrofacetVertexOutputFieldIndices};
 use naga::{
     AddressSpace, Arena, ArraySize, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant,
@@ -38,6 +40,7 @@ use naga::{
     Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator,
     UniqueArena, VectorSize,
 };
+use prepass::PrepassVertexOutputFieldIndices;
 use std::{borrow::Cow, collections::HashMap, fs, hash::Hash, mem, path::Path, vec};
 use vertex_color::VertexColorShaderGenerator;
 
@@ -87,6 +90,7 @@ pub enum InstanceFeatureShaderInput {
     FixedColorMaterial(FixedColorFeatureShaderInput),
     BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
     MicrofacetMaterial(MicrofacetFeatureShaderInput),
+    ParallaxMappingPrepassMaterial(ParallaxMappingFeatureShaderInput),
     /// For convenience in unit tests.
     #[cfg(test)]
     None,
@@ -95,11 +99,16 @@ pub enum InstanceFeatureShaderInput {
 /// Input description for any kind of material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum MaterialShaderInput {
-    GlobalAmbientColor(GlobalAmbientColorShaderInput),
     VertexColor,
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(BlinnPhongTextureShaderInput),
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
+    Prepass(
+        (
+            GlobalAmbientColorShaderInput,
+            Option<BumpMappingShaderInput>,
+        ),
+    ),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -151,12 +160,12 @@ pub struct UnidirectionalLightShaderInput {
 /// Shader generator for any kind of material.
 #[derive(Clone, Debug)]
 pub enum MaterialShaderGenerator<'a> {
-    GlobalAmbientColor(GlobalAmbientColorShaderGenerator<'a>),
     VertexColor,
     FixedColor(FixedColorShaderGenerator<'a>),
     FixedTexture(FixedTextureShaderGenerator<'a>),
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
     Microfacet(MicrofacetShaderGenerator<'a>),
+    Prepass(PrepassShaderGenerator<'a>),
 }
 
 /// Handles to expressions for accessing the rotational, translational and
@@ -290,6 +299,7 @@ pub enum MaterialVertexOutputFieldIndices {
     FixedColor(FixedColorVertexOutputFieldIdx),
     BlinnPhong(BlinnPhongVertexOutputFieldIndices),
     Microfacet(MicrofacetVertexOutputFieldIndices),
+    Prepass(PrepassVertexOutputFieldIndices),
     None,
 }
 
@@ -796,6 +806,7 @@ impl ShaderGenerator {
                 &mut fragment_function,
                 &mut bind_group_idx,
                 input_render_attachment_quantities,
+                &push_constant_fragment_expressions,
                 &fragment_input_struct,
                 &mesh_vertex_output_field_indices,
                 light_vertex_output_field_indices.as_ref(),
@@ -887,6 +898,7 @@ impl ShaderGenerator {
         let mut fixed_color_feature_shader_input = None;
         let mut blinn_phong_feature_shader_input = None;
         let mut microfacet_feature_shader_input = None;
+        let mut parallax_mapping_feature_shader_input = None;
 
         for &instance_feature_shader_input in instance_feature_shader_inputs {
             match instance_feature_shader_input {
@@ -908,6 +920,10 @@ impl ShaderGenerator {
                     let old = microfacet_feature_shader_input.replace(shader_input);
                     assert!(old.is_none());
                 }
+                InstanceFeatureShaderInput::ParallaxMappingPrepassMaterial(shader_input) => {
+                    let old = parallax_mapping_feature_shader_input.replace(shader_input);
+                    assert!(old.is_none());
+                }
                 #[cfg(test)]
                 InstanceFeatureShaderInput::None => {}
             }
@@ -922,18 +938,19 @@ impl ShaderGenerator {
             fixed_color_feature_shader_input,
             blinn_phong_feature_shader_input,
             microfacet_feature_shader_input,
+            parallax_mapping_feature_shader_input,
             material_shader_input,
         ) {
-            (None, None, None, None) => None,
-            (None, None, None, Some(MaterialShaderInput::GlobalAmbientColor(input))) => {
-                Some(MaterialShaderGenerator::GlobalAmbientColor(
-                    GlobalAmbientColorShaderGenerator::new(input),
+            (None, None, None, None, None) => None,
+            (None, None, None, None, Some(MaterialShaderInput::VertexColor)) => {
+                Some(MaterialShaderGenerator::VertexColor)
+            }
+            (Some(feature_input), None, None, None, Some(MaterialShaderInput::Fixed(None))) => {
+                Some(MaterialShaderGenerator::FixedColor(
+                    FixedColorShaderGenerator::new(feature_input),
                 ))
             }
-            (Some(feature_input), None, None, Some(MaterialShaderInput::Fixed(None))) => Some(
-                MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input)),
-            ),
-            (None, None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
+            (None, None, None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
                 Some(MaterialShaderGenerator::FixedTexture(
                     FixedTextureShaderGenerator::new(texture_input),
                 ))
@@ -941,6 +958,7 @@ impl ShaderGenerator {
             (
                 None,
                 Some(feature_input),
+                None,
                 None,
                 Some(MaterialShaderInput::BlinnPhong(texture_input)),
             ) => Some(MaterialShaderGenerator::BlinnPhong(
@@ -950,13 +968,27 @@ impl ShaderGenerator {
                 None,
                 None,
                 Some(feature_input),
+                None,
                 Some(MaterialShaderInput::Microfacet((model, texture_input))),
             ) => Some(MaterialShaderGenerator::Microfacet(
                 MicrofacetShaderGenerator::new(model, feature_input, texture_input),
             )),
-            (None, None, None, Some(MaterialShaderInput::VertexColor)) => {
-                Some(MaterialShaderGenerator::VertexColor)
-            }
+            (
+                None,
+                None,
+                None,
+                parallax_mapping_feature_input,
+                Some(MaterialShaderInput::Prepass((
+                    global_ambient_color_input,
+                    bump_mapping_input,
+                ))),
+            ) => Some(MaterialShaderGenerator::Prepass(
+                PrepassShaderGenerator::new(
+                    global_ambient_color_input,
+                    bump_mapping_input.as_ref(),
+                    parallax_mapping_feature_input,
+                ),
+            )),
             input => {
                 return Err(anyhow!(
                     "Tried to build shader with invalid material: {:?}",
@@ -1205,17 +1237,17 @@ impl ShaderGenerator {
         let input_tangent_to_model_space_quaternion_expr = if vertex_attribute_requirements
             .contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
         {
-                Some(Self::add_vertex_attribute_input_argument::<
-                    VertexTangentSpaceQuaternion<fre>,
-                >(
-                    vertex_function,
-                    mesh_shader_input,
-                    new_name("tangentToModelSpaceRotationQuaternion"),
-                    vec4_type,
-                )?)
-            } else {
-                None
-            };
+            Some(Self::add_vertex_attribute_input_argument::<
+                VertexTangentSpaceQuaternion<fre>,
+            >(
+                vertex_function,
+                mesh_shader_input,
+                new_name("tangentToModelSpaceRotationQuaternion"),
+                vec4_type,
+            )?)
+        } else {
+            None
+        };
 
         let position_expr = source_code_lib.generate_function_call(
             module,
@@ -1840,7 +1872,7 @@ impl MaterialShaderInput {
     /// Whether the material requires light sources.
     pub fn requires_lights(&self) -> bool {
         match self {
-            Self::GlobalAmbientColor(_) | Self::VertexColor | Self::Fixed(_) => false,
+            Self::VertexColor | Self::Fixed(_) | Self::Prepass(_) => false,
             Self::BlinnPhong(_) | Self::Microfacet(_) => true,
         }
     }
@@ -1863,15 +1895,34 @@ impl<'a> MaterialShaderGenerator<'a> {
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> MaterialVertexOutputFieldIndices {
         match self {
-            Self::FixedColor(builder) => MaterialVertexOutputFieldIndices::FixedColor(
-                builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
-            ),
-            Self::BlinnPhong(builder) => MaterialVertexOutputFieldIndices::BlinnPhong(
-                builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
-            ),
-            Self::Microfacet(builder) => MaterialVertexOutputFieldIndices::Microfacet(
-                builder.generate_vertex_code(module, vertex_function, vertex_output_struct_builder),
-            ),
+            Self::FixedColor(generator) => {
+                MaterialVertexOutputFieldIndices::FixedColor(generator.generate_vertex_code(
+                    module,
+                    vertex_function,
+                    vertex_output_struct_builder,
+                ))
+            }
+            Self::BlinnPhong(generator) => {
+                MaterialVertexOutputFieldIndices::BlinnPhong(generator.generate_vertex_code(
+                    module,
+                    vertex_function,
+                    vertex_output_struct_builder,
+                ))
+            }
+            Self::Microfacet(generator) => {
+                MaterialVertexOutputFieldIndices::Microfacet(generator.generate_vertex_code(
+                    module,
+                    vertex_function,
+                    vertex_output_struct_builder,
+                ))
+            }
+            Self::Prepass(generator) => {
+                MaterialVertexOutputFieldIndices::Prepass(generator.generate_vertex_code(
+                    module,
+                    vertex_function,
+                    vertex_output_struct_builder,
+                ))
+            }
             _ => MaterialVertexOutputFieldIndices::None,
         }
     }
@@ -1895,6 +1946,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
@@ -1902,9 +1954,6 @@ impl<'a> MaterialShaderGenerator<'a> {
         light_shader_generator: Option<&LightShaderGenerator>,
     ) {
         match (self, material_input_field_indices) {
-            (Self::GlobalAmbientColor(generator), MaterialVertexOutputFieldIndices::None) => {
-                generator.generate_fragment_code(module, fragment_function, bind_group_idx);
-            }
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
                 VertexColorShaderGenerator::generate_fragment_code(
                     module,
@@ -1939,6 +1988,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                 fragment_function,
                 bind_group_idx,
                 input_render_attachment_quantities,
+                push_constant_fragment_expressions,
                 fragment_input_struct,
                 mesh_input_field_indices,
                 light_input_field_indices,
@@ -1954,12 +2004,27 @@ impl<'a> MaterialShaderGenerator<'a> {
                 fragment_function,
                 bind_group_idx,
                 input_render_attachment_quantities,
+                push_constant_fragment_expressions,
                 fragment_input_struct,
                 mesh_input_field_indices,
                 light_input_field_indices,
                 material_input_field_indices,
                 light_shader_generator,
             ),
+            (
+                Self::Prepass(generator),
+                MaterialVertexOutputFieldIndices::Prepass(material_input_field_indices),
+            ) => {
+                generator.generate_fragment_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    bind_group_idx,
+                    fragment_input_struct,
+                    mesh_input_field_indices,
+                    material_input_field_indices,
+                );
+            }
             _ => panic!("Mismatched material shader builder and output field indices type"),
         }
     }
@@ -2220,7 +2285,7 @@ impl LightShaderGenerator {
             push_constant_expressions
                 .light_idx
                 .expect("Missing light index push constant"),
-            )
+        )
     }
 
     fn generate_single_light_ptr_expr(
@@ -3512,9 +3577,9 @@ impl SampledTexture {
         sampling_expr
     }
 
-    /// Generates and returns an expression sampling the texture at
-    /// the texture coordinates specified by the given expression,
-    /// and extracting the RGB values of the sampled RGBA color.
+    /// Generates and returns an expression sampling the texture at the texture
+    /// coordinates specified by the given expression, and extracting the RGB
+    /// values of the sampled RGBA color.
     pub fn generate_rgb_sampling_expr(
         &self,
         function: &mut Function,
@@ -3525,6 +3590,22 @@ impl SampledTexture {
 
         emit_in_func(function, |function| {
             include_expr_in_func(function, swizzle_xyz_expr(sampling_expr))
+        })
+    }
+
+    /// Generates and returns an expression sampling the texture at the texture
+    /// coordinates specified by the given expression, and extracting the RG
+    /// values of the sampled RGBA color.
+    pub fn generate_rg_sampling_expr(
+        &self,
+        function: &mut Function,
+        texture_coord_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let sampling_expr =
+            self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
+
+        emit_in_func(function, |function| {
+            include_expr_in_func(function, swizzle_xy_expr(sampling_expr))
         })
     }
 
@@ -3804,147 +3885,6 @@ impl SampledTexture {
                 texture_coord_expr,
                 depth_reference_expr,
             ],
-        )
-    }
-}
-
-pub fn generate_fragment_normal_vector_and_texture_coord_expr(
-    module: &mut Module,
-    source_code_lib: &mut SourceCode,
-    fragment_function: &mut Function,
-    fragment_input_struct: &InputStruct,
-    mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    normal_map_texture_and_sampler_bindings: Option<(u32, u32)>,
-    height_map_texture_and_sampler_bindings: Option<(u32, u32)>,
-    parallax_displacement_scale_idx: usize,
-    bind_group: u32,
-    view_dir_expr: Handle<Expression>,
-    texture_coord_expr: Option<Handle<Expression>>,
-) -> (Handle<Expression>, Option<Handle<Expression>>) {
-    if let Some((height_map_texture_binding, height_map_sampler_binding)) =
-        height_map_texture_and_sampler_bindings
-    {
-        let height_map_texture = SampledTexture::declare(
-            &mut module.types,
-            &mut module.global_variables,
-            TextureType::Image,
-            "heightMap",
-            bind_group,
-            height_map_texture_binding,
-            Some(height_map_sampler_binding),
-            None,
-        );
-
-        let (height_map_texture_expr, height_map_sampler_expr) =
-            height_map_texture.generate_texture_and_sampler_expressions(fragment_function, false);
-
-        let parallax_displacement_scale_expr =
-            fragment_input_struct.get_field_expr(parallax_displacement_scale_idx);
-
-        let unnormalized_tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .tangent_space_quaternion
-                .expect("Missing tangent space quaternion for parallax mapping"),
-        );
-
-        let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "normalizeQuaternion",
-            vec![unnormalized_tangent_space_quaternion_expr],
-        );
-
-        let parallax_mapped_texture_coord_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "computeParallaxMappedTextureCoordinates",
-            vec![
-                height_map_texture_expr,
-                height_map_sampler_expr,
-                parallax_displacement_scale_expr,
-                texture_coord_expr.unwrap(),
-                tangent_space_quaternion_expr,
-                view_dir_expr,
-            ],
-        );
-
-        let tangent_space_normal_vector_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "obtainNormalFromHeightMap",
-            vec![
-                height_map_texture_expr,
-                height_map_sampler_expr,
-                texture_coord_expr.unwrap(),
-            ],
-        );
-
-        (
-            source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                "tranformVectorFromTangentSpace",
-                vec![
-                    tangent_space_quaternion_expr,
-                    tangent_space_normal_vector_expr,
-                ],
-            ),
-            Some(parallax_mapped_texture_coord_expr),
-        )
-    } else if let Some((normal_map_texture_binding, normal_map_sampler_binding)) =
-        normal_map_texture_and_sampler_bindings
-    {
-        let normal_map_texture = SampledTexture::declare(
-            &mut module.types,
-            &mut module.global_variables,
-            TextureType::Image,
-            "normalMap",
-            bind_group,
-            normal_map_texture_binding,
-            Some(normal_map_sampler_binding),
-            None,
-        );
-
-        let normal_map_color_expr = normal_map_texture
-            .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
-
-        let tangent_space_normal_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "convertNormalMapColorToNormalVector",
-            vec![normal_map_color_expr],
-        );
-
-        let unnormalized_tangent_space_quaternion_expr = fragment_input_struct.get_field_expr(
-            mesh_input_field_indices
-                .tangent_space_quaternion
-                .expect("Missing tangent space quaternion for normal mapping"),
-        );
-
-        let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "normalizeQuaternion",
-            vec![unnormalized_tangent_space_quaternion_expr],
-        );
-
-        (
-            source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                "tranformVectorFromTangentSpace",
-                vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
-            ),
-            texture_coord_expr,
-        )
-    } else {
-        (
-            fragment_input_struct.get_field_expr(
-                mesh_input_field_indices
-                    .normal_vector
-                    .expect("Missing normal vector for shading"),
-            ),
-            None,
         )
     }
 }
@@ -4700,6 +4640,19 @@ fn float32_constant(value: f64) -> Constant {
     }
 }
 
+fn swizzle_xy_expr(expr: Handle<Expression>) -> Expression {
+    Expression::Swizzle {
+        size: VectorSize::Bi,
+        vector: expr,
+        pattern: [
+            SwizzleComponent::X,
+            SwizzleComponent::Y,
+            SwizzleComponent::X,
+            SwizzleComponent::X,
+        ],
+    }
+}
+
 fn swizzle_xyz_expr(expr: Handle<Expression>) -> Expression {
     Expression::Swizzle {
         size: VectorSize::Tri,
@@ -4819,9 +4772,7 @@ fn append_unity_component_to_vec3(
 mod test {
     #![allow(clippy::dbg_macro)]
 
-    use crate::scene::{
-        FixedColorMaterial, FixedTextureMaterial, GlobalAmbientColorMaterial, VertexColorMaterial,
-    };
+    use crate::scene::{FixedColorMaterial, FixedTextureMaterial, VertexColorMaterial};
 
     use super::*;
     use naga::{
@@ -4857,11 +4808,6 @@ mod test {
         MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings: (0, 1),
         }));
-
-    const GLOBAL_AMBIENT_COLOR_INPUT: MaterialShaderInput =
-        MaterialShaderInput::GlobalAmbientColor(GlobalAmbientColorShaderInput {
-            uniform_binding: 0,
-        });
 
     const OMNIDIRECTIONAL_LIGHT_INPUT: LightShaderInput =
         LightShaderInput::OmnidirectionalLight(OmnidirectionalLightShaderInput {
@@ -4947,6 +4893,7 @@ mod test {
             &[],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap();
     }
@@ -4961,6 +4908,7 @@ mod test {
             &[],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap();
     }
@@ -4975,6 +4923,7 @@ mod test {
             &[],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap();
     }
@@ -4988,6 +4937,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5009,6 +4959,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5030,27 +4981,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_global_ambient_color_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[&MODEL_VIEW_TRANSFORM_INPUT],
-            Some(&GLOBAL_AMBIENT_COLOR_INPUT),
-            GlobalAmbientColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5079,7 +5010,8 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&MaterialShaderInput::VertexColor),
-            VertexColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            VertexColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5100,7 +5032,8 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialShaderInput::Fixed(None)),
-            FixedColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            FixedColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5129,7 +5062,8 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
-            FixedTextureMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS,
+            FixedTextureMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5162,18 +5096,16 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5206,18 +5138,16 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5250,18 +5180,16 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5294,18 +5222,16 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5338,18 +5264,16 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5382,18 +5306,16 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5427,18 +5349,16 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5472,18 +5392,16 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5516,18 +5434,16 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: Some((2, 3)),
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5560,18 +5476,16 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     shininess_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
                 BlinnPhongTextureShaderInput {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: Some((2, 3)),
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5605,7 +5519,6 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5614,11 +5527,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5652,7 +5564,6 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5661,11 +5572,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5699,7 +5609,6 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5708,11 +5617,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5746,7 +5654,6 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5755,11 +5662,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5792,7 +5698,6 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5801,11 +5706,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5838,7 +5742,6 @@ mod test {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5847,11 +5750,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5884,7 +5786,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5893,11 +5794,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5930,7 +5830,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5939,11 +5838,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: None,
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5977,7 +5875,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5986,11 +5883,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6024,7 +5920,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6033,11 +5928,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6071,7 +5965,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6080,11 +5973,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6118,7 +6010,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 2,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6127,11 +6018,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: None,
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6165,7 +6055,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6174,11 +6063,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: Some((2, 3)),
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6212,7 +6100,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6221,11 +6108,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: Some((2, 3)),
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6259,7 +6145,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6268,11 +6153,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: Some((2, 3)),
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6306,7 +6190,6 @@ mod test {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 1,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6315,195 +6198,10 @@ mod test {
                     diffuse_texture_and_sampler_bindings: Some((0, 1)),
                     specular_texture_and_sampler_bindings: Some((2, 3)),
                     roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: None,
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_uniform_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_with_normal_mapping_works(
-    ) {
-        let module = ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    Some(MESH_VERTEX_BINDING_START + 2),
-                    Some(MESH_VERTEX_BINDING_START + 3),
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
-                }),
-            ],
-            Some(&MaterialShaderInput::BlinnPhong(
-                BlinnPhongTextureShaderInput {
-                    diffuse_texture_and_sampler_bindings: None,
-                    specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: Some((0, 1)),
-                    height_map_texture_and_sampler_bindings: None,
-                },
-            )),
-            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_uniform_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_with_parallax_mapping_works(
-    ) {
-        let module = ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    Some(MESH_VERTEX_BINDING_START + 2),
-                    Some(MESH_VERTEX_BINDING_START + 3),
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
-                }),
-            ],
-            Some(&MaterialShaderInput::BlinnPhong(
-                BlinnPhongTextureShaderInput {
-                    diffuse_texture_and_sampler_bindings: None,
-                    specular_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: Some((0, 1)),
-                },
-            )),
-            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_and_normal_mapping_works(
-    ) {
-        let module = ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    Some(MESH_VERTEX_BINDING_START + 2),
-                    Some(MESH_VERTEX_BINDING_START + 3),
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
-                }),
-            ],
-            Some(&MaterialShaderInput::Microfacet((
-                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-                MicrofacetTextureShaderInput {
-                    diffuse_texture_and_sampler_bindings: None,
-                    specular_texture_and_sampler_bindings: None,
-                    roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: Some((0, 1)),
-                    height_map_texture_and_sampler_bindings: None,
-                },
-            ))),
-            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_and_parallax_mapping_works(
-    ) {
-        let module = ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    Some(MESH_VERTEX_BINDING_START + 2),
-                    Some(MESH_VERTEX_BINDING_START + 3),
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-                    parallax_displacement_scale_location: MATERIAL_VERTEX_BINDING_START + 3,
-                }),
-            ],
-            Some(&MaterialShaderInput::Microfacet((
-                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-                MicrofacetTextureShaderInput {
-                    diffuse_texture_and_sampler_bindings: None,
-                    specular_texture_and_sampler_bindings: None,
-                    roughness_texture_and_sampler_bindings: None,
-                    normal_map_texture_and_sampler_bindings: None,
-                    height_map_texture_and_sampler_bindings: Some((0, 1)),
-                },
-            ))),
-            VertexAttributeSet::FOR_BUMP_MAPPED_SHADING,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
