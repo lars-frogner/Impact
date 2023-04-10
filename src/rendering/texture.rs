@@ -1,13 +1,15 @@
 //! Textures.
 
-mod depth;
+mod attachment;
 mod image;
 mod shadow_map;
 
-pub use self::image::{
-    ColorSpace, ImageTexture, ImageTextureConfig, MultisampledRenderTargetTexture,
+pub use self::image::{ColorSpace, ImageTexture, ImageTextureConfig};
+pub use attachment::{
+    DepthTexture, MultisampledSurfaceTexture, RenderAttachmentQuantity,
+    RenderAttachmentQuantitySet, RenderAttachmentTextureManager, RENDER_ATTACHMENT_BINDINGS,
+    RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
 };
-pub use depth::DepthTexture;
 pub use shadow_map::{
     CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,
 };

@@ -4,7 +4,8 @@ use crate::{
     geometry::VertexAttributeSet,
     rendering::{
         buffer::{self, RenderBuffer},
-        Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput, TextureID,
+        Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput,
+        RenderAttachmentQuantitySet, TextureID,
     },
     scene::{FixedMaterialResources, MaterialPropertyTextureSet, MaterialSpecification},
 };
@@ -14,7 +15,8 @@ use std::borrow::Cow;
 /// Manager of render resources for a material type.
 #[derive(Debug)]
 pub struct MaterialRenderResourceManager {
-    vertex_attribute_requirements: VertexAttributeSet,
+    input_render_attachment_quantities: RenderAttachmentQuantitySet,
+    output_render_attachment_quantities: RenderAttachmentQuantitySet,
     fixed_resources: Option<FixedMaterialRenderResourceManager>,
     shader_input: MaterialShaderInput,
 }
@@ -54,16 +56,27 @@ impl MaterialRenderResourceManager {
             });
 
         Self {
-            vertex_attribute_requirements: material_specification.vertex_attribute_requirements(),
+            input_render_attachment_quantities: material_specification
+                .input_render_attachment_quantities(),
+            output_render_attachment_quantities: material_specification
+                .output_render_attachment_quantities(),
             fixed_resources,
             shader_input: material_specification.shader_input().clone(),
         }
     }
 
-    /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
-    /// for rendering the material.
-    pub fn vertex_attribute_requirements(&self) -> VertexAttributeSet {
-        self.vertex_attribute_requirements
+    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
+    /// render attachment textures are required as input for rendering with the
+    /// material.
+    pub fn input_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
+        self.input_render_attachment_quantities
+    }
+
+    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
+    /// render attachment textures are written to when rendering with the
+    /// material.
+    pub fn output_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
+        self.output_render_attachment_quantities
     }
 
     /// Returns a reference to the [`FixedMaterialRenderResourceManager`] for
