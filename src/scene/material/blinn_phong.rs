@@ -82,7 +82,6 @@ pub struct TexturedColorBlinnPhongMaterialFeature {
 pub fn add_blinn_phong_material_component_for_entity(
     material_library: &RwLock<MaterialLibrary>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
-    ambient_color: RGBColor,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {
@@ -103,7 +102,6 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                ambient_color,
                 Some(diffuse_color),
                 specular_color,
                 None,
@@ -139,7 +137,6 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                ambient_color,
                 diffuse_color,
                 Some(specular_color),
                 diffuse_texture,
@@ -175,7 +172,6 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                ambient_color,
                 None,
                 specular_color,
                 Some(diffuse_texture),
@@ -211,7 +207,6 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                ambient_color,
                 diffuse_color,
                 None,
                 diffuse_texture,
@@ -234,7 +229,6 @@ pub fn add_blinn_phong_material_component_for_entity(
 fn execute_material_setup(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
-    ambient_color: RGBColor,
     diffuse_color: Option<&DiffuseColorComp>,
     specular_color: Option<&SpecularColorComp>,
     diffuse_texture: Option<&DiffuseTextureComp>,
@@ -339,10 +333,14 @@ fn execute_material_setup(
         texture_ids.push(specular_texture.0);
     }
 
-    let (prepass_material_handle, input_render_attachment_quantities) = create_prepass_material(
+    let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
+
+    let prepass_material_handle = create_prepass_material(
         instance_feature_manager,
         material_library,
-        ambient_color,
+        &mut input_render_attachment_quantities,
+        diffuse_color,
+        diffuse_texture,
         normal_map,
         parallax_map,
     );

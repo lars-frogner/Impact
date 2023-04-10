@@ -423,13 +423,6 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             }
         };
 
-        let view_dir_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "computeCameraSpaceViewDirection",
-            vec![position_expr],
-        );
-
         let light_color_expr = match (diffuse_color_expr, specular_color_expr) {
             (Some(diffuse_color_expr), None) => source_code_lib.generate_function_call(
                 module,
@@ -442,21 +435,37 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     light_radiance_expr,
                 ],
             ),
-            (None, Some(specular_color_expr)) => source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                "computeSpecularBlinnPhongColor",
-                vec![
-                    view_dir_expr,
-                    normal_vector_expr,
-                    specular_color_expr,
-                    shininess_expr,
-                    light_dir_expr,
-                    light_radiance_expr,
-                ],
-            ),
-            (Some(diffuse_color_expr), Some(specular_color_expr)) => source_code_lib
-                .generate_function_call(
+            (None, Some(specular_color_expr)) => {
+                let view_dir_expr = source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeCameraSpaceViewDirection",
+                    vec![position_expr],
+                );
+
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeSpecularBlinnPhongColor",
+                    vec![
+                        view_dir_expr,
+                        normal_vector_expr,
+                        specular_color_expr,
+                        shininess_expr,
+                        light_dir_expr,
+                        light_radiance_expr,
+                    ],
+                )
+            }
+            (Some(diffuse_color_expr), Some(specular_color_expr)) => {
+                let view_dir_expr = source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeCameraSpaceViewDirection",
+                    vec![position_expr],
+                );
+
+                source_code_lib.generate_function_call(
                     module,
                     fragment_function,
                     "computeBlinnPhongColor",
@@ -469,7 +478,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                         light_dir_expr,
                         light_radiance_expr,
                     ],
-                ),
+                )
+            }
             (None, None) => panic!("No diffuse or specular color for Blinn-Phong shader"),
         };
 

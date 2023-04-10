@@ -53,6 +53,7 @@ impl ShaderManager {
         material_shader_input: Option<&MaterialShaderInput>,
         vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Result<&Shader> {
         let shader_id = ShaderID::from_input(
             camera_shader_input,
@@ -62,6 +63,7 @@ impl ShaderManager {
             material_shader_input,
             vertex_attribute_requirements,
             input_render_attachment_quantities,
+            output_render_attachment_quantities,
         );
 
         match self.shaders.entry(shader_id) {
@@ -75,6 +77,7 @@ impl ShaderManager {
                     material_shader_input,
                     vertex_attribute_requirements,
                     input_render_attachment_quantities,
+                    output_render_attachment_quantities,
                 )?;
                 Ok(entry.insert(Shader::from_naga_module(
                     core_system,
@@ -102,6 +105,7 @@ impl ShaderID {
         material_shader_input: Option<&MaterialShaderInput>,
         vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Self {
         let mut hasher = DefaultHasher::new();
         camera_shader_input.hash(&mut hasher);
@@ -111,6 +115,7 @@ impl ShaderID {
         material_shader_input.hash(&mut hasher);
         vertex_attribute_requirements.hash(&mut hasher);
         input_render_attachment_quantities.hash(&mut hasher);
+        output_render_attachment_quantities.hash(&mut hasher);
         Self(hasher.finish())
     }
 }

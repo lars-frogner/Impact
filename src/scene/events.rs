@@ -156,7 +156,6 @@ impl Scene {
         add_blinn_phong_material_component_for_entity(
             self.material_library(),
             self.instance_feature_manager(),
-            self.config.global_ambient_color,
             components,
             desynchronized,
         );
@@ -164,7 +163,6 @@ impl Scene {
         add_microfacet_material_component_for_entity(
             self.material_library(),
             self.instance_feature_manager(),
-            self.config.global_ambient_color,
             components,
             desynchronized,
         );

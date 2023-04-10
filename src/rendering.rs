@@ -26,12 +26,12 @@ pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     AmbientLightShaderInput, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
-    BumpMappingShaderInput, CameraShaderInput, DiffuseMicrofacetShadingModel,
-    FixedColorFeatureShaderInput, FixedTextureShaderInput, GlobalAmbientColorShaderInput,
-    InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
-    MicrofacetFeatureShaderInput, MicrofacetShadingModel, MicrofacetTextureShaderInput,
-    ModelViewTransformShaderInput, NormalMappingShaderInput, OmnidirectionalLightShaderInput,
-    ParallaxMappingFeatureShaderInput, ParallaxMappingShaderInput, Shader, ShaderGenerator,
+    BumpMappingTextureShaderInput, CameraShaderInput, DiffuseMicrofacetShadingModel,
+    FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
+    LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetFeatureShaderInput,
+    MicrofacetShadingModel, MicrofacetTextureShaderInput, ModelViewTransformShaderInput,
+    NormalMappingShaderInput, OmnidirectionalLightShaderInput, ParallaxMappingShaderInput,
+    PrepassFeatureShaderInput, PrepassTextureShaderInput, Shader, ShaderGenerator,
     SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};

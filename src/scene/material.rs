@@ -23,7 +23,10 @@ pub use microfacet::{
     UniformColorMicrofacetMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
     UniformSpecularMicrofacetMaterialFeature,
 };
-pub use prepass::{create_prepass_material, ParallaxMappingPrepassMaterialFeature};
+pub use prepass::{
+    create_prepass_material, ParallaxMappingPrepassMaterialFeature,
+    UniformDiffuseParallaxMappingPrepassMaterialFeature, UniformDiffusePrepassMaterialFeature,
+};
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{
