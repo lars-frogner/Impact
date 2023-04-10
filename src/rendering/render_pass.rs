@@ -264,54 +264,104 @@ impl RenderPassManager {
             // Avoid rendering the model if there are currently no instances
             let no_visible_instances = transform_buffer_manager.initial_feature_range().is_empty();
 
-            let material_requires_lights = render_resources
+            let material_shader_input = render_resources
                 .get_material_resource_manager(model_id.material_handle().material_id())
                 .expect("Missing resource manager for material after synchronization")
-                .shader_input()
-                .requires_lights();
+                .shader_input();
 
-            if material_requires_lights {
+            if material_shader_input.requires_lights() {
                 match self.light_shaded_model_index_mapper.try_push_key(model_id) {
                     // The model has no existing shading passes
                     Ok(_) => {
-                        // Create a shading prepass for the new model
-                        self.light_shaded_model_shading_prepasses
-                            .push(RenderPassRecorder::new(
-                                core_system,
-                                config,
-                                render_resources,
-                                render_attachment_texture_manager,
-                                shader_manager,
-                                RenderPassSpecification::shading_prepass(model_id),
-                                no_visible_instances,
-                            )?);
+                        if let Some(prepass_material_handle) = model_id.prepass_material_handle() {
+                            if ambient_light_ids.is_empty() {
+                                let prepass_material_shader_input = render_resources
+                                    .get_material_resource_manager(
+                                        prepass_material_handle.material_id(),
+                                    )
+                                    .expect("Missing resource manager for material after synchronization")
+                                    .shader_input();
 
-                        for &light_id in ambient_light_ids {
-                            let passes = self
-                                .light_shaded_model_shading_passes
-                                .entry(light_id)
-                                .or_default();
+                                let specification = match prepass_material_shader_input {
+                                    MaterialShaderInput::Prepass(shader_input)
+                                        if shader_input.bump_mapping_input.is_some() =>
+                                    {
+                                        // If there are no ambient lights but
+                                        // the new model has a prepass material
+                                        // with bump mapping, we create a
+                                        // shading prepass with no light
+                                        RenderPassSpecification::shading_prepass(None, model_id)
+                                    }
+                                    _ => {
+                                        // If there are no ambient lights and
+                                        // the new model does not use bump
+                                        // mapping, we only need a pure depth
+                                        // prepass
+                                        RenderPassSpecification::depth_prepass(model_id)
+                                    }
+                                };
 
-                            let light = LightInfo {
-                                light_type: LightType::AmbientLight,
-                                light_id,
-                            };
+                                self.light_shaded_model_shading_prepasses.push(
+                                    RenderPassRecorder::new(
+                                        core_system,
+                                        config,
+                                        render_resources,
+                                        render_attachment_texture_manager,
+                                        shader_manager,
+                                        specification,
+                                        no_visible_instances,
+                                    )?,
+                                );
+                            } else {
+                                assert_eq!(
+                                    ambient_light_ids.len(),
+                                    1,
+                                    "Multiple ambient lights not supported"
+                                );
 
-                            // Create an ambient light shading pass for the new
-                            // model
-                            passes.shading_passes.push(RenderPassRecorder::new(
-                                core_system,
-                                config,
-                                render_resources,
-                                render_attachment_texture_manager,
-                                shader_manager,
-                                RenderPassSpecification::model_shading_pass_without_shadow_map(
-                                    Some(light),
-                                    model_id,
-                                    true,
-                                ),
-                                no_visible_instances,
-                            )?);
+                                for &light_id in ambient_light_ids {
+                                    let light = LightInfo {
+                                        light_type: LightType::AmbientLight,
+                                        light_id,
+                                    };
+
+                                    // If there are ambient lights and the new
+                                    // model has a prepass material, we create a
+                                    // shading prepass with each ambient light.
+                                    // TODO: If the prepass material is
+                                    // unaffected by ambient light, only a
+                                    // single prepass without a light is
+                                    // actually needed.
+                                    self.light_shaded_model_shading_prepasses.push(
+                                        RenderPassRecorder::new(
+                                            core_system,
+                                            config,
+                                            render_resources,
+                                            render_attachment_texture_manager,
+                                            shader_manager,
+                                            RenderPassSpecification::shading_prepass(
+                                                Some(light),
+                                                model_id,
+                                            ),
+                                            no_visible_instances,
+                                        )?,
+                                    );
+                                }
+                            }
+                        } else {
+                            // If the new model has no prepass material, we
+                            // create a pure depth prepass
+                            self.light_shaded_model_shading_prepasses.push(
+                                RenderPassRecorder::new(
+                                    core_system,
+                                    config,
+                                    render_resources,
+                                    render_attachment_texture_manager,
+                                    shader_manager,
+                                    RenderPassSpecification::depth_prepass(model_id),
+                                    no_visible_instances,
+                                )?,
+                            );
                         }
 
                         for &light_id in omnidirectional_light_ids {
@@ -573,7 +623,7 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::model_shading_pass_without_shadow_map(
-                                    None, model_id, false,
+                                    None, model_id,
                                 ),
                                 no_visible_instances,
                             )?);
@@ -602,7 +652,7 @@ impl RenderPassSpecification {
 
     /// Creates the specification for the render pass that will clear the
     /// rendering surface with the given color and clear the depth map.
-    pub fn surface_clearing_pass(clear_color: wgpu::Color) -> Self {
+    fn surface_clearing_pass(clear_color: wgpu::Color) -> Self {
         Self {
             clear_color: Some(clear_color),
             model_id: None,
@@ -616,7 +666,7 @@ impl RenderPassSpecification {
 
     /// Creates the specification for the render pass that will update the depth
     /// map with the depths of the model with the given ID.
-    pub fn depth_prepass(model_id: ModelID) -> Self {
+    fn depth_prepass(model_id: ModelID) -> Self {
         Self {
             clear_color: None,
             model_id: Some(model_id),
@@ -630,25 +680,29 @@ impl RenderPassSpecification {
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID with its prepass material.
-    pub fn shading_prepass(model_id: ModelID) -> Self {
+    fn shading_prepass(light: Option<LightInfo>, model_id: ModelID) -> Self {
+        let label = if let Some(light) = light {
+            format!(
+                "Shading prepass for model {} with light {} ({:?})",
+                model_id, light.light_id, light.light_type
+            )
+        } else {
+            format!("Shading prepass for model {}", model_id)
+        };
         Self {
             clear_color: None,
             model_id: Some(model_id),
             use_prepass_material: true,
             depth_map_usage: DepthMapUsage::use_readwrite(),
-            light: None,
+            light,
             shadow_map_usage: ShadowMapUsage::None,
-            label: format!("Shading prepass for model {}", model_id),
+            label,
         }
     }
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID without making use of a shadow map.
-    fn model_shading_pass_without_shadow_map(
-        light: Option<LightInfo>,
-        model_id: ModelID,
-        update_depthmap: bool,
-    ) -> Self {
+    fn model_shading_pass_without_shadow_map(light: Option<LightInfo>, model_id: ModelID) -> Self {
         let label = if let Some(light) = light {
             format!(
                 "Shading of model {} for light {} ({:?}) without shadow map",
@@ -662,11 +716,7 @@ impl RenderPassSpecification {
             clear_color: None,
             model_id: Some(model_id),
             use_prepass_material: false,
-            depth_map_usage: if update_depthmap {
-                DepthMapUsage::use_readwrite()
-            } else {
-                DepthMapUsage::use_readonly()
-            },
+            depth_map_usage: DepthMapUsage::use_readonly(),
             light,
             shadow_map_usage: ShadowMapUsage::None,
             label,
@@ -1149,7 +1199,7 @@ impl RenderPassSpecification {
     }
 
     fn determine_color_blend_state(&self) -> wgpu::BlendState {
-        if self.light.is_some() {
+        if self.light.is_some() && !self.use_prepass_material {
             // Since we determine contributions from each light in
             // separate render passes, we need to add up the color
             // contributions. We simply ignore alpha.
@@ -1178,11 +1228,13 @@ impl RenderPassSpecification {
         } else {
             let mut color_target_states = Vec::with_capacity(3);
 
-            color_target_states.push(Some(wgpu::ColorTargetState {
-                format: core_system.surface_config().format,
-                blend: Some(self.determine_color_blend_state()),
-                write_mask: wgpu::ColorWrites::COLOR,
-            }));
+            if !(self.use_prepass_material && self.light.is_none()) {
+                color_target_states.push(Some(wgpu::ColorTargetState {
+                    format: core_system.surface_config().format,
+                    blend: Some(self.determine_color_blend_state()),
+                    write_mask: wgpu::ColorWrites::COLOR,
+                }));
+            }
 
             if !output_render_attachment_quantities.is_empty() {
                 color_target_states.extend(
@@ -1295,20 +1347,22 @@ impl RenderPassSpecification {
                     )
                 };
 
-            let (color_attachment_texture_view, color_attachment_resolve_target) =
-                render_attachment_texture_manager
-                    .attachment_surface_view_and_resolve_target(surface_texture_view);
-
             let mut color_attachments = Vec::with_capacity(3);
 
-            color_attachments.push(Some(wgpu::RenderPassColorAttachment {
-                view: color_attachment_texture_view,
-                resolve_target: color_attachment_resolve_target,
-                ops: wgpu::Operations {
-                    load: surface_load_operations,
-                    store: true,
-                },
-            }));
+            if !(self.use_prepass_material && self.light.is_none()) {
+                let (color_attachment_texture_view, color_attachment_resolve_target) =
+                    render_attachment_texture_manager
+                        .attachment_surface_view_and_resolve_target(surface_texture_view);
+
+                color_attachments.push(Some(wgpu::RenderPassColorAttachment {
+                    view: color_attachment_texture_view,
+                    resolve_target: color_attachment_resolve_target,
+                    ops: wgpu::Operations {
+                        load: surface_load_operations,
+                        store: true,
+                    },
+                }));
+            }
 
             if !render_attachment_quantities.is_empty() {
                 color_attachments.extend(
@@ -1424,6 +1478,7 @@ impl RenderPassRecorder {
                 bind_group_shader_input.material,
                 vertex_attribute_requirements,
                 input_render_attachment_quantities,
+                output_render_attachment_quantities,
             )?;
 
             let pipeline_layout = Self::create_render_pipeline_layout(

@@ -18,7 +18,7 @@ use crate::{
         MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, Omnidirectional,
         ParallaxMapComp, PerspectiveCameraComp, PlanarTextureProjectionComp, PlaneMeshComp,
         RadianceComp, RoughnessComp, RoughnessTextureComp, ScalingComp, SpecularColorComp,
-        SphereMeshComp,
+        SphereMeshComp, UniformIrradianceComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -361,6 +361,10 @@ async fn init_world(window: Window) -> Result<World> {
                 AngularExtentComp(Degrees(2.0)),
             ],
         ))
+        .unwrap();
+
+    world
+        .create_entities(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.1))
         .unwrap();
 
     Ok(world)

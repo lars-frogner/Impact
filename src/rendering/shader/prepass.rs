@@ -1,36 +1,42 @@
 //! Generation of shaders executed as preparation for a main shading pass.
 
 use super::{
-    append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
-    include_named_expr_in_func, insert_in_arena, new_name, InputStruct, InputStructBuilder,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, SourceCode, TextureType,
-    F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
+    LightShaderGenerator, MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture,
+    SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE,
+    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use naga::{AddressSpace, Expression, Function, GlobalVariable, Handle, Module, ResourceBinding};
+use crate::rendering::RenderAttachmentQuantitySet;
+use naga::{Expression, Function, Handle, Module};
 
-/// Input description specifying the vertex attribute locations of parallax
-/// mapping parameters.
+/// Input description specifying the vertex attribute locations of prepass
+/// material properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ParallaxMappingFeatureShaderInput {
+pub struct PrepassFeatureShaderInput {
     /// Vertex attribute location for the instance feature representing the
-    /// displacement scale.
-    pub displacement_scale_location: u32,
+    /// diffuse color of the material.
+    pub diffuse_color_location: Option<u32>,
     /// Vertex attribute location for the instance feature representing the
-    /// change in UV texture coordinates per world space distance.
-    pub uv_per_distance_location: u32,
+    /// displacement scale for parallax mapping.
+    pub parallax_displacement_scale_location: Option<u32>,
+    /// Vertex attribute location for the instance feature representing the
+    /// change in UV texture coordinates per world space distance for parallax
+    /// mapping.
+    pub parallax_uv_per_distance_location: Option<u32>,
 }
 
-/// Input description specifying the uniform binding reqired for shading with a
-/// global ambient color.
+/// Input description specifying the bindings of textures for prepass material
+/// properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GlobalAmbientColorShaderInput {
-    /// Bind group binding of the uniform buffer holding the global ambient color.
-    pub uniform_binding: u32,
+pub struct PrepassTextureShaderInput {
+    /// Bind group bindings of the diffuse color texture and its sampler.
+    pub diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
+    pub bump_mapping_input: Option<BumpMappingTextureShaderInput>,
 }
 
 /// Input description for a material performing some form of bump mapping.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BumpMappingShaderInput {
+pub enum BumpMappingTextureShaderInput {
     NormalMapping(NormalMappingShaderInput),
     ParallaxMapping(ParallaxMappingShaderInput),
 }
@@ -52,30 +58,28 @@ pub struct ParallaxMappingShaderInput {
 /// Shader generator for a prepass material.
 #[derive(Clone, Debug)]
 pub struct PrepassShaderGenerator<'a> {
-    global_ambient_color_input: &'a GlobalAmbientColorShaderInput,
-    bump_mapping_input: Option<&'a BumpMappingShaderInput>,
-    parallax_mapping_feature_input: Option<&'a ParallaxMappingFeatureShaderInput>,
+    feature_input: Option<&'a PrepassFeatureShaderInput>,
+    texture_input: &'a PrepassTextureShaderInput,
 }
 
 /// Indices of the fields holding the various prepass properties in the
 /// vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct PrepassVertexOutputFieldIndices {
-    displacement_scale: Option<usize>,
-    uv_per_distance: Option<usize>,
+    diffuse_color: Option<usize>,
+    parallax_displacement_scale: Option<usize>,
+    parallax_uv_per_distance: Option<usize>,
 }
 
 impl<'a> PrepassShaderGenerator<'a> {
     /// Creates a new shader generator using the given input descriptions.
     pub fn new(
-        global_ambient_color_input: &'a GlobalAmbientColorShaderInput,
-        bump_mapping_input: Option<&'a BumpMappingShaderInput>,
-        parallax_mapping_feature_input: Option<&'a ParallaxMappingFeatureShaderInput>,
+        feature_input: Option<&'a PrepassFeatureShaderInput>,
+        texture_input: &'a PrepassTextureShaderInput,
     ) -> Self {
         Self {
-            global_ambient_color_input,
-            bump_mapping_input,
-            parallax_mapping_feature_input,
+            feature_input,
+            texture_input,
         }
     }
 
@@ -96,51 +100,86 @@ impl<'a> PrepassShaderGenerator<'a> {
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> PrepassVertexOutputFieldIndices {
         let mut indices = PrepassVertexOutputFieldIndices {
-            displacement_scale: None,
-            uv_per_distance: None,
+            diffuse_color: None,
+            parallax_displacement_scale: None,
+            parallax_uv_per_distance: None,
         };
 
-        if let Some(parallax_mapping_feature_input) = self.parallax_mapping_feature_input {
+        if let Some(feature_input) = self.feature_input {
             let float_type = insert_in_arena(&mut module.types, F32_TYPE);
             let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
+            let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
 
             let mut input_struct_builder =
                 InputStructBuilder::new("MaterialProperties", "material");
 
-            let input_displacement_scale_field_idx = input_struct_builder.add_field(
-                "displacementScale",
-                float_type,
-                parallax_mapping_feature_input.displacement_scale_location,
-                F32_WIDTH,
-            );
+            let input_diffuse_color_field_idx =
+                feature_input.diffuse_color_location.map(|location| {
+                    input_struct_builder.add_field(
+                        "diffuseColor",
+                        vec3_type,
+                        location,
+                        VECTOR_3_SIZE,
+                    )
+                });
 
-            let input_uv_per_distance_field_idx = input_struct_builder.add_field(
-                "uvPerDistance",
-                vec2_type,
-                parallax_mapping_feature_input.uv_per_distance_location,
-                VECTOR_2_SIZE,
-            );
+            let input_parallax_displacement_scale_field_idx = feature_input
+                .parallax_displacement_scale_location
+                .map(|location| {
+                    input_struct_builder.add_field(
+                        "parallaxDisplacementScale",
+                        float_type,
+                        location,
+                        F32_WIDTH,
+                    )
+                });
+
+            let input_parallax_uv_per_distance_field_idx = feature_input
+                .parallax_uv_per_distance_location
+                .map(|location| {
+                    input_struct_builder.add_field(
+                        "parallaxUVPerDistance",
+                        vec2_type,
+                        location,
+                        VECTOR_2_SIZE,
+                    )
+                });
 
             let input_struct =
                 input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
-            indices.displacement_scale = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "parallaxDisplacementScale",
-                    float_type,
-                    F32_WIDTH,
-                    input_struct.get_field_expr(input_displacement_scale_field_idx),
-                ),
-            );
+            if let Some(idx) = input_diffuse_color_field_idx {
+                indices.diffuse_color = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "diffuseColor",
+                        vec3_type,
+                        VECTOR_3_SIZE,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
 
-            indices.uv_per_distance = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "uvPerDistance",
-                    vec2_type,
-                    VECTOR_2_SIZE,
-                    input_struct.get_field_expr(input_uv_per_distance_field_idx),
-                ),
-            );
+            if let Some(idx) = input_parallax_displacement_scale_field_idx {
+                indices.parallax_displacement_scale = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "parallaxDisplacementScale",
+                        float_type,
+                        F32_WIDTH,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
+
+            if let Some(idx) = input_parallax_uv_per_distance_field_idx {
+                indices.parallax_uv_per_distance = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "parallaxUVPerDistance",
+                        vec2_type,
+                        VECTOR_2_SIZE,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
         }
 
         indices
@@ -159,75 +198,107 @@ impl<'a> PrepassShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &PrepassVertexOutputFieldIndices,
+        light_shader_generator: Option<&LightShaderGenerator>,
     ) {
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
-        let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let bind_group = *bind_group_idx;
-        *bind_group_idx += 1;
+        let (bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+            let bind_group = *bind_group_idx;
+            *bind_group_idx += 1;
 
-        let ambient_color_var = append_to_arena(
-            &mut module.global_variables,
-            GlobalVariable {
-                name: new_name("ambientColor"),
-                space: AddressSpace::Uniform,
-                binding: Some(ResourceBinding {
-                    group: bind_group,
-                    binding: self.global_ambient_color_input.uniform_binding,
-                }),
-                ty: vec3_type,
-                init: None,
-            },
-        );
-
-        let ambient_color_ptr_expr = include_expr_in_func(
-            fragment_function,
-            Expression::GlobalVariable(ambient_color_var),
-        );
-
-        let ambient_color_expr = emit_in_func(fragment_function, |function| {
-            include_named_expr_in_func(
-                function,
-                "ambientColor",
-                Expression::Load {
-                    pointer: ambient_color_ptr_expr,
-                },
+            (
+                bind_group,
+                Some(
+                    fragment_input_struct.get_field_expr(
+                        mesh_input_field_indices
+                            .texture_coords
+                            .expect("Missing texture coordinates for shading prepass"),
+                    ),
+                ),
             )
-        });
+        } else {
+            (*bind_group_idx, None)
+        };
 
         let (normal_vector_expr, texture_coord_expr) =
-            if let Some(bump_mapping_input) = self.bump_mapping_input {
-                let texture_coord_expr = fragment_input_struct.get_field_expr(
-                    mesh_input_field_indices
-                        .texture_coords
-                        .expect("Missing texture coordinates for shading prepass"),
-                );
+            generate_normal_vector_and_texture_coord_expr(
+                module,
+                source_code_lib,
+                fragment_function,
+                fragment_input_struct,
+                mesh_input_field_indices,
+                self.texture_input.bump_mapping_input.as_ref(),
+                material_input_field_indices.parallax_displacement_scale,
+                material_input_field_indices.parallax_uv_per_distance,
+                bind_group,
+                texture_coord_expr,
+            );
 
-                let bind_group = *bind_group_idx;
-                *bind_group_idx += 1;
+        let ambient_color_expr = match light_shader_generator {
+            None => source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "getBaseAmbientColor",
+                Vec::new(),
+            ),
+            Some(LightShaderGenerator::AmbientLight(ambient_light_shader_generator)) => {
+                let diffuse_color_expr = self
+                    .texture_input
+                    .diffuse_texture_and_sampler_bindings
+                    .map(|(diffuse_texture_binding, diffuse_sampler_binding)| {
+                        let diffuse_color_texture = SampledTexture::declare(
+                            &mut module.types,
+                            &mut module.global_variables,
+                            TextureType::Image,
+                            "diffuseColor",
+                            bind_group,
+                            diffuse_texture_binding,
+                            Some(diffuse_sampler_binding),
+                            None,
+                        );
 
-                let (normal_vector_expr, texture_coord_expr) =
-                    generate_normal_vector_and_texture_coord_expr(
+                        diffuse_color_texture.generate_rgb_sampling_expr(
+                            fragment_function,
+                            texture_coord_expr.unwrap(),
+                        )
+                    })
+                    .or_else(|| {
+                        material_input_field_indices
+                            .diffuse_color
+                            .map(|idx| fragment_input_struct.get_field_expr(idx))
+                    });
+
+                if let Some(diffuse_color_expr) = diffuse_color_expr {
+                    source_code_lib.generate_function_call(
                         module,
-                        source_code_lib,
                         fragment_function,
-                        fragment_input_struct,
-                        mesh_input_field_indices,
-                        Some(bump_mapping_input),
-                        material_input_field_indices.displacement_scale,
-                        material_input_field_indices.uv_per_distance,
-                        bind_group,
-                        Some(texture_coord_expr),
-                    );
-
-                (Some(normal_vector_expr), texture_coord_expr)
-            } else {
-                (None, None)
-            };
+                        "computeAmbientColor",
+                        vec![
+                            diffuse_color_expr,
+                            ambient_light_shader_generator.irradiance,
+                        ],
+                    )
+                } else {
+                    source_code_lib.generate_function_call(
+                        module,
+                        fragment_function,
+                        "getBaseAmbientColor",
+                        Vec::new(),
+                    )
+                }
+            }
+            Some(invalid_shader_generator) => {
+                panic!(
+                    "Invalid light type for prepass material: {:?}",
+                    invalid_shader_generator
+                );
+            }
+        };
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
@@ -247,7 +318,35 @@ impl<'a> PrepassShaderGenerator<'a> {
             ambient_rgba_color_expr,
         );
 
-        if let Some(normal_vector_expr) = normal_vector_expr {
+        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
+            let position_expr = fragment_input_struct.get_field_expr(
+                mesh_input_field_indices
+                    .position
+                    .expect("Missing position for writing to render attachment"),
+            );
+
+            let padded_position_expr = append_unity_component_to_vec3(
+                &mut module.types,
+                &mut module.constants,
+                fragment_function,
+                position_expr,
+            );
+
+            output_struct_builder.add_field(
+                "position",
+                vec4_type,
+                None,
+                None,
+                VECTOR_4_SIZE,
+                padded_position_expr,
+            );
+        }
+
+        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)
+        {
+            let normal_vector_expr =
+                normal_vector_expr.expect("Missing normal vector for writing to render attachment");
+
             let normal_color_expr = source_code_lib.generate_function_call(
                 module,
                 fragment_function,
@@ -272,7 +371,11 @@ impl<'a> PrepassShaderGenerator<'a> {
             );
         }
 
-        if let Some(texture_coord_expr) = texture_coord_expr {
+        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
+        {
+            let texture_coord_expr = texture_coord_expr
+                .expect("Missing texture coordinates for writing to render attachment");
+
             output_struct_builder.add_field(
                 "textureCoords",
                 vec2_type,
@@ -293,27 +396,20 @@ fn generate_normal_vector_and_texture_coord_expr(
     fragment_function: &mut Function,
     fragment_input_struct: &InputStruct,
     mesh_input_field_indices: &MeshVertexOutputFieldIndices,
-    bump_mapping_input: Option<&BumpMappingShaderInput>,
+    bump_mapping_input: Option<&BumpMappingTextureShaderInput>,
     displacement_scale_idx: Option<usize>,
     uv_per_distance_idx: Option<usize>,
     bind_group: u32,
     texture_coord_expr: Option<Handle<Expression>>,
-) -> (Handle<Expression>, Option<Handle<Expression>>) {
+) -> (Option<Handle<Expression>>, Option<Handle<Expression>>) {
     match bump_mapping_input {
         None => (
-            source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                "normalizeVector",
-                vec![fragment_input_struct.get_field_expr(
-                    mesh_input_field_indices
-                        .normal_vector
-                        .expect("Missing normal vector for shading prepass"),
-                )],
-            ),
-            None,
+            mesh_input_field_indices
+                .normal_vector
+                .map(|idx| fragment_input_struct.get_field_expr(idx)),
+            texture_coord_expr,
         ),
-        Some(BumpMappingShaderInput::NormalMapping(normal_mapping_input)) => {
+        Some(BumpMappingTextureShaderInput::NormalMapping(normal_mapping_input)) => {
             let (normal_map_texture_binding, normal_map_sampler_binding) =
                 normal_mapping_input.normal_map_texture_and_sampler_bindings;
 
@@ -352,16 +448,16 @@ fn generate_normal_vector_and_texture_coord_expr(
             );
 
             (
-                source_code_lib.generate_function_call(
+                Some(source_code_lib.generate_function_call(
                     module,
                     fragment_function,
                     "transformVectorFromTangentSpace",
                     vec![tangent_space_quaternion_expr, tangent_space_normal_expr],
-                ),
+                )),
                 texture_coord_expr,
             )
         }
-        Some(BumpMappingShaderInput::ParallaxMapping(parallax_mapping_input)) => {
+        Some(BumpMappingTextureShaderInput::ParallaxMapping(parallax_mapping_input)) => {
             let position_expr = fragment_input_struct.get_field_expr(
                 mesh_input_field_indices
                     .position
@@ -442,7 +538,7 @@ fn generate_normal_vector_and_texture_coord_expr(
             );
 
             (
-                source_code_lib.generate_function_call(
+                Some(source_code_lib.generate_function_call(
                     module,
                     fragment_function,
                     "transformVectorFromTangentSpace",
@@ -450,9 +546,15 @@ fn generate_normal_vector_and_texture_coord_expr(
                         tangent_space_quaternion_expr,
                         tangent_space_normal_vector_expr,
                     ],
-                ),
+                )),
                 Some(parallax_mapped_texture_coord_expr),
             )
         }
+    }
+}
+
+impl PrepassTextureShaderInput {
+    fn is_empty(&self) -> bool {
+        self.diffuse_texture_and_sampler_bindings.is_none() && self.bump_mapping_input.is_none()
     }
 }

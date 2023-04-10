@@ -40,6 +40,7 @@ pub use material::{
     TexturedColorBlinnPhongMaterialFeature, TexturedColorMicrofacetMaterialFeature,
     UniformColorBlinnPhongMaterialFeature, UniformColorMicrofacetMaterialFeature,
     UniformDiffuseBlinnPhongMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
+    UniformDiffuseParallaxMappingPrepassMaterialFeature, UniformDiffusePrepassMaterialFeature,
     UniformSpecularBlinnPhongMaterialFeature, UniformSpecularMicrofacetMaterialFeature,
     VertexColorComp, VertexColorMaterial,
 };
@@ -57,7 +58,6 @@ pub use tasks::{
 pub use texture_projection::PlanarTextureProjectionComp;
 
 use crate::rendering::fre;
-use nalgebra::vector;
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
@@ -74,12 +74,8 @@ pub struct Scene {
 }
 
 /// Global scene configuration options.
-#[derive(Clone, Debug)]
-pub struct SceneConfig {
-    /// The fixed ambient color to use for every model whose material is light
-    /// dependent.
-    pub global_ambient_color: RGBColor,
-}
+#[derive(Clone, Debug, Default)]
+pub struct SceneConfig {}
 
 impl Scene {
     /// Creates a new scene data container.
@@ -165,7 +161,10 @@ impl Scene {
             .register_feature_type::<UniformSpecularMicrofacetMaterialFeature>();
         instance_feature_manager.register_feature_type::<TexturedColorMicrofacetMaterialFeature>();
 
+        instance_feature_manager.register_feature_type::<UniformDiffusePrepassMaterialFeature>();
         instance_feature_manager.register_feature_type::<ParallaxMappingPrepassMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseParallaxMappingPrepassMaterialFeature>();
 
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
@@ -176,13 +175,5 @@ impl Scene {
 impl Default for Scene {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Default for SceneConfig {
-    fn default() -> Self {
-        Self {
-            global_ambient_color: vector![1.0, 1.0, 1.0] * 0.05,
-        }
     }
 }

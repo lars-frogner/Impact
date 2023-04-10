@@ -13,8 +13,8 @@ pub use microfacet::{
     MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
 };
 pub use prepass::{
-    BumpMappingShaderInput, GlobalAmbientColorShaderInput, NormalMappingShaderInput,
-    ParallaxMappingFeatureShaderInput, ParallaxMappingShaderInput, PrepassShaderGenerator,
+    BumpMappingTextureShaderInput, NormalMappingShaderInput, ParallaxMappingShaderInput,
+    PrepassFeatureShaderInput, PrepassShaderGenerator, PrepassTextureShaderInput,
 };
 
 use crate::{
@@ -90,7 +90,7 @@ pub enum InstanceFeatureShaderInput {
     FixedColorMaterial(FixedColorFeatureShaderInput),
     BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
     MicrofacetMaterial(MicrofacetFeatureShaderInput),
-    ParallaxMappingPrepassMaterial(ParallaxMappingFeatureShaderInput),
+    PrepassMaterial(PrepassFeatureShaderInput),
     /// For convenience in unit tests.
     #[cfg(test)]
     None,
@@ -103,12 +103,7 @@ pub enum MaterialShaderInput {
     Fixed(Option<FixedTextureShaderInput>),
     BlinnPhong(BlinnPhongTextureShaderInput),
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
-    Prepass(
-        (
-            GlobalAmbientColorShaderInput,
-            Option<BumpMappingShaderInput>,
-        ),
-    ),
+    Prepass(PrepassTextureShaderInput),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -697,6 +692,7 @@ impl ShaderGenerator {
         material_shader_input: Option<&MaterialShaderInput>,
         mut vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Result<(Module, EntryPointNames)> {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
@@ -826,6 +822,7 @@ impl ShaderGenerator {
                 &mut fragment_function,
                 &mut bind_group_idx,
                 input_render_attachment_quantities,
+                output_render_attachment_quantities,
                 &push_constant_fragment_expressions,
                 &fragment_input_struct,
                 &mesh_vertex_output_field_indices,
@@ -918,7 +915,7 @@ impl ShaderGenerator {
         let mut fixed_color_feature_shader_input = None;
         let mut blinn_phong_feature_shader_input = None;
         let mut microfacet_feature_shader_input = None;
-        let mut parallax_mapping_feature_shader_input = None;
+        let mut prepass_feature_shader_input = None;
 
         for &instance_feature_shader_input in instance_feature_shader_inputs {
             match instance_feature_shader_input {
@@ -940,8 +937,8 @@ impl ShaderGenerator {
                     let old = microfacet_feature_shader_input.replace(shader_input);
                     assert!(old.is_none());
                 }
-                InstanceFeatureShaderInput::ParallaxMappingPrepassMaterial(shader_input) => {
-                    let old = parallax_mapping_feature_shader_input.replace(shader_input);
+                InstanceFeatureShaderInput::PrepassMaterial(shader_input) => {
+                    let old = prepass_feature_shader_input.replace(shader_input);
                     assert!(old.is_none());
                 }
                 #[cfg(test)]
@@ -958,7 +955,7 @@ impl ShaderGenerator {
             fixed_color_feature_shader_input,
             blinn_phong_feature_shader_input,
             microfacet_feature_shader_input,
-            parallax_mapping_feature_shader_input,
+            prepass_feature_shader_input,
             material_shader_input,
         ) {
             (None, None, None, None, None) => None,
@@ -997,17 +994,10 @@ impl ShaderGenerator {
                 None,
                 None,
                 None,
-                parallax_mapping_feature_input,
-                Some(MaterialShaderInput::Prepass((
-                    global_ambient_color_input,
-                    bump_mapping_input,
-                ))),
+                feature_input,
+                Some(MaterialShaderInput::Prepass(texture_input)),
             ) => Some(MaterialShaderGenerator::Prepass(
-                PrepassShaderGenerator::new(
-                    global_ambient_color_input,
-                    bump_mapping_input.as_ref(),
-                    parallax_mapping_feature_input,
-                ),
+                PrepassShaderGenerator::new(feature_input, texture_input),
             )),
             input => {
                 return Err(anyhow!(
@@ -2081,6 +2071,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet,
         push_constant_fragment_expressions: &PushConstantFieldExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
@@ -2155,9 +2146,11 @@ impl<'a> MaterialShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
+                    output_render_attachment_quantities,
                     fragment_input_struct,
                     mesh_input_field_indices,
                     material_input_field_indices,
+                    light_shader_generator,
                 );
             }
             _ => panic!("Mismatched material shader builder and output field indices type"),
@@ -5064,6 +5057,7 @@ mod test {
             None,
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap();
     }
@@ -5078,6 +5072,7 @@ mod test {
             &[],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap();
@@ -5094,6 +5089,7 @@ mod test {
             None,
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap();
     }
@@ -5107,6 +5103,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5130,6 +5127,7 @@ mod test {
             None,
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5151,6 +5149,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             None,
             VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5182,6 +5181,7 @@ mod test {
             Some(&MaterialShaderInput::VertexColor),
             VertexColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5203,6 +5203,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialShaderInput::Fixed(None)),
             FixedColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5233,6 +5234,7 @@ mod test {
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
             FixedTextureMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5276,6 +5278,7 @@ mod test {
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5317,6 +5320,7 @@ mod test {
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5360,6 +5364,7 @@ mod test {
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5401,6 +5406,7 @@ mod test {
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5444,6 +5450,7 @@ mod test {
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5485,6 +5492,7 @@ mod test {
                 },
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5529,6 +5537,7 @@ mod test {
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5572,6 +5581,7 @@ mod test {
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5614,6 +5624,7 @@ mod test {
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5655,6 +5666,7 @@ mod test {
                 },
             )),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5701,6 +5713,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5745,6 +5758,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5791,6 +5805,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5836,6 +5851,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5879,6 +5895,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -5924,6 +5941,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -5968,6 +5986,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6011,6 +6030,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -6057,6 +6077,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6101,6 +6122,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -6147,6 +6169,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6191,6 +6214,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -6237,6 +6261,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6281,6 +6306,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -6327,6 +6353,7 @@ mod test {
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
@@ -6371,6 +6398,7 @@ mod test {
                 },
             ))),
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
