@@ -3,10 +3,11 @@
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
     insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
-    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OmnidirectionalLightShaderGenerator, OutputStructBuilder, PushConstantFieldExpressions,
-    SampledTexture, SourceCode, TextureType, UnidirectionalLightShaderGenerator, F32_TYPE,
-    F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    LightMaterialFeatureShaderInput, LightShaderGenerator, LightVertexOutputFieldIndices,
+    MeshVertexOutputFieldIndices, OmnidirectionalLightShaderGenerator, OutputStructBuilder,
+    PushConstantFieldExpressions, SampledTexture, SourceCode, TextureType,
+    UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::rendering::{
     RenderAttachmentQuantity, RenderAttachmentQuantitySet, RENDER_ATTACHMENT_BINDINGS,
@@ -45,21 +46,6 @@ pub enum SpecularMicrofacetShadingModel {
     GGX,
 }
 
-/// Input description specifying the vertex attribute locations of microfacet
-/// material properties.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MicrofacetFeatureShaderInput {
-    /// Vertex attribute location for the instance feature representing diffuse
-    /// color.
-    pub diffuse_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature representing specular
-    /// color.
-    pub specular_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature representing
-    /// roughness.
-    pub roughness_location: u32,
-}
-
 /// Input description specifying the bindings of textures for microfacet
 /// properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -76,7 +62,7 @@ pub struct MicrofacetTextureShaderInput {
 #[derive(Clone, Debug)]
 pub struct MicrofacetShaderGenerator<'a> {
     model: &'a MicrofacetShadingModel,
-    feature_input: &'a MicrofacetFeatureShaderInput,
+    feature_input: &'a LightMaterialFeatureShaderInput,
     texture_input: &'a MicrofacetTextureShaderInput,
 }
 
@@ -115,7 +101,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
     /// Creates a new shader generator using the given input description.
     pub fn new(
         model: &'a MicrofacetShadingModel,
-        feature_input: &'a MicrofacetFeatureShaderInput,
+        feature_input: &'a LightMaterialFeatureShaderInput,
         texture_input: &'a MicrofacetTextureShaderInput,
     ) -> Self {
         Self {

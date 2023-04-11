@@ -1,12 +1,10 @@
 //! Materials using a microfacet reflection model.
 
-use super::{create_prepass_material, MATERIAL_VERTEX_BINDING_START};
+use super::{create_material_feature, create_prepass_material};
 use crate::{
-    geometry::{InstanceFeature, InstanceFeatureID, VertexAttributeSet},
-    impl_InstanceFeature,
+    geometry::VertexAttributeSet,
     rendering::{
-        fre, DiffuseMicrofacetShadingModel, InstanceFeatureShaderInput,
-        MaterialPropertyTextureManager, MaterialShaderInput, MicrofacetFeatureShaderInput,
+        DiffuseMicrofacetShadingModel, MaterialPropertyTextureManager, MaterialShaderInput,
         MicrofacetShadingModel, MicrofacetTextureShaderInput, RenderAttachmentQuantitySet,
         SpecularMicrofacetShadingModel,
     },
@@ -14,65 +12,13 @@ use crate::{
         DiffuseColorComp, DiffuseTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
         MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
         MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
-        NormalMapComp, ParallaxMapComp, RGBColor, RenderResourcesDesynchronized, RoughnessComp,
+        NormalMapComp, ParallaxMapComp, RenderResourcesDesynchronized, RoughnessComp,
         RoughnessTextureComp, SpecularColorComp, SpecularTextureComp,
     },
 };
-use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use std::sync::RwLock;
-
-/// Fixed material properties for a microfacet material with uniform diffuse and
-/// specular color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformColorMicrofacetMaterialFeature {
-    diffuse_color: RGBColor,
-    specular_color: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a microfacet material with uniform diffuse
-/// color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseMicrofacetMaterialFeature {
-    diffuse_color: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a microfacet material with uniform specular
-/// color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformSpecularMicrofacetMaterialFeature {
-    specular_color: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a microfacet material with no uniform color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct TexturedColorMicrofacetMaterialFeature {
-    roughness: fre,
-}
 
 /// Checks if the entity-to-be with the given components has the components for
 /// a microfacet material, and if so, adds the material specification to the
@@ -553,52 +499,14 @@ fn execute_material_setup(
         1.0
     };
 
-    let (feature_type_id, feature_id) = match (diffuse_color, specular_color) {
-        (Some(diffuse_color), Some(specular_color)) => {
-            material_name_parts.push("UniformDiffuseUniformSpecular");
-
-            (
-                UniformColorMicrofacetMaterialFeature::FEATURE_TYPE_ID,
-                UniformColorMicrofacetMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    diffuse_color,
-                    specular_color,
-                    roughness_value,
-                ),
-            )
-        }
-        (Some(diffuse_color), None) => {
-            material_name_parts.push("UniformDiffuse");
-
-            (
-                UniformDiffuseMicrofacetMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseMicrofacetMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    diffuse_color,
-                    roughness_value,
-                ),
-            )
-        }
-        (None, Some(specular_color)) => {
-            material_name_parts.push("UniformSpecular");
-
-            (
-                UniformSpecularMicrofacetMaterialFeature::FEATURE_TYPE_ID,
-                UniformSpecularMicrofacetMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    specular_color,
-                    roughness_value,
-                ),
-            )
-        }
-        (None, None) => (
-            TexturedColorMicrofacetMaterialFeature::FEATURE_TYPE_ID,
-            TexturedColorMicrofacetMaterialFeature::add_feature(
-                instance_feature_manager,
-                roughness_value,
-            ),
-        ),
-    };
+    let (feature_type_id, feature_id) = create_material_feature(
+        instance_feature_manager,
+        &mut material_name_parts,
+        diffuse_color,
+        specular_color,
+        roughness_value,
+        parallax_map,
+    );
 
     let mut vertex_attribute_requirements_for_shader =
         VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR;
@@ -666,11 +574,15 @@ fn execute_material_setup(
     let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
     let prepass_material_handle = create_prepass_material(
-        instance_feature_manager,
         material_library,
         &mut input_render_attachment_quantities,
-        diffuse_color,
-        diffuse_texture,
+        material_name_parts.clone(),
+        feature_type_id,
+        feature_id,
+        texture_ids.clone(),
+        texture_shader_input.diffuse_texture_and_sampler_bindings,
+        texture_shader_input.specular_texture_and_sampler_bindings,
+        texture_shader_input.roughness_texture_and_sampler_bindings,
         normal_map,
         parallax_map,
     );
@@ -736,117 +648,3 @@ fn execute_material_setup(
         Some(prepass_material_handle),
     )
 }
-
-impl UniformColorMicrofacetMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        diffuse_color: &DiffuseColorComp,
-        specular_color: &SpecularColorComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformColorMicrofacetMaterialFeature")
-            .add_feature(&Self {
-                diffuse_color: diffuse_color.0,
-                specular_color: specular_color.0,
-                roughness,
-            })
-    }
-}
-
-impl UniformDiffuseMicrofacetMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        diffuse_color: &DiffuseColorComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseMicrofacetMaterialFeature")
-            .add_feature(&Self {
-                diffuse_color: diffuse_color.0,
-                roughness,
-            })
-    }
-}
-
-impl UniformSpecularMicrofacetMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        specular_color: &SpecularColorComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformSpecularMicrofacetMaterialFeature")
-            .add_feature(&Self {
-                specular_color: specular_color.0,
-                roughness,
-            })
-    }
-}
-
-impl TexturedColorMicrofacetMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for TexturedColorMicrofacetMaterialFeature")
-            .add_feature(&Self { roughness })
-    }
-}
-
-impl_InstanceFeature!(
-    UniformColorMicrofacetMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-    ],
-    InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseMicrofacetMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_color_location: None,
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformSpecularMicrofacetMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-        diffuse_color_location: None,
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
-    })
-);
-
-impl_InstanceFeature!(
-    TexturedColorMicrofacetMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32,
-    ],
-    InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
-        diffuse_color_location: None,
-        specular_color_location: None,
-        roughness_location: MATERIAL_VERTEX_BINDING_START,
-    })
-);

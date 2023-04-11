@@ -35,14 +35,8 @@ pub use material::{
     FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle,
     MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
     MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
-    NormalMapComp, ParallaxMapComp, ParallaxMappingPrepassMaterialFeature, RGBColor, RoughnessComp,
-    RoughnessTextureComp, SpecularColorComp, SpecularTextureComp,
-    TexturedColorBlinnPhongMaterialFeature, TexturedColorMicrofacetMaterialFeature,
-    UniformColorBlinnPhongMaterialFeature, UniformColorMicrofacetMaterialFeature,
-    UniformDiffuseBlinnPhongMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
-    UniformDiffuseParallaxMappingPrepassMaterialFeature, UniformDiffusePrepassMaterialFeature,
-    UniformSpecularBlinnPhongMaterialFeature, UniformSpecularMicrofacetMaterialFeature,
-    VertexColorComp, VertexColorMaterial,
+    NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp,
+    SpecularColorComp, SpecularTextureComp, VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{
     BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
@@ -58,6 +52,13 @@ pub use tasks::{
 pub use texture_projection::PlanarTextureProjectionComp;
 
 use crate::rendering::fre;
+use material::{
+    TexturedColorMaterialFeature, TexturedColorParallaxMappingMaterialFeature,
+    UniformDiffuseMaterialFeature, UniformDiffuseParallaxMappingMaterialFeature,
+    UniformDiffuseUniformSpecularMaterialFeature,
+    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature, UniformSpecularMaterialFeature,
+    UniformSpecularParallaxMappingMaterialFeature,
+};
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
@@ -149,22 +150,19 @@ impl Scene {
         let mut material_library = self.material_library.write().unwrap();
         let mut instance_feature_manager = self.instance_feature_manager.write().unwrap();
 
-        instance_feature_manager.register_feature_type::<UniformColorBlinnPhongMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformDiffuseBlinnPhongMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedColorMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
         instance_feature_manager
-            .register_feature_type::<UniformSpecularBlinnPhongMaterialFeature>();
-        instance_feature_manager.register_feature_type::<TexturedColorBlinnPhongMaterialFeature>();
-
-        instance_feature_manager.register_feature_type::<UniformColorMicrofacetMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformDiffuseMicrofacetMaterialFeature>();
+            .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
         instance_feature_manager
-            .register_feature_type::<UniformSpecularMicrofacetMaterialFeature>();
-        instance_feature_manager.register_feature_type::<TexturedColorMicrofacetMaterialFeature>();
-
-        instance_feature_manager.register_feature_type::<UniformDiffusePrepassMaterialFeature>();
-        instance_feature_manager.register_feature_type::<ParallaxMappingPrepassMaterialFeature>();
+            .register_feature_type::<TexturedColorParallaxMappingMaterialFeature>();
         instance_feature_manager
-            .register_feature_type::<UniformDiffuseParallaxMappingPrepassMaterialFeature>();
+            .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
 
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);

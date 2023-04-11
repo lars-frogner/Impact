@@ -3,30 +3,16 @@
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
     insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
-    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OmnidirectionalLightShaderGenerator, OutputStructBuilder, PushConstantFieldExpressions,
-    SampledTexture, SourceCode, TextureType, UnidirectionalLightShaderGenerator, F32_TYPE,
-    F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    LightMaterialFeatureShaderInput, LightShaderGenerator, LightVertexOutputFieldIndices,
+    MeshVertexOutputFieldIndices, OmnidirectionalLightShaderGenerator, OutputStructBuilder,
+    PushConstantFieldExpressions, SampledTexture, SourceCode, TextureType,
+    UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::rendering::{
     RenderAttachmentQuantity, RenderAttachmentQuantitySet, RENDER_ATTACHMENT_BINDINGS,
 };
 use naga::{Expression, Function, LocalVariable, MathFunction, Module, Statement};
-
-/// Input description specifying the vertex attribute locations of fixed
-/// Blinn-Phong material properties.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BlinnPhongFeatureShaderInput {
-    /// Vertex attribute location for the instance feature representing diffuse
-    /// color.
-    pub diffuse_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature representing specular
-    /// color.
-    pub specular_color_location: Option<u32>,
-    /// Vertex attribute location for the instance feature representing
-    /// shininess.
-    pub shininess_location: u32,
-}
 
 /// Input description specifying the bindings of textures for Blinn-Phong
 /// material properties.
@@ -43,7 +29,7 @@ pub struct BlinnPhongTextureShaderInput {
 /// Shader generator for a Blinn-Phong material.
 #[derive(Clone, Debug)]
 pub struct BlinnPhongShaderGenerator<'a> {
-    feature_input: &'a BlinnPhongFeatureShaderInput,
+    feature_input: &'a LightMaterialFeatureShaderInput,
     texture_input: &'a BlinnPhongTextureShaderInput,
 }
 
@@ -60,7 +46,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
     /// Creates a new shader generator using the given input
     /// description.
     pub fn new(
-        feature_input: &'a BlinnPhongFeatureShaderInput,
+        feature_input: &'a LightMaterialFeatureShaderInput,
         texture_input: &'a BlinnPhongTextureShaderInput,
     ) -> Self {
         Self {
@@ -104,7 +90,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let input_shininess_field_idx = input_struct_builder.add_field(
             "shininess",
             float_type,
-            self.feature_input.shininess_location,
+            self.feature_input.roughness_location,
             F32_WIDTH,
         );
 
