@@ -5,7 +5,7 @@ use crate::{
         TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
         VertexTextureCoords,
     },
-    rendering::{fre, ImageTextureConfig, RenderingSystem},
+    rendering::{fre, RenderingSystem, TextureConfig},
     scene::{
         DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshID, MeshRepository, RoughnessComp,
         SpecularColorComp, SpecularTextureComp, VertexColorComp,
@@ -29,7 +29,7 @@ use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
 /// Reads the Wavefront OBJ file at the given path and any associated MTL
 /// material files and returns the set of components representing the mesh and
 /// material of each model in the file. The meshes are added to the mesh
-/// repository, and any image textures referenced in the MTL files are loaded as
+/// repository, and any textures referenced in the MTL files are loaded as
 /// rendering assets. Each [`ArchetypeComponentStorage`] in the returned list
 /// contains the components describing a single model, and their order in the
 /// list is the same as their order in the OBJ file.
@@ -317,10 +317,10 @@ fn create_material_components_from_tobj_material(
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
-        let diffuse_texture_id = assets.load_image_texture_from_path(
+        let diffuse_texture_id = assets.load_texture_from_path(
             renderer.core_system(),
             &material.diffuse_texture,
-            ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
+            TextureConfig::REPEATING_COLOR_TEXTRUE,
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
@@ -336,10 +336,10 @@ fn create_material_components_from_tobj_material(
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
-        let specular_texture_id = assets.load_image_texture_from_path(
+        let specular_texture_id = assets.load_texture_from_path(
             renderer.core_system(),
             &material.specular_texture,
-            ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
+            TextureConfig::REPEATING_COLOR_TEXTRUE,
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(

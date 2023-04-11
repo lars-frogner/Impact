@@ -410,7 +410,8 @@ pub struct SampledTexture {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextureType {
-    Image,
+    Image2D,
+    Image3D,
     DepthCubemap,
     DepthArray,
 }
@@ -508,10 +509,22 @@ const MATRIX_4X4_TYPE: Type = Type {
     },
 };
 
-const IMAGE_TEXTURE_TYPE: Type = Type {
+const IMAGE_2D_TEXTURE_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Image {
         dim: ImageDimension::D2,
+        arrayed: false,
+        class: ImageClass::Sampled {
+            kind: ScalarKind::Float,
+            multi: false,
+        },
+    },
+};
+
+const IMAGE_3D_TEXTURE_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Image {
+        dim: ImageDimension::D3,
         arrayed: false,
         class: ImageClass::Sampled {
             kind: ScalarKind::Float,
@@ -3603,7 +3616,8 @@ impl SampledTexture {
         comparison_sampler_binding: Option<u32>,
     ) -> Self {
         let texture_type_const = match texture_type {
-            TextureType::Image => IMAGE_TEXTURE_TYPE,
+            TextureType::Image2D => IMAGE_2D_TEXTURE_TYPE,
+            TextureType::Image3D => IMAGE_3D_TEXTURE_TYPE,
             TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };

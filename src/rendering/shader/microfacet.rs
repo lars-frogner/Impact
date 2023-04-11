@@ -242,7 +242,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let position_texture = SampledTexture::declare(
                     &mut module.types,
                     &mut module.global_variables,
-                    TextureType::Image,
+                    TextureType::Image2D,
                     "position",
                     *bind_group_idx,
                     position_texture_binding,
@@ -273,7 +273,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             let normal_vector_texture = SampledTexture::declare(
                 &mut module.types,
                 &mut module.global_variables,
-                TextureType::Image,
+                TextureType::Image2D,
                 "normalVector",
                 *bind_group_idx,
                 normal_vector_texture_binding,
@@ -317,7 +317,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let texture_coord_texture = SampledTexture::declare(
                     &mut module.types,
                     &mut module.global_variables,
-                    TextureType::Image,
+                    TextureType::Image2D,
                     "textureCoord",
                     *bind_group_idx,
                     texture_coord_texture_binding,
@@ -354,7 +354,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let diffuse_color_texture = SampledTexture::declare(
                     &mut module.types,
                     &mut module.global_variables,
-                    TextureType::Image,
+                    TextureType::Image2D,
                     "diffuseColor",
                     material_texture_bind_group,
                     diffuse_texture_binding,
@@ -378,7 +378,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 let specular_color_texture = SampledTexture::declare(
                     &mut module.types,
                     &mut module.global_variables,
-                    TextureType::Image,
+                    TextureType::Image2D,
                     "specularColor",
                     material_texture_bind_group,
                     specular_texture_binding,
@@ -407,7 +407,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     let roughness_texture = SampledTexture::declare(
                         &mut module.types,
                         &mut module.global_variables,
-                        TextureType::Image,
+                        TextureType::Image2D,
                         "roughness",
                         material_texture_bind_group,
                         roughness_texture_binding,

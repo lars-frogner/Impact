@@ -1,6 +1,6 @@
 //! Management of rendering assets.
 
-use crate::rendering::{CoreRenderingSystem, ImageTexture, ImageTextureConfig};
+use crate::rendering::{CoreRenderingSystem, Texture, TextureConfig};
 use anyhow::Result;
 use impact_utils::{hash32, stringhash32_newtype};
 use std::{
@@ -17,34 +17,33 @@ stringhash32_newtype!(
 /// Container for any rendering assets that never change.
 #[derive(Debug, Default)]
 pub struct Assets {
-    /// Textures sourced from images.
-    pub image_textures: HashMap<TextureID, ImageTexture>,
+    pub textures: HashMap<TextureID, Texture>,
 }
 
 impl Assets {
     pub fn new() -> Self {
         Self {
-            image_textures: HashMap::new(),
+            textures: HashMap::new(),
         }
     }
 
-    /// Loads the image file at the given path as an [`ImageTexture`],
-    /// unless it already has been loaded.
+    /// Loads the image file at the given path as a [`Texture`], unless it
+    /// already has been loaded.
     ///
     /// # Returns
     /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
     ///
     /// # Errors
-    /// See [`ImageTexture::from_path`].
-    pub fn load_image_texture_from_path(
+    /// See [`Texture::from_path`].
+    pub fn load_texture_from_path(
         &mut self,
         core_system: &CoreRenderingSystem,
         image_path: impl AsRef<Path>,
-        config: ImageTextureConfig,
+        config: TextureConfig,
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(image_path.as_ref().to_string_lossy()));
-        if let Entry::Vacant(entry) = self.image_textures.entry(texture_id) {
-            entry.insert(ImageTexture::from_path(core_system, image_path, config)?);
+        if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
+            entry.insert(Texture::from_path(core_system, image_path, config)?);
         }
         Ok(texture_id)
     }
