@@ -4,8 +4,7 @@ use crate::{
     geometry::VertexAttributeSet,
     rendering::{
         buffer::{self, RenderBuffer},
-        Assets, CoreRenderingSystem, ImageTexture, MaterialShaderInput,
-        RenderAttachmentQuantitySet, TextureID,
+        Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet, TextureID,
     },
     scene::{FixedMaterialResources, MaterialPropertyTextureSet, MaterialSpecification},
 };
@@ -185,19 +184,12 @@ impl MaterialPropertyTextureManager {
         texture_set: &MaterialPropertyTextureSet,
         label: String,
     ) -> Result<Self> {
-        let image_texture_ids = texture_set.image_texture_ids().to_vec();
+        let texture_ids = texture_set.texture_ids().to_vec();
 
-        let bind_group_layout = Self::create_texture_bind_group_layout(
-            core_system.device(),
-            image_texture_ids.len(),
-            &label,
-        );
-
-        let bind_group = Self::create_texture_bind_group(
+        let (bind_group_layout, bind_group) = Self::create_texture_bind_group_and_layout(
             core_system.device(),
             assets,
-            &image_texture_ids,
-            &bind_group_layout,
+            &texture_ids,
             &label,
         )?;
 
@@ -225,55 +217,45 @@ impl MaterialPropertyTextureManager {
         &self.bind_group
     }
 
-    fn create_texture_bind_group_layout(
-        device: &wgpu::Device,
-        n_textures: usize,
-        label: &str,
-    ) -> wgpu::BindGroupLayout {
-        let n_entries = 2 * n_textures;
-        let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
-
-        for idx in 0..n_textures {
-            let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
-            bind_group_layout_entries.push(ImageTexture::create_texture_bind_group_layout_entry(
-                texture_binding,
-            ));
-            bind_group_layout_entries.push(ImageTexture::create_sampler_bind_group_layout_entry(
-                sampler_binding,
-            ));
-        }
-
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &bind_group_layout_entries,
-            label: Some(&format!("{} bind group layout", label)),
-        })
-    }
-
-    fn create_texture_bind_group(
+    fn create_texture_bind_group_and_layout(
         device: &wgpu::Device,
         assets: &Assets,
         texture_ids: &[TextureID],
-        layout: &wgpu::BindGroupLayout,
         label: &str,
-    ) -> Result<wgpu::BindGroup> {
+    ) -> Result<(wgpu::BindGroupLayout, wgpu::BindGroup)> {
         let n_entries = 2 * texture_ids.len();
+
+        let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
         let mut bind_group_entries = Vec::with_capacity(n_entries);
 
         for (idx, texture_id) in texture_ids.iter().enumerate() {
-            let image_texture = assets
-                .image_textures
+            let texture = assets
+                .textures
                 .get(texture_id)
                 .ok_or_else(|| anyhow!("Texture {} missing from assets", texture_id))?;
 
             let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
-            bind_group_entries.push(image_texture.create_texture_bind_group_entry(texture_binding));
-            bind_group_entries.push(image_texture.create_sampler_bind_group_entry(sampler_binding));
+
+            bind_group_layout_entries
+                .push(texture.create_texture_bind_group_layout_entry(texture_binding));
+            bind_group_layout_entries
+                .push(texture.create_sampler_bind_group_layout_entry(sampler_binding));
+
+            bind_group_entries.push(texture.create_texture_bind_group_entry(texture_binding));
+            bind_group_entries.push(texture.create_sampler_bind_group_entry(sampler_binding));
         }
 
-        Ok(device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &bind_group_layout_entries,
+            label: Some(&format!("{} bind group layout", label)),
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
             entries: &bind_group_entries,
             label: Some(&format!("{} bind group", label)),
-        }))
+        });
+
+        Ok((bind_group_layout, bind_group))
     }
 }

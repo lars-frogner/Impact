@@ -98,16 +98,16 @@ impl World {
     }
 
     /// Reads the Wavefront OBJ file at the given path and any associated MTL
-    /// material files and returns the set of components representing the mesh and
-    /// material of each model in the file. The meshes are added to the mesh
-    /// repository, and any image textures referenced in the MTL files are loaded as
-    /// rendering assets. Each [`ArchetypeComponentStorage`] in the returned list
-    /// contains the components describing a single model, and their order in the
-    /// list is the same as their order in the OBJ file.
+    /// material files and returns the set of components representing the mesh
+    /// and material of each model in the file. The meshes are added to the mesh
+    /// repository, and any textures referenced in the MTL files are loaded as
+    /// rendering assets. Each [`ArchetypeComponentStorage`] in the returned
+    /// list contains the components describing a single model, and their order
+    /// in the list is the same as their order in the OBJ file.
     ///
     /// # Errors
-    /// Returns an error if any of the involved OBJ, MTL or texture files can not be
-    /// found or loaded.
+    /// Returns an error if any of the involved OBJ, MTL or texture files can
+    /// not be found or loaded.
     pub fn load_models_from_obj_file<P>(
         &self,
         obj_file_path: P,

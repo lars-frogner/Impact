@@ -11,7 +11,7 @@ use crate::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{Assets, ImageTextureConfig},
+    rendering::{Assets, TextureConfig},
     scene::{
         AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
         DirectionComp, EmissionExtentComp, FixedColorComp, LightDirection,
@@ -80,40 +80,40 @@ async fn init_world(window: Window) -> Result<World> {
 
     let mut assets = Assets::new();
 
-    let bricks_color_texture_id = assets.load_image_texture_from_path(
+    let bricks_color_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Color.jpg",
-        ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
+        TextureConfig::REPEATING_COLOR_TEXTRUE,
     )?;
 
-    let bricks_roughness_texture_id = assets.load_image_texture_from_path(
+    let bricks_roughness_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Roughness.jpg",
-        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
-    let bricks_height_texture_id = assets.load_image_texture_from_path(
+    let bricks_height_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Displacement.jpg",
-        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
-    let wood_floor_color_texture_id = assets.load_image_texture_from_path(
+    let wood_floor_color_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Color.jpg",
-        ImageTextureConfig::REPEATING_COLOR_TEXTRUE,
+        TextureConfig::REPEATING_COLOR_TEXTRUE,
     )?;
 
-    let wood_floor_roughness_texture_id = assets.load_image_texture_from_path(
+    let wood_floor_roughness_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Roughness.jpg",
-        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
-    let wood_floor_normal_texture_id = assets.load_image_texture_from_path(
+    let wood_floor_normal_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_NormalDX.jpg",
-        ImageTextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
     )?;
 
     let vertical_field_of_view = Degrees(70.0);

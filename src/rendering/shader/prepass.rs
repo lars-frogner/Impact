@@ -271,7 +271,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                         let diffuse_color_texture = SampledTexture::declare(
                             &mut module.types,
                             &mut module.global_variables,
-                            TextureType::Image,
+                            TextureType::Image2D,
                             "diffuseColor",
                             bind_group,
                             diffuse_texture_binding,
@@ -433,7 +433,7 @@ fn generate_normal_vector_and_texture_coord_expr(
             let normal_map_texture = SampledTexture::declare(
                 &mut module.types,
                 &mut module.global_variables,
-                TextureType::Image,
+                TextureType::Image2D,
                 "normalMap",
                 bind_group,
                 normal_map_texture_binding,
@@ -494,7 +494,7 @@ fn generate_normal_vector_and_texture_coord_expr(
             let height_map_texture = SampledTexture::declare(
                 &mut module.types,
                 &mut module.global_variables,
-                TextureType::Image,
+                TextureType::Image2D,
                 "heightMap",
                 bind_group,
                 height_map_texture_binding,

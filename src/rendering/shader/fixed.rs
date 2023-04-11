@@ -164,7 +164,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
         let color_texture = SampledTexture::declare(
             &mut module.types,
             &mut module.global_variables,
-            TextureType::Image,
+            TextureType::Image2D,
             "color",
             bind_group,
             color_texture_binding,
