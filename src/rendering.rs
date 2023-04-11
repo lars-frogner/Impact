@@ -25,14 +25,13 @@ pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager
 pub use render_pass::{RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
-    AmbientLightShaderInput, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
-    BumpMappingTextureShaderInput, CameraShaderInput, DiffuseMicrofacetShadingModel,
-    FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
-    LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetFeatureShaderInput,
-    MicrofacetShadingModel, MicrofacetTextureShaderInput, ModelViewTransformShaderInput,
-    NormalMappingShaderInput, OmnidirectionalLightShaderInput, ParallaxMappingShaderInput,
-    PrepassFeatureShaderInput, PrepassTextureShaderInput, Shader, ShaderGenerator,
-    SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
+    AmbientLightShaderInput, BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput,
+    CameraShaderInput, DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput,
+    FixedTextureShaderInput, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput,
+    LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
+    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
+    OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput, Shader,
+    ShaderGenerator, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{

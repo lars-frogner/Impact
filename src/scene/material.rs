@@ -2,31 +2,28 @@
 
 mod blinn_phong;
 mod components;
+mod features;
 mod fixed;
 mod microfacet;
 mod prepass;
 mod vertex_color;
 
-pub use blinn_phong::{
-    add_blinn_phong_material_component_for_entity, TexturedColorBlinnPhongMaterialFeature,
-    UniformColorBlinnPhongMaterialFeature, UniformDiffuseBlinnPhongMaterialFeature,
-    UniformSpecularBlinnPhongMaterialFeature,
-};
+pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
     DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
     MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
     RoughnessComp, RoughnessTextureComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
 };
+pub use features::{
+    create_material_feature, TexturedColorMaterialFeature,
+    TexturedColorParallaxMappingMaterialFeature, UniformDiffuseMaterialFeature,
+    UniformDiffuseParallaxMappingMaterialFeature, UniformDiffuseUniformSpecularMaterialFeature,
+    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature, UniformSpecularMaterialFeature,
+    UniformSpecularParallaxMappingMaterialFeature,
+};
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
-pub use microfacet::{
-    add_microfacet_material_component_for_entity, TexturedColorMicrofacetMaterialFeature,
-    UniformColorMicrofacetMaterialFeature, UniformDiffuseMicrofacetMaterialFeature,
-    UniformSpecularMicrofacetMaterialFeature,
-};
-pub use prepass::{
-    create_prepass_material, ParallaxMappingPrepassMaterialFeature,
-    UniformDiffuseParallaxMappingPrepassMaterialFeature, UniformDiffusePrepassMaterialFeature,
-};
+pub use microfacet::add_microfacet_material_component_for_entity;
+pub use prepass::create_prepass_material;
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{

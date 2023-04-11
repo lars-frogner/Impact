@@ -1,67 +1,27 @@
 //! Materials for use in shading prepasses.
 
-use super::{NormalMapComp, MATERIAL_VERTEX_BINDING_START};
+use super::NormalMapComp;
 use crate::{
-    geometry::{InstanceFeature, InstanceFeatureID, VertexAttributeSet},
-    impl_InstanceFeature,
+    geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     rendering::{
-        fre, BumpMappingTextureShaderInput, InstanceFeatureShaderInput,
-        MaterialPropertyTextureManager, MaterialShaderInput, NormalMappingShaderInput,
-        ParallaxMappingShaderInput, PrepassFeatureShaderInput, PrepassTextureShaderInput,
-        RenderAttachmentQuantitySet,
+        BumpMappingTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
+        NormalMappingShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
+        RenderAttachmentQuantitySet, TextureID,
     },
     scene::{
-        DiffuseColorComp, DiffuseTextureComp, InstanceFeatureManager, MaterialHandle, MaterialID,
-        MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-        MaterialSpecification, ParallaxMapComp, RGBColor,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+        MaterialPropertyTextureSetID, MaterialSpecification, ParallaxMapComp,
     },
 };
-use bytemuck::{Pod, Zeroable};
 use impact_utils::hash64;
-use nalgebra::Vector2;
 
-/// Fixed material properties for a uniformly diffuse prepass material.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffusePrepassMaterialFeature {
-    diffuse_color: RGBColor,
-}
-
-/// Fixed material properties for a prepass material using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct ParallaxMappingPrepassMaterialFeature {
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a uniformly diffuse prepass material using
-/// parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseParallaxMappingPrepassMaterialFeature {
-    diffuse_color: RGBColor,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Determines the prepass material to use for the given combination of relevant
-/// components, adds the material specification to the material library if it
-/// does not already exist, then creates instance features and a texture set as
-/// required and stores them in the instance feature manager and material
-/// library.
+/// Creates a prepass material based on the given information about the main
+/// material. The given set of render attachment quantities that the prepass
+/// material produces (and the main material consumes) may be extended. The
+/// prepass material will use the same instance feature as the main material,
+/// and a superset of the main material's texture set. The specification for the
+/// perpass material is added to the material library if it does not already
+/// exist.
 ///
 /// # Returns
 /// A [`MaterialHandle`] containing the ID of the material and the IDs of the
@@ -72,82 +32,32 @@ pub struct UniformDiffuseParallaxMappingPrepassMaterialFeature {
 /// # Panics
 /// If both a normal map and a parallax map component is provided.
 pub fn create_prepass_material(
-    instance_feature_manager: &mut InstanceFeatureManager,
     material_library: &mut MaterialLibrary,
     output_render_attachment_quantities: &mut RenderAttachmentQuantitySet,
-    diffuse_color: Option<&DiffuseColorComp>,
-    diffuse_texture: Option<&DiffuseTextureComp>,
+    mut material_name_parts: Vec<&str>,
+    feature_type_id: InstanceFeatureTypeID,
+    feature_id: InstanceFeatureID,
+    mut texture_ids: Vec<TextureID>,
+    diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
+    specular_texture_and_sampler_bindings: Option<(u32, u32)>,
+    roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
     normal_map: Option<&NormalMapComp>,
     parallax_map: Option<&ParallaxMapComp>,
 ) -> MaterialHandle {
-    let mut material_name_parts = Vec::new();
-
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = VertexAttributeSet::empty();
 
-    let mut texture_shader_input = PrepassTextureShaderInput {
-        diffuse_texture_and_sampler_bindings: None,
-        bump_mapping_input: None,
-    };
-
-    let (feature_type_ids, feature_id) = match (diffuse_color, parallax_map) {
-        (None, None) => (Vec::new(), None),
-        (Some(diffuse_color), None) => {
-            material_name_parts.push("UniformDiffuse");
-
-            (
-                vec![UniformDiffusePrepassMaterialFeature::FEATURE_TYPE_ID],
-                Some(UniformDiffusePrepassMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    diffuse_color,
-                )),
-            )
-        }
-        (None, Some(parallax_map)) => {
-            material_name_parts.push("ParallaxMapping");
-
-            (
-                vec![ParallaxMappingPrepassMaterialFeature::FEATURE_TYPE_ID],
-                Some(ParallaxMappingPrepassMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    parallax_map,
-                )),
-            )
-        }
-        (Some(diffuse_color), Some(parallax_map)) => {
-            material_name_parts.push("UniformDiffuseParallaxMapping");
-
-            (
-                vec![UniformDiffuseParallaxMappingPrepassMaterialFeature::FEATURE_TYPE_ID],
-                Some(
-                    UniformDiffuseParallaxMappingPrepassMaterialFeature::add_feature(
-                        instance_feature_manager,
-                        diffuse_color,
-                        parallax_map,
-                    ),
-                ),
-            )
-        }
-    };
-
-    let mut texture_ids = Vec::new();
-
-    if let Some(diffuse_texture) = diffuse_texture {
-        assert!(
-            diffuse_color.is_none(),
-            "Tried to create prepass material with both uniform and textured diffuse color"
-        );
-
-        material_name_parts.push("TexturedDiffuse");
-
+    if !texture_ids.is_empty() {
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
-
-        texture_shader_input.diffuse_texture_and_sampler_bindings = Some(
-            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
-        );
-        texture_ids.push(diffuse_texture.0);
     }
+
+    let mut texture_shader_input = PrepassTextureShaderInput {
+        diffuse_texture_and_sampler_bindings,
+        specular_texture_and_sampler_bindings,
+        roughness_texture_and_sampler_bindings,
+        bump_mapping_input: None,
+    };
 
     if let Some(normal_map) = normal_map {
         assert!(
@@ -215,7 +125,7 @@ pub fn create_prepass_material(
                 RenderAttachmentQuantitySet::empty(),
                 *output_render_attachment_quantities,
                 None,
-                feature_type_ids,
+                vec![feature_type_id],
                 MaterialShaderInput::Prepass(texture_shader_input),
             )
         });
@@ -233,92 +143,5 @@ pub fn create_prepass_material(
         Some(texture_set_id)
     };
 
-    MaterialHandle::new(material_id, feature_id, texture_set_id)
+    MaterialHandle::new(material_id, Some(feature_id), texture_set_id)
 }
-
-impl UniformDiffusePrepassMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        diffuse_color: &DiffuseColorComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffusePrepassMaterialFeature features")
-            .add_feature(&Self {
-                diffuse_color: diffuse_color.0,
-            })
-    }
-}
-
-impl ParallaxMappingPrepassMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for ParallaxMappingPrepassMaterialFeature features")
-            .add_feature(&Self {
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl UniformDiffuseParallaxMappingPrepassMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        diffuse_color: &DiffuseColorComp,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect(
-                "Missing storage for UniformDiffuseParallaxMappingPrepassMaterialFeature features",
-            )
-            .add_feature(&Self {
-                diffuse_color: diffuse_color.0,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl_InstanceFeature!(
-    UniformDiffusePrepassMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-    ],
-    InstanceFeatureShaderInput::PrepassMaterial(PrepassFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    ParallaxMappingPrepassMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x2
-    ],
-    InstanceFeatureShaderInput::PrepassMaterial(PrepassFeatureShaderInput {
-        diffuse_color_location: None,
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseParallaxMappingPrepassMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32x2
-    ],
-    InstanceFeatureShaderInput::PrepassMaterial(PrepassFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-    })
-);

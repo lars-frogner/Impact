@@ -1,77 +1,23 @@
 //! Materials using the Blinn-Phong reflection model.
 
-use super::{create_prepass_material, MATERIAL_VERTEX_BINDING_START};
+use super::{create_material_feature, create_prepass_material};
 use crate::{
-    geometry::{InstanceFeature, InstanceFeatureID, VertexAttributeSet},
-    impl_InstanceFeature,
+    geometry::VertexAttributeSet,
     rendering::{
-        fre, BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput,
-        InstanceFeatureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
+        BlinnPhongTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
         RenderAttachmentQuantitySet,
     },
     scene::{
         DiffuseColorComp, DiffuseTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
         MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
         MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
-        NormalMapComp, ParallaxMapComp, RGBColor, RenderResourcesDesynchronized, RoughnessComp,
+        NormalMapComp, ParallaxMapComp, RenderResourcesDesynchronized, RoughnessComp,
         RoughnessTextureComp, SpecularColorComp, SpecularTextureComp,
     },
 };
-use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use std::sync::RwLock;
-
-/// Fixed material properties for a Blinn-Phong material with uniform diffuse
-/// and specular color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformColorBlinnPhongMaterialFeature {
-    diffuse_color: RGBColor,
-    specular_color: RGBColor,
-    shininess: fre,
-}
-
-/// Fixed material properties for a Blinn-Phong material with uniform diffuse
-/// color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseBlinnPhongMaterialFeature {
-    diffuse_color: RGBColor,
-    shininess: fre,
-}
-
-/// Fixed material properties for a Blinn-Phong material with uniform specular
-/// color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformSpecularBlinnPhongMaterialFeature {
-    specular_color: RGBColor,
-    shininess: fre,
-}
-
-/// Fixed material properties for a Blinn-Phong material with no uniform color.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct TexturedColorBlinnPhongMaterialFeature {
-    shininess: fre,
-}
 
 /// Checks if the entity-to-be with the given components has the components for
 /// a Blinn-Phong material, and if so, adds the material specification to the
@@ -241,52 +187,14 @@ fn execute_material_setup(
 
     let shininess = roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess());
 
-    let (feature_type_id, feature_id) = match (diffuse_color, specular_color) {
-        (Some(diffuse_color), Some(specular_color)) => {
-            material_name_parts.push("UniformDiffuseUniformSpecular");
-
-            (
-                UniformColorBlinnPhongMaterialFeature::FEATURE_TYPE_ID,
-                UniformColorBlinnPhongMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    diffuse_color,
-                    specular_color,
-                    shininess,
-                ),
-            )
-        }
-        (Some(diffuse_color), None) => {
-            material_name_parts.push("UniformDiffuse");
-
-            (
-                UniformDiffuseBlinnPhongMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseBlinnPhongMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    diffuse_color,
-                    shininess,
-                ),
-            )
-        }
-        (None, Some(specular_color)) => {
-            material_name_parts.push("UniformSpecular");
-
-            (
-                UniformSpecularBlinnPhongMaterialFeature::FEATURE_TYPE_ID,
-                UniformSpecularBlinnPhongMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    specular_color,
-                    shininess,
-                ),
-            )
-        }
-        (None, None) => (
-            TexturedColorBlinnPhongMaterialFeature::FEATURE_TYPE_ID,
-            TexturedColorBlinnPhongMaterialFeature::add_feature(
-                instance_feature_manager,
-                shininess,
-            ),
-        ),
-    };
+    let (feature_type_id, feature_id) = create_material_feature(
+        instance_feature_manager,
+        &mut material_name_parts,
+        diffuse_color,
+        specular_color,
+        shininess,
+        parallax_map,
+    );
 
     let mut vertex_attribute_requirements_for_shader =
         VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR;
@@ -336,11 +244,15 @@ fn execute_material_setup(
     let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
     let prepass_material_handle = create_prepass_material(
-        instance_feature_manager,
         material_library,
         &mut input_render_attachment_quantities,
-        diffuse_color,
-        diffuse_texture,
+        material_name_parts.clone(),
+        feature_type_id,
+        feature_id,
+        texture_ids.clone(),
+        texture_shader_input.diffuse_texture_and_sampler_bindings,
+        texture_shader_input.specular_texture_and_sampler_bindings,
+        None,
         normal_map,
         parallax_map,
     );
@@ -400,117 +312,3 @@ fn execute_material_setup(
         Some(prepass_material_handle),
     )
 }
-
-impl UniformColorBlinnPhongMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        diffuse_color: &DiffuseColorComp,
-        specular_color: &SpecularColorComp,
-        shininess: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformColorBlinnPhongMaterial features")
-            .add_feature(&Self {
-                diffuse_color: diffuse_color.0,
-                specular_color: specular_color.0,
-                shininess,
-            })
-    }
-}
-
-impl UniformDiffuseBlinnPhongMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        diffuse_color: &DiffuseColorComp,
-        shininess: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseBlinnPhongMaterial features")
-            .add_feature(&Self {
-                diffuse_color: diffuse_color.0,
-                shininess,
-            })
-    }
-}
-
-impl UniformSpecularBlinnPhongMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        specular_color: &SpecularColorComp,
-        shininess: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformSpecularBlinnPhongMaterial features")
-            .add_feature(&Self {
-                specular_color: specular_color.0,
-                shininess,
-            })
-    }
-}
-
-impl TexturedColorBlinnPhongMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        shininess: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for TexturedColorBlinnPhongMaterial features")
-            .add_feature(&Self { shininess })
-    }
-}
-
-impl_InstanceFeature!(
-    UniformColorBlinnPhongMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseBlinnPhongMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_color_location: None,
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformSpecularBlinnPhongMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: None,
-        specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
-    })
-);
-
-impl_InstanceFeature!(
-    TexturedColorBlinnPhongMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32,
-    ],
-    InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
-        diffuse_color_location: None,
-        specular_color_location: None,
-        shininess_location: MATERIAL_VERTEX_BINDING_START,
-    })
-);

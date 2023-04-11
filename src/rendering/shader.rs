@@ -6,15 +6,15 @@ mod microfacet;
 mod prepass;
 mod vertex_color;
 
-pub use blinn_phong::{BlinnPhongFeatureShaderInput, BlinnPhongTextureShaderInput};
+pub use blinn_phong::BlinnPhongTextureShaderInput;
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
 pub use microfacet::{
-    DiffuseMicrofacetShadingModel, MicrofacetFeatureShaderInput, MicrofacetShadingModel,
-    MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
+    DiffuseMicrofacetShadingModel, MicrofacetShadingModel, MicrofacetTextureShaderInput,
+    SpecularMicrofacetShadingModel,
 };
 pub use prepass::{
     BumpMappingTextureShaderInput, NormalMappingShaderInput, ParallaxMappingShaderInput,
-    PrepassFeatureShaderInput, PrepassShaderGenerator, PrepassTextureShaderInput,
+    PrepassShaderGenerator, PrepassTextureShaderInput,
 };
 
 use crate::{
@@ -88,12 +88,32 @@ pub struct MeshShaderInput {
 pub enum InstanceFeatureShaderInput {
     ModelViewTransform(ModelViewTransformShaderInput),
     FixedColorMaterial(FixedColorFeatureShaderInput),
-    BlinnPhongMaterial(BlinnPhongFeatureShaderInput),
-    MicrofacetMaterial(MicrofacetFeatureShaderInput),
-    PrepassMaterial(PrepassFeatureShaderInput),
+    LightMaterial(LightMaterialFeatureShaderInput),
     /// For convenience in unit tests.
     #[cfg(test)]
     None,
+}
+
+/// Input description specifying the vertex attribute locations of material
+/// properties of a a light shaded material.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LightMaterialFeatureShaderInput {
+    /// Vertex attribute location for the instance feature representing the
+    /// diffuse color of the material.
+    pub diffuse_color_location: Option<u32>,
+    /// Vertex attribute location for the instance feature representing the
+    /// specular color of the material.
+    pub specular_color_location: Option<u32>,
+    /// Vertex attribute location for the instance feature representing the
+    /// roughness of the material.
+    pub roughness_location: u32,
+    /// Vertex attribute location for the instance feature representing the
+    /// displacement scale for parallax mapping.
+    pub parallax_displacement_scale_location: Option<u32>,
+    /// Vertex attribute location for the instance feature representing the
+    /// change in UV texture coordinates per world space distance for parallax
+    /// mapping.
+    pub parallax_uv_per_distance_location: Option<u32>,
 }
 
 /// Input description for any kind of material.
@@ -913,9 +933,7 @@ impl ShaderGenerator {
     )> {
         let mut model_view_transform_shader_input = None;
         let mut fixed_color_feature_shader_input = None;
-        let mut blinn_phong_feature_shader_input = None;
-        let mut microfacet_feature_shader_input = None;
-        let mut prepass_feature_shader_input = None;
+        let mut light_material_feature_shader_input = None;
 
         for &instance_feature_shader_input in instance_feature_shader_inputs {
             match instance_feature_shader_input {
@@ -929,16 +947,8 @@ impl ShaderGenerator {
                     let old = fixed_color_feature_shader_input.replace(shader_input);
                     assert!(old.is_none());
                 }
-                InstanceFeatureShaderInput::BlinnPhongMaterial(shader_input) => {
-                    let old = blinn_phong_feature_shader_input.replace(shader_input);
-                    assert!(old.is_none());
-                }
-                InstanceFeatureShaderInput::MicrofacetMaterial(shader_input) => {
-                    let old = microfacet_feature_shader_input.replace(shader_input);
-                    assert!(old.is_none());
-                }
-                InstanceFeatureShaderInput::PrepassMaterial(shader_input) => {
-                    let old = prepass_feature_shader_input.replace(shader_input);
+                InstanceFeatureShaderInput::LightMaterial(shader_input) => {
+                    let old = light_material_feature_shader_input.replace(shader_input);
                     assert!(old.is_none());
                 }
                 #[cfg(test)]
@@ -953,52 +963,38 @@ impl ShaderGenerator {
 
         let material_shader_builder = match (
             fixed_color_feature_shader_input,
-            blinn_phong_feature_shader_input,
-            microfacet_feature_shader_input,
-            prepass_feature_shader_input,
+            light_material_feature_shader_input,
             material_shader_input,
         ) {
-            (None, None, None, None, None) => None,
-            (None, None, None, None, Some(MaterialShaderInput::VertexColor)) => {
+            (None, None, None) => None,
+            (None, None, Some(MaterialShaderInput::VertexColor)) => {
                 Some(MaterialShaderGenerator::VertexColor)
             }
-            (Some(feature_input), None, None, None, Some(MaterialShaderInput::Fixed(None))) => {
-                Some(MaterialShaderGenerator::FixedColor(
-                    FixedColorShaderGenerator::new(feature_input),
-                ))
-            }
-            (None, None, None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
+            (Some(feature_input), None, Some(MaterialShaderInput::Fixed(None))) => Some(
+                MaterialShaderGenerator::FixedColor(FixedColorShaderGenerator::new(feature_input)),
+            ),
+            (None, None, Some(MaterialShaderInput::Fixed(Some(texture_input)))) => {
                 Some(MaterialShaderGenerator::FixedTexture(
                     FixedTextureShaderGenerator::new(texture_input),
                 ))
             }
+            (None, Some(feature_input), Some(MaterialShaderInput::BlinnPhong(texture_input))) => {
+                Some(MaterialShaderGenerator::BlinnPhong(
+                    BlinnPhongShaderGenerator::new(feature_input, texture_input),
+                ))
+            }
             (
                 None,
                 Some(feature_input),
-                None,
-                None,
-                Some(MaterialShaderInput::BlinnPhong(texture_input)),
-            ) => Some(MaterialShaderGenerator::BlinnPhong(
-                BlinnPhongShaderGenerator::new(feature_input, texture_input),
-            )),
-            (
-                None,
-                None,
-                Some(feature_input),
-                None,
                 Some(MaterialShaderInput::Microfacet((model, texture_input))),
             ) => Some(MaterialShaderGenerator::Microfacet(
                 MicrofacetShaderGenerator::new(model, feature_input, texture_input),
             )),
-            (
-                None,
-                None,
-                None,
-                feature_input,
-                Some(MaterialShaderInput::Prepass(texture_input)),
-            ) => Some(MaterialShaderGenerator::Prepass(
-                PrepassShaderGenerator::new(feature_input, texture_input),
-            )),
+            (None, Some(feature_input), Some(MaterialShaderInput::Prepass(texture_input))) => {
+                Some(MaterialShaderGenerator::Prepass(
+                    PrepassShaderGenerator::new(feature_input, texture_input),
+                ))
+            }
             input => {
                 return Err(anyhow!(
                     "Tried to build shader with invalid material: {:?}",
@@ -5264,10 +5260,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5307,10 +5305,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5350,10 +5350,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5393,10 +5395,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5436,10 +5440,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5479,10 +5485,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5523,10 +5531,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5567,10 +5577,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    shininess_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5610,10 +5622,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    shininess_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5653,10 +5667,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::BlinnPhongMaterial(BlinnPhongFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    shininess_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::BlinnPhong(
@@ -5697,10 +5713,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5743,10 +5761,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5789,10 +5809,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5835,10 +5857,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5880,10 +5904,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5925,10 +5951,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -5970,10 +5998,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6015,10 +6045,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6061,10 +6093,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6107,10 +6141,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6153,10 +6189,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6199,10 +6237,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6245,10 +6285,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6291,10 +6333,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6337,10 +6381,12 @@ mod test {
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
@@ -6383,10 +6429,12 @@ mod test {
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
             &[
                 &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::MicrofacetMaterial(MicrofacetFeatureShaderInput {
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
                     roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
                 }),
             ],
             Some(&MaterialShaderInput::Microfacet((
