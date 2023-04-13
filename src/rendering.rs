@@ -1,6 +1,7 @@
 //! Graphics rendering.
 
 mod assets;
+mod brdf;
 mod buffer;
 mod camera;
 mod core;
@@ -17,6 +18,7 @@ mod uniform;
 
 pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, TextureID};
+pub use brdf::create_specular_ggx_reflectance_lookup_tables;
 pub use buffer::{
     create_uniform_buffer_bind_group_layout_entry, create_vertex_buffer_layout_for_instance,
     create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
