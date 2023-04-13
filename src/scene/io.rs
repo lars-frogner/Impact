@@ -2,6 +2,7 @@
 
 mod obj;
 mod ply;
+pub mod util;
 
 pub use obj::{
     load_mesh_from_obj_file, load_mesh_from_obj_file_with_projection, load_models_from_obj_file,
