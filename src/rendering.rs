@@ -35,8 +35,9 @@ pub use shader::{
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
-    CascadeIdx, ColorSpace, DepthTexture, MultisampledSurfaceTexture, RenderAttachmentQuantity,
-    RenderAttachmentQuantitySet, RenderAttachmentTextureManager, Texture, TextureConfig,
+    CascadeIdx, ColorSpace, DepthOrArrayLayers, DepthTexture, MultisampledSurfaceTexture,
+    RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
+    TexelDescription, TexelType, Texture, TextureConfig, TextureLookupTable,
     RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
 };
 
