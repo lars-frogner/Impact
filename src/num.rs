@@ -12,6 +12,8 @@ pub trait Float: Copy + nt::FloatConst + nt::FromPrimitive + na::RealField + na:
     const ONE_HALF: Self;
     const FRAC_1_SQRT_2: Self;
     const NEG_FRAC_1_SQRT_2: Self;
+    const PI: Self;
+    const TWO_PI: Self;
     const MIN: Self;
     const MAX: Self;
 }
@@ -26,6 +28,8 @@ macro_rules! impl_float {
             const ONE_HALF: Self = 0.5;
             const FRAC_1_SQRT_2: Self = std::$f::consts::FRAC_1_SQRT_2;
             const NEG_FRAC_1_SQRT_2: Self = -std::$f::consts::FRAC_1_SQRT_2;
+            const PI: Self = std::$f::consts::PI;
+            const TWO_PI: Self = 2.0 * std::$f::consts::PI;
             const MIN: Self = Self::MIN;
             const MAX: Self = Self::MAX;
         }

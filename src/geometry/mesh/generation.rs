@@ -201,8 +201,7 @@ impl<F: Float> TriangleMesh<F> {
 
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let angle_between_vertices =
-            F::TWO * F::PI() / F::from_u32(n_circumference_vertices).unwrap();
+        let angle_between_vertices = F::TWO_PI / F::from_u32(n_circumference_vertices).unwrap();
 
         // Bottom and top center vertices
         positions.push(pos![F::ZERO, -half_length, F::ZERO]);
@@ -324,8 +323,8 @@ impl<F: Float> TriangleMesh<F> {
         let n_rings = u32::try_from(n_rings).unwrap();
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let delta_phi = F::TWO * F::PI() / F::from_u32(n_circumference_vertices).unwrap();
-        let delta_theta = F::PI() / F::from_u32(n_rings + 1).unwrap();
+        let delta_phi = F::TWO_PI / F::from_u32(n_circumference_vertices).unwrap();
+        let delta_theta = <F as Float>::PI / F::from_u32(n_rings + 1).unwrap();
 
         positions.push(pos![F::ZERO, radius, F::ZERO]);
         normal_vectors.push(normal!(Vector3::y_axis()));
