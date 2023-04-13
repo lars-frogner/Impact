@@ -12,28 +12,52 @@ pub use shadow_map::{
     CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,
 };
 
-use crate::rendering::CoreRenderingSystem;
+use crate::{rendering::CoreRenderingSystem, scene};
 use anyhow::{anyhow, bail, Result};
 use bytemuck::Pod;
 use image::{
     self, buffer::ConvertBuffer, io::Reader as ImageReader, DynamicImage, GenericImageView,
     ImageBuffer, Luma, Rgba,
 };
-use std::{num::NonZeroU32, path::Path};
+use rmp_serde::{from_read, Serializer};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{fs::File, io::BufReader, num::NonZeroU32, path::Path};
 use wgpu::util::DeviceExt;
+
+/// Represents a data type that can be copied directly to a [`Texture`].
+pub trait TexelType: Pod {
+    const DESCRIPTION: TexelDescription;
+}
+
+/// A description of the data type used for a texel.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TexelDescription {
+    Rgba8(ColorSpace),
+    Grayscale8,
+    Float32,
+}
+
+/// A color space for pixel/texel values.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ColorSpace {
+    Linear,
+    Srgb,
+}
 
 /// A texture holding multidimensional data.
 #[derive(Debug)]
 pub struct Texture {
-    texture: wgpu::Texture,
+    _texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
+    view_dimension: wgpu::TextureViewDimension,
 }
 
 /// Configuration for [`Texture`]s.
 #[derive(Clone, Debug, Default)]
 pub struct TextureConfig {
-    /// The color space that the pixel values should be assumed to be stored in.
+    /// The color space that the texel data values should be assumed to be
+    /// stored in.
     pub color_space: ColorSpace,
     /// How addressing outside the [0, 1] range for the U texture coordinate
     /// should be handled.
@@ -50,17 +74,53 @@ pub struct TextureConfig {
     pub min_filter: wgpu::FilterMode,
 }
 
-/// A color space for pixel values.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ColorSpace {
-    Linear,
-    Srgb,
+/// Dimensions and data for a lookup table to be loaded into a texture.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TextureLookupTable<T: TexelType> {
+    width: NonZeroU32,
+    height: NonZeroU32,
+    depth_or_array_layers: DepthOrArrayLayers,
+    data: Vec<T>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum ColorType {
-    Rgba8(ColorSpace),
-    Grayscale8,
+/// A number that either represents the number of depths in a 3D texture or the
+/// number of layers in a 1D or 2D texture array.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DepthOrArrayLayers {
+    Depth(NonZeroU32),
+    ArrayLayers(NonZeroU32),
+}
+
+impl Default for ColorSpace {
+    fn default() -> Self {
+        Self::Linear
+    }
+}
+
+impl TexelDescription {
+    fn n_bytes(&self) -> u32 {
+        match self {
+            Self::Rgba8(_) | Self::Float32 => 4,
+            Self::Grayscale8 => 1,
+        }
+    }
+
+    fn texture_format(&self) -> wgpu::TextureFormat {
+        match self {
+            Self::Rgba8(ColorSpace::Linear) => wgpu::TextureFormat::Rgba8Unorm,
+            Self::Rgba8(ColorSpace::Srgb) => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Self::Grayscale8 => wgpu::TextureFormat::R8Unorm,
+            Self::Float32 => wgpu::TextureFormat::R32Float,
+        }
+    }
+}
+
+impl TexelType for f32 {
+    const DESCRIPTION: TexelDescription = TexelDescription::Float32;
+}
+
+impl TexelType for u8 {
+    const DESCRIPTION: TexelDescription = TexelDescription::Grayscale8;
 }
 
 impl Texture {
@@ -72,6 +132,9 @@ impl Texture {
     /// - The image file can not be read or decoded.
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_path(
@@ -91,6 +154,9 @@ impl Texture {
     /// Returns an error if:
     /// - The image bytes can not be interpreted.
     /// - The image width or height is zero.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_bytes(
@@ -109,6 +175,9 @@ impl Texture {
     /// # Errors
     /// Returns an error if:
     /// - The image width or height is zero.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   data between buffers and textures).
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_image(
@@ -122,14 +191,14 @@ impl Texture {
         let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
         let depth = NonZeroU32::new(1).unwrap();
 
-        Ok(if image.color().has_color() {
+        if image.color().has_color() {
             Self::new(
                 core_system,
                 &image.into_rgba8(),
                 width,
                 height,
-                depth,
-                ColorType::Rgba8(config.color_space),
+                DepthOrArrayLayers::Depth(depth),
+                TexelDescription::Rgba8(config.color_space),
                 config,
                 label,
             )
@@ -146,53 +215,129 @@ impl Texture {
                 &image.into_luma8(),
                 width,
                 height,
-                depth,
-                ColorType::Grayscale8,
+                DepthOrArrayLayers::Depth(depth),
+                TexelDescription::Grayscale8,
                 config,
                 label,
             )
-        })
+        }
+    }
+
+    /// Creates a texture holding the given lookup table. The texture will be
+    /// sampled with (bi/tri)linear interpolation, and lookups outside [0, 1]
+    /// are clamped to the edge values.
+    ///
+    /// # Errors
+    /// Returns an error if the row size (width times data value size) is not a
+    /// multiple of 256 bytes (`wgpu` requires that rows are a multiple of 256
+    /// bytes for for copying data between buffers and textures).
+    pub fn from_lookup_table<T: TexelType>(
+        core_system: &CoreRenderingSystem,
+        table: &TextureLookupTable<T>,
+        label: &str,
+    ) -> Result<Self> {
+        let byte_buffer = bytemuck::cast_slice(&table.data);
+
+        let config = TextureConfig {
+            color_space: ColorSpace::Linear,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+        };
+
+        Self::new(
+            core_system,
+            byte_buffer,
+            table.width,
+            table.height,
+            table.depth_or_array_layers,
+            T::DESCRIPTION,
+            config,
+            label,
+        )
     }
 
     /// Creates a texture for the data contained in the given byte buffer, with
-    /// the given dimensions and color type, using the given configuration
-    /// parameters.
+    /// the given dimensions and texel description, using the given
+    /// configuration parameters.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The texture shape and texel size are inconsistent with the size of the
+    ///   byte buffer.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   data between buffers and textures).
     fn new(
         core_system: &CoreRenderingSystem,
         byte_buffer: &[u8],
         width: NonZeroU32,
         height: NonZeroU32,
-        depth: NonZeroU32,
-        color_type: ColorType,
+        depth_or_array_layers: DepthOrArrayLayers,
+        texel_description: TexelDescription,
         config: TextureConfig,
         label: &str,
-    ) -> Self {
-        let device = core_system.device();
-
+    ) -> Result<Self> {
         let texture_size = wgpu::Extent3d {
             width: u32::from(width),
             height: u32::from(height),
-            depth_or_array_layers: u32::from(depth),
+            depth_or_array_layers: u32::from(depth_or_array_layers.unwrap()),
         };
 
-        let dimension = if texture_size.depth_or_array_layers > 1 {
-            wgpu::TextureDimension::D3
+        if (texel_description.n_bytes()
+            * texture_size.width
+            * texture_size.height
+            * texture_size.depth_or_array_layers) as usize
+            != byte_buffer.len()
+        {
+            bail!(
+                "Texture {} shape ({}, {}, {:?}) and texel size ({} bytes) not consistent with number bytes of data ({})",
+                label,
+                width,
+                height,
+                depth_or_array_layers,
+                texel_description.n_bytes(),
+                byte_buffer.len()
+            )
+        } else if (texel_description.n_bytes() * texture_size.width) % 256 != 0 {
+            bail!(
+                "Texture {} row size ({} bytes) is not a multiple of 256 bytes",
+                label,
+                texel_description.n_bytes() * texture_size.width
+            )
+        }
+
+        let (dimension, view_dimension) = if depth_or_array_layers.is_array_layers() {
+            (
+                wgpu::TextureDimension::D2,
+                wgpu::TextureViewDimension::D2Array,
+            )
+        } else if texture_size.depth_or_array_layers == 1 {
+            if texture_size.height == 1 {
+                (wgpu::TextureDimension::D1, wgpu::TextureViewDimension::D1)
+            } else {
+                (wgpu::TextureDimension::D2, wgpu::TextureViewDimension::D2)
+            }
         } else {
-            wgpu::TextureDimension::D2
+            (wgpu::TextureDimension::D3, wgpu::TextureViewDimension::D3)
         };
+
+        let device = core_system.device();
 
         let texture =
-            Self::create_empty_texture(device, color_type, texture_size, dimension, label);
+            Self::create_empty_texture(device, texel_description, texture_size, dimension, label);
 
         Self::write_data_to_texture(
             core_system.queue(),
             &texture,
             byte_buffer,
-            color_type,
+            texel_description,
             texture_size,
         );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = Self::create_view(&texture, view_dimension);
 
         let sampler = Self::create_sampler(
             device,
@@ -203,11 +348,12 @@ impl Texture {
             config.min_filter,
         );
 
-        Self {
-            texture,
+        Ok(Self {
+            _texture: texture,
             view,
             sampler,
-        }
+            view_dimension,
+        })
     }
 
     /// Returns a view into the texture.
@@ -231,11 +377,7 @@ impl Texture {
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: if self.texture.depth_or_array_layers() > 1 {
-                    wgpu::TextureViewDimension::D3
-                } else {
-                    wgpu::TextureViewDimension::D2
-                },
+                view_dimension: self.view_dimension,
                 multisampled: false,
             },
             count: None,
@@ -279,7 +421,7 @@ impl Texture {
     /// Creates a new [`wgpu::Texture`] configured to hold 2D image data.
     fn create_empty_texture(
         device: &wgpu::Device,
-        color_type: ColorType,
+        texel_description: TexelDescription,
         texture_size: wgpu::Extent3d,
         dimension: wgpu::TextureDimension,
         label: &str,
@@ -289,7 +431,7 @@ impl Texture {
             mip_level_count: 1,
             sample_count: 1,
             dimension,
-            format: color_type.texture_format(),
+            format: texel_description.texture_format(),
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             label: Some(label),
             view_formats: &[],
@@ -300,7 +442,7 @@ impl Texture {
         queue: &wgpu::Queue,
         texture: &wgpu::Texture,
         byte_buffer: &[u8],
-        color_type: ColorType,
+        texel_description: TexelDescription,
         texture_size: wgpu::Extent3d,
     ) {
         queue.write_texture(
@@ -314,12 +456,22 @@ impl Texture {
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(
-                    NonZeroU32::new(color_type.n_bytes() * texture_size.width).unwrap(),
+                    NonZeroU32::new(texel_description.n_bytes() * texture_size.width).unwrap(),
                 ),
                 rows_per_image: Some(NonZeroU32::new(texture_size.height).unwrap()),
             },
             texture_size,
         );
+    }
+
+    fn create_view(
+        texture: &wgpu::Texture,
+        view_dimension: wgpu::TextureViewDimension,
+    ) -> wgpu::TextureView {
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(view_dimension),
+            ..Default::default()
+        })
     }
 
     fn create_sampler(
@@ -362,25 +514,77 @@ impl TextureConfig {
     };
 }
 
-impl Default for ColorSpace {
-    fn default() -> Self {
-        Self::Linear
+impl<T: TexelType> TextureLookupTable<T> {
+    /// Wraps the lookup table with the given dimensions and data. The table is
+    /// considered an array of 2D subtables if `depth_or_array_layers` is
+    /// `ArrayLayers`, otherwise it is considered 1D if `depth_or_array_layers`
+    /// and `height` are 1, 2D if only `depth_or_array_layers` is 1 and 3D
+    /// otherwise. The lookup values in the `data` vector are assumed to be laid
+    /// out in row-major order, with adjacent values varying in width first,
+    /// then height and finally depth.
+    ///
+    /// # Panics
+    /// - If the `data` vector is empty.
+    /// - If the table shape is inconsistent with the number of data values.
+    pub fn new(
+        width: usize,
+        height: usize,
+        depth_or_array_layers: DepthOrArrayLayers,
+        data: Vec<T>,
+    ) -> Self {
+        assert!(!data.is_empty(), "No data for lookup table");
+
+        assert_eq!(
+            width * height * (u32::from(depth_or_array_layers.unwrap()) as usize),
+            data.len(),
+            "Lookup table shape ({}, {}, {:?}) inconsistent with number of data values ({})",
+            width,
+            height,
+            depth_or_array_layers,
+            data.len()
+        );
+
+        let width = NonZeroU32::new(u32::try_from(width).unwrap()).unwrap();
+        let height = NonZeroU32::new(u32::try_from(height).unwrap()).unwrap();
+
+        Self {
+            width,
+            height,
+            depth_or_array_layers,
+            data,
+        }
     }
 }
 
-impl ColorType {
-    fn n_bytes(&self) -> u32 {
-        match self {
-            Self::Rgba8(_) => 4,
-            Self::Grayscale8 => 1,
-        }
+impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
+    /// Serializes the lookup table into the `MessagePack` format and saves it
+    /// at the given path.
+    pub fn save_to_file(self, output_file_path: impl AsRef<Path>) -> Result<Self> {
+        let mut byte_buffer = Vec::new();
+        self.serialize(&mut Serializer::new(&mut byte_buffer))?;
+        scene::io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
+        Ok(self)
     }
 
-    fn texture_format(&self) -> wgpu::TextureFormat {
+    /// Loads and returns the `MessagePack` serialized lookup table at the given
+    /// path.
+    pub fn read_from_file(file_path: impl AsRef<Path>) -> Result<Self> {
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
+        let table = from_read(reader)?;
+        Ok(table)
+    }
+}
+
+impl DepthOrArrayLayers {
+    fn is_array_layers(&self) -> bool {
+        matches!(self, Self::ArrayLayers(_))
+    }
+
+    fn unwrap(&self) -> NonZeroU32 {
         match self {
-            Self::Rgba8(ColorSpace::Linear) => wgpu::TextureFormat::Rgba8Unorm,
-            Self::Rgba8(ColorSpace::Srgb) => wgpu::TextureFormat::Rgba8UnormSrgb,
-            Self::Grayscale8 => wgpu::TextureFormat::R8Unorm,
+            Self::Depth(depth) => *depth,
+            Self::ArrayLayers(n_array_layers) => *n_array_layers,
         }
     }
 }
@@ -479,14 +683,14 @@ fn extract_texture_data<T: Pod>(
 
     let width = texture.width();
     let height = texture.height();
-    let pixel_size = u32::from(texture.format().describe().block_size);
+    let texel_size = u32::from(texture.format().describe().block_size);
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Texture copy encoder"),
     });
 
     let raw_buffer =
-        vec![0; (pixel_size * width * height * texture.depth_or_array_layers()) as usize];
+        vec![0; (texel_size * width * height * texture.depth_or_array_layers()) as usize];
 
     let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         contents: raw_buffer.as_slice(),
@@ -500,7 +704,7 @@ fn extract_texture_data<T: Pod>(
             buffer: &buffer,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(pixel_size * width).unwrap()),
+                bytes_per_row: Some(NonZeroU32::new(texel_size * width).unwrap()),
                 rows_per_image: Some(NonZeroU32::new(height).unwrap()),
             },
         },
@@ -515,7 +719,7 @@ fn extract_texture_data<T: Pod>(
     let buffer_view = buffer_slice.get_mapped_range();
 
     // Extract only the data of the texture with the given texture array index
-    let texture_image_size = (pixel_size * width * height) as usize;
+    let texture_image_size = (texel_size * width * height) as usize;
     let buffer_view = &buffer_view
         [texture_array_idx * texture_image_size..(texture_array_idx + 1) * texture_image_size];
 
