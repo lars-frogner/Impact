@@ -60,7 +60,7 @@ pub struct PrepassShaderGenerator<'a> {
 pub struct PrepassVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
-    roughness: usize,
+    roughness: Option<usize>,
     parallax_displacement_scale: Option<usize>,
     parallax_uv_per_distance: Option<usize>,
 }
@@ -99,27 +99,30 @@ impl<'a> PrepassShaderGenerator<'a> {
 
         let mut input_struct_builder = InputStructBuilder::new("MaterialProperties", "material");
 
+        let mut has_material_property = false;
+
         let input_diffuse_color_field_idx =
             self.feature_input.diffuse_color_location.map(|location| {
+                has_material_property = true;
                 input_struct_builder.add_field("diffuseColor", vec3_type, location, VECTOR_3_SIZE)
             });
 
         let input_specular_color_field_idx =
             self.feature_input.specular_color_location.map(|location| {
+                has_material_property = true;
                 input_struct_builder.add_field("specularColor", vec3_type, location, VECTOR_3_SIZE)
             });
 
-        let input_roughness_field_idx = input_struct_builder.add_field(
-            "roughness",
-            float_type,
-            self.feature_input.roughness_location,
-            F32_WIDTH,
-        );
+        let input_roughness_field_idx = self.feature_input.roughness_location.map(|location| {
+            has_material_property = true;
+            input_struct_builder.add_field("roughness", float_type, location, F32_WIDTH)
+        });
 
         let input_parallax_displacement_scale_field_idx = self
             .feature_input
             .parallax_displacement_scale_location
             .map(|location| {
+                has_material_property = true;
                 input_struct_builder.add_field(
                     "parallaxDisplacementScale",
                     float_type,
@@ -132,6 +135,7 @@ impl<'a> PrepassShaderGenerator<'a> {
             .feature_input
             .parallax_uv_per_distance_location
             .map(|location| {
+                has_material_property = true;
                 input_struct_builder.add_field(
                     "parallaxUVPerDistance",
                     vec2_type,
@@ -140,67 +144,72 @@ impl<'a> PrepassShaderGenerator<'a> {
                 )
             });
 
-        let input_struct =
-            input_struct_builder.generate_input_code(&mut module.types, vertex_function);
-
-        let output_roughness_field_idx = vertex_output_struct_builder
-            .add_field_with_perspective_interpolation(
-                "roughness",
-                float_type,
-                F32_WIDTH,
-                input_struct.get_field_expr(input_roughness_field_idx),
-            );
-
         let mut indices = PrepassVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
-            roughness: output_roughness_field_idx,
+            roughness: None,
             parallax_displacement_scale: None,
             parallax_uv_per_distance: None,
         };
 
-        if let Some(idx) = input_diffuse_color_field_idx {
-            indices.diffuse_color = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "diffuseColor",
-                    vec3_type,
-                    VECTOR_3_SIZE,
-                    input_struct.get_field_expr(idx),
-                ),
-            );
-        }
+        if has_material_property {
+            let input_struct =
+                input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
-        if let Some(idx) = input_specular_color_field_idx {
-            indices.specular_color = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "specularColor",
-                    vec3_type,
-                    VECTOR_3_SIZE,
-                    input_struct.get_field_expr(idx),
-                ),
-            );
-        }
+            if let Some(idx) = input_diffuse_color_field_idx {
+                indices.diffuse_color = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "diffuseColor",
+                        vec3_type,
+                        VECTOR_3_SIZE,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
 
-        if let Some(idx) = input_parallax_displacement_scale_field_idx {
-            indices.parallax_displacement_scale = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "parallaxDisplacementScale",
-                    float_type,
-                    F32_WIDTH,
-                    input_struct.get_field_expr(idx),
-                ),
-            );
-        }
+            if let Some(idx) = input_specular_color_field_idx {
+                indices.specular_color = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "specularColor",
+                        vec3_type,
+                        VECTOR_3_SIZE,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
 
-        if let Some(idx) = input_parallax_uv_per_distance_field_idx {
-            indices.parallax_uv_per_distance = Some(
-                vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "parallaxUVPerDistance",
-                    vec2_type,
-                    VECTOR_2_SIZE,
-                    input_struct.get_field_expr(idx),
-                ),
-            );
+            if let Some(idx) = input_roughness_field_idx {
+                indices.roughness = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "roughness",
+                        float_type,
+                        F32_WIDTH,
+                        input_struct.get_field_expr(idx),
+                    ),
+                )
+            };
+
+            if let Some(idx) = input_parallax_displacement_scale_field_idx {
+                indices.parallax_displacement_scale = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "parallaxDisplacementScale",
+                        float_type,
+                        F32_WIDTH,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
+
+            if let Some(idx) = input_parallax_uv_per_distance_field_idx {
+                indices.parallax_uv_per_distance = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "parallaxUVPerDistance",
+                        vec2_type,
+                        VECTOR_2_SIZE,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
         }
 
         indices
@@ -354,8 +363,11 @@ impl<'a> PrepassShaderGenerator<'a> {
                                         .map(|idx| fragment_input_struct.get_field_expr(idx))
                                 });
 
-                            let fixed_roughness_value_expr = fragment_input_struct
-                                .get_field_expr(material_input_field_indices.roughness);
+                            let fixed_roughness_value_expr = fragment_input_struct.get_field_expr(
+                                material_input_field_indices
+                                    .roughness
+                                    .expect("Missing roughness for computing specular ambient color"),
+                            );
 
                             let roughness_expr = self
                                 .texture_input

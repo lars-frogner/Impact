@@ -90,7 +90,9 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let input_shininess_field_idx = input_struct_builder.add_field(
             "shininess",
             float_type,
-            self.feature_input.roughness_location,
+            self.feature_input
+                .roughness_location
+                .expect("Missing shininess for Blinn-Phong shading"),
             F32_WIDTH,
         );
 
