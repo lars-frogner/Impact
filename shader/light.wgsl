@@ -1,3 +1,11 @@
+struct ReflectionDotProducts {
+    VDotN: f32,
+    LDotN: f32,
+    LDotV: f32,
+    NDotH: f32,
+    LDotH: f32,
+}
+
 // ***** Ambient lights *****
 
 fn computeAmbientColorForLambertian(diffuseColor: vec3<f32>, ambientRadiance: vec3<f32>) -> vec3<f32> {
@@ -80,39 +88,55 @@ fn computeShadowMapFragmentDepthOmniLight(
     return (length(cubemapSpaceFragmentPosition) - nearDistance) * inverseDistanceSpan;
 }
 
-struct LightQuantitiesOmniLight {
-    lightDirection: vec3<f32>,
-    lightDirectionDotNormalVector: f32,
+struct OmniLightQuantities {
     attenuatedLightRadiance: vec3<f32>,
     lightSpaceFragmentDisplacement: vec3<f32>,
     normalizedDistance: f32,
+    dots: ReflectionDotProducts,
 }
 
-fn computeLightQuantitiesOmniLight(
+fn computeOmniLightQuantities(
     lightPosition: vec3<f32>,
     lightRadiance: vec3<f32>,
+    lightRadius: f32,
     cameraToLightSpaceRotationQuaternion: vec4<f32>,
     nearDistance: f32,
     inverseDistanceSpan: f32,
     fragmentPosition: vec3<f32>,
     fragmentNormal: vec3<f32>,
-) -> LightQuantitiesOmniLight {
-    var output: LightQuantitiesOmniLight;
+    viewDirection: vec3<f32>,
+) -> OmniLightQuantities {
+    var output: OmniLightQuantities;
 
-    let lightDisplacement = lightPosition - fragmentPosition;
-    let inverseSquaredDistance = 1.0 / dot(lightDisplacement, lightDisplacement);
-    output.lightDirection = lightDisplacement * sqrt(inverseSquaredDistance);
-    output.lightDirectionDotNormalVector = dot(output.lightDirection, fragmentNormal);
+    let lightCenterDisplacement = lightPosition - fragmentPosition;
+    let inverseSquaredDistance = 1.0 / dot(lightCenterDisplacement, lightCenterDisplacement);
+    let lightCenterDirection = lightCenterDisplacement * sqrt(inverseSquaredDistance);
 
     output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
+
+    let VDotN = dot(viewDirection, fragmentNormal);
+    let LDotN = dot(lightCenterDirection, fragmentNormal);
+    let LDotV = dot(lightCenterDirection, viewDirection);
 
     // Add an offset to the fragment position along the fragment
     // normal to avoid shadow acne. The offset increases as the
     // light becomes less perpendicular to the surface.
-    let offsetFragmentDisplacement = -lightDisplacement + fragmentNormal * clamp(1.0 - output.lightDirectionDotNormalVector, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
+    let offsetFragmentDisplacement = -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotV, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
 
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
+
+    // Compute dot products with half vector without computing half vector
+    let onePlusLDotV = 1.0 + LDotV;
+    let inverseLPlusVLength = inverseSqrt(2.0 * onePlusLDotV);
+    let LDotH = onePlusLDotV * inverseLPlusVLength;
+    let NDotH = (LDotN + VDotN) * inverseLPlusVLength;
+
+    output.dots.VDotN = VDotN;
+    output.dots.LDotN = LDotN;
+    output.dots.LDotV = LDotV;
+    output.dots.NDotH = NDotH;
+    output.dots.LDotH = LDotH;
 
     return output;
 }
@@ -263,14 +287,45 @@ fn applyNormalBiasUniLight(
     return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * 1e-1;
 }
 
-fn computeUniLightClipSpacePosition(
+struct UniLightQuantities {
+    lightClipSpacePosition: vec3<f32>,
+    dots: ReflectionDotProducts,
+}
+
+fn computeUniLightQuantities(
+    directionOfLight: vec3<f32>,
+    tanAngularLightRadius: f32,
     orthographicTranslation: vec3<f32>,
     orthographicScaling: vec3<f32>,
     lightSpacePosition: vec3<f32>,
     lightSpaceNormalVector: vec3<f32>,
-) -> vec3<f32> {
+    fragmentNormal: vec3<f32>,
+    viewDirection: vec3<f32>,
+) -> UniLightQuantities {
+    var output: UniLightQuantities;
+
     let biasedLightSpacePosition = applyNormalBiasUniLight(lightSpacePosition, lightSpaceNormalVector);
-    return applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
+    output.lightClipSpacePosition = applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
+
+    let lightCenterDirection = -directionOfLight;
+
+    let VDotN = dot(viewDirection, fragmentNormal);
+    let LDotN = dot(lightCenterDirection, fragmentNormal);
+    let LDotV = dot(lightCenterDirection, viewDirection);
+
+    // Compute dot products with half vector without computing half vector
+    let onePlusLDotV = 1.0 + LDotV;
+    let inverseLPlusVLength = inverseSqrt(2.0 * onePlusLDotV);
+    let LDotH = onePlusLDotV * inverseLPlusVLength;
+    let NDotH = (LDotN + VDotN) * inverseLPlusVLength;
+
+    output.dots.VDotN = VDotN;
+    output.dots.LDotN = LDotN;
+    output.dots.LDotV = LDotV;
+    output.dots.NDotH = NDotH;
+    output.dots.LDotH = LDotH;
+
+    return output;
 }
 
 fn determineCascadeIdxMax1(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {

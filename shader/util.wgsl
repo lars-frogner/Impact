@@ -79,6 +79,10 @@ fn transformVectorToTangentSpace(
     return tangentSpaceVector;
 }
 
+fn clampToZero(value: f32) -> f32 {
+    return max(0.0, value);
+}
+
 fn computeCameraSpaceViewDirection(vertexPosition: vec3<f32>) -> vec3<f32> {
     return normalize(-vertexPosition);
 }

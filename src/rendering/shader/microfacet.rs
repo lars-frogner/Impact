@@ -446,7 +446,14 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             )),
         );
 
-        let (light_dir_expr, light_radiance_expr) = match (
+        let view_dir_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "computeCameraSpaceViewDirection",
+            vec![position_expr],
+        );
+
+        let (reflection_dot_products_expr, light_radiance_expr) = match (
             light_shader_generator,
             light_input_field_indices,
         ) {
@@ -468,6 +475,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     framebuffer_position_expr,
                     position_expr,
                     normal_vector_expr,
+                    view_dir_expr,
                 )
             }
             (
@@ -491,19 +499,13 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     unidirectional_light_input_field_indices,
                     framebuffer_position_expr,
                     normal_vector_expr,
+                    view_dir_expr,
                 )
             }
             _ => {
                 panic!("Invalid variant of light shader generator and/or light vertex output field indices for microfacet shading");
             }
         };
-
-        let view_dir_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "computeCameraSpaceViewDirection",
-            vec![position_expr],
-        );
 
         let light_color_expr = match (self.model, diffuse_color_expr, specular_color_expr) {
             (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(diffuse_color_expr), None) => {
@@ -512,11 +514,9 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     fragment_function,
                     "computeGGXDiffuseNoSpecularColor",
                     vec![
-                        view_dir_expr,
-                        normal_vector_expr,
+                        reflection_dot_products_expr,
                         diffuse_color_expr,
                         roughness_expr,
-                        light_dir_expr,
                         light_radiance_expr,
                     ],
                 )
@@ -527,11 +527,9 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     fragment_function,
                     "computeNoDiffuseGGXSpecularColor",
                     vec![
-                        view_dir_expr,
-                        normal_vector_expr,
+                        reflection_dot_products_expr,
                         specular_color_expr,
                         roughness_expr,
-                        light_dir_expr,
                         light_radiance_expr,
                     ],
                 )
@@ -545,12 +543,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 fragment_function,
                 "computeLambertianDiffuseGGXSpecularColor",
                 vec![
-                    view_dir_expr,
-                    normal_vector_expr,
+                    reflection_dot_products_expr,
                     diffuse_color_expr,
                     specular_color_expr,
                     roughness_expr,
-                    light_dir_expr,
                     light_radiance_expr,
                 ],
             ),
@@ -563,12 +559,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 fragment_function,
                 "computeGGXDiffuseGGXSpecularColor",
                 vec![
-                    view_dir_expr,
-                    normal_vector_expr,
+                    reflection_dot_products_expr,
                     diffuse_color_expr,
                     specular_color_expr,
                     roughness_expr,
-                    light_dir_expr,
                     light_radiance_expr,
                 ],
             ),

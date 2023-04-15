@@ -186,7 +186,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                         F32_WIDTH,
                         input_struct.get_field_expr(idx),
                     ),
-                )
+                );
             };
 
             if let Some(idx) = input_parallax_displacement_scale_field_idx {
