@@ -290,7 +290,14 @@ impl<'a> PrepassShaderGenerator<'a> {
                             .map(|idx| fragment_input_struct.get_field_expr(idx))
                     });
 
-                if let Some(diffuse_color_expr) = diffuse_color_expr {
+                let diffuse_ambient_color = diffuse_color_expr.map(|diffuse_color_expr| {
+                    source_code_lib.generate_function_call(
+                        module,
+                        fragment_function,
+                        "computeAmbientColorForLambertian",
+                        vec![diffuse_color_expr, ambient_light_shader_generator.radiance],
+                    )
+                });
                     source_code_lib.generate_function_call(
                         module,
                         fragment_function,

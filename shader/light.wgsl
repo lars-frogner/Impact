@@ -1,7 +1,8 @@
 // ***** Ambient lights *****
 
-fn computeAmbientColor(diffuseColor: vec3<f32>, irradiance: vec3<f32>) -> vec3<f32> {
-    return diffuseColor * irradiance;
+fn computeAmbientColorForLambertian(diffuseColor: vec3<f32>, ambientRadiance: vec3<f32>) -> vec3<f32> {
+    return diffuseColor * ambientRadiance;
+}
 }
 
 fn getBaseAmbientColor() -> vec3<f32> {

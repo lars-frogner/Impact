@@ -1,9 +1,10 @@
 //! Ambient light sources.
 
 use crate::{
+    num::Float,
     rendering::fre,
     scene::{
-        AmbientLightComp, Irradiance, LightStorage, RenderResourcesDesynchronized,
+        AmbientLightComp, Irradiance, LightStorage, Radiance, RenderResourcesDesynchronized,
         UniformIrradianceComp,
     },
 };
@@ -12,7 +13,7 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry
 use std::sync::RwLock;
 
 /// A spatially uniform and isotropic radiance field, represented by an RGB
-/// irradiance.
+/// radiance.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -20,7 +21,7 @@ use std::sync::RwLock;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct AmbientLight {
-    irradiance: Irradiance,
+    radiance: Radiance,
     // Padding to make size multiple of 16-bytes
     _padding: fre,
 }
@@ -28,7 +29,7 @@ pub struct AmbientLight {
 impl AmbientLight {
     fn new(irradiance: Irradiance) -> Self {
         Self {
-            irradiance,
+            radiance: irradiance / fre::PI,
             _padding: 0.0,
         }
     }
