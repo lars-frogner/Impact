@@ -106,7 +106,7 @@ pub struct LightMaterialFeatureShaderInput {
     pub specular_color_location: Option<u32>,
     /// Vertex attribute location for the instance feature representing the
     /// roughness of the material.
-    pub roughness_location: u32,
+    pub roughness_location: Option<u32>,
     /// Vertex attribute location for the instance feature representing the
     /// displacement scale for parallax mapping.
     pub parallax_displacement_scale_location: Option<u32>,
@@ -4996,6 +4996,12 @@ mod test {
             color_texture_and_sampler_bindings: (0, 1),
         }));
 
+    const AMBIENT_LIGHT_INPUT: LightShaderInput =
+        LightShaderInput::AmbientLight(AmbientLightShaderInput {
+            uniform_binding: 8,
+            max_light_count: 20,
+        });
+
     const OMNIDIRECTIONAL_LIGHT_INPUT: LightShaderInput =
         LightShaderInput::OmnidirectionalLight(OmnidirectionalLightShaderInput {
             uniform_binding: 0,
@@ -5291,7 +5297,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5336,7 +5342,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5381,7 +5387,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5426,7 +5432,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5471,7 +5477,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5516,7 +5522,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5562,7 +5568,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5608,7 +5614,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5653,7 +5659,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5698,7 +5704,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5744,7 +5750,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5792,7 +5798,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5840,7 +5846,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5888,7 +5894,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5935,7 +5941,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -5982,7 +5988,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6029,7 +6035,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6076,7 +6082,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6124,7 +6130,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6172,7 +6178,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6220,7 +6226,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6268,7 +6274,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6316,7 +6322,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6364,7 +6370,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6412,7 +6418,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6460,7 +6466,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
-                    roughness_location: MATERIAL_VERTEX_BINDING_START,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
                 }),
@@ -6476,6 +6482,437 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_minimal_prepass_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+            }),
+            None,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: None,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: None,
+                bump_mapping_input: None,
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_prepass_shader_with_normal_mapping_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            None,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: None,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: None,
+                bump_mapping_input: Some(BumpMappingTextureShaderInput::NormalMapping(
+                    NormalMappingShaderInput {
+                        normal_map_texture_and_sampler_bindings: (0, 1),
+                    },
+                )),
+            })),
+            VertexAttributeSet::TEXTURE_COORDS | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::NORMAL_VECTOR,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_prepass_shader_with_parallax_mapping_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                ],
+            }),
+            None,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: None,
+                    parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: None,
+                bump_mapping_input: Some(BumpMappingTextureShaderInput::ParallaxMapping(
+                    ParallaxMappingShaderInput {
+                        height_map_texture_and_sampler_bindings: (0, 1),
+                    },
+                )),
+            })),
+            VertexAttributeSet::POSITION
+                | VertexAttributeSet::TEXTURE_COORDS
+                | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_lambertian_diffuse_prepass_shader_with_ambient_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+            }),
+            Some(&AMBIENT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: None,
+                    roughness_location: None,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: None,
+                bump_mapping_input: None,
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_microfacet_specular_prepass_shader_with_ambient_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&AMBIENT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: Some((0, 1)),
+                bump_mapping_input: None,
+            })),
+            VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&AMBIENT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: Some((0, 1)),
+                bump_mapping_input: None,
+            })),
+            VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    None,
+                ],
+            }),
+            Some(&AMBIENT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                specular_texture_and_sampler_bindings: Some((2, 3)),
+                roughness_texture_and_sampler_bindings: Some((4, 5)),
+                specular_reflectance_lookup_texture_and_sampler_bindings: Some((6, 7)),
+                bump_mapping_input: None,
+            })),
+            VertexAttributeSet::POSITION
+                | VertexAttributeSet::NORMAL_VECTOR
+                | VertexAttributeSet::TEXTURE_COORDS,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_and_normal_mapping_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    Some(MESH_VERTEX_BINDING_START + 3),
+                ],
+            }),
+            Some(&AMBIENT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                specular_texture_and_sampler_bindings: Some((2, 3)),
+                roughness_texture_and_sampler_bindings: Some((4, 5)),
+                specular_reflectance_lookup_texture_and_sampler_bindings: Some((6, 7)),
+                bump_mapping_input: Some(BumpMappingTextureShaderInput::NormalMapping(
+                    NormalMappingShaderInput {
+                        normal_map_texture_and_sampler_bindings: (8, 9),
+                    },
+                )),
+            })),
+            VertexAttributeSet::POSITION
+                | VertexAttributeSet::TEXTURE_COORDS
+                | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::NORMAL_VECTOR,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_textured_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_and_parallax_mapping_works(
+    ) {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 2),
+                    Some(MESH_VERTEX_BINDING_START + 3),
+                ],
+            }),
+            Some(&AMBIENT_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: Some((0, 1)),
+                specular_texture_and_sampler_bindings: Some((2, 3)),
+                roughness_texture_and_sampler_bindings: Some((4, 5)),
+                specular_reflectance_lookup_texture_and_sampler_bindings: Some((6, 7)),
+                bump_mapping_input: Some(BumpMappingTextureShaderInput::ParallaxMapping(
+                    ParallaxMappingShaderInput {
+                        height_map_texture_and_sampler_bindings: (8, 9),
+                    },
+                )),
+            })),
+            VertexAttributeSet::POSITION
+                | VertexAttributeSet::TEXTURE_COORDS
+                | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
         )
         .unwrap()
         .0;

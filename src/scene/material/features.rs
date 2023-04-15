@@ -377,7 +377,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: None,
         specular_color_location: None,
-        roughness_location: MATERIAL_VERTEX_BINDING_START,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
         parallax_displacement_scale_location: None,
         parallax_uv_per_distance_location: None,
     })
@@ -392,7 +392,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: None,
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         parallax_displacement_scale_location: None,
         parallax_uv_per_distance_location: None,
     })
@@ -407,7 +407,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: None,
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         parallax_displacement_scale_location: None,
         parallax_uv_per_distance_location: None,
     })
@@ -423,7 +423,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
         parallax_displacement_scale_location: None,
         parallax_uv_per_distance_location: None,
     })
@@ -439,7 +439,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: None,
         specular_color_location: None,
-        roughness_location: MATERIAL_VERTEX_BINDING_START,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
         parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
     })
@@ -456,7 +456,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: None,
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
         parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
     })
@@ -473,7 +473,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: None,
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 1,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
         parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
         parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
     })
@@ -491,7 +491,7 @@ impl_InstanceFeature!(
     InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
         diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
         specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: MATERIAL_VERTEX_BINDING_START + 2,
+        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
         parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
         parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 4),
     })

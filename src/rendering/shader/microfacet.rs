@@ -145,7 +145,9 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         let input_roughness_field_idx = input_struct_builder.add_field(
             "roughness",
             float_type,
-            self.feature_input.roughness_location,
+            self.feature_input
+                .roughness_location
+                .expect("Missing roughness for Blinn-Phong shading"),
             F32_WIDTH,
         );
 
