@@ -559,11 +559,11 @@ impl<T: TexelType> TextureLookupTable<T> {
 impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
     /// Serializes the lookup table into the `MessagePack` format and saves it
     /// at the given path.
-    pub fn save_to_file(self, output_file_path: impl AsRef<Path>) -> Result<Self> {
+    pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
         let mut byte_buffer = Vec::new();
         self.serialize(&mut Serializer::new(&mut byte_buffer))?;
         scene::io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
-        Ok(self)
+        Ok(())
     }
 
     /// Loads and returns the `MessagePack` serialized lookup table at the given

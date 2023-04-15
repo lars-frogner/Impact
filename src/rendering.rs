@@ -100,7 +100,7 @@ struct Screenshotter {
 impl RenderingSystem {
     /// Creates a new rendering system consisting of the given core system and
     /// assets.
-    pub async fn new(core_system: CoreRenderingSystem, assets: Assets) -> Result<Self> {
+    pub async fn new(core_system: CoreRenderingSystem, mut assets: Assets) -> Result<Self> {
         let config = RenderingConfig::default();
 
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
@@ -109,6 +109,8 @@ impl RenderingSystem {
             RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS,
         );
+
+        assets.load_default_lookup_table_textures(&core_system)?;
 
         Ok(Self {
             core_system,
