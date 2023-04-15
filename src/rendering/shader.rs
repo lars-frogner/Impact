@@ -243,7 +243,7 @@ pub enum LightShaderGenerator {
 /// ambient light.
 #[derive(Clone, Debug)]
 pub struct AmbientLightShaderGenerator {
-    pub irradiance: Handle<Expression>,
+    pub radiance: Handle<Expression>,
 }
 
 /// Generator for shader code associated with an omnidirectional light source.
@@ -1509,7 +1509,7 @@ impl ShaderGenerator {
                 name: new_name("AmbientLight"),
                 inner: TypeInner::Struct {
                     members: vec![StructMember {
-                        name: new_name("irradiance"),
+                        name: new_name("radiance"),
                         ty: vec3_type,
                         binding: None,
                         offset: 0,
@@ -2497,14 +2497,14 @@ impl AmbientLightShaderGenerator {
             push_constant_fragment_expressions,
         );
 
-        let irradiance = LightShaderGenerator::generate_named_field_access_expr(
+        let radiance = LightShaderGenerator::generate_named_field_access_expr(
             fragment_function,
-            "lightIrradiance",
+            "lightRadiance",
             active_light_ptr_expr,
             0,
         );
 
-        Self { irradiance }
+        Self { radiance }
     }
 }
 
