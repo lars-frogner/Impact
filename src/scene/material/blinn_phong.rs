@@ -255,6 +255,7 @@ fn execute_material_setup(
         None,
         normal_map,
         parallax_map,
+        false,
     );
 
     if normal_map.is_some() || parallax_map.is_some() {

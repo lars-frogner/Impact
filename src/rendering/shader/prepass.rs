@@ -1,13 +1,14 @@
 //! Generation of shaders executed as preparation for a main shading pass.
 
 use super::{
-    append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
-    LightMaterialFeatureShaderInput, LightShaderGenerator, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
-    VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_unity_component_to_vec3, emit_in_func, include_expr_in_func, insert_in_arena,
+    InputStruct, InputStructBuilder, LightMaterialFeatureShaderInput, LightShaderGenerator,
+    MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, SourceCode, TextureType,
+    F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
+    VECTOR_4_TYPE,
 };
 use crate::rendering::RenderAttachmentQuantitySet;
-use naga::{Expression, Function, Handle, Module};
+use naga::{BinaryOperator, Expression, Function, Handle, Module};
 
 /// Input description specifying the bindings of textures for prepass material
 /// properties.
@@ -19,6 +20,9 @@ pub struct PrepassTextureShaderInput {
     pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
     /// Bind group bindings of the roughness texture and its sampler.
     pub roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the lookup table texture for specular reflectance
+    /// and its sampler.
+    pub specular_reflectance_lookup_texture_and_sampler_bindings: Option<(u32, u32)>,
     pub bump_mapping_input: Option<BumpMappingTextureShaderInput>,
 }
 
@@ -298,22 +302,149 @@ impl<'a> PrepassShaderGenerator<'a> {
                         vec![diffuse_color_expr, ambient_light_shader_generator.radiance],
                     )
                 });
-                    source_code_lib.generate_function_call(
-                        module,
-                        fragment_function,
-                        "computeAmbientColor",
-                        vec![
-                            diffuse_color_expr,
-                            ambient_light_shader_generator.irradiance,
-                        ],
-                    )
-                } else {
-                    source_code_lib.generate_function_call(
+
+                let specular_ambient_color = self
+                    .texture_input
+                    .specular_reflectance_lookup_texture_and_sampler_bindings
+                    .map(
+                        |(
+                            specular_reflectance_texture_binding,
+                            specular_reflectance_sampler_binding,
+                        )| {
+                            let specular_reflectance_lookup_texture = SampledTexture::declare(
+                                &mut module.types,
+                                &mut module.global_variables,
+                                TextureType::Image2DArray,
+                                "specularReflectanceLookup",
+                                bind_group,
+                                specular_reflectance_texture_binding,
+                                Some(specular_reflectance_sampler_binding),
+                                None,
+                            );
+
+                            let (
+                                specular_reflectance_lookup_texture_expr,
+                                specular_reflectance_lookup_sampler_expr,
+                            ) = specular_reflectance_lookup_texture
+                                .generate_texture_and_sampler_expressions(fragment_function, false);
+
+                            let specular_color_expr = self
+                                .texture_input
+                                .specular_texture_and_sampler_bindings
+                                .map(|(specular_texture_binding, specular_sampler_binding)| {
+                                    let specular_color_texture = SampledTexture::declare(
+                                        &mut module.types,
+                                        &mut module.global_variables,
+                                        TextureType::Image2D,
+                                        "specularColor",
+                                        bind_group,
+                                        specular_texture_binding,
+                                        Some(specular_sampler_binding),
+                                        None,
+                                    );
+
+                                    specular_color_texture.generate_rgb_sampling_expr(
+                                        fragment_function,
+                                        texture_coord_expr.unwrap(),
+                                    )
+                                })
+                                .or_else(|| {
+                                    material_input_field_indices
+                                        .specular_color
+                                        .map(|idx| fragment_input_struct.get_field_expr(idx))
+                                });
+
+                            let fixed_roughness_value_expr = fragment_input_struct
+                                .get_field_expr(material_input_field_indices.roughness);
+
+                            let roughness_expr = self
+                                .texture_input
+                                .roughness_texture_and_sampler_bindings
+                                .map_or(
+                                    fixed_roughness_value_expr,
+                                    |(roughness_texture_binding, roughness_sampler_binding)| {
+                                        let roughness_texture = SampledTexture::declare(
+                                            &mut module.types,
+                                            &mut module.global_variables,
+                                            TextureType::Image2D,
+                                            "roughness",
+                                            bind_group,
+                                            roughness_texture_binding,
+                                            Some(roughness_sampler_binding),
+                                            None,
+                                        );
+
+                                        let roughness_texture_value_expr = roughness_texture
+                                            .generate_single_channel_sampling_expr(
+                                                fragment_function,
+                                                texture_coord_expr.unwrap(),
+                                                0,
+                                            );
+
+                                        source_code_lib.generate_function_call(
+                                            module,
+                                            fragment_function,
+                                            "computeGGXRoughnessFromSampledRoughness",
+                                            // Use fixed roughness as scale for roughness sampled from texture
+                                            vec![
+                                                roughness_texture_value_expr,
+                                                fixed_roughness_value_expr,
+                                            ],
+                                        )
+                                    },
+                                );
+
+                            let position_expr = fragment_input_struct.get_field_expr(
+                                mesh_input_field_indices.position.expect(
+                                    "Missing position for computing specular ambient color",
+                                ),
+                            );
+
+                            let view_dir_expr = source_code_lib.generate_function_call(
+                                module,
+                                fragment_function,
+                                "computeCameraSpaceViewDirection",
+                                vec![position_expr],
+                            );
+
+                            source_code_lib.generate_function_call(
+                                module,
+                                fragment_function,
+                                "computeAmbientColorForSpecularGGX",
+                                vec![
+                                    specular_reflectance_lookup_texture_expr,
+                                    specular_reflectance_lookup_sampler_expr,
+                                    view_dir_expr,
+                                    normal_vector_expr.expect("Missing normal vector for computing specular ambient color"),
+                                    specular_color_expr.expect("Missing specular color for computing specular ambient color"),
+                                    roughness_expr,
+                                    ambient_light_shader_generator.radiance,
+                                ],
+                            )
+                        },
+                    );
+
+                match (diffuse_ambient_color, specular_ambient_color) {
+                    (None, None) => source_code_lib.generate_function_call(
                         module,
                         fragment_function,
                         "getBaseAmbientColor",
                         Vec::new(),
-                    )
+                    ),
+                    (Some(diffuse_ambient_color), None) => diffuse_ambient_color,
+                    (None, Some(specular_ambient_color)) => specular_ambient_color,
+                    (Some(diffuse_ambient_color), Some(specular_ambient_color)) => {
+                        emit_in_func(fragment_function, |function| {
+                            include_expr_in_func(
+                                function,
+                                Expression::Binary {
+                                    op: BinaryOperator::Add,
+                                    left: diffuse_ambient_color,
+                                    right: specular_ambient_color,
+                                },
+                            )
+                        })
+                    }
                 }
             }
             Some(invalid_shader_generator) => {

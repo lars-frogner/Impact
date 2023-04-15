@@ -364,7 +364,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.1))
+        .create_entities(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.3))
         .unwrap();
 
     Ok(world)

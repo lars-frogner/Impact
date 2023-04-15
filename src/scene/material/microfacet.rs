@@ -585,6 +585,7 @@ fn execute_material_setup(
         texture_shader_input.roughness_texture_and_sampler_bindings,
         normal_map,
         parallax_map,
+        specular_color.is_some() || specular_texture.is_some(),
     );
 
     if normal_map.is_some() || parallax_map.is_some() {

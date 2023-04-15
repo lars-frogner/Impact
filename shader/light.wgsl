@@ -3,6 +3,51 @@
 fn computeAmbientColorForLambertian(diffuseColor: vec3<f32>, ambientRadiance: vec3<f32>) -> vec3<f32> {
     return diffuseColor * ambientRadiance;
 }
+
+fn computeAmbientColorForSpecularGGX(
+    specularGGXReflectanceLookupTexture: texture_2d_array<f32>,
+    specularGGXReflectanceLookupSampler: sampler,
+    viewDirection: vec3<f32>,
+    normalVector: vec3<f32>,
+    specularColor: vec3<f32>,
+    roughness: f32,
+    ambientRadiance: vec3<f32>,
+) -> vec3<f32> {
+    var ambientColor: vec3<f32>;
+
+    let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
+
+    if viewDirectionDotNormalVector > 0.0 {
+        // Mip level must be explicit since it can not be computed automatically
+        // inside non-uniform control flow
+        let mipLevel = 0.0;
+
+        let textureCoords = vec2<f32>(viewDirectionDotNormalVector, roughness);
+
+        let reflectanceForSpecularColorZero = textureSampleLevel(
+            specularGGXReflectanceLookupTexture,
+            specularGGXReflectanceLookupSampler,
+            textureCoords,
+            0,
+            mipLevel
+        ).r;
+
+        let reflectanceForSpecularColorOne = textureSampleLevel(
+            specularGGXReflectanceLookupTexture,
+            specularGGXReflectanceLookupSampler,
+            textureCoords,
+            1,
+            mipLevel
+        ).r;
+
+        let reflectance = (1.0 - specularColor) * reflectanceForSpecularColorZero + specularColor * reflectanceForSpecularColorOne;
+
+        ambientColor = reflectance * ambientRadiance;
+    } else {
+        ambientColor = vec3<f32>(0.0, 0.0, 0.0);
+    }
+
+    return ambientColor;
 }
 
 fn getBaseAmbientColor() -> vec3<f32> {

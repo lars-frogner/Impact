@@ -4,7 +4,7 @@ use super::NormalMapComp;
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     rendering::{
-        BumpMappingTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
+        Assets, BumpMappingTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
         NormalMappingShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
         RenderAttachmentQuantitySet, TextureID,
     },
@@ -43,6 +43,7 @@ pub fn create_prepass_material(
     roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
     normal_map: Option<&NormalMapComp>,
     parallax_map: Option<&ParallaxMapComp>,
+    uses_specular_microfacet_model: bool,
 ) -> MaterialHandle {
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = VertexAttributeSet::empty();
@@ -56,6 +57,7 @@ pub fn create_prepass_material(
         diffuse_texture_and_sampler_bindings,
         specular_texture_and_sampler_bindings,
         roughness_texture_and_sampler_bindings,
+        specular_reflectance_lookup_texture_and_sampler_bindings: None,
         bump_mapping_input: None,
     };
 
@@ -108,6 +110,20 @@ pub fn create_prepass_material(
         );
 
         texture_ids.push(parallax_map.height_map_texture_id);
+    }
+
+    if uses_specular_microfacet_model {
+        material_name_parts.push("GGXAmbient");
+
+        vertex_attribute_requirements_for_mesh |= VertexAttributeSet::NORMAL_VECTOR;
+        vertex_attribute_requirements_for_shader |=
+            VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR;
+
+        texture_shader_input.specular_reflectance_lookup_texture_and_sampler_bindings = Some(
+            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
+        );
+
+        texture_ids.push(Assets::specular_ggx_reflectance_lookup_table_texture_id());
     }
 
     let material_id = MaterialID(hash64!(format!(
