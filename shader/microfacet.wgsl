@@ -10,23 +10,18 @@ fn computeNoDiffuseGGXSpecularColor(
     lightDirection: vec3<f32>,
     lightRadiance: vec3<f32>,
 ) -> vec3<f32> {
-    let halfVector = normalize((lightDirection + viewDirection));
-
-    let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-    let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-    let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
-    let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
+    let dots = computeDotProducts(viewDirection, normalVector, lightDirection);
+    
     let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
         specularColor,
-        clampedLightDirectionDotNormalVector,
-        clampedViewDirectionDotNormalVector,
-        clampedLightDirectionDotHalfVector,
-        normalVectorDotHalfVector,
+        dots.clampedLightDirectionDotNormalVector,
+        dots.clampedViewDirectionDotNormalVector,
+        dots.clampedLightDirectionDotHalfVector,
+        dots.normalVectorDotHalfVector,
         roughness,
     );
 
-    return computeColorFromBRDFs(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
+    return computeColorFromBRDFs(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, dots.clampedLightDirectionDotNormalVector, lightRadiance);
 }
 
 fn computeGGXRoughnessFromSampledRoughness(sampledRoughness: f32, roughnessScale: f32) -> f32 {
@@ -44,33 +39,28 @@ fn computeLambertianDiffuseGGXSpecularColor(
     lightDirection: vec3<f32>,
     lightRadiance: vec3<f32>,
 ) -> vec3<f32> {
-    let halfVector = normalize((lightDirection + viewDirection));
-
-    let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-    let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-    let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
-    let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
+    let dots = computeDotProducts(viewDirection, normalVector, lightDirection);
+    
     // The Lambertian BRDF (diffuseColor / pi) must be scaled to
     // account for some of the available light being specularly
     // reflected rather than subsurface scattered (Shirley et al.
     // 1997)
     let diffuseBRDFTimesPi = diffuseColor * computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
         specularColor,
-        clampedLightDirectionDotNormalVector,
-        clampedViewDirectionDotNormalVector
+        dots.clampedLightDirectionDotNormalVector,
+        dots.clampedViewDirectionDotNormalVector
     );
 
     let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
         specularColor,
-        clampedLightDirectionDotNormalVector,
-        clampedViewDirectionDotNormalVector,
-        clampedLightDirectionDotHalfVector,
-        normalVectorDotHalfVector,
+        dots.clampedLightDirectionDotNormalVector,
+        dots.clampedViewDirectionDotNormalVector,
+        dots.clampedLightDirectionDotHalfVector,
+        dots.normalVectorDotHalfVector,
         roughness,
     );
 
-    return computeColorFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
+    return computeColorFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, dots.clampedLightDirectionDotNormalVector, lightRadiance);
 }
 
 fn computeGGXDiffuseGGXSpecularColor(
@@ -82,34 +72,28 @@ fn computeGGXDiffuseGGXSpecularColor(
     lightDirection: vec3<f32>,
     lightRadiance: vec3<f32>,
 ) -> vec3<f32> {
-    let halfVector = normalize((lightDirection + viewDirection));
-
-    let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-    let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-    let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
-    let clampedLightDirectionDotHalfVector = max(0.0, dot(lightDirection, halfVector));
-    let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
+    let dots = computeDotProducts(viewDirection, normalVector, lightDirection);
+    
     let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
         diffuseColor,
         specularColor,
-        clampedLightDirectionDotNormalVector,
-        clampedViewDirectionDotNormalVector,
-        lightDirectionDotViewDirection,
-        normalVectorDotHalfVector,
+        dots.clampedLightDirectionDotNormalVector,
+        dots.clampedViewDirectionDotNormalVector,
+        dots.lightDirectionDotViewDirection,
+        dots.normalVectorDotHalfVector,
         roughness,
     );
 
     let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
         specularColor,
-        clampedLightDirectionDotNormalVector,
-        clampedViewDirectionDotNormalVector,
-        clampedLightDirectionDotHalfVector,
-        normalVectorDotHalfVector,
+        dots.clampedLightDirectionDotNormalVector,
+        dots.clampedViewDirectionDotNormalVector,
+        dots.clampedLightDirectionDotHalfVector,
+        dots.normalVectorDotHalfVector,
         roughness,
     );
 
-    return computeColorFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLightDirectionDotNormalVector, lightRadiance);
+    return computeColorFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, dots.clampedLightDirectionDotNormalVector, lightRadiance);
 }
 
 fn computeGGXDiffuseNoSpecularColor(
@@ -120,30 +104,52 @@ fn computeGGXDiffuseNoSpecularColor(
     lightDirection: vec3<f32>,
     lightRadiance: vec3<f32>,
 ) -> vec3<f32> {
-    let halfVector = normalize((lightDirection + viewDirection));
-
-    let clampedLightDirectionDotNormalVector = max(0.0, dot(lightDirection, normalVector));
-    let clampedViewDirectionDotNormalVector = max(0.0, dot(viewDirection, normalVector));
-    let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
-    let normalVectorDotHalfVector = dot(normalVector, halfVector);
-
+    let dots = computeDotProducts(viewDirection, normalVector, lightDirection);
+    
     let zero = vec3<f32>(0.0, 0.0, 0.0);
 
     let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
         diffuseColor,
         zero,
-        clampedLightDirectionDotNormalVector,
-        clampedViewDirectionDotNormalVector,
-        lightDirectionDotViewDirection,
-        normalVectorDotHalfVector,
+        dots.clampedLightDirectionDotNormalVector,
+        dots.clampedViewDirectionDotNormalVector,
+        dots.lightDirectionDotViewDirection,
+        dots.normalVectorDotHalfVector,
         roughness,
     );
 
-    return computeColorFromBRDFs(diffuseBRDFTimesPi, zero, clampedLightDirectionDotNormalVector, lightRadiance);
+    return computeColorFromBRDFs(diffuseBRDFTimesPi, zero, dots.clampedLightDirectionDotNormalVector, lightRadiance);
+}
+
+fn computeDotProducts(
+    viewDirection: vec3<f32>,
+    normalVector: vec3<f32>,
+    lightDirection: vec3<f32>,
+) -> DotProducts {
+    var dotProducts: DotProducts;
+
+    let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
+    let lightDirectionDotNormalVector = dot(lightDirection, normalVector);
+    let lightDirectionDotViewDirection = dot(lightDirection, viewDirection);
+    
+    let onePlusLightDirectionDotViewDirection = 1.0 + lightDirectionDotViewDirection;
+    let lightDirectionPlusViewDirectionSquaredLen = 2.0 * onePlusLightDirectionDotViewDirection;
+    let inverseLightDirectionPlusViewDirectionLen = inverseSqrt(lightDirectionPlusViewDirectionSquaredLen);
+    
+    let lightDirectionDotHalfVector = onePlusLightDirectionDotViewDirection * inverseLightDirectionPlusViewDirectionLen;
+    let normalVectorDotHalfVector = (lightDirectionDotNormalVector + viewDirectionDotNormalVector) * inverseLightDirectionPlusViewDirectionLen;
+
+    dotProducts.clampedViewDirectionDotNormalVector = max(0.0, viewDirectionDotNormalVector);
+    dotProducts.clampedLightDirectionDotNormalVector = max(0.0, lightDirectionDotNormalVector);
+    dotProducts.lightDirectionDotViewDirection = lightDirectionDotViewDirection;
+    dotProducts.normalVectorDotHalfVector = normalVectorDotHalfVector;
+    dotProducts.clampedLightDirectionDotHalfVector = max(0.0, lightDirectionDotHalfVector);
+
+    return dotProducts;
 }
 
 fn computeFresnelReflectanceIncidenceFactor(clampedLightDirectionDotNormalVector: f32) -> f32 {
-    let oneMinusLDotN = 1.0 - max(0.0, clampedLightDirectionDotNormalVector);
+    let oneMinusLDotN = 1.0 - clampedLightDirectionDotNormalVector;
     return oneMinusLDotN * oneMinusLDotN * oneMinusLDotN * oneMinusLDotN * oneMinusLDotN;
 }
 
@@ -234,4 +240,12 @@ fn computeColorFromBRDFs(
     lightRadiance: vec3<f32>,
 ) -> vec3<f32> {
     return (diffuseBRDFTimesPi + specularBRDFTimesPi) * clampedLightDirectionDotNormalVector * lightRadiance;
+}
+
+struct DotProducts {
+    clampedViewDirectionDotNormalVector: f32,
+    clampedLightDirectionDotNormalVector: f32,
+    lightDirectionDotViewDirection: f32,
+    normalVectorDotHalfVector: f32,
+    clampedLightDirectionDotHalfVector: f32,
 }
