@@ -98,7 +98,6 @@ struct OmniLightQuantities {
 fn computeOmniLightQuantities(
     lightPosition: vec3<f32>,
     lightRadiance: vec3<f32>,
-    lightRadius: f32,
     cameraToLightSpaceRotationQuaternion: vec4<f32>,
     nearDistance: f32,
     inverseDistanceSpan: f32,
@@ -109,7 +108,7 @@ fn computeOmniLightQuantities(
     var output: OmniLightQuantities;
 
     let lightCenterDisplacement = lightPosition - fragmentPosition;
-    let inverseSquaredDistance = 1.0 / dot(lightCenterDisplacement, lightCenterDisplacement);
+    let inverseSquaredDistance = 1.0 / (dot(lightCenterDisplacement, lightCenterDisplacement) + 1e-4);
     let inverseDistance = sqrt(inverseSquaredDistance);
     let lightCenterDirection = lightCenterDisplacement * inverseDistance;
 
@@ -127,12 +126,63 @@ fn computeOmniLightQuantities(
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
 
+    let onePlusLDotV = 1.0 + LDotV;
+    let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
+    let NDotH = (LDotN + VDotN) * inverseHLength;
+    let LDotH = onePlusLDotV * inverseHLength;
+
+    output.dots.VDotN = VDotN;
+    output.dots.LDotN = LDotN;
+    output.dots.LDotV = LDotV;
+    output.dots.NDotH = NDotH;
+    output.dots.LDotH = LDotN;
+
+    return output;
+}
+
+fn computeOmniAreaLightQuantities(
+    lightPosition: vec3<f32>,
+    lightRadiance: vec3<f32>,
+    lightRadius: f32,
+    cameraToLightSpaceRotationQuaternion: vec4<f32>,
+    nearDistance: f32,
+    inverseDistanceSpan: f32,
+    fragmentPosition: vec3<f32>,
+    fragmentNormal: vec3<f32>,
+    viewDirection: vec3<f32>,
+    roughness: f32,
+) -> OmniLightQuantities {
+    var output: OmniLightQuantities;
+
+    let lightCenterDisplacement = lightPosition - fragmentPosition;
+    let inverseSquaredDistance = 1.0 / (dot(lightCenterDisplacement, lightCenterDisplacement) + 1e-4);
+    let inverseDistance = sqrt(inverseSquaredDistance);
+    let lightCenterDirection = lightCenterDisplacement * inverseDistance;
+
+    output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
+
+    let VDotN = dot(viewDirection, fragmentNormal);
+    let LDotN = dot(lightCenterDirection, fragmentNormal);
+    let LDotV = dot(lightCenterDirection, viewDirection);
+
+    // Add an offset to the fragment position along the fragment
+    // normal to avoid shadow acne. The offset increases as the
+    // light becomes less perpendicular to the surface.
+    let offsetFragmentDisplacement = -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotV, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
+
+    output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
+    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
+
+    let tanAngularLightRadius = lightRadius * inverseDistance;
+
     output.dots = determineRepresentativeDirectionForSphericalAreaLight(
-        lightRadius * inverseDistance,
+        tanAngularLightRadius,
         VDotN,
         LDotN,
         LDotV,
     );
+
+    output.attenuatedLightRadiance *= computeRadianceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness);
 
     return output;
 }
@@ -284,12 +334,51 @@ fn applyNormalBiasUniLight(
 }
 
 struct UniLightQuantities {
+    modifiedLightRadiance: vec3<f32>,
     lightClipSpacePosition: vec3<f32>,
     dots: ReflectionDotProducts,
 }
 
 fn computeUniLightQuantities(
     directionOfLight: vec3<f32>,
+    lightRadiance: vec3<f32>,
+    orthographicTranslation: vec3<f32>,
+    orthographicScaling: vec3<f32>,
+    lightSpacePosition: vec3<f32>,
+    lightSpaceNormalVector: vec3<f32>,
+    fragmentNormal: vec3<f32>,
+    viewDirection: vec3<f32>,
+) -> UniLightQuantities {
+    var output: UniLightQuantities;
+
+    output.modifiedLightRadiance = lightRadiance;
+
+    let biasedLightSpacePosition = applyNormalBiasUniLight(lightSpacePosition, lightSpaceNormalVector);
+    output.lightClipSpacePosition = applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
+
+    let lightCenterDirection = -directionOfLight;
+
+    let VDotN = dot(viewDirection, fragmentNormal);
+    let LDotN = dot(lightCenterDirection, fragmentNormal);
+    let LDotV = dot(lightCenterDirection, viewDirection);
+
+    let onePlusLDotV = 1.0 + LDotV;
+    let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
+    let NDotH = (LDotN + VDotN) * inverseHLength;
+    let LDotH = onePlusLDotV * inverseHLength;
+
+    output.dots.VDotN = VDotN;
+    output.dots.LDotN = LDotN;
+    output.dots.LDotV = LDotV;
+    output.dots.NDotH = NDotH;
+    output.dots.LDotH = LDotN;
+
+    return output;
+}
+
+fn computeUniAreaLightQuantities(
+    directionOfLight: vec3<f32>,
+    lightRadiance: vec3<f32>,
     tanAngularLightRadius: f32,
     orthographicTranslation: vec3<f32>,
     orthographicScaling: vec3<f32>,
@@ -297,6 +386,7 @@ fn computeUniLightQuantities(
     lightSpaceNormalVector: vec3<f32>,
     fragmentNormal: vec3<f32>,
     viewDirection: vec3<f32>,
+    roughness: f32,
 ) -> UniLightQuantities {
     var output: UniLightQuantities;
 
@@ -315,6 +405,8 @@ fn computeUniLightQuantities(
         LDotN,
         LDotV,
     );
+
+    output.modifiedLightRadiance = computeRadianceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness) * lightRadiance;
 
     return output;
 }
@@ -540,6 +632,14 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
     dots.LDotH = LDotN;
 
     return dots;
+}
+
+fn computeRadianceScalingFactorForSphericalAreaLight(
+    tanAngularLightRadius: f32,
+    roughness: f32,
+) -> f32 {
+    let modifiedRoughness = saturate(roughness + 0.333 * tanAngularLightRadius);
+    return roughness * roughness / (modifiedRoughness * modifiedRoughness + 1e-4);
 }
 
 // ***** Common shadow mapping utilities *****
