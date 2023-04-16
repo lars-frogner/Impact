@@ -476,6 +476,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     position_expr,
                     normal_vector_expr,
                     view_dir_expr,
+                    Some(roughness_expr),
+                    true,
                 )
             }
             (
@@ -500,6 +502,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     framebuffer_position_expr,
                     normal_vector_expr,
                     view_dir_expr,
+                    Some(roughness_expr),
+                    true,
                 )
             }
             _ => {

@@ -389,6 +389,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     position_expr,
                     normal_vector_expr,
                     view_dir_expr,
+                    None,
+                    false,
                 )
             }
             (
@@ -413,6 +415,8 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
                     framebuffer_position_expr,
                     normal_vector_expr,
                     view_dir_expr,
+                    None,
+                    false,
                 )
             }
             _ => {

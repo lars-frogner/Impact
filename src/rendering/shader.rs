@@ -2687,25 +2687,48 @@ impl OmnidirectionalLightShadingShaderGenerator {
         position_expr: Handle<Expression>,
         normal_vector_expr: Handle<Expression>,
         view_dir_expr: Handle<Expression>,
+        roughness_expr: Option<Handle<Expression>>,
+        emulate_area_light_reflection: bool,
     ) -> (Handle<Expression>, Handle<Expression>) {
         source_code_lib.use_type(module, "OmniLightQuantities");
 
-        let light_quantities = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "computeOmniLightQuantities",
-            vec![
-                self.camera_space_position,
-                self.radiance,
-                self.emission_radius,
-                self.camera_to_light_space_rotation_quaternion,
-                self.near_distance,
-                self.inverse_distance_span,
-                position_expr,
-                normal_vector_expr,
-                view_dir_expr,
-            ],
-        );
+        let light_quantities = if emulate_area_light_reflection {
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeOmniAreaLightQuantities",
+                vec![
+                    self.camera_space_position,
+                    self.radiance,
+                    self.emission_radius,
+                    self.camera_to_light_space_rotation_quaternion,
+                    self.near_distance,
+                    self.inverse_distance_span,
+                    position_expr,
+                    normal_vector_expr,
+                    view_dir_expr,
+                    roughness_expr.expect(
+                        "Missing roughness for omnidirectional area light radiance modification",
+                    ),
+                ],
+            )
+        } else {
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeOmniLightQuantities",
+                vec![
+                    self.camera_space_position,
+                    self.radiance,
+                    self.camera_to_light_space_rotation_quaternion,
+                    self.near_distance,
+                    self.inverse_distance_span,
+                    position_expr,
+                    normal_vector_expr,
+                    view_dir_expr,
+                ],
+            )
+        };
 
         let (light_space_fragment_displacement_expr, depth_reference_expr) =
             emit_in_func(fragment_function, |function| {
@@ -2970,6 +2993,8 @@ impl UnidirectionalLightShadingShaderGenerator {
         framebuffer_position_expr: Handle<Expression>,
         camera_space_normal_vector_expr: Handle<Expression>,
         camera_space_view_dir_expr: Handle<Expression>,
+        roughness_expr: Option<Handle<Expression>>,
+        emulate_area_light_reflection: bool,
     ) -> (Handle<Expression>, Handle<Expression>) {
         let camera_space_direction_of_light_expr =
             LightShaderGenerator::generate_named_field_access_expr(
@@ -3101,31 +3126,63 @@ impl UnidirectionalLightShadingShaderGenerator {
                 },
             );
 
-        let light_quantities = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "computeUniLightQuantities",
-            vec![
-                camera_space_direction_of_light_expr,
-                tan_angular_radius_expr,
-                orthographic_translation_expr,
-                orthographic_scaling_expr,
-                light_space_position_expr,
-                light_space_normal_vector_expr,
-                camera_space_normal_vector_expr,
-                camera_space_view_dir_expr,
-            ],
-        );
-
-        let light_clip_position_expr = emit_in_func(fragment_function, |function| {
-            include_expr_in_func(
-                function,
-                Expression::AccessIndex {
-                    base: light_quantities,
-                    index: 0,
-                },
+        let light_quantities = if emulate_area_light_reflection {
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeUniAreaLightQuantities",
+                vec![
+                    camera_space_direction_of_light_expr,
+                    radiance_expr,
+                    tan_angular_radius_expr,
+                    orthographic_translation_expr,
+                    orthographic_scaling_expr,
+                    light_space_position_expr,
+                    light_space_normal_vector_expr,
+                    camera_space_normal_vector_expr,
+                    camera_space_view_dir_expr,
+                    roughness_expr.expect(
+                        "Missing roughness for omnidirectional area light radiance modification",
+                    ),
+                ],
             )
-        });
+        } else {
+            source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeUniLightQuantities",
+                vec![
+                    camera_space_direction_of_light_expr,
+                    radiance_expr,
+                    orthographic_translation_expr,
+                    orthographic_scaling_expr,
+                    light_space_position_expr,
+                    light_space_normal_vector_expr,
+                    camera_space_normal_vector_expr,
+                    camera_space_view_dir_expr,
+                ],
+            )
+        };
+
+        let (modified_radiance_expr, light_clip_position_expr) =
+            emit_in_func(fragment_function, |function| {
+                (
+                    include_expr_in_func(
+                        function,
+                        Expression::AccessIndex {
+                            base: light_quantities,
+                            index: 0,
+                        },
+                    ),
+                    include_expr_in_func(
+                        function,
+                        Expression::AccessIndex {
+                            base: light_quantities,
+                            index: 1,
+                        },
+                    ),
+                )
+            });
 
         let light_access_factor_expr = self
             .shadow_map
@@ -3148,7 +3205,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                         function,
                         Expression::AccessIndex {
                             base: light_quantities,
-                            index: 1,
+                            index: 2,
                         },
                     ),
                     include_expr_in_func(
@@ -3156,7 +3213,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                         Expression::Binary {
                             op: BinaryOperator::Multiply,
                             left: light_access_factor_expr,
-                            right: radiance_expr,
+                            right: modified_radiance_expr,
                         },
                     ),
                 )
