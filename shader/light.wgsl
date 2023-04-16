@@ -110,7 +110,8 @@ fn computeOmniLightQuantities(
 
     let lightCenterDisplacement = lightPosition - fragmentPosition;
     let inverseSquaredDistance = 1.0 / dot(lightCenterDisplacement, lightCenterDisplacement);
-    let lightCenterDirection = lightCenterDisplacement * sqrt(inverseSquaredDistance);
+    let inverseDistance = sqrt(inverseSquaredDistance);
+    let lightCenterDirection = lightCenterDisplacement * inverseDistance;
 
     output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
 
@@ -126,17 +127,12 @@ fn computeOmniLightQuantities(
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
 
-    // Compute dot products with half vector without computing half vector
-    let onePlusLDotV = 1.0 + LDotV;
-    let inverseLPlusVLength = inverseSqrt(2.0 * onePlusLDotV);
-    let LDotH = onePlusLDotV * inverseLPlusVLength;
-    let NDotH = (LDotN + VDotN) * inverseLPlusVLength;
-
-    output.dots.VDotN = VDotN;
-    output.dots.LDotN = LDotN;
-    output.dots.LDotV = LDotV;
-    output.dots.NDotH = NDotH;
-    output.dots.LDotH = LDotH;
+    output.dots = determineRepresentativeDirectionForSphericalAreaLight(
+        lightRadius * inverseDistance,
+        VDotN,
+        LDotN,
+        LDotV,
+    );
 
     return output;
 }
@@ -313,17 +309,12 @@ fn computeUniLightQuantities(
     let LDotN = dot(lightCenterDirection, fragmentNormal);
     let LDotV = dot(lightCenterDirection, viewDirection);
 
-    // Compute dot products with half vector without computing half vector
-    let onePlusLDotV = 1.0 + LDotV;
-    let inverseLPlusVLength = inverseSqrt(2.0 * onePlusLDotV);
-    let LDotH = onePlusLDotV * inverseLPlusVLength;
-    let NDotH = (LDotN + VDotN) * inverseLPlusVLength;
-
-    output.dots.VDotN = VDotN;
-    output.dots.LDotN = LDotN;
-    output.dots.LDotV = LDotV;
-    output.dots.NDotH = NDotH;
-    output.dots.LDotH = LDotH;
+    output.dots = determineRepresentativeDirectionForSphericalAreaLight(
+        tanAngularLightRadius,
+        VDotN,
+        LDotN,
+        LDotV,
+    );
 
     return output;
 }
@@ -498,6 +489,57 @@ fn computePCSSLightAccessFactorUniLight(
         centerTextureCoords,
         referenceDepth,
     );
+}
+
+// ***** Representative point area lighting *****
+
+fn determineRepresentativeDirectionForSphericalAreaLight(
+    tanAngularLightRadius: f32,
+    VDotN: f32,
+    LDotN: f32,
+    LDotV: f32,
+) -> ReflectionDotProducts {
+    var dots: ReflectionDotProducts;
+    dots.VDotN = VDotN;
+        
+    let cosAngularLightRadius = inverseSqrt(1.0 + tanAngularLightRadius * tanAngularLightRadius);
+
+    // R is the reflection direction
+    let LDotR = 2.0 * VDotN * LDotN - LDotV;
+
+    // Check if the reflection vector points to inside the sphere
+    if LDotR >= cosAngularLightRadius {
+        // If so, tweak light direction to give maximal intensity (NDotH = 1)
+        dots.NDotH = 1.0;
+        dots.LDotN = VDotN;
+        dots.LDotH = LDotN;
+        dots.LDotV = 2.0 * VDotN * VDotN - 1.0;
+        return dots;
+    }
+
+    let sinAngularLightRadius = tanAngularLightRadius * cosAngularLightRadius;
+    
+    // T is the direction perpendicular to L pointing towards R:
+    // T = (R - LDotR * L) / |R - LDotR * L|
+    
+    let sinAngularLightRadiusOverTLength = sinAngularLightRadius * inverseSqrt(1.0 - LDotR * LDotR);
+    
+    let newLDotNAlongT = (VDotN - LDotR * LDotN) * sinAngularLightRadiusOverTLength;
+    let newLDotVAlongT = (2.0 * VDotN * VDotN - 1.0 - LDotR * LDotV) * sinAngularLightRadiusOverTLength;
+
+    let newLDotN = cosAngularLightRadius * LDotN + newLDotNAlongT;
+    let newLDotV = cosAngularLightRadius * LDotV + newLDotVAlongT;
+
+    let inverseHLength = inverseSqrt(2.0 * (1.0 + newLDotV));
+    let NDotH = (newLDotN + VDotN) * inverseHLength;
+    let LDotH = (1.0 + newLDotV) * inverseHLength;
+
+    dots.LDotN = newLDotN;
+    dots.LDotV = newLDotV;
+    dots.NDotH = NDotH;
+    dots.LDotH = LDotN;
+
+    return dots;
 }
 
 // ***** Common shadow mapping utilities *****
