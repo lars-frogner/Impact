@@ -125,9 +125,12 @@ impl UnidirectionalLight {
             -(camera_space_bounding_sphere.center().z + camera_space_bounding_sphere.radius()),
         );
 
-        let far_distance = fre::min(
-            camera_space_view_frustum.far_distance(),
-            -(camera_space_bounding_sphere.center().z - camera_space_bounding_sphere.radius()),
+        let far_distance = fre::max(
+            near_distance + fre::EPSILON,
+            fre::min(
+                camera_space_view_frustum.far_distance(),
+                -(camera_space_bounding_sphere.center().z - camera_space_bounding_sphere.radius()),
+            ),
         );
 
         // Use a blend between exponential and linear increase in the span of
