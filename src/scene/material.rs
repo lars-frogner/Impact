@@ -10,15 +10,23 @@ mod vertex_color;
 
 pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
-    DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
-    MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
-    RoughnessComp, RoughnessTextureComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
+    DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,
+    FixedTextureComp, MaterialComp, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
+    NormalMapComp, ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SpecularColorComp,
+    SpecularTextureComp, VertexColorComp,
 };
 pub use features::{
-    create_material_feature, TexturedColorMaterialFeature,
-    TexturedColorParallaxMappingMaterialFeature, UniformDiffuseMaterialFeature,
-    UniformDiffuseParallaxMappingMaterialFeature, UniformDiffuseUniformSpecularMaterialFeature,
-    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature, UniformSpecularMaterialFeature,
+    create_material_feature, TexturedColorEmissiveMaterialFeature, TexturedColorMaterialFeature,
+    TexturedColorParallaxMappingEmissiveMaterialFeature,
+    TexturedColorParallaxMappingMaterialFeature, UniformDiffuseEmissiveMaterialFeature,
+    UniformDiffuseMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
+    UniformDiffuseParallaxMappingMaterialFeature,
+    UniformDiffuseUniformSpecularEmissiveMaterialFeature,
+    UniformDiffuseUniformSpecularMaterialFeature,
+    UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
+    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature,
+    UniformSpecularEmissiveMaterialFeature, UniformSpecularMaterialFeature,
+    UniformSpecularParallaxMappingEmissiveMaterialFeature,
     UniformSpecularParallaxMappingMaterialFeature,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};

@@ -44,6 +44,14 @@ pub struct SpecularTextureComp(pub TextureID);
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct EmissiveColorComp(pub RGBColor);
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct EmissiveTextureComp(pub TextureID);
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RoughnessComp(pub fre);
 
 #[repr(C)]
