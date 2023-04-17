@@ -16,10 +16,13 @@ mod tasks;
 mod texture_projection;
 
 pub use camera::{OrthographicCameraComp, PerspectiveCameraComp, SceneCamera};
-pub use components::{ScalingComp, SceneGraphCameraNodeComp, SceneGraphNodeComp};
+pub use components::{
+    ParentComp, ScalingComp, SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
+    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+};
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
-    create_model_to_world_transform, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
+    create_child_to_parent_transform, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
     NodeTransform, SceneGraph, SceneGraphNodeID,
 };
 pub use instance::InstanceFeatureManager;
@@ -47,7 +50,7 @@ pub use systems::SyncLightPositionsAndDirectionsInStorage;
 pub use tasks::{
     BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
-    SyncSceneCameraViewTransform,
+    SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
 };
 pub use texture_projection::PlanarTextureProjectionComp;
 

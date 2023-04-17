@@ -7,14 +7,20 @@ use crate::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, AmbientLight, FixedColorMaterial,
         FixedTextureMaterial, MaterialComp, MaterialHandle, MeshComp, ModelID, ModelInstanceNodeID,
-        OmnidirectionalLight, ScalingComp, Scene, SceneGraphNodeComp, UnidirectionalLight,
-        VertexColorMaterial,
+        OmnidirectionalLight, ParentComp, ScalingComp, Scene, SceneGraphCameraNodeComp,
+        SceneGraphGroup, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
+        SceneGraphNodeComp, SceneGraphParentNodeComp, UnidirectionalLight, VertexColorMaterial,
     },
     window::{self, Window},
 };
 use anyhow::Result;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_ecs::{
+    archetype::ArchetypeComponentStorage,
+    setup,
+    world::{EntityEntry, World as ECSWorld},
+};
 use nalgebra::{Point3, UnitQuaternion};
+use std::sync::RwLock;
 
 /// Indicates whether an event caused the render resources to go out of sync
 /// with its source scene data.
@@ -41,6 +47,7 @@ impl Scene {
     pub fn handle_entity_created(
         &self,
         window: &Window,
+        ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
     ) -> Result<RenderResourcesDesynchronized> {
         let mut desynchronized = RenderResourcesDesynchronized::No;
@@ -49,7 +56,10 @@ impl Scene {
         self.add_camera_component_for_entity(window, components, &mut desynchronized)?;
         self.add_light_component_for_entity(components, &mut desynchronized);
         self.add_material_component_for_entity(components, &mut desynchronized);
-        self.add_model_instance_node_component_for_entity(components, &mut desynchronized);
+
+        self.add_parent_group_node_component_for_entity(ecs_world, components);
+        self.add_group_node_component_for_entity(components);
+        self.add_model_instance_node_component_for_entity(components);
 
         self.generate_missing_vertex_properties_for_mesh(components);
 
@@ -168,10 +178,74 @@ impl Scene {
         );
     }
 
+    fn add_parent_group_node_component_for_entity(
+        &self,
+        ecs_world: &RwLock<ECSWorld>,
+        components: &mut ArchetypeComponentStorage,
+    ) {
+        setup!(
+            {
+                let ecs_world = ecs_world.read().unwrap();
+            },
+            components,
+            |parent: &ParentComp| -> SceneGraphParentNodeComp {
+                let parent_entity = ecs_world
+                    .get_entity(&parent.entity)
+                    .expect("Missing parent entity");
+
+                let parent_group_node = parent_entity
+                    .get_component::<SceneGraphGroupNodeComp>()
+                    .expect("Missing group node component for parent entity");
+
+                SceneGraphParentNodeComp::new(parent_group_node.access().id)
+            },
+            ![
+                SceneGraphParentNodeComp,
+                SceneGraphGroupNodeComp,
+                SceneGraphCameraNodeComp,
+                SceneGraphModelInstanceNodeComp
+            ]
+        );
+    }
+
+    fn add_group_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
+        setup!(
+            {
+                let mut scene_graph = self.scene_graph().write().unwrap();
+            },
+            components,
+            |position: Option<&PositionComp>,
+             orientation: Option<&OrientationComp>,
+             scaling: Option<&ScalingComp>,
+             parent: Option<&SceneGraphParentNodeComp>|
+             -> SceneGraphGroupNodeComp {
+                let position = position.map_or_else(Point3::origin, |position| position.0.cast());
+                let orientation = orientation
+                    .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
+                let scaling = scaling.map_or_else(|| 1.0, |scaling| scaling.0);
+
+                let group_to_parent_transform =
+                    scene::create_child_to_parent_transform(position, orientation, scaling);
+
+                let parent_node_id =
+                    parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
+
+                SceneGraphNodeComp::new(
+                    scene_graph.create_group_node(parent_node_id, group_to_parent_transform),
+                )
+            },
+            [SceneGraphGroup],
+            ![
+                SceneGraphGroupNodeComp,
+                SceneGraphCameraNodeComp,
+                SceneGraphModelInstanceNodeComp
+            ]
+        );
+    }
+
     fn add_model_instance_node_component_for_entity(
         &self,
         components: &mut ArchetypeComponentStorage,
-        _desynchronized: &mut RenderResourcesDesynchronized,
     ) {
         setup!(
             {
@@ -179,15 +253,15 @@ impl Scene {
                 let material_library = self.material_library().read().unwrap();
                 let mut instance_feature_manager = self.instance_feature_manager().write().unwrap();
                 let mut scene_graph = self.scene_graph().write().unwrap();
-                let root_node_id = scene_graph.root_node_id();
             },
             components,
             |mesh: &MeshComp,
              material: &MaterialComp,
              position: Option<&PositionComp>,
              orientation: Option<&OrientationComp>,
-             scaling: Option<&ScalingComp>|
-             -> SceneGraphNodeComp::<ModelInstanceNodeID> {
+             scaling: Option<&ScalingComp>,
+             parent: Option<&SceneGraphParentNodeComp>|
+             -> SceneGraphModelInstanceNodeComp {
                 let model_id = ModelID::for_mesh_and_material(
                     mesh.id,
                     *material.material_handle(),
@@ -200,8 +274,8 @@ impl Scene {
                     .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
                 let scaling = scaling.map_or_else(|| 1.0, |scaling| scaling.0);
 
-                let model_to_world_transform =
-                    scene::create_model_to_world_transform(position, orientation, scaling);
+                let model_to_parent_transform =
+                    scene::create_child_to_parent_transform(position, orientation, scaling);
 
                 let mut feature_ids = Vec::with_capacity(2);
 
@@ -227,15 +301,22 @@ impl Scene {
                     .compute_bounding_sphere()
                     .expect("Tried to create renderable entity with empty mesh");
 
+                let parent_node_id =
+                    parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
+
                 SceneGraphNodeComp::new(scene_graph.create_model_instance_node(
-                    root_node_id,
-                    model_to_world_transform,
+                    parent_node_id,
+                    model_to_parent_transform,
                     model_id,
                     bounding_sphere,
                     feature_ids,
                 ))
             },
-            ![SceneGraphNodeComp::<ModelInstanceNodeID>]
+            ![
+                SceneGraphGroupNodeComp,
+                SceneGraphCameraNodeComp,
+                SceneGraphModelInstanceNodeComp
+            ]
         );
     }
 

@@ -204,6 +204,20 @@ impl World {
         )
     }
 
+    pub fn create_entity<A, E>(
+        &self,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<Entity>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        Ok(self
+            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
+            .pop()
+            .unwrap())
+    }
+
     pub fn create_entities<A, E>(
         &self,
         components: impl TryInto<ArchetypeComponents<A>, Error = E>,
@@ -214,11 +228,11 @@ impl World {
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
 
-        let render_resources_desynchronized = self
-            .scene()
-            .read()
-            .unwrap()
-            .handle_entity_created(self.window(), &mut components)?;
+        let render_resources_desynchronized = self.scene().read().unwrap().handle_entity_created(
+            self.window(),
+            &self.ecs_world,
+            &mut components,
+        )?;
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()

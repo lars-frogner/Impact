@@ -6,7 +6,8 @@ use crate::{
     rendering::fre,
     scene::{
         self, PerspectiveCameraComp, RenderResourcesDesynchronized, ScalingComp, SceneCamera,
-        SceneGraph, SceneGraphCameraNodeComp,
+        SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
+        SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
     },
     window::Window,
 };
@@ -49,12 +50,12 @@ impl PerspectiveCamera<fre> {
                 desynchronized.set_yes();
 
                 let mut scene_graph = scene_graph.write().unwrap();
-                let root_node_id = scene_graph.root_node_id();
             },
             components,
             |position: Option<&PositionComp>,
              orientation: Option<&OrientationComp>,
-             camera_comp: &PerspectiveCameraComp|
+             camera_comp: &PerspectiveCameraComp,
+             parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphCameraNodeComp {
                 let camera = Self::new(
                     window.aspect_ratio(),
@@ -69,16 +70,24 @@ impl PerspectiveCamera<fre> {
                 let orientation = orientation
                     .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
 
-                let camera_to_world_transform =
-                    scene::create_model_to_world_transform(position, orientation, 1.0);
+                let camera_to_parent_transform =
+                    scene::create_child_to_parent_transform(position, orientation, 1.0);
+
+                let parent_node_id =
+                    parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
                 let node_id =
-                    scene_graph.create_camera_node(root_node_id, camera_to_world_transform);
+                    scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
 
                 *scene_camera = Some(SceneCamera::new(camera, node_id));
 
                 SceneGraphCameraNodeComp::new(node_id)
-            }
+            },
+            ![
+                SceneGraphGroupNodeComp,
+                SceneGraphCameraNodeComp,
+                SceneGraphModelInstanceNodeComp
+            ]
         );
         Ok(())
     }
