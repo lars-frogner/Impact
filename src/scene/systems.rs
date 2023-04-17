@@ -6,8 +6,8 @@ use crate::{
     rendering::RenderingTag,
     scene::{
         CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
-        OmnidirectionalLightComp, SceneGraphNodeComp, SyncSceneCameraViewTransform,
-        UnidirectionalLightComp,
+        OmnidirectionalLightComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+        SyncSceneCameraViewTransform, UnidirectionalLightComp, UpdateSceneGroupToWorldTransforms,
     },
     world::World,
 };
@@ -95,13 +95,17 @@ define_task!(
     /// and direction of every applicable light source in the
     /// [`LightStorage`](crate::scene::LightStorage).
     [pub] SyncLightPositionsAndDirectionsInStorage,
-    depends_on = [SyncSceneCameraViewTransform],
+    depends_on = [
+        UpdateSceneGroupToWorldTransforms,
+        SyncSceneCameraViewTransform
+    ],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing camera space positions and directions of lights in storage"; {
             let scene = world.scene().read().unwrap();
 
             let ecs_world = world.ecs_world().read().unwrap();
+            let scene_graph = scene.scene_graph().read().unwrap();
             let mut light_storage = scene.light_storage().write().unwrap();
 
             let view_transform = scene.scene_camera()
@@ -118,6 +122,20 @@ define_task!(
                     light_storage
                         .omnidirectional_light_mut(light_id)
                         .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
+                },
+                ![SceneGraphParentNodeComp]
+            );
+
+            query!(
+                ecs_world, |omnidirectional_light: &OmnidirectionalLightComp, position: &PositionComp, parent: &SceneGraphParentNodeComp| {
+                    let parent_group_node = scene_graph.group_nodes().node(parent.id);
+
+                    let view_transform = view_transform * parent_group_node.group_to_root_transform();
+
+                    let light_id = omnidirectional_light.id;
+                    light_storage
+                        .omnidirectional_light_mut(light_id)
+                        .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
                 }
             );
 
@@ -127,9 +145,22 @@ define_task!(
                     light_storage
                         .unidirectional_light_mut(light_id)
                         .set_camera_space_direction(LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast())));
-                }
+                },
+                ![SceneGraphParentNodeComp]
             );
 
+            query!(
+                ecs_world, |unidirectional_light: &UnidirectionalLightComp, direction: &DirectionComp, parent: &SceneGraphParentNodeComp| {
+                    let parent_group_node = scene_graph.group_nodes().node(parent.id);
+
+                    let view_transform = view_transform * parent_group_node.group_to_root_transform();
+
+                    let light_id = unidirectional_light.id;
+                    light_storage
+                        .unidirectional_light_mut(light_id)
+                        .set_camera_space_direction(LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast())));
+                }
+            );
 
             Ok(())
         })
