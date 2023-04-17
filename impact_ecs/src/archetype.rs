@@ -8,6 +8,7 @@ use super::{
     world::{Entity, EntityID},
 };
 use anyhow::{anyhow, bail, Result};
+use bytemuck::{Pod, Zeroable};
 use impact_ecs_macros::archetype_of;
 use impact_utils::KeyIndexMapper;
 use paste::paste;
@@ -33,7 +34,8 @@ pub struct Archetype {
 
 /// Unique identifier for an [`Archetype`], obtained by hashing
 /// the sorted list of component IDs defining the archetype.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ArchetypeID(u64);
 
 /// Container holding [`ComponentArray`]s for a set
