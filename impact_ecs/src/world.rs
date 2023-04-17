@@ -8,6 +8,7 @@ use super::{
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
 use anyhow::{anyhow, Result};
+use bytemuck::{Pod, Zeroable};
 use impact_utils::KeyIndexMapper;
 use std::{
     hash::Hash,
@@ -20,7 +21,8 @@ use std::{
 /// type of object that has certain specific [`Component`]s
 /// that define its properties. An entity can be created
 /// using a [`World`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct Entity {
     id: EntityID,
     archetype_id: ArchetypeID,
@@ -28,11 +30,13 @@ pub struct Entity {
 
 /// Unique ID identifying an [`Entity`].
 #[cfg(not(test))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct EntityID(u64);
 
 #[cfg(test)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct EntityID(pub(crate) u64);
 
 /// Overall manager for [`Entity`]s in the world and
