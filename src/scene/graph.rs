@@ -116,6 +116,7 @@ pub struct GroupNode<F: Float> {
     child_model_instance_node_ids: HashSet<ModelInstanceNodeID>,
     child_camera_node_ids: HashSet<CameraNodeID>,
     bounding_sphere: Option<Sphere<F>>,
+    group_to_root_transform: NodeTransform<F>,
 }
 
 /// A [`SceneGraph`] leaf node representing a model instance.
@@ -396,8 +397,18 @@ impl<F: Float> SceneGraph<F> {
             .set_rotation_of_model_to_parent_transform(rotation);
     }
 
+    /// Updates the transform from local space to the space of the root node for
+    /// all group nodes in the scene graph.
+    pub fn update_all_group_to_root_transforms(&mut self) {
+        self.update_group_to_root_transforms(self.root_node_id(), NodeTransform::identity());
+    }
+
     /// Updates the world-to-camera transform of the given scene camera based on
     /// the transforms of its node and parent nodes.
+    ///
+    /// # Warning
+    /// Make sure to [`update_all_group_to_root_transforms`]  before calling
+    /// this method if any group nodes have changed.
     pub fn sync_camera_view_transform(&self, scene_camera: &mut SceneCamera<F>) {
         let camera_node = self.camera_nodes.node(scene_camera.scene_graph_node_id());
         let view_transform = self.compute_view_transform(camera_node);
@@ -433,24 +444,34 @@ impl<F: Float> SceneGraph<F> {
         );
     }
 
+    /// Updates the transform from local space to the space of the root node for
+    /// the specified group node and all its children, by concatenating their
+    /// group-to-parent transforms recursively.
+    ///
+    /// # Panics
+    /// If the specified group node does not exist.
+    fn update_group_to_root_transforms(
+        &mut self,
+        group_node_id: GroupNodeID,
+        parent_to_root_transform: NodeTransform<F>,
+    ) {
+        let group_node = self.group_nodes.node_mut(group_node_id);
+
+        let group_to_root_transform =
+            parent_to_root_transform * group_node.group_to_parent_transform();
+
+        group_node.set_group_to_root_transform(group_to_root_transform);
+
+        for child_group_node_id in group_node.obtain_child_group_node_ids() {
+            self.update_group_to_root_transforms(child_group_node_id, group_to_root_transform);
+        }
+    }
+
     /// Computes the transform from the scene graph's root node space
     /// to the space of the given camera node.
     fn compute_view_transform(&self, camera_node: &CameraNode<F>) -> NodeTransform<F> {
-        let mut view_transform = camera_node.parent_to_camera_transform();
-        let mut parent_node = self.group_nodes.node(camera_node.parent_node_id());
-
-        // Walk up the tree and append transforms until reaching the root
-        loop {
-            view_transform *= parent_node.parent_to_group_transform();
-
-            if parent_node.is_root() {
-                break;
-            } else {
-                parent_node = self.group_nodes.node(parent_node.parent_node_id());
-            }
-        }
-
-        view_transform
+        let parent_node = self.group_nodes.node(camera_node.parent_node_id());
+        camera_node.parent_to_camera_transform() * parent_node.root_to_group_transform()
     }
 
     /// Updates the bounding sphere of the specified group node
@@ -950,6 +971,11 @@ impl<N: SceneGraphNode> NodeStorage<N> {
 }
 
 impl<F: Float> GroupNode<F> {
+    /// Returns the group-to-root transform for the node.
+    pub fn group_to_root_transform(&self) -> &NodeTransform<F> {
+        &self.group_to_root_transform
+    }
+
     fn new(
         parent_node_id: Option<GroupNodeID>,
         group_to_parent_transform: NodeTransform<F>,
@@ -961,6 +987,7 @@ impl<F: Float> GroupNode<F> {
             child_model_instance_node_ids: HashSet::new(),
             child_camera_node_ids: HashSet::new(),
             bounding_sphere: None,
+            group_to_root_transform: NodeTransform::identity(),
         }
     }
 
@@ -972,16 +999,12 @@ impl<F: Float> GroupNode<F> {
         Self::new(Some(parent_node_id), transform)
     }
 
-    fn is_root(&self) -> bool {
-        self.parent_node_id.is_none()
-    }
-
-    fn parent_to_group_transform(&self) -> NodeTransform<F> {
-        self.group_to_parent_transform.inverse()
-    }
-
     fn group_to_parent_transform(&self) -> &NodeTransform<F> {
         &self.group_to_parent_transform
+    }
+
+    fn root_to_group_transform(&self) -> NodeTransform<F> {
+        self.group_to_root_transform.inverse()
     }
 
     fn parent_node_id(&self) -> GroupNodeID {
@@ -1059,6 +1082,10 @@ impl<F: Float> GroupNode<F> {
 
     fn set_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<F>>) {
         self.bounding_sphere = bounding_sphere;
+    }
+
+    fn set_group_to_root_transform(&mut self, group_to_root_transform: NodeTransform<F>) {
+        self.group_to_root_transform = group_to_root_transform;
     }
 }
 
@@ -1191,9 +1218,9 @@ impl_node_id_idx_traits!(GroupNodeID);
 impl_node_id_idx_traits!(ModelInstanceNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
 
-/// Creates a [`NodeTransform`] from model to world space
-/// for a model with the given position and orientation.
-pub fn create_model_to_world_transform<F: Float>(
+/// Creates a [`NodeTransform`] from child to parent space for a child with the
+/// given position, orientation and scaling with respect to the parent.
+pub fn create_child_to_parent_transform<F: Float>(
     position: Point3<F>,
     orientation: UnitQuaternion<F>,
     scaling: F,
