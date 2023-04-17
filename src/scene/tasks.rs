@@ -15,13 +15,36 @@ use crate::{
 use anyhow::{anyhow, Result};
 
 define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the group-to-world
+    /// transforms of all [`SceneGraph`](crate::scene::SceneGraph) group nodes.
+    [pub] UpdateSceneGroupToWorldTransforms,
+    depends_on = [
+        SyncSceneObjectTransformsWithPositions,
+        SyncSceneObjectTransformsWithOrientations
+    ],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Updating scene object group-to-world transforms"; {
+            let scene = world.scene().read().unwrap();
+            scene.scene_graph()
+                .write()
+                .unwrap()
+                .update_all_group_to_root_transforms();
+
+            Ok(())
+        })
+    }
+);
+
+define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
     /// [`SceneGraph`](crate::scene::SceneGraph) to update the view transform of
     /// the scene camera.
     [pub] SyncSceneCameraViewTransform,
     depends_on = [
         SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations
+        SyncSceneObjectTransformsWithOrientations,
+        UpdateSceneGroupToWorldTransforms
     ],
     execute_on = [RenderingTag],
     |world: &World| {
@@ -191,6 +214,7 @@ impl Scene {
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
         task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
+        task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
         task_scheduler.register_task(SyncSceneCameraViewTransform)?;
         task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
         task_scheduler.register_task(BufferVisibleModelInstances)?;
