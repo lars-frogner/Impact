@@ -60,6 +60,7 @@ pub struct PrepassShaderGenerator<'a> {
 pub struct PrepassVertexOutputFieldIndices {
     diffuse_color: Option<usize>,
     specular_color: Option<usize>,
+    emissive_color: Option<usize>,
     roughness: Option<usize>,
     parallax_displacement_scale: Option<usize>,
     parallax_uv_per_distance: Option<usize>,
@@ -113,6 +114,12 @@ impl<'a> PrepassShaderGenerator<'a> {
                 input_struct_builder.add_field("specularColor", vec3_type, location, VECTOR_3_SIZE)
             });
 
+        let input_emissive_color_field_idx =
+            self.feature_input.emissive_color_location.map(|location| {
+                has_material_property = true;
+                input_struct_builder.add_field("emissiveColor", vec3_type, location, VECTOR_3_SIZE)
+            });
+
         let input_roughness_field_idx = self.feature_input.roughness_location.map(|location| {
             has_material_property = true;
             input_struct_builder.add_field("roughness", float_type, location, F32_WIDTH)
@@ -147,6 +154,7 @@ impl<'a> PrepassShaderGenerator<'a> {
         let mut indices = PrepassVertexOutputFieldIndices {
             diffuse_color: None,
             specular_color: None,
+            emissive_color: None,
             roughness: None,
             parallax_displacement_scale: None,
             parallax_uv_per_distance: None,
@@ -171,6 +179,17 @@ impl<'a> PrepassShaderGenerator<'a> {
                 indices.specular_color = Some(
                     vertex_output_struct_builder.add_field_with_perspective_interpolation(
                         "specularColor",
+                        vec3_type,
+                        VECTOR_3_SIZE,
+                        input_struct.get_field_expr(idx),
+                    ),
+                );
+            }
+
+            if let Some(idx) = input_emissive_color_field_idx {
+                indices.emissive_color = Some(
+                    vertex_output_struct_builder.add_field_with_perspective_interpolation(
+                        "emissiveColor",
                         vec3_type,
                         VECTOR_3_SIZE,
                         input_struct.get_field_expr(idx),
@@ -469,11 +488,29 @@ impl<'a> PrepassShaderGenerator<'a> {
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
-        let ambient_rgba_color_expr = append_unity_component_to_vec3(
+        let output_color_expr =
+            material_input_field_indices
+                .emissive_color
+                .map_or(ambient_color_expr, |idx| {
+                    let emissive_color = fragment_input_struct.get_field_expr(idx);
+
+                    emit_in_func(fragment_function, |function| {
+                        include_expr_in_func(
+                            function,
+                            Expression::Binary {
+                                op: BinaryOperator::Add,
+                                left: ambient_color_expr,
+                                right: emissive_color,
+                            },
+                        )
+                    })
+                });
+
+        let output_rgba_color_expr = append_unity_component_to_vec3(
             &mut module.types,
             &mut module.constants,
             fragment_function,
-            ambient_color_expr,
+            output_color_expr,
         );
 
         output_struct_builder.add_field(
@@ -482,7 +519,7 @@ impl<'a> PrepassShaderGenerator<'a> {
             None,
             None,
             VECTOR_4_SIZE,
-            ambient_rgba_color_expr,
+            output_rgba_color_expr,
         );
 
         if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {

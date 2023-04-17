@@ -105,6 +105,9 @@ pub struct LightMaterialFeatureShaderInput {
     /// specular color of the material.
     pub specular_color_location: Option<u32>,
     /// Vertex attribute location for the instance feature representing the
+    /// emissive color of the material.
+    pub emissive_color_location: Option<u32>,
+    /// Vertex attribute location for the instance feature representing the
     /// roughness of the material.
     pub roughness_location: Option<u32>,
     /// Vertex attribute location for the instance feature representing the
@@ -5376,6 +5379,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5421,6 +5425,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5466,6 +5471,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5511,6 +5517,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5556,6 +5563,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5601,6 +5609,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5647,6 +5656,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5693,6 +5703,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5738,6 +5749,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5783,6 +5795,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5829,6 +5842,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5877,6 +5891,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5925,6 +5940,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -5973,6 +5989,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6020,6 +6037,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6067,6 +6085,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6114,6 +6133,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6161,6 +6181,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6209,6 +6230,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6257,6 +6279,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6305,6 +6328,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6353,6 +6377,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6401,6 +6426,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6449,6 +6475,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6497,6 +6524,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6545,6 +6573,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6586,6 +6615,48 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
+                    roughness_location: None,
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Prepass(PrepassTextureShaderInput {
+                diffuse_texture_and_sampler_bindings: None,
+                specular_texture_and_sampler_bindings: None,
+                roughness_texture_and_sampler_bindings: None,
+                specular_reflectance_lookup_texture_and_sampler_bindings: None,
+                bump_mapping_input: None,
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_prepass_shader_with_emissive_color_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+            }),
+            None,
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    diffuse_color_location: None,
+                    specular_color_location: None,
+                    emissive_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     roughness_location: None,
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6632,6 +6703,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: None,
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6682,6 +6754,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: None,
                     parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
@@ -6729,6 +6802,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: None,
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6775,6 +6849,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6821,6 +6896,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_color_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6868,6 +6944,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6917,6 +6994,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: None,
                     parallax_uv_per_distance_location: None,
@@ -6970,6 +7048,7 @@ mod test {
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     diffuse_color_location: None,
                     specular_color_location: None,
+                    emissive_color_location: None,
                     roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
                     parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
                     parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),

@@ -34,12 +34,18 @@ pub use light::{
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
-    DiffuseColorComp, DiffuseTextureComp, FixedColorComp, FixedColorMaterial,
-    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle,
-    MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
-    NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp,
-    SpecularColorComp, SpecularTextureComp, VertexColorComp, VertexColorMaterial,
+    DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,
+    FixedColorMaterial, FixedMaterialResources, FixedTextureComp, FixedTextureMaterial,
+    MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+    MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
+    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
+    RoughnessTextureComp, SpecularColorComp, SpecularTextureComp,
+    TexturedColorEmissiveMaterialFeature, TexturedColorParallaxMappingEmissiveMaterialFeature,
+    UniformDiffuseEmissiveMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
+    UniformDiffuseUniformSpecularEmissiveMaterialFeature,
+    UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
+    UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
+    VertexColorComp, VertexColorMaterial,
 };
 pub use mesh::{
     BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
@@ -166,6 +172,19 @@ impl Scene {
             .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedColorEmissiveMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<TexturedColorParallaxMappingEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformSpecularParallaxMappingEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature>();
 
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
