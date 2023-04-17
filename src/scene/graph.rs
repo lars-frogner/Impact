@@ -1580,6 +1580,8 @@ mod test {
         let group_3 = scene_graph.create_group_node(group_2, Similarity3::identity());
         let camera = scene_graph.create_camera_node(group_3, Similarity3::identity());
 
+        scene_graph.update_all_group_to_root_transforms();
+
         let transform = scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
         assert_abs_diff_eq!(transform, Similarity3::identity());
@@ -1609,6 +1611,8 @@ mod test {
                 scaling,
             ),
         );
+
+        scene_graph.update_all_group_to_root_transforms();
 
         let root_to_camera_transform =
             scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
