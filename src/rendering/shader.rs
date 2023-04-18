@@ -26,6 +26,7 @@ use crate::{
     scene::MAX_SHADOW_MAP_CASCADES,
 };
 use anyhow::{anyhow, bail, Result};
+use bitflags::bitflags;
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
@@ -195,6 +196,16 @@ pub enum MaterialShaderGenerator<'a> {
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
     Microfacet(MicrofacetShaderGenerator<'a>),
     Prepass(PrepassShaderGenerator<'a>),
+bitflags! {
+    /// Bitflag encoding a set of "tricks" that can be made to achieve certain
+    /// effects.
+    pub struct ShaderTricks: u8 {
+        /// Ignore the translational part of the model-to-camera transform when
+        /// transforming the position.
+        const FOLLOW_CAMERA = 0b00000001;
+        /// Make the depth of every fragment in framebuffer space 1.0.
+        const DRAW_AT_MAX_DEPTH = 0b00000010;
+    }
 }
 
 /// Handles to expressions for accessing the rotational, translational and
@@ -827,11 +838,13 @@ impl ShaderGenerator {
                 .unwrap()
         };
 
-        let (mesh_vertex_output_field_indices, mut vertex_output_struct_builder) =
-            Self::generate_vertex_code_for_vertex_attributes(
+        let tricks = material_shader_generator
+            .as_ref()
+            .map_or_else(ShaderTricks::empty, |generator| generator.tricks());
                 mesh_shader_input,
                 vertex_attribute_requirements,
                 input_render_attachment_quantities,
+            tricks,
                 &mut module,
                 &mut source_code_lib,
                 &mut vertex_function,
@@ -1203,6 +1216,7 @@ impl ShaderGenerator {
         mesh_shader_input: &MeshShaderInput,
         vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        tricks: ShaderTricks,
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
@@ -1284,7 +1298,19 @@ impl ShaderGenerator {
             None
         };
 
-        let position_expr = source_code_lib.generate_function_call(
+        let position_expr = if tricks.contains(ShaderTricks::FOLLOW_CAMERA) {
+            source_code_lib.generate_function_call(
+                module,
+                vertex_function,
+                "transformPositionWithoutTranslation",
+                vec![
+                    model_view_transform.rotation_quaternion,
+                    model_view_transform.scaling_factor,
+                    input_model_position_expr,
+                ],
+            )
+        } else {
+            source_code_lib.generate_function_call(
             module,
             vertex_function,
             "transformPosition",
@@ -1294,7 +1320,8 @@ impl ShaderGenerator {
                 model_view_transform.scaling_factor,
                 input_model_position_expr,
             ],
-        );
+            )
+        };
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
@@ -1302,6 +1329,7 @@ impl ShaderGenerator {
             module,
             source_code_lib,
             vertex_function,
+            tricks,
             position_expr,
         );
         let framebuffer_position_field_idx = output_struct_builder.add_builtin_position_field(
@@ -2029,6 +2057,11 @@ impl MaterialShaderInput {
 }
 
 impl<'a> MaterialShaderGenerator<'a> {
+    /// Any [`ShaderTricks`] employed by the material.
+    pub fn tricks(&self) -> ShaderTricks {
+        ShaderTricks::empty()
+    }
+
     /// Generates the vertex shader code specific to the relevant material
     /// by adding code representation to the given [`naga`] objects.
     ///
@@ -2192,11 +2225,12 @@ impl ProjectionExpressions {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
+        tricks: ShaderTricks,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
         match self {
             Self::Camera(camera_projection_matrix) => camera_projection_matrix
-                .generate_projected_position_expr(module, vertex_function, position_expr),
+                .generate_projected_position_expr(module, vertex_function, tricks, position_expr),
             Self::OmnidirectionalLight(omnidirectional_light_cubemap_projection) => {
                 omnidirectional_light_cubemap_projection.generate_projected_position_expr(
                     module,
@@ -2225,6 +2259,7 @@ impl CameraProjectionExpressions {
         &self,
         module: &mut Module,
         vertex_function: &mut Function,
+        tricks: ShaderTricks,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
         let homogeneous_position_expr = append_unity_component_to_vec3(
@@ -2235,14 +2270,32 @@ impl CameraProjectionExpressions {
         );
 
         emit_in_func(vertex_function, |function| {
-            include_expr_in_func(
+            let projected_position_expr = include_expr_in_func(
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
                     left: self.matrix,
                     right: homogeneous_position_expr,
                 },
+            );
+
+            if tricks.contains(ShaderTricks::DRAW_AT_MAX_DEPTH) {
+                include_expr_in_func(
+                    function,
+                    Expression::Swizzle {
+                        size: VectorSize::Quad,
+                        vector: projected_position_expr,
+                        pattern: [
+                            SwizzleComponent::X,
+                            SwizzleComponent::Y,
+                            SwizzleComponent::W,
+                            SwizzleComponent::W,
+                        ],
+                    },
             )
+            } else {
+                projected_position_expr
+            }
         })
     }
 }

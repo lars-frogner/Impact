@@ -19,7 +19,15 @@ fn transformPosition(
     scaling: f32,
     position: vec3<f32>
 ) -> vec3<f32> {
-    return rotateVectorWithQuaternion(rotationQuaternion, scaling * position) + translation;
+    return transformPositionWithoutTranslation(rotationQuaternion, scaling, position) + translation;
+}
+
+fn transformPositionWithoutTranslation(
+    rotationQuaternion: vec4<f32>,
+    scaling: f32,
+    position: vec3<f32>
+) -> vec3<f32> {
+    return rotateVectorWithQuaternion(rotationQuaternion, scaling * position);
 }
 
 fn normalizeVector(vector: vec3<f32>) -> vec3<f32> {
