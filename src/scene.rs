@@ -18,7 +18,7 @@ mod texture_projection;
 pub use camera::{OrthographicCameraComp, PerspectiveCameraComp, SceneCamera};
 pub use components::{
     ParentComp, ScalingComp, SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
-    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable,
 };
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{

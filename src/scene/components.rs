@@ -57,6 +57,13 @@ pub type SceneGraphCameraNodeComp = SceneGraphNodeComp<CameraNodeID>;
 /// model instance node in the [`SceneGraph`](crate::scene::SceneGraph).
 pub type SceneGraphModelInstanceNodeComp = SceneGraphNodeComp<ModelInstanceNodeID>;
 
+/// Marker [`Component`](impact_ecs::component::Component) for entities that
+/// should never be frustum culled in the
+/// [`SceneGraph`](crate::scene::SceneGraph).
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct Uncullable;
+
 impl ParentComp {
     /// Creates a new component representing a direct child of the given
     /// [`Entity`].

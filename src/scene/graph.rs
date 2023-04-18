@@ -126,7 +126,7 @@ pub struct GroupNode<F: Float> {
 #[derive(Clone, Debug)]
 pub struct ModelInstanceNode<F: Float> {
     parent_node_id: GroupNodeID,
-    model_bounding_sphere: Sphere<F>,
+    model_bounding_sphere: Option<Sphere<F>>,
     model_to_parent_transform: NodeTransform<F>,
     model_id: ModelID,
     feature_ids: Vec<InstanceFeatureID>,
@@ -203,35 +203,50 @@ impl<F: Float> SceneGraph<F> {
         group_node_id
     }
 
-    /// Creates a new [`ModelInstanceNode`] for an instance of the
-    /// model with the given ID, bounding sphere and feature IDs.
-    /// It is included in the scene graph with the given transform
-    /// relative to the the given parent node.
+    /// Creates a new [`ModelInstanceNode`] for an instance of the model with
+    /// the given ID, bounding sphere for frustum culling and feature IDs. It is
+    /// included in the scene graph with the given transform relative to the the
+    /// given parent node.
+    ///
+    /// If no bounding sphere is provided, the model will not be frustum culled.
     ///
     /// # Returns
     /// The ID of the created model instance node.
     ///
     /// # Panics
-    /// If the specified parent group node does not exist.
+    /// - If the specified parent group node does not exist.
+    /// - If no bounding sphere is provided when the parent node is not the root
+    ///   node.
     pub fn create_model_instance_node(
         &mut self,
         parent_node_id: GroupNodeID,
         model_to_parent_transform: NodeTransform<F>,
         model_id: ModelID,
-        bounding_sphere: Sphere<F>,
+        frustum_culling_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<InstanceFeatureID>,
     ) -> ModelInstanceNodeID {
+        // Since we don't guarantee that any other parent node than the root is
+        // never culled, allowing a non-root node to have an uncullable child
+        // could lead to unexpected behavior, so we disallow it
+        assert!(
+            frustum_culling_bounding_sphere.is_some() || parent_node_id == self.root_node_id(),
+            "Tried to create model instance node without bounding sphere and with a non-root parent"
+        );
+
         let model_instance_node = ModelInstanceNode::new(
             parent_node_id,
-            bounding_sphere,
+            frustum_culling_bounding_sphere,
             model_to_parent_transform,
             model_id,
             feature_ids,
         );
+
         let model_instance_node_id = self.model_instance_nodes.add_node(model_instance_node);
+
         self.group_nodes
             .node_mut(parent_node_id)
             .add_child_model_instance_node(model_instance_node_id);
+
         model_instance_node_id
     }
 
@@ -436,12 +451,63 @@ impl<F: Float> SceneGraph<F> {
         InstanceModelViewTransform: InstanceFeature,
         F: simba::scalar::SubsetOf<fre>,
     {
-        self.buffer_transforms_of_visible_model_instances_in_group(
-            instance_feature_manager,
-            scene_camera.camera().view_frustum(),
-            self.root_node_id(),
-            scene_camera.view_transform(),
-        );
+        let root_node = self.group_nodes.node(self.root_node_id());
+
+        let camera_space_view_frustum = scene_camera.camera().view_frustum();
+        let root_to_camera_transform = scene_camera.view_transform();
+
+        for &group_node_id in root_node.child_group_node_ids() {
+            let group_node = self.group_nodes.node(group_node_id);
+
+            let group_to_camera_transform =
+                root_to_camera_transform * group_node.group_to_parent_transform();
+
+            let should_buffer = if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
+                let bounding_sphere_camera_space =
+                    bounding_sphere.transformed(&group_to_camera_transform);
+
+                !camera_space_view_frustum.sphere_lies_outside(&bounding_sphere_camera_space)
+            } else {
+                // If the group has no bounding sphere, buffer it unconditionally
+                true
+            };
+
+            if should_buffer {
+                self.buffer_transforms_of_visible_model_instances_in_group(
+                    instance_feature_manager,
+                    camera_space_view_frustum,
+                    group_node,
+                    &group_to_camera_transform,
+                );
+            }
+        }
+
+        for &model_instance_node_id in root_node.child_model_instance_node_ids() {
+            let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+            let model_view_transform =
+                root_to_camera_transform * model_instance_node.model_to_parent_transform();
+
+            let should_buffer = if let Some(bounding_sphere) =
+                model_instance_node.get_model_bounding_sphere()
+            {
+                let child_bounding_sphere_camera_space =
+                    bounding_sphere.transformed(&model_view_transform);
+
+                !camera_space_view_frustum.sphere_lies_outside(&child_bounding_sphere_camera_space)
+            } else {
+                // If the model has no bounding sphere, buffer it unconditionally
+                true
+            };
+
+            if should_buffer {
+                Self::buffer_model_view_transform_of_model_instance(
+                    instance_feature_manager,
+                    model_instance_node,
+                    &model_view_transform,
+                );
+            }
+        }
     }
 
     /// Updates the transform from local space to the space of the root node for
@@ -499,9 +565,15 @@ impl<F: Float> SceneGraph<F> {
                 .filter_map(|group_node_id| self.update_bounding_spheres(group_node_id)),
         );
 
-        child_bounding_spheres.extend(model_instance_node_ids.into_iter().map(
+        child_bounding_spheres.extend(model_instance_node_ids.into_iter().filter_map(
             |model_instance_node_id| {
-                self.find_model_instance_bounding_sphere(model_instance_node_id)
+                let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
+
+                model_instance_node
+                    .get_model_bounding_sphere()
+                    .map(|bounding_sphere| {
+                        bounding_sphere.transformed(model_instance_node.model_to_parent_transform())
+                    })
             },
         ));
 
@@ -523,67 +595,79 @@ impl<F: Float> SceneGraph<F> {
         }
     }
 
-    /// Returns the bounding sphere of the model of the
-    /// specified model instance node, defined in the space
-    /// of the model instance.
-    fn find_model_instance_bounding_sphere(
-        &self,
-        model_instance_node_id: ModelInstanceNodeID,
-    ) -> Sphere<F> {
-        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-
-        model_instance_node
-            .model_bounding_sphere()
-            .transformed(model_instance_node.model_to_parent_transform())
-    }
-
-    /// Determines the model-to-camera transforms of the group and model
-    /// instance nodes that are children of the specified group node and
-    /// whose bounding spheres lie within the given camera frustum.
-    /// The given parent model-to-camera transform and the model-to-parent
-    /// transform of the specified group node are prepended to the transforms
-    /// of the children. For the children that are model instance
-    /// nodes, their final model-to-camera transforms are added to
-    /// the given instance feature manager.
+    /// Determines the group/model-to-camera transforms of the group and model
+    /// instance nodes that are children of the specified group node and whose
+    /// bounding spheres lie within the given camera frustum. The given
+    /// group-to-camera transform is prepended to the transforms of the
+    /// children. For the children that are model instance nodes, their final
+    /// model-to-camera transforms are added to the given instance feature
+    /// manager.
     ///
     /// # Panics
-    /// If the specified group node does not exist.
+    /// If any of the child nodes of the group node does not exist.
     fn buffer_transforms_of_visible_model_instances_in_group(
         &self,
         instance_feature_manager: &mut InstanceFeatureManager,
         camera_space_view_frustum: &Frustum<F>,
-        group_node_id: GroupNodeID,
-        parent_group_to_camera_transform: &NodeTransform<F>,
+        group_node: &GroupNode<F>,
+        group_to_camera_transform: &NodeTransform<F>,
     ) where
         InstanceModelViewTransform: InstanceFeature,
         F: simba::scalar::SubsetOf<fre>,
     {
-        let group_node = self.group_nodes.node(group_node_id);
+        for &child_group_node_id in group_node.child_group_node_ids() {
+            let child_group_node = self.group_nodes.node(child_group_node_id);
 
-        let group_to_camera_transform =
-            parent_group_to_camera_transform * group_node.group_to_parent_transform();
+            let child_group_to_camera_transform =
+                group_to_camera_transform * child_group_node.group_to_parent_transform();
 
-        if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
-            let bounding_sphere_camera_space =
-                bounding_sphere.transformed(&group_to_camera_transform);
+            let should_buffer = if let Some(child_bounding_sphere) =
+                child_group_node.get_bounding_sphere()
+            {
+                let child_bounding_sphere_camera_space =
+                    child_bounding_sphere.transformed(&child_group_to_camera_transform);
 
-            if !camera_space_view_frustum.sphere_lies_outside(&bounding_sphere_camera_space) {
-                for &group_node_id in group_node.child_group_node_ids() {
-                    self.buffer_transforms_of_visible_model_instances_in_group(
-                        instance_feature_manager,
-                        camera_space_view_frustum,
-                        group_node_id,
-                        &group_to_camera_transform,
-                    );
-                }
+                !camera_space_view_frustum.sphere_lies_outside(&child_bounding_sphere_camera_space)
+            } else {
+                // If the group has no bounding sphere, buffer it unconditionally
+                true
+            };
 
-                for &model_instance_node_id in group_node.child_model_instance_node_ids() {
-                    self.buffer_model_view_transform_of_model_instance(
-                        instance_feature_manager,
-                        model_instance_node_id,
-                        &group_to_camera_transform,
-                    );
-                }
+            if should_buffer {
+                self.buffer_transforms_of_visible_model_instances_in_group(
+                    instance_feature_manager,
+                    camera_space_view_frustum,
+                    child_group_node,
+                    &child_group_to_camera_transform,
+                );
+            }
+        }
+
+        for &child_model_instance_node_id in group_node.child_model_instance_node_ids() {
+            let child_model_instance_node =
+                self.model_instance_nodes.node(child_model_instance_node_id);
+
+            let child_model_view_transform =
+                group_to_camera_transform * child_model_instance_node.model_to_parent_transform();
+
+            let should_buffer = if let Some(child_bounding_sphere) =
+                child_model_instance_node.get_model_bounding_sphere()
+            {
+                let child_bounding_sphere_camera_space =
+                    child_bounding_sphere.transformed(&child_model_view_transform);
+
+                !camera_space_view_frustum.sphere_lies_outside(&child_bounding_sphere_camera_space)
+            } else {
+                // If the model has no bounding sphere, buffer it unconditionally
+                true
+            };
+
+            if should_buffer {
+                Self::buffer_model_view_transform_of_model_instance(
+                    instance_feature_manager,
+                    child_model_instance_node,
+                    &child_model_view_transform,
+                );
             }
         }
     }
@@ -596,19 +680,13 @@ impl<F: Float> SceneGraph<F> {
     /// # Panics
     /// If the specified model instance node does not exist.
     fn buffer_model_view_transform_of_model_instance(
-        &self,
         instance_feature_manager: &mut InstanceFeatureManager,
-        model_instance_node_id: ModelInstanceNodeID,
-        parent_group_to_camera_transform: &NodeTransform<F>,
+        model_instance_node: &ModelInstanceNode<F>,
+        model_view_transform: &NodeTransform<F>,
     ) where
         InstanceModelViewTransform: InstanceFeature,
         F: simba::scalar::SubsetOf<fre>,
     {
-        let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-
-        let model_view_transform =
-            parent_group_to_camera_transform * model_instance_node.model_to_parent_transform();
-
         let instance_model_view_transform =
             InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
 
@@ -808,6 +886,7 @@ impl SceneGraph<fre> {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
 
+            // We assume that only objects with bounding spheres will cast shadows
             if let Some(child_world_space_bounding_sphere) = child_group_node.get_bounding_sphere()
             {
                 let child_group_to_camera_transform =
@@ -834,31 +913,34 @@ impl SceneGraph<fre> {
         for &model_instance_node_id in group_node.child_model_instance_node_ids() {
             let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-            let model_instance_world_space_bounding_sphere =
-                model_instance_node.model_bounding_sphere();
-
-            let model_instance_to_camera_transform =
-                group_to_camera_transform * model_instance_node.model_to_parent_transform();
-
-            let model_instance_camera_space_bounding_sphere =
-                model_instance_world_space_bounding_sphere
-                    .transformed(&model_instance_to_camera_transform);
-
-            if !camera_space_face_frustum
-                .sphere_lies_outside(&model_instance_camera_space_bounding_sphere)
+            // We assume that only objects with bounding spheres will cast shadows
+            if let Some(model_instance_world_space_bounding_sphere) =
+                model_instance_node.get_model_bounding_sphere()
             {
-                let instance_model_light_transform =
-                    InstanceModelLightTransform::with_model_light_transform(
-                        omnidirectional_light.create_transform_to_positive_z_cubemap_face_space(
-                            face,
-                            &model_instance_to_camera_transform,
-                        ),
-                    );
+                let model_instance_to_camera_transform =
+                    group_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-                instance_feature_manager.buffer_instance_transform(
-                    model_instance_node.model_id(),
-                    &instance_model_light_transform,
-                );
+                let model_instance_camera_space_bounding_sphere =
+                    model_instance_world_space_bounding_sphere
+                        .transformed(&model_instance_to_camera_transform);
+
+                if !camera_space_face_frustum
+                    .sphere_lies_outside(&model_instance_camera_space_bounding_sphere)
+                {
+                    let instance_model_light_transform =
+                        InstanceModelLightTransform::with_model_light_transform(
+                            omnidirectional_light
+                                .create_transform_to_positive_z_cubemap_face_space(
+                                    face,
+                                    &model_instance_to_camera_transform,
+                                ),
+                        );
+
+                    instance_feature_manager.buffer_instance_transform(
+                        model_instance_node.model_id(),
+                        &instance_model_light_transform,
+                    );
+                }
             }
         }
     }
@@ -874,6 +956,7 @@ impl SceneGraph<fre> {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
 
+            // We assume that only objects with bounding spheres will cast shadows
             if let Some(child_world_space_bounding_sphere) = child_group_node.get_bounding_sphere()
             {
                 let child_group_to_camera_transform =
@@ -900,30 +983,33 @@ impl SceneGraph<fre> {
         for &model_instance_node_id in group_node.child_model_instance_node_ids() {
             let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
 
-            let model_instance_world_space_bounding_sphere =
-                model_instance_node.model_bounding_sphere();
+            // We assume that only objects with bounding spheres will cast shadows
+            if let Some(model_instance_world_space_bounding_sphere) =
+                model_instance_node.get_model_bounding_sphere()
+            {
+                let model_instance_to_camera_transform =
+                    group_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-            let model_instance_to_camera_transform =
-                group_to_camera_transform * model_instance_node.model_to_parent_transform();
+                let model_instance_camera_space_bounding_sphere =
+                    model_instance_world_space_bounding_sphere
+                        .transformed(&model_instance_to_camera_transform);
 
-            let model_instance_camera_space_bounding_sphere =
-                model_instance_world_space_bounding_sphere
-                    .transformed(&model_instance_to_camera_transform);
+                if unidirectional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
+                    cascade_idx,
+                    &model_instance_camera_space_bounding_sphere,
+                ) {
+                    let instance_model_light_transform =
+                        InstanceModelLightTransform::with_model_light_transform(
+                            unidirectional_light.create_transform_to_light_space(
+                                &model_instance_to_camera_transform,
+                            ),
+                        );
 
-            if unidirectional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
-                cascade_idx,
-                &model_instance_camera_space_bounding_sphere,
-            ) {
-                let instance_model_light_transform =
-                    InstanceModelLightTransform::with_model_light_transform(
-                        unidirectional_light
-                            .create_transform_to_light_space(&model_instance_to_camera_transform),
+                    instance_feature_manager.buffer_instance_transform(
+                        model_instance_node.model_id(),
+                        &instance_model_light_transform,
                     );
-
-                instance_feature_manager.buffer_instance_transform(
-                    model_instance_node.model_id(),
-                    &instance_model_light_transform,
-                );
+                }
             }
         }
     }
@@ -1101,13 +1187,13 @@ impl<F: Float> SceneGraphNode for GroupNode<F> {
 }
 
 impl<F: Float> ModelInstanceNode<F> {
-    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Sphere<F>) {
+    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<F>>) {
         self.model_bounding_sphere = bounding_sphere;
     }
 
     fn new(
         parent_node_id: GroupNodeID,
-        model_bounding_sphere: Sphere<F>,
+        model_bounding_sphere: Option<Sphere<F>>,
         model_to_parent_transform: NodeTransform<F>,
         model_id: ModelID,
         feature_ids: Vec<InstanceFeatureID>,
@@ -1147,9 +1233,10 @@ impl<F: Float> ModelInstanceNode<F> {
         &self.feature_ids
     }
 
-    /// Returns the bounding sphere of the model instance.
-    fn model_bounding_sphere(&self) -> &Sphere<F> {
-        &self.model_bounding_sphere
+    /// Returns the bounding sphere of the model instance, or [`None`] if it has
+    /// no bounding sphere.
+    fn get_model_bounding_sphere(&self) -> Option<&Sphere<F>> {
+        self.model_bounding_sphere.as_ref()
     }
 }
 
@@ -1254,7 +1341,7 @@ mod test {
             parent_node_id,
             Similarity3::identity(),
             create_dummy_model_id(""),
-            Sphere::new(Point3::origin(), F::one()),
+            Some(Sphere::new(Point3::origin(), F::one())),
             Vec::new(),
         )
     }
@@ -1646,11 +1733,11 @@ mod test {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root = scene_graph.root_node_id();
 
-        let instance = scene_graph.create_model_instance_node(
+        let model_instance_node_id = scene_graph.create_model_instance_node(
             root,
             model_to_parent_transform,
             create_dummy_model_id(""),
-            bounding_sphere.clone(),
+            Some(bounding_sphere.clone()),
             Vec::new(),
         );
 
@@ -1659,8 +1746,17 @@ mod test {
             &root_bounding_sphere.unwrap(),
             &bounding_sphere.transformed(&model_to_parent_transform),
         );
+
+        let model_instance_node = scene_graph
+            .model_instance_nodes
+            .node(model_instance_node_id);
+        let model_bounding_sphere = model_instance_node
+            .get_model_bounding_sphere()
+            .unwrap()
+            .transformed(model_instance_node.model_to_parent_transform());
+
         assert_spheres_equal(
-            &scene_graph.find_model_instance_bounding_sphere(instance),
+            &model_bounding_sphere,
             &bounding_sphere.transformed(&model_to_parent_transform),
         );
     }
@@ -1677,14 +1773,14 @@ mod test {
             root,
             Similarity3::identity(),
             create_dummy_model_id("1"),
-            bounding_sphere_1.clone(),
+            Some(bounding_sphere_1.clone()),
             Vec::new(),
         );
         scene_graph.create_model_instance_node(
             root,
             Similarity3::identity(),
             create_dummy_model_id("2"),
-            bounding_sphere_2.clone(),
+            Some(bounding_sphere_2.clone()),
             Vec::new(),
         );
 
@@ -1724,7 +1820,7 @@ mod test {
             group_1,
             Similarity3::identity(),
             create_dummy_model_id("1"),
-            bounding_sphere_1.clone(),
+            Some(bounding_sphere_1.clone()),
             Vec::new(),
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_to_parent_transform);
@@ -1732,7 +1828,7 @@ mod test {
             group_2,
             model_instance_2_to_parent_transform,
             create_dummy_model_id("2"),
-            bounding_sphere_2.clone(),
+            Some(bounding_sphere_2.clone()),
             Vec::new(),
         );
 
