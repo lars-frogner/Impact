@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to meshes.
 
 use super::MeshID;
-use crate::rendering::fre;
+use crate::{geometry::FrontFaceSide, rendering::fre};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use impact_utils::hash64;
@@ -30,6 +30,7 @@ pub struct BoxMeshComp {
     pub extent_y: fre,
     /// The extent of the box in the z-direction.
     pub extent_z: fre,
+    front_faces_on_outside: u32,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
@@ -100,14 +101,33 @@ impl BoxMeshComp {
         extent_x: 1.0,
         extent_y: 1.0,
         extent_z: 1.0,
+        front_faces_on_outside: 1,
     };
 
     /// Creates a new component for a box mesh with the given extents.
-    pub fn new(extent_x: fre, extent_y: fre, extent_z: fre) -> Self {
+    pub fn new(
+        extent_x: fre,
+        extent_y: fre,
+        extent_z: fre,
+        front_face_side: FrontFaceSide,
+    ) -> Self {
         Self {
             extent_x,
             extent_y,
             extent_z,
+            front_faces_on_outside: match front_face_side {
+                FrontFaceSide::Outside => 1,
+                FrontFaceSide::Inside => 0,
+            },
+        }
+    }
+
+    /// Returns the [`FrontFaceSide`] for the box mesh.
+    pub fn front_face_side(&self) -> FrontFaceSide {
+        match self.front_faces_on_outside {
+            1 => FrontFaceSide::Outside,
+            0 => FrontFaceSide::Inside,
+            _ => unreachable!(),
         }
     }
 
@@ -115,8 +135,8 @@ impl BoxMeshComp {
     /// label to describe the texture projection.
     pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Box mesh {{ extent_x = {}, extent_y = {}, extent_z = {}, projection = {} }}",
-            self.extent_x, self.extent_y, self.extent_z, projection_label
+            "Box mesh {{ extent_x = {}, extent_y = {}, extent_z = {}, front_faces_on_outside = {}, projection = {} }}",
+            self.extent_x, self.extent_y, self.extent_z, self.front_faces_on_outside, projection_label
         )))
     }
 }

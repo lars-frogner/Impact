@@ -141,6 +141,7 @@ impl TriangleMesh<fre> {
                     box_mesh.extent_x,
                     box_mesh.extent_y,
                     box_mesh.extent_z,
+                    box_mesh.front_face_side(),
                 );
 
                 if let Some(projection) = projection {

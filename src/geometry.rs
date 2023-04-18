@@ -26,9 +26,9 @@ pub use instance::{
     InstanceFeatureTypeID, InstanceModelLightTransform, InstanceModelViewTransform,
 };
 pub use mesh::{
-    TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector,
-    VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
-    VERTEX_ATTRIBUTE_FLAGS, VERTEX_ATTRIBUTE_NAMES,
+    FrontFaceSide, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor,
+    VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords,
+    N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS, VERTEX_ATTRIBUTE_NAMES,
 };
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;

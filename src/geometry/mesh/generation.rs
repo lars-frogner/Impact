@@ -19,6 +19,14 @@ macro_rules! normal {
     };
 }
 
+/// Whether the front faces of a mesh should be oriented toward the outside or
+/// the inside.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FrontFaceSide {
+    Outside,
+    Inside,
+}
+
 impl<F: Float> TriangleMesh<F> {
     /// Creates a mesh representing a flat plane centered at the origin with the
     /// given horizontal extents.
@@ -69,7 +77,12 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// If any of the given extents are negative.
-    pub fn create_box(extent_x: F, extent_y: F, extent_z: F) -> Self {
+    pub fn create_box(
+        extent_x: F,
+        extent_y: F,
+        extent_z: F,
+        front_face_side: FrontFaceSide,
+    ) -> Self {
         assert!(
             extent_x >= F::ZERO,
             "Tried to create box mesh with negative x-extent"
@@ -94,7 +107,14 @@ impl<F: Float> TriangleMesh<F> {
         let mut idx = 0;
 
         let mut add_face_indices = || {
-            indices.extend_from_slice(&[idx, idx + 3, idx + 1, idx + 1, idx + 3, idx + 2]);
+            match front_face_side {
+                FrontFaceSide::Outside => {
+                    indices.extend_from_slice(&[idx, idx + 3, idx + 1, idx + 1, idx + 3, idx + 2]);
+                }
+                FrontFaceSide::Inside => {
+                    indices.extend_from_slice(&[idx + 1, idx + 3, idx, idx + 2, idx + 3, idx + 1]);
+                }
+            }
             idx += 4;
         };
 
