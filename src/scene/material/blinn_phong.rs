@@ -5,7 +5,7 @@ use crate::{
     geometry::VertexAttributeSet,
     rendering::{
         BlinnPhongTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
-        RenderAttachmentQuantitySet,
+        RenderAttachmentQuantitySet, RenderPassHints,
     },
     scene::{
         DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, InstanceFeatureManager,
@@ -302,6 +302,7 @@ fn execute_material_setup(
                 RenderAttachmentQuantitySet::empty(),
                 None,
                 vec![feature_type_id],
+                RenderPassHints::REQUIRES_LIGHTS,
                 MaterialShaderInput::BlinnPhong(texture_shader_input),
             )
         });

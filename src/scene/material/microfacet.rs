@@ -6,7 +6,7 @@ use crate::{
     rendering::{
         DiffuseMicrofacetShadingModel, MaterialPropertyTextureManager, MaterialShaderInput,
         MicrofacetShadingModel, MicrofacetTextureShaderInput, RenderAttachmentQuantitySet,
-        SpecularMicrofacetShadingModel,
+        RenderPassHints, SpecularMicrofacetShadingModel,
     },
     scene::{
         DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, InstanceFeatureManager,
@@ -648,6 +648,7 @@ fn execute_material_setup(
                 RenderAttachmentQuantitySet::empty(),
                 None,
                 vec![feature_type_id],
+                RenderPassHints::REQUIRES_LIGHTS,
                 MaterialShaderInput::Microfacet((
                     MicrofacetShadingModel {
                         diffuse: diffuse_shading_model,

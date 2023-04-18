@@ -6,7 +6,7 @@ use crate::{
     rendering::{
         Assets, BumpMappingTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
         NormalMappingShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
-        RenderAttachmentQuantitySet, TextureID,
+        RenderAttachmentQuantitySet, RenderPassHints, TextureID,
     },
     scene::{
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
@@ -142,6 +142,7 @@ pub fn create_prepass_material(
                 *output_render_attachment_quantities,
                 None,
                 vec![feature_type_id],
+                RenderPassHints::empty(),
                 MaterialShaderInput::Prepass(texture_shader_input),
             )
         });

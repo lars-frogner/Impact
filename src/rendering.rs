@@ -24,7 +24,7 @@ pub use buffer::{
     create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
 };
 pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
-pub use render_pass::{RenderPassManager, SyncRenderPasses};
+pub use render_pass::{RenderPassHints, RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
     AmbientLightShaderInput, BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput,

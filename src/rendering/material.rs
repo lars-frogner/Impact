@@ -4,7 +4,8 @@ use crate::{
     geometry::VertexAttributeSet,
     rendering::{
         buffer::{self, RenderBuffer},
-        Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet, TextureID,
+        Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet,
+        RenderPassHints, TextureID,
     },
     scene::{FixedMaterialResources, MaterialPropertyTextureSet, MaterialSpecification},
 };
@@ -18,6 +19,7 @@ pub struct MaterialRenderResourceManager {
     input_render_attachment_quantities: RenderAttachmentQuantitySet,
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
     fixed_resources: Option<FixedMaterialRenderResourceManager>,
+    render_pass_hints: RenderPassHints,
     shader_input: MaterialShaderInput,
 }
 
@@ -63,6 +65,7 @@ impl MaterialRenderResourceManager {
             output_render_attachment_quantities: material_specification
                 .output_render_attachment_quantities(),
             fixed_resources,
+            render_pass_hints: material_specification.render_pass_hints(),
             shader_input: material_specification.shader_input().clone(),
         }
     }
@@ -91,6 +94,11 @@ impl MaterialRenderResourceManager {
     /// the material, or [`None`] if the material has no fixed resources.
     pub fn fixed_resources(&self) -> Option<&FixedMaterialRenderResourceManager> {
         self.fixed_resources.as_ref()
+    }
+
+    /// Returns the render pass hints for the material.
+    pub fn render_pass_hints(&self) -> RenderPassHints {
+        self.render_pass_hints
     }
 
     /// Returns the input required for generating shaders for the material.

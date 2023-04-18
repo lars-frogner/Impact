@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{MaterialShaderInput, RenderAttachmentQuantitySet},
+    rendering::{MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints},
     scene::{
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialSpecification,
         RenderResourcesDesynchronized, VertexColorComp,
@@ -39,6 +39,7 @@ impl VertexColorMaterial {
             RenderAttachmentQuantitySet::empty(),
             None,
             Vec::new(),
+            RenderPassHints::empty(),
             MaterialShaderInput::VertexColor,
         );
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);

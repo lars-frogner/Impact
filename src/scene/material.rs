@@ -37,7 +37,8 @@ pub use vertex_color::VertexColorMaterial;
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     rendering::{
-        fre, MaterialShaderInput, RenderAttachmentQuantitySet, TextureID, UniformBufferable,
+        fre, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints, TextureID,
+        UniformBufferable,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -89,6 +90,7 @@ pub struct MaterialSpecification {
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
     fixed_resources: Option<FixedMaterialResources>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
+    render_pass_hints: RenderPassHints,
     shader_input: MaterialShaderInput,
 }
 
@@ -126,6 +128,7 @@ impl MaterialSpecification {
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         fixed_resources: Option<FixedMaterialResources>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
+        render_pass_hints: RenderPassHints,
         shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
@@ -135,6 +138,7 @@ impl MaterialSpecification {
             output_render_attachment_quantities,
             fixed_resources,
             instance_feature_type_ids,
+            render_pass_hints,
             shader_input,
         }
     }
@@ -175,6 +179,11 @@ impl MaterialSpecification {
     /// for the material.
     pub fn instance_feature_type_ids(&self) -> &[InstanceFeatureTypeID] {
         &self.instance_feature_type_ids
+    }
+
+    /// Returns the render pass hints for the material.
+    pub fn render_pass_hints(&self) -> RenderPassHints {
+        self.render_pass_hints
     }
 
     /// Returns the input required for using the material in a shader.
