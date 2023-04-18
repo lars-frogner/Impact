@@ -6,14 +6,15 @@ mod features;
 mod fixed;
 mod microfacet;
 mod prepass;
+mod skybox;
 mod vertex_color;
 
 pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
     DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,
     FixedTextureComp, MaterialComp, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
-    NormalMapComp, ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SpecularColorComp,
-    SpecularTextureComp, VertexColorComp,
+    NormalMapComp, ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SkyboxComp,
+    SpecularColorComp, SpecularTextureComp, VertexColorComp,
 };
 pub use features::{
     create_material_feature, TexturedColorEmissiveMaterialFeature, TexturedColorMaterialFeature,
@@ -32,6 +33,7 @@ pub use features::{
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
 pub use microfacet::add_microfacet_material_component_for_entity;
 pub use prepass::create_prepass_material;
+pub use skybox::add_skybox_material_component_for_entity;
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{

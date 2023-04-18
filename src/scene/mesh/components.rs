@@ -104,6 +104,13 @@ impl BoxMeshComp {
         front_faces_on_outside: 1,
     };
 
+    pub const SKYBOX: Self = Self {
+        extent_x: 1.0,
+        extent_y: 1.0,
+        extent_z: 1.0,
+        front_faces_on_outside: 0,
+    };
+
     /// Creates a new component for a box mesh with the given extents.
     pub fn new(
         extent_x: fre,

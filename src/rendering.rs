@@ -33,7 +33,8 @@ pub use shader::{
     LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
     MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
     OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput, Shader,
-    ShaderGenerator, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
+    ShaderGenerator, SkyboxTextureShaderInput, SpecularMicrofacetShadingModel,
+    UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{

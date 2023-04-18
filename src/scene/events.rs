@@ -5,11 +5,12 @@ use crate::{
     physics::{OrientationComp, PositionComp},
     scene::{
         self, add_blinn_phong_material_component_for_entity,
-        add_microfacet_material_component_for_entity, AmbientLight, FixedColorMaterial,
-        FixedTextureMaterial, MaterialComp, MaterialHandle, MeshComp, ModelID, ModelInstanceNodeID,
-        OmnidirectionalLight, ParentComp, ScalingComp, Scene, SceneGraphCameraNodeComp,
-        SceneGraphGroup, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
-        SceneGraphNodeComp, SceneGraphParentNodeComp, UnidirectionalLight, VertexColorMaterial,
+        add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
+        AmbientLight, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
+        MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, ScalingComp,
+        Scene, SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
+        SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable,
+        UnidirectionalLight, VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -57,7 +58,7 @@ impl Scene {
         self.add_light_component_for_entity(components, &mut desynchronized);
         self.add_material_component_for_entity(components, &mut desynchronized);
 
-        self.add_parent_group_node_component_for_entity(ecs_world, components);
+        Self::add_parent_group_node_component_for_entity(ecs_world, components);
         self.add_group_node_component_for_entity(components);
         self.add_model_instance_node_component_for_entity(components);
 
@@ -176,10 +177,15 @@ impl Scene {
             components,
             desynchronized,
         );
+
+        add_skybox_material_component_for_entity(
+            self.material_library(),
+            components,
+            desynchronized,
+        );
     }
 
     fn add_parent_group_node_component_for_entity(
-        &self,
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
     ) {
@@ -297,12 +303,12 @@ impl Scene {
                     // The scene graph will not cull models with no bounding sphere
                     None
                 } else {
-                // Panic on errors since returning an error could leave us
-                // in an inconsistent state
+                    // Panic on errors since returning an error could leave us
+                    // in an inconsistent state
                     Some(mesh_repository
-                    .get_mesh(mesh.id)
-                    .expect("Tried to create renderable entity with mesh not present in mesh repository")
-                    .compute_bounding_sphere()
+                        .get_mesh(mesh.id)
+                        .expect("Tried to create renderable entity with mesh not present in mesh repository")
+                        .compute_bounding_sphere()
                         .expect("Tried to create renderable entity with empty mesh"))
                 };
 
