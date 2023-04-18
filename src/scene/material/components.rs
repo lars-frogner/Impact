@@ -81,6 +81,10 @@ pub struct ParallaxMapComp {
     pub uv_per_distance: Vector2<fre>,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct SkyboxComp(pub TextureID);
+
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a material.
 #[repr(C)]

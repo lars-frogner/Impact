@@ -14,11 +14,12 @@ use crate::{
     rendering::{Assets, TextureConfig},
     scene::{
         AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
-        DirectionComp, EmissionExtentComp, FixedColorComp, LightDirection,
+        DirectionComp, EmissionExtentComp, EmissiveColorComp, LightDirection,
         MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, Omnidirectional,
-        ParallaxMapComp, PerspectiveCameraComp, PlanarTextureProjectionComp, PlaneMeshComp,
-        RadianceComp, RoughnessComp, RoughnessTextureComp, ScalingComp, SpecularColorComp,
-        SphereMeshComp, UniformIrradianceComp,
+        ParallaxMapComp, ParentComp, PerspectiveCameraComp, PlanarTextureProjectionComp,
+        PlaneMeshComp, RadianceComp, RoughnessComp, RoughnessTextureComp, ScalingComp,
+        SceneGraphGroup, SkyboxComp, SpecularColorComp, SphereMeshComp, Uncullable,
+        UniformIrradianceComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -80,6 +81,17 @@ async fn init_world(window: Window) -> Result<World> {
 
     let mut assets = Assets::new();
 
+    let skybox_texture_id = assets.load_cubemap_texture_from_paths(
+        &core_system,
+        "assets/skybox/right.jpg",
+        "assets/skybox/left.jpg",
+        "assets/skybox/top.jpg",
+        "assets/skybox/bottom.jpg",
+        "assets/skybox/front.jpg",
+        "assets/skybox/back.jpg",
+        TextureConfig::NON_REPEATING_COLOR_TEXTRUE,
+    )?;
+
     let bricks_color_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Color.jpg",
@@ -134,12 +146,12 @@ async fn init_world(window: Window) -> Result<World> {
     );
 
     world
-        .create_entities((
+        .create_entity((
             &PerspectiveCameraComp::new(
                 vertical_field_of_view,
                 UpperExclusiveBounds::new(0.1, 100.0),
             ),
-            &PositionComp(Point3::new(0.0, 2.0, -9.0)),
+            &PositionComp(Point3::new(0.0, 7.0, -10.0)),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::y_axis(), PI)),
             &VelocityComp(Vector3::zeros()),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
@@ -148,7 +160,16 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
+            &BoxMeshComp::SKYBOX,
+            &PositionComp(Point3::origin()),
+            &SkyboxComp(skybox_texture_id),
+            &Uncullable,
+        ))
+        .unwrap();
+
+    world
+        .create_entity((
             &world.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
             &PositionComp(Point3::new(0.0, 1.5, 11.0)),
             &ScalingComp(0.06),
@@ -163,7 +184,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &CylinderMeshComp::new(10.0, 0.6, 100),
             &PositionComp(Point3::new(7.0, 0.5, 5.0)),
             &ScalingComp(1.0),
@@ -174,7 +195,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_object.obj")?,
             &PositionComp(Point3::new(7.0, 7.7, 5.0)),
             &ScalingComp(0.02),
@@ -187,7 +208,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
             &PositionComp(Point3::new(-1.0, 9.0, 9.0)),
             &ScalingComp(0.035),
@@ -200,7 +221,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &BoxMeshComp::UNIT_CUBE,
             &PositionComp(Point3::new(-9.0, -1.0, 5.0)),
             &ScalingComp(2.0),
@@ -215,7 +236,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &SphereMeshComp::new(100),
             &PositionComp(Point3::new(-9.0, 2.0, 5.0)),
             &ScalingComp(4.0),
@@ -228,7 +249,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
             &PositionComp(Point3::new(-9.0, 5.8, 5.0)),
             &ScalingComp(0.016),
@@ -241,7 +262,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &PlaneMeshComp::UNIT_PLANE,
             &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
@@ -257,7 +278,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &PlaneMeshComp::UNIT_PLANE,
             &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
             &PositionComp(Point3::new(25.0, 5.0, 0.0)),
@@ -280,7 +301,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &PlaneMeshComp::UNIT_PLANE,
             &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
             &PositionComp(Point3::new(-25.0, 5.0, 0.0)),
@@ -303,7 +324,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
+        .create_entity((
             &PlaneMeshComp::UNIT_PLANE,
             &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
             &PositionComp(Point3::new(0.0, 5.0, 25.0)),
@@ -323,24 +344,13 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
-            &SphereMeshComp::new(25),
-            &ScalingComp(0.7),
-            &PositionComp(Point3::new(-15.0, 11.0, 7.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
-            &FixedColorComp(vector![1.0, 1.0, 1.0]),
-            &Omnidirectional,
-            &EmissionExtentComp(0.7),
-        ))
-        .unwrap();
-
-    world
-        .create_entities((
+        .create_entity((
             &SphereMeshComp::new(25),
             &ScalingComp(0.7),
             &PositionComp(Point3::new(0.0, 9.0, 2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 60.0),
-            &FixedColorComp(vector![1.0, 1.0, 1.0]),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
+            &DiffuseColorComp(Vector3::zeros()),
+            &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,
             &EmissionExtentComp(0.7),
         ))
@@ -363,8 +373,31 @@ async fn init_world(window: Window) -> Result<World> {
         ))
         .unwrap();
 
+    let parent = world
+        .create_entity((
+            &PositionComp(Point3::new(0.0, 15.0, 5.0)),
+            &OrientationComp(Orientation::identity()),
+            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(1.5))),
+            &SceneGraphGroup,
+        ))
+        .unwrap();
+
     world
-        .create_entities(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.3))
+        .create_entity((
+            &SphereMeshComp::new(25),
+            &ScalingComp(3.0),
+            &PositionComp(Point3::new(10.0, 0.0, 0.0)),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 150.0),
+            &DiffuseColorComp(Vector3::zeros()),
+            &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
+            &Omnidirectional,
+            &EmissionExtentComp(3.0),
+            &ParentComp::new(parent),
+        ))
+        .unwrap();
+
+    world
+        .create_entity(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.3))
         .unwrap();
 
     Ok(world)

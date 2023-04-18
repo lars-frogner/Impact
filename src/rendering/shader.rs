@@ -4,6 +4,7 @@ mod blinn_phong;
 mod fixed;
 mod microfacet;
 mod prepass;
+mod skybox;
 mod vertex_color;
 
 pub use blinn_phong::BlinnPhongTextureShaderInput;
@@ -16,6 +17,7 @@ pub use prepass::{
     BumpMappingTextureShaderInput, NormalMappingShaderInput, ParallaxMappingShaderInput,
     PrepassShaderGenerator, PrepassTextureShaderInput,
 };
+pub use skybox::{SkyboxShaderGenerator, SkyboxTextureShaderInput};
 
 use crate::{
     geometry::{
@@ -42,6 +44,7 @@ use naga::{
     UniqueArena, VectorSize,
 };
 use prepass::PrepassVertexOutputFieldIndices;
+use skybox::SkyboxVertexOutputFieldIndices;
 use std::{borrow::Cow, collections::HashMap, fs, hash::Hash, mem, path::Path, vec};
 use vertex_color::VertexColorShaderGenerator;
 
@@ -128,6 +131,7 @@ pub enum MaterialShaderInput {
     BlinnPhong(BlinnPhongTextureShaderInput),
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
     Prepass(PrepassTextureShaderInput),
+    Skybox(SkyboxTextureShaderInput),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -196,6 +200,9 @@ pub enum MaterialShaderGenerator<'a> {
     BlinnPhong(BlinnPhongShaderGenerator<'a>),
     Microfacet(MicrofacetShaderGenerator<'a>),
     Prepass(PrepassShaderGenerator<'a>),
+    Skybox(SkyboxShaderGenerator<'a>),
+}
+
 bitflags! {
     /// Bitflag encoding a set of "tricks" that can be made to achieve certain
     /// effects.
@@ -311,6 +318,16 @@ pub struct UnidirectionalLightShadingShaderGenerator {
     pub shadow_map: SampledTexture,
 }
 
+/// Expressions for vertex attributes passed as input to the vertex entry point
+/// function.
+pub struct MeshVertexInputExpressions {
+    pub position: Handle<Expression>,
+    pub color: Option<Handle<Expression>>,
+    pub normal_vector: Option<Handle<Expression>>,
+    pub texture_coords: Option<Handle<Expression>>,
+    pub tangent_space_quaternion: Option<Handle<Expression>>,
+}
+
 /// Indices of the fields holding the various mesh vertex attributes and related
 /// quantities in the vertex shader output struct.
 #[derive(Clone, Debug)]
@@ -349,6 +366,7 @@ pub enum MaterialVertexOutputFieldIndices {
     BlinnPhong(BlinnPhongVertexOutputFieldIndices),
     Microfacet(MicrofacetVertexOutputFieldIndices),
     Prepass(PrepassVertexOutputFieldIndices),
+    Skybox(SkyboxVertexOutputFieldIndices),
     None,
 }
 
@@ -426,7 +444,7 @@ pub struct SampledTexture {
 pub enum TextureType {
     Image2D,
     Image2DArray,
-    Image3D,
+    ImageCubemap,
     DepthCubemap,
     DepthArray,
 }
@@ -548,10 +566,10 @@ const IMAGE_2D_ARRAY_TEXTURE_TYPE: Type = Type {
     },
 };
 
-const IMAGE_3D_TEXTURE_TYPE: Type = Type {
+const IMAGE_CUBEMAP_TEXTURE_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Image {
-        dim: ImageDimension::D3,
+        dim: ImageDimension::Cube,
         arrayed: false,
         class: ImageClass::Sampled {
             kind: ScalarKind::Float,
@@ -841,16 +859,22 @@ impl ShaderGenerator {
         let tricks = material_shader_generator
             .as_ref()
             .map_or_else(ShaderTricks::empty, |generator| generator.tricks());
-                mesh_shader_input,
-                vertex_attribute_requirements,
-                input_render_attachment_quantities,
+
+        let (
+            mesh_vertex_input_expressions,
+            mesh_vertex_output_field_indices,
+            mut vertex_output_struct_builder,
+        ) = Self::generate_vertex_code_for_vertex_attributes(
+            mesh_shader_input,
+            vertex_attribute_requirements,
+            input_render_attachment_quantities,
             tricks,
-                &mut module,
-                &mut source_code_lib,
-                &mut vertex_function,
-                &model_view_transform,
-                projection,
-            )?;
+            &mut module,
+            &mut source_code_lib,
+            &mut vertex_function,
+            &model_view_transform,
+            projection,
+        )?;
 
         let entry_point_names = if let Some(material_shader_generator) = material_shader_generator {
             let light_vertex_output_field_indices =
@@ -868,6 +892,7 @@ impl ShaderGenerator {
                 .generate_vertex_code(
                     &mut module,
                     &mut vertex_function,
+                    &mesh_vertex_input_expressions,
                     &mut vertex_output_struct_builder,
                 );
 
@@ -1037,6 +1062,9 @@ impl ShaderGenerator {
                     PrepassShaderGenerator::new(feature_input, texture_input),
                 ))
             }
+            (None, None, Some(MaterialShaderInput::Skybox(input))) => Some(
+                MaterialShaderGenerator::Skybox(SkyboxShaderGenerator::new(input)),
+            ),
             input => {
                 return Err(anyhow!(
                     "Tried to build shader with invalid material: {:?}",
@@ -1207,7 +1235,9 @@ impl ShaderGenerator {
     /// code can not be fully generated at this point. Instead, the
     /// [`OutputStructBuilder`] is returned so that the material shader
     /// generator can complete it. The indices of the included vertex attribute
-    /// fields are also returned for access in the fragment shader.
+    /// fields are also returned for access in the fragment shader. The function
+    /// also returns the expressions for the vertex attributes passed to the
+    /// vertex entry point, for access in the vertex shader.
     ///
     /// # Errors
     /// Returns an error if not all vertex attributes required by the material
@@ -1222,7 +1252,11 @@ impl ShaderGenerator {
         vertex_function: &mut Function,
         model_view_transform: &ModelViewTransformExpressions,
         projection: ProjectionExpressions,
-    ) -> Result<(MeshVertexOutputFieldIndices, OutputStructBuilder)> {
+    ) -> Result<(
+        MeshVertexInputExpressions,
+        MeshVertexOutputFieldIndices,
+        OutputStructBuilder,
+    )> {
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -1235,21 +1269,29 @@ impl ShaderGenerator {
                 vec3_type,
             )?;
 
-        let input_color_expr = if vertex_attribute_requirements.contains(VertexAttributeSet::COLOR)
-        {
-            Some(
-                Self::add_vertex_attribute_input_argument::<VertexColor<fre>>(
-                    vertex_function,
-                    mesh_shader_input,
-                    new_name("color"),
-                    vec3_type,
-                )?,
-            )
-        } else {
-            None
+        let mut input_expressions = MeshVertexInputExpressions {
+            position: input_model_position_expr,
+            color: None,
+            normal_vector: None,
+            texture_coords: None,
+            tangent_space_quaternion: None,
         };
 
-        let input_model_normal_vector_expr = if vertex_attribute_requirements
+        input_expressions.color =
+            if vertex_attribute_requirements.contains(VertexAttributeSet::COLOR) {
+                Some(
+                    Self::add_vertex_attribute_input_argument::<VertexColor<fre>>(
+                        vertex_function,
+                        mesh_shader_input,
+                        new_name("color"),
+                        vec3_type,
+                    )?,
+                )
+            } else {
+                None
+            };
+
+        input_expressions.normal_vector = if vertex_attribute_requirements
             .contains(VertexAttributeSet::NORMAL_VECTOR)
             && !input_render_attachment_quantities
                 .contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)
@@ -1266,7 +1308,7 @@ impl ShaderGenerator {
             None
         };
 
-        let input_texture_coord_expr = if vertex_attribute_requirements
+        input_expressions.texture_coords = if vertex_attribute_requirements
             .contains(VertexAttributeSet::TEXTURE_COORDS)
             && !input_render_attachment_quantities
                 .contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
@@ -1283,7 +1325,7 @@ impl ShaderGenerator {
             None
         };
 
-        let input_tangent_to_model_space_quaternion_expr = if vertex_attribute_requirements
+        input_expressions.tangent_space_quaternion = if vertex_attribute_requirements
             .contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
         {
             Some(Self::add_vertex_attribute_input_argument::<
@@ -1311,15 +1353,15 @@ impl ShaderGenerator {
             )
         } else {
             source_code_lib.generate_function_call(
-            module,
-            vertex_function,
-            "transformPosition",
-            vec![
-                model_view_transform.rotation_quaternion,
-                model_view_transform.translation_vector,
-                model_view_transform.scaling_factor,
-                input_model_position_expr,
-            ],
+                module,
+                vertex_function,
+                "transformPosition",
+                vec![
+                    model_view_transform.rotation_quaternion,
+                    model_view_transform.translation_vector,
+                    model_view_transform.scaling_factor,
+                    input_model_position_expr,
+                ],
             )
         };
 
@@ -1361,7 +1403,7 @@ impl ShaderGenerator {
             );
         }
 
-        if let Some(input_color_expr) = input_color_expr {
+        if let Some(input_color_expr) = input_expressions.color {
             output_field_indices.color = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "color",
@@ -1372,7 +1414,7 @@ impl ShaderGenerator {
             );
         }
 
-        if let Some(input_model_normal_vector_expr) = input_model_normal_vector_expr {
+        if let Some(input_model_normal_vector_expr) = input_expressions.normal_vector {
             let normal_vector_expr = source_code_lib.generate_function_call(
                 module,
                 vertex_function,
@@ -1393,7 +1435,7 @@ impl ShaderGenerator {
             );
         }
 
-        if let Some(input_texture_coord_expr) = input_texture_coord_expr {
+        if let Some(input_texture_coord_expr) = input_expressions.texture_coords {
             output_field_indices.texture_coords = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "textureCoords",
@@ -1405,7 +1447,7 @@ impl ShaderGenerator {
         }
 
         if let Some(input_tangent_to_model_space_quaternion_expr) =
-            input_tangent_to_model_space_quaternion_expr
+            input_expressions.tangent_space_quaternion
         {
             let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
                 module,
@@ -1427,7 +1469,11 @@ impl ShaderGenerator {
             );
         }
 
-        Ok((output_field_indices, output_struct_builder))
+        Ok((
+            input_expressions,
+            output_field_indices,
+            output_struct_builder,
+        ))
     }
 
     fn add_vertex_attribute_input_argument<V>(
@@ -2050,7 +2096,7 @@ impl MaterialShaderInput {
     /// Whether the material requires light sources.
     pub fn requires_lights(&self) -> bool {
         match self {
-            Self::VertexColor | Self::Fixed(_) | Self::Prepass(_) => false,
+            Self::VertexColor | Self::Fixed(_) | Self::Prepass(_) | Self::Skybox(_) => false,
             Self::BlinnPhong(_) | Self::Microfacet(_) => true,
         }
     }
@@ -2059,7 +2105,10 @@ impl MaterialShaderInput {
 impl<'a> MaterialShaderGenerator<'a> {
     /// Any [`ShaderTricks`] employed by the material.
     pub fn tricks(&self) -> ShaderTricks {
-        ShaderTricks::empty()
+        match self {
+            Self::Skybox(_) => SkyboxShaderGenerator::TRICKS,
+            _ => ShaderTricks::empty(),
+        }
     }
 
     /// Generates the vertex shader code specific to the relevant material
@@ -2075,6 +2124,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         &self,
         module: &mut Module,
         vertex_function: &mut Function,
+        mesh_vertex_input_expressions: &MeshVertexInputExpressions,
         vertex_output_struct_builder: &mut OutputStructBuilder,
     ) -> MaterialVertexOutputFieldIndices {
         match self {
@@ -2103,6 +2153,13 @@ impl<'a> MaterialShaderGenerator<'a> {
                 MaterialVertexOutputFieldIndices::Prepass(generator.generate_vertex_code(
                     module,
                     vertex_function,
+                    vertex_output_struct_builder,
+                ))
+            }
+            Self::Skybox(generator) => {
+                MaterialVertexOutputFieldIndices::Skybox(generator.generate_vertex_code(
+                    module,
+                    mesh_vertex_input_expressions,
                     vertex_output_struct_builder,
                 ))
             }
@@ -2211,6 +2268,18 @@ impl<'a> MaterialShaderGenerator<'a> {
                     light_shader_generator,
                 );
             }
+            (
+                Self::Skybox(generator),
+                MaterialVertexOutputFieldIndices::Skybox(material_input_field_indices),
+            ) => {
+                generator.generate_fragment_code(
+                    module,
+                    fragment_function,
+                    bind_group_idx,
+                    fragment_input_struct,
+                    material_input_field_indices,
+                );
+            }
             _ => panic!("Mismatched material shader builder and output field indices type"),
         }
     }
@@ -2292,7 +2361,7 @@ impl CameraProjectionExpressions {
                             SwizzleComponent::W,
                         ],
                     },
-            )
+                )
             } else {
                 projected_position_expr
             }
@@ -3766,7 +3835,7 @@ impl SampledTexture {
         let texture_type_const = match texture_type {
             TextureType::Image2D => IMAGE_2D_TEXTURE_TYPE,
             TextureType::Image2DArray => IMAGE_2D_ARRAY_TEXTURE_TYPE,
-            TextureType::Image3D => IMAGE_3D_TEXTURE_TYPE,
+            TextureType::ImageCubemap => IMAGE_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };
