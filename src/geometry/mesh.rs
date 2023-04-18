@@ -2,6 +2,8 @@
 
 mod generation;
 
+pub use generation::FrontFaceSide;
+
 use crate::{
     geometry::{
         AxisAlignedBox, CollectionChange, CollectionChangeTracker, Point, Sphere, TextureProjection,
