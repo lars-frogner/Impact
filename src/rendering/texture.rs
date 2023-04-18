@@ -199,6 +199,7 @@ impl Texture {
                 height,
                 DepthOrArrayLayers::Depth(depth),
                 TexelDescription::Rgba8(config.color_space),
+                false,
                 config,
                 label,
             )
@@ -217,10 +218,172 @@ impl Texture {
                 height,
                 DepthOrArrayLayers::Depth(depth),
                 TexelDescription::Grayscale8,
+                false,
                 config,
                 label,
             )
         }
+    }
+    /// Creates a cubemap texture for the image files representing cubemap faces
+    /// at the given paths, using the given configuration parameters.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The image dimensions or pixel formats do not match.
+    /// - The image file can not be read or decoded.
+    /// - The image bytes can not be interpreted.
+    /// - The image width or height is zero.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   data between buffers and textures).
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
+    pub fn from_cubemap_image_paths<P: AsRef<Path>>(
+        core_system: &CoreRenderingSystem,
+        right_image_path: P,
+        left_image_path: P,
+        top_image_path: P,
+        bottom_image_path: P,
+        front_image_path: P,
+        back_image_path: P,
+        config: TextureConfig,
+    ) -> Result<Self> {
+        let right_image_path = right_image_path.as_ref();
+        let left_image_path = left_image_path.as_ref();
+        let top_image_path = top_image_path.as_ref();
+        let bottom_image_path = bottom_image_path.as_ref();
+        let front_image_path = front_image_path.as_ref();
+        let back_image_path = back_image_path.as_ref();
+
+        let right_image = ImageReader::open(right_image_path)?.decode()?;
+        let left_image = ImageReader::open(left_image_path)?.decode()?;
+        let top_image = ImageReader::open(top_image_path)?.decode()?;
+        let bottom_image = ImageReader::open(bottom_image_path)?.decode()?;
+        let front_image = ImageReader::open(front_image_path)?.decode()?;
+        let back_image = ImageReader::open(back_image_path)?.decode()?;
+
+        let label = format!(
+            "Cubemap {{{}, {}, {}, {}, {}, {}}}",
+            right_image_path.to_string_lossy(),
+            left_image_path.to_string_lossy(),
+            top_image_path.to_string_lossy(),
+            bottom_image_path.to_string_lossy(),
+            front_image_path.to_string_lossy(),
+            back_image_path.to_string_lossy()
+        );
+
+        Self::from_cubemap_images(
+            core_system,
+            right_image,
+            left_image,
+            top_image,
+            bottom_image,
+            front_image,
+            back_image,
+            config,
+            &label,
+        )
+    }
+
+    /// Creates a cubemap texture for the given loaded images representing
+    /// cubemap faces, using the given configuration parameters.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The image dimensions or pixel formats do not match.
+    /// - The image width or height is zero.
+    /// - The row size (width times texel size) is not a multiple of 256 bytes
+    ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
+    ///   data between buffers and textures).
+    /// - The image is grayscale and the color space in the configuration is not
+    ///   linear.
+    pub fn from_cubemap_images(
+        core_system: &CoreRenderingSystem,
+        right_image: DynamicImage,
+        left_image: DynamicImage,
+        top_image: DynamicImage,
+        bottom_image: DynamicImage,
+        front_image: DynamicImage,
+        back_image: DynamicImage,
+        config: TextureConfig,
+        label: &str,
+    ) -> Result<Self> {
+        let dimensions = right_image.dimensions();
+        if left_image.dimensions() != dimensions
+            || top_image.dimensions() != dimensions
+            || bottom_image.dimensions() != dimensions
+            || front_image.dimensions() != dimensions
+            || back_image.dimensions() != dimensions
+        {
+            bail!("Inconsistent dimensions for cubemap texture images")
+        }
+
+        let color = right_image.color();
+        if left_image.color() != color
+            || top_image.color() != color
+            || bottom_image.color() != color
+            || front_image.color() != color
+            || back_image.color() != color
+        {
+            bail!("Inconsistent pixel formats for cubemap texture images")
+        }
+
+        let (width, height) = right_image.dimensions();
+        let width = NonZeroU32::new(width).ok_or_else(|| anyhow!("Image width is zero"))?;
+        let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
+        let array_layers = NonZeroU32::new(6).unwrap();
+
+        let (texel_description, byte_buffer) = if color.has_color() {
+            let texel_description = TexelDescription::Rgba8(config.color_space);
+
+            let mut byte_buffer = Vec::with_capacity(
+                (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
+            );
+
+            byte_buffer.extend_from_slice(&right_image.into_rgba8());
+            byte_buffer.extend_from_slice(&left_image.into_rgba8());
+            byte_buffer.extend_from_slice(&top_image.into_rgba8());
+            byte_buffer.extend_from_slice(&bottom_image.into_rgba8());
+            byte_buffer.extend_from_slice(&front_image.into_rgba8());
+            byte_buffer.extend_from_slice(&back_image.into_rgba8());
+
+            (texel_description, byte_buffer)
+        } else {
+            if config.color_space != ColorSpace::Linear {
+                bail!(
+                    "Unsupported color space {:?} for grayscale image {}",
+                    config.color_space,
+                    label
+                );
+            }
+
+            let texel_description = TexelDescription::Grayscale8;
+
+            let mut byte_buffer = Vec::with_capacity(
+                (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
+            );
+
+            byte_buffer.extend_from_slice(&right_image.into_luma8());
+            byte_buffer.extend_from_slice(&left_image.into_luma8());
+            byte_buffer.extend_from_slice(&top_image.into_luma8());
+            byte_buffer.extend_from_slice(&bottom_image.into_luma8());
+            byte_buffer.extend_from_slice(&front_image.into_luma8());
+            byte_buffer.extend_from_slice(&back_image.into_luma8());
+
+            (texel_description, byte_buffer)
+        };
+
+        Self::new(
+            core_system,
+            &byte_buffer,
+            width,
+            height,
+            DepthOrArrayLayers::ArrayLayers(array_layers),
+            texel_description,
+            true,
+            config,
+            label,
+        )
     }
 
     /// Creates a texture holding the given lookup table. The texture will be
@@ -254,6 +417,7 @@ impl Texture {
             table.height,
             table.depth_or_array_layers,
             T::DESCRIPTION,
+            false,
             config,
             label,
         )
@@ -277,6 +441,7 @@ impl Texture {
         height: NonZeroU32,
         depth_or_array_layers: DepthOrArrayLayers,
         texel_description: TexelDescription,
+        is_cubemap: bool,
         config: TextureConfig,
         label: &str,
     ) -> Result<Self> {
@@ -309,20 +474,26 @@ impl Texture {
             )
         }
 
-        let (dimension, view_dimension) = if depth_or_array_layers.is_array_layers() {
-            (
-                wgpu::TextureDimension::D2,
-                wgpu::TextureViewDimension::D2Array,
-            )
-        } else if texture_size.depth_or_array_layers == 1 {
-            if texture_size.height == 1 {
-                (wgpu::TextureDimension::D1, wgpu::TextureViewDimension::D1)
+        let (dimension, view_dimension) =
+            if let DepthOrArrayLayers::ArrayLayers(array_layers) = depth_or_array_layers {
+                let view_dimension = if is_cubemap {
+                    if array_layers.get() != 6 {
+                        bail!("Tried to create cubemap with {} array layers", array_layers);
+                    }
+                    wgpu::TextureViewDimension::Cube
+                } else {
+                    wgpu::TextureViewDimension::D2Array
+                };
+                (wgpu::TextureDimension::D2, view_dimension)
+            } else if texture_size.depth_or_array_layers == 1 {
+                if texture_size.height == 1 {
+                    (wgpu::TextureDimension::D1, wgpu::TextureViewDimension::D1)
+                } else {
+                    (wgpu::TextureDimension::D2, wgpu::TextureViewDimension::D2)
+                }
             } else {
-                (wgpu::TextureDimension::D2, wgpu::TextureViewDimension::D2)
-            }
-        } else {
-            (wgpu::TextureDimension::D3, wgpu::TextureViewDimension::D3)
-        };
+                (wgpu::TextureDimension::D3, wgpu::TextureViewDimension::D3)
+            };
 
         let device = core_system.device();
 
@@ -504,6 +675,15 @@ impl TextureConfig {
         min_filter: wgpu::FilterMode::Nearest,
     };
 
+    pub const NON_REPEATING_COLOR_TEXTRUE: Self = Self {
+        color_space: ColorSpace::Srgb,
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Nearest,
+    };
+
     pub const REPEATING_NON_COLOR_TEXTRUE: Self = Self {
         color_space: ColorSpace::Linear,
         address_mode_u: wgpu::AddressMode::Repeat,
@@ -577,10 +757,6 @@ impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
 }
 
 impl DepthOrArrayLayers {
-    fn is_array_layers(&self) -> bool {
-        matches!(self, Self::ArrayLayers(_))
-    }
-
     fn unwrap(&self) -> NonZeroU32 {
         match self {
             Self::Depth(depth) => *depth,

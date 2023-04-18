@@ -66,6 +66,51 @@ impl Assets {
         Ok(texture_id)
     }
 
+    /// Loads the cubemap face image files at the given paths as a cubemap
+    /// [`Texture`], unless it already has been loaded.
+    ///
+    /// # Returns
+    /// A [`Result`] with the [`TextureID`] assigned to the loaded texture.
+    ///
+    /// # Errors
+    /// See [`Texture::from_cubemap_image_paths`].
+    pub fn load_cubemap_texture_from_paths<P: AsRef<Path>>(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        right_image_path: P,
+        left_image_path: P,
+        top_image_path: P,
+        bottom_image_path: P,
+        front_image_path: P,
+        back_image_path: P,
+        config: TextureConfig,
+    ) -> Result<TextureID> {
+        let texture_id = TextureID(hash32!(format!(
+            "Cubemap {{{}, {}, {}, {}, {}, {}}}",
+            right_image_path.as_ref().to_string_lossy(),
+            left_image_path.as_ref().to_string_lossy(),
+            top_image_path.as_ref().to_string_lossy(),
+            bottom_image_path.as_ref().to_string_lossy(),
+            front_image_path.as_ref().to_string_lossy(),
+            back_image_path.as_ref().to_string_lossy()
+        )));
+
+        if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
+            entry.insert(Texture::from_cubemap_image_paths(
+                core_system,
+                right_image_path,
+                left_image_path,
+                top_image_path,
+                bottom_image_path,
+                front_image_path,
+                back_image_path,
+                config,
+            )?);
+        }
+
+        Ok(texture_id)
+    }
+
     /// Loads all default lookup tables as textures. The tables are read from
     /// file or computed.
     ///
