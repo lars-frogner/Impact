@@ -7,6 +7,7 @@ use crate::{
     rendering::{
         FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
         MaterialPropertyTextureManager, MaterialShaderInput, RenderAttachmentQuantitySet,
+        RenderPassHints,
     },
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
@@ -66,6 +67,7 @@ impl FixedColorMaterial {
             RenderAttachmentQuantitySet::empty(),
             None,
             vec![Self::FEATURE_TYPE_ID],
+            RenderPassHints::empty(),
             MaterialShaderInput::Fixed(None),
         );
         material_library.add_material_specification(*FIXED_COLOR_MATERIAL_ID, specification);
@@ -127,6 +129,7 @@ impl FixedTextureMaterial {
             RenderAttachmentQuantitySet::empty(),
             None,
             Vec::new(),
+            RenderPassHints::empty(),
             Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*FIXED_TEXTURE_MATERIAL_ID, specification);

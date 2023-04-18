@@ -22,6 +22,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Result};
+use bitflags::bitflags;
 use impact_utils::KeyIndexMapper;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -76,6 +77,16 @@ pub struct RenderPassRecorder {
     vertex_attribute_requirements: VertexAttributeSet,
     pipeline: Option<wgpu::RenderPipeline>,
     disabled: bool,
+}
+
+bitflags! {
+    /// Bitflag encoding a set of hints for configuring a render pass.
+    pub struct RenderPassHints: u8 {
+        /// The rendered material is lit by light sources.
+        const REQUIRES_LIGHTS = 0b00000001;
+        /// No depth prepass should be performed for the model.
+        const NO_DEPTH_PREPASS = 0b00000010;
+    }
 }
 
 #[derive(Debug, Default)]
@@ -264,43 +275,17 @@ impl RenderPassManager {
             // Avoid rendering the model if there are currently no instances
             let no_visible_instances = transform_buffer_manager.initial_feature_range().is_empty();
 
-            let material_shader_input = render_resources
+            let hints = render_resources
                 .get_material_resource_manager(model_id.material_handle().material_id())
                 .expect("Missing resource manager for material after synchronization")
-                .shader_input();
+                .render_pass_hints();
 
-            if material_shader_input.requires_lights() {
+            if hints.contains(RenderPassHints::REQUIRES_LIGHTS) {
                 match self.light_shaded_model_index_mapper.try_push_key(model_id) {
                     // The model has no existing shading passes
                     Ok(_) => {
-                        if let Some(prepass_material_handle) = model_id.prepass_material_handle() {
+                        if model_id.prepass_material_handle().is_some() {
                             if ambient_light_ids.is_empty() {
-                                let prepass_material_shader_input = render_resources
-                                    .get_material_resource_manager(
-                                        prepass_material_handle.material_id(),
-                                    )
-                                    .expect("Missing resource manager for material after synchronization")
-                                    .shader_input();
-
-                                let specification = match prepass_material_shader_input {
-                                    MaterialShaderInput::Prepass(shader_input)
-                                        if shader_input.bump_mapping_input.is_some() =>
-                                    {
-                                        // If there are no ambient lights but
-                                        // the new model has a prepass material
-                                        // with bump mapping, we create a
-                                        // shading prepass with no light
-                                        RenderPassSpecification::shading_prepass(None, model_id)
-                                    }
-                                    _ => {
-                                        // If there are no ambient lights and
-                                        // the new model does not use bump
-                                        // mapping, we only need a pure depth
-                                        // prepass
-                                        RenderPassSpecification::depth_prepass(model_id)
-                                    }
-                                };
-
                                 self.light_shaded_model_shading_prepasses.push(
                                     RenderPassRecorder::new(
                                         core_system,
@@ -308,7 +293,7 @@ impl RenderPassManager {
                                         render_resources,
                                         render_attachment_texture_manager,
                                         shader_manager,
-                                        specification,
+                                        RenderPassSpecification::shading_prepass(None, model_id),
                                         no_visible_instances,
                                     )?,
                                 );
@@ -359,7 +344,8 @@ impl RenderPassManager {
                                     render_attachment_texture_manager,
                                     shader_manager,
                                     RenderPassSpecification::depth_prepass(model_id),
-                                    no_visible_instances,
+                                    no_visible_instances
+                                        || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
                                 )?,
                             );
                         }
@@ -551,8 +537,11 @@ impl RenderPassManager {
                     Err(model_idx) => {
                         // Set the disabled state of the passes for the existing model
 
-                        self.light_shaded_model_shading_prepasses[model_idx]
-                            .set_disabled(no_visible_instances);
+                        self.light_shaded_model_shading_prepasses[model_idx].set_disabled(
+                            no_visible_instances
+                                || (model_id.prepass_material_handle().is_none()
+                                    && hints.contains(RenderPassHints::NO_DEPTH_PREPASS)),
+                        );
 
                         self.light_shaded_model_shading_passes.iter_mut().for_each(
                             |(&light_id, passes)| {
@@ -611,7 +600,8 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::depth_prepass(model_id),
-                                no_visible_instances,
+                                no_visible_instances
+                                    || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
                             )?);
 
                         // Create a shading pass for the new model
@@ -632,8 +622,10 @@ impl RenderPassManager {
                     Err(model_idx) => {
                         // Set the disabled state of the passes for the existing model
 
-                        self.non_light_shaded_model_depth_prepasses[model_idx]
-                            .set_disabled(no_visible_instances);
+                        self.non_light_shaded_model_depth_prepasses[model_idx].set_disabled(
+                            no_visible_instances
+                                || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                        );
 
                         self.non_light_shaded_model_shading_passes[model_idx]
                             .set_disabled(no_visible_instances);
