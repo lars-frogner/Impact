@@ -293,13 +293,18 @@ impl Scene {
                     feature_ids.push(feature_id);
                 }
 
+                let bounding_sphere = if components.has_component_type::<Uncullable>() {
+                    // The scene graph will not cull models with no bounding sphere
+                    None
+                } else {
                 // Panic on errors since returning an error could leave us
                 // in an inconsistent state
-                let bounding_sphere = mesh_repository
+                    Some(mesh_repository
                     .get_mesh(mesh.id)
                     .expect("Tried to create renderable entity with mesh not present in mesh repository")
                     .compute_bounding_sphere()
-                    .expect("Tried to create renderable entity with empty mesh");
+                        .expect("Tried to create renderable entity with empty mesh"))
+                };
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
