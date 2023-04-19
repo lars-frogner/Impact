@@ -46,7 +46,10 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, Hash64, StringHash64};
 use nalgebra::Vector3;
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fmt,
+};
 
 /// A color with RGB components.
 pub type RGBColor = Vector3<fre>;
@@ -352,7 +355,7 @@ impl MaterialPropertyTextureSetID {
                 .iter()
                 .map(|id| id.to_string())
                 .collect::<Vec<_>>()
-                .join("-")
+                .join(" - ")
         )))
     }
 
@@ -439,5 +442,24 @@ impl MaterialHandle {
         }
 
         hash
+    }
+}
+
+impl fmt::Display for MaterialHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{material: {}{}}}",
+            if self.material_id.is_not_applicable() {
+                "N/A".to_string()
+            } else {
+                self.material_id.to_string()
+            },
+            if self.material_property_texture_set_id.is_empty() {
+                String::new()
+            } else {
+                format!(", textures: {}", self.material_property_texture_set_id)
+            },
+        )
     }
 }

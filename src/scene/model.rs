@@ -69,8 +69,14 @@ impl fmt::Display for ModelID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{{mesh: {}, material: {:?}, prepass_material: {:?}}}",
-            self.mesh_id, &self.material_handle, &self.prepass_material_handle
+            "{{mesh: {}, material: {}{}}}",
+            self.mesh_id,
+            &self.material_handle,
+            if let Some(prepass_material_handle) = self.prepass_material_handle {
+                format!(", prepass_material: {}", prepass_material_handle)
+            } else {
+                String::new()
+            }
         )
     }
 }
