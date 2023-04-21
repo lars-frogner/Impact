@@ -21,7 +21,7 @@ env_logger = "0.10"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 lazy_static = "1.4"
 log = "0.4"
-naga = { version = "0.11", features = ["validate", "wgsl-out"] }
+naga = { version = "0.12", features = ["validate", "wgsl-out"] }
 nalgebra = { version = "0.32", features = ["bytemuck"] }
 num-traits = "0.2"
 petgraph = { version = "0.6", default-features = false, features = ["graphmap"] }
@@ -32,14 +32,14 @@ rmp-serde = "1.1.1"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.8"
 tobj = "3.2.4"
-wgpu = { version = "0.15", features = ["naga"] }
+wgpu = { version = "0.16", features = ["naga"] }
 winit = "0.27"
 
 impact_ecs = { path = "impact_ecs" }
 impact_utils = { path = "impact_utils" }
 
 [dev-dependencies]
-naga = { version = "0.11", features = ["validate", "wgsl-in", "wgsl-out"] }
+naga = { version = "0.12", features = ["validate", "wgsl-in", "wgsl-out"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1"
@@ -47,7 +47,7 @@ console_log = "0.2"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["Document", "Window", "Element"] }
-wgpu = { version = "0.15", features = ["webgl", "naga"] }
+wgpu = { version = "0.16", features = ["webgl", "naga"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"

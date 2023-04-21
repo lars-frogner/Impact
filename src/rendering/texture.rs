@@ -717,10 +717,8 @@ impl Texture {
             byte_buffer,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(
-                    NonZeroU32::new(texel_description.n_bytes() * texture_size.width).unwrap(),
-                ),
-                rows_per_image: Some(NonZeroU32::new(texture_size.height).unwrap()),
+                bytes_per_row: Some(texel_description.n_bytes() * texture_size.width),
+                rows_per_image: Some(texture_size.height),
             },
             texture_size,
         );
@@ -975,7 +973,7 @@ impl MipmapGenerator {
                     dimension: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip_level,
-                    mip_level_count: Some(NonZeroU32::new(1).unwrap()),
+                    mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
                     label: Some(&format!("{} mipmap view", label)),
@@ -1120,7 +1118,10 @@ fn extract_texture_data<T: Pod>(
 
     let width = texture.width();
     let height = texture.height();
-    let texel_size = u32::from(texture.format().describe().block_size);
+    let texel_size = texture
+        .format()
+        .block_size(None)
+        .expect("Texel block size unavailable");
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Texture copy encoder"),
@@ -1141,8 +1142,8 @@ fn extract_texture_data<T: Pod>(
             buffer: &buffer,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(NonZeroU32::new(texel_size * width).unwrap()),
-                rows_per_image: Some(NonZeroU32::new(height).unwrap()),
+                bytes_per_row: Some(texel_size * width),
+                rows_per_image: Some(height),
             },
         },
         texture.size(),

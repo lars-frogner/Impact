@@ -89,7 +89,7 @@ fn obtainNormalFromHeightMap(
     ));
 }
 
-fn computeLevelOfDetail(textureDims: vec2<i32>, textureCoords: vec2<f32>) -> f32 {
+fn computeLevelOfDetail(textureDims: vec2<u32>, textureCoords: vec2<f32>) -> f32 {
     let texelPosition = textureCoords * vec2<f32>(textureDims);
     let duvdx = dpdx(texelPosition);
     let duvdy = dpdy(texelPosition);
