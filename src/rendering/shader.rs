@@ -4372,6 +4372,9 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                             size,
                         }
                     }
+                    TypeInner::AccelerationStructure { .. } | TypeInner::RayQuery { .. } => {
+                        panic!("Unsupported type")
+                    }
                 },
             };
             let new_h = insert_in_arena(&mut self.exported_to_module.types, new_type);
@@ -4496,7 +4499,7 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                         cases: cases
                             .iter()
                             .map(|case| SwitchCase {
-                                value: case.value.clone(),
+                                value: case.value,
                                 body: map_block!(&case.body),
                                 fall_through: case.fall_through,
                             })
@@ -4567,6 +4570,10 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                     | Statement::Continue
                     | Statement::Kill
                     | Statement::Barrier(_) => stmt.clone(),
+
+                    Statement::RayQuery { .. } => {
+                        panic!("Unsupported statement")
+                    }
                 }
             })
             .collect();
@@ -4719,9 +4726,10 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                 accept: map_expr!(accept),
                 reject: map_expr!(reject),
             },
-            Expression::Derivative { axis, expr } => Expression::Derivative {
+            Expression::Derivative { axis, expr, ctrl } => Expression::Derivative {
                 axis: *axis,
                 expr: map_expr!(expr),
+                ctrl: *ctrl,
             },
             Expression::Relational { fun, argument } => Expression::Relational {
                 fun: *fun,
@@ -4757,6 +4765,9 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             }
 
             Expression::AtomicResult { .. } => expr.clone(),
+            Expression::RayQueryGetIntersection { .. } | Expression::RayQueryProceedResult => {
+                panic!("Unsupported expression")
+            }
         };
 
         if !non_emitting_only || is_external {

@@ -2,7 +2,7 @@
 
 use crate::{geometry::CubemapFace, rendering::CoreRenderingSystem};
 use anyhow::Result;
-use std::{num::NonZeroU32, path::Path};
+use std::path::Path;
 
 /// Index representing a cascade in a cascaded shadow map.
 pub type CascadeIdx = u32;
@@ -194,7 +194,7 @@ impl ShadowCubemapTexture {
         texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::D2),
             base_array_layer: face.as_idx_u32(),
-            array_layer_count: Some(NonZeroU32::new(1).unwrap()),
+            array_layer_count: Some(1),
             ..Default::default()
         })
     }
@@ -366,7 +366,7 @@ impl CascadedShadowMapTexture {
         texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::D2),
             base_array_layer: cascade_idx,
-            array_layer_count: Some(NonZeroU32::new(1).unwrap()),
+            array_layer_count: Some(1),
             ..Default::default()
         })
     }
