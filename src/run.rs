@@ -11,7 +11,7 @@ use crate::{
         AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, PhysicsSimulator,
         PositionComp, SimulatorConfig, VelocityComp,
     },
-    rendering::{Assets, TextureConfig},
+    rendering::{Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
     scene::{
         AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
         DirectionComp, EmissionExtentComp, EmissiveColorComp, LightDirection,
@@ -89,43 +89,70 @@ async fn init_world(window: Window) -> Result<World> {
         "assets/skybox/bottom.jpg",
         "assets/skybox/front.jpg",
         "assets/skybox/back.jpg",
-        TextureConfig::NON_REPEATING_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Srgb,
+            ..Default::default()
+        },
     )?;
 
     let bricks_color_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Color.jpg",
-        TextureConfig::REPEATING_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Srgb,
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        },
     )?;
 
     let bricks_roughness_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Roughness.jpg",
-        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Linear,
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        },
     )?;
 
     let bricks_height_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/Bricks059_4K-JPG/Bricks059_4K_Displacement.jpg",
-        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Linear,
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        },
     )?;
 
     let wood_floor_color_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Color.jpg",
-        TextureConfig::REPEATING_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Srgb,
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        },
     )?;
 
     let wood_floor_roughness_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Roughness.jpg",
-        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Linear,
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        },
     )?;
 
     let wood_floor_normal_texture_id = assets.load_texture_from_path(
         &core_system,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_NormalDX.jpg",
-        TextureConfig::REPEATING_NON_COLOR_TEXTRUE,
+        TextureConfig {
+            color_space: ColorSpace::Linear,
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        },
     )?;
 
     let vertical_field_of_view = Degrees(70.0);
