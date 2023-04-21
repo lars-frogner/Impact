@@ -237,7 +237,7 @@ impl PartialOrd for ConstStringHash64 {
 // Disabling this error because the requirement for `Hash`,
 // `k1 == k2 -> hash(k1) == hash(k2)`, is still upheld
 // even though we only hash one of the fields
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for ConstStringHash64 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state);

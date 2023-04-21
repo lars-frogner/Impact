@@ -173,7 +173,6 @@ impl<M> ThreadPool<M> {
         let communicator = ThreadPoolCommunicator::new(n_workers);
 
         let workers = (0..n_workers.get())
-            .into_iter()
             .map(|worker_id| {
                 // Create a new instance of the shared communicator
                 // for the spawned worker to use
