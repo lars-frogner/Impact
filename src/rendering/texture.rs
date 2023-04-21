@@ -56,7 +56,7 @@ pub struct Texture {
 }
 
 /// Configuration for [`Texture`]s.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TextureConfig {
     /// The color space that the texel data values should be assumed to be
     /// stored in.
@@ -74,6 +74,12 @@ pub struct TextureConfig {
     pub mag_filter: wgpu::FilterMode,
     /// How to filter the texture when it needs to be minified.
     pub min_filter: wgpu::FilterMode,
+    /// How to filter between mipmap levels.
+    pub mipmap_filter: wgpu::FilterMode,
+    /// Minimum level of detail (i.e. mip level) to use.
+    pub lod_min_clamp: f32,
+    /// Maximum level of detail (i.e. mip level) to use.
+    pub lod_max_clamp: f32,
     /// The maximum number of mip levels that should be generated for the
     /// texture. If [`None`], a full mipmap chain will be generated.
     pub max_mip_level_count: Option<u32>,
@@ -442,7 +448,7 @@ impl Texture {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            max_mip_level_count: None,
+            ..Default::default()
         };
 
         Self::new(
@@ -592,6 +598,9 @@ impl Texture {
             config.address_mode_w,
             config.mag_filter,
             config.min_filter,
+            config.mipmap_filter,
+            config.lod_min_clamp,
+            config.lod_max_clamp,
         );
 
         Ok(Self {
@@ -730,6 +739,9 @@ impl Texture {
         address_mode_w: wgpu::AddressMode,
         mag_filter: wgpu::FilterMode,
         min_filter: wgpu::FilterMode,
+        mipmap_filter: wgpu::FilterMode,
+        lod_min_clamp: f32,
+        lod_max_clamp: f32,
     ) -> wgpu::Sampler {
         device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u,
@@ -737,7 +749,9 @@ impl Texture {
             address_mode_w,
             mag_filter,
             min_filter,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter,
+            lod_min_clamp,
+            lod_max_clamp,
             ..Default::default()
         })
     }
@@ -751,6 +765,9 @@ impl TextureConfig {
         address_mode_w: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: std::f32::MAX,
         max_mip_level_count: None,
     };
 
@@ -761,6 +778,9 @@ impl TextureConfig {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: std::f32::MAX,
         max_mip_level_count: None,
     };
 
@@ -771,8 +791,28 @@ impl TextureConfig {
         address_mode_w: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: std::f32::MAX,
         max_mip_level_count: None,
     };
+}
+
+impl Default for TextureConfig {
+    fn default() -> Self {
+        Self {
+            color_space: Default::default(),
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+            address_mode_w: Default::default(),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: std::f32::MAX,
+            max_mip_level_count: None,
+        }
+    }
 }
 
 impl<T: TexelType> TextureLookupTable<T> {
