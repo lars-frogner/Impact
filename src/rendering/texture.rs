@@ -21,7 +21,9 @@ use image::{
 };
 use rmp_serde::{from_read, Serializer};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{fs::File, io::BufReader, num::NonZeroU32, path::Path};
+use std::{
+    borrow::Cow, collections::HashMap, fs::File, io::BufReader, num::NonZeroU32, path::Path,
+};
 use wgpu::util::DeviceExt;
 
 /// Represents a data type that can be copied directly to a [`Texture`].
@@ -72,6 +74,9 @@ pub struct TextureConfig {
     pub mag_filter: wgpu::FilterMode,
     /// How to filter the texture when it needs to be minified.
     pub min_filter: wgpu::FilterMode,
+    /// The maximum number of mip levels that should be generated for the
+    /// texture. If [`None`], a full mipmap chain will be generated.
+    pub max_mip_level_count: Option<u32>,
 }
 
 /// Dimensions and data for a lookup table to be loaded into a texture.
@@ -91,6 +96,15 @@ pub enum DepthOrArrayLayers {
     ArrayLayers(NonZeroU32),
 }
 
+/// Helper for generating mipmaps for a texture.
+#[derive(Debug)]
+pub struct MipmapGenerator {
+    _shader: wgpu::ShaderModule,
+    sampler: wgpu::Sampler,
+    pipelines_and_bind_group_layouts:
+        HashMap<wgpu::TextureFormat, (wgpu::RenderPipeline, wgpu::BindGroupLayout)>,
+}
+
 impl Default for ColorSpace {
     fn default() -> Self {
         Self::Linear
@@ -98,6 +112,13 @@ impl Default for ColorSpace {
 }
 
 impl TexelDescription {
+    const AVAILABLE_FORMATS: [wgpu::TextureFormat; 4] = [
+        wgpu::TextureFormat::R8Unorm,
+        wgpu::TextureFormat::R32Float,
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
+    ];
+
     fn n_bytes(&self) -> u32 {
         match self {
             Self::Rgba8(_) | Self::Float32 => 4,
@@ -125,7 +146,7 @@ impl TexelType for u8 {
 
 impl Texture {
     /// Creates a texture for the image file at the given path, using the given
-    /// configuration parameters.
+    /// configuration parameters. Mipmaps will be generated automatically.
     ///
     /// # Errors
     /// Returns an error if:
@@ -139,16 +160,24 @@ impl Texture {
     ///   linear.
     pub fn from_path(
         core_system: &CoreRenderingSystem,
+        mipmap_generator: &MipmapGenerator,
         image_path: impl AsRef<Path>,
         config: TextureConfig,
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
-        Self::from_image(core_system, image, config, &image_path.to_string_lossy())
+        Self::from_image(
+            core_system,
+            mipmap_generator,
+            image,
+            config,
+            &image_path.to_string_lossy(),
+        )
     }
 
     /// Creates a texture for the image file represented by the given raw byte
-    /// buffer, using the given configuration parameters.
+    /// buffer, using the given configuration parameters. Mipmaps will be
+    /// generated automatically.
     ///
     /// # Errors
     /// Returns an error if:
@@ -161,16 +190,17 @@ impl Texture {
     ///   linear.
     pub fn from_bytes(
         core_system: &CoreRenderingSystem,
+        mipmap_generator: &MipmapGenerator,
         byte_buffer: &[u8],
         config: TextureConfig,
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(core_system, image, config, label)
+        Self::from_image(core_system, mipmap_generator, image, config, label)
     }
 
     /// Creates a texture for the given loaded image, using the given
-    /// configuration parameters.
+    /// configuration parameters. Mipmaps will be generated automatically.
     ///
     /// # Errors
     /// Returns an error if:
@@ -182,6 +212,7 @@ impl Texture {
     ///   linear.
     pub fn from_image(
         core_system: &CoreRenderingSystem,
+        mipmap_generator: &MipmapGenerator,
         image: DynamicImage,
         config: TextureConfig,
         label: &str,
@@ -194,6 +225,7 @@ impl Texture {
         if image.color().has_color() {
             Self::new(
                 core_system,
+                Some(mipmap_generator),
                 &image.into_rgba8(),
                 width,
                 height,
@@ -213,6 +245,7 @@ impl Texture {
             }
             Self::new(
                 core_system,
+                Some(mipmap_generator),
                 &image.into_luma8(),
                 width,
                 height,
@@ -375,6 +408,7 @@ impl Texture {
 
         Self::new(
             core_system,
+            None,
             &byte_buffer,
             width,
             height,
@@ -408,10 +442,12 @@ impl Texture {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            max_mip_level_count: None,
         };
 
         Self::new(
             core_system,
+            None,
             byte_buffer,
             table.width,
             table.height,
@@ -425,7 +461,8 @@ impl Texture {
 
     /// Creates a texture for the data contained in the given byte buffer, with
     /// the given dimensions and texel description, using the given
-    /// configuration parameters.
+    /// configuration parameters. Mipmaps will be generated automatically if a
+    /// generator is provided.
     ///
     /// # Errors
     /// Returns an error if:
@@ -436,6 +473,7 @@ impl Texture {
     ///   data between buffers and textures).
     fn new(
         core_system: &CoreRenderingSystem,
+        mipmap_generator: Option<&MipmapGenerator>,
         byte_buffer: &[u8],
         width: NonZeroU32,
         height: NonZeroU32,
@@ -496,17 +534,54 @@ impl Texture {
             };
 
         let device = core_system.device();
+        let queue = core_system.queue();
 
-        let texture =
-            Self::create_empty_texture(device, texel_description, texture_size, dimension, label);
+        let format = texel_description.texture_format();
+
+        let full_mip_chain_level_count = ((u32::max(texture_size.width, texture_size.height) as f32)
+            .log2()
+            .ceil() as u32)
+            + 1;
+
+        let mip_level_count = u32::max(
+            1,
+            u32::min(
+                full_mip_chain_level_count,
+                config
+                    .max_mip_level_count
+                    .unwrap_or(full_mip_chain_level_count),
+            ),
+        );
+
+        let texture = Self::create_empty_texture(
+            device,
+            format,
+            texture_size,
+            dimension,
+            mip_level_count,
+            label,
+        );
 
         Self::write_data_to_texture(
-            core_system.queue(),
+            queue,
             &texture,
             byte_buffer,
             texel_description,
             texture_size,
         );
+
+        if mip_level_count > 1 {
+            if let Some(mipmap_generator) = mipmap_generator {
+                mipmap_generator.generate_mipmaps(
+                    device,
+                    queue,
+                    &texture,
+                    format,
+                    mip_level_count,
+                    label,
+                );
+            }
+        }
 
         let view = Self::create_view(&texture, view_dimension);
 
@@ -592,18 +667,21 @@ impl Texture {
     /// Creates a new [`wgpu::Texture`] configured to hold 2D image data.
     fn create_empty_texture(
         device: &wgpu::Device,
-        texel_description: TexelDescription,
+        format: wgpu::TextureFormat,
         texture_size: wgpu::Extent3d,
         dimension: wgpu::TextureDimension,
+        mip_level_count: u32,
         label: &str,
     ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
             size: texture_size,
-            mip_level_count: 1,
+            mip_level_count,
             sample_count: 1,
             dimension,
-            format: texel_description.texture_format(),
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST,
             label: Some(label),
             view_formats: &[],
         })
@@ -673,6 +751,7 @@ impl TextureConfig {
         address_mode_w: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
+        max_mip_level_count: None,
     };
 
     pub const NON_REPEATING_COLOR_TEXTRUE: Self = Self {
@@ -682,6 +761,7 @@ impl TextureConfig {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
+        max_mip_level_count: None,
     };
 
     pub const REPEATING_NON_COLOR_TEXTRUE: Self = Self {
@@ -691,6 +771,7 @@ impl TextureConfig {
         address_mode_w: wgpu::AddressMode::Repeat,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
+        max_mip_level_count: None,
     };
 }
 
@@ -762,6 +843,142 @@ impl DepthOrArrayLayers {
             Self::Depth(depth) => *depth,
             Self::ArrayLayers(n_array_layers) => *n_array_layers,
         }
+    }
+}
+
+impl MipmapGenerator {
+    /// Creates a new mipmap generator
+    pub fn new(device: &wgpu::Device) -> Self {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "../../shader/mipmap.wgsl"
+            ))),
+            label: Some("Mipmap shader"),
+        });
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            label: Some("Mipmap sampler"),
+            ..Default::default()
+        });
+
+        let pipelines_and_bind_group_layouts = TexelDescription::AVAILABLE_FORMATS
+            .iter()
+            .map(|&format| {
+                let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    layout: None,
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: "mainVS",
+                        buffers: &[],
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: "mainFS",
+                        targets: &[Some(format.into())],
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        ..Default::default()
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    label: Some("Mipmap pipeline"),
+                });
+
+                // Get bind group layout determined from shader code
+                let bind_group_layout = pipeline.get_bind_group_layout(0);
+
+                (format, (pipeline, bind_group_layout))
+            })
+            .collect();
+
+        Self {
+            _shader: shader,
+            sampler,
+            pipelines_and_bind_group_layouts,
+        }
+    }
+
+    fn generate_mipmaps(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture: &wgpu::Texture,
+        format: wgpu::TextureFormat,
+        mip_level_count: u32,
+        label: &str,
+    ) {
+        let (pipeline, bind_group_layout) = self
+            .pipelines_and_bind_group_layouts
+            .get(&format)
+            .expect("Tried to create mipmaps for unsupported format");
+
+        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Mipmap command encoder"),
+        });
+
+        let texture_views: Vec<_> = (0..mip_level_count)
+            .map(|mip_level| {
+                texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: None,
+                    dimension: None,
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: mip_level,
+                    mip_level_count: Some(NonZeroU32::new(1).unwrap()),
+                    base_array_layer: 0,
+                    array_layer_count: None,
+                    label: Some(&format!("{} mipmap view", label)),
+                })
+            })
+            .collect();
+
+        for target_mip_level in 1..mip_level_count as usize {
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: bind_group_layout,
+                entries: &[
+                    // Bind the view for the previous mip level
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(
+                            &texture_views[target_mip_level - 1],
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+                label: Some(&format!("{} mipmap bind group", label)),
+            });
+
+            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                // Render to the view for the current mip level
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &texture_views[target_mip_level],
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                label: Some(&format!("{} mipmap render pass", label)),
+            });
+
+            render_pass.set_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[]);
+
+            render_pass.draw(0..3, 0..1);
+        }
+
+        queue.submit(Some(command_encoder.finish()));
     }
 }
 

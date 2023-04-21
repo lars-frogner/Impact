@@ -79,7 +79,7 @@ fn init_logging_native() -> Result<()> {
 async fn init_world(window: Window) -> Result<World> {
     let core_system = CoreRenderingSystem::new(&window).await?;
 
-    let mut assets = Assets::new();
+    let mut assets = Assets::new(&core_system);
 
     let skybox_texture_id = assets.load_cubemap_texture_from_paths(
         &core_system,
