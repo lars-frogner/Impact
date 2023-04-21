@@ -225,7 +225,6 @@ impl CascadedShadowMapTexture {
         let view = Self::create_view(&texture);
 
         let cascade_views = (0..n_cascades)
-            .into_iter()
             .map(|cascade_idx| Self::create_cascade_view(&texture, cascade_idx))
             .collect();
 

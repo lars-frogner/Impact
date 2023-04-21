@@ -210,11 +210,11 @@ impl DesynchronizedRenderResources {
     fn new() -> Self {
         Self {
             camera_buffer_manager: Mutex::new(Box::new(None)),
-            mesh_buffer_managers: Mutex::new(Box::new(HashMap::new())),
-            material_resource_managers: Mutex::new(Box::new(HashMap::new())),
-            material_property_texture_managers: Mutex::new(Box::new(HashMap::new())),
+            mesh_buffer_managers: Mutex::new(Box::default()),
+            material_resource_managers: Mutex::new(Box::default()),
+            material_property_texture_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
-            instance_feature_buffer_managers: Mutex::new(Box::new(HashMap::new())),
+            instance_feature_buffer_managers: Mutex::new(Box::default()),
         }
     }
 

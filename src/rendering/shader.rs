@@ -3528,7 +3528,6 @@ impl InputStructBuilder {
 
         let input_field_expressions = emit_in_func(function, |function| {
             (0..n_fields)
-                .into_iter()
                 .map(|idx| {
                     include_expr_in_func(
                         function,

@@ -440,7 +440,6 @@ impl RenderPassManager {
                         for &light_id in unidirectional_light_ids {
                             let cascades_have_shadow_casting_model_instances: Vec<_> = (0
                                 ..MAX_SHADOW_MAP_CASCADES)
-                                .into_iter()
                                 .map(|cascade_idx| {
                                     !transform_buffer_manager
                                         .feature_range(
