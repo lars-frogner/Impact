@@ -549,15 +549,19 @@ impl Texture {
             .ceil() as u32)
             + 1;
 
-        let mip_level_count = u32::max(
-            1,
-            u32::min(
-                full_mip_chain_level_count,
-                config
-                    .max_mip_level_count
-                    .unwrap_or(full_mip_chain_level_count),
-            ),
-        );
+        let mip_level_count = if mipmap_generator.is_some() {
+            u32::max(
+                1,
+                u32::min(
+                    full_mip_chain_level_count,
+                    config
+                        .max_mip_level_count
+                        .unwrap_or(full_mip_chain_level_count),
+                ),
+            )
+        } else {
+            1
+        };
 
         let texture = Self::create_empty_texture(
             device,
