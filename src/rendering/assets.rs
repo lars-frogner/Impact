@@ -1,8 +1,8 @@
 //! Management of rendering assets.
 
 use crate::rendering::{
-    create_specular_ggx_reflectance_lookup_tables, CoreRenderingSystem, TexelType, Texture,
-    TextureConfig, TextureLookupTable,
+    create_specular_ggx_reflectance_lookup_tables, texture::MipmapGenerator, CoreRenderingSystem,
+    TexelType, Texture, TextureConfig, TextureLookupTable,
 };
 use anyhow::Result;
 use impact_utils::{hash32, stringhash32_newtype};
@@ -20,9 +20,10 @@ stringhash32_newtype!(
 );
 
 /// Container for any rendering assets that never change.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Assets {
     pub textures: HashMap<TextureID, Texture>,
+    mipmap_generator: MipmapGenerator,
 }
 
 lazy_static! {
@@ -39,9 +40,10 @@ impl Assets {
         *SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_ID
     }
 
-    pub fn new() -> Self {
+    pub fn new(core_system: &CoreRenderingSystem) -> Self {
         Self {
             textures: HashMap::new(),
+            mipmap_generator: MipmapGenerator::new(core_system.device()),
         }
     }
 
@@ -61,7 +63,12 @@ impl Assets {
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(image_path.as_ref().to_string_lossy()));
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            entry.insert(Texture::from_path(core_system, image_path, config)?);
+            entry.insert(Texture::from_path(
+                core_system,
+                &self.mipmap_generator,
+                image_path,
+                config,
+            )?);
         }
         Ok(texture_id)
     }
