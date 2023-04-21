@@ -55,12 +55,21 @@ pub struct Texture {
     view_dimension: wgpu::TextureViewDimension,
 }
 
-/// Configuration for [`Texture`]s.
-#[derive(Clone, Debug)]
+/// Configuration parameters for [`Texture`]s.
+#[derive(Clone, Debug, Default)]
 pub struct TextureConfig {
     /// The color space that the texel data values should be assumed to be
     /// stored in.
     pub color_space: ColorSpace,
+    /// Configuration for texture addressing.
+    pub addressing: TextureAddressingConfig,
+    /// Configuration for texture filtering.
+    pub filtering: TextureFilteringConfig,
+}
+
+/// Configuration parameters for addressing [`Texture`]s.
+#[derive(Clone, Debug)]
+pub struct TextureAddressingConfig {
     /// How addressing outside the [0, 1] range for the U texture coordinate
     /// should be handled.
     pub address_mode_u: wgpu::AddressMode,
@@ -70,19 +79,26 @@ pub struct TextureConfig {
     /// How addressing outside the [0, 1] range for the W texture coordinate
     /// should be handled.
     pub address_mode_w: wgpu::AddressMode,
+}
+
+/// Configuration parameters for filtering of [`Texture`]s.
+#[derive(Clone, Debug)]
+pub struct TextureFilteringConfig {
     /// How to filter the texture when it needs to be magnified.
     pub mag_filter: wgpu::FilterMode,
     /// How to filter the texture when it needs to be minified.
     pub min_filter: wgpu::FilterMode,
+    /// The maximum number of mip levels that should be generated for the
+    /// texture. If [`None`], a full mipmap chain will be generated.
+    pub max_mip_level_count: Option<u32>,
     /// How to filter between mipmap levels.
     pub mipmap_filter: wgpu::FilterMode,
     /// Minimum level of detail (i.e. mip level) to use.
     pub lod_min_clamp: f32,
     /// Maximum level of detail (i.e. mip level) to use.
     pub lod_max_clamp: f32,
-    /// The maximum number of mip levels that should be generated for the
-    /// texture. If [`None`], a full mipmap chain will be generated.
-    pub max_mip_level_count: Option<u32>,
+    /// Maximum number of samples to use for anisotropic filtering.
+    pub anisotropy_clamp: u16,
 }
 
 /// Dimensions and data for a lookup table to be loaded into a texture.
@@ -443,12 +459,8 @@ impl Texture {
 
         let config = TextureConfig {
             color_space: ColorSpace::Linear,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
+            addressing: TextureAddressingConfig::CLAMPED,
+            filtering: TextureFilteringConfig::LOOKUP,
         };
 
         Self::new(
@@ -555,6 +567,7 @@ impl Texture {
                 u32::min(
                     full_mip_chain_level_count,
                     config
+                        .filtering
                         .max_mip_level_count
                         .unwrap_or(full_mip_chain_level_count),
                 ),
@@ -597,14 +610,15 @@ impl Texture {
 
         let sampler = Self::create_sampler(
             device,
-            config.address_mode_u,
-            config.address_mode_v,
-            config.address_mode_w,
-            config.mag_filter,
-            config.min_filter,
-            config.mipmap_filter,
-            config.lod_min_clamp,
-            config.lod_max_clamp,
+            config.addressing.address_mode_u,
+            config.addressing.address_mode_v,
+            config.addressing.address_mode_w,
+            config.filtering.mag_filter,
+            config.filtering.min_filter,
+            config.filtering.mipmap_filter,
+            config.filtering.lod_min_clamp,
+            config.filtering.lod_max_clamp,
+            config.filtering.anisotropy_clamp,
         );
 
         Ok(Self {
@@ -744,6 +758,7 @@ impl Texture {
         mipmap_filter: wgpu::FilterMode,
         lod_min_clamp: f32,
         lod_max_clamp: f32,
+        anisotropy_clamp: u16,
     ) -> wgpu::Sampler {
         device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u,
@@ -754,66 +769,82 @@ impl Texture {
             mipmap_filter,
             lod_min_clamp,
             lod_max_clamp,
+            anisotropy_clamp,
             ..Default::default()
         })
     }
 }
 
-impl TextureConfig {
-    pub const REPEATING_COLOR_TEXTRUE: Self = Self {
-        color_space: ColorSpace::Srgb,
-        address_mode_u: wgpu::AddressMode::Repeat,
-        address_mode_v: wgpu::AddressMode::Repeat,
-        address_mode_w: wgpu::AddressMode::Repeat,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: std::f32::MAX,
-        max_mip_level_count: None,
-    };
-
-    pub const NON_REPEATING_COLOR_TEXTRUE: Self = Self {
-        color_space: ColorSpace::Srgb,
+impl TextureAddressingConfig {
+    pub const CLAMPED: Self = Self {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: std::f32::MAX,
-        max_mip_level_count: None,
     };
 
-    pub const REPEATING_NON_COLOR_TEXTRUE: Self = Self {
-        color_space: ColorSpace::Linear,
+    pub const REPEATING: Self = Self {
         address_mode_u: wgpu::AddressMode::Repeat,
         address_mode_v: wgpu::AddressMode::Repeat,
         address_mode_w: wgpu::AddressMode::Repeat,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: std::f32::MAX,
-        max_mip_level_count: None,
     };
 }
 
-impl Default for TextureConfig {
+impl Default for TextureAddressingConfig {
     fn default() -> Self {
-        Self {
-            color_space: Default::default(),
-            address_mode_u: Default::default(),
-            address_mode_v: Default::default(),
-            address_mode_w: Default::default(),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
-            max_mip_level_count: None,
-        }
+        Self::CLAMPED
+    }
+}
+
+impl TextureFilteringConfig {
+    pub const BASIC: Self = Self {
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Nearest,
+        max_mip_level_count: None,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: std::f32::MAX,
+        anisotropy_clamp: 1,
+    };
+
+    pub const ANISOTROPIC_2X: Self = Self {
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        max_mip_level_count: None,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: std::f32::MAX,
+        anisotropy_clamp: 2,
+    };
+
+    pub const ANISOTROPIC_4X: Self = Self {
+        anisotropy_clamp: 4,
+        ..Self::ANISOTROPIC_2X
+    };
+
+    pub const ANISOTROPIC_8X: Self = Self {
+        anisotropy_clamp: 8,
+        ..Self::ANISOTROPIC_2X
+    };
+
+    pub const ANISOTROPIC_16X: Self = Self {
+        anisotropy_clamp: 16,
+        ..Self::ANISOTROPIC_2X
+    };
+
+    pub const LOOKUP: Self = Self {
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        max_mip_level_count: None,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: std::f32::MAX,
+        anisotropy_clamp: 1,
+    };
+}
+
+impl Default for TextureFilteringConfig {
+    fn default() -> Self {
+        Self::BASIC
     }
 }
 
