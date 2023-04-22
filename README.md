@@ -1,1 +1,1 @@
-![screenshot](screenshots/screenshot_2023-04-19T13:37:33.123931994+00:00.png "Screenshot")
+![screenshot](screenshots/screenshot.png "Screenshot")
