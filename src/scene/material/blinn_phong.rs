@@ -302,7 +302,7 @@ fn execute_material_setup(
                 RenderAttachmentQuantitySet::empty(),
                 None,
                 vec![feature_type_id],
-                RenderPassHints::REQUIRES_LIGHTS,
+                RenderPassHints::AFFECTED_BY_LIGHT,
                 MaterialShaderInput::BlinnPhong(texture_shader_input),
             )
         });
