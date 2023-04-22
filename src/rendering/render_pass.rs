@@ -82,8 +82,9 @@ pub struct RenderPassRecorder {
 bitflags! {
     /// Bitflag encoding a set of hints for configuring a render pass.
     pub struct RenderPassHints: u8 {
-        /// The rendered material is lit by light sources.
-        const REQUIRES_LIGHTS = 0b00000001;
+        /// The appearance of the rendered material is affected by light
+        /// sources.
+        const AFFECTED_BY_LIGHT = 0b00000001;
         /// No depth prepass should be performed for the model.
         const NO_DEPTH_PREPASS = 0b00000010;
     }
@@ -280,7 +281,7 @@ impl RenderPassManager {
                 .expect("Missing resource manager for material after synchronization")
                 .render_pass_hints();
 
-            if hints.contains(RenderPassHints::REQUIRES_LIGHTS) {
+            if hints.contains(RenderPassHints::AFFECTED_BY_LIGHT) {
                 match self.light_shaded_model_index_mapper.try_push_key(model_id) {
                     // The model has no existing shading passes
                     Ok(_) => {
