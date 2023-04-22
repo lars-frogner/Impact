@@ -1220,13 +1220,11 @@ impl RenderPassSpecification {
         } else {
             let mut color_target_states = Vec::with_capacity(3);
 
-            if !(self.use_prepass_material && self.light.is_none()) {
-                color_target_states.push(Some(wgpu::ColorTargetState {
-                    format: core_system.surface_config().format,
-                    blend: Some(self.determine_color_blend_state()),
-                    write_mask: wgpu::ColorWrites::COLOR,
-                }));
-            }
+            color_target_states.push(Some(wgpu::ColorTargetState {
+                format: core_system.surface_config().format,
+                blend: Some(self.determine_color_blend_state()),
+                write_mask: wgpu::ColorWrites::COLOR,
+            }));
 
             if !output_render_attachment_quantities.is_empty() {
                 color_target_states.extend(
@@ -1341,20 +1339,18 @@ impl RenderPassSpecification {
 
             let mut color_attachments = Vec::with_capacity(3);
 
-            if !(self.use_prepass_material && self.light.is_none()) {
-                let (color_attachment_texture_view, color_attachment_resolve_target) =
-                    render_attachment_texture_manager
-                        .attachment_surface_view_and_resolve_target(surface_texture_view);
+            let (color_attachment_texture_view, color_attachment_resolve_target) =
+                render_attachment_texture_manager
+                    .attachment_surface_view_and_resolve_target(surface_texture_view);
 
-                color_attachments.push(Some(wgpu::RenderPassColorAttachment {
-                    view: color_attachment_texture_view,
-                    resolve_target: color_attachment_resolve_target,
-                    ops: wgpu::Operations {
-                        load: surface_load_operations,
-                        store: true,
-                    },
-                }));
-            }
+            color_attachments.push(Some(wgpu::RenderPassColorAttachment {
+                view: color_attachment_texture_view,
+                resolve_target: color_attachment_resolve_target,
+                ops: wgpu::Operations {
+                    load: surface_load_operations,
+                    store: true,
+                },
+            }));
 
             if !render_attachment_quantities.is_empty() {
                 color_attachments.extend(
