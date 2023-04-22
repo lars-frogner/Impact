@@ -202,7 +202,7 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(0.06),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-            &DiffuseColorComp(vector![0.2, 0.3, 0.7]),
+            &DiffuseColorComp(vector![0.1, 0.2, 0.6]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
             &RoughnessComp(0.4),
             &MicrofacetDiffuseReflection,
@@ -241,7 +241,7 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(0.035),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), 0.4)),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(-1.3))),
-            &DiffuseColorComp(vector![0.8, 0.4, 0.3]),
+            &DiffuseColorComp(vector![0.7, 0.3, 0.2]),
             &RoughnessComp(0.95),
             &MicrofacetDiffuseReflection,
         ))
@@ -254,7 +254,7 @@ async fn init_world(window: Window) -> Result<World> {
             &ScalingComp(2.0),
             &OrientationComp(Orientation::identity()),
             &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
-            &DiffuseColorComp(vector![0.2, 0.8, 0.4]),
+            &DiffuseColorComp(vector![0.1, 0.7, 0.3]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
             &RoughnessComp(0.55),
             &MicrofacetDiffuseReflection,
@@ -267,7 +267,7 @@ async fn init_world(window: Window) -> Result<World> {
             &SphereMeshComp::new(100),
             &PositionComp(Point3::new(-9.0, 2.0, 5.0)),
             &ScalingComp(4.0),
-            &DiffuseColorComp(vector![0.4, 0.3, 0.8]),
+            &DiffuseColorComp(vector![0.3, 0.2, 0.7]),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 0.5),
             &RoughnessComp(0.7),
             &MicrofacetDiffuseReflection,
@@ -375,7 +375,7 @@ async fn init_world(window: Window) -> Result<World> {
             &SphereMeshComp::new(25),
             &ScalingComp(0.7),
             &PositionComp(Point3::new(0.0, 9.0, 2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 40.0),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 20.0),
             &DiffuseColorComp(Vector3::zeros()),
             &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,
@@ -384,19 +384,10 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entities((
-            &[
-                DirectionComp(LightDirection::new_normalize(vector![-0.3, -0.7, 1.0])),
-                DirectionComp(LightDirection::new_normalize(vector![0.6, -0.3, 1.0])),
-            ],
-            &[
-                RadianceComp(vector![1.0, 1.0, 1.0] * 0.25),
-                RadianceComp(vector![1.0, 1.0, 1.0] * 0.20),
-            ],
-            &[
-                AngularExtentComp(Degrees(2.0)),
-                AngularExtentComp(Degrees(2.0)),
-            ],
+        .create_entity((
+            &DirectionComp(LightDirection::new_normalize(vector![0.6, -0.3, 1.0])),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 0.05),
+            &AngularExtentComp(Degrees(2.0)),
         ))
         .unwrap();
 
@@ -414,7 +405,7 @@ async fn init_world(window: Window) -> Result<World> {
             &SphereMeshComp::new(25),
             &ScalingComp(3.0),
             &PositionComp(Point3::new(10.0, 0.0, 0.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 150.0),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 80.0),
             &DiffuseColorComp(Vector3::zeros()),
             &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,
@@ -424,7 +415,7 @@ async fn init_world(window: Window) -> Result<World> {
         .unwrap();
 
     world
-        .create_entity(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.3))
+        .create_entity(&UniformIrradianceComp(vector![1.0, 1.0, 1.0] * 0.03))
         .unwrap();
 
     Ok(world)
