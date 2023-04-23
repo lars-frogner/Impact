@@ -108,7 +108,8 @@ impl RenderingSystem {
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &core_system,
             config.multisampling_sample_count,
-            RenderAttachmentQuantitySet::NORMAL_VECTOR
+            RenderAttachmentQuantitySet::DEPTH
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS,
         );
 
@@ -192,7 +193,7 @@ impl RenderingSystem {
 
         self.screenshotter.save_depth_map_if_requested(
             &self.core_system,
-            self.render_attachment_texture_manager.depth_texture(),
+            &self.render_attachment_texture_manager,
         )?;
 
         self.screenshotter
