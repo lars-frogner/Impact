@@ -10,9 +10,9 @@ use crate::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
         resource::SynchronizedRenderResources, texture::SHADOW_MAP_FORMAT, CameraShaderInput,
-        CascadeIdx, CoreRenderingSystem, DepthTexture, InstanceFeatureShaderInput,
-        LightShaderInput, MaterialPropertyTextureManager, MaterialRenderResourceManager,
-        MaterialShaderInput, MeshShaderInput, RenderAttachmentQuantitySet,
+        CascadeIdx, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
+        MaterialPropertyTextureManager, MaterialRenderResourceManager, MaterialShaderInput,
+        MeshShaderInput, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
         RenderAttachmentTextureManager, RenderingConfig, Shader, RENDER_ATTACHMENT_FLAGS,
         RENDER_ATTACHMENT_FORMATS,
     },
@@ -1328,14 +1328,6 @@ impl RenderPassSpecification {
         }
     }
 
-    fn determine_multisampling_sample_count(&self, config: &RenderingConfig) -> u32 {
-        if self.shadow_map_usage.is_clear_or_update() {
-            1
-        } else {
-            config.multisampling_sample_count
-        }
-    }
-
     fn create_color_attachments<'a, 'b: 'a>(
         &'a self,
         surface_texture_view: &'b wgpu::TextureView,
@@ -1371,8 +1363,8 @@ impl RenderPassSpecification {
 
             if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
             color_attachments.push(Some(wgpu::RenderPassColorAttachment {
-                view: color_attachment_texture_view,
-                resolve_target: color_attachment_resolve_target,
+                    view: surface_texture_view,
+                    resolve_target: None,
                 ops: wgpu::Operations {
                     load: surface_load_operations,
                     store: true,
@@ -1515,9 +1507,6 @@ impl RenderPassRecorder {
 
             let depth_stencil_state = specification.determine_depth_stencil_state();
 
-            let multisampling_sample_count =
-                specification.determine_multisampling_sample_count(config);
-
             let pipeline = Some(Self::create_render_pipeline(
                 core_system.device(),
                 &pipeline_layout,
@@ -1526,7 +1515,7 @@ impl RenderPassRecorder {
                 &color_target_states,
                 front_face,
                 depth_stencil_state,
-                multisampling_sample_count,
+                1,
                 config,
                 &format!("{} render pipeline", &specification.label),
             ));

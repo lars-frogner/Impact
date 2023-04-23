@@ -38,11 +38,10 @@ pub use shader::{
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
-    CascadeIdx, ColorSpace, DepthOrArrayLayers, DepthTexture, MultisampledSurfaceTexture,
-    RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-    TexelDescription, TexelType, Texture, TextureAddressingConfig, TextureConfig,
-    TextureFilteringConfig, TextureLookupTable, RENDER_ATTACHMENT_BINDINGS,
-    RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
+    CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
+    RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,
+    Texture, TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureLookupTable,
+    RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
 };
 
 use self::resource::RenderResourceManager;
@@ -81,8 +80,6 @@ pub struct RenderingConfig {
     pub cull_mode: Option<wgpu::Face>,
     /// Controls the way each polygon is rasterized.
     pub polygon_mode: wgpu::PolygonMode,
-    /// The number of samples to use for multisampling anti-aliasing.
-    pub multisampling_sample_count: u32,
     /// The width and height of each face of the omnidirectional light shadow
     /// cubemap in number of texels.
     pub omnidirectional_light_shadow_map_resolution: u32,
@@ -107,7 +104,6 @@ impl RenderingSystem {
 
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &core_system,
-            config.multisampling_sample_count,
             RenderAttachmentQuantitySet::DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS,
@@ -217,7 +213,7 @@ impl RenderingSystem {
     pub fn resize_surface(&mut self, new_size: (u32, u32)) {
         self.core_system.resize_surface(new_size);
         self.render_attachment_texture_manager
-            .recreate_textures(&self.core_system, self.config.multisampling_sample_count);
+            .recreate_textures(&self.core_system);
     }
 
     /// Toggles culling of triangle back faces in all render passes.
@@ -249,15 +245,6 @@ impl RenderingSystem {
             .write()
             .unwrap()
             .clear_model_render_pass_recorders();
-    }
-
-    pub fn toggle_4x_msaa(&mut self) {
-        let sample_count = if self.config.multisampling_sample_count == 1 {
-            4
-        } else {
-            1
-        };
-        self.set_multisampling_sample_count(sample_count);
     }
 
     pub fn request_screenshot_save(&self) {
@@ -304,24 +291,6 @@ impl RenderingSystem {
             label: Some("Render encoder"),
         })
     }
-
-    fn set_multisampling_sample_count(&mut self, sample_count: u32) {
-        if self.config.multisampling_sample_count != sample_count {
-            log::info!("MSAA sample count changed to {}", sample_count);
-
-            self.config.multisampling_sample_count = sample_count;
-
-            self.render_attachment_texture_manager
-                .recreate_multisampled_textures(&self.core_system, sample_count);
-
-            // Remove all render pass recorders so that they will be recreated with
-            // the updated configuration
-            self.render_pass_manager
-                .write()
-                .unwrap()
-                .clear_model_render_pass_recorders();
-        }
-    }
 }
 
 impl Default for RenderingConfig {
@@ -329,7 +298,6 @@ impl Default for RenderingConfig {
         Self {
             cull_mode: Some(wgpu::Face::Back),
             polygon_mode: wgpu::PolygonMode::Fill,
-            multisampling_sample_count: 1,
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
         }
