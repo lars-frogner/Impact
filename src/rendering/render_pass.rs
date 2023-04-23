@@ -58,6 +58,11 @@ pub struct RenderPassSpecification {
     /// ID of the model type to render, or [`None`] if the pass does not render
     /// a model (e.g. a clearing pass).
     model_id: Option<ModelID>,
+    /// If present, use this mesh rather than a mesh associated with a model.
+    explicit_mesh_id: Option<MeshID>,
+    /// If present, use this material rather than a material associated with a
+    /// model.
+    explicit_material_id: Option<MaterialID>,
     /// Whether to use the prepass material associated with the model's material
     /// rather than using the model's material.
     use_prepass_material: bool,
@@ -656,6 +661,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: Some(clear_color),
             model_id: None,
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::Clear,
             light: None,
@@ -671,6 +678,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: Some(model_id),
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::Prepass,
             light: None,
@@ -698,6 +707,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: Some(model_id),
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: true,
             depth_map_usage: DepthMapUsage::use_readwrite(),
             light,
@@ -726,6 +737,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: Some(model_id),
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::use_readonly(),
             light,
@@ -745,6 +758,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: Some(model_id),
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::use_readonly(),
             light: Some(light),
@@ -763,6 +778,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: None,
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::None,
             light: None,
@@ -784,6 +801,8 @@ impl RenderPassSpecification {
         Self {
             clear_color: None,
             model_id: Some(model_id),
+            explicit_mesh_id: None,
+            explicit_material_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::None,
             light: Some(light),
@@ -941,9 +960,11 @@ impl RenderPassSpecification {
         let mut mesh_shader_input = None;
         let mut instance_feature_shader_inputs = Vec::with_capacity(2);
 
-        if let Some(model_id) = self.model_id {
-            let mesh_buffer_manager =
-                Self::get_mesh_buffer_manager(render_resources, model_id.mesh_id())?;
+        if let Some(mesh_id) = self
+            .explicit_mesh_id
+            .or_else(|| self.model_id.map(|model_id| model_id.mesh_id()))
+        {
+            let mesh_buffer_manager = Self::get_mesh_buffer_manager(render_resources, mesh_id)?;
 
             layouts.extend(
                 mesh_buffer_manager.request_vertex_buffer_layouts_including_position(
@@ -951,7 +972,9 @@ impl RenderPassSpecification {
                 )?,
             );
             mesh_shader_input = Some(mesh_buffer_manager.shader_input());
+        }
 
+        if let Some(model_id) = self.model_id {
             let (transform_buffer_manager, material_property_buffer_manager) =
                 Self::get_instance_feature_buffer_managers(
                     render_resources,
@@ -1040,7 +1063,34 @@ impl RenderPassSpecification {
             shader_input.light = Some(light_buffer_manager.shader_input_for_light_type(light_type));
         }
 
-        if let Some(model_id) = self.model_id {
+        if let Some(material_id) = self.explicit_material_id {
+            let material_resource_manager =
+                Self::get_material_resource_manager(render_resources, material_id)?;
+
+            input_render_attachment_quantities =
+                material_resource_manager.input_render_attachment_quantities();
+
+            output_render_attachment_quantities =
+                material_resource_manager.output_render_attachment_quantities();
+
+            if !input_render_attachment_quantities.is_empty() {
+                layouts.extend(
+                    render_attachment_texture_manager
+                        .request_render_attachment_texture_bind_group_layouts(
+                            input_render_attachment_quantities,
+                        )?,
+                );
+            }
+
+            shader_input.material = Some(material_resource_manager.shader_input());
+
+            vertex_attribute_requirements =
+                material_resource_manager.vertex_attribute_requirements_for_shader();
+
+            if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                layouts.push(fixed_resources.bind_group_layout());
+            }
+        } else if let Some(model_id) = self.model_id {
             // We do not need a material if we are doing a pure depth prepass or
             // updating a shadow map
             if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
@@ -1144,7 +1194,29 @@ impl RenderPassSpecification {
             }
         }
 
-        if let Some(model_id) = self.model_id {
+        if let Some(material_id) = self.explicit_material_id {
+            let material_resource_manager =
+                Self::get_material_resource_manager(render_resources, material_id)?;
+
+            let input_render_attachment_quantities =
+                material_resource_manager.input_render_attachment_quantities();
+
+            output_render_attachment_quantities =
+                material_resource_manager.output_render_attachment_quantities();
+
+            if !input_render_attachment_quantities.is_empty() {
+                bind_groups.extend(
+                    render_attachment_texture_manager
+                        .request_render_attachment_texture_bind_groups(
+                            input_render_attachment_quantities,
+                        )?,
+                );
+            }
+
+            if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                bind_groups.push(fixed_resources.bind_group());
+            }
+        } else if let Some(model_id) = self.model_id {
             // We do not need a material if we are doing a pure depth prepass or
             // updating a shadow map
             if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
