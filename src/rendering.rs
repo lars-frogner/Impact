@@ -342,9 +342,10 @@ impl Screenshotter {
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
-            texture::save_color_texture_as_image_file(
+            texture::save_texture_as_image_file(
                 core_system,
                 &surface_texture.texture,
+                0,
                 format!("screenshot_{}.png", Utc::now().to_rfc3339()),
             )
         } else {
@@ -355,11 +356,12 @@ impl Screenshotter {
     fn save_depth_map_if_requested(
         &self,
         core_system: &CoreRenderingSystem,
-        depth_texture: &DepthTexture,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
     ) -> Result<()> {
         if self.depth_map_save_requested.swap(false, Ordering::Acquire) {
-            depth_texture.save_as_image_file(
+            render_attachment_texture_manager.save_render_attachment_texture_as_image_file(
                 core_system,
+                RenderAttachmentQuantity::Depth,
                 format!("depth_map_{}.png", Utc::now().to_rfc3339()),
             )
         } else {
