@@ -88,6 +88,8 @@ bitflags! {
         const AFFECTED_BY_LIGHT = 0b00000001;
         /// No depth prepass should be performed for the model.
         const NO_DEPTH_PREPASS = 0b00000010;
+        /// The render pass renders to the surface color attachment.
+        const RENDERS_TO_SURFACE = 0b00000100;
     }
 }
 
@@ -1246,11 +1248,13 @@ impl RenderPassSpecification {
         } else {
             let mut color_target_states = Vec::with_capacity(3);
 
+            if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
             color_target_states.push(Some(wgpu::ColorTargetState {
                 format: core_system.surface_config().format,
                 blend: Some(self.determine_color_blend_state()),
                 write_mask: wgpu::ColorWrites::COLOR,
             }));
+            }
 
             if !output_render_attachment_quantities.is_empty() {
                 color_target_states.extend(
@@ -1365,10 +1369,7 @@ impl RenderPassSpecification {
 
             let mut color_attachments = Vec::with_capacity(3);
 
-            let (color_attachment_texture_view, color_attachment_resolve_target) =
-                render_attachment_texture_manager
-                    .attachment_surface_view_and_resolve_target(surface_texture_view);
-
+            if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
             color_attachments.push(Some(wgpu::RenderPassColorAttachment {
                 view: color_attachment_texture_view,
                 resolve_target: color_attachment_resolve_target,
@@ -1377,6 +1378,7 @@ impl RenderPassSpecification {
                     store: true,
                 },
             }));
+            }
 
             if !render_attachment_quantities.is_empty() {
                 color_attachments.extend(

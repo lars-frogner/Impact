@@ -302,7 +302,7 @@ fn execute_material_setup(
                 RenderAttachmentQuantitySet::empty(),
                 None,
                 vec![feature_type_id],
-                RenderPassHints::AFFECTED_BY_LIGHT,
+                RenderPassHints::RENDERS_TO_SURFACE | RenderPassHints::AFFECTED_BY_LIGHT,
                 MaterialShaderInput::BlinnPhong(texture_shader_input),
             )
         });

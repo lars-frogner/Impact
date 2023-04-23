@@ -59,7 +59,7 @@ pub fn add_skybox_material_component_for_entity(
                         RenderAttachmentQuantitySet::empty(),
                         None,
                         Vec::new(),
-                        RenderPassHints::NO_DEPTH_PREPASS,
+                        RenderPassHints::NO_DEPTH_PREPASS | RenderPassHints::RENDERS_TO_SURFACE,
                         MaterialShaderInput::Skybox(texture_shader_input),
                     )
                 });

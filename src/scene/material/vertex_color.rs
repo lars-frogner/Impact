@@ -39,7 +39,7 @@ impl VertexColorMaterial {
             RenderAttachmentQuantitySet::empty(),
             None,
             Vec::new(),
-            RenderPassHints::empty(),
+            RenderPassHints::RENDERS_TO_SURFACE,
             MaterialShaderInput::VertexColor,
         );
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);
