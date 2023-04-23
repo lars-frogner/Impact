@@ -40,7 +40,7 @@ pub struct RenderAttachmentTextureManager {
 /// quantity into.
 #[derive(Debug)]
 pub struct RenderAttachmentTexture {
-    _texture: wgpu::Texture,
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
@@ -219,6 +219,32 @@ impl RenderAttachmentTextureManager {
         }
     }
 
+    /// Saves the texture for the given render attachment quantity as a color or
+    /// grayscale image at the given output path. The image file format is
+    /// automatically determined from the file extension.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The requested quantity is missing.
+    /// - The format of the given texture is not supported.
+    pub fn save_render_attachment_texture_as_image_file<P: AsRef<Path>>(
+        &self,
+        core_system: &CoreRenderingSystem,
+        quantity: RenderAttachmentQuantity,
+        output_path: P,
+    ) -> Result<()> {
+        let texture = self.quantity_textures[quantity as usize]
+            .as_ref()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Tried to save image for missing render attachment quantity: {}",
+                    RENDER_ATTACHMENT_NAMES[quantity as usize]
+                )
+            })?;
+
+        super::save_texture_as_image_file(core_system, texture.texture(), 0, output_path)
+    }
+
     /// Recreates all render attachment textures for the current state of the
     /// core system.
     pub fn recreate_textures(&mut self, core_system: &CoreRenderingSystem) {
@@ -342,10 +368,15 @@ impl RenderAttachmentTexture {
         let sampler = Self::create_sampler(device);
 
         Self {
-            _texture: texture,
+            texture,
             view,
             sampler,
         }
+    }
+
+    /// Returns the render attachment texture.
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.texture
     }
 
     /// Returns a view into the render attachment texture.
@@ -422,7 +453,9 @@ impl RenderAttachmentTexture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             label: Some(label),
             view_formats: &[],
         })

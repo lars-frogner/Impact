@@ -1249,11 +1249,11 @@ impl RenderPassSpecification {
             let mut color_target_states = Vec::with_capacity(3);
 
             if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
-            color_target_states.push(Some(wgpu::ColorTargetState {
-                format: core_system.surface_config().format,
-                blend: Some(self.determine_color_blend_state()),
-                write_mask: wgpu::ColorWrites::COLOR,
-            }));
+                color_target_states.push(Some(wgpu::ColorTargetState {
+                    format: core_system.surface_config().format,
+                    blend: Some(self.determine_color_blend_state()),
+                    write_mask: wgpu::ColorWrites::COLOR,
+                }));
             }
 
             if !output_render_attachment_quantities.is_empty() {
@@ -1362,14 +1362,14 @@ impl RenderPassSpecification {
             let mut color_attachments = Vec::with_capacity(3);
 
             if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
-            color_attachments.push(Some(wgpu::RenderPassColorAttachment {
+                color_attachments.push(Some(wgpu::RenderPassColorAttachment {
                     view: surface_texture_view,
                     resolve_target: None,
-                ops: wgpu::Operations {
-                    load: surface_load_operations,
-                    store: true,
-                },
-            }));
+                    ops: wgpu::Operations {
+                        load: surface_load_operations,
+                        store: true,
+                    },
+                }));
             }
 
             if !render_attachment_quantities.is_empty() {

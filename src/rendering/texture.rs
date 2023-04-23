@@ -1054,85 +1054,129 @@ impl MipmapGenerator {
     }
 }
 
-/// Saves the given color texture as a color image at the given output path. The
-/// image file format is automatically determined from the file extension.
-///
-/// Supported texture formats are RGBA8 and BGRA8.
-///
-/// # Errors
-/// Returns an error if the format of the given texture is not supported.
-///
-/// # Panics
-/// If the texture is a texture array with multiple textures.
-pub fn save_color_texture_as_image_file<P: AsRef<Path>>(
-    core_system: &CoreRenderingSystem,
-    texture: &wgpu::Texture,
-    output_path: P,
-) -> Result<()> {
-    assert_eq!(texture.depth_or_array_layers(), 1);
-
-    let mut data = extract_texture_data(core_system.device(), core_system.queue(), texture, 0);
-
-    match texture.format() {
-        wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Rgba8UnormSrgb => {}
-        wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb => {
-            convert_bgra8_to_rgba8(&mut data);
-        }
-        format => {
-            bail!(
-                "Unsupported texture format for saving as color image file: {:?}",
-                format
-            );
-        }
-    }
-
-    let image_buffer =
-        ImageBuffer::<Rgba<u8>, _>::from_raw(texture.width(), texture.height(), data).unwrap();
-
-    image_buffer.save(output_path)?;
-
-    Ok(())
-}
-
-/// Saves the texture at the given index of the given depth texture array as a
-/// grayscale image at the given output path. The image file format is
+/// Saves the texture at the given index of the given texture array as a color
+/// or grayscale image at the given output path. The image file format is
 /// automatically determined from the file extension.
 ///
-/// The supported texture format is [`wgpu::TextureFormat::Depth32Float`].
-///
 /// # Errors
 /// Returns an error if the format of the given texture is not supported.
-pub fn save_depth_texture_as_image_file<P: AsRef<Path>>(
+pub fn save_texture_as_image_file<P: AsRef<Path>>(
     core_system: &CoreRenderingSystem,
     texture: &wgpu::Texture,
     texture_array_idx: u32,
     output_path: P,
 ) -> Result<()> {
-    if texture.format() != wgpu::TextureFormat::Depth32Float {
-        bail!(
-            "Unsupported depth texture format for saving as image file: {:?}",
-            texture.format()
-        );
+    fn byte_to_float(byte: u8) -> f32 {
+        f32::from(byte) / 255.0
     }
 
-    let mut data = extract_texture_data::<f32>(
-        core_system.device(),
-        core_system.queue(),
-        texture,
-        texture_array_idx,
-    );
-
-    // Gamma correction
-    for value in &mut data {
-        *value = f32::powf(*value, 2.2);
+    fn float_to_byte(float: f32) -> u8 {
+        (float.clamp(0.0, 1.0) * 255.0) as u8
     }
 
-    let image_buffer: ImageBuffer<Luma<f32>, _> =
-        ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+    fn gamma_corrected(linear_value: f32) -> f32 {
+        f32::powf(linear_value, 2.2)
+    }
 
-    let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
+    fn gamma_corrected_byte(linear_value: u8) -> u8 {
+        float_to_byte(gamma_corrected(byte_to_float(linear_value)))
+    }
 
-    image_buffer.save(output_path)?;
+    let format = texture.format();
+
+    match format {
+        wgpu::TextureFormat::Rgba8Unorm
+        | wgpu::TextureFormat::Rgba8UnormSrgb
+        | wgpu::TextureFormat::Bgra8Unorm
+        | wgpu::TextureFormat::Bgra8UnormSrgb
+        | wgpu::TextureFormat::R8Unorm => {
+            let mut data = extract_texture_data::<u8>(
+                core_system.device(),
+                core_system.queue(),
+                texture,
+                texture_array_idx,
+            );
+
+            if matches!(
+                format,
+                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+            ) {
+                convert_bgra8_to_rgba8(&mut data);
+            }
+
+            if matches!(format, wgpu::TextureFormat::R8Unorm) {
+                let mut image_buffer: ImageBuffer<Luma<u8>, _> =
+                    ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+
+                for p in image_buffer.pixels_mut() {
+                    p.0[0] = gamma_corrected_byte(p.0[0]);
+                }
+
+                let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
+
+                image_buffer.save(output_path)?;
+            } else {
+                let mut image_buffer =
+                    ImageBuffer::<Rgba<u8>, _>::from_raw(texture.width(), texture.height(), data)
+                        .unwrap();
+
+                if matches!(
+                    format,
+                    wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
+                ) {
+                    for p in image_buffer.pixels_mut() {
+                        p.0[0] = gamma_corrected_byte(p.0[0]);
+                        p.0[1] = gamma_corrected_byte(p.0[1]);
+                        p.0[2] = gamma_corrected_byte(p.0[2]);
+                    }
+                }
+
+                for p in image_buffer.pixels_mut() {
+                    p.0[3] = 255;
+                }
+
+                image_buffer.save(output_path)?;
+            }
+        }
+        wgpu::TextureFormat::Depth32Float | wgpu::TextureFormat::Rgba32Float => {
+            let mut data = extract_texture_data::<f32>(
+                core_system.device(),
+                core_system.queue(),
+                texture,
+                texture_array_idx,
+            );
+
+            for value in &mut data {
+                *value = gamma_corrected(*value);
+            }
+
+            if matches!(format, wgpu::TextureFormat::Depth32Float) {
+                let image_buffer: ImageBuffer<Luma<f32>, _> =
+                    ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+
+                let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
+
+                image_buffer.save(output_path)?;
+            } else {
+                let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
+                    ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+
+                for p in image_buffer.pixels_mut() {
+                    p.0[3] = 1.0;
+                }
+
+                let image_buffer: ImageBuffer<Rgba<u8>, _> = image_buffer.convert();
+
+                image_buffer.save(output_path)?;
+            }
+        }
+        _ => {
+            bail!(
+                "Unsupported texture format for saving as image file: {:?}",
+                format
+            );
+        }
+    }
 
     Ok(())
 }
