@@ -29,19 +29,11 @@ pub enum RenderAttachmentQuantity {
 /// Manager for textures used as render attachments.
 #[derive(Debug)]
 pub struct RenderAttachmentTextureManager {
-    multisampled_surface_texture: Option<MultisampledSurfaceTexture>,
     quantity_textures: [Option<RenderAttachmentTexture>; N_RENDER_ATTACHMENT_QUANTITIES],
     quantity_texture_bind_group_layouts:
         [Option<wgpu::BindGroupLayout>; N_RENDER_ATTACHMENT_QUANTITIES],
     quantity_texture_bind_groups: [Option<wgpu::BindGroup>; N_RENDER_ATTACHMENT_QUANTITIES],
     available_quantities: RenderAttachmentQuantitySet,
-}
-
-/// A surface texture that can be used as a multisampled render target.
-#[derive(Debug)]
-pub struct MultisampledSurfaceTexture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
 }
 
 /// A texture that can be used as a color attachment for rendering a specific
@@ -102,14 +94,8 @@ impl Display for RenderAttachmentQuantitySet {
 
 impl RenderAttachmentTextureManager {
     /// Creates a new manager for render attachment textures, initializing
-    /// render attachment textures for the given set of quantities in addition
-    /// to the depth texture and (if `sample_count` > 1) the multisampled
-    /// surface texture.
-    pub fn new(
-        core_system: &CoreRenderingSystem,
-        sample_count: u32,
-        quantities: RenderAttachmentQuantitySet,
-    ) -> Self {
+    /// render attachment textures for the given set of quantities.
+    pub fn new(core_system: &CoreRenderingSystem, quantities: RenderAttachmentQuantitySet) -> Self {
         let mut manager = Self {
             quantity_textures: [None, None, None, None],
             quantity_texture_bind_group_layouts: [None, None, None, None],
@@ -117,33 +103,14 @@ impl RenderAttachmentTextureManager {
             available_quantities: RenderAttachmentQuantitySet::empty(),
         };
 
-        manager.recreate_multisampled_surface_texture(core_system, sample_count);
-
         manager.recreate_render_attachment_textures(core_system, quantities);
 
         manager
     }
 
-    /// Returns a tuple where the first element is a view to the surface texture
-    /// to use as an attachment and the second element, if not [`None`], is a
-    /// view to the surface texture that should receive the resolved output.
-    pub fn attachment_surface_view_and_resolve_target<'a, 'b, 'c>(
-        &'a self,
-        surface_texture_view: &'b wgpu::TextureView,
-    ) -> (&'c wgpu::TextureView, Option<&'c wgpu::TextureView>)
-    where
-        'a: 'c,
-        'b: 'c,
-    {
-        if let Some(multisampled_surface_texture) = self.multisampled_surface_texture.as_ref() {
-            // If multisampling, use multisampled texture as render target
-            // and surface texture as resolve target
-            (
-                multisampled_surface_texture.view(),
-                Some(surface_texture_view),
-            )
-        } else {
-            (surface_texture_view, None)
+    /// Returns the set of available render attachment quantities.
+    pub fn available_quantities(&self) -> RenderAttachmentQuantitySet {
+        self.available_quantities
         }
 
     /// Returns the set of available render attachment quantities that can be
@@ -252,23 +219,10 @@ impl RenderAttachmentTextureManager {
         }
     }
 
-    /// Recreates all render attachment textures (including the depth texture
-    /// and multisampled surface texture) for the current state of the core
-    /// system, using the given sample count.
-    pub fn recreate_textures(&mut self, core_system: &CoreRenderingSystem, sample_count: u32) {
-        self.recreate_multisampled_textures(core_system, sample_count);
-        self.recreate_available_render_attachment_textures(core_system);
-    }
-
-    /// Recreates the depth texture and multisampled surface texture for the
-    /// current state of the core system, using the given sample count.
-    pub fn recreate_multisampled_textures(
-        &mut self,
-        core_system: &CoreRenderingSystem,
-        sample_count: u32,
-    ) {
-        self.recreate_depth_texture(core_system, sample_count);
-        self.recreate_multisampled_surface_texture(core_system, sample_count);
+    /// Recreates all render attachment textures for the current state of the
+    /// core system.
+    pub fn recreate_textures(&mut self, core_system: &CoreRenderingSystem) {
+        self.recreate_render_attachment_textures(core_system, self.available_quantities);
     }
 
     /// Creates a view into the given surface texture.
@@ -278,23 +232,6 @@ impl RenderAttachmentTextureManager {
         surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
-    fn recreate_multisampled_surface_texture(
-        &mut self,
-        core_system: &CoreRenderingSystem,
-        sample_count: u32,
-    ) {
-        self.multisampled_surface_texture.take();
-
-        if sample_count > 1 {
-            self.multisampled_surface_texture =
-                Some(MultisampledSurfaceTexture::new(core_system, sample_count));
-        }
-    }
-
-    fn recreate_available_render_attachment_textures(&mut self, core_system: &CoreRenderingSystem) {
-        self.recreate_render_attachment_textures(core_system, self.available_quantities);
     }
 
     fn recreate_render_attachment_textures(
@@ -503,54 +440,3 @@ impl RenderAttachmentTexture {
     }
 }
 
-impl MultisampledSurfaceTexture {
-    /// Creates a texture corresponding to the core system surface texture, but
-    /// with the given sample count for multisampling.
-    pub fn new(core_system: &CoreRenderingSystem, sample_count: u32) -> Self {
-        let texture = Self::create_empty_surface_texture(
-            core_system.device(),
-            core_system.surface_config(),
-            sample_count,
-            "Multisampled surface texture",
-        );
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        Self { texture, view }
-    }
-
-    /// Returns the multisampling sample count.
-    pub fn sample_count(&self) -> u32 {
-        self.texture.sample_count()
-    }
-
-    /// Returns a view into the texture.
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
-    }
-
-    /// Creates a new [`wgpu::Texture`] with the same dimensions and format as
-    /// the specified surface, but with the given sample count for
-    /// multisampling.
-    fn create_empty_surface_texture(
-        device: &wgpu::Device,
-        surface_config: &wgpu::SurfaceConfiguration,
-        sample_count: u32,
-        label: &str,
-    ) -> wgpu::Texture {
-        device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: surface_config.width,
-                height: surface_config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count,
-            dimension: wgpu::TextureDimension::D2,
-            format: surface_config.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            label: Some(label),
-            view_formats: &[],
-        })
-    }
-}
