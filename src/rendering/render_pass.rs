@@ -67,6 +67,7 @@ pub struct RenderPassSpecification {
     light: Option<LightInfo>,
     /// Whether and how the shadow map will be used.
     shadow_map_usage: ShadowMapUsage,
+    hints: RenderPassHints,
     label: String,
 }
 
@@ -294,7 +295,9 @@ impl RenderPassManager {
                                         render_resources,
                                         render_attachment_texture_manager,
                                         shader_manager,
-                                        RenderPassSpecification::shading_prepass(None, model_id),
+                                        RenderPassSpecification::shading_prepass(
+                                            None, model_id, hints,
+                                        ),
                                         no_visible_instances,
                                     )?,
                                 );
@@ -328,6 +331,7 @@ impl RenderPassManager {
                                             RenderPassSpecification::shading_prepass(
                                                 Some(light),
                                                 model_id,
+                                                hints,
                                             ),
                                             no_visible_instances,
                                         )?,
@@ -344,7 +348,7 @@ impl RenderPassManager {
                                     render_resources,
                                     render_attachment_texture_manager,
                                     shader_manager,
-                                    RenderPassSpecification::depth_prepass(model_id),
+                                    RenderPassSpecification::depth_prepass(model_id, hints),
                                     no_visible_instances
                                         || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
                                 )?,
@@ -418,6 +422,7 @@ impl RenderPassManager {
                                         light,
                                         model_id,
                                         ShadowMapIdentifier::ForOmnidirectionalLight(face),
+                                        hints,
                                     ),
                                     !faces_have_shadow_casting_model_instances[face.as_idx_usize()],
                                 )?);
@@ -432,7 +437,7 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::model_shading_pass_with_shadow_map(
-                                    light, model_id,
+                                    light, model_id, hints,
                                 ),
                                 no_visible_instances,
                             )?);
@@ -511,6 +516,7 @@ impl RenderPassManager {
                                             ShadowMapIdentifier::ForUnidirectionalLight(
                                                 cascade_idx,
                                             ),
+                                            hints,
                                         ),
                                         !cascades_have_shadow_casting_model_instances
                                             [cascade_idx as usize],
@@ -527,7 +533,7 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::model_shading_pass_with_shadow_map(
-                                    light, model_id,
+                                    light, model_id, hints,
                                 ),
                                 no_visible_instances,
                             )?);
@@ -599,7 +605,7 @@ impl RenderPassManager {
                                 render_resources,
                                 render_attachment_texture_manager,
                                 shader_manager,
-                                RenderPassSpecification::depth_prepass(model_id),
+                                RenderPassSpecification::depth_prepass(model_id, hints),
                                 no_visible_instances
                                     || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
                             )?);
@@ -613,7 +619,7 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::model_shading_pass_without_shadow_map(
-                                    None, model_id,
+                                    None, model_id, hints,
                                 ),
                                 no_visible_instances,
                             )?);
@@ -652,13 +658,14 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::Clear,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
+            hints: RenderPassHints::empty(),
             label: "Surface clearing pass".to_string(),
         }
     }
 
     /// Creates the specification for the render pass that will update the depth
     /// map with the depths of the model with the given ID.
-    fn depth_prepass(model_id: ModelID) -> Self {
+    fn depth_prepass(model_id: ModelID, hints: RenderPassHints) -> Self {
         Self {
             clear_color: None,
             model_id: Some(model_id),
@@ -666,13 +673,18 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::Prepass,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
+            hints,
             label: format!("Depth prepass for model {}", model_id),
         }
     }
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID with its prepass material.
-    fn shading_prepass(light: Option<LightInfo>, model_id: ModelID) -> Self {
+    fn shading_prepass(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        hints: RenderPassHints,
+    ) -> Self {
         let label = if let Some(light) = light {
             format!(
                 "Shading prepass for model {} with light {} ({:?})",
@@ -688,13 +700,18 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::use_readwrite(),
             light,
             shadow_map_usage: ShadowMapUsage::None,
+            hints,
             label,
         }
     }
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID without making use of a shadow map.
-    fn model_shading_pass_without_shadow_map(light: Option<LightInfo>, model_id: ModelID) -> Self {
+    fn model_shading_pass_without_shadow_map(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        hints: RenderPassHints,
+    ) -> Self {
         let label = if let Some(light) = light {
             format!(
                 "Shading of model {} for light {} ({:?}) without shadow map",
@@ -711,13 +728,18 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::use_readonly(),
             light,
             shadow_map_usage: ShadowMapUsage::None,
+            hints,
             label,
         }
     }
 
     /// Creates the specification for the render pass that will render the model
     /// with the given ID making use of a shadow map.
-    fn model_shading_pass_with_shadow_map(light: LightInfo, model_id: ModelID) -> Self {
+    fn model_shading_pass_with_shadow_map(
+        light: LightInfo,
+        model_id: ModelID,
+        hints: RenderPassHints,
+    ) -> Self {
         Self {
             clear_color: None,
             model_id: Some(model_id),
@@ -725,6 +747,7 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::use_readonly(),
             light: Some(light),
             shadow_map_usage: ShadowMapUsage::Use,
+            hints,
             label: format!(
                 "Shading of model {} for light {} ({:?}) with shadow map",
                 model_id, light.light_id, light.light_type
@@ -742,6 +765,7 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::None,
             light: None,
             shadow_map_usage: ShadowMapUsage::Clear(shadow_map_id),
+            hints: RenderPassHints::empty(),
             label: format!("Shadow map clearing pass ({:?})", shadow_map_id),
         }
     }
@@ -753,6 +777,7 @@ impl RenderPassSpecification {
         light: LightInfo,
         model_id: ModelID,
         shadow_map_id: ShadowMapIdentifier,
+        hints: RenderPassHints,
     ) -> Self {
         Self {
             clear_color: None,
@@ -761,6 +786,7 @@ impl RenderPassSpecification {
             depth_map_usage: DepthMapUsage::None,
             light: Some(light),
             shadow_map_usage: ShadowMapUsage::Update(shadow_map_id),
+            hints,
             label: format!(
                 "Shadow map update for model {} and light {} ({:?})",
                 model_id, light.light_id, shadow_map_id
