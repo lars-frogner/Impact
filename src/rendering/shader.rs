@@ -755,9 +755,6 @@ impl ShaderGenerator {
     /// # Errors
     /// Returns an error if:
     /// - There is no mesh input (no shaders witout a mesh supported).
-    /// - `instance_feature_shader_inputs` does not contain a
-    ///   [`ModelInstanceTransformShaderInput`] (no shaders without a model view
-    ///   transform supported).
     /// - `instance_feature_shader_inputs` and `material_shader_input` do not
     ///   provide a consistent and supported material description.
     /// - Not all vertex attributes required by the material are available in
@@ -820,11 +817,14 @@ impl ShaderGenerator {
             )
         });
 
-        let model_view_transform = Self::generate_vertex_code_for_model_view_transform(
+        let model_view_transform =
+            model_view_transform_shader_input.map(|model_view_transform_shader_input| {
+                Self::generate_vertex_code_for_model_view_transform(
             model_view_transform_shader_input,
             &mut module,
             &mut vertex_function,
-        );
+                )
+            });
 
         let light_shader_generator = light_shader_input.map(|light_shader_input| {
             Self::create_light_shader_generator(
@@ -841,19 +841,11 @@ impl ShaderGenerator {
         });
 
         let projection = if let Some(camera_projection) = camera_projection {
-            ProjectionExpressions::Camera(camera_projection)
-        } else if material_shader_generator.is_some() {
-            bail!("Tried to build shader with material but no camera");
+            Some(ProjectionExpressions::Camera(camera_projection))
+        } else if let Some(light_shader_generator) = &light_shader_generator {
+            light_shader_generator.get_projection_to_light_clip_space()
         } else {
-            light_shader_generator
-                .as_ref()
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Tried to build shader with no camera or light input (missing projection)"
-                    )
-                })?
-                .get_projection_to_light_clip_space()
-                .unwrap()
+            None
         };
 
         let tricks = material_shader_generator
@@ -872,7 +864,7 @@ impl ShaderGenerator {
             &mut module,
             &mut source_code_lib,
             &mut vertex_function,
-            &model_view_transform,
+            model_view_transform.as_ref(),
             projection,
         )?;
 
@@ -982,11 +974,9 @@ impl ShaderGenerator {
     /// into a [`MaterialShaderGenerator`].
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - `instance_feature_shader_inputs` does not contain a
-    ///   [`ModelInstanceTransformShaderInput`].
-    /// - `instance_feature_shader_inputs`, `material_shader_input` do not
-    ///   provide a consistent and supported material description.
+    /// Returns an error if `instance_feature_shader_inputs` and
+    /// `material_shader_input` do not provide a consistent and supported
+    /// material description.
     ///
     /// # Panics
     /// If `instance_feature_shader_inputs` contain multiple inputs of the same
@@ -995,7 +985,7 @@ impl ShaderGenerator {
         instance_feature_shader_inputs: &'a [&'a InstanceFeatureShaderInput],
         material_shader_input: Option<&'a MaterialShaderInput>,
     ) -> Result<(
-        &'a ModelViewTransformShaderInput,
+        Option<&'a ModelViewTransformShaderInput>,
         Option<MaterialShaderGenerator<'a>>,
     )> {
         let mut model_view_transform_shader_input = None;
@@ -1022,11 +1012,6 @@ impl ShaderGenerator {
                 InstanceFeatureShaderInput::None => {}
             }
         }
-
-        let model_view_transform_shader_input =
-            model_view_transform_shader_input.ok_or_else(|| {
-                anyhow!("Tried to build shader with no instance model view transform input")
-            })?;
 
         let material_shader_builder = match (
             fixed_color_feature_shader_input,
@@ -1250,8 +1235,8 @@ impl ShaderGenerator {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
-        model_view_transform: &ModelViewTransformExpressions,
-        projection: ProjectionExpressions,
+        model_view_transform: Option<&ModelViewTransformExpressions>,
+        projection: Option<ProjectionExpressions>,
     ) -> Result<(
         MeshVertexInputExpressions,
         MeshVertexOutputFieldIndices,
@@ -1340,7 +1325,9 @@ impl ShaderGenerator {
             None
         };
 
-        let position_expr = if tricks.contains(ShaderTricks::FOLLOW_CAMERA) {
+        let position_expr =
+            model_view_transform.map_or(input_model_position_expr, |model_view_transform| {
+                if tricks.contains(ShaderTricks::FOLLOW_CAMERA) {
             source_code_lib.generate_function_call(
                 module,
                 vertex_function,
@@ -1363,17 +1350,28 @@ impl ShaderGenerator {
                     input_model_position_expr,
                 ],
             )
-        };
+                }
+            });
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
-        let projected_position_expr = projection.generate_projected_position_expr(
+        let projected_position_expr = if let Some(projection) = projection {
+            projection.generate_projected_position_expr(
             module,
             source_code_lib,
             vertex_function,
             tricks,
             position_expr,
-        );
+            )
+        } else {
+            append_unity_component_to_vec3(
+                &mut module.types,
+                &mut module.constants,
+                vertex_function,
+                position_expr,
+            )
+        };
+
         let framebuffer_position_field_idx = output_struct_builder.add_builtin_position_field(
             "projectedPosition",
             vec4_type,
@@ -1415,7 +1413,10 @@ impl ShaderGenerator {
         }
 
         if let Some(input_model_normal_vector_expr) = input_expressions.normal_vector {
-            let normal_vector_expr = source_code_lib.generate_function_call(
+            let normal_vector_expr = model_view_transform.map_or(
+                input_model_normal_vector_expr,
+                |model_view_transform| {
+                    source_code_lib.generate_function_call(
                 module,
                 vertex_function,
                 "rotateVectorWithQuaternion",
@@ -1423,6 +1424,8 @@ impl ShaderGenerator {
                     model_view_transform.rotation_quaternion,
                     input_model_normal_vector_expr,
                 ],
+                    )
+                },
             );
 
             output_field_indices.normal_vector = Some(
@@ -1449,7 +1452,10 @@ impl ShaderGenerator {
         if let Some(input_tangent_to_model_space_quaternion_expr) =
             input_expressions.tangent_space_quaternion
         {
-            let tangent_space_quaternion_expr = source_code_lib.generate_function_call(
+            let tangent_space_quaternion_expr = model_view_transform.map_or(
+                input_tangent_to_model_space_quaternion_expr,
+                |model_view_transform| {
+                    source_code_lib.generate_function_call(
                 module,
                 vertex_function,
                 "applyRotationToTangentSpaceQuaternion",
@@ -1457,6 +1463,8 @@ impl ShaderGenerator {
                     model_view_transform.rotation_quaternion,
                     input_tangent_to_model_space_quaternion_expr,
                 ],
+                    )
+                },
             );
 
             output_field_indices.tangent_space_quaternion = Some(
@@ -5312,22 +5320,6 @@ mod test {
         ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             None,
-            None,
-            &[],
-            None,
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn building_shader_with_only_camera_and_mesh_input_fails() {
-        ShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MINIMAL_MESH_INPUT),
             None,
             &[],
             None,
