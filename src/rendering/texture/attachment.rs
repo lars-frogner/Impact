@@ -7,40 +7,34 @@ use std::{fmt::Display, path::Path};
 
 bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
-    /// color attachment textures.
+    /// render attachment textures.
     pub struct RenderAttachmentQuantitySet: u8 {
-        const POSITION = 0b00000001;
-        const NORMAL_VECTOR = 0b00000010;
-        const TEXTURE_COORDS = 0b00000100;
+        const DEPTH = 0b00000001;
+        const POSITION = 0b00000010;
+        const NORMAL_VECTOR = 0b00000100;
+        const TEXTURE_COORDS = 0b00001000;
     }
 }
 
-/// A quantity that can be rendered to a dedicated color attachment texture.
+/// A quantity that can be rendered to a dedicated render attachment texture.
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RenderAttachmentQuantity {
-    Position = 0,
-    NormalVector = 1,
-    TextureCoords = 2,
+    Depth = 0,
+    Position = 1,
+    NormalVector = 2,
+    TextureCoords = 3,
 }
 
 /// Manager for textures used as render attachments.
 #[derive(Debug)]
 pub struct RenderAttachmentTextureManager {
-    depth_texture: DepthTexture,
     multisampled_surface_texture: Option<MultisampledSurfaceTexture>,
     quantity_textures: [Option<RenderAttachmentTexture>; N_RENDER_ATTACHMENT_QUANTITIES],
     quantity_texture_bind_group_layouts:
         [Option<wgpu::BindGroupLayout>; N_RENDER_ATTACHMENT_QUANTITIES],
     quantity_texture_bind_groups: [Option<wgpu::BindGroup>; N_RENDER_ATTACHMENT_QUANTITIES],
     available_quantities: RenderAttachmentQuantitySet,
-}
-
-/// Texture for storing fragment depths.
-#[derive(Debug)]
-pub struct DepthTexture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
 }
 
 /// A surface texture that can be used as a multisampled render target.
@@ -60,21 +54,27 @@ pub struct RenderAttachmentTexture {
 }
 
 /// The total number of separate render attachment quantities.
-pub const N_RENDER_ATTACHMENT_QUANTITIES: usize = 3;
+pub const N_RENDER_ATTACHMENT_QUANTITIES: usize = 4;
 
 /// The bitflag of each individual render attachment quantity.
 pub const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    RenderAttachmentQuantitySet::DEPTH,
     RenderAttachmentQuantitySet::POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
 ];
 
 /// The name of each individual render attachment quantity.
-pub const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] =
-    ["position", "normal vector", "texture coords"];
+pub const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    "depth",
+    "position",
+    "normal vector",
+    "texture coords",
+];
 
 /// The texture format used for each render attachment quantity.
 pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    wgpu::TextureFormat::Depth32Float,
     wgpu::TextureFormat::Rgba32Float,
     wgpu::TextureFormat::Rgba8Unorm,
     wgpu::TextureFormat::Rg32Float,
@@ -83,7 +83,7 @@ pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_Q
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
 pub const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
-    [(0, 1), (0, 1), (0, 1)];
+    [(0, 1), (0, 1), (0, 1), (0, 1)];
 
 impl Display for RenderAttachmentQuantitySet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -110,14 +110,10 @@ impl RenderAttachmentTextureManager {
         sample_count: u32,
         quantities: RenderAttachmentQuantitySet,
     ) -> Self {
-        let depth_texture = DepthTexture::new(core_system, sample_count);
-
         let mut manager = Self {
-            depth_texture,
-            multisampled_surface_texture: None,
-            quantity_textures: [None, None, None],
-            quantity_texture_bind_group_layouts: [None, None, None],
-            quantity_texture_bind_groups: [None, None, None],
+            quantity_textures: [None, None, None, None],
+            quantity_texture_bind_group_layouts: [None, None, None, None],
+            quantity_texture_bind_groups: [None, None, None, None],
             available_quantities: RenderAttachmentQuantitySet::empty(),
         };
 
@@ -126,11 +122,6 @@ impl RenderAttachmentTextureManager {
         manager.recreate_render_attachment_textures(core_system, quantities);
 
         manager
-    }
-
-    /// Returns a reference to the [`DepthTexture`].
-    pub fn depth_texture(&self) -> &DepthTexture {
-        &self.depth_texture
     }
 
     /// Returns a tuple where the first element is a view to the surface texture
@@ -154,11 +145,24 @@ impl RenderAttachmentTextureManager {
         } else {
             (surface_texture_view, None)
         }
+
+    /// Returns the set of available render attachment quantities that can be
+    /// used as color attachments (as opposed to depth).
+    pub fn available_color_quantities(&self) -> RenderAttachmentQuantitySet {
+        self.available_quantities - RenderAttachmentQuantitySet::DEPTH
     }
 
-    /// Returns the set of available render attachment quantities.
-    pub fn available_quantities(&self) -> RenderAttachmentQuantitySet {
-        self.available_quantities
+    /// Returns the render attachment texture for the requested quantity.
+    ///
+    /// # Panics
+    /// If the requested quantity is missing.
+    pub fn render_attachment_texture(
+        &self,
+        quantity: RenderAttachmentQuantity,
+    ) -> &RenderAttachmentTexture {
+        self.quantity_textures[quantity as usize]
+            .as_ref()
+            .expect("Requested missing render attachment quantity")
     }
 
     /// Returns an iterator over the render attachment texture views for the
@@ -276,10 +280,6 @@ impl RenderAttachmentTextureManager {
             .create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    fn recreate_depth_texture(&mut self, core_system: &CoreRenderingSystem, sample_count: u32) {
-        self.depth_texture = DepthTexture::new(core_system, sample_count);
-    }
-
     fn recreate_multisampled_surface_texture(
         &mut self,
         core_system: &CoreRenderingSystem,
@@ -376,65 +376,6 @@ impl RenderAttachmentTextureManager {
                 render_attachment_texture.create_sampler_bind_group_entry(sampler_binding),
             ],
             label: Some(&format!("{} bind group", label)),
-        })
-    }
-}
-
-impl DepthTexture {
-    pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-
-    /// Creates a new depth texture of the same size as the rendering surface in
-    /// `core_system` and with the given sample count for multisampling.
-    pub fn new(core_system: &CoreRenderingSystem, sample_count: u32) -> Self {
-        let device = core_system.device();
-        let surface_config = core_system.surface_config();
-
-        let texture_size = wgpu::Extent3d {
-            width: surface_config.width,
-            height: surface_config.height,
-            depth_or_array_layers: 1,
-        };
-
-        let texture =
-            Self::create_empty_depth32_texture(device, texture_size, sample_count, "Depth texture");
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        Self { texture, view }
-    }
-
-    /// Returns a view into the depth texture.
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
-    }
-
-    /// Saves the texture as a grayscale image at the given output path. The
-    /// image file format is automatically determined from the file extension.
-    pub fn save_as_image_file<P: AsRef<Path>>(
-        &self,
-        core_system: &CoreRenderingSystem,
-        output_path: P,
-    ) -> Result<()> {
-        super::save_depth_texture_as_image_file(core_system, &self.texture, 0, output_path)
-    }
-
-    /// Creates a new [`wgpu::Texture`] configured to hold 2D depth data
-    /// in 32-bit float format.
-    fn create_empty_depth32_texture(
-        device: &wgpu::Device,
-        texture_size: wgpu::Extent3d,
-        sample_count: u32,
-        label: &str,
-    ) -> wgpu::Texture {
-        device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count,
-            dimension: wgpu::TextureDimension::D2,
-            format: Self::FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            label: Some(label),
-            view_formats: &[],
         })
     }
 }

@@ -1317,7 +1317,7 @@ impl RenderPassSpecification {
             };
 
             Some(wgpu::DepthStencilState {
-                format: DepthTexture::FORMAT,
+                format: RENDER_ATTACHMENT_FORMATS[RenderAttachmentQuantity::Depth as usize],
                 depth_write_enabled,
                 depth_compare,
                 stencil: wgpu::StencilState::default(),
@@ -1354,7 +1354,7 @@ impl RenderPassSpecification {
                     (
                         wgpu::LoadOp::Clear(clear_color),
                         wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        render_attachment_texture_manager.available_quantities(),
+                        render_attachment_texture_manager.available_color_quantities(),
                     )
                 } else {
                     // Otherwise, we use the surface texture as well as the
@@ -1428,7 +1428,9 @@ impl RenderPassSpecification {
             })
         } else if self.depth_map_usage.is_clear() {
             Some(wgpu::RenderPassDepthStencilAttachment {
-                view: render_attachment_texture_manager.depth_texture().view(),
+                view: render_attachment_texture_manager
+                    .render_attachment_texture(RenderAttachmentQuantity::Depth)
+                    .view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
                     store: true,
@@ -1437,7 +1439,9 @@ impl RenderPassSpecification {
             })
         } else if !self.depth_map_usage.is_none() {
             Some(wgpu::RenderPassDepthStencilAttachment {
-                view: render_attachment_texture_manager.depth_texture().view(),
+                view: render_attachment_texture_manager
+                    .render_attachment_texture(RenderAttachmentQuantity::Depth)
+                    .view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,
