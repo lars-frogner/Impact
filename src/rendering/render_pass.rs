@@ -95,6 +95,8 @@ bitflags! {
         const NO_DEPTH_PREPASS = 0b00000010;
         /// The render pass renders to the surface color attachment.
         const RENDERS_TO_SURFACE = 0b00000100;
+        /// The render pass does not make use of a camera.
+        const NO_CAMERA = 0b00001000;
     }
 }
 
@@ -1047,7 +1049,7 @@ impl RenderPassSpecification {
         let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
         // We do not need a camera if we are updating shadow map
-        if !self.shadow_map_usage.is_update() {
+        if !self.shadow_map_usage.is_update() && !self.hints.contains(RenderPassHints::NO_CAMERA) {
             if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
                 layouts.push(camera_buffer_manager.bind_group_layout());
                 shader_input.camera = Some(CameraRenderBufferManager::shader_input());
@@ -1181,7 +1183,7 @@ impl RenderPassSpecification {
         let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
         // We do not need a camera if we are updating shadow map
-        if !self.shadow_map_usage.is_update() {
+        if !self.shadow_map_usage.is_update() && !self.hints.contains(RenderPassHints::NO_CAMERA) {
             if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
                 bind_groups.push(camera_buffer_manager.bind_group());
             }
