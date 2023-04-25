@@ -236,25 +236,6 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 (sample_offset_array_expr, sample_count_expr)
             });
 
-        let (depth_texture_binding, depth_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Depth as usize];
-
-        let depth_texture = SampledTexture::declare(
-            &mut module.types,
-            &mut module.global_variables,
-            TextureType::Depth,
-            "depth",
-            *bind_group_idx,
-            depth_texture_binding,
-            Some(depth_sampler_binding),
-            None,
-        );
-
-        *bind_group_idx += 1;
-
-        let (depth_texture_expr, depth_sampler_expr) =
-            depth_texture.generate_texture_and_sampler_expressions(fragment_function, false);
-
         let (position_texture_binding, position_sampler_binding) =
             RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
 
@@ -308,8 +289,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT
             ),
             vec![
-                depth_texture_expr,
-                depth_sampler_expr,
+                position_texture_expr,
+                position_sampler_expr,
                 sample_offset_array_expr,
                 sample_count_expr,
                 position_expr,

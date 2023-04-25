@@ -67,9 +67,7 @@ pub fn register_ambient_occlusion_materials(
         MaterialSpecification::new(
             vertex_attribute_requirements_for_mesh,
             vertex_attribute_requirements_for_shader,
-            RenderAttachmentQuantitySet::DEPTH
-                | RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::OCCLUSION,
             Some(FixedMaterialResources::new(&sample_uniform)),
             Vec::new(),

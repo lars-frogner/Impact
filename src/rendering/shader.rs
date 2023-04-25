@@ -450,7 +450,6 @@ pub enum TextureType {
     Image2D,
     Image2DArray,
     ImageCubemap,
-    Depth,
     DepthCubemap,
     DepthArray,
 }
@@ -592,15 +591,6 @@ const SAMPLER_TYPE: Type = Type {
 const COMPARISON_SAMPLER_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Sampler { comparison: true },
-};
-
-const DEPTH_TEXTURE_TYPE: Type = Type {
-    name: None,
-    inner: TypeInner::Image {
-        dim: ImageDimension::D2,
-        arrayed: false,
-        class: ImageClass::Depth { multi: false },
-    },
 };
 
 const DEPTH_CUBEMAP_TEXTURE_TYPE: Type = Type {
@@ -3863,7 +3853,6 @@ impl SampledTexture {
             TextureType::Image2D => IMAGE_2D_TEXTURE_TYPE,
             TextureType::Image2DArray => IMAGE_2D_ARRAY_TEXTURE_TYPE,
             TextureType::ImageCubemap => IMAGE_CUBEMAP_TEXTURE_TYPE,
-            TextureType::Depth => DEPTH_TEXTURE_TYPE,
             TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };
@@ -7261,9 +7250,7 @@ mod test {
                 }),
             )),
             VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::DEPTH
-                | RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::OCCLUSION,
         )
         .unwrap()

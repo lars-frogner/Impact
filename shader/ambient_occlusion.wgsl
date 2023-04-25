@@ -1,6 +1,6 @@
 fn computeAmbientOcclusionMax64Samples(
-    depthTexture: texture_depth_2d,
-    depthSampler: sampler,
+    positionTexture: texture_2d<f32>,
+    positionSampler: sampler,
     sampleOffsets: array<vec4<f32>, 32u>,
     sampleCount: u32,
     position: vec3<f32>,
