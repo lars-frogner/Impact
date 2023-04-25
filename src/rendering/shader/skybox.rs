@@ -71,7 +71,7 @@ impl<'a> SkyboxShaderGenerator<'a> {
     /// Generates the fragment shader code specific to this material by adding
     /// code representation to the given [`naga`] objects.
     ///
-    /// The skybix cubemap texture and sampler are declared as global variables,
+    /// The skybox cubemap texture and sampler are declared as global variables,
     /// and a sampling expression is generated in the main fragment shader
     /// function. The sampled color is returned from the function in an output
     /// struct.
