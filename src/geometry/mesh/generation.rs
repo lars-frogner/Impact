@@ -28,6 +28,29 @@ pub enum FrontFaceSide {
 }
 
 impl<F: Float> TriangleMesh<F> {
+    /// Creates a mesh with vertex positions directly in clip space coordinates,
+    /// consisting of two triangles at zero depth that will exactly fill the
+    /// view.
+    pub fn create_screen_filling_quad() -> Self {
+        let positions = vec![
+            pos![-F::ONE, -F::ONE, F::ZERO],
+            pos![F::ONE, -F::ONE, F::ZERO],
+            pos![F::ONE, F::ONE, F::ZERO],
+            pos![-F::ONE, F::ONE, F::ZERO],
+        ];
+
+        let indices = vec![1, 3, 0, 2, 3, 1];
+
+        Self::new(
+            positions,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
+    }
+
     /// Creates a mesh representing a flat plane centered at the origin with the
     /// given horizontal extents.
     ///

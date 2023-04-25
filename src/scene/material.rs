@@ -1,5 +1,6 @@
 //! Management of materials.
 
+mod ambient_occlusion;
 mod blinn_phong;
 mod components;
 mod features;
@@ -9,6 +10,11 @@ mod prepass;
 mod skybox;
 mod vertex_color;
 
+pub use ambient_occlusion::{
+    register_ambient_occlusion_materials, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
+    AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
+    AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+};
 pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
     DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,

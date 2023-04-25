@@ -27,14 +27,14 @@ pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager
 pub use render_pass::{RenderPassHints, RenderPassManager, SyncRenderPasses};
 pub use resource::SyncRenderResources;
 pub use shader::{
-    AmbientLightShaderInput, BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput,
-    CameraShaderInput, DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput,
-    FixedTextureShaderInput, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput,
-    LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
-    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
-    OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput, Shader,
-    ShaderGenerator, SkyboxTextureShaderInput, SpecularMicrofacetShadingModel,
-    UnidirectionalLightShaderInput,
+    AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
+    BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput, CameraShaderInput,
+    DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput, FixedTextureShaderInput,
+    InstanceFeatureShaderInput, LightMaterialFeatureShaderInput, LightShaderInput,
+    MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel, MicrofacetTextureShaderInput,
+    ModelViewTransformShaderInput, NormalMappingShaderInput, OmnidirectionalLightShaderInput,
+    ParallaxMappingShaderInput, PrepassTextureShaderInput, Shader, ShaderGenerator,
+    SkyboxTextureShaderInput, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
@@ -349,16 +349,16 @@ impl ScreenCapturer {
                 // Re-render the surface at the screenshot resolution.
                 let surface_texture = renderer.render_surface()?;
 
-            texture::save_texture_as_image_file(
+                texture::save_texture_as_image_file(
                     renderer.core_system(),
-                &surface_texture.texture,
-                0,
-                format!("screenshot_{}.png", Utc::now().to_rfc3339()),
+                    &surface_texture.texture,
+                    0,
+                    format!("screenshot_{}.png", Utc::now().to_rfc3339()),
                 )?;
             }
             renderer.resize_surface(original_dimensions);
         }
-            Ok(())
+        Ok(())
     }
 
     /// Checks if a render attachment capture was scheduled with
@@ -400,7 +400,7 @@ impl ScreenCapturer {
             }
             renderer.resize_surface(original_dimensions);
         }
-            Ok(())
+        Ok(())
     }
 
     /// Checks if a omnidirectional light shadow map capture was scheduled with

@@ -27,7 +27,7 @@ fn computeAmbientColorForSpecularGGX(
 
     if viewDirectionDotNormalVector > 0.0 {
         // Mip level must be explicit since it can not be computed automatically
-        // inside non-uniform control flow
+        // inside non-uniform control flow. It should always be zero anyway.
         let mipLevel = 0.0;
 
         let textureCoords = vec2<f32>(viewDirectionDotNormalVector, roughness);
@@ -643,12 +643,6 @@ fn computeRadianceScalingFactorForSphericalAreaLight(
 }
 
 // ***** Common shadow mapping utilities *****
-
-// Returns a random number between 0 and 1 based on the pixel coordinates
-fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4<f32>) -> f32 {
-    let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
-    return fract(magic.z * fract(dot(magic.xy, cameraFramebufferPosition.xy)));
-}
 
 fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sampleIdx: u32) -> vec2<f32> {
     let goldenAngle: f32 = 2.4;

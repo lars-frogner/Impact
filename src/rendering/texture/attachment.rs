@@ -13,6 +13,8 @@ bitflags! {
         const POSITION = 0b00000010;
         const NORMAL_VECTOR = 0b00000100;
         const TEXTURE_COORDS = 0b00001000;
+        const COLOR = 0b00010000;
+        const OCCLUSION = 0b00100000;
     }
 }
 
@@ -24,6 +26,8 @@ pub enum RenderAttachmentQuantity {
     Position = 1,
     NormalVector = 2,
     TextureCoords = 3,
+    Color = 4,
+    Occlusion = 5,
 }
 
 /// Manager for textures used as render attachments.
@@ -46,7 +50,7 @@ pub struct RenderAttachmentTexture {
 }
 
 /// The total number of separate render attachment quantities.
-pub const N_RENDER_ATTACHMENT_QUANTITIES: usize = 4;
+pub const N_RENDER_ATTACHMENT_QUANTITIES: usize = 6;
 
 /// The bitflag of each individual render attachment quantity.
 pub const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
@@ -54,6 +58,8 @@ pub const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACH
     RenderAttachmentQuantitySet::POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
+    RenderAttachmentQuantitySet::COLOR,
+    RenderAttachmentQuantitySet::OCCLUSION,
 ];
 
 /// The name of each individual render attachment quantity.
@@ -62,6 +68,8 @@ pub const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "position",
     "normal_vector",
     "texture_coords",
+    "color",
+    "occlusion",
 ];
 
 /// The texture format used for each render attachment quantity.
@@ -70,12 +78,14 @@ pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_Q
     wgpu::TextureFormat::Rgba32Float,
     wgpu::TextureFormat::Rgba8Unorm,
     wgpu::TextureFormat::Rg32Float,
+    wgpu::TextureFormat::Rgba8Unorm,
+    wgpu::TextureFormat::R8Unorm,
 ];
 
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
 pub const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
-    [(0, 1), (0, 1), (0, 1), (0, 1)];
+    [(0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1)];
 
 impl Display for RenderAttachmentQuantitySet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,9 +107,9 @@ impl RenderAttachmentTextureManager {
     /// render attachment textures for the given set of quantities.
     pub fn new(core_system: &CoreRenderingSystem, quantities: RenderAttachmentQuantitySet) -> Self {
         let mut manager = Self {
-            quantity_textures: [None, None, None, None],
-            quantity_texture_bind_group_layouts: [None, None, None, None],
-            quantity_texture_bind_groups: [None, None, None, None],
+            quantity_textures: [None, None, None, None, None, None],
+            quantity_texture_bind_group_layouts: [None, None, None, None, None, None],
+            quantity_texture_bind_groups: [None, None, None, None, None, None],
             available_quantities: RenderAttachmentQuantitySet::empty(),
         };
 
@@ -111,7 +121,7 @@ impl RenderAttachmentTextureManager {
     /// Returns the set of available render attachment quantities.
     pub fn available_quantities(&self) -> RenderAttachmentQuantitySet {
         self.available_quantities
-        }
+    }
 
     /// Returns the set of available render attachment quantities that can be
     /// used as color attachments (as opposed to depth).

@@ -18,7 +18,10 @@ use crate::{
     },
     scene::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
-        ShaderManager, MAX_SHADOW_MAP_CASCADES,
+        ShaderManager, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
+        AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
+        AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, MAX_SHADOW_MAP_CASCADES,
+        SCREEN_FILLING_QUAD_MESH_ID,
     },
 };
 use anyhow::{anyhow, Result};
@@ -41,6 +44,8 @@ pub struct RenderPassManager {
     /// prepass material. This also does the job of filling the remainder of the
     /// depth map.
     light_shaded_model_shading_prepasses: Vec<RenderPassRecorder>,
+    /// Passes for computing and applying ambient occlusion.
+    ambient_occlusion_passes: Vec<RenderPassRecorder>,
     /// Passes for shading models that do not depend on light sources.
     non_light_shaded_model_shading_passes: Vec<RenderPassRecorder>,
     /// Passes for shading models that depend on light sources, including passes
@@ -167,6 +172,7 @@ impl RenderPassManager {
             clearing_pass_recorder: RenderPassRecorder::surface_clearing_pass(clear_color),
             non_light_shaded_model_depth_prepasses: Vec::new(),
             light_shaded_model_shading_prepasses: Vec::new(),
+            ambient_occlusion_passes: Vec::with_capacity(2),
             non_light_shaded_model_shading_passes: Vec::new(),
             light_shaded_model_shading_passes: HashMap::new(),
             non_light_shaded_model_index_mapper: KeyIndexMapper::new(),
@@ -179,6 +185,7 @@ impl RenderPassManager {
         iter::once(&self.clearing_pass_recorder)
             .chain(self.non_light_shaded_model_depth_prepasses.iter())
             .chain(self.light_shaded_model_shading_prepasses.iter())
+            .chain(self.ambient_occlusion_passes.iter())
             .chain(self.non_light_shaded_model_shading_passes.iter())
             .chain(
                 self.light_shaded_model_shading_passes
@@ -278,6 +285,28 @@ impl RenderPassManager {
                     }
                     passes.shading_passes.swap_remove(model_idx);
                 });
+        }
+
+        if self.ambient_occlusion_passes.is_empty() {
+            self.ambient_occlusion_passes.push(RenderPassRecorder::new(
+                core_system,
+                config,
+                render_resources,
+                render_attachment_texture_manager,
+                shader_manager,
+                RenderPassSpecification::ambient_occlusion_computation_pass(),
+                false,
+            )?);
+
+            self.ambient_occlusion_passes.push(RenderPassRecorder::new(
+                core_system,
+                config,
+                render_resources,
+                render_attachment_texture_manager,
+                shader_manager,
+                RenderPassSpecification::ambient_occlusion_application_pass(),
+                false,
+            )?);
         }
 
         for (&model_id, feature_buffer_managers) in all_feature_buffer_managers {
@@ -826,6 +855,36 @@ impl RenderPassSpecification {
         }
     }
 
+    fn ambient_occlusion_computation_pass() -> Self {
+        Self {
+            clear_color: None,
+            model_id: None,
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_material_id: Some(*AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID),
+            use_prepass_material: false,
+            depth_map_usage: DepthMapUsage::None,
+            light: None,
+            shadow_map_usage: ShadowMapUsage::None,
+            hints: AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS,
+            label: "Ambient occlusion computation pass".to_string(),
+        }
+    }
+
+    fn ambient_occlusion_application_pass() -> Self {
+        Self {
+            clear_color: None,
+            model_id: None,
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_material_id: Some(*AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID),
+            use_prepass_material: false,
+            depth_map_usage: DepthMapUsage::None,
+            light: None,
+            shadow_map_usage: ShadowMapUsage::None,
+            hints: AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
+            label: "Ambient occlusion application pass".to_string(),
+        }
+    }
+
     fn get_mesh_buffer_manager(
         render_resources: &SynchronizedRenderResources,
         mesh_id: MeshID,
@@ -1329,7 +1388,7 @@ impl RenderPassSpecification {
             // only work with depths, so we don't need a color target
             Vec::new()
         } else {
-            let mut color_target_states = Vec::with_capacity(3);
+            let mut color_target_states = Vec::with_capacity(4);
 
             if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
                 color_target_states.push(Some(wgpu::ColorTargetState {
@@ -1442,7 +1501,7 @@ impl RenderPassSpecification {
                     )
                 };
 
-            let mut color_attachments = Vec::with_capacity(3);
+            let mut color_attachments = Vec::with_capacity(4);
 
             if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
                 color_attachments.push(Some(wgpu::RenderPassColorAttachment {

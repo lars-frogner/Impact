@@ -9,7 +9,7 @@ use crate::{
         RenderAttachmentQuantitySet, RenderPassHints, TextureID,
     },
     scene::{
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+        EmissiveColorComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
         MaterialPropertyTextureSetID, MaterialSpecification, ParallaxMapComp,
     },
 };
@@ -38,6 +38,7 @@ pub fn create_prepass_material(
     feature_type_id: InstanceFeatureTypeID,
     feature_id: InstanceFeatureID,
     mut texture_ids: Vec<TextureID>,
+    emissive_color: Option<&EmissiveColorComp>,
     diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
     specular_texture_and_sampler_bindings: Option<(u32, u32)>,
     roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
@@ -46,7 +47,14 @@ pub fn create_prepass_material(
     uses_specular_microfacet_model: bool,
 ) -> MaterialHandle {
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
-    let mut vertex_attribute_requirements_for_shader = VertexAttributeSet::empty();
+    let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
+
+    let mut render_pass_hints = RenderPassHints::empty();
+
+    // These are required for ambient occlusion
+    *output_render_attachment_quantities |= RenderAttachmentQuantitySet::POSITION
+        | RenderAttachmentQuantitySet::NORMAL_VECTOR
+        | RenderAttachmentQuantitySet::COLOR;
 
     if !texture_ids.is_empty() {
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
@@ -60,6 +68,10 @@ pub fn create_prepass_material(
         specular_reflectance_lookup_texture_and_sampler_bindings: None,
         bump_mapping_input: None,
     };
+
+    if emissive_color.is_some() {
+        render_pass_hints |= RenderPassHints::RENDERS_TO_SURFACE;
+    }
 
     if let Some(normal_map) = normal_map {
         assert!(
@@ -110,6 +122,9 @@ pub fn create_prepass_material(
         );
 
         texture_ids.push(parallax_map.height_map_texture_id);
+    } else {
+        vertex_attribute_requirements_for_mesh |= VertexAttributeSet::NORMAL_VECTOR;
+        vertex_attribute_requirements_for_shader |= VertexAttributeSet::NORMAL_VECTOR;
     }
 
     if uses_specular_microfacet_model {
@@ -142,7 +157,7 @@ pub fn create_prepass_material(
                 *output_render_attachment_quantities,
                 None,
                 vec![feature_type_id],
-                RenderPassHints::empty(),
+                render_pass_hints,
                 MaterialShaderInput::Prepass(texture_shader_input),
             )
         });

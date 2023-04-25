@@ -1,5 +1,6 @@
 //! Generation of graphics shaders.
 
+mod ambient_occlusion;
 mod blinn_phong;
 mod fixed;
 mod microfacet;
@@ -7,6 +8,7 @@ mod prepass;
 mod skybox;
 mod vertex_color;
 
+pub use ambient_occlusion::{AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput};
 pub use blinn_phong::BlinnPhongTextureShaderInput;
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
 pub use microfacet::{
@@ -27,7 +29,8 @@ use crate::{
     rendering::{fre, CoreRenderingSystem, RenderAttachmentQuantitySet},
     scene::MAX_SHADOW_MAP_CASCADES,
 };
-use anyhow::{anyhow, bail, Result};
+use ambient_occlusion::AmbientOcclusionShaderGenerator;
+use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
 use fixed::{
@@ -132,6 +135,7 @@ pub enum MaterialShaderInput {
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
     Prepass(PrepassTextureShaderInput),
     Skybox(SkyboxTextureShaderInput),
+    AmbientOcclusion(AmbientOcclusionShaderInput),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -201,6 +205,7 @@ pub enum MaterialShaderGenerator<'a> {
     Microfacet(MicrofacetShaderGenerator<'a>),
     Prepass(PrepassShaderGenerator<'a>),
     Skybox(SkyboxShaderGenerator<'a>),
+    AmbientOcclusion(AmbientOcclusionShaderGenerator<'a>),
 }
 
 bitflags! {
@@ -445,6 +450,7 @@ pub enum TextureType {
     Image2D,
     Image2DArray,
     ImageCubemap,
+    Depth,
     DepthCubemap,
     DepthArray,
 }
@@ -588,6 +594,15 @@ const COMPARISON_SAMPLER_TYPE: Type = Type {
     inner: TypeInner::Sampler { comparison: true },
 };
 
+const DEPTH_TEXTURE_TYPE: Type = Type {
+    name: None,
+    inner: TypeInner::Image {
+        dim: ImageDimension::D2,
+        arrayed: false,
+        class: ImageClass::Depth { multi: false },
+    },
+};
+
 const DEPTH_CUBEMAP_TEXTURE_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Image {
@@ -612,7 +627,8 @@ lazy_static! {
         include_str!("../../shader/light.wgsl"),
         include_str!("../../shader/normal_map.wgsl"),
         include_str!("../../shader/blinn_phong.wgsl"),
-        include_str!("../../shader/microfacet.wgsl")
+        include_str!("../../shader/microfacet.wgsl"),
+        include_str!("../../shader/ambient_occlusion.wgsl")
     ))
     .unwrap_or_else(|err| panic!("Error when including shader source library: {}", err));
 }
@@ -820,9 +836,9 @@ impl ShaderGenerator {
         let model_view_transform =
             model_view_transform_shader_input.map(|model_view_transform_shader_input| {
                 Self::generate_vertex_code_for_model_view_transform(
-            model_view_transform_shader_input,
-            &mut module,
-            &mut vertex_function,
+                    model_view_transform_shader_input,
+                    &mut module,
+                    &mut vertex_function,
                 )
             });
 
@@ -1050,6 +1066,11 @@ impl ShaderGenerator {
             (None, None, Some(MaterialShaderInput::Skybox(input))) => Some(
                 MaterialShaderGenerator::Skybox(SkyboxShaderGenerator::new(input)),
             ),
+            (None, None, Some(MaterialShaderInput::AmbientOcclusion(input))) => {
+                Some(MaterialShaderGenerator::AmbientOcclusion(
+                    AmbientOcclusionShaderGenerator::new(input),
+                ))
+            }
             input => {
                 return Err(anyhow!(
                     "Tried to build shader with invalid material: {:?}",
@@ -1328,28 +1349,28 @@ impl ShaderGenerator {
         let position_expr =
             model_view_transform.map_or(input_model_position_expr, |model_view_transform| {
                 if tricks.contains(ShaderTricks::FOLLOW_CAMERA) {
-            source_code_lib.generate_function_call(
-                module,
-                vertex_function,
-                "transformPositionWithoutTranslation",
-                vec![
-                    model_view_transform.rotation_quaternion,
-                    model_view_transform.scaling_factor,
-                    input_model_position_expr,
-                ],
-            )
-        } else {
-            source_code_lib.generate_function_call(
-                module,
-                vertex_function,
-                "transformPosition",
-                vec![
-                    model_view_transform.rotation_quaternion,
-                    model_view_transform.translation_vector,
-                    model_view_transform.scaling_factor,
-                    input_model_position_expr,
-                ],
-            )
+                    source_code_lib.generate_function_call(
+                        module,
+                        vertex_function,
+                        "transformPositionWithoutTranslation",
+                        vec![
+                            model_view_transform.rotation_quaternion,
+                            model_view_transform.scaling_factor,
+                            input_model_position_expr,
+                        ],
+                    )
+                } else {
+                    source_code_lib.generate_function_call(
+                        module,
+                        vertex_function,
+                        "transformPosition",
+                        vec![
+                            model_view_transform.rotation_quaternion,
+                            model_view_transform.translation_vector,
+                            model_view_transform.scaling_factor,
+                            input_model_position_expr,
+                        ],
+                    )
                 }
             });
 
@@ -1357,11 +1378,11 @@ impl ShaderGenerator {
 
         let projected_position_expr = if let Some(projection) = projection {
             projection.generate_projected_position_expr(
-            module,
-            source_code_lib,
-            vertex_function,
-            tricks,
-            position_expr,
+                module,
+                source_code_lib,
+                vertex_function,
+                tricks,
+                position_expr,
             )
         } else {
             append_unity_component_to_vec3(
@@ -1415,13 +1436,13 @@ impl ShaderGenerator {
                 input_model_normal_vector_expr,
                 |model_view_transform| {
                     source_code_lib.generate_function_call(
-                module,
-                vertex_function,
-                "rotateVectorWithQuaternion",
-                vec![
-                    model_view_transform.rotation_quaternion,
-                    input_model_normal_vector_expr,
-                ],
+                        module,
+                        vertex_function,
+                        "rotateVectorWithQuaternion",
+                        vec![
+                            model_view_transform.rotation_quaternion,
+                            input_model_normal_vector_expr,
+                        ],
                     )
                 },
             );
@@ -1454,13 +1475,13 @@ impl ShaderGenerator {
                 input_tangent_to_model_space_quaternion_expr,
                 |model_view_transform| {
                     source_code_lib.generate_function_call(
-                module,
-                vertex_function,
-                "applyRotationToTangentSpaceQuaternion",
-                vec![
-                    model_view_transform.rotation_quaternion,
-                    input_tangent_to_model_space_quaternion_expr,
-                ],
+                        module,
+                        vertex_function,
+                        "applyRotationToTangentSpaceQuaternion",
+                        vec![
+                            model_view_transform.rotation_quaternion,
+                            input_tangent_to_model_space_quaternion_expr,
+                        ],
                     )
                 },
             );
@@ -2098,16 +2119,6 @@ impl ShaderGenerator {
     }
 }
 
-impl MaterialShaderInput {
-    /// Whether the material requires light sources.
-    pub fn requires_lights(&self) -> bool {
-        match self {
-            Self::VertexColor | Self::Fixed(_) | Self::Prepass(_) | Self::Skybox(_) => false,
-            Self::BlinnPhong(_) | Self::Microfacet(_) => true,
-        }
-    }
-}
-
 impl<'a> MaterialShaderGenerator<'a> {
     /// Any [`ShaderTricks`] employed by the material.
     pub fn tricks(&self) -> ShaderTricks {
@@ -2284,6 +2295,17 @@ impl<'a> MaterialShaderGenerator<'a> {
                     bind_group_idx,
                     fragment_input_struct,
                     material_input_field_indices,
+                );
+            }
+            (Self::AmbientOcclusion(generator), MaterialVertexOutputFieldIndices::None) => {
+                generator.generate_fragment_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    bind_group_idx,
+                    push_constant_fragment_expressions,
+                    fragment_input_struct,
+                    mesh_input_field_indices,
                 );
             }
             _ => panic!("Mismatched material shader builder and output field indices type"),
@@ -3841,6 +3863,7 @@ impl SampledTexture {
             TextureType::Image2D => IMAGE_2D_TEXTURE_TYPE,
             TextureType::Image2DArray => IMAGE_2D_ARRAY_TEXTURE_TYPE,
             TextureType::ImageCubemap => IMAGE_CUBEMAP_TEXTURE_TYPE,
+            TextureType::Depth => DEPTH_TEXTURE_TYPE,
             TextureType::DepthCubemap => DEPTH_CUBEMAP_TEXTURE_TYPE,
             TextureType::DepthArray => DEPTH_TEXTURE_ARRAY_TYPE,
         };
@@ -5253,36 +5276,16 @@ mod test {
     fn parse() {
         match wgsl_in::parse_str(
             "
-            fn generateVogelDiskSampleCoords(invSqrtSampleCount: f32, baseAngle: f32, sampleIdx: u32) -> vec2<f32> {
-                let goldenAngle: f32 = 2.4;
-                let radius = sqrt(sampleIdx + 0.5) * invSqrtSampleCount;
-                let angle = baseAngle + goldenAngle * sampleIdx;
-                return vec2<f32>(radius * cos(angle), radius * sin(angle));
-            }
-
-            fn computeVogelDiskComparisonSampleAverage(
-                shadowMapTexture: texture_depth_2d_array,
-                comparisonSampler: sampler_comparison,
-                array_index: i32,
-                //sampleCount: u32,
-                //diskRadius: f32,
-                centerTextureCoords: vec2<f32>,
-                referenceDepth: f32,
+            fn computeAmbientOcclusion(
+                depthTexture: texture_depth_2d,
+                depthSampler: sampler,
+                sampleOffsets: array<vec4<f32>, 32>,
+                sampleCount: u32,
+                position: vec3<f32>,
+                normalVector: vec3<f32>,
+                noiseFactor: f32,
             ) -> f32 {
-                let sampleCount: u32 = 16u;
-                let diskRadius: f32 = 0.01;
-
-                let invSqrtSampleCount = inverseSqrt(sampleCount);
-                var sampleAverage: f32 = 0.0;
-
-                for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-                    let sampleTextureCoords = centerTextureCoords + diskRadius * generateVogelDiskSampleCoords(invSqrtSampleCount, 0.0, sampleIdx);
-                    sampleAverage += textureSampleCompare(shadowMapTexture, comparisonSampler, sampleTextureCoords, array_index, referenceDepth);
-                }
-
-                sampleAverage /= sampleCount;
-
-                return sampleAverage;
+                return 1.0;
             }
             ",
         ) {
@@ -6729,7 +6732,13 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
             }),
             None,
             &[
@@ -6750,9 +6759,11 @@ mod test {
                 specular_reflectance_lookup_texture_and_sampler_bindings: None,
                 bump_mapping_input: None,
             })),
-            VertexAttributeSet::empty(),
+            VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -6770,7 +6781,13 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
             }),
             None,
             &[
@@ -6791,9 +6808,11 @@ mod test {
                 specular_reflectance_lookup_texture_and_sampler_bindings: None,
                 bump_mapping_input: None,
             })),
-            VertexAttributeSet::empty(),
+            VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -6842,9 +6861,13 @@ mod test {
                     },
                 )),
             })),
-            VertexAttributeSet::TEXTURE_COORDS | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
+            VertexAttributeSet::POSITION
+                | VertexAttributeSet::TEXTURE_COORDS
+                | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -6897,8 +6920,10 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -6916,7 +6941,13 @@ mod test {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
-                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
@@ -6937,9 +6968,11 @@ mod test {
                 specular_reflectance_lookup_texture_and_sampler_bindings: None,
                 bump_mapping_input: None,
             })),
-            VertexAttributeSet::empty(),
+            VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -6986,7 +7019,9 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -7033,7 +7068,9 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -7083,7 +7120,9 @@ mod test {
                 | VertexAttributeSet::NORMAL_VECTOR
                 | VertexAttributeSet::TEXTURE_COORDS,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -7106,8 +7145,8 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START),
                     None,
                     None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
-                    Some(MESH_VERTEX_BINDING_START + 3),
                 ],
             }),
             Some(&AMBIENT_LIGHT_INPUT),
@@ -7137,7 +7176,9 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::COLOR,
         )
         .unwrap()
         .0;
@@ -7160,8 +7201,8 @@ mod test {
                     Some(MESH_VERTEX_BINDING_START),
                     None,
                     None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
                     Some(MESH_VERTEX_BINDING_START + 2),
-                    Some(MESH_VERTEX_BINDING_START + 3),
                 ],
             }),
             Some(&AMBIENT_LIGHT_INPUT),
@@ -7191,8 +7232,64 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS
+                | RenderAttachmentQuantitySet::COLOR,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_ambient_occlusion_computation_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::AmbientOcclusion(
+                AmbientOcclusionShaderInput::Calculation(AmbientOcclusionCalculationShaderInput {
+                    sample_uniform_binding: 0,
+                }),
+            )),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::DEPTH
+                | RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::OCCLUSION,
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_ambient_occlusion_application_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::AmbientOcclusion(
+                AmbientOcclusionShaderInput::Application,
+            )),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::COLOR | RenderAttachmentQuantitySet::OCCLUSION,
+            RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
         .0;
