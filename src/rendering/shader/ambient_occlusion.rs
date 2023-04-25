@@ -3,9 +3,9 @@
 use super::{
     append_to_arena, append_unity_component_to_vec3, define_constant_if_missing, emit_in_func,
     include_expr_in_func, include_named_expr_in_func, insert_in_arena, new_name, u32_constant,
-    InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder, PushConstantFieldExpressions,
-    SampledTexture, SourceCode, TextureType, F32_WIDTH, U32_TYPE, U32_WIDTH, VECTOR_4_SIZE,
-    VECTOR_4_TYPE,
+    CameraProjectionVariable, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
+    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_WIDTH,
+    U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::{
     rendering::{shader::F32_TYPE, RenderAttachmentQuantity, RENDER_ATTACHMENT_BINDINGS},
@@ -39,6 +39,9 @@ pub struct AmbientOcclusionShaderGenerator<'a> {
 }
 
 impl<'a> AmbientOcclusionShaderGenerator<'a> {
+    /// The [`ShaderTricks`] employed by the material.
+    pub const TRICKS: ShaderTricks = ShaderTricks::NO_VERTEX_PROJECTION;
+
     /// Creates a new shader generator using the given input description.
     pub fn new(input: &'a AmbientOcclusionShaderInput) -> Self {
         Self { input }
@@ -63,25 +66,20 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        camera_projection: Option<&CameraProjectionVariable>,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
+        let framebuffer_position_expr =
+            fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position);
+
         let screen_space_texture_coord_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
             "convertFramebufferPositionToScreenTextureCoords",
             vec![
                 push_constant_fragment_expressions.inverse_window_dimensions,
-                fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position),
-            ],
-        );
-
-        let noise_factor_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "generateInterleavedGradientNoiseFactor",
-            vec![
-                fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position)
+                framebuffer_position_expr,
             ],
         );
 
@@ -93,8 +91,10 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
+                    push_constant_fragment_expressions,
+                    camera_projection,
+                    framebuffer_position_expr,
                     screen_space_texture_coord_expr,
-                    noise_factor_expr,
                 );
             }
             AmbientOcclusionShaderInput::Application => {
@@ -103,8 +103,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
+                    framebuffer_position_expr,
                     screen_space_texture_coord_expr,
-                    noise_factor_expr,
                 );
             }
         }
@@ -116,8 +116,10 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        camera_projection: Option<&CameraProjectionVariable>,
+        framebuffer_position_expr: Handle<Expression>,
         screen_space_texture_coord_expr: Handle<Expression>,
-        noise_factor_expr: Handle<Expression>,
     ) {
         #[allow(clippy::assertions_on_constants)]
         const _: () = assert!((MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT % 2) == 0);
@@ -252,6 +254,9 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
 
         *bind_group_idx += 1;
 
+        let (position_texture_expr, position_sampler_expr) =
+            position_texture.generate_texture_and_sampler_expressions(fragment_function, false);
+
         let position_expr = position_texture
             .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
 
@@ -281,6 +286,17 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             vec![normal_color_expr],
         );
 
+        let projection_matrix_expr = camera_projection
+            .expect("Missing camera projection matrix for computing ambient occlusion")
+            .generate_projection_matrix_expr(fragment_function);
+
+        let random_angle_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "generateRandomAngle",
+            vec![framebuffer_position_expr],
+        );
+
         let occlusion_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
@@ -291,11 +307,13 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             vec![
                 position_texture_expr,
                 position_sampler_expr,
+                push_constant_fragment_expressions.inverse_window_dimensions,
+                projection_matrix_expr,
                 sample_offset_array_expr,
                 sample_count_expr,
                 position_expr,
                 normal_vector_expr,
-                noise_factor_expr,
+                random_angle_expr,
             ],
         );
 
@@ -318,8 +336,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
+        framebuffer_position_expr: Handle<Expression>,
         screen_space_texture_coord_expr: Handle<Expression>,
-        noise_factor_expr: Handle<Expression>,
     ) {
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
@@ -360,6 +378,13 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
 
         let (occlusion_texture_expr, occlusion_sampler_expr) =
             occlusion_texture.generate_texture_and_sampler_expressions(fragment_function, false);
+
+        let noise_factor_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "generateInterleavedGradientNoiseFactor",
+            vec![framebuffer_position_expr],
+        );
 
         let occluded_ambient_color_expr = source_code_lib.generate_function_call(
             module,

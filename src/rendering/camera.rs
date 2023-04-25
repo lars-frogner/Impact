@@ -143,6 +143,9 @@ impl UniformBufferable for Projective3<fre> {
     const ID: ConstStringHash64 = ConstStringHash64::new("Camera projection");
 
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::VERTEX)
+        buffer::create_uniform_buffer_bind_group_layout_entry(
+            binding,
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+        )
     }
 }

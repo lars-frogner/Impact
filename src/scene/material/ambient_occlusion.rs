@@ -21,7 +21,7 @@ pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 64;
 
 /// Render pass hints for the ambient occlusion computation material.
 pub const AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS: RenderPassHints =
-    RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA);
+    RenderPassHints::NO_DEPTH_PREPASS;
 
 /// Render pass hints for the ambient occlusion application material.
 pub const AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS: RenderPassHints =
