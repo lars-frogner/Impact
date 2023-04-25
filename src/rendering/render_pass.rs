@@ -1076,6 +1076,10 @@ impl RenderPassSpecification {
             let material_resource_manager =
                 Self::get_material_resource_manager(render_resources, material_id)?;
 
+            if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                layouts.push(fixed_resources.bind_group_layout());
+            }
+
             input_render_attachment_quantities =
                 material_resource_manager.input_render_attachment_quantities();
 
@@ -1095,10 +1099,6 @@ impl RenderPassSpecification {
 
             vertex_attribute_requirements =
                 material_resource_manager.vertex_attribute_requirements_for_shader();
-
-            if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
-                layouts.push(fixed_resources.bind_group_layout());
-            }
         } else if let Some(model_id) = self.model_id {
             // We do not need a material if we are doing a pure depth prepass or
             // updating a shadow map
@@ -1115,6 +1115,10 @@ impl RenderPassSpecification {
                     render_resources,
                     material_handle.material_id(),
                 )?;
+
+                if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                    layouts.push(fixed_resources.bind_group_layout());
+                }
 
                 input_render_attachment_quantities =
                     material_resource_manager.input_render_attachment_quantities();
@@ -1135,10 +1139,6 @@ impl RenderPassSpecification {
 
                 vertex_attribute_requirements =
                     material_resource_manager.vertex_attribute_requirements_for_shader();
-
-                if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
-                    layouts.push(fixed_resources.bind_group_layout());
-                }
 
                 if let Some(texture_set_id) = material_handle.material_property_texture_set_id() {
                     let material_property_texture_manager =
@@ -1207,6 +1207,10 @@ impl RenderPassSpecification {
             let material_resource_manager =
                 Self::get_material_resource_manager(render_resources, material_id)?;
 
+            if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                bind_groups.push(fixed_resources.bind_group());
+            }
+
             let input_render_attachment_quantities =
                 material_resource_manager.input_render_attachment_quantities();
 
@@ -1220,10 +1224,6 @@ impl RenderPassSpecification {
                             input_render_attachment_quantities,
                         )?,
                 );
-            }
-
-            if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
-                bind_groups.push(fixed_resources.bind_group());
             }
         } else if let Some(model_id) = self.model_id {
             // We do not need a material if we are doing a pure depth prepass or
@@ -1242,6 +1242,10 @@ impl RenderPassSpecification {
                     material_handle.material_id(),
                 )?;
 
+                if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
+                    bind_groups.push(fixed_resources.bind_group());
+                }
+
                 let input_render_attachment_quantities =
                     material_resource_manager.input_render_attachment_quantities();
 
@@ -1255,10 +1259,6 @@ impl RenderPassSpecification {
                                 input_render_attachment_quantities,
                             )?,
                     );
-                }
-
-                if let Some(fixed_resources) = material_resource_manager.fixed_resources() {
-                    bind_groups.push(fixed_resources.bind_group());
                 }
 
                 if let Some(texture_set_id) = material_handle.material_property_texture_set_id() {
