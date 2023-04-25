@@ -123,3 +123,8 @@ fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4<f32>) 
     let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
     return fract(magic.z * fract(dot(magic.xy, cameraFramebufferPosition.xy)));
 }
+
+fn generateRandomAngle(cameraFramebufferPosition: vec4<f32>) -> f32 {
+    // Multiply noise factor with 2 * pi to get random angle
+    return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferPosition);
+}
