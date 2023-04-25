@@ -217,6 +217,8 @@ bitflags! {
         const FOLLOW_CAMERA = 0b00000001;
         /// Make the depth of every fragment in framebuffer space 1.0.
         const DRAW_AT_MAX_DEPTH = 0b00000010;
+        /// Do not apply the projection to the vertex position.
+        const NO_VERTEX_PROJECTION = 0b00000100;
     }
 }
 
@@ -232,15 +234,15 @@ pub struct ModelViewTransformExpressions {
 /// Handle to expressions for a projection.
 #[derive(Clone, Debug)]
 pub enum ProjectionExpressions {
-    Camera(CameraProjectionExpressions),
+    Camera(CameraProjectionVariable),
     OmnidirectionalLight(OmnidirectionalLightProjectionExpressions),
     UnidirectionalLight(UnidirectionalLightProjectionExpressions),
 }
 
-/// Handle to expression for the camera projection matrix.
+/// Handle to the global variable for the camera projection matrix.
 #[derive(Clone, Debug)]
-pub struct CameraProjectionExpressions {
-    matrix: Handle<Expression>,
+pub struct CameraProjectionVariable {
+    projection_matrix_var: Handle<GlobalVariable>,
 }
 
 /// Marker type with method for projecting points onto a face of a shadow
@@ -815,10 +817,9 @@ impl ShaderGenerator {
         let mut bind_group_idx = 0;
 
         let camera_projection = camera_shader_input.map(|camera_shader_input| {
-            Self::generate_vertex_code_for_projection_matrix(
+            Self::generate_code_for_projection_matrix(
                 camera_shader_input,
                 &mut module,
-                &mut vertex_function,
                 &mut bind_group_idx,
             )
         });
@@ -846,7 +847,7 @@ impl ShaderGenerator {
             )
         });
 
-        let projection = if let Some(camera_projection) = camera_projection {
+        let projection = if let Some(camera_projection) = camera_projection.clone() {
             Some(ProjectionExpressions::Camera(camera_projection))
         } else if let Some(light_shader_generator) = &light_shader_generator {
             light_shader_generator.get_projection_to_light_clip_space()
@@ -909,6 +910,7 @@ impl ShaderGenerator {
                 input_render_attachment_quantities,
                 output_render_attachment_quantities,
                 &push_constant_fragment_expressions,
+                camera_projection.as_ref(),
                 &fragment_input_struct,
                 &mesh_vertex_output_field_indices,
                 light_vertex_output_field_indices.as_ref(),
@@ -1163,14 +1165,13 @@ impl ShaderGenerator {
     }
 
     /// Generates the declaration of the global uniform variable for the camera
-    /// projection matrix and returns a new [`CameraProjectionMatrix`]
+    /// projection matrix and returns a new [`CameraProjectionVariable`]
     /// representing the matrix.
-    fn generate_vertex_code_for_projection_matrix(
+    fn generate_code_for_projection_matrix(
         camera_shader_input: &CameraShaderInput,
         module: &mut Module,
-        vertex_function: &mut Function,
         bind_group_idx: &mut u32,
-    ) -> CameraProjectionExpressions {
+    ) -> CameraProjectionVariable {
         let bind_group = *bind_group_idx;
         *bind_group_idx += 1;
 
@@ -1190,23 +1191,8 @@ impl ShaderGenerator {
             },
         );
 
-        let projection_matrix_ptr_expr = include_expr_in_func(
-            vertex_function,
-            Expression::GlobalVariable(projection_matrix_var),
-        );
-
-        let matrix_expr = emit_in_func(vertex_function, |function| {
-            include_named_expr_in_func(
-                function,
-                "projectionMatrix",
-                Expression::Load {
-                    pointer: projection_matrix_ptr_expr,
-                },
-            )
-        });
-
-        CameraProjectionExpressions {
-            matrix: matrix_expr,
+        CameraProjectionVariable {
+            projection_matrix_var,
         }
     }
 
@@ -1366,21 +1352,21 @@ impl ShaderGenerator {
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
-        let projected_position_expr = if let Some(projection) = projection {
-            projection.generate_projected_position_expr(
-                module,
-                source_code_lib,
-                vertex_function,
-                tricks,
-                position_expr,
-            )
-        } else {
-            append_unity_component_to_vec3(
+        let projected_position_expr = match projection {
+            Some(projection) if !tricks.contains(ShaderTricks::NO_VERTEX_PROJECTION) => projection
+                .generate_projected_position_expr(
+                    module,
+                    source_code_lib,
+                    vertex_function,
+                    tricks,
+                    position_expr,
+                ),
+            _ => append_unity_component_to_vec3(
                 &mut module.types,
                 &mut module.constants,
                 vertex_function,
                 position_expr,
-            )
+            ),
         };
 
         let framebuffer_position_field_idx = output_struct_builder.add_builtin_position_field(
@@ -2114,6 +2100,7 @@ impl<'a> MaterialShaderGenerator<'a> {
     pub fn tricks(&self) -> ShaderTricks {
         match self {
             Self::Skybox(_) => SkyboxShaderGenerator::TRICKS,
+            Self::AmbientOcclusion(_) => AmbientOcclusionShaderGenerator::TRICKS,
             _ => ShaderTricks::empty(),
         }
     }
@@ -2195,6 +2182,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        camera_projection: Option<&CameraProjectionVariable>,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
@@ -2294,6 +2282,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                     fragment_function,
                     bind_group_idx,
                     push_constant_fragment_expressions,
+                    camera_projection,
                     fragment_input_struct,
                     mesh_input_field_indices,
                 );
@@ -2338,7 +2327,28 @@ impl ProjectionExpressions {
     }
 }
 
-impl CameraProjectionExpressions {
+impl CameraProjectionVariable {
+    /// Generates the expression for the projection matrix in the given
+    /// function.
+    pub fn generate_projection_matrix_expr(&self, function: &mut Function) -> Handle<Expression> {
+        let projection_matrix_ptr_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(self.projection_matrix_var),
+        );
+
+        let matrix_expr = emit_in_func(function, |function| {
+            include_named_expr_in_func(
+                function,
+                "projectionMatrix",
+                Expression::Load {
+                    pointer: projection_matrix_ptr_expr,
+                },
+            )
+        });
+
+        matrix_expr
+    }
+
     /// Generates an expression for the given position (as a vec3) projected
     /// with the projection matrix in the vertex entry point function. The
     /// projected position will be a vec4.
@@ -2349,6 +2359,8 @@ impl CameraProjectionExpressions {
         tricks: ShaderTricks,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
+        let matrix_expr = self.generate_projection_matrix_expr(vertex_function);
+
         let homogeneous_position_expr = append_unity_component_to_vec3(
             &mut module.types,
             &mut module.constants,
@@ -2361,7 +2373,7 @@ impl CameraProjectionExpressions {
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
-                    left: self.matrix,
+                    left: matrix_expr,
                     right: homogeneous_position_expr,
                 },
             );
@@ -7240,7 +7252,7 @@ mod test {
     #[test]
     fn building_ambient_occlusion_computation_shader_works() {
         let module = ShaderGenerator::generate_shader_module(
-            None,
+            Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             None,
             &[],
