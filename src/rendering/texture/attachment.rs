@@ -290,6 +290,7 @@ impl RenderAttachmentTextureManager {
             self.quantity_texture_bind_group_layouts[idx].get_or_insert_with(|| {
                 Self::create_render_attachment_texture_bind_group_layout(
                     core_system.device(),
+                    quantity_texture.texture().format(),
                     texture_binding,
                     sampler_binding,
                     &label,
@@ -311,13 +312,17 @@ impl RenderAttachmentTextureManager {
 
     fn create_render_attachment_texture_bind_group_layout(
         device: &wgpu::Device,
+        texture_format: wgpu::TextureFormat,
         texture_binding: u32,
         sampler_binding: u32,
         label: &str,
     ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                RenderAttachmentTexture::create_texture_bind_group_layout_entry(texture_binding),
+                RenderAttachmentTexture::create_texture_bind_group_layout_entry(
+                    texture_format,
+                    texture_binding,
+                ),
                 RenderAttachmentTexture::create_sampler_bind_group_layout_entry(sampler_binding),
             ],
             label: Some(&format!("{} bind group layout", label)),
@@ -391,14 +396,19 @@ impl RenderAttachmentTexture {
 
     /// Creates the bind group layout entry for this texture type, assigned to
     /// the given binding.
-    pub const fn create_texture_bind_group_layout_entry(
+    pub fn create_texture_bind_group_layout_entry(
+        texture_format: wgpu::TextureFormat,
         binding: u32,
     ) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                sample_type: if texture_format.has_depth_aspect() {
+                    wgpu::TextureSampleType::Depth
+                } else {
+                    wgpu::TextureSampleType::Float { filterable: false }
+                },
                 view_dimension: wgpu::TextureViewDimension::D2,
                 multisampled: false,
             },
