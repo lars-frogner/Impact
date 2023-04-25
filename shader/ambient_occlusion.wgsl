@@ -5,6 +5,7 @@ fn computeAmbientOcclusionMax64Samples(
     projectionMatrix: mat4x4<f32>,
     sampleOffsets: array<vec4<f32>, 32u>,
     sampleCount: u32,
+    sampleRadius: f32,
     position: vec3<f32>,
     normalVector: vec3<f32>,
     randomAngle: f32,

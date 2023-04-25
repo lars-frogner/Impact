@@ -151,7 +151,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let sample_offset_array_size =
             u32::try_from(HALF_MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT).unwrap() * VECTOR_4_SIZE;
 
-        let sample_struct_size = sample_offset_array_size + U32_WIDTH + 3 * F32_WIDTH;
+        let sample_struct_size = sample_offset_array_size + U32_WIDTH + F32_WIDTH + 2 * F32_WIDTH;
 
         let sample_struct_type = insert_in_arena(
             &mut module.types,
@@ -170,6 +170,12 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                             ty: u32_type,
                             binding: None,
                             offset: sample_offset_array_size,
+                        },
+                        StructMember {
+                            name: new_name("sampleRadius"),
+                            ty: f32_type,
+                            binding: None,
+                            offset: sample_offset_array_size + U32_WIDTH,
                         },
                         // <-- The rest of the struct is for padding an not
                         // needed in the shader
@@ -200,7 +206,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             Expression::GlobalVariable(sample_struct_var),
         );
 
-        let (sample_offset_array_expr, sample_count_expr) =
+        let (sample_offset_array_expr, sample_count_expr, sample_radius_expr) =
             emit_in_func(fragment_function, |function| {
                 let sample_offset_array_ptr_expr = include_expr_in_func(
                     function,
@@ -218,9 +224,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     },
                 );
 
-                let sample_count_ptr_expr = include_named_expr_in_func(
+                let sample_count_ptr_expr = include_expr_in_func(
                     function,
-                    "sampleCount",
                     Expression::AccessIndex {
                         base: sample_struct_ptr_expr,
                         index: 1,
@@ -235,7 +240,27 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     },
                 );
 
-                (sample_offset_array_expr, sample_count_expr)
+                let sample_radius_ptr_expr = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: sample_struct_ptr_expr,
+                        index: 2,
+                    },
+                );
+
+                let sample_radius_expr = include_named_expr_in_func(
+                    function,
+                    "sampleRadius",
+                    Expression::Load {
+                        pointer: sample_radius_ptr_expr,
+                    },
+                );
+
+                (
+                    sample_offset_array_expr,
+                    sample_count_expr,
+                    sample_radius_expr,
+                )
             });
 
         let (position_texture_binding, position_sampler_binding) =
@@ -311,6 +336,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 projection_matrix_expr,
                 sample_offset_array_expr,
                 sample_count_expr,
+                sample_radius_expr,
                 position_expr,
                 normal_vector_expr,
                 random_angle_expr,

@@ -46,7 +46,8 @@ lazy_static! {
 struct AmbientOcclusionSamples {
     sample_offsets: [Vector2<fre>; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
     sample_count: u32,
-    _padding: [fre; 3],
+    sample_radius: f32,
+    _padding: [fre; 2],
 }
 
 /// Adds the material specifications for ambient occlusion materials with the
@@ -100,7 +101,8 @@ impl AmbientOcclusionSamples {
         Self {
             sample_offsets: [Vector2::zeroed(); MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
             sample_count,
-            _padding: [0.0; 3],
+            sample_radius,
+            _padding: [0.0; 2],
         }
     }
 }
