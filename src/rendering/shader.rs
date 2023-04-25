@@ -1388,9 +1388,7 @@ impl ShaderGenerator {
             tangent_space_quaternion: None,
         };
 
-        if vertex_attribute_requirements.contains(VertexAttributeSet::POSITION)
-            && !input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION)
-        {
+        if vertex_attribute_requirements.contains(VertexAttributeSet::POSITION) {
             output_field_indices.position = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
                     "position",

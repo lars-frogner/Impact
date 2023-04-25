@@ -619,10 +619,6 @@ fn execute_material_setup(
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TANGENT_SPACE_QUATERNION;
     }
 
-    if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
-        vertex_attribute_requirements_for_shader -= VertexAttributeSet::POSITION;
-    }
-
     if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::NORMAL_VECTOR) {
         vertex_attribute_requirements_for_shader -= VertexAttributeSet::NORMAL_VECTOR;
     }
