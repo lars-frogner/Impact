@@ -1,7 +1,6 @@
 fn computeAmbientOcclusionMax64Samples(
     positionTexture: texture_2d<f32>,
     positionSampler: sampler,
-    inverseWindowDimensions: vec2<f32>,
     projectionMatrix: mat4x4<f32>,
     sampleOffsets: array<vec4<f32>, 32u>,
     sampleCount: u32,

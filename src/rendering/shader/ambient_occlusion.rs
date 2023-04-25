@@ -91,7 +91,6 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
-                    push_constant_fragment_expressions,
                     camera_projection,
                     framebuffer_position_expr,
                     screen_space_texture_coord_expr,
@@ -116,7 +115,6 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         camera_projection: Option<&CameraProjectionVariable>,
         framebuffer_position_expr: Handle<Expression>,
         screen_space_texture_coord_expr: Handle<Expression>,
@@ -332,7 +330,6 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             vec![
                 position_texture_expr,
                 position_sampler_expr,
-                push_constant_fragment_expressions.inverse_window_dimensions,
                 projection_matrix_expr,
                 sample_offset_array_expr,
                 sample_count_expr,
