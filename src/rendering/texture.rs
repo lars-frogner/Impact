@@ -1075,7 +1075,13 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
     }
 
     fn gamma_corrected(linear_value: f32) -> f32 {
-        f32::powf(linear_value, 2.2)
+        f32::powf(linear_value, 0.4545) // ^(1 / 2.2)
+    }
+
+    fn gamma_corrected_depth(linear_value: f32) -> f32 {
+        // To make small depths darker, we invert before gamma correcting, then
+        // invert back
+        1.0 - gamma_corrected(1.0 - linear_value)
     }
 
     fn gamma_corrected_byte(linear_value: u8) -> u8 {
@@ -1146,11 +1152,11 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 texture_array_idx,
             );
 
-            for value in &mut data {
-                *value = gamma_corrected(*value);
-            }
-
             if matches!(format, wgpu::TextureFormat::Depth32Float) {
+                for value in &mut data {
+                    *value = gamma_corrected_depth(*value);
+                }
+
                 let image_buffer: ImageBuffer<Luma<f32>, _> =
                     ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
 
@@ -1158,6 +1164,10 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
 
                 image_buffer.save(output_path)?;
             } else {
+                for value in &mut data {
+                    *value = gamma_corrected(*value);
+                }
+
                 let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
                     ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
 
