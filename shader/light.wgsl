@@ -276,7 +276,7 @@ fn computePCSSLightAccessFactorOmniLight(
     lightSpaceFragmentDisplacement: vec3<f32>,
     referenceDepth: f32,
 ) -> f32 {
-    let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraFramebufferPosition);
+    let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferPosition);
 
     let displacementNormalDirection = normalize(findPerpendicularVector(lightSpaceFragmentDisplacement));
     let displacementBinormalDirection = normalize(cross(lightSpaceFragmentDisplacement, displacementNormalDirection));
@@ -553,7 +553,7 @@ fn computePCSSLightAccessFactorUniLight(
     centerTextureCoords: vec2<f32>,
     referenceDepth: f32,
 ) -> f32 {
-    let vogelDiskBaseAngle = computeVogelDiskBaseAngle(cameraFramebufferPosition);
+    let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferPosition);
 
     let shadowPenumbraExtent = computeShadowPenumbraExtentUniLight(
         shadowMapTexture,
@@ -650,9 +650,3 @@ fn generateVogelDiskSampleCoords(baseAngle: f32, inverseSqrtSampleCount: f32, sa
     let angle = baseAngle + goldenAngle * f32(sampleIdx);
     return vec2<f32>(radius * cos(angle), radius * sin(angle));
 }
-
-fn computeVogelDiskBaseAngle(cameraFramebufferPosition: vec4<f32>) -> f32 {
-    // Multiply with 2 * pi to get random angle
-    return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferPosition);
-}
-
