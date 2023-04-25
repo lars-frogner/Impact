@@ -237,10 +237,12 @@ impl<'a> PrepassShaderGenerator<'a> {
     /// Generates the fragment shader code specific to this material by adding
     /// code representation to the given [`naga`] objects.
     ///
-    /// The global ambient color is declared as a global uniform variable, and
-    /// is returned from the function in an output struct. If the prepass
-    /// involves normal or parallax mapping, the code for this is generated and
-    /// the resulting quantities are included in the output struct.
+    /// The ambient color is computed based on the diffuse and specular color
+    /// and the ambient radiance, and is returned from the function in an output
+    /// struct. If the prepass involves normal or parallax mapping, the code for
+    /// this is generated and the resulting quantities are included in the
+    /// output struct. If there is an emissive color, this is also returned
+    /// directly in the output struct.
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
@@ -488,39 +490,26 @@ impl<'a> PrepassShaderGenerator<'a> {
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
-        let output_color_expr =
-            material_input_field_indices
-                .emissive_color
-                .map_or(ambient_color_expr, |idx| {
-                    let emissive_color = fragment_input_struct.get_field_expr(idx);
+        // Write emissive color to the surface color attachment.
+        if let Some(emissive_color_idx) = material_input_field_indices.emissive_color {
+            let emissive_color_expr = fragment_input_struct.get_field_expr(emissive_color_idx);
 
-                    emit_in_func(fragment_function, |function| {
-                        include_expr_in_func(
-                            function,
-                            Expression::Binary {
-                                op: BinaryOperator::Add,
-                                left: ambient_color_expr,
-                                right: emissive_color,
-                            },
-                        )
-                    })
-                });
+            let emissive_rgba_color_expr = append_unity_component_to_vec3(
+                &mut module.types,
+                &mut module.constants,
+                fragment_function,
+                emissive_color_expr,
+            );
 
-        let output_rgba_color_expr = append_unity_component_to_vec3(
-            &mut module.types,
-            &mut module.constants,
-            fragment_function,
-            output_color_expr,
-        );
-
-        output_struct_builder.add_field(
-            "color",
-            vec4_type,
-            None,
-            None,
-            VECTOR_4_SIZE,
-            output_rgba_color_expr,
-        );
+            output_struct_builder.add_field(
+                "emissiveColor",
+                vec4_type,
+                None,
+                None,
+                VECTOR_4_SIZE,
+                emissive_rgba_color_expr,
+            );
+        }
 
         if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
             let position_expr = fragment_input_struct.get_field_expr(
@@ -587,6 +576,26 @@ impl<'a> PrepassShaderGenerator<'a> {
                 None,
                 VECTOR_2_SIZE,
                 texture_coord_expr,
+            );
+        }
+
+        // Write ambient color to the color render attachment (will be used when
+        // applying ambient occlusion).
+        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::COLOR) {
+            let ambient_rgba_color_expr = append_unity_component_to_vec3(
+                &mut module.types,
+                &mut module.constants,
+                fragment_function,
+                ambient_color_expr,
+            );
+
+            output_struct_builder.add_field(
+                "ambientColor",
+                vec4_type,
+                None,
+                None,
+                VECTOR_4_SIZE,
+                ambient_rgba_color_expr,
             );
         }
 

@@ -34,22 +34,25 @@ pub use light::{
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
-    add_skybox_material_component_for_entity, DiffuseColorComp, DiffuseTextureComp,
-    EmissiveColorComp, EmissiveTextureComp, FixedColorComp, FixedColorMaterial,
-    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle,
-    MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
-    NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
-    SpecularColorComp, SpecularTextureComp, TexturedColorEmissiveMaterialFeature,
-    TexturedColorParallaxMappingEmissiveMaterialFeature, UniformDiffuseEmissiveMaterialFeature,
-    UniformDiffuseParallaxMappingEmissiveMaterialFeature,
+    add_skybox_material_component_for_entity, register_ambient_occlusion_materials,
+    DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,
+    FixedColorMaterial, FixedMaterialResources, FixedTextureComp, FixedTextureMaterial,
+    MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+    MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
+    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
+    RoughnessTextureComp, SkyboxComp, SpecularColorComp, SpecularTextureComp,
+    TexturedColorEmissiveMaterialFeature, TexturedColorParallaxMappingEmissiveMaterialFeature,
+    UniformDiffuseEmissiveMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
     UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
-    VertexColorComp, VertexColorMaterial,
+    VertexColorComp, VertexColorMaterial, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
+    AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
+    AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use mesh::{
     BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
+    SCREEN_FILLING_QUAD_MESH_ID,
 };
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
@@ -190,6 +193,8 @@ impl Scene {
         VertexColorMaterial::register(&mut material_library);
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);
+
+        register_ambient_occlusion_materials(&mut material_library, 0, 1.0);
     }
 }
 

@@ -117,3 +117,9 @@ fn convertNormalColorToNormalizedNormalVector(color: vec3<f32>) -> vec3<f32> {
 fn convertNormalVectorToNormalColor(normalVector: vec3<f32>) -> vec3<f32> {
     return 0.5 * (normalVector + 1.0);
 }
+
+// Returns a random number between 0 and 1 based on the pixel coordinates
+fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4<f32>) -> f32 {
+    let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(magic.xy, cameraFramebufferPosition.xy)));
+}
