@@ -293,7 +293,14 @@ impl RenderPassManager {
                 match self.light_shaded_model_index_mapper.try_push_key(model_id) {
                     // The model has no existing shading passes
                     Ok(_) => {
-                        if model_id.prepass_material_handle().is_some() {
+                        if let Some(prepass_material_handle) = model_id.prepass_material_handle() {
+                            let prepass_hints = render_resources
+                                .get_material_resource_manager(
+                                    prepass_material_handle.material_id(),
+                                )
+                                .expect("Missing resource manager for prepass material")
+                                .render_pass_hints();
+
                             if ambient_light_ids.is_empty() {
                                 self.light_shaded_model_shading_prepasses.push(
                                     RenderPassRecorder::new(
@@ -303,7 +310,9 @@ impl RenderPassManager {
                                         render_attachment_texture_manager,
                                         shader_manager,
                                         RenderPassSpecification::shading_prepass(
-                                            None, model_id, hints,
+                                            None,
+                                            model_id,
+                                            prepass_hints,
                                         ),
                                         no_visible_instances,
                                     )?,
@@ -338,7 +347,7 @@ impl RenderPassManager {
                                             RenderPassSpecification::shading_prepass(
                                                 Some(light),
                                                 model_id,
-                                                hints,
+                                                prepass_hints,
                                             ),
                                             no_visible_instances,
                                         )?,
