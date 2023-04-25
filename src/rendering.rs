@@ -49,7 +49,7 @@ use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::Contr
 use anyhow::{Error, Result};
 use chrono::Utc;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU8, Ordering},
     RwLock,
 };
 
@@ -70,7 +70,6 @@ pub struct RenderingSystem {
     render_resource_manager: RwLock<RenderResourceManager>,
     render_pass_manager: RwLock<RenderPassManager>,
     render_attachment_texture_manager: RenderAttachmentTextureManager,
-    screenshotter: Screenshotter,
 }
 
 /// Global rendering configuration options.
@@ -88,10 +87,13 @@ pub struct RenderingConfig {
     pub unidirectional_light_shadow_map_resolution: u32,
 }
 
+/// Helper for capturing screenshots and related textures.
 #[derive(Debug)]
-struct Screenshotter {
+pub struct ScreenCapturer {
+    screenshot_width: u32,
     screenshot_save_requested: AtomicBool,
-    depth_map_save_requested: AtomicBool,
+    render_attachment_save_requested: AtomicBool,
+    render_attachment_quantity: AtomicU8,
     omnidirectional_light_shadow_map_save_requested: AtomicBool,
     unidirectional_light_shadow_map_save_requested: AtomicBool,
 }
@@ -105,8 +107,11 @@ impl RenderingSystem {
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &core_system,
             RenderAttachmentQuantitySet::DEPTH
+                | RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS
+                | RenderAttachmentQuantitySet::COLOR
+                | RenderAttachmentQuantitySet::OCCLUSION,
         );
 
         assets.load_default_lookup_table_textures(&core_system)?;
@@ -118,7 +123,6 @@ impl RenderingSystem {
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
             render_attachment_texture_manager,
-            screenshotter: Screenshotter::new(),
         })
     }
 
@@ -154,6 +158,12 @@ impl RenderingSystem {
         &self.render_attachment_texture_manager
     }
 
+    /// Returns the width and height of the rendering surface in pixels.
+    pub fn surface_dimensions(&self) -> (u32, u32) {
+        let surface_config = self.core_system.surface_config();
+        (surface_config.width, surface_config.height)
+    }
+
     /// Creates and presents a rendering using the current synchronized render
     /// resources.
     ///
@@ -162,50 +172,8 @@ impl RenderingSystem {
     /// - The surface texture to render to can not be obtained.
     /// - Recording a render pass fails.
     pub fn render(&self) -> Result<()> {
-        let surface_texture = self.core_system.surface().get_current_texture()?;
-
-        let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
-
-        {
-            let render_resources_guard = self.render_resource_manager.read().unwrap();
-            for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
-                render_pass_recorder.record_render_pass(
-                    &self.core_system,
-                    render_resources_guard.synchronized(),
-                    &surface_texture,
-                    &self.render_attachment_texture_manager,
-                    &mut command_encoder,
-                )?;
-            }
-        } // <- Lock on `self.render_resource_manager` is released here
-
-        self.core_system
-            .queue()
-            .submit(std::iter::once(command_encoder.finish()));
-
-        // Screenshots must be saved before the surface is presented
-        self.screenshotter
-            .save_screenshot_if_requested(&self.core_system, &surface_texture)?;
-
-        self.screenshotter.save_depth_map_if_requested(
-            &self.core_system,
-            &self.render_attachment_texture_manager,
-        )?;
-
-        self.screenshotter
-            .save_omnidirectional_light_shadow_map_if_requested(
-                &self.core_system,
-                &self.render_resource_manager,
-            )?;
-
-        self.screenshotter
-            .save_unidirectional_light_shadow_map_if_requested(
-                &self.core_system,
-                &self.render_resource_manager,
-            )?;
-
+        let surface_texture = self.render_surface()?;
         surface_texture.present();
-
         Ok(())
     }
 
@@ -247,24 +215,6 @@ impl RenderingSystem {
             .clear_model_render_pass_recorders();
     }
 
-    pub fn request_screenshot_save(&self) {
-        self.screenshotter.request_screenshot_save();
-    }
-
-    pub fn request_depth_map_save(&self) {
-        self.screenshotter.request_depth_map_save();
-    }
-
-    pub fn request_omnidirectional_light_shadow_map_save(&self) {
-        self.screenshotter
-            .request_omnidirectional_light_shadow_map_save();
-    }
-
-    pub fn request_unidirectional_light_shadow_map_save(&self) {
-        self.screenshotter
-            .request_unidirectional_light_shadow_map_save();
-    }
-
     /// Marks the render resources as being out of sync with the source data.
     pub fn declare_render_resources_desynchronized(&self) {
         self.render_resource_manager
@@ -277,6 +227,31 @@ impl RenderingSystem {
     /// current surface configuration.
     fn initialize_surface(&self) {
         self.core_system.initialize_surface();
+    }
+
+    fn render_surface(&self) -> Result<wgpu::SurfaceTexture> {
+        let surface_texture = self.core_system.surface().get_current_texture()?;
+
+        let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
+
+        {
+            let render_resources_guard = self.render_resource_manager.read().unwrap();
+            for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
+                render_pass_recorder.record_render_pass(
+                    &self.core_system,
+                    render_resources_guard.synchronized(),
+                    &surface_texture,
+                    &self.render_attachment_texture_manager,
+                    &mut command_encoder,
+                )?;
+            }
+        } // <- Lock on `self.render_resource_manager` is released here
+
+        self.core_system
+            .queue()
+            .submit(std::iter::once(command_encoder.finish()));
+
+        Ok(surface_texture)
     }
 
     fn handle_render_error(&self, error: Error, _control_flow: &mut ControlFlow<'_>) {
@@ -304,83 +279,147 @@ impl Default for RenderingConfig {
     }
 }
 
-impl Screenshotter {
-    fn new() -> Self {
+impl ScreenCapturer {
+    /// Creates a new screen capturer that will use the given width when saving
+    /// screenshots. The height will be determined automatically to match the
+    /// aspect ratio of the rendering surface.
+    ///
+    /// # Panics
+    /// When a screenshot is captured, a panic will occur if the width times the
+    /// number of bytes per pixel is not a multiple of 256.
+    pub fn new(screenshot_width: u32) -> Self {
         Self {
+            screenshot_width,
             screenshot_save_requested: AtomicBool::new(false),
-            depth_map_save_requested: AtomicBool::new(false),
+            render_attachment_save_requested: AtomicBool::new(false),
+            render_attachment_quantity: AtomicU8::new(0),
             omnidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
             unidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
         }
     }
 
-    fn request_screenshot_save(&self) {
+    /// Schedule a screenshot capture for the next
+    /// [`save_screenshot_if_requested`] call.
+    pub fn request_screenshot_save(&self) {
         self.screenshot_save_requested
             .store(true, Ordering::Release);
     }
 
-    fn request_depth_map_save(&self) {
-        self.depth_map_save_requested.store(true, Ordering::Release);
+    /// Schedule a capture of the render attachment texture for the given
+    /// quantity for the next [`save_render_attachment_quantity_if_requested`]
+    /// call.
+    pub fn request_render_attachment_quantity_save(&self, quantity: RenderAttachmentQuantity) {
+        self.render_attachment_save_requested
+            .store(true, Ordering::Release);
+        self.render_attachment_quantity
+            .store(quantity as u8, Ordering::Release);
     }
 
-    fn request_omnidirectional_light_shadow_map_save(&self) {
+    /// Schedule a capture of the omnidirectional light shadow map texture for
+    /// the next [`save_omnidirectional_light_shadow_map_if_requested`] call.
+    pub fn request_omnidirectional_light_shadow_map_save(&self) {
         self.omnidirectional_light_shadow_map_save_requested
             .store(true, Ordering::Release);
     }
 
-    fn request_unidirectional_light_shadow_map_save(&self) {
+    /// Schedule a capture of the unidirectional light shadow map texture for
+    /// the next [`save_unidirectional_light_shadow_map_if_requested`] call.
+    pub fn request_unidirectional_light_shadow_map_save(&self) {
         self.unidirectional_light_shadow_map_save_requested
             .store(true, Ordering::Release);
     }
 
-    fn save_screenshot_if_requested(
-        &self,
-        core_system: &CoreRenderingSystem,
-        surface_texture: &wgpu::SurfaceTexture,
-    ) -> Result<()> {
+    /// Checks if a screenshot capture was scheduled with
+    /// [`request_screenshot_save`], and if so, captures a screenshot and saves
+    /// it as a timestamped PNG file in the current directory.
+    pub fn save_screenshot_if_requested(&self, renderer: &RwLock<RenderingSystem>) -> Result<()> {
         if self
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
+            let mut renderer = renderer.write().unwrap();
+
+            let original_dimensions = renderer.surface_dimensions();
+
+            renderer.resize_surface((
+                self.screenshot_width,
+                self.determine_screenshot_height(original_dimensions),
+            ));
+            {
+                // Re-render the surface at the screenshot resolution.
+                let surface_texture = renderer.render_surface()?;
+
             texture::save_texture_as_image_file(
-                core_system,
+                    renderer.core_system(),
                 &surface_texture.texture,
                 0,
                 format!("screenshot_{}.png", Utc::now().to_rfc3339()),
-            )
-        } else {
-            Ok(())
+                )?;
+            }
+            renderer.resize_surface(original_dimensions);
         }
+            Ok(())
     }
 
-    fn save_depth_map_if_requested(
+    /// Checks if a render attachment capture was scheduled with
+    /// [`request_render_attachment_quantity_save`], and if so, captures the
+    /// requested render attachment texture and saves it as a timestamped PNG
+    /// file in the current directory.
+    pub fn save_render_attachment_quantity_if_requested(
         &self,
-        core_system: &CoreRenderingSystem,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        renderer: &RwLock<RenderingSystem>,
     ) -> Result<()> {
-        if self.depth_map_save_requested.swap(false, Ordering::Acquire) {
-            render_attachment_texture_manager.save_render_attachment_texture_as_image_file(
-                core_system,
-                RenderAttachmentQuantity::Depth,
-                format!("depth_map_{}.png", Utc::now().to_rfc3339()),
+        if self
+            .render_attachment_save_requested
+            .swap(false, Ordering::Acquire)
+        {
+            let quantity = RenderAttachmentQuantity::from_u8(
+                self.render_attachment_quantity.load(Ordering::Acquire),
             )
-        } else {
-            Ok(())
+            .unwrap();
+
+            let mut renderer = renderer.write().unwrap();
+
+            let original_dimensions = renderer.surface_dimensions();
+
+            renderer.resize_surface((
+                self.screenshot_width,
+                self.determine_screenshot_height(original_dimensions),
+            ));
+            {
+                // Re-render the surface at the screenshot resolution.
+                renderer.render_surface()?;
+
+                renderer
+                    .render_attachment_texture_manager()
+                    .save_render_attachment_texture_as_image_file(
+                        renderer.core_system(),
+                        quantity,
+                        format!("{}_{}.png", quantity, Utc::now().to_rfc3339()),
+                    )?;
+            }
+            renderer.resize_surface(original_dimensions);
         }
+            Ok(())
     }
 
-    fn save_omnidirectional_light_shadow_map_if_requested(
+    /// Checks if a omnidirectional light shadow map capture was scheduled with
+    /// [`request_omnidirectional_light_shadow_map_save`], and if so, captures
+    /// the texture and saves it as a timestamped PNG file in the current
+    /// directory.
+    pub fn save_omnidirectional_light_shadow_map_if_requested(
         &self,
-        core_system: &CoreRenderingSystem,
-        render_resource_manager: &RwLock<RenderResourceManager>,
+        renderer: &RwLock<RenderingSystem>,
     ) -> Result<()> {
         if self
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
+            let renderer = renderer.read().unwrap();
+
+            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+
             if let Some(light_buffer_manager) = render_resource_manager
-                .read()
-                .unwrap()
                 .synchronized()
                 .get_light_buffer_manager()
             {
@@ -388,7 +427,7 @@ impl Screenshotter {
                     light_buffer_manager
                         .omnidirectional_light_shadow_map_texture()
                         .save_face_as_image_file(
-                            core_system,
+                            renderer.core_system(),
                             face,
                             format!(
                                 "omnidirectional_light_shadow_map_{}_{:?}.png",
@@ -406,18 +445,23 @@ impl Screenshotter {
         }
     }
 
-    fn save_unidirectional_light_shadow_map_if_requested(
+    /// Checks if a unidirectional light shadow map capture was scheduled with
+    /// [`request_unidirectional_light_shadow_map_save`], and if so, captures
+    /// the texture and saves it as a timestamped PNG file in the current
+    /// directory.
+    pub fn save_unidirectional_light_shadow_map_if_requested(
         &self,
-        core_system: &CoreRenderingSystem,
-        render_resource_manager: &RwLock<RenderResourceManager>,
+        renderer: &RwLock<RenderingSystem>,
     ) -> Result<()> {
         if self
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
+            let renderer = renderer.read().unwrap();
+
+            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+
             if let Some(light_buffer_manager) = render_resource_manager
-                .read()
-                .unwrap()
                 .synchronized()
                 .get_light_buffer_manager()
             {
@@ -425,7 +469,7 @@ impl Screenshotter {
                     light_buffer_manager
                         .unidirectional_light_shadow_map_texture()
                         .save_cascade_as_image_file(
-                            core_system,
+                            renderer.core_system(),
                             cascade_idx,
                             format!(
                                 "unidirectional_light_shadow_map_{}_{}.png",
@@ -441,5 +485,10 @@ impl Screenshotter {
         } else {
             Ok(())
         }
+    }
+
+    fn determine_screenshot_height(&self, surface_dimensions: (u32, u32)) -> u32 {
+        let aspect_ratio = (surface_dimensions.1 as f32) / (surface_dimensions.0 as f32);
+        f32::round((self.screenshot_width as f32) * aspect_ratio) as u32
     }
 }

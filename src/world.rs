@@ -4,7 +4,7 @@ use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
     physics::PhysicsSimulator,
-    rendering::{fre, RenderingSystem},
+    rendering::{fre, RenderingSystem, ScreenCapturer},
     scene::{io, MeshComp, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
@@ -36,6 +36,7 @@ pub struct World {
     simulator: RwLock<PhysicsSimulator>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
+    screen_capturer: ScreenCapturer,
 }
 
 pub type WorldTaskScheduler = TaskScheduler<World>;
@@ -59,6 +60,7 @@ impl World {
             simulator: RwLock::new(simulator),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
+            screen_capturer: ScreenCapturer::new(2048),
         }
     }
 
@@ -95,6 +97,27 @@ impl World {
     /// by a [`RwLock`].
     pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
+    }
+
+    /// Returns a reference to the [`ScreenCapturer`].
+    pub fn screen_capturer(&self) -> &ScreenCapturer {
+        &self.screen_capturer
+    }
+
+    /// Captures any screenshots or related textures requested through the
+    /// [`ScreenCapturer`].
+    pub fn capture_screenshots(&self) -> Result<()> {
+        self.screen_capturer
+            .save_screenshot_if_requested(self.renderer())?;
+
+        self.screen_capturer
+            .save_render_attachment_quantity_if_requested(self.renderer())?;
+
+        self.screen_capturer
+            .save_omnidirectional_light_shadow_map_if_requested(self.renderer())?;
+
+        self.screen_capturer
+            .save_unidirectional_light_shadow_map_if_requested(self.renderer())
     }
 
     /// Reads the Wavefront OBJ file at the given path and any associated MTL

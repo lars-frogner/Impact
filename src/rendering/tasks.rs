@@ -24,7 +24,10 @@ define_task!(
     depends_on = [SyncRenderPasses],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Rendering"; world.renderer().read().unwrap().render())
+        with_debug_logging!("Rendering"; {
+            world.capture_screenshots()?;
+            world.renderer().read().unwrap().render()
+        })
     }
 );
 
