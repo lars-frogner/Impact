@@ -1542,7 +1542,10 @@ impl RenderPassRecorder {
         specification: RenderPassSpecification,
         disabled: bool,
     ) -> Result<Self> {
-        let (pipeline, vertex_attribute_requirements) = if specification.model_id.is_some() {
+        let (pipeline, vertex_attribute_requirements) = if specification.model_id.is_some()
+            || specification.explicit_mesh_id.is_some()
+            || specification.explicit_material_id.is_some()
+        {
             let (
                 bind_group_layouts,
                 bind_group_shader_input,
@@ -1653,23 +1656,32 @@ impl RenderPassRecorder {
                 render_attachment_texture_manager,
             )?;
 
-        let (mesh_buffer_manager, feature_buffer_managers) = match self.specification.model_id {
-            Some(model_id) => (
-                Some(RenderPassSpecification::get_mesh_buffer_manager(
+        let mesh_buffer_manager = if let Some(mesh_id) =
+            self.specification.explicit_mesh_id.or_else(|| {
+                self.specification
+                    .model_id
+                    .map(|model_id| model_id.mesh_id())
+            }) {
+            Some(RenderPassSpecification::get_mesh_buffer_manager(
+                render_resources,
+                mesh_id,
+            )?)
+        } else {
+            None
+        };
+
+        let feature_buffer_managers = if let Some(model_id) = self.specification.model_id {
+            Some(
+                RenderPassSpecification::get_instance_feature_buffer_managers(
                     render_resources,
-                    model_id.mesh_id(),
-                )?),
-                Some(
-                    RenderPassSpecification::get_instance_feature_buffer_managers(
-                        render_resources,
-                        model_id,
-                        self.specification.use_prepass_material,
-                        self.specification.depth_map_usage,
-                        self.specification.shadow_map_usage,
-                    )?,
-                ),
-            ),
-            _ => (None, None),
+                    model_id,
+                    self.specification.use_prepass_material,
+                    self.specification.depth_map_usage,
+                    self.specification.shadow_map_usage,
+                )?,
+            )
+        } else {
+            None
         };
 
         let surface_texture_view =
