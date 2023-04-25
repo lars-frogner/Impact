@@ -60,8 +60,8 @@ pub const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACH
 pub const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "depth",
     "position",
-    "normal vector",
-    "texture coords",
+    "normal_vector",
+    "texture_coords",
 ];
 
 /// The texture format used for each render attachment quantity.
@@ -483,3 +483,24 @@ impl RenderAttachmentTexture {
     }
 }
 
+impl RenderAttachmentQuantity {
+    /// Returns the enum variant corresponding to the given integer, or [`None`]
+    /// if the integer has no corresponding enum variant.
+    pub fn from_u8(number: u8) -> Option<Self> {
+        match number {
+            0 => Some(Self::Depth),
+            1 => Some(Self::Position),
+            2 => Some(Self::NormalVector),
+            3 => Some(Self::TextureCoords),
+            4 => Some(Self::Color),
+            5 => Some(Self::Occlusion),
+            _ => None,
+        }
+    }
+}
+
+impl Display for RenderAttachmentQuantity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", RENDER_ATTACHMENT_NAMES[*self as usize])
+    }
+}

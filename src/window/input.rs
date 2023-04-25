@@ -2,6 +2,7 @@
 
 use crate::{
     control::{MotionDirection, MotionState},
+    rendering::RenderAttachmentQuantity,
     window::ControlFlow,
     world::World,
 };
@@ -163,22 +164,24 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
-                            world.renderer().read().unwrap().request_screenshot_save();
+                            world.screen_capturer().request_screenshot_save();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::SaveDepthMap => {
                         if state == &ElementState::Released {
-                            world.renderer().read().unwrap().request_depth_map_save();
+                            world
+                                .screen_capturer()
+                                .request_render_attachment_quantity_save(
+                                    RenderAttachmentQuantity::Depth,
+                                );
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::SaveOmnidirectionalLightShadowMap => {
                         if state == &ElementState::Released {
                             world
-                                .renderer()
-                                .read()
-                                .unwrap()
+                                .screen_capturer()
                                 .request_omnidirectional_light_shadow_map_save();
                         }
                         Ok(HandlingResult::Handled)
@@ -186,9 +189,7 @@ impl KeyInputHandler {
                     KeyboardInputAction::SaveUnidirectionalLightShadowMap => {
                         if state == &ElementState::Released {
                             world
-                                .renderer()
-                                .read()
-                                .unwrap()
+                                .screen_capturer()
                                 .request_unidirectional_light_shadow_map_save();
                         }
                         Ok(HandlingResult::Handled)
