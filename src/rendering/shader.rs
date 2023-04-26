@@ -437,6 +437,18 @@ pub struct StructBuilder {
     offset: u32,
 }
 
+/// Helper for generating code for a for-loop.
+pub struct ForLoop {
+    /// Expression for the index in the for-loop body.
+    pub idx_expr: Handle<Expression>,
+    /// Set of statements making up the for-loop body.
+    pub body: Block,
+    continuing: Block,
+    break_if: Option<Handle<Expression>>,
+    n_iterations_expr: Handle<Expression>,
+    zero_constant: Handle<Constant>,
+}
+
 /// Helper for declaring global variables for a texture
 /// with an associated sampler and generating a sampling
 /// expression.
@@ -3845,6 +3857,146 @@ impl StructBuilder {
     }
 }
 
+impl ForLoop {
+    /// Generates code for a new for-loop with the number of iterations given by
+    /// `n_iterations_expr` and returns a new [`ForLoop`]. The loop index starts
+    /// at zero, and is available as the `idx_expr` field of the returned
+    /// `ForLoop` struct. The main body of the loop is empty, and statements can
+    /// be added to it by pushing to the `body` field of the returned `ForLoop`.
+    pub fn new(
+        types: &mut UniqueArena<Type>,
+        constants: &mut Arena<Constant>,
+        function: &mut Function,
+        name: &str,
+        n_iterations_expr: Handle<Expression>,
+    ) -> Self {
+        let u32_type = insert_in_arena(types, U32_TYPE);
+
+        let zero_constant = define_constant_if_missing(constants, u32_constant(0));
+
+        let idx_ptr_expr = append_to_arena(
+            &mut function.expressions,
+            Expression::LocalVariable(append_to_arena(
+                &mut function.local_variables,
+                LocalVariable {
+                    name: Some(format!("{}Idx", name)),
+                    ty: u32_type,
+                    init: Some(zero_constant),
+                },
+            )),
+        );
+
+        let mut body_block = Block::new();
+
+        let idx_expr = emit(&mut body_block, &mut function.expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::Load {
+                    pointer: idx_ptr_expr,
+                },
+            )
+        });
+
+        let mut continuing_block = Block::new();
+
+        let unity_constant_expr = append_to_arena(
+            &mut function.expressions,
+            Expression::Constant(define_constant_if_missing(constants, u32_constant(1))),
+        );
+
+        let incremented_idx_expr = emit(
+            &mut continuing_block,
+            &mut function.expressions,
+            |expressions| {
+                append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: idx_expr,
+                        right: unity_constant_expr,
+                    },
+                )
+            },
+        );
+
+        push_to_block(
+            &mut continuing_block,
+            Statement::Store {
+                pointer: idx_ptr_expr,
+                value: incremented_idx_expr,
+            },
+        );
+
+        let break_if_expr = emit(
+            &mut continuing_block,
+            &mut function.expressions,
+            |expressions| {
+                let idx_expr = append_to_arena(
+                    expressions,
+                    Expression::Load {
+                        pointer: idx_ptr_expr,
+                    },
+                );
+                append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::GreaterEqual,
+                        left: idx_expr,
+                        right: n_iterations_expr,
+                    },
+                )
+            },
+        );
+
+        Self {
+            body: body_block,
+            continuing: continuing_block,
+            break_if: Some(break_if_expr),
+            idx_expr,
+            n_iterations_expr,
+            zero_constant,
+        }
+    }
+
+    /// Generates the actual loop statement. Call this when the `body` field has
+    /// been filled with all required statements.
+    pub fn generate_code(self, block: &mut Block, expressions: &mut Arena<Expression>) {
+        let mut loop_block = Block::new();
+
+        push_to_block(
+            &mut loop_block,
+            Statement::Loop {
+                body: self.body,
+                continuing: self.continuing,
+                break_if: self.break_if,
+            },
+        );
+
+        let zero_constant_expr =
+            append_to_arena(expressions, Expression::Constant(self.zero_constant));
+
+        let n_iter_above_zero_expr = emit(block, expressions, |expressions| {
+            append_to_arena(
+                expressions,
+                Expression::Binary {
+                    op: BinaryOperator::Greater,
+                    left: self.n_iterations_expr,
+                    right: zero_constant_expr,
+                },
+            )
+        });
+
+        push_to_block(
+            block,
+            Statement::If {
+                condition: n_iter_above_zero_expr,
+                accept: loop_block,
+                reject: Block::new(),
+            },
+        );
+    }
+}
+
 impl SampledTexture {
     /// Generates code declaring global variables for a texture and samplers
     /// with the given name root, group and bindings.
@@ -4932,6 +5084,38 @@ impl SourceCode {
         function_name: &str,
         arguments: Vec<Handle<Expression>>,
     ) -> Handle<Expression> {
+        self.generate_function_call_in_block(
+            module,
+            &mut parent_function.body,
+            &mut parent_function.expressions,
+            function_name,
+            arguments,
+        )
+    }
+
+    /// Generates the code calling the function with the given name with the
+    /// given argument expressions within the given statement block. The called
+    /// function will be imported to the given module if it has not already been
+    /// imported.
+    ///
+    /// # Returns
+    /// The return value expression.
+    ///
+    /// # Panics
+    /// If no function with the requested name exists in the source code.
+    ///
+    /// # Warning
+    /// As the handles of previously imported functions are cached, calling this
+    /// method on the same [`SourceCode`] instance with multiple [`Module`]s may
+    /// cause incorrect functions to be called.
+    pub fn generate_function_call_in_block(
+        &mut self,
+        module: &mut Module,
+        block: &mut Block,
+        expressions: &mut Arena<Expression>,
+        function_name: &str,
+        arguments: Vec<Handle<Expression>>,
+    ) -> Handle<Expression> {
         let imported_function_handle = *self
             .used_functions
             .entry(function_name.to_string())
@@ -4950,13 +5134,13 @@ impl SourceCode {
                 importer.import_function(original_function_handle).unwrap()
             });
 
-        let return_expr = include_expr_in_func(
-            parent_function,
+        let return_expr = append_to_arena(
+            expressions,
             Expression::CallResult(imported_function_handle),
         );
 
         push_to_block(
-            &mut parent_function.body,
+            block,
             Statement::Call {
                 function: imported_function_handle,
                 arguments,
@@ -5135,6 +5319,23 @@ fn define_constant_if_missing(
     constants.fetch_or_append(constant, Span::UNDEFINED)
 }
 
+/// Executes the given closure that adds [`Expression`]s to the given [`Arena`]
+/// before pushing to the given [`Block`] a [`Statement::Emit`] emitting the
+/// range of added expressions.
+///
+/// # Returns
+/// The value returned from the closure.
+fn emit<T>(
+    block: &mut Block,
+    arena: &mut Arena<Expression>,
+    add_expressions: impl FnOnce(&mut Arena<Expression>) -> T,
+) -> T {
+    let start_length = arena.len();
+    let ret = add_expressions(arena);
+    push_to_block(block, Statement::Emit(arena.range_from(start_length)));
+    ret
+}
+
 /// Executes the given closure that adds [`Expression`]s to the given
 /// [`Function`] before pushing to the function body a [`Statement::Emit`]
 /// emitting the range of added expressions.
@@ -5275,21 +5476,7 @@ mod test {
 
     #[test]
     fn parse() {
-        match wgsl_in::parse_str(
-            "
-            fn computeAmbientOcclusion(
-                depthTexture: texture_depth_2d,
-                depthSampler: sampler,
-                sampleOffsets: array<vec4<f32>, 32>,
-                sampleCount: u32,
-                position: vec3<f32>,
-                normalVector: vec3<f32>,
-                noiseFactor: f32,
-            ) -> f32 {
-                return 1.0;
-            }
-            ",
-        ) {
+        match wgsl_in::parse_str("") {
             Ok(module) => {
                 dbg!(module);
             }

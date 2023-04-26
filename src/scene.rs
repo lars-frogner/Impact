@@ -194,7 +194,7 @@ impl Scene {
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);
 
-        register_ambient_occlusion_materials(&mut material_library, 0, 1.0);
+        register_ambient_occlusion_materials(&mut material_library, 4, 0.1);
     }
 }
 

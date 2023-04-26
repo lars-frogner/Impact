@@ -1,19 +1,20 @@
 //! Generation of shaders for ambient occlusion.
 
 use super::{
-    append_to_arena, append_unity_component_to_vec3, define_constant_if_missing, emit_in_func,
-    include_expr_in_func, include_named_expr_in_func, insert_in_arena, new_name, u32_constant,
-    CameraProjectionVariable, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_WIDTH,
-    U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_to_arena, append_unity_component_to_vec3, define_constant_if_missing, emit,
+    emit_in_func, float32_constant, include_expr_in_func, include_named_expr_in_func,
+    insert_in_arena, new_name, push_to_block, u32_constant, CameraProjectionVariable, ForLoop,
+    InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder, PushConstantFieldExpressions,
+    SampledTexture, ShaderTricks, SourceCode, TextureType, F32_WIDTH, U32_TYPE, U32_WIDTH,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::{
     rendering::{shader::F32_TYPE, RenderAttachmentQuantity, RENDER_ATTACHMENT_BINDINGS},
     scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 use naga::{
-    AddressSpace, ArraySize, Expression, Function, GlobalVariable, Handle, Module, ResourceBinding,
-    StructMember, Type, TypeInner,
+    AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle,
+    LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,
 };
 
 /// Input description specifying the stage and uniform bindings for ambient
@@ -119,19 +120,13 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         framebuffer_position_expr: Handle<Expression>,
         screen_space_texture_coord_expr: Handle<Expression>,
     ) {
-        #[allow(clippy::assertions_on_constants)]
-        const _: () = assert!((MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT % 2) == 0);
-
-        const HALF_MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize =
-            MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT / 2;
-
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
         let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let half_max_sample_count_constant = define_constant_if_missing(
+        let max_sample_count_constant = define_constant_if_missing(
             &mut module.constants,
-            u32_constant(HALF_MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u64),
+            u32_constant(MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u64),
         );
 
         let sample_offset_array_type = insert_in_arena(
@@ -140,16 +135,16 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 name: None,
                 inner: TypeInner::Array {
                     base: vec4_type,
-                    size: ArraySize::Constant(half_max_sample_count_constant),
+                    size: ArraySize::Constant(max_sample_count_constant),
                     stride: VECTOR_4_SIZE,
                 },
             },
         );
 
         let sample_offset_array_size =
-            u32::try_from(HALF_MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT).unwrap() * VECTOR_4_SIZE;
+            u32::try_from(MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT).unwrap() * VECTOR_4_SIZE;
 
-        let sample_struct_size = sample_offset_array_size + U32_WIDTH + F32_WIDTH + 2 * F32_WIDTH;
+        let sample_struct_size = sample_offset_array_size + U32_WIDTH + 3 * F32_WIDTH;
 
         let sample_struct_type = insert_in_arena(
             &mut module.types,
@@ -174,6 +169,12 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                             ty: f32_type,
                             binding: None,
                             offset: sample_offset_array_size + U32_WIDTH,
+                        },
+                        StructMember {
+                            name: new_name("sampleNormalization"),
+                            ty: f32_type,
+                            binding: None,
+                            offset: sample_offset_array_size + U32_WIDTH + F32_WIDTH,
                         },
                         // <-- The rest of the struct is for padding an not
                         // needed in the shader
@@ -204,62 +205,75 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             Expression::GlobalVariable(sample_struct_var),
         );
 
-        let (sample_offset_array_expr, sample_count_expr, sample_radius_expr) =
-            emit_in_func(fragment_function, |function| {
-                let sample_offset_array_ptr_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: sample_struct_ptr_expr,
-                        index: 0,
-                    },
-                );
+        let (
+            sample_offset_array_ptr_expr,
+            sample_count_expr,
+            sample_radius_expr,
+            sample_normalization_expr,
+        ) = emit_in_func(fragment_function, |function| {
+            let sample_offset_array_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: sample_struct_ptr_expr,
+                    index: 0,
+                },
+            );
 
-                let sample_offset_array_expr = include_named_expr_in_func(
-                    function,
-                    "sampleOffsets",
-                    Expression::Load {
-                        pointer: sample_offset_array_ptr_expr,
-                    },
-                );
+            let sample_count_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: sample_struct_ptr_expr,
+                    index: 1,
+                },
+            );
 
-                let sample_count_ptr_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: sample_struct_ptr_expr,
-                        index: 1,
-                    },
-                );
+            let sample_count_expr = include_named_expr_in_func(
+                function,
+                "sampleCount",
+                Expression::Load {
+                    pointer: sample_count_ptr_expr,
+                },
+            );
 
-                let sample_count_expr = include_named_expr_in_func(
-                    function,
-                    "sampleCount",
-                    Expression::Load {
-                        pointer: sample_count_ptr_expr,
-                    },
-                );
+            let sample_radius_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: sample_struct_ptr_expr,
+                    index: 2,
+                },
+            );
 
-                let sample_radius_ptr_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: sample_struct_ptr_expr,
-                        index: 2,
-                    },
-                );
+            let sample_radius_expr = include_named_expr_in_func(
+                function,
+                "sampleRadius",
+                Expression::Load {
+                    pointer: sample_radius_ptr_expr,
+                },
+            );
 
-                let sample_radius_expr = include_named_expr_in_func(
-                    function,
-                    "sampleRadius",
-                    Expression::Load {
-                        pointer: sample_radius_ptr_expr,
-                    },
-                );
+            let sample_normalization_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: sample_struct_ptr_expr,
+                    index: 3,
+                },
+            );
 
-                (
-                    sample_offset_array_expr,
-                    sample_count_expr,
-                    sample_radius_expr,
-                )
-            });
+            let sample_normalization_expr = include_named_expr_in_func(
+                function,
+                "sampleNormalization",
+                Expression::Load {
+                    pointer: sample_normalization_ptr_expr,
+                },
+            );
+
+            (
+                sample_offset_array_ptr_expr,
+                sample_count_expr,
+                sample_radius_expr,
+                sample_normalization_expr,
+            )
+        });
 
         let (position_texture_binding, position_sampler_binding) =
             RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
@@ -320,25 +334,125 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             vec![framebuffer_position_expr],
         );
 
-        let occlusion_expr = source_code_lib.generate_function_call(
+        let sampling_space_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
-            &format!(
-                "computeAmbientOcclusionMax{}Samples",
-                MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT
-            ),
+            "computeAmbientOcclusionSamplingSpace",
             vec![
-                position_texture_expr,
-                position_sampler_expr,
-                projection_matrix_expr,
-                sample_offset_array_expr,
-                sample_count_expr,
                 sample_radius_expr,
                 position_expr,
                 normal_vector_expr,
                 random_angle_expr,
             ],
         );
+
+        let zero_constant =
+            define_constant_if_missing(&mut module.constants, float32_constant(0.0));
+
+        let summed_unoccupied_height_ptr_expr = append_to_arena(
+            &mut fragment_function.expressions,
+            Expression::LocalVariable(append_to_arena(
+                &mut fragment_function.local_variables,
+                LocalVariable {
+                    name: new_name("summedUnoccupiedHeight"),
+                    ty: f32_type,
+                    init: Some(zero_constant),
+                },
+            )),
+        );
+
+        let mut sampling_loop = ForLoop::new(
+            &mut module.types,
+            &mut module.constants,
+            fragment_function,
+            "sample",
+            sample_count_expr,
+        );
+
+        let sample_offset_expr = emit(
+            &mut sampling_loop.body,
+            &mut fragment_function.expressions,
+            |expressions| {
+                let sample_offset_ptr_expr = append_to_arena(
+                    expressions,
+                    Expression::Access {
+                        base: sample_offset_array_ptr_expr,
+                        index: sampling_loop.idx_expr,
+                    },
+                );
+                append_to_arena(
+                    expressions,
+                    Expression::Load {
+                        pointer: sample_offset_ptr_expr,
+                    },
+                )
+            },
+        );
+
+        let unoccupied_height_expr = source_code_lib.generate_function_call_in_block(
+            module,
+            &mut sampling_loop.body,
+            &mut fragment_function.expressions,
+            "computeUnoccupiedHeightForSample",
+            vec![
+                position_texture_expr,
+                position_sampler_expr,
+                projection_matrix_expr,
+                sampling_space_expr,
+                sample_offset_expr,
+            ],
+        );
+
+        let summed_unoccupied_height_expr = emit(
+            &mut sampling_loop.body,
+            &mut fragment_function.expressions,
+            |expressions| {
+                let prev_summed_unoccupied_height_expr = append_to_arena(
+                    expressions,
+                    Expression::Load {
+                        pointer: summed_unoccupied_height_ptr_expr,
+                    },
+                );
+                append_to_arena(
+                    expressions,
+                    Expression::Binary {
+                        op: BinaryOperator::Add,
+                        left: prev_summed_unoccupied_height_expr,
+                        right: unoccupied_height_expr,
+                    },
+                )
+            },
+        );
+
+        push_to_block(
+            &mut sampling_loop.body,
+            Statement::Store {
+                pointer: summed_unoccupied_height_ptr_expr,
+                value: summed_unoccupied_height_expr,
+            },
+        );
+
+        sampling_loop.generate_code(
+            &mut fragment_function.body,
+            &mut fragment_function.expressions,
+        );
+
+        let occlusion_expr = emit_in_func(fragment_function, |function| {
+            let summed_unoccupied_height_expr = include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: summed_unoccupied_height_ptr_expr,
+                },
+            );
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: summed_unoccupied_height_expr,
+                    right: sample_normalization_expr,
+                },
+            )
+        });
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
