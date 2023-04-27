@@ -250,6 +250,11 @@ impl<F: Float> TriangleMesh<F> {
         &self.indices
     }
 
+    /// Whether the mesh has any indices.
+    pub fn has_indices(&self) -> bool {
+        !self.indices.is_empty()
+    }
+
     /// Whether the mesh has any vertices.
     pub fn has_positions(&self) -> bool {
         !self.positions.is_empty()

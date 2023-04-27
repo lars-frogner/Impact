@@ -29,9 +29,16 @@ impl InstanceFeatureRenderBufferManager {
         feature_buffer: &DynamicInstanceFeatureBuffer,
         label: Cow<'static, str>,
     ) -> Self {
+        let raw_buffer = feature_buffer.raw_buffer();
+
+        assert!(
+            !raw_buffer.is_empty(),
+            "Tried to create render buffer manager for empty instance feature buffer"
+        );
+
         let feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
             core_system,
-            feature_buffer.raw_buffer(),
+            raw_buffer,
             feature_buffer.n_valid_bytes(),
             label,
         );
