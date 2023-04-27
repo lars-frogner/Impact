@@ -23,6 +23,7 @@ use naga::{
 pub enum AmbientOcclusionShaderInput {
     Calculation(AmbientOcclusionCalculationShaderInput),
     Application,
+    Disabled,
 }
 
 /// Input description specifying uniform bindings needed for calculating ambient
@@ -103,7 +104,13 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
-                    framebuffer_position_expr,
+                );
+            }
+            AmbientOcclusionShaderInput::Disabled => {
+                Self::generate_fragment_code_for_rendering_unoccluded_ambient_color(
+                    module,
+                    fragment_function,
+                    bind_group_idx,
                     screen_space_texture_coord_expr,
                 );
             }
@@ -552,6 +559,52 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             None,
             VECTOR_4_SIZE,
             output_rgba_color_expr,
+        );
+
+        output_struct_builder.generate_output_code(&mut module.types, fragment_function);
+    }
+
+    fn generate_fragment_code_for_rendering_unoccluded_ambient_color(
+        module: &mut Module,
+        fragment_function: &mut Function,
+        bind_group_idx: &mut u32,
+        screen_space_texture_coord_expr: Handle<Expression>,
+    ) {
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+
+        let (ambient_color_texture_binding, ambient_color_sampler_binding) =
+            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Color as usize];
+
+        let ambient_color_texture = SampledTexture::declare(
+            &mut module.types,
+            &mut module.global_variables,
+            TextureType::Image2D,
+            "ambientColor",
+            *bind_group_idx,
+            ambient_color_texture_binding,
+            Some(ambient_color_sampler_binding),
+            None,
+        );
+
+        *bind_group_idx += 1;
+
+        let ambient_color_expr = ambient_color_texture.generate_sampling_expr(
+            fragment_function,
+            screen_space_texture_coord_expr,
+            None,
+            None,
+            None,
+        );
+
+        let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
+
+        output_struct_builder.add_field(
+            "color",
+            vec4_type,
+            None,
+            None,
+            VECTOR_4_SIZE,
+            ambient_color_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);

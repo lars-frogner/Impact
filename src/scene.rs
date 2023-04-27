@@ -48,7 +48,8 @@ pub use material::{
     UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
     VertexColorComp, VertexColorMaterial, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
     AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
-    AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+    AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
+    AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use mesh::{
     BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
@@ -88,8 +89,11 @@ pub struct Scene {
 }
 
 /// Global scene configuration options.
-#[derive(Clone, Debug, Default)]
-pub struct SceneConfig {}
+#[derive(Clone, Debug)]
+pub struct SceneConfig {
+    ambient_occlusion_sample_count: u32,
+    ambient_occlusion_sampling_radius: fre,
+}
 
 impl Scene {
     /// Creates a new scene data container.
@@ -194,12 +198,25 @@ impl Scene {
         FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
         FixedTextureMaterial::register(&mut material_library);
 
-        register_ambient_occlusion_materials(&mut material_library, 4, 0.1);
+        register_ambient_occlusion_materials(
+            &mut material_library,
+            self.config.ambient_occlusion_sample_count,
+            self.config.ambient_occlusion_sampling_radius,
+        );
     }
 }
 
 impl Default for Scene {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Default for SceneConfig {
+    fn default() -> Self {
+        Self {
+            ambient_occlusion_sample_count: 4,
+            ambient_occlusion_sampling_radius: 0.6,
+        }
     }
 }

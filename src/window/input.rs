@@ -45,6 +45,7 @@ pub enum KeyboardInputAction {
     ToggleInteractionMode,
     ToggleBackFaceCulling,
     ToggleTriangleFill,
+    ToggleAmbientOcclusion,
     SaveScreenshot,
     SaveDepthMap,
     SaveOmnidirectionalLightShadowMap,
@@ -162,6 +163,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::ToggleAmbientOcclusion => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().toggle_ambient_occlusion();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
                             world.screen_capturer().request_screenshot_save();
@@ -173,7 +180,7 @@ impl KeyInputHandler {
                             world
                                 .screen_capturer()
                                 .request_render_attachment_quantity_save(
-                                    RenderAttachmentQuantity::Depth,
+                                    RenderAttachmentQuantity::Occlusion,
                                 );
                         }
                         Ok(HandlingResult::Handled)
@@ -241,6 +248,7 @@ impl Default for KeyActionMap {
             ToggleInteractionMode => Tab,
             ToggleBackFaceCulling => B,
             ToggleTriangleFill => F,
+            ToggleAmbientOcclusion => O,
             SaveScreenshot => F12,
             SaveDepthMap => F11,
             SaveOmnidirectionalLightShadowMap => F10,
