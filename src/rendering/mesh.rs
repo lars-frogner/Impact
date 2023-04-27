@@ -38,12 +38,21 @@ impl MeshRenderBufferManager {
         mesh_id: MeshID,
         mesh: &TriangleMesh<fre>,
     ) -> Self {
+        assert!(
+            mesh.has_indices(),
+            "Tried to create render buffer manager for mesh with no indices"
+        );
+
         let mut available_attributes = VertexAttributeSet::empty();
         let mut vertex_buffers = [None, None, None, None, None];
         let mut vertex_buffer_layouts = [None, None, None, None, None];
         let mut shader_input = MeshShaderInput {
             locations: [None, None, None, None, None],
         };
+
+        let indices = mesh.indices();
+        let n_indices = indices.len();
+        let (index_format, index_buffer) = Self::create_index_buffer(core_system, mesh_id, indices);
 
         Self::add_vertex_attribute_if_available(
             core_system,
@@ -90,10 +99,6 @@ impl MeshRenderBufferManager {
             mesh_id,
             mesh.tangent_space_quaternions(),
         );
-
-        let indices = mesh.indices();
-        let n_indices = indices.len();
-        let (index_format, index_buffer) = Self::create_index_buffer(core_system, mesh_id, indices);
 
         Self {
             available_attributes,

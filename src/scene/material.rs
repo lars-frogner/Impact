@@ -54,7 +54,7 @@ use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, Hash
 use nalgebra::Vector3;
 use std::{
     collections::{hash_map::Entry, HashMap},
-    fmt,
+    fmt, mem,
 };
 
 /// A color with RGB components.
@@ -213,6 +213,12 @@ impl FixedMaterialResources {
     where
         U: UniformBufferable,
     {
+        assert_ne!(
+            mem::size_of::<U>(),
+            0,
+            "Tried to create fixed material resources from zero-sized uniform"
+        );
+
         let uniform_data = AlignedByteVec::copied_from_slice(
             Alignment::of::<U>(),
             bytemuck::bytes_of(resource_uniform),

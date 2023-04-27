@@ -99,13 +99,7 @@ impl RenderBuffer {
 
         let bytes = bytemuck::cast_slice(vertices);
 
-        Self::new(
-            core_system,
-            RenderBufferType::Vertex,
-            bytes,
-            n_valid_bytes,
-            label,
-        )
+        Self::new_vertex_buffer_with_bytes(core_system, bytes, n_valid_bytes, label)
     }
 
     /// Creates a vertex render buffer initialized with the given vertex
@@ -137,6 +131,10 @@ impl RenderBuffer {
         n_valid_bytes: usize,
         label: Cow<'static, str>,
     ) -> Self {
+        assert!(
+            !bytes.is_empty(),
+            "Tried to create empty vertex render buffer"
+        );
         Self::new(
             core_system,
             RenderBufferType::Vertex,
@@ -162,6 +160,11 @@ impl RenderBuffer {
     where
         I: IndexBufferable,
     {
+        assert!(
+            !indices.is_empty(),
+            "Tried to create empty index render buffer"
+        );
+
         let n_valid_bytes = mem::size_of::<I>().checked_mul(n_valid_indices).unwrap();
 
         let bytes = bytemuck::cast_slice(indices);
@@ -211,9 +214,13 @@ impl RenderBuffer {
     {
         assert!(
             Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
-            "Tried to create uniform buffer with uniform size that \
+            "Tried to create uniform render buffer with uniform size that \
              causes invalid alignment (uniform buffer item stride \
              must be a multiple of 16)"
+        );
+        assert!(
+            !uniforms.is_empty(),
+            "Tried to create empty uniform render buffer"
         );
 
         let n_valid_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
@@ -260,21 +267,7 @@ impl RenderBuffer {
     where
         U: UniformBufferable,
     {
-        assert!(
-            Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
-            "Tried to create uniform buffer with invalid uniform size \
-            (must be a multiple of 16)"
-        );
-
-        let bytes = bytemuck::bytes_of(uniform);
-
-        Self::new(
-            core_system,
-            RenderBufferType::Uniform,
-            bytes,
-            bytes.len(),
-            label,
-        )
+        Self::new_buffer_for_single_uniform_bytes(core_system, bytemuck::bytes_of(uniform), label)
     }
 
     /// Creates a render buffer containing the given bytes representing a single
@@ -290,8 +283,12 @@ impl RenderBuffer {
     ) -> Self {
         assert!(
             Alignment::SIXTEEN.is_aligned(uniform_bytes.len()),
-            "Tried to create uniform buffer with invalid uniform size \
+            "Tried to create uniform render buffer with invalid uniform size \
             (must be a multiple of 16)"
+        );
+        assert!(
+            !uniform_bytes.is_empty(),
+            "Tried to create uniform render buffer for a single zero-sized uniform"
         );
 
         Self::new(
