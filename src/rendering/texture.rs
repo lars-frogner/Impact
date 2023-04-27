@@ -5,7 +5,8 @@ mod shadow_map;
 
 pub use attachment::{
     RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-    RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
+    RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_CLEAR_COLORS, RENDER_ATTACHMENT_FLAGS,
+    RENDER_ATTACHMENT_FORMATS,
 };
 pub use shadow_map::{
     CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,

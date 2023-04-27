@@ -82,6 +82,16 @@ pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_Q
     wgpu::TextureFormat::R8Unorm,
 ];
 
+/// The clear color used for each color render attachment quantity (depth is not
+/// included).
+pub const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
+    wgpu::Color::BLACK,
+    wgpu::Color::BLACK,
+    wgpu::Color::BLACK,
+    wgpu::Color::BLACK,
+    wgpu::Color::WHITE,
+];
+
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
 pub const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
