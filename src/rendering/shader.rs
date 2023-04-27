@@ -7474,7 +7474,33 @@ mod test {
                 AmbientOcclusionShaderInput::Application,
             )),
             VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::COLOR | RenderAttachmentQuantitySet::OCCLUSION,
+                RenderAttachmentQuantitySet::COLOR
+                | RenderAttachmentQuantitySet::OCCLUSION,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_ambient_occlusion_disabled_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::AmbientOcclusion(
+                AmbientOcclusionShaderInput::Disabled,
+            )),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::COLOR,
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
