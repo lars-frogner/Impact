@@ -180,7 +180,7 @@ impl KeyInputHandler {
                             world
                                 .screen_capturer()
                                 .request_render_attachment_quantity_save(
-                                    RenderAttachmentQuantity::Occlusion,
+                                    RenderAttachmentQuantity::Depth,
                                 );
                         }
                         Ok(HandlingResult::Handled)
