@@ -33,7 +33,7 @@ use impact_utils::hash64;
 /// If both a normal map and a parallax map component is provided.
 pub fn create_prepass_material(
     material_library: &mut MaterialLibrary,
-    output_render_attachment_quantities: &mut RenderAttachmentQuantitySet,
+    input_render_attachment_quantities_for_main_material: &mut RenderAttachmentQuantitySet,
     mut material_name_parts: Vec<&str>,
     feature_type_id: InstanceFeatureTypeID,
     feature_id: InstanceFeatureID,
@@ -52,9 +52,12 @@ pub fn create_prepass_material(
     let mut render_pass_hints = RenderPassHints::empty();
 
     // These are required for ambient occlusion
-    *output_render_attachment_quantities |= RenderAttachmentQuantitySet::POSITION
+    let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::POSITION
         | RenderAttachmentQuantitySet::NORMAL_VECTOR
         | RenderAttachmentQuantitySet::COLOR;
+
+    *input_render_attachment_quantities_for_main_material |=
+        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR;
 
     if !texture_ids.is_empty() {
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
@@ -88,7 +91,9 @@ pub fn create_prepass_material(
         vertex_attribute_requirements_for_shader |=
             VertexAttributeSet::TEXTURE_COORDS | VertexAttributeSet::TANGENT_SPACE_QUATERNION;
 
-        *output_render_attachment_quantities |= RenderAttachmentQuantitySet::NORMAL_VECTOR;
+        output_render_attachment_quantities |= RenderAttachmentQuantitySet::NORMAL_VECTOR;
+        *input_render_attachment_quantities_for_main_material |=
+            RenderAttachmentQuantitySet::NORMAL_VECTOR;
 
         texture_shader_input.bump_mapping_input = Some(
             BumpMappingTextureShaderInput::NormalMapping(NormalMappingShaderInput {
@@ -109,8 +114,11 @@ pub fn create_prepass_material(
             | VertexAttributeSet::TEXTURE_COORDS
             | VertexAttributeSet::TANGENT_SPACE_QUATERNION;
 
-        *output_render_attachment_quantities |= RenderAttachmentQuantitySet::NORMAL_VECTOR
+        output_render_attachment_quantities |= RenderAttachmentQuantitySet::NORMAL_VECTOR
             | RenderAttachmentQuantitySet::TEXTURE_COORDS;
+        *input_render_attachment_quantities_for_main_material |=
+            RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS;
 
         texture_shader_input.bump_mapping_input = Some(
             BumpMappingTextureShaderInput::ParallaxMapping(ParallaxMappingShaderInput {
@@ -154,7 +162,7 @@ pub fn create_prepass_material(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
                 RenderAttachmentQuantitySet::empty(),
-                *output_render_attachment_quantities,
+                output_render_attachment_quantities,
                 None,
                 vec![feature_type_id],
                 render_pass_hints,
