@@ -1361,7 +1361,7 @@ impl RenderPassSpecification {
     }
 
     fn determine_color_blend_state(&self) -> wgpu::BlendState {
-        if self.light.is_some() && !self.use_prepass_material {
+        if !self.use_prepass_material {
             // Since we determine contributions from each light in
             // separate render passes, we need to add up the color
             // contributions. We simply ignore alpha.
