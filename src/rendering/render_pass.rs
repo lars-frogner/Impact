@@ -13,8 +13,8 @@ use crate::{
         CascadeIdx, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
         MaterialPropertyTextureManager, MaterialRenderResourceManager, MaterialShaderInput,
         MeshShaderInput, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
-        RenderAttachmentTextureManager, RenderingConfig, Shader, RENDER_ATTACHMENT_FLAGS,
-        RENDER_ATTACHMENT_FORMATS,
+        RenderAttachmentTextureManager, RenderingConfig, Shader, RENDER_ATTACHMENT_CLEAR_COLORS,
+        RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
     },
     scene::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
@@ -1487,7 +1487,10 @@ impl RenderPassSpecification {
                     // texture and any available render attachment textures
                     (
                         wgpu::LoadOp::Clear(clear_color),
-                        wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        RENDER_ATTACHMENT_CLEAR_COLORS
+                            .iter()
+                            .map(|clear_color| wgpu::LoadOp::Clear(*clear_color))
+                            .collect(),
                         render_attachment_texture_manager.available_color_quantities(),
                     )
                 } else {
@@ -1496,7 +1499,7 @@ impl RenderPassSpecification {
                     // attachments
                     (
                         wgpu::LoadOp::Load,
-                        wgpu::LoadOp::Load,
+                        vec![wgpu::LoadOp::Load; RENDER_ATTACHMENT_CLEAR_COLORS.len()],
                         output_render_attachment_quantities,
                     )
                 };
@@ -1518,12 +1521,13 @@ impl RenderPassSpecification {
                 color_attachments.extend(
                     render_attachment_texture_manager
                         .request_render_attachment_texture_views(render_attachment_quantities)?
-                        .map(|texture_view| {
+                        .zip(other_load_operations.into_iter())
+                        .map(|(texture_view, load_operation)| {
                             Some(wgpu::RenderPassColorAttachment {
                                 view: texture_view,
                                 resolve_target: None,
                                 ops: wgpu::Operations {
-                                    load: other_load_operations,
+                                    load: load_operation,
                                     store: true,
                                 },
                             })

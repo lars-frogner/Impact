@@ -41,7 +41,8 @@ pub use texture::{
     CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
     RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,
     Texture, TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureLookupTable,
-    RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
+    RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_CLEAR_COLORS, RENDER_ATTACHMENT_FLAGS,
+    RENDER_ATTACHMENT_FORMATS,
 };
 
 use self::resource::RenderResourceManager;
