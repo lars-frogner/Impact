@@ -139,7 +139,9 @@ impl CoreRenderingSystem {
         Ok(adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::PUSH_CONSTANTS | wgpu::Features::POLYGON_MODE_LINE,
+                    features: wgpu::Features::PUSH_CONSTANTS
+                        | wgpu::Features::POLYGON_MODE_LINE
+                        | wgpu::Features::DEPTH32FLOAT_STENCIL8,
                     limits: if cfg!(target_arch = "wasm32") {
                         wgpu::Limits {
                             max_bind_groups: 7,

@@ -45,7 +45,8 @@ pub struct RenderAttachmentTextureManager {
 #[derive(Debug)]
 pub struct RenderAttachmentTexture {
     texture: wgpu::Texture,
-    view: wgpu::TextureView,
+    attachment_view: wgpu::TextureView,
+    binding_view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
 
@@ -74,7 +75,7 @@ pub const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
 
 /// The texture format used for each render attachment quantity.
 pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    wgpu::TextureFormat::Depth32Float,
+    wgpu::TextureFormat::Depth32FloatStencil8,
     wgpu::TextureFormat::Rgba32Float,
     wgpu::TextureFormat::Rgba8Unorm,
     wgpu::TextureFormat::Rg32Float,
@@ -152,7 +153,8 @@ impl RenderAttachmentTextureManager {
             .expect("Requested missing render attachment quantity")
     }
 
-    /// Returns an iterator over the render attachment texture views for the
+    /// Returns an iterator over the render attachment texture views (the views
+    /// returned by [`RenderAttachmentTexture::attachment_view`]) for the
     /// requested set of quantities, in the order in which the quantities are
     /// listed in the [`RENDER_ATTACHMENT_FLAGS`] constant.
     ///
@@ -168,7 +170,7 @@ impl RenderAttachmentTextureManager {
                 .zip(self.quantity_textures.iter())
                 .filter_map(move |(&quantity_flag, quantity_texture)| {
                     if requested_quantities.contains(quantity_flag) {
-                        Some(quantity_texture.as_ref().unwrap().view())
+                        Some(quantity_texture.as_ref().unwrap().attachment_view())
                     } else {
                         None
                     }
@@ -388,13 +390,25 @@ impl RenderAttachmentTexture {
             &format!("Render attachment texture (format = {:?})", format),
         );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let attachment_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // When using a depth texture as a binding, we must exclude the stencil
+        // aspect
+        let binding_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            aspect: if format.has_depth_aspect() {
+                wgpu::TextureAspect::DepthOnly
+            } else {
+                wgpu::TextureAspect::All
+            },
+            ..Default::default()
+        });
 
         let sampler = Self::create_sampler(device);
 
         Self {
             texture,
-            view,
+            attachment_view,
+            binding_view,
             sampler,
         }
     }
@@ -404,9 +418,14 @@ impl RenderAttachmentTexture {
         &self.texture
     }
 
-    /// Returns a view into the render attachment texture.
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
+    /// Returns a view into the texture for use as a render attachment.
+    pub fn attachment_view(&self) -> &wgpu::TextureView {
+        &self.attachment_view
+    }
+
+    /// Returns a view into the texture for use as a binding.
+    pub fn binding_view(&self) -> &wgpu::TextureView {
+        &self.binding_view
     }
 
     /// Returns a sampler for the render attachment texture.
@@ -456,7 +475,7 @@ impl RenderAttachmentTexture {
     pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
-            resource: wgpu::BindingResource::TextureView(self.view()),
+            resource: wgpu::BindingResource::TextureView(self.binding_view()),
         }
     }
 

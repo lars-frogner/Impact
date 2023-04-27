@@ -132,9 +132,12 @@ enum DepthMapUsage {
     /// Fill the depth map with model depths without doing shading.
     Prepass,
     /// Use the depth map for depth testing when shading. The [`WriteDepths`]
-    /// value decides whether depths will be written to the depth map during the
-    /// pass.
+    /// value decides whether depths (and stencil values) will be written to the
+    /// depth map during the pass.
     Use(WriteDepths),
+    /// Use the value in the stencil map to determine whether a fragment should
+    /// be ignored.
+    StencilTest,
 }
 
 type WriteDepths = bool;
@@ -710,6 +713,9 @@ impl RenderPassSpecification {
     /// Maximum z-value in clip space.
     const CLEAR_DEPTH: f32 = 1.0;
 
+    const CLEAR_STENCIL_VALUE: u32 = 0;
+    const REFERENCE_STENCIL_VALUE: u32 = 1;
+
     /// Creates the specification for the render pass that will clear the
     /// rendering surface with the given color and clear the depth map.
     fn surface_clearing_pass(clear_color: wgpu::Color) -> Self {
@@ -877,7 +883,7 @@ impl RenderPassSpecification {
             explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
             explicit_material_id: Some(*AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID),
             use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::None,
+            depth_map_usage: DepthMapUsage::StencilTest,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS,
@@ -892,7 +898,7 @@ impl RenderPassSpecification {
             explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
             explicit_material_id: Some(*AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID),
             use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::None,
+            depth_map_usage: DepthMapUsage::StencilTest,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
@@ -907,7 +913,7 @@ impl RenderPassSpecification {
             explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
             explicit_material_id: Some(*AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID),
             use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::None,
+            depth_map_usage: DepthMapUsage::StencilTest,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,
@@ -1478,23 +1484,62 @@ impl RenderPassSpecification {
         } else if !self.depth_map_usage.is_none() {
             let depth_write_enabled = self.depth_map_usage.make_writeable();
 
-            let depth_compare = if depth_write_enabled {
-                wgpu::CompareFunction::Less
+            let (depth_compare, stencil) = if depth_write_enabled {
+                (
+                    wgpu::CompareFunction::Less,
+                    // Write the reference stencil value to the stencil map
+                    // whenever the depth test passes
+                    wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Always,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::Replace,
+                        },
+                        read_mask: 0xFF,
+                        write_mask: 0xFF,
+                        ..Default::default()
+                    },
+                )
+            } else if self.depth_map_usage.is_stencil_test() {
+                // When we are doing stencil testing rather than depth testing,
+                // we make the depth test always pass and configure the stencil
+                // operations to pass only if the stencil value is equal to the
+                // reference value
+                (
+                    wgpu::CompareFunction::Always,
+                    wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                            pass_op: wgpu::StencilOperation::Keep,
+                        },
+                        read_mask: 0xFF,
+                        write_mask: 0x00,
+                        ..Default::default()
+                    },
+                )
             } else {
-                // When we turn off depth writing, all closest depths have
-                // been determined. To be able to do subsequent shading, we
-                // must allow shading when the depth is equal to the depth
-                // in the depth map.
-                wgpu::CompareFunction::LessEqual
+                (
+                    // When we turn off depth writing, all closest depths have
+                    // been determined. To be able to do subsequent shading, we
+                    // must allow shading when the depth is equal to the depth
+                    // in the depth map.
+                    wgpu::CompareFunction::LessEqual,
+                    wgpu::StencilState::default(),
+                )
             };
 
-            Some(wgpu::DepthStencilState {
+            let depth_stencil_state = wgpu::DepthStencilState {
                 format: RENDER_ATTACHMENT_FORMATS[RenderAttachmentQuantity::Depth as usize],
                 depth_write_enabled,
                 depth_compare,
-                stencil: wgpu::StencilState::default(),
+                stencil,
                 bias: wgpu::DepthBiasState::default(),
-            })
+            };
+
+            Some(depth_stencil_state)
         } else {
             None
         }
@@ -1598,23 +1643,29 @@ impl RenderPassSpecification {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
-                    .view(),
+                    .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
                     store: true,
                 }),
-                stencil_ops: None,
+                stencil_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(Self::CLEAR_STENCIL_VALUE),
+                    store: true,
+                }),
             })
         } else if !self.depth_map_usage.is_none() {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
-                    .view(),
+                    .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: true,
                 }),
-                stencil_ops: None,
+                stencil_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: true,
+                }),
             })
         } else {
             None
@@ -1798,6 +1849,8 @@ impl RenderPassRecorder {
             depth_stencil_attachment,
             label: Some(&self.specification.label),
         });
+
+        render_pass.set_stencil_reference(RenderPassSpecification::REFERENCE_STENCIL_VALUE);
 
         if let Some(ref pipeline) = self.pipeline {
             let mesh_buffer_manager = mesh_buffer_manager.expect("Has pipeline but no vertices");
@@ -2037,6 +2090,10 @@ impl DepthMapUsage {
 
     fn is_prepass(&self) -> bool {
         *self == Self::Prepass
+    }
+
+    fn is_stencil_test(&self) -> bool {
+        *self == Self::StencilTest
     }
 
     fn is_clear_or_prepass(&self) -> bool {

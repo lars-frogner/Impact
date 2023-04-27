@@ -1145,7 +1145,9 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 image_buffer.save(output_path)?;
             }
         }
-        wgpu::TextureFormat::Depth32Float | wgpu::TextureFormat::Rgba32Float => {
+        wgpu::TextureFormat::Depth32Float
+        | wgpu::TextureFormat::Depth32FloatStencil8
+        | wgpu::TextureFormat::Rgba32Float => {
             let mut data = extract_texture_data::<f32>(
                 core_system.device(),
                 core_system.queue(),
@@ -1153,7 +1155,10 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 texture_array_idx,
             );
 
-            if matches!(format, wgpu::TextureFormat::Depth32Float) {
+            if matches!(
+                format,
+                wgpu::TextureFormat::Depth32Float | wgpu::TextureFormat::Depth32FloatStencil8
+            ) {
                 for value in &mut data {
                     *value = gamma_corrected_depth(*value);
                 }
@@ -1203,9 +1208,18 @@ fn extract_texture_data<T: Pod>(
 
     let width = texture.width();
     let height = texture.height();
+
+    let format = texture.format();
+
+    let aspect = if format.has_depth_aspect() {
+        wgpu::TextureAspect::DepthOnly
+    } else {
+        wgpu::TextureAspect::All
+    };
+
     let texel_size = texture
         .format()
-        .block_size(None)
+        .block_size(Some(aspect))
         .expect("Texel block size unavailable");
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -1222,7 +1236,12 @@ fn extract_texture_data<T: Pod>(
     });
 
     command_encoder.copy_texture_to_buffer(
-        texture.as_image_copy(),
+        wgpu::ImageCopyTexture {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect,
+        },
         wgpu::ImageCopyBuffer {
             buffer: &buffer,
             layout: wgpu::ImageDataLayout {
@@ -1237,7 +1256,11 @@ fn extract_texture_data<T: Pod>(
     queue.submit(std::iter::once(command_encoder.finish()));
 
     let buffer_slice = buffer.slice(..);
-    buffer_slice.map_async(wgpu::MapMode::Read, |result| result.unwrap());
+    buffer_slice.map_async(wgpu::MapMode::Read, |result| {
+        if let Err(err) = result {
+            panic!("Copying texture to buffer failed: {}", err)
+        }
+    });
     device.poll(wgpu::Maintain::Wait);
     let buffer_view = buffer_slice.get_mapped_range();
 
