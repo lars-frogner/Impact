@@ -33,6 +33,12 @@ pub const AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS: RenderPassHints =
         .union(RenderPassHints::NO_CAMERA)
         .union(RenderPassHints::RENDERS_TO_SURFACE);
 
+/// Render pass hints for the ambient occlusion disabled material.
+pub const AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS: RenderPassHints =
+    RenderPassHints::NO_DEPTH_PREPASS
+        .union(RenderPassHints::NO_CAMERA)
+        .union(RenderPassHints::RENDERS_TO_SURFACE);
+
 lazy_static! {
     /// ID of the ambient occlusion computation material in the
     /// [`MaterialLibrary`].
@@ -43,6 +49,11 @@ lazy_static! {
     /// [`MaterialLibrary`].
     pub static ref AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID: MaterialID =
         MaterialID(hash64!("AmbientOcclusionApplicationMaterial"));
+
+    /// ID of the material in the [`MaterialLibrary`] that should be used
+    /// when ambient occlusion is disabled.
+    pub static ref AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID: MaterialID =
+        MaterialID(hash64!("AmbientOcclusionDisabledMaterial"));
 }
 
 /// Uniform holding horizontal offsets for the ambient occlusion samples. Each
@@ -108,6 +119,20 @@ pub fn register_ambient_occlusion_materials(
             Vec::new(),
             AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
             MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Application),
+        ),
+    );
+
+    material_library.add_material_specification(
+        *AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
+        MaterialSpecification::new(
+            vertex_attribute_requirements_for_mesh,
+            vertex_attribute_requirements_for_shader,
+            RenderAttachmentQuantitySet::COLOR,
+            RenderAttachmentQuantitySet::empty(),
+            None,
+            Vec::new(),
+            AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,
+            MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Disabled),
         ),
     );
 }

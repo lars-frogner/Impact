@@ -20,7 +20,8 @@ use crate::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
         ShaderManager, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
         AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
-        AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, MAX_SHADOW_MAP_CASCADES,
+        AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
+        AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_SHADOW_MAP_CASCADES,
         SCREEN_FILLING_QUAD_MESH_ID,
     },
 };
@@ -295,7 +296,7 @@ impl RenderPassManager {
                 render_attachment_texture_manager,
                 shader_manager,
                 RenderPassSpecification::ambient_occlusion_computation_pass(),
-                false,
+                !config.ambient_occlusion_enabled,
             )?);
 
             self.ambient_occlusion_passes.push(RenderPassRecorder::new(
@@ -305,8 +306,22 @@ impl RenderPassManager {
                 render_attachment_texture_manager,
                 shader_manager,
                 RenderPassSpecification::ambient_occlusion_application_pass(),
-                false,
+                !config.ambient_occlusion_enabled,
             )?);
+
+            self.ambient_occlusion_passes.push(RenderPassRecorder::new(
+                core_system,
+                config,
+                render_resources,
+                render_attachment_texture_manager,
+                shader_manager,
+                RenderPassSpecification::ambient_occlusion_disabled_pass(),
+                config.ambient_occlusion_enabled,
+            )?);
+        } else {
+            self.ambient_occlusion_passes[0].set_disabled(!config.ambient_occlusion_enabled);
+            self.ambient_occlusion_passes[1].set_disabled(!config.ambient_occlusion_enabled);
+            self.ambient_occlusion_passes[2].set_disabled(config.ambient_occlusion_enabled);
         }
 
         for (&model_id, feature_buffer_managers) in all_feature_buffer_managers {
@@ -882,6 +897,21 @@ impl RenderPassSpecification {
             shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
             label: "Ambient occlusion application pass".to_string(),
+        }
+    }
+
+    fn ambient_occlusion_disabled_pass() -> Self {
+        Self {
+            clear_color: None,
+            model_id: None,
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_material_id: Some(*AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID),
+            use_prepass_material: false,
+            depth_map_usage: DepthMapUsage::None,
+            light: None,
+            shadow_map_usage: ShadowMapUsage::None,
+            hints: AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,
+            label: "Ambient occlusion disabled pass".to_string(),
         }
     }
 
