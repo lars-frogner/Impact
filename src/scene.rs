@@ -216,7 +216,7 @@ impl Default for SceneConfig {
     fn default() -> Self {
         Self {
             ambient_occlusion_sample_count: 4,
-            ambient_occlusion_sampling_radius: 0.6,
+            ambient_occlusion_sampling_radius: 0.5,
         }
     }
 }

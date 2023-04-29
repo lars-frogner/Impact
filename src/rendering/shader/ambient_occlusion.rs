@@ -72,6 +72,9 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
+        let inverse_window_dimensions_expr =
+            push_constant_fragment_expressions.inverse_window_dimensions;
+
         let framebuffer_position_expr =
             fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position);
 
@@ -79,10 +82,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             module,
             fragment_function,
             "convertFramebufferPositionToScreenTextureCoords",
-            vec![
-                push_constant_fragment_expressions.inverse_window_dimensions,
-                framebuffer_position_expr,
-            ],
+            vec![inverse_window_dimensions_expr, framebuffer_position_expr],
         );
 
         match self.input {
@@ -104,6 +104,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
+                    inverse_window_dimensions_expr,
+                    screen_space_texture_coord_expr,
                 );
             }
             AmbientOcclusionShaderInput::Disabled => {
@@ -183,8 +185,12 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                             binding: None,
                             offset: sample_offset_array_size + U32_WIDTH + F32_WIDTH,
                         },
-                        // <-- The rest of the struct is for padding an not
-                        // needed in the shader
+                        StructMember {
+                            name: new_name("contrast"),
+                            ty: f32_type,
+                            binding: None,
+                            offset: sample_offset_array_size + U32_WIDTH + 2 * F32_WIDTH,
+                        },
                     ],
                     span: sample_struct_size,
                 },
@@ -217,6 +223,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             sample_count_expr,
             sample_radius_expr,
             sample_normalization_expr,
+            contrast_expr,
         ) = emit_in_func(fragment_function, |function| {
             let sample_offset_array_ptr_expr = include_expr_in_func(
                 function,
@@ -274,11 +281,28 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 },
             );
 
+            let contrast_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: sample_struct_ptr_expr,
+                    index: 4,
+                },
+            );
+
+            let contrast_expr = include_named_expr_in_func(
+                function,
+                "sampleNormalization",
+                Expression::Load {
+                    pointer: contrast_ptr_expr,
+                },
+            );
+
             (
                 sample_offset_array_ptr_expr,
                 sample_count_expr,
                 sample_radius_expr,
                 sample_normalization_expr,
+                contrast_expr,
             )
         });
 
@@ -341,27 +365,33 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             vec![framebuffer_position_expr],
         );
 
-        let sampling_space_expr = source_code_lib.generate_function_call(
+        let rotation_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
-            "computeAmbientOcclusionSamplingSpace",
-            vec![
-                sample_radius_expr,
-                position_expr,
-                normal_vector_expr,
-                random_angle_expr,
-            ],
+            "computeAmbientOcclusionSampleRotation",
+            vec![random_angle_expr],
         );
+
+        let squared_sample_radius_expr = emit_in_func(fragment_function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Multiply,
+                    left: sample_radius_expr,
+                    right: sample_radius_expr,
+                },
+            )
+        });
 
         let zero_constant =
             define_constant_if_missing(&mut module.constants, float32_constant(0.0));
 
-        let summed_unoccupied_height_ptr_expr = append_to_arena(
+        let summed_occlusion_sample_values_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
             Expression::LocalVariable(append_to_arena(
                 &mut fragment_function.local_variables,
                 LocalVariable {
-                    name: new_name("summedUnoccupiedHeight"),
+                    name: new_name("summedOcclusionSampleValues"),
                     ty: f32_type,
                     init: Some(zero_constant),
                 },
@@ -396,36 +426,39 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             },
         );
 
-        let unoccupied_height_expr = source_code_lib.generate_function_call_in_block(
+        let occlusion_sample_value_expr = source_code_lib.generate_function_call_in_block(
             module,
             &mut sampling_loop.body,
             &mut fragment_function.expressions,
-            "computeUnoccupiedHeightForSample",
+            "computeAmbientOcclusionSampleValue",
             vec![
                 position_texture_expr,
                 position_sampler_expr,
                 projection_matrix_expr,
-                sampling_space_expr,
+                squared_sample_radius_expr,
+                position_expr,
+                normal_vector_expr,
+                rotation_expr,
                 sample_offset_expr,
             ],
         );
 
-        let summed_unoccupied_height_expr = emit(
+        let summed_occlusion_sample_values_expr = emit(
             &mut sampling_loop.body,
             &mut fragment_function.expressions,
             |expressions| {
-                let prev_summed_unoccupied_height_expr = append_to_arena(
+                let prev_summed_occlusion_sample_value_expr = append_to_arena(
                     expressions,
                     Expression::Load {
-                        pointer: summed_unoccupied_height_ptr_expr,
+                        pointer: summed_occlusion_sample_values_ptr_expr,
                     },
                 );
                 append_to_arena(
                     expressions,
                     Expression::Binary {
                         op: BinaryOperator::Add,
-                        left: prev_summed_unoccupied_height_expr,
-                        right: unoccupied_height_expr,
+                        left: prev_summed_occlusion_sample_value_expr,
+                        right: occlusion_sample_value_expr,
                     },
                 )
             },
@@ -434,8 +467,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         push_to_block(
             &mut sampling_loop.body,
             Statement::Store {
-                pointer: summed_unoccupied_height_ptr_expr,
-                value: summed_unoccupied_height_expr,
+                pointer: summed_occlusion_sample_values_ptr_expr,
+                value: summed_occlusion_sample_values_expr,
             },
         );
 
@@ -444,32 +477,35 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             &mut fragment_function.expressions,
         );
 
-        let occlusion_expr = emit_in_func(fragment_function, |function| {
-            let summed_unoccupied_height_expr = include_expr_in_func(
-                function,
-                Expression::Load {
-                    pointer: summed_unoccupied_height_ptr_expr,
-                },
-            );
+        let summed_occlusion_sample_values_expr = emit_in_func(fragment_function, |function| {
             include_expr_in_func(
                 function,
-                Expression::Binary {
-                    op: BinaryOperator::Multiply,
-                    left: summed_unoccupied_height_expr,
-                    right: sample_normalization_expr,
+                Expression::Load {
+                    pointer: summed_occlusion_sample_values_ptr_expr,
                 },
             )
         });
 
+        let ambient_visibility_expr = source_code_lib.generate_function_call(
+            module,
+            fragment_function,
+            "computeAmbientVisibility",
+            vec![
+                sample_normalization_expr,
+                contrast_expr,
+                summed_occlusion_sample_values_expr,
+            ],
+        );
+
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
-            "occlusion",
+            "ambientVisibility",
             f32_type,
             None,
             None,
             F32_WIDTH,
-            occlusion_expr,
+            ambient_visibility_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
@@ -480,10 +516,29 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        framebuffer_position_expr: Handle<Expression>,
+        texel_dimensions_expr: Handle<Expression>,
         screen_space_texture_coord_expr: Handle<Expression>,
     ) {
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
+
+        let (position_texture_binding, position_sampler_binding) =
+            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
+
+        let position_texture = SampledTexture::declare(
+            &mut module.types,
+            &mut module.global_variables,
+            TextureType::Image2D,
+            "position",
+            *bind_group_idx,
+            position_texture_binding,
+            Some(position_sampler_binding),
+            None,
+        );
+
+        *bind_group_idx += 1;
+
+        let (position_texture_expr, position_sampler_expr) =
+            position_texture.generate_texture_and_sampler_expressions(fragment_function, false);
 
         let (ambient_color_texture_binding, ambient_color_sampler_binding) =
             RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Color as usize];
@@ -504,42 +559,38 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let ambient_color_expr = ambient_color_texture
             .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
 
-        let (occlusion_texture_binding, occlusion_sampler_binding) =
+        let (ambient_visibility_texture_binding, ambient_visibility_sampler_binding) =
             RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Occlusion as usize];
 
-        let occlusion_texture = SampledTexture::declare(
+        let ambient_visibility_texture = SampledTexture::declare(
             &mut module.types,
             &mut module.global_variables,
             TextureType::Image2D,
-            "occlusion",
+            "ambientVisibility",
             *bind_group_idx,
-            occlusion_texture_binding,
-            Some(occlusion_sampler_binding),
+            ambient_visibility_texture_binding,
+            Some(ambient_visibility_sampler_binding),
             None,
         );
 
         *bind_group_idx += 1;
 
-        let (occlusion_texture_expr, occlusion_sampler_expr) =
-            occlusion_texture.generate_texture_and_sampler_expressions(fragment_function, false);
-
-        let noise_factor_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "generateInterleavedGradientNoiseFactor",
-            vec![framebuffer_position_expr],
-        );
+        let (ambient_visibility_texture_expr, ambient_visibility_sampler_expr) =
+            ambient_visibility_texture
+                .generate_texture_and_sampler_expressions(fragment_function, false);
 
         let occluded_ambient_color_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
             "computeOccludedAmbientColor",
             vec![
-                occlusion_texture_expr,
-                occlusion_sampler_expr,
+                position_texture_expr,
+                position_sampler_expr,
+                ambient_visibility_texture_expr,
+                ambient_visibility_sampler_expr,
+                texel_dimensions_expr,
                 screen_space_texture_coord_expr,
                 ambient_color_expr,
-                noise_factor_expr,
             ],
         );
 

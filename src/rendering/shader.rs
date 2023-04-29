@@ -7474,7 +7474,8 @@ mod test {
                 AmbientOcclusionShaderInput::Application,
             )),
             VertexAttributeSet::empty(),
-                RenderAttachmentQuantitySet::COLOR
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::COLOR
                 | RenderAttachmentQuantitySet::OCCLUSION,
             RenderAttachmentQuantitySet::empty(),
         )

@@ -56,13 +56,12 @@ lazy_static! {
         MaterialID(hash64!("AmbientOcclusionDisabledMaterial"));
 }
 
-/// Uniform holding horizontal offsets for the ambient occlusion samples. Each
-/// element in the `sample_offsets` array is a [`Vector4`] whose x- and
-/// y-component are the actual horizontal sample offsets, and whose z- and
-/// w-component are the precomputed half and whole vertical height,
-/// respectively, of the sampling bounding sphere (with radius `sample_radius`)
-/// at the location of the sample. Only the first `sample_count` offsets in the
-/// array will be computed.
+/// Uniform holding horizontal offsets for the ambient occlusion samples. Only
+/// the first `sample_count` offsets in the array will be computed. The uniform
+/// also contains the ambient occlusion parameters needed in the shader.
+///
+/// The size of this struct has to be a multiple of 16 bytes as required for
+/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct AmbientOcclusionSamples {
@@ -70,7 +69,7 @@ struct AmbientOcclusionSamples {
     sample_count: u32,
     sample_radius: f32,
     sample_normalization: f32,
-    _padding: fre,
+    contrast: fre,
 }
 
 /// Adds the material specifications for ambient occlusion materials with the
@@ -88,7 +87,7 @@ pub fn register_ambient_occlusion_materials(
     let vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let vertex_attribute_requirements_for_shader = VertexAttributeSet::empty();
 
-    let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius);
+    let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
 
     material_library.add_material_specification(
         *AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
@@ -113,7 +112,9 @@ pub fn register_ambient_occlusion_materials(
         MaterialSpecification::new(
             vertex_attribute_requirements_for_mesh,
             vertex_attribute_requirements_for_shader,
-            RenderAttachmentQuantitySet::COLOR | RenderAttachmentQuantitySet::OCCLUSION,
+            RenderAttachmentQuantitySet::POSITION
+                | RenderAttachmentQuantitySet::COLOR
+                | RenderAttachmentQuantitySet::OCCLUSION,
             RenderAttachmentQuantitySet::empty(),
             None,
             Vec::new(),
@@ -138,7 +139,7 @@ pub fn register_ambient_occlusion_materials(
 }
 
 impl AmbientOcclusionSamples {
-    fn new(sample_count: u32, sample_radius: fre) -> Self {
+    fn new(sample_count: u32, sample_radius: fre, intensity_scale: f32, contrast: f32) -> Self {
         assert_ne!(sample_count, 0);
         assert!(sample_count <= MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u32);
         assert!(sample_radius > 0.0);
@@ -149,8 +150,6 @@ impl AmbientOcclusionSamples {
 
         let mut sample_offsets = [Vector4::zeroed(); MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT];
 
-        let mut summed_sphere_height = 0.0;
-
         for offset in &mut sample_offsets[..(sample_count as usize)] {
             // Take square root of radius fraction to ensure uniform
             // distribution over the disk
@@ -160,27 +159,18 @@ impl AmbientOcclusionSamples {
             let angle = angle_range.sample(&mut rng);
             let (sin_angle, cos_angle) = fre::sin_cos(angle);
 
-            let half_sphere_height = sample_radius * fre::sqrt(1.0 - radius_fraction.powi(2));
-            let sphere_height = 2.0 * half_sphere_height;
-
             offset.x = radius * cos_angle;
             offset.y = radius * sin_angle;
-            offset.z = half_sphere_height;
-            offset.w = sphere_height;
-
-            summed_sphere_height += sphere_height;
         }
 
-        // While the normalization can be calculated analytically, computing it
-        // from the actual samples gives correlated errors and thus less noise
-        let sample_normalization = 1.0 / summed_sphere_height;
+        let sample_normalization = 2.0 * intensity_scale / (fre::PI * (sample_count as fre));
 
         Self {
             sample_offsets,
             sample_count,
             sample_radius,
             sample_normalization,
-            _padding: 0.0,
+            contrast,
         }
     }
 }
