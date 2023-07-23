@@ -120,8 +120,7 @@ impl<F: Float> Frustum<F> {
         // the point on the frustum closest to the sphere
         let mut closest_point_ndc = Point3::origin();
 
-        for (plane, (plane_axis, plane_offset_ndc)) in
-            self.planes.iter().zip(Self::CUBE_PLANES_NDC.into_iter())
+        for (plane, (plane_axis, plane_offset_ndc)) in self.planes.iter().zip(Self::CUBE_PLANES_NDC)
         {
             // If we already know that the sphere center lies in the
             // negative halfspace of the opposite plane, there is no
