@@ -13,8 +13,11 @@ use crate::{
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Matrix3x2, Point3, UnitQuaternion, UnitVector3, Vector2, Vector3};
-use std::fmt::{Debug, Display};
+use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
+use std::{
+    fmt::{Debug, Display},
+    ops::Neg,
+};
 
 /// Represents a type of attribute associated with a mesh vertex.
 pub trait VertexAttribute: Sized {
@@ -117,6 +120,37 @@ impl VertexAttributeSet {
     pub const FOR_LIGHT_SHADING: Self = Self::POSITION.union(Self::NORMAL_VECTOR);
     pub const FOR_TEXTURED_LIGHT_SHADING: Self =
         Self::FOR_LIGHT_SHADING.union(Self::TEXTURE_COORDS);
+}
+
+impl<F: Float> VertexPosition<F> {
+    /// Returns the position transformed by the given similarity transform.
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+        Self(transform * self.0)
+    }
+}
+
+impl<F: Float> VertexNormalVector<F> {
+    /// Returns the normal vector transformed by the given similarity transform.
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+        Self(transform.isometry.rotation * self.0)
+    }
+}
+
+impl<F: Float> VertexTangentSpaceQuaternion<F> {
+    /// Returns the tangent space quaternion transformed by the given similarity
+    /// transform.
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+        let mut rotated_tangent_space_quaternion = transform.isometry.rotation * self.0;
+
+        // Preserve encoding of tangent space handedness in real component of
+        // tangent space quaternion
+        if (rotated_tangent_space_quaternion.w < F::ZERO) != (self.0.w < F::ZERO) {
+            rotated_tangent_space_quaternion =
+                UnitQuaternion::new_unchecked(rotated_tangent_space_quaternion.neg());
+        }
+
+        Self(rotated_tangent_space_quaternion)
+    }
 }
 
 impl<F: Float> VertexAttribute for VertexPosition<F> {
@@ -553,6 +587,22 @@ impl<F: Float> TriangleMesh<F> {
 
         self.tangent_space_quaternion_change_tracker
             .notify_count_change();
+    }
+
+    /// Applies the given similarity transform to the mesh, transforming vertex
+    /// positions, normal vectors and tangent space quaternions.
+    pub fn transform(&mut self, transform: &Similarity3<F>) {
+        for position in &mut self.positions {
+            *position = position.transformed(transform);
+        }
+
+        for normal_vector in &mut self.normal_vectors {
+            *normal_vector = normal_vector.transformed(transform);
+        }
+
+        for tangent_space_quaternion in &mut self.tangent_space_quaternions {
+            *tangent_space_quaternion = tangent_space_quaternion.transformed(transform);
+        }
     }
 
     /// Merges the given mesh into this mesh.
