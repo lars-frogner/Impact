@@ -350,7 +350,31 @@ impl<F: Float> TriangleMesh<F> {
         self.index_change_tracker.change()
     }
 
-    /// Computes the axis-aligned bounding box enclosing all vertices in the
+    /// Returns an iterator over the mesh triangles, each item containing the
+    /// three triangle indices.
+    pub fn triangle_indices(&self) -> impl Iterator<Item = [usize; 3]> + '_ {
+        self.indices().chunks_exact(3).map(|indices| {
+            [
+                indices[0] as usize,
+                indices[1] as usize,
+                indices[2] as usize,
+            ]
+        })
+    }
+
+    /// Returns an iterator over the mesh triangles, each item containing the
+    /// three triangle vertex positions.
+    pub fn triangle_vertex_positions(&self) -> impl Iterator<Item = [&Point3<F>; 3]> {
+        self.triangle_indices().map(|[i, j, k]| {
+            [
+                &self.positions[i].0,
+                &self.positions[j].0,
+                &self.positions[k].0,
+            ]
+        })
+    }
+
+    /// Computes the axis-aligned boundtobjing box enclosing all vertices in the
     /// mesh, or returns [`None`] if the mesh has no vertices.
     pub fn compute_aabb(&self) -> Option<AxisAlignedBox<F>> {
         if self.has_positions() {
@@ -379,11 +403,7 @@ impl<F: Float> TriangleMesh<F> {
 
         let mut summed_normal_vectors = vec![Vector3::zeros(); self.n_vertices()];
 
-        for indices in self.indices.chunks_exact(3) {
-            let idx0 = indices[0] as usize;
-            let idx1 = indices[1] as usize;
-            let idx2 = indices[2] as usize;
-
+        for [idx0, idx1, idx2] in self.triangle_indices() {
             let p0 = &self.positions[idx0].0;
             let p1 = &self.positions[idx1].0;
             let p2 = &self.positions[idx2].0;
@@ -437,11 +457,7 @@ impl<F: Float> TriangleMesh<F> {
 
         let mut summed_tangent_and_bitangent_vectors = vec![Matrix3x2::zeros(); self.n_vertices()];
 
-        for indices in self.indices.chunks_exact(3) {
-            let idx0 = indices[0] as usize;
-            let idx1 = indices[1] as usize;
-            let idx2 = indices[2] as usize;
-
+        for [idx0, idx1, idx2] in self.triangle_indices() {
             let p0 = &self.positions[idx0].0;
             let p1 = &self.positions[idx1].0;
             let p2 = &self.positions[idx2].0;
