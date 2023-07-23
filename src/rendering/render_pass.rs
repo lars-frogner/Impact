@@ -1596,7 +1596,7 @@ impl RenderPassSpecification {
                 color_attachments.extend(
                     render_attachment_texture_manager
                         .request_render_attachment_texture_views(render_attachment_quantities)?
-                        .zip(other_load_operations.into_iter())
+                        .zip(other_load_operations)
                         .map(|(texture_view, load_operation)| {
                             Some(wgpu::RenderPassColorAttachment {
                                 view: texture_view,

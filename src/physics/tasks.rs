@@ -29,7 +29,7 @@ impl PhysicsSimulator {
     /// handling in the given set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
-        task_errors: &mut ThreadPoolTaskErrors,
+        task_errors: &ThreadPoolTaskErrors,
         control_flow: &mut ControlFlow<'_>,
     ) {
         if task_errors.n_errors() > 0 {

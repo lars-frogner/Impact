@@ -153,8 +153,7 @@ impl Parse for QueryClosure {
         if input.lookahead1().peek(Token![,]) {
             input.parse::<Token![,]>()?;
             comp_args.extend(
-                Punctuated::<QueryCompClosureArg, Token![,]>::parse_separated_nonempty(input)?
-                    .into_iter(),
+                Punctuated::<QueryCompClosureArg, Token![,]>::parse_separated_nonempty(input)?,
             );
         }
         input.parse::<Token![|]>()?;
@@ -425,7 +424,7 @@ fn get_storage_iter_code_sorted_by_arg_type(
     let mut type_names_and_code: Vec<_> = arg_type_refs
         .iter()
         .map(|ty| ty.elem.to_token_stream().to_string())
-        .zip(storage_iter_code.into_iter())
+        .zip(storage_iter_code)
         .collect();
     type_names_and_code.sort_by_key(|(ty, _)| ty.to_string());
     type_names_and_code
