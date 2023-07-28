@@ -496,7 +496,6 @@ impl<'a> PrepassShaderGenerator<'a> {
 
             let emissive_rgba_color_expr = append_unity_component_to_vec3(
                 &mut module.types,
-                &mut module.constants,
                 fragment_function,
                 emissive_color_expr,
             );
@@ -518,12 +517,8 @@ impl<'a> PrepassShaderGenerator<'a> {
                     .expect("Missing position for writing to render attachment"),
             );
 
-            let padded_position_expr = append_unity_component_to_vec3(
-                &mut module.types,
-                &mut module.constants,
-                fragment_function,
-                position_expr,
-            );
+            let padded_position_expr =
+                append_unity_component_to_vec3(&mut module.types, fragment_function, position_expr);
 
             output_struct_builder.add_field(
                 "position",
@@ -549,7 +544,6 @@ impl<'a> PrepassShaderGenerator<'a> {
 
             let normal_rgba_color_expr = append_unity_component_to_vec3(
                 &mut module.types,
-                &mut module.constants,
                 fragment_function,
                 normal_color_expr,
             );
@@ -584,7 +578,6 @@ impl<'a> PrepassShaderGenerator<'a> {
         if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::COLOR) {
             let ambient_rgba_color_expr = append_unity_component_to_vec3(
                 &mut module.types,
-                &mut module.constants,
                 fragment_function,
                 ambient_color_expr,
             );

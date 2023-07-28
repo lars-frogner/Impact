@@ -1,21 +1,21 @@
 //! Generation of shaders for ambient occlusion.
 
 use super::{
-    append_to_arena, append_unity_component_to_vec3, define_constant_if_missing, emit,
-    emit_in_func, float32_constant, include_expr_in_func, include_named_expr_in_func,
-    insert_in_arena, new_name, push_to_block, u32_constant, CameraProjectionVariable, ForLoop,
-    InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder, PushConstantFieldExpressions,
-    SampledTexture, ShaderTricks, SourceCode, TextureType, F32_WIDTH, U32_TYPE, U32_WIDTH,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    append_to_arena, append_unity_component_to_vec3, emit, emit_in_func, include_expr_in_func,
+    include_named_expr_in_func, insert_in_arena, new_name, push_to_block, CameraProjectionVariable,
+    ForLoop, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
+    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_WIDTH,
+    U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::{
     rendering::{shader::F32_TYPE, RenderAttachmentQuantity, RENDER_ATTACHMENT_BINDINGS},
     scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 use naga::{
-    AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle,
+    AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle, Literal,
     LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,
 };
+use std::num::NonZeroU32;
 
 /// Input description specifying the stage and uniform bindings for ambient
 /// occlusion.
@@ -133,18 +133,15 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
-        let max_sample_count_constant = define_constant_if_missing(
-            &mut module.constants,
-            u32_constant(MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u64),
-        );
-
         let sample_offset_array_type = insert_in_arena(
             &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
                     base: vec4_type,
-                    size: ArraySize::Constant(max_sample_count_constant),
+                    size: ArraySize::Constant(
+                        NonZeroU32::new(MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u32).unwrap(),
+                    ),
                     stride: VECTOR_4_SIZE,
                 },
             },
@@ -383,8 +380,10 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             )
         });
 
-        let zero_constant =
-            define_constant_if_missing(&mut module.constants, float32_constant(0.0));
+        let zero_constant_expr = append_to_arena(
+            &mut module.const_expressions,
+            Expression::Literal(Literal::F32(0.0)),
+        );
 
         let summed_occlusion_sample_values_ptr_expr = append_to_arena(
             &mut fragment_function.expressions,
@@ -393,14 +392,14 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 LocalVariable {
                     name: new_name("summedOcclusionSampleValues"),
                     ty: f32_type,
-                    init: Some(zero_constant),
+                    init: Some(zero_constant_expr),
                 },
             )),
         );
 
         let mut sampling_loop = ForLoop::new(
             &mut module.types,
-            &mut module.constants,
+            &mut module.const_expressions,
             fragment_function,
             "sample",
             sample_count_expr,
@@ -598,7 +597,6 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
 
         let output_rgba_color_expr = append_unity_component_to_vec3(
             &mut module.types,
-            &mut module.constants,
             fragment_function,
             occluded_ambient_color_expr,
         );

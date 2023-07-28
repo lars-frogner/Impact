@@ -40,15 +40,16 @@ use lazy_static::lazy_static;
 use microfacet::{MicrofacetShaderGenerator, MicrofacetVertexOutputFieldIndices};
 use naga::{
     AddressSpace, Arena, ArraySize, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant,
-    ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
-    GlobalVariable, Handle, ImageClass, ImageDimension, ImageQuery, Interpolation, LocalVariable,
-    Module, ResourceBinding, SampleLevel, Sampling, ScalarKind, ScalarValue, ShaderStage, Span,
-    Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator,
-    UniqueArena, VectorSize,
+    EntryPoint, Expression, Function, FunctionArgument, FunctionResult, GlobalVariable, Handle,
+    ImageClass, ImageDimension, ImageQuery, Interpolation, Literal, LocalVariable, Module,
+    ResourceBinding, SampleLevel, Sampling, ScalarKind, ShaderStage, Span, Statement, StructMember,
+    SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator, UniqueArena, VectorSize,
 };
 use prepass::PrepassVertexOutputFieldIndices;
 use skybox::SkyboxVertexOutputFieldIndices;
-use std::{borrow::Cow, collections::HashMap, fs, hash::Hash, mem, path::Path, vec};
+use std::{
+    borrow::Cow, collections::HashMap, fs, hash::Hash, mem, num::NonZeroU32, path::Path, vec,
+};
 use vertex_color::VertexColorShaderGenerator;
 
 /// A graphics shader program.
@@ -446,7 +447,6 @@ pub struct ForLoop {
     continuing: Block,
     break_if: Option<Handle<Expression>>,
     n_iterations_expr: Handle<Expression>,
-    zero_constant: Handle<Constant>,
 }
 
 /// Helper for declaring global variables for a texture
@@ -479,6 +479,7 @@ pub struct ModuleImporter<'a, 'b> {
     type_map: HashMap<Handle<Type>, Handle<Type>>,
     const_map: HashMap<Handle<Constant>, Handle<Constant>>,
     global_map: HashMap<Handle<GlobalVariable>, Handle<GlobalVariable>>,
+    const_expression_map: HashMap<Handle<Expression>, Handle<Expression>>,
     function_map: HashMap<String, Handle<Function>>,
 }
 
@@ -1373,12 +1374,7 @@ impl ShaderGenerator {
                     tricks,
                     position_expr,
                 ),
-            _ => append_unity_component_to_vec3(
-                &mut module.types,
-                &mut module.constants,
-                vertex_function,
-                position_expr,
-            ),
+            _ => append_unity_component_to_vec3(&mut module.types, vertex_function, position_expr),
         };
 
         let framebuffer_position_field_idx = output_struct_builder.add_builtin_position_field(
@@ -1624,18 +1620,15 @@ impl ShaderGenerator {
             },
         );
 
-        let max_light_count_constant = define_constant_if_missing(
-            &mut module.constants,
-            u32_constant(light_shader_input.max_light_count),
-        );
-
         let light_array_type = insert_in_arena(
             &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
                     base: single_light_struct_type,
-                    size: ArraySize::Constant(max_light_count_constant),
+                    size: ArraySize::Constant(
+                        NonZeroU32::new(light_shader_input.max_light_count as u32).unwrap(),
+                    ),
                     stride: single_light_struct_size,
                 },
             },
@@ -1780,18 +1773,15 @@ impl ShaderGenerator {
             },
         );
 
-        let max_light_count_constant = define_constant_if_missing(
-            &mut module.constants,
-            u32_constant(light_shader_input.max_light_count),
-        );
-
         let light_array_type = insert_in_arena(
             &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
                     base: single_light_struct_type,
-                    size: ArraySize::Constant(max_light_count_constant),
+                    size: ArraySize::Constant(
+                        NonZeroU32::new(light_shader_input.max_light_count as u32).unwrap(),
+                    ),
                     stride: single_light_struct_size,
                 },
             },
@@ -1938,18 +1928,13 @@ impl ShaderGenerator {
             },
         );
 
-        let max_shadow_map_cascades_constant = define_constant_if_missing(
-            &mut module.constants,
-            u32_constant(MAX_SHADOW_MAP_CASCADES.into()),
-        );
-
         let orthographic_transform_array_type = insert_in_arena(
             &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
                     base: orthographic_transform_struct_type,
-                    size: ArraySize::Constant(max_shadow_map_cascades_constant),
+                    size: ArraySize::Constant(NonZeroU32::new(MAX_SHADOW_MAP_CASCADES).unwrap()),
                     stride: orthographic_transform_struct_size,
                 },
             },
@@ -2006,18 +1991,15 @@ impl ShaderGenerator {
             },
         );
 
-        let max_light_count_constant = define_constant_if_missing(
-            &mut module.constants,
-            u32_constant(light_shader_input.max_light_count),
-        );
-
         let lights_array_type = insert_in_arena(
             &mut module.types,
             Type {
                 name: None,
                 inner: TypeInner::Array {
                     base: single_light_struct_type,
-                    size: ArraySize::Constant(max_light_count_constant),
+                    size: ArraySize::Constant(
+                        NonZeroU32::new(light_shader_input.max_light_count as u32).unwrap(),
+                    ),
                     stride: single_light_struct_size,
                 },
             },
@@ -2373,12 +2355,8 @@ impl CameraProjectionVariable {
     ) -> Handle<Expression> {
         let matrix_expr = self.generate_projection_matrix_expr(vertex_function);
 
-        let homogeneous_position_expr = append_unity_component_to_vec3(
-            &mut module.types,
-            &mut module.constants,
-            vertex_function,
-            position_expr,
-        );
+        let homogeneous_position_expr =
+            append_unity_component_to_vec3(&mut module.types, vertex_function, position_expr);
 
         emit_in_func(vertex_function, |function| {
             let projected_position_expr = include_expr_in_func(
@@ -2449,7 +2427,6 @@ impl UnidirectionalLightProjectionExpressions {
 
         append_unity_component_to_vec3(
             &mut module.types,
-            &mut module.constants,
             vertex_function,
             light_clip_space_position_expr,
         )
@@ -3865,14 +3842,15 @@ impl ForLoop {
     /// be added to it by pushing to the `body` field of the returned `ForLoop`.
     pub fn new(
         types: &mut UniqueArena<Type>,
-        constants: &mut Arena<Constant>,
+        const_expressions: &mut Arena<Expression>,
         function: &mut Function,
         name: &str,
         n_iterations_expr: Handle<Expression>,
     ) -> Self {
         let u32_type = insert_in_arena(types, U32_TYPE);
 
-        let zero_constant = define_constant_if_missing(constants, u32_constant(0));
+        let zero_constant_expr =
+            append_to_arena(const_expressions, Expression::Literal(Literal::U32(0)));
 
         let idx_ptr_expr = append_to_arena(
             &mut function.expressions,
@@ -3881,7 +3859,7 @@ impl ForLoop {
                 LocalVariable {
                     name: Some(format!("{}Idx", name)),
                     ty: u32_type,
-                    init: Some(zero_constant),
+                    init: Some(zero_constant_expr),
                 },
             )),
         );
@@ -3899,10 +3877,8 @@ impl ForLoop {
 
         let mut continuing_block = Block::new();
 
-        let unity_constant_expr = append_to_arena(
-            &mut function.expressions,
-            Expression::Constant(define_constant_if_missing(constants, u32_constant(1))),
-        );
+        let unity_constant_expr =
+            include_expr_in_func(function, Expression::Literal(Literal::U32(1)));
 
         let incremented_idx_expr = emit(
             &mut continuing_block,
@@ -3954,7 +3930,6 @@ impl ForLoop {
             break_if: Some(break_if_expr),
             idx_expr,
             n_iterations_expr,
-            zero_constant,
         }
     }
 
@@ -3972,8 +3947,7 @@ impl ForLoop {
             },
         );
 
-        let zero_constant_expr =
-            append_to_arena(expressions, Expression::Constant(self.zero_constant));
+        let zero_constant_expr = append_to_arena(expressions, Expression::Literal(Literal::U32(0)));
 
         let n_iter_above_zero_expr = emit(block, expressions, |expressions| {
             append_to_arena(
@@ -4250,21 +4224,11 @@ impl SampledTexture {
     ) -> Handle<Expression> {
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
 
-        let unity_constant_expr = include_expr_in_func(
-            function,
-            Expression::Constant(define_constant_if_missing(
-                &mut module.constants,
-                float32_constant(1.0),
-            )),
-        );
+        let unity_constant_expr =
+            include_expr_in_func(function, Expression::Literal(Literal::F32(1.0)));
 
-        let half_constant_expr = include_expr_in_func(
-            function,
-            Expression::Constant(define_constant_if_missing(
-                &mut module.constants,
-                float32_constant(0.5),
-            )),
-        );
+        let half_constant_expr =
+            include_expr_in_func(function, Expression::Literal(Literal::F32(0.5)));
 
         let (texture_coord_expr, depth_reference_expr) = emit_in_func(function, |function| {
             // Map x [-1, 1] to u [0, 1]
@@ -4471,6 +4435,7 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             type_map: HashMap::new(),
             const_map: HashMap::new(),
             global_map: HashMap::new(),
+            const_expression_map: HashMap::new(),
             function_map: HashMap::new(),
         }
     }
@@ -4533,27 +4498,15 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                             span: *span,
                         }
                     }
-                    TypeInner::Array { base, size, stride } => {
-                        let size = match size {
-                            ArraySize::Constant(c) => ArraySize::Constant(self.import_const(*c)),
-                            ArraySize::Dynamic => ArraySize::Dynamic,
-                        };
-                        TypeInner::Array {
-                            base: self.import_type(*base),
-                            size,
-                            stride: *stride,
-                        }
-                    }
-                    TypeInner::BindingArray { base, size } => {
-                        let size = match size {
-                            ArraySize::Constant(c) => ArraySize::Constant(self.import_const(*c)),
-                            ArraySize::Dynamic => ArraySize::Dynamic,
-                        };
-                        TypeInner::BindingArray {
-                            base: self.import_type(*base),
-                            size,
-                        }
-                    }
+                    TypeInner::Array { base, size, stride } => TypeInner::Array {
+                        base: self.import_type(*base),
+                        size: *size,
+                        stride: *stride,
+                    },
+                    TypeInner::BindingArray { base, size } => TypeInner::BindingArray {
+                        base: self.import_type(*base),
+                        size: *size,
+                    },
                     TypeInner::AccelerationStructure { .. } | TypeInner::RayQuery { .. } => {
                         panic!("Unsupported type")
                     }
@@ -4576,17 +4529,9 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
 
             let new_const = Constant {
                 name: c.name.clone(),
-                specialization: c.specialization,
-                inner: match &c.inner {
-                    ConstantInner::Scalar { .. } => c.inner.clone(),
-                    ConstantInner::Composite { ty, components } => {
-                        let components = components.iter().map(|c| self.import_const(*c)).collect();
-                        ConstantInner::Composite {
-                            ty: self.import_type(*ty),
-                            components,
-                        }
-                    }
-                },
+                r#override: c.r#override,
+                ty: self.import_type(c.ty),
+                init: self.import_const_expression(c.init),
             };
 
             let new_h =
@@ -4610,13 +4555,115 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                 space: gv.space,
                 binding: gv.binding.clone(),
                 ty: self.import_type(gv.ty),
-                init: gv.init.map(|c| self.import_const(c)),
+                init: gv
+                    .init
+                    .map(|const_expr| self.import_const_expression(const_expr)),
             };
 
             let new_h = append_to_arena(&mut self.exported_to_module.global_variables, new_global);
             self.global_map.insert(h_global, new_h);
             new_h
         })
+    }
+
+    fn import_const_expression(&mut self, h_const_expr: Handle<Expression>) -> Handle<Expression> {
+        self.const_expression_map
+            .get(&h_const_expr)
+            .copied()
+            .unwrap_or_else(|| {
+                let const_expr = self
+                    .imported_from_module
+                    .const_expressions
+                    .try_get(h_const_expr)
+                    .unwrap()
+                    .clone();
+
+                let new_const_expr = match const_expr {
+                    Expression::Constant(c) => Expression::Constant(self.import_const(c)),
+                    Expression::Compose { ty, components } => Expression::Compose {
+                        ty: self.import_type(ty),
+                        components: components
+                            .iter()
+                            .map(|const_expr| self.import_const_expression(*const_expr))
+                            .collect(),
+                    },
+                    Expression::Access { base, index } => Expression::Access {
+                        base: self.import_const_expression(base),
+                        index: self.import_const_expression(index),
+                    },
+                    Expression::AccessIndex { base, index } => Expression::AccessIndex {
+                        base: self.import_const_expression(base),
+                        index,
+                    },
+                    Expression::Splat { size, value } => Expression::Splat {
+                        size,
+                        value: self.import_const_expression(value),
+                    },
+                    Expression::Swizzle {
+                        size,
+                        vector,
+                        pattern,
+                    } => Expression::Swizzle {
+                        size,
+                        vector: self.import_const_expression(vector),
+                        pattern,
+                    },
+                    Expression::Unary { op, expr } => Expression::Unary {
+                        op,
+                        expr: self.import_const_expression(expr),
+                    },
+                    Expression::Binary { op, left, right } => Expression::Binary {
+                        op,
+                        left: self.import_const_expression(left),
+                        right: self.import_const_expression(right),
+                    },
+                    Expression::Select {
+                        condition,
+                        accept,
+                        reject,
+                    } => Expression::Select {
+                        condition: self.import_const_expression(condition),
+                        accept: self.import_const_expression(accept),
+                        reject: self.import_const_expression(reject),
+                    },
+                    Expression::Relational { fun, argument } => Expression::Relational {
+                        fun,
+                        argument: self.import_const_expression(argument),
+                    },
+                    Expression::Math {
+                        fun,
+                        arg,
+                        arg1,
+                        arg2,
+                        arg3,
+                    } => Expression::Math {
+                        fun,
+                        arg: self.import_const_expression(arg),
+                        arg1: arg1.map(|arg1| self.import_const_expression(arg1)),
+                        arg2: arg2.map(|arg2| self.import_const_expression(arg2)),
+                        arg3: arg3.map(|arg3| self.import_const_expression(arg3)),
+                    },
+                    Expression::As {
+                        expr,
+                        kind,
+                        convert,
+                    } => Expression::As {
+                        expr: self.import_const_expression(expr),
+                        kind,
+                        convert,
+                    },
+                    Expression::Literal(_) => const_expr,
+                    Expression::ZeroValue(ty) => Expression::ZeroValue(self.import_type(ty)),
+                    _ => panic!("Invalid variant for constant expression"),
+                };
+
+                let new_h = append_to_arena(
+                    &mut self.exported_to_module.const_expressions,
+                    new_const_expr,
+                );
+                self.const_expression_map.insert(h_const_expr, new_h);
+                new_h
+            })
     }
 
     fn import_block(
@@ -4753,7 +4800,7 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                     | Statement::Kill
                     | Statement::Barrier(_) => stmt.clone(),
 
-                    Statement::RayQuery { .. } => {
+                    Statement::RayQuery { .. } | Statement::WorkGroupUniformLoad { .. } => {
                         panic!("Unsupported statement")
                     }
                 }
@@ -4832,7 +4879,7 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                 gather: *gather,
                 coordinate: map_expr!(coordinate),
                 array_index: map_expr_opt!(array_index),
-                offset: offset.map(|c| self.import_const(c)),
+                offset: offset.map(|const_expr| self.import_const_expression(const_expr)),
                 level: match level {
                     SampleLevel::Auto | SampleLevel::Zero => *level,
                     SampleLevel::Exact(expr) => SampleLevel::Exact(map_expr!(expr)),
@@ -4940,14 +4987,17 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                 convert: *convert,
             },
             Expression::ArrayLength(expr) => Expression::ArrayLength(map_expr!(expr)),
-
-            Expression::LocalVariable(_) | Expression::FunctionArgument(_) => {
+            Expression::LocalVariable(_)
+            | Expression::FunctionArgument(_)
+            | Expression::Literal(_) => {
                 is_external = true;
                 expr.clone()
             }
-
             Expression::AtomicResult { .. } => expr.clone(),
-            Expression::RayQueryGetIntersection { .. } | Expression::RayQueryProceedResult => {
+            Expression::ZeroValue(ty) => Expression::ZeroValue(self.import_type(*ty)),
+            Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryProceedResult
+            | Expression::WorkGroupUniformLoadResult { .. } => {
                 panic!("Unsupported expression")
             }
         };
@@ -4983,7 +5033,9 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             let new_local = LocalVariable {
                 name: l.name.clone(),
                 ty: self.import_type(l.ty),
-                init: l.init.map(|c| self.import_const(c)),
+                init: l
+                    .init
+                    .map(|const_expr| self.import_const_expression(const_expr)),
             };
             let new_h = append_to_arena(&mut local_variables, new_local);
             assert_eq!(h_l, new_h);
@@ -5233,28 +5285,6 @@ fn new_name<S: ToString>(name_str: S) -> Option<String> {
     Some(name_str.to_string())
 }
 
-fn u32_constant(value: u64) -> Constant {
-    Constant {
-        name: None,
-        specialization: None,
-        inner: ConstantInner::Scalar {
-            width: U32_WIDTH as Bytes,
-            value: ScalarValue::Uint(value),
-        },
-    }
-}
-
-fn float32_constant(value: f64) -> Constant {
-    Constant {
-        name: None,
-        specialization: None,
-        inner: ConstantInner::Scalar {
-            width: F32_WIDTH as Bytes,
-            value: ScalarValue::Float(value),
-        },
-    }
-}
-
 fn swizzle_xy_expr(expr: Handle<Expression>) -> Expression {
     Expression::Swizzle {
         size: VectorSize::Bi,
@@ -5378,16 +5408,13 @@ fn include_named_expr_in_func<S: ToString>(
 /// and the last component is 1.0.
 fn append_unity_component_to_vec3(
     types: &mut UniqueArena<Type>,
-    constants: &mut Arena<Constant>,
     function: &mut Function,
     vec3_expr: Handle<Expression>,
 ) -> Handle<Expression> {
     let vec4_type = insert_in_arena(types, VECTOR_4_TYPE);
 
-    let unity_constant_expr = include_expr_in_func(
-        function,
-        Expression::Constant(define_constant_if_missing(constants, float32_constant(1.0))),
-    );
+    let unity_constant_expr =
+        include_expr_in_func(function, Expression::Literal(Literal::F32(1.0)));
 
     emit_in_func(function, |function| {
         include_expr_in_func(
@@ -5402,7 +5429,8 @@ fn append_unity_component_to_vec3(
 
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
-#[cfg(all(test, not(miri)))]
+#[cfg(test)]
+// #[cfg(not(miri))]
 mod test {
     #![allow(clippy::dbg_macro)]
 

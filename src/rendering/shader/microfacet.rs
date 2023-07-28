@@ -602,12 +602,8 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             )
         });
 
-        let output_rgba_color_expr = append_unity_component_to_vec3(
-            &mut module.types,
-            &mut module.constants,
-            fragment_function,
-            output_color_expr,
-        );
+        let output_rgba_color_expr =
+            append_unity_component_to_vec3(&mut module.types, fragment_function, output_color_expr);
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 

@@ -32,12 +32,8 @@ impl VertexColorShaderGenerator {
                 .expect("No `color` passed to vertex color fragment shader"),
         );
 
-        let output_rgba_color_expr = append_unity_component_to_vec3(
-            &mut module.types,
-            &mut module.constants,
-            fragment_function,
-            vertex_color_expr,
-        );
+        let output_rgba_color_expr =
+            append_unity_component_to_vec3(&mut module.types, fragment_function, vertex_color_expr);
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
