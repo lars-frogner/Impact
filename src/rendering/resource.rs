@@ -411,6 +411,7 @@ impl DesynchronizedRenderResources {
                         let feature_render_buffer_managers = instance_feature_buffers
                             .iter()
                             .map(|feature_buffer| {
+                                assert!(feature_buffer.n_valid_features() > 0);
                                 let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
                                     core_system,
                                     feature_buffer,
