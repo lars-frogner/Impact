@@ -59,16 +59,16 @@ fn transformVectorFromTangentSpace(
     tangentToParentSpaceRotationQuaternion: vec4<f32>,
     tangentSpaceVector: vec3<f32>,
 ) -> vec3<f32> {
-    var tangentSpaceVector = tangentSpaceVector;
+    var correctedTangentSpaceVector = tangentSpaceVector;
 
     // If the real component is negative, tangent space is really left-handed
     // and we have to flip the y (bitangent) component of the tangent space
     // vector before applying the rotation
     if tangentToParentSpaceRotationQuaternion.w < 0.0 {
-        tangentSpaceVector.y = -tangentSpaceVector.y;
+        correctedTangentSpaceVector.y = -correctedTangentSpaceVector.y;
     }
 
-    return rotateVectorWithQuaternion(tangentToParentSpaceRotationQuaternion, tangentSpaceVector);
+    return rotateVectorWithQuaternion(tangentToParentSpaceRotationQuaternion, correctedTangentSpaceVector);
 }
 
 fn transformVectorToTangentSpace(
