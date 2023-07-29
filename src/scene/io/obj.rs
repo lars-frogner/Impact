@@ -7,8 +7,8 @@ use crate::{
     },
     rendering::{fre, ColorSpace, RenderingSystem, TextureAddressingConfig, TextureConfig},
     scene::{
-        DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshID, MeshRepository, RoughnessComp,
-        SpecularColorComp, SpecularTextureComp, VertexColorComp,
+        DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshID, MeshRepository, NormalMapComp,
+        RGBColor, RoughnessComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
     },
 };
 use anyhow::{bail, Result};
@@ -267,59 +267,65 @@ fn create_material_components_from_tobj_material(
 ) -> Result<Vec<SingleInstance<ComponentStorage>>> {
     let obj_file_path = obj_file_path.as_ref();
 
-    if !material.dissolve_texture.is_empty() {
+    match material.dissolve {
+        Some(alpha) if alpha != 1.0 => {
+            log::warn!(
+                "Warning: Unsupported content in MTL material referenced in {}: \
+                 material `{}` uses a value for alpha not equal to 1 ({}) - alpha will be ignored",
+                obj_file_path,
+                &material.name,
+                alpha,
+            );
+        }
+        _ => {}
+    }
+    if let Some(alpha_texture_path) = &material.dissolve_texture {
         log::warn!(
-            "Warning: Unsupported MTL material referenced in {}: \
-             material `{}` uses a texture for alpha ({}) - falling back to fixed value of {} instead",
+            "Warning: Unsupported content in MTL material referenced in {}: \
+             material `{}` uses a texture for alpha ({}) - alpha will be ignored",
             obj_file_path,
             &material.name,
-            &material.dissolve_texture,
-            material.dissolve
+            alpha_texture_path,
         );
     }
-    if !material.shininess_texture.is_empty() {
+    if let Some(ambient_color) = material.ambient {
         log::warn!(
-            "Warning: Unsupported MTL material referenced in {}: \
+            "Warning: Unsupported content in MTL material referenced in {}: \
+             material `{}` uses an ambient color ({:?}) - ambient color will be ignored",
+            obj_file_path,
+            &material.name,
+            ambient_color,
+        );
+    }
+    if let Some(ambient_texture_path) = &material.ambient_texture {
+        log::warn!(
+            "Warning: Unsupported content in MTL material referenced in {}: \
+             material `{}` uses a texture for ambient color ({}) - ambient color will be ignored",
+            obj_file_path,
+            &material.name,
+            ambient_texture_path,
+        );
+    }
+    if let Some(shininess_texture_path) = &material.shininess_texture {
+        log::warn!(
+            "Warning: Unsupported content in MTL material referenced in {}: \
              material `{}` uses a texture for shininess ({}) - falling back to fixed value of {} instead",
              obj_file_path,
              &material.name,
-            &material.normal_texture,
-            material.shininess
-        );
-    }
-    if !material.normal_texture.is_empty() {
-        log::warn!(
-            "Warning: Unsupported MTL material referenced in {}: \
-             material `{}` uses a texture for normals ({}) - falling back to mesh normals instead",
-            obj_file_path,
-            &material.name,
-            &material.normal_texture,
-        );
-    }
-    if !material.ambient_texture.is_empty() {
-        log::warn!(
-            "Warning: Unsupported MTL material referenced in {}: \
-             material `{}` uses a texture for ambient color ({}) - falling back to fixed value of {:?} instead",
-             obj_file_path,
-             &material.name,
-            &material.normal_texture,
-            &material.ambient
+             shininess_texture_path,
+             material.shininess.unwrap_or(0.0)
         );
     }
 
-    let mut components = Vec::with_capacity(3);
+    let mut components = Vec::with_capacity(4);
 
-    if material.diffuse_texture.is_empty() {
-        components.push(ComponentStorage::from_single_instance_view(
-            &DiffuseColorComp(material.diffuse.into()),
-        ));
-    } else {
+    if let Some(diffuse_texture_path) = &material.diffuse_texture {
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
         let diffuse_texture_id = assets.load_texture_from_path(
             renderer.core_system(),
-            &material.diffuse_texture,
+            diffuse_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 addressing: TextureAddressingConfig::REPEATING,
@@ -330,19 +336,21 @@ fn create_material_components_from_tobj_material(
         components.push(ComponentStorage::from_single_instance_view(
             &DiffuseTextureComp(diffuse_texture_id),
         ));
+    } else {
+        components.push(ComponentStorage::from_single_instance_view(
+            &DiffuseColorComp(RGBColor::from_row_slice(
+                &material.diffuse.unwrap_or([0.0; 3]),
+            )),
+        ));
     }
 
-    if material.specular_texture.is_empty() {
-        components.push(ComponentStorage::from_single_instance_view(
-            &SpecularColorComp(material.specular.into()),
-        ));
-    } else {
+    if let Some(specular_texture_path) = &material.specular_texture {
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
         let specular_texture_id = assets.load_texture_from_path(
             renderer.core_system(),
-            &material.specular_texture,
+            specular_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 addressing: TextureAddressingConfig::REPEATING,
@@ -353,10 +361,35 @@ fn create_material_components_from_tobj_material(
         components.push(ComponentStorage::from_single_instance_view(
             &SpecularTextureComp(specular_texture_id),
         ));
+    } else {
+        components.push(ComponentStorage::from_single_instance_view(
+            &SpecularColorComp(RGBColor::from_row_slice(
+                &material.specular.unwrap_or([0.0; 3]),
+            )),
+        ));
+    }
+
+    if let Some(normal_texture_path) = &material.normal_texture {
+        let renderer = renderer.read().unwrap();
+        let mut assets = renderer.assets().write().unwrap();
+
+        let normal_texture_id = assets.load_texture_from_path(
+            renderer.core_system(),
+            normal_texture_path,
+            TextureConfig {
+                color_space: ColorSpace::Linear,
+                addressing: TextureAddressingConfig::REPEATING,
+                ..Default::default()
+            },
+        )?;
+
+        components.push(ComponentStorage::from_single_instance_view(&NormalMapComp(
+            normal_texture_id,
+        )));
     }
 
     components.push(ComponentStorage::from_single_instance_view(
-        &RoughnessComp::from_blinn_phong_shininess(material.shininess),
+        &RoughnessComp::from_blinn_phong_shininess(material.shininess.unwrap_or(0.0)),
     ));
 
     Ok(components)
