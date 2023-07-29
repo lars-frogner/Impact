@@ -5430,7 +5430,7 @@ fn append_unity_component_to_vec3(
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-// #[cfg(not(miri))]
+#[cfg(not(miri))]
 mod test {
     #![allow(clippy::dbg_macro)]
 
