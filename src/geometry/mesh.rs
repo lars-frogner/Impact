@@ -63,6 +63,7 @@ pub struct VertexTangentSpaceQuaternion<F: Float>(pub UnitQuaternion<F>);
 
 bitflags! {
     /// Bitflag encoding a set of [`VertexAttribute`]s.
+    #[derive(Debug, Clone, Copy, Hash)]
     pub struct VertexAttributeSet: u8 {
         const POSITION = 0b00000001;
         const COLOR = 0b00000010;

@@ -8,6 +8,7 @@ use std::{fmt::Display, path::Path};
 bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
     /// render attachment textures.
+    #[derive(Debug, Clone, Copy, Hash)]
     pub struct RenderAttachmentQuantitySet: u8 {
         const DEPTH = 0b00000001;
         const POSITION = 0b00000010;
