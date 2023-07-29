@@ -93,6 +93,7 @@ pub struct RenderPassRecorder {
 
 bitflags! {
     /// Bitflag encoding a set of hints for configuring a render pass.
+    #[derive(Debug, Clone, Copy)]
     pub struct RenderPassHints: u8 {
         /// The appearance of the rendered material is affected by light
         /// sources.
