@@ -354,13 +354,24 @@ impl InstanceFeatureStorage {
 }
 
 impl DynamicInstanceFeatureBuffer {
+    /// The number of features that space should be allocated for when a new
+    /// buffer is constructed.
+    ///
+    /// By having some initial space we avoid the issue of potentially
+    /// constructing empty render buffers when synchronizing this buffer with
+    /// the GPU.
+    const INITIAL_ALLOCATED_FEATURE_COUNT: usize = 1;
+
     /// Creates a new empty buffer for features of type `Fe`.
     pub fn new<Fe: InstanceFeature>() -> Self {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::BUFFER_LAYOUT,
             shader_input: Fe::SHADER_INPUT,
-            bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
+            bytes: AlignedByteVec::copied_from_slice(
+                Fe::FEATURE_ALIGNMENT,
+                &vec![0; Fe::FEATURE_SIZE * Self::INITIAL_ALLOCATED_FEATURE_COUNT],
+            ),
             n_valid_bytes: AtomicUsize::new(0),
             range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
         }
@@ -374,7 +385,10 @@ impl DynamicInstanceFeatureBuffer {
             type_descriptor,
             vertex_buffer_layout: storage.vertex_buffer_layout().clone(),
             shader_input: storage.shader_input().clone(),
-            bytes: AlignedByteVec::new(type_descriptor.alignment()),
+            bytes: AlignedByteVec::copied_from_slice(
+                type_descriptor.alignment(),
+                &vec![0; type_descriptor.size() * Self::INITIAL_ALLOCATED_FEATURE_COUNT],
+            ),
             n_valid_bytes: AtomicUsize::new(0),
             range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
         }
