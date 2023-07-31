@@ -404,26 +404,20 @@ impl DesynchronizedRenderResources {
                     }
                 }
                 Entry::Vacant(vacant_entry) => {
-                    // The first buffer is for model instance transforms and always present.
-                    // If it currently has no valid features, we don't have any data to create
-                    // render buffers for, so we defer creation until there is valid data.
-                    if instance_feature_buffers[0].n_valid_features() > 0 {
-                        let feature_render_buffer_managers = instance_feature_buffers
-                            .iter()
-                            .map(|feature_buffer| {
-                                assert!(feature_buffer.n_valid_features() > 0);
-                                let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
-                                    core_system,
-                                    feature_buffer,
-                                    Cow::Owned(model_id.to_string()),
-                                );
-                                feature_buffer.clear();
-                                render_buffer_manager
-                            })
-                            .collect();
+                    let feature_render_buffer_managers = instance_feature_buffers
+                        .iter()
+                        .map(|feature_buffer| {
+                            let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
+                                core_system,
+                                feature_buffer,
+                                Cow::Owned(model_id.to_string()),
+                            );
+                            feature_buffer.clear();
+                            render_buffer_manager
+                        })
+                        .collect();
 
-                        vacant_entry.insert(feature_render_buffer_managers);
-                    }
+                    vacant_entry.insert(feature_render_buffer_managers);
                 }
             }
         }
