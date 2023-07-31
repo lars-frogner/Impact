@@ -52,8 +52,8 @@ pub use material::{
     AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use mesh::{
-    BoxMeshComp, CylinderMeshComp, MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp,
-    SCREEN_FILLING_QUAD_MESH_ID,
+    BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
+    MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp, SCREEN_FILLING_QUAD_MESH_ID,
 };
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};

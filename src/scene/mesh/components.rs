@@ -39,11 +39,41 @@ pub struct BoxMeshComp {
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CylinderMeshComp {
     /// The length of the cylinder.
-    pub extent_y: fre,
+    pub length: fre,
     /// The diameter of the cylinder.
     pub diameter: fre,
     /// The number of vertices used for representing a circular cross-section of
     /// the cylinder.
+    pub n_circumference_vertices: u32,
+}
+
+/// [`Component`](impact_ecs::component::Component) for entities whose mesh is
+/// an upward-pointing cone centered on the origin.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct ConeMeshComp {
+    /// The length of the cone.
+    pub length: fre,
+    /// The maximum diameter of the cone.
+    pub max_diameter: fre,
+    /// The number of vertices used for representing a circular cross-section of
+    /// the cone.
+    pub n_circumference_vertices: u32,
+}
+
+/// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
+/// vertical circular frustum centered on the origin.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct CircularFrustumMeshComp {
+    /// The length of the frustum.
+    pub length: fre,
+    /// The bottom diameter of the frustum.
+    pub bottom_diameter: fre,
+    /// The top diameter of the frustum.
+    pub top_diameter: fre,
+    /// The number of vertices used for representing a circular cross-section of
+    /// the frustum.
     pub n_circumference_vertices: u32,
 }
 
@@ -55,6 +85,19 @@ pub struct SphereMeshComp {
     /// The number of horizontal circular cross-sections of vertices making up
     /// the sphere. The number of vertices comprising each ring is proportional
     /// to `n_rings`, resulting in an approximately uniform resolution.
+    pub n_rings: u32,
+}
+
+/// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
+/// unit diameter hemisphere whose disk lies in the xz-plane and is centered on
+/// the origin.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct HemisphereMeshComp {
+    /// The number of horizontal circular cross-sections of vertices making up
+    /// the hemisphere. The number of vertices comprising each ring is
+    /// proportional to `n_rings`, resulting in an approximately uniform
+    /// resolution.
     pub n_rings: u32,
 }
 
@@ -149,11 +192,11 @@ impl BoxMeshComp {
 }
 
 impl CylinderMeshComp {
-    /// Creates a new component for a box mesh with the given y-extent, diameter
-    /// and number of circumeference vertices.
-    pub fn new(extent_y: fre, diameter: fre, n_circumference_vertices: u32) -> Self {
+    /// Creates a new component for a cylinder mesh with the given length,
+    /// diameter and number of circumeference vertices.
+    pub fn new(length: fre, diameter: fre, n_circumference_vertices: u32) -> Self {
         Self {
-            extent_y,
+            length,
             diameter,
             n_circumference_vertices,
         }
@@ -163,8 +206,56 @@ impl CylinderMeshComp {
     /// label to describe the texture projection.
     pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Cylinder mesh {{ extent_y = {}, diameter = {}, n_circumference_vertices = {}, projection = {} }}",
-            self.extent_y, self.diameter, self.n_circumference_vertices, projection_label
+            "Cylinder mesh {{ length = {}, diameter = {}, n_circumference_vertices = {}, projection = {} }}",
+            self.length, self.diameter, self.n_circumference_vertices, projection_label
+        )))
+    }
+}
+
+impl ConeMeshComp {
+    /// Creates a new component for a cone mesh with the given length, maximum
+    /// diameter and number of circumeference vertices.
+    pub fn new(length: fre, max_diameter: fre, n_circumference_vertices: u32) -> Self {
+        Self {
+            length,
+            max_diameter,
+            n_circumference_vertices,
+        }
+    }
+
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
+        MeshID(hash64!(format!(
+            "Cone mesh {{ length = {}, max_diameter = {}, n_circumference_vertices = {}, projection = {} }}",
+            self.length, self.max_diameter, self.n_circumference_vertices, projection_label
+        )))
+    }
+}
+
+impl CircularFrustumMeshComp {
+    /// Creates a new component for a circular frustum mesh with the given
+    /// length, bottom and top diameter and number of circumeference vertices.
+    pub fn new(
+        length: fre,
+        bottom_diameter: fre,
+        top_diameter: fre,
+        n_circumference_vertices: u32,
+    ) -> Self {
+        Self {
+            length,
+            bottom_diameter,
+            top_diameter,
+            n_circumference_vertices,
+        }
+    }
+
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
+        MeshID(hash64!(format!(
+            "Circular frustum mesh {{ length = {}, bottom_diameter = {}, top_diameter = {}, n_circumference_vertices = {}, projection = {} }}",
+            self.length, self.bottom_diameter, self.top_diameter, self.n_circumference_vertices, projection_label
         )))
     }
 }
@@ -181,6 +272,23 @@ impl SphereMeshComp {
     pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
             "Sphere mesh {{ n_rings = {}, projection = {} }}",
+            self.n_rings, projection_label
+        )))
+    }
+}
+
+impl HemisphereMeshComp {
+    /// Creates a new component for a hemisphere mesh with the given number of
+    /// rings.
+    pub fn new(n_rings: u32) -> Self {
+        Self { n_rings }
+    }
+
+    /// Generates a [`MeshID`] for the mesh of this component, using the given
+    /// label to describe the texture projection.
+    pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
+        MeshID(hash64!(format!(
+            "Hemisphere mesh {{ n_rings = {}, projection = {} }}",
             self.n_rings, projection_label
         )))
     }

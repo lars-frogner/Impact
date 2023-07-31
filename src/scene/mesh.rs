@@ -2,7 +2,10 @@
 
 mod components;
 
-pub use components::{BoxMeshComp, CylinderMeshComp, MeshComp, PlaneMeshComp, SphereMeshComp};
+pub use components::{
+    BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
+    MeshComp, PlaneMeshComp, SphereMeshComp,
+};
 
 use crate::{
     geometry::{PlanarTextureProjection, TextureProjection, TriangleMesh, VertexAttributeSet},
@@ -181,9 +184,70 @@ impl TriangleMesh<fre> {
 
             if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
                 let mut mesh = TriangleMesh::create_cylinder(
-                    cylinder_mesh.extent_y,
+                    cylinder_mesh.length,
                     cylinder_mesh.diameter,
                     cylinder_mesh.n_circumference_vertices as usize,
+                );
+
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
+                }
+
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        fn execute_setup_for_cone_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            cone_mesh: &ConeMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = cone_mesh.generate_id(create_projection_label(projection));
+
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_cone(
+                    cone_mesh.length,
+                    cone_mesh.max_diameter,
+                    cone_mesh.n_circumference_vertices as usize,
+                );
+
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
+                }
+
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        fn execute_setup_for_circular_frustum_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            circular_frustum_mesh: &CircularFrustumMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = circular_frustum_mesh.generate_id(create_projection_label(projection));
+
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_circular_frustum(
+                    circular_frustum_mesh.length,
+                    circular_frustum_mesh.bottom_diameter,
+                    circular_frustum_mesh.top_diameter,
+                    circular_frustum_mesh.n_circumference_vertices as usize,
                 );
 
                 if let Some(projection) = projection {
@@ -211,6 +275,32 @@ impl TriangleMesh<fre> {
 
             if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
                 let mut mesh = TriangleMesh::create_sphere(sphere_mesh.n_rings as usize);
+
+                if let Some(projection) = projection {
+                    mesh.generate_texture_coords(projection);
+                }
+
+                mesh_repository
+                    .write()
+                    .unwrap()
+                    .add_mesh_unless_present(mesh_id, mesh);
+
+                desynchronized.set_yes();
+            }
+
+            MeshComp::new(mesh_id)
+        }
+
+        fn execute_setup_for_hemisphere_mesh(
+            mesh_repository: &RwLock<MeshRepository<fre>>,
+            desynchronized: &mut RenderResourcesDesynchronized,
+            hemisphere_mesh: &HemisphereMeshComp,
+            projection: Option<&impl TextureProjection<fre>>,
+        ) -> MeshComp {
+            let mesh_id = hemisphere_mesh.generate_id(create_projection_label(projection));
+
+            if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+                let mut mesh = TriangleMesh::create_hemisphere(hemisphere_mesh.n_rings as usize);
 
                 if let Some(projection) = projection {
                     mesh.generate_texture_coords(projection);
@@ -298,6 +388,52 @@ impl TriangleMesh<fre> {
 
         setup!(
             components,
+            |cone_mesh: &ConeMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_cone_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        cone_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_cone_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        cone_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
+                }
+            },
+            ![MeshComp]
+        );
+
+        setup!(
+            components,
+            |circular_frustum_mesh: &CircularFrustumMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_circular_frustum_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        circular_frustum_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_circular_frustum_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        circular_frustum_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
+                }
+            },
+            ![MeshComp]
+        );
+
+        setup!(
+            components,
             |sphere_mesh: &SphereMeshComp,
              planar_projection: Option<&PlanarTextureProjectionComp>|
              -> MeshComp {
@@ -312,6 +448,29 @@ impl TriangleMesh<fre> {
                         mesh_repository,
                         desynchronized,
                         sphere_mesh,
+                        Option::<&PlanarTextureProjection<_>>::None,
+                    ),
+                }
+            },
+            ![MeshComp]
+        );
+
+        setup!(
+            components,
+            |hemisphere_mesh: &HemisphereMeshComp,
+             planar_projection: Option<&PlanarTextureProjectionComp>|
+             -> MeshComp {
+                match (planar_projection,) {
+                    (Some(planar_projection),) => execute_setup_for_hemisphere_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        hemisphere_mesh,
+                        Some(&planar_projection.create_projection()),
+                    ),
+                    (None,) => execute_setup_for_hemisphere_mesh(
+                        mesh_repository,
+                        desynchronized,
+                        hemisphere_mesh,
                         Option::<&PlanarTextureProjection<_>>::None,
                     ),
                 }
