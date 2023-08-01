@@ -3,6 +3,7 @@
 mod motion;
 mod tasks;
 mod time;
+mod uniform_body;
 
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularVelocity,
