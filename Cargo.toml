@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 anyhow = "1.0"
 approx = "0.5"
 atomic_enum = "0.2"
-bitflags = "2.3"
+bitflags = "2.4"
 bytemuck = { version = "1.14", features = ["derive"] }
 cfg-if = "1.0"
 chrono = "0.4"
