@@ -19,7 +19,7 @@ impl Parse for TypeList {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
         bracketed!(content in input);
-        let tys = content.parse_terminated(Type::parse)?;
+        let tys = content.parse_terminated(Type::parse, Token![,])?;
         Ok(Self { tys })
     }
 }
