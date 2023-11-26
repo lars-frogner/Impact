@@ -4,7 +4,7 @@ use crate::{
     rendering::{RenderPassManager, RenderResourceManager, RenderingSystem, SyncRenderPasses},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
-    window::ControlFlow,
+    window::EventLoopController,
     world::{World, WorldTaskScheduler},
     {define_execution_tag, define_task},
 };
@@ -45,14 +45,14 @@ impl RenderingSystem {
     pub fn handle_task_errors(
         &self,
         task_errors: &mut ThreadPoolTaskErrors,
-        control_flow: &mut ControlFlow<'_>,
+        event_loop_controller: &EventLoopController<'_>,
     ) {
         if let Err(render_error) = task_errors.take_result_of(Render.id()) {
-            self.handle_render_error(render_error, control_flow);
+            self.handle_render_error(render_error, event_loop_controller);
         }
         if task_errors.n_errors() > 0 {
             log::error!("Aborting due to fatal errors");
-            control_flow.exit();
+            event_loop_controller.exit();
         }
     }
 }

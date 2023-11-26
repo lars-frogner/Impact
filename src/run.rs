@@ -40,7 +40,7 @@ pub async fn run() -> Result<()> {
     let input_handler = InputHandler::new(KeyActionMap::default());
 
     event_loop
-        .run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap());
+        .run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap())
 }
 
 #[cfg(target_arch = "wasm32")]

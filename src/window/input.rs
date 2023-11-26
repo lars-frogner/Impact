@@ -3,12 +3,15 @@
 use crate::{
     control::{MotionDirection, MotionState},
     rendering::RenderAttachmentQuantity,
-    window::ControlFlow,
+    window::EventLoopController,
     world::World,
 };
 use anyhow::Result;
 use std::{collections::HashMap, sync::Arc};
-use winit::event::{DeviceEvent, ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::{
+    event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
+};
 
 /// Handler for any user input events.
 #[derive(Clone, Debug)]
@@ -31,7 +34,7 @@ pub struct MouseInputHandler;
 /// A map associating specific keyboard key inputs
 /// with the actions they should perform.
 #[derive(Clone, Debug)]
-pub struct KeyActionMap(HashMap<VirtualKeyCode, KeyboardInputAction>);
+pub struct KeyActionMap(HashMap<KeyCode, KeyboardInputAction>);
 
 /// Actions that can be performed with a keyboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -62,7 +65,7 @@ struct KeyInputHandler {
 /// Macro for easing creation of keyboard action maps.
 macro_rules! def_key_action_map {
     ($($action:ident => $key:ident),*) => {
-        [$((VirtualKeyCode::$key, KeyboardInputAction::$action),)*].into_iter().collect::<HashMap<_, _>>()
+        [$((KeyCode::$key, KeyboardInputAction::$action),)*].into_iter().collect::<HashMap<_, _>>()
     };
 }
 
@@ -83,13 +86,14 @@ impl InputHandler {
     pub fn handle_window_event(
         &self,
         world: &Arc<World>,
-        control_flow: &mut ControlFlow<'_>,
-        event: &WindowEvent<'_>,
+        event_loop_controller: &EventLoopController<'_>,
+        event: &WindowEvent,
     ) -> Result<HandlingResult> {
         match event {
             // Handle keyboard input events
-            WindowEvent::KeyboardInput { input, .. } => {
-                self.key_handler.handle_event(world, control_flow, input)
+            WindowEvent::KeyboardInput { event, .. } => {
+                self.key_handler
+                    .handle_event(world, event_loop_controller, event)
             }
             _ => Ok(HandlingResult::Unhandled),
         }
@@ -103,7 +107,7 @@ impl InputHandler {
     pub fn handle_device_event(
         &self,
         world: &Arc<World>,
-        _control_flow: &mut ControlFlow<'_>,
+        _event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
     ) -> Result<HandlingResult> {
         match event {
@@ -131,18 +135,18 @@ impl KeyInputHandler {
     fn handle_event(
         &self,
         world: &World,
-        control_flow: &mut ControlFlow<'_>,
-        key_input_event: &KeyboardInput,
+        event_loop_controller: &EventLoopController<'_>,
+        key_input_event: &KeyEvent,
     ) -> Result<HandlingResult> {
         match key_input_event {
-            KeyboardInput {
+            KeyEvent {
                 state,
-                virtual_keycode: Some(key),
+                physical_key: PhysicalKey::Code(key),
                 ..
-            } => match self.key_map.action_for_key(*key) {
+            } => match self.key_map.action_for_key(key) {
                 Some(action) => match action {
                     KeyboardInputAction::Exit => {
-                        control_flow.exit();
+                        event_loop_controller.exit();
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleInteractionMode => {
@@ -225,12 +229,12 @@ impl KeyInputHandler {
 }
 
 impl KeyActionMap {
-    pub fn new(map: HashMap<VirtualKeyCode, KeyboardInputAction>) -> Self {
+    pub fn new(map: HashMap<KeyCode, KeyboardInputAction>) -> Self {
         Self(map)
     }
 
-    fn action_for_key(&self, key: VirtualKeyCode) -> Option<KeyboardInputAction> {
-        self.0.get(&key).cloned()
+    fn action_for_key(&self, key: &KeyCode) -> Option<KeyboardInputAction> {
+        self.0.get(key).cloned()
     }
 }
 
@@ -239,16 +243,16 @@ impl Default for KeyActionMap {
         Self::new(def_key_action_map!(
             // Since camera looks towards -z, we invert the inputs
             // so that pressing W makes us appear to move forwards
-            MoveForwards => S,
-            MoveBackwards => W,
-            MoveRight => D,
-            MoveLeft => A,
-            MoveUp => Q,
-            MoveDown => E,
+            MoveForwards => KeyS,
+            MoveBackwards => KeyW,
+            MoveRight => KeyD,
+            MoveLeft => KeyA,
+            MoveUp => KeyQ,
+            MoveDown => KeyE,
             ToggleInteractionMode => Tab,
-            ToggleBackFaceCulling => B,
-            ToggleTriangleFill => F,
-            ToggleAmbientOcclusion => O,
+            ToggleBackFaceCulling => KeyB,
+            ToggleTriangleFill => KeyF,
+            ToggleAmbientOcclusion => KeyO,
             SaveScreenshot => F12,
             SaveDepthMap => F11,
             SaveOmnidirectionalLightShadowMap => F10,

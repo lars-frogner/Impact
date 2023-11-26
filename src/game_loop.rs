@@ -5,7 +5,7 @@ use crate::{
     physics::PhysicsTag,
     rendering::RenderingTag,
     thread::ThreadPoolResult,
-    window::{ControlFlow, HandlingResult, InputHandler, WindowEvent},
+    window::{EventLoopController, HandlingResult, InputHandler, WindowEvent},
     world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
@@ -68,34 +68,37 @@ impl GameLoop {
 
     pub fn handle_window_event(
         &self,
-        control_flow: &mut ControlFlow<'_>,
-        event: &WindowEvent<'_>,
+        event_loop_controller: &EventLoopController<'_>,
+        event: &WindowEvent,
     ) -> Result<HandlingResult> {
         self.input_handler
-            .handle_window_event(&self.world, control_flow, event)
+            .handle_window_event(&self.world, event_loop_controller, event)
     }
 
     pub fn handle_device_event(
         &self,
-        control_flow: &mut ControlFlow<'_>,
+        event_loop_controller: &EventLoopController<'_>,
         event: &DeviceEvent,
     ) -> Result<HandlingResult> {
         self.input_handler
-            .handle_device_event(&self.world, control_flow, event)
+            .handle_device_event(&self.world, event_loop_controller, event)
     }
 
     pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
         self.world.resize_rendering_surface(new_size);
     }
 
-    pub fn perform_iteration(&mut self, control_flow: &mut ControlFlow<'_>) -> ThreadPoolResult {
+    pub fn perform_iteration(
+        &mut self,
+        event_loop_controller: &EventLoopController<'_>,
+    ) -> ThreadPoolResult {
         let execution_result = self
             .task_scheduler
             .execute_and_wait(&PHYSICS_AND_RENDERING_TAGS);
 
         if let Err(mut task_errors) = execution_result {
             self.world
-                .handle_task_errors(&mut task_errors, control_flow);
+                .handle_task_errors(&mut task_errors, event_loop_controller);
 
             // Pass any unhandled errors to caller
             if task_errors.n_errors() > 0 {
