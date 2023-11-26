@@ -4,7 +4,7 @@ use crate::{
     define_execution_tag,
     physics::{AdvancePositions, PhysicsSimulator},
     thread::ThreadPoolTaskErrors,
-    window::ControlFlow,
+    window::EventLoopController,
     world::WorldTaskScheduler,
 };
 use anyhow::Result;
@@ -30,11 +30,11 @@ impl PhysicsSimulator {
     pub fn handle_task_errors(
         &self,
         task_errors: &ThreadPoolTaskErrors,
-        control_flow: &mut ControlFlow<'_>,
+        event_loop_controller: &EventLoopController<'_>,
     ) {
         if task_errors.n_errors() > 0 {
             log::error!("Aborting due to fatal errors");
-            control_flow.exit();
+            event_loop_controller.exit();
         }
     }
 }

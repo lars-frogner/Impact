@@ -46,7 +46,7 @@ pub use texture::{
 };
 
 use self::resource::RenderResourceManager;
-use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::ControlFlow};
+use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::EventLoopController};
 use anyhow::{Error, Result};
 use chrono::Utc;
 use std::sync::{
@@ -262,7 +262,7 @@ impl RenderingSystem {
         Ok(surface_texture)
     }
 
-    fn handle_render_error(&self, error: Error, _control_flow: &mut ControlFlow<'_>) {
+    fn handle_render_error(&self, error: Error, _event_loop_controller: &EventLoopController<'_>) {
         if let Some(wgpu::SurfaceError::Lost) = error.downcast_ref() {
             // Recreate swap chain if lost
             self.initialize_surface();

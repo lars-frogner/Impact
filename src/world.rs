@@ -9,7 +9,7 @@ use crate::{
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
-    window::{ControlFlow, Window},
+    window::{EventLoopController, Window},
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -405,22 +405,22 @@ impl World {
     pub fn handle_task_errors(
         &self,
         task_errors: &mut ThreadPoolTaskErrors,
-        control_flow: &mut ControlFlow<'_>,
+        event_loop_controller: &EventLoopController<'_>,
     ) {
         self.simulator
             .read()
             .unwrap()
-            .handle_task_errors(task_errors, control_flow);
+            .handle_task_errors(task_errors, event_loop_controller);
 
         self.scene
             .read()
             .unwrap()
-            .handle_task_errors(task_errors, control_flow);
+            .handle_task_errors(task_errors, event_loop_controller);
 
         self.renderer
             .read()
             .unwrap()
-            .handle_task_errors(task_errors, control_flow);
+            .handle_task_errors(task_errors, event_loop_controller);
     }
 
     /// Registers all tasks in the given task scheduler.

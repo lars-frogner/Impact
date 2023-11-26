@@ -10,7 +10,7 @@ use anyhow::Result;
 use winit::{
     dpi::PhysicalSize,
     event::Event,
-    event_loop::{ControlFlow as WinitControlFlow, EventLoop as WinitEventLoop},
+    event_loop::{ControlFlow, EventLoop as WinitEventLoop, EventLoopWindowTarget},
     window::{Window as WinitWindow, WindowBuilder},
 };
 
@@ -37,9 +37,9 @@ pub struct EventLoop {
     event_loop: WinitEventLoop<()>,
 }
 
-/// Wrapper for an event loop control flow.
+/// Wrapper for an event loop controller.
 #[derive(Debug)]
-pub struct ControlFlow<'a>(&'a mut WinitControlFlow);
+pub struct EventLoopController<'a>(&'a EventLoopWindowTarget<()>);
 
 /// Calculates the ratio of width to height.
 pub fn calculate_aspect_ratio(width: u32, height: u32) -> f32 {
@@ -49,10 +49,12 @@ pub fn calculate_aspect_ratio(width: u32, height: u32) -> f32 {
 impl Window {
     /// Creates a new window with an associated event loop.
     pub fn new_window_and_event_loop() -> Result<(Self, EventLoop)> {
-        let event_loop = WinitEventLoop::new();
+        let event_loop = WinitEventLoop::new()?;
         let window = WindowBuilder::new()
             .with_inner_size(PhysicalSize::new(1600, 1200))
             .build(&event_loop)?;
+
+        event_loop.set_control_flow(ControlFlow::Poll);
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -98,21 +100,21 @@ impl Window {
 impl EventLoop {
     /// Wraps the given game loop in an event loop that can capture
     /// window events and runs the loop.
-    pub fn run_game_loop(self, mut game_loop: GameLoop) -> ! {
+    pub fn run_game_loop(self, mut game_loop: GameLoop) -> Result<()> {
         let event_loop = self.unwrap();
-        event_loop.run(move |event, _, control_flow| {
-            let mut control_flow = ControlFlow(control_flow);
+        event_loop.run(move |event, event_loop_window_target| {
+            let event_loop_controller = EventLoopController(event_loop_window_target);
             match event {
                 // Handle window events
                 Event::WindowEvent { event, window_id }
                     if window_id == game_loop.world().window().window().id() =>
                 {
-                    match game_loop.handle_window_event(&mut control_flow, &event) {
+                    match game_loop.handle_window_event(&event_loop_controller, &event) {
                         Ok(HandlingResult::Handled) => {}
                         Ok(HandlingResult::Unhandled) => {
                             match event {
                                 // Exit if user requests close
-                                WindowEvent::CloseRequested => control_flow.exit(),
+                                WindowEvent::CloseRequested => event_loop_controller.exit(),
                                 // Resize rendering surface when window is resized..
                                 WindowEvent::Resized(new_size) => {
                                     game_loop.resize_rendering_surface((
@@ -120,42 +122,36 @@ impl EventLoop {
                                         new_size.height,
                                     ));
                                 }
-                                // ..or when screen DPI changes
-                                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                                    game_loop.resize_rendering_surface((
-                                        new_inner_size.width,
-                                        new_inner_size.height,
-                                    ));
-                                }
                                 _ => {}
                             }
                         }
                         Err(error) => {
                             log::error!("Window event handling error: {:?}", error);
-                            control_flow.exit();
+                            event_loop_controller.exit();
                         }
                     }
                 }
                 Event::DeviceEvent { event, .. } => {
-                    match game_loop.handle_device_event(&mut control_flow, &event) {
+                    match game_loop.handle_device_event(&event_loop_controller, &event) {
                         Ok(_) => {}
                         Err(error) => {
                             log::error!("Device event handling error: {:?}", error);
-                            control_flow.exit();
+                            event_loop_controller.exit();
                         }
                     }
                 }
                 // When all queued input events have been handled we can do other work
-                Event::MainEventsCleared => {
-                    let result = game_loop.perform_iteration(&mut control_flow);
+                Event::AboutToWait => {
+                    let result = game_loop.perform_iteration(&event_loop_controller);
                     if let Err(errors) = result {
                         log::error!("Unhandled errors: {:?}", errors);
-                        control_flow.exit();
+                        event_loop_controller.exit();
                     }
                 }
                 _ => {}
             }
-        });
+        })?;
+        Ok(())
     }
 
     fn wrap(event_loop: WinitEventLoop<()>) -> Self {
@@ -168,10 +164,10 @@ impl EventLoop {
     }
 }
 
-impl<'a> ControlFlow<'a> {
+impl<'a> EventLoopController<'a> {
     /// Terminates the event loop.
-    pub fn exit(&mut self) {
-        *self.0 = WinitControlFlow::Exit;
+    pub fn exit(&self) {
+        self.0.exit();
     }
 }
 
