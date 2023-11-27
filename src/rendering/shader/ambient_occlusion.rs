@@ -380,8 +380,8 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             )
         });
 
-        let zero_constant_expr = append_to_arena(
-            &mut module.const_expressions,
+        let zero_expr = append_to_arena(
+            &mut fragment_function.expressions,
             Expression::Literal(Literal::F32(0.0)),
         );
 
@@ -392,14 +392,13 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 LocalVariable {
                     name: new_name("summedOcclusionSampleValues"),
                     ty: f32_type,
-                    init: Some(zero_constant_expr),
+                    init: Some(zero_expr),
                 },
             )),
         );
 
         let mut sampling_loop = ForLoop::new(
             &mut module.types,
-            &mut module.const_expressions,
             fragment_function,
             "sample",
             sample_count_expr,

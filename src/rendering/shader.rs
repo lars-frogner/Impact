@@ -1111,6 +1111,7 @@ impl ShaderGenerator {
                         ty: vec4_type,
                         binding: Some(Binding::Location {
                             location: model_view_transform_shader_input.rotation_location,
+                            second_blend_source: false,
                             interpolation: None,
                             sampling: None,
                         }),
@@ -1122,6 +1123,7 @@ impl ShaderGenerator {
                         binding: Some(Binding::Location {
                             location: model_view_transform_shader_input
                                 .translation_and_scaling_location,
+                            second_blend_source: false,
                             interpolation: None,
                             sampling: None,
                         }),
@@ -3520,6 +3522,7 @@ impl InputStructBuilder {
             type_handle,
             Some(Binding::Location {
                 location,
+                second_blend_source: false,
                 interpolation: None,
                 sampling: None,
             }),
@@ -3609,6 +3612,7 @@ impl OutputStructBuilder {
             type_handle,
             Some(Binding::Location {
                 location: self.location,
+                second_blend_source: false,
                 interpolation,
                 sampling,
             }),
@@ -3842,15 +3846,16 @@ impl ForLoop {
     /// be added to it by pushing to the `body` field of the returned `ForLoop`.
     pub fn new(
         types: &mut UniqueArena<Type>,
-        const_expressions: &mut Arena<Expression>,
         function: &mut Function,
         name: &str,
         n_iterations_expr: Handle<Expression>,
     ) -> Self {
         let u32_type = insert_in_arena(types, U32_TYPE);
 
-        let zero_constant_expr =
-            append_to_arena(const_expressions, Expression::Literal(Literal::U32(0)));
+        let zero_expr = append_to_arena(
+            &mut function.expressions,
+            Expression::Literal(Literal::U32(0)),
+        );
 
         let idx_ptr_expr = append_to_arena(
             &mut function.expressions,
@@ -3859,7 +3864,7 @@ impl ForLoop {
                 LocalVariable {
                     name: Some(format!("{}Idx", name)),
                     ty: u32_type,
-                    init: Some(zero_constant_expr),
+                    init: Some(zero_expr),
                 },
             )),
         );
@@ -5028,21 +5033,27 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             binding: r.binding.clone(),
         });
 
+        let mut expressions = Arena::new();
+        let mut expr_map = HashMap::new();
+
         let mut local_variables = Arena::new();
         for (h_l, l) in func.local_variables.iter() {
             let new_local = LocalVariable {
                 name: l.name.clone(),
                 ty: self.import_type(l.ty),
-                init: l
-                    .init
-                    .map(|const_expr| self.import_const_expression(const_expr)),
+                init: l.init.map(|expr| {
+                    self.import_expression(
+                        expr,
+                        &func.expressions,
+                        &mut expr_map,
+                        &mut expressions,
+                        false,
+                    )
+                }),
             };
             let new_h = append_to_arena(&mut local_variables, new_local);
             assert_eq!(h_l, new_h);
         }
-
-        let mut expressions = Arena::new();
-        let mut expr_map = HashMap::new();
 
         let body = self.import_block(
             &func.body,
@@ -5253,6 +5264,7 @@ pub fn generate_location_bound_input_argument(
         input_type,
         Some(Binding::Location {
             location,
+            second_blend_source: false,
             interpolation: None,
             sampling: None,
         }),
