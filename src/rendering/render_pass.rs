@@ -1588,7 +1588,7 @@ impl RenderPassSpecification {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: surface_load_operations,
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }));
             }
@@ -1604,7 +1604,7 @@ impl RenderPassSpecification {
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                     load: load_operation,
-                                    store: true,
+                                    store: wgpu::StoreOp::Store,
                                 },
                             })
                         }),
@@ -1627,7 +1627,7 @@ impl RenderPassSpecification {
                 view: self.get_shadow_map_texture_view(render_resources).unwrap(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             })
@@ -1636,7 +1636,7 @@ impl RenderPassSpecification {
                 view: self.get_shadow_map_texture_view(render_resources).unwrap(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             })
@@ -1647,11 +1647,11 @@ impl RenderPassSpecification {
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_STENCIL_VALUE),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
             })
         } else if !self.depth_map_usage.is_none() {
@@ -1661,11 +1661,11 @@ impl RenderPassSpecification {
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
             })
         } else {
@@ -1848,6 +1848,8 @@ impl RenderPassRecorder {
             // A `@location(i)` directive in the fragment shader output targets color attachment `i` here
             color_attachments: &color_attachments,
             depth_stencil_attachment,
+            timestamp_writes: None,
+            occlusion_query_set: None,
             label: Some(&self.specification.label),
         });
 
