@@ -1,10 +1,11 @@
 //! Simulation of physics.
 
+mod inertia;
 mod motion;
 mod tasks;
 mod time;
-mod uniform_body;
 
+pub use inertia::InertialProperties;
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularVelocity,
     AngularVelocityComp, Orientation, OrientationComp, Position, PositionComp, Static, Velocity,
