@@ -52,21 +52,21 @@ impl<F: Float> TriangleMesh<F> {
         )
     }
 
-    /// Creates a mesh representing a flat plane centered at the origin with the
+    /// Creates a mesh representing a rectangle centered at the origin with the
     /// given horizontal extents.
     ///
     /// The generated mesh will contain positions and normal vectors.
     ///
     /// # Panics
     /// If any of the given extents are negative.
-    pub fn create_plane(extent_x: F, extent_z: F) -> Self {
+    pub fn create_rectangle(extent_x: F, extent_z: F) -> Self {
         assert!(
             extent_x >= F::ZERO,
-            "Tried to create plane mesh with negative x-extent"
+            "Tried to create rectangle mesh with negative x-extent"
         );
         assert!(
             extent_z >= F::ZERO,
-            "Tried to create plane mesh with negative y-extent"
+            "Tried to create rectangle mesh with negative y-extent"
         );
 
         let hex = extent_x * F::ONE_HALF;

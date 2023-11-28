@@ -4,7 +4,7 @@ mod components;
 
 pub use components::{
     BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
-    MeshComp, PlaneMeshComp, SphereMeshComp,
+    MeshComp, RectangleMeshComp, SphereMeshComp,
 };
 
 use crate::{
@@ -117,16 +117,19 @@ impl TriangleMesh<fre> {
                 .map_or("None".to_string(), |projection| projection.identifier())
         }
 
-        fn execute_setup_for_plane_mesh(
+        fn execute_setup_for_rectangle_mesh(
             mesh_repository: &RwLock<MeshRepository<fre>>,
             desynchronized: &mut RenderResourcesDesynchronized,
-            plane_mesh: &PlaneMeshComp,
+            rectangle_mesh: &RectangleMeshComp,
             projection: Option<&impl TextureProjection<fre>>,
         ) -> MeshComp {
-            let mesh_id = plane_mesh.generate_id(create_projection_label(projection));
+            let mesh_id = rectangle_mesh.generate_id(create_projection_label(projection));
 
             if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
-                let mut mesh = TriangleMesh::create_plane(plane_mesh.extent_x, plane_mesh.extent_z);
+                let mut mesh = TriangleMesh::create_rectangle(
+                    rectangle_mesh.extent_x,
+                    rectangle_mesh.extent_z,
+                );
 
                 if let Some(projection) = projection {
                     mesh.generate_texture_coords(projection);
@@ -319,20 +322,20 @@ impl TriangleMesh<fre> {
 
         setup!(
             components,
-            |plane_mesh: &PlaneMeshComp,
+            |rectangle_mesh: &RectangleMeshComp,
              planar_projection: Option<&PlanarTextureProjectionComp>|
              -> MeshComp {
                 match (planar_projection,) {
-                    (Some(planar_projection),) => execute_setup_for_plane_mesh(
+                    (Some(planar_projection),) => execute_setup_for_rectangle_mesh(
                         mesh_repository,
                         desynchronized,
-                        plane_mesh,
+                        rectangle_mesh,
                         Some(&planar_projection.create_projection()),
                     ),
-                    (None,) => execute_setup_for_plane_mesh(
+                    (None,) => execute_setup_for_rectangle_mesh(
                         mesh_repository,
                         desynchronized,
-                        plane_mesh,
+                        rectangle_mesh,
                         Option::<&PlanarTextureProjection<_>>::None,
                     ),
                 }

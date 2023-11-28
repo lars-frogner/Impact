@@ -8,14 +8,14 @@ use impact_utils::hash64;
 use std::fmt::Display;
 
 /// [`Component`](impact_ecs::component::Component) for entities whose mesh is
-/// an axis-aligned horizontal plane centered on the origin, whose front face is
-/// on the positive y side.
+/// an axis-aligned horizontal rectangle centered on the origin, whose front
+/// face is on the positive y side.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct PlaneMeshComp {
-    /// The extent of the plane in the x-direction.
+pub struct RectangleMeshComp {
+    /// The extent of the rectangle in the x-direction.
     pub extent_x: fre,
-    /// The extent of the plane in the z-direction.
+    /// The extent of the rectangle in the z-direction.
     pub extent_z: fre,
 }
 
@@ -118,13 +118,14 @@ impl MeshComp {
     }
 }
 
-impl PlaneMeshComp {
-    pub const UNIT_PLANE: Self = Self {
+impl RectangleMeshComp {
+    pub const UNIT_SQUARE: Self = Self {
         extent_x: 1.0,
         extent_z: 1.0,
     };
 
-    /// Creates a new component for a plane mesh with the given horizontal extents.
+    /// Creates a new component for a rectangle mesh with the given horizontal
+    /// extents.
     pub fn new(extent_x: fre, extent_z: fre) -> Self {
         Self { extent_x, extent_z }
     }
@@ -133,7 +134,7 @@ impl PlaneMeshComp {
     /// label to describe the texture projection.
     pub fn generate_id(&self, projection_label: impl Display) -> MeshID {
         MeshID(hash64!(format!(
-            "Plane mesh {{ extent_x = {}, extent_z = {}, projection = {} }}",
+            "Rectangle mesh {{ extent_x = {}, extent_z = {}, projection = {} }}",
             self.extent_x, self.extent_z, projection_label
         )))
     }
