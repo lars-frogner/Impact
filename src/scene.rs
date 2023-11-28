@@ -53,7 +53,8 @@ pub use material::{
 };
 pub use mesh::{
     BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
-    MeshComp, MeshID, MeshRepository, PlaneMeshComp, SphereMeshComp, SCREEN_FILLING_QUAD_MESH_ID,
+    MeshComp, MeshID, MeshRepository, RectangleMeshComp, SphereMeshComp,
+    SCREEN_FILLING_QUAD_MESH_ID,
 };
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};

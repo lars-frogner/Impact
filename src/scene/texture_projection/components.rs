@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to texture projections.
 
-use crate::{geometry::PlanarTextureProjection, rendering::fre, scene::PlaneMeshComp};
+use crate::{geometry::PlanarTextureProjection, rendering::fre, scene::RectangleMeshComp};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{point, vector, Point3, Vector3};
@@ -34,14 +34,19 @@ impl PlanarTextureProjectionComp {
     }
 
     /// Creates the component for a projection onto the axis-aligned horizontal
-    /// plane specified by the given [`PlaneMeshComp`], scaling the projection
-    /// so that the texture will repeat the given numbers of times along the U
-    /// and V texture coordinate directions. The U-axis will be aligned with the
-    /// x-axis and the V-axis will be aligned with the negative z-axis.
-    pub fn for_plane(plane: &PlaneMeshComp, n_repeats_u: fre, n_repeats_v: fre) -> Self {
+    /// rectangle specified by the given [`RectangleMeshComp`], scaling the
+    /// projection so that the texture will repeat the given numbers of times
+    /// along the U and V texture coordinate directions. The U-axis will be
+    /// aligned with the x-axis and the V-axis will be aligned with the negative
+    /// z-axis.
+    pub fn for_rectangle(
+        rectangle: &RectangleMeshComp,
+        n_repeats_u: fre,
+        n_repeats_v: fre,
+    ) -> Self {
         let origin = point![-0.5, 0.0, 0.5];
-        let u_vector = vector![plane.extent_x / n_repeats_u, 0.0, 0.0];
-        let v_vector = vector![0.0, 0.0, -plane.extent_z / n_repeats_v];
+        let u_vector = vector![rectangle.extent_x / n_repeats_u, 0.0, 0.0];
+        let v_vector = vector![0.0, 0.0, -rectangle.extent_z / n_repeats_v];
         Self::new(origin, u_vector, v_vector)
     }
 

@@ -17,7 +17,7 @@ use crate::{
         DirectionComp, EmissionExtentComp, EmissiveColorComp, LightDirection,
         MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, Omnidirectional,
         ParallaxMapComp, ParentComp, PerspectiveCameraComp, PlanarTextureProjectionComp,
-        PlaneMeshComp, RadianceComp, RoughnessComp, RoughnessTextureComp, ScalingComp,
+        RadianceComp, RectangleMeshComp, RoughnessComp, RoughnessTextureComp, ScalingComp,
         SceneGraphGroup, SkyboxComp, SpecularColorComp, SphereMeshComp, Uncullable,
         UniformIrradianceComp,
     },
@@ -290,8 +290,8 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entity((
-            &PlaneMeshComp::UNIT_PLANE,
-            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &RectangleMeshComp::UNIT_SQUARE,
+            &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
             &PositionComp(Point3::new(0.0, -2.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::z_axis(), 0.0)),
@@ -306,8 +306,8 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entity((
-            &PlaneMeshComp::UNIT_PLANE,
-            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &RectangleMeshComp::UNIT_SQUARE,
+            &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
             &PositionComp(Point3::new(25.0, 5.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(
@@ -329,8 +329,8 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entity((
-            &PlaneMeshComp::UNIT_PLANE,
-            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &RectangleMeshComp::UNIT_SQUARE,
+            &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
             &PositionComp(Point3::new(-25.0, 5.0, 0.0)),
             &ScalingComp(50.0),
             &OrientationComp(
@@ -352,8 +352,8 @@ async fn init_world(window: Window) -> Result<World> {
 
     world
         .create_entity((
-            &PlaneMeshComp::UNIT_PLANE,
-            &PlanarTextureProjectionComp::for_plane(&PlaneMeshComp::UNIT_PLANE, 2.0, 2.0),
+            &RectangleMeshComp::UNIT_SQUARE,
+            &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
             &PositionComp(Point3::new(0.0, 5.0, 25.0)),
             &ScalingComp(50.0),
             &OrientationComp(Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0)),
