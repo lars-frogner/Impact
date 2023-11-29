@@ -3,11 +3,16 @@
 mod components;
 mod systems;
 
-pub use components::{AngularVelocityComp, OrientationComp, PositionComp, Static, VelocityComp};
+pub use components::{
+    AngularVelocityComp, DrivenAngularVelocityComp, OrientationComp, PositionComp, Static,
+    VelocityComp,
+};
 pub use systems::{AdvanceOrientations, AdvancePositions};
 
-use super::fph;
-use crate::geometry::{Angle, Radians};
+use crate::{
+    geometry::{Angle, Radians},
+    physics::fph,
+};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, Vector3};
 
@@ -23,50 +28,28 @@ pub type Velocity = Vector3<fph>;
 /// An orientation in 3D space.
 pub type Orientation = UnitQuaternion<fph>;
 
-/// An angular velocity in 3D space, represented by an axis of rotation, a
-/// center of rotation in the model's reference frame and an angular speed.
+/// An angular velocity in 3D space, represented by an axis of rotation and an
+/// angular speed.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct AngularVelocity {
     axis_of_rotation: Direction,
-    center_of_rotation: Position,
     angular_speed: Radians<fph>,
 }
 
 impl AngularVelocity {
-    /// Creates a new [`AngularVelocity`] with the given axis of rotation,
-    /// center of rotation (a point in the model's reference frame the axis of
-    /// rotation goes through) and angular speed.
-    pub fn new<A: Angle<fph>>(
-        axis_of_rotation: Direction,
-        center_of_rotation: Position,
-        angular_speed: A,
-    ) -> Self {
+    /// Creates a new [`AngularVelocity`] with the given axis of rotation and
+    /// angular speed.
+    pub fn new<A: Angle<fph>>(axis_of_rotation: Direction, angular_speed: A) -> Self {
         Self {
             axis_of_rotation,
-            center_of_rotation,
             angular_speed: angular_speed.as_radians(),
         }
-    }
-
-    /// Creates a new [`AngularVelocity`] with the given axis of rotation and
-    /// angular speed. The axis of rotation is assumed to pass through the model
-    /// space origin.
-    pub fn new_about_model_origin<A: Angle<fph>>(
-        axis_of_rotation: Direction,
-        angular_speed: A,
-    ) -> Self {
-        Self::new(axis_of_rotation, Position::origin(), angular_speed)
     }
 
     /// Returns the axis of rotation.
     pub fn axis_of_rotation(&self) -> &Direction {
         &self.axis_of_rotation
-    }
-
-    /// Returns the center of rotation in the model's reference frame.
-    pub fn center_of_rotation(&self) -> &Position {
-        &self.center_of_rotation
     }
 
     /// Returns the angular speed.
@@ -114,8 +97,7 @@ mod test {
     #[test]
     fn advancing_orientation_with_zero_angular_speed_gives_same_orientation() {
         let orientation = Orientation::identity();
-        let angular_velocity =
-            AngularVelocity::new_about_model_origin(Vector3::x_axis(), Degrees(0.0));
+        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Degrees(0.0));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 1.2);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
@@ -123,8 +105,7 @@ mod test {
     #[test]
     fn advancing_orientation_by_zero_duration_gives_same_orientation() {
         let orientation = Orientation::identity();
-        let angular_velocity =
-            AngularVelocity::new_about_model_origin(Vector3::x_axis(), Degrees(1.2));
+        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Degrees(1.2));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 0.0);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
@@ -134,8 +115,7 @@ mod test {
         let angular_speed = 0.1;
         let duration = 2.0;
         let orientation = Orientation::from_axis_angle(&Vector3::y_axis(), 0.1);
-        let angular_velocity =
-            AngularVelocity::new_about_model_origin(Vector3::y_axis(), Radians(angular_speed));
+        let angular_velocity = AngularVelocity::new(Vector3::y_axis(), Radians(angular_speed));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, duration);
         assert_abs_diff_eq!(
             advanced_orientation.angle(),
