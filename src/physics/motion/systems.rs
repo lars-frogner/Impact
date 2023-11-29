@@ -21,7 +21,7 @@ define_task!(
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
-                    position.0 += velocity.0*time_step_duration;
+                    position.0 += velocity.0 * time_step_duration;
                 },
                 ![Static]
             );
@@ -41,8 +41,23 @@ define_task!(
             let time_step_duration = world.simulator().read().unwrap().time_step_duration();
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
-                ecs_world, |orientation: &mut OrientationComp, angular_velocity: &AngularVelocityComp| {
-                    orientation.0 = physics::advance_orientation(&orientation.0, &angular_velocity.0, time_step_duration);
+                ecs_world, |orientation: &mut OrientationComp, position: &mut PositionComp, angular_velocity: &AngularVelocityComp| {
+                    let new_orientation = physics::advance_orientation(&orientation.0, &angular_velocity.0, time_step_duration);
+
+                    // The position, which is the world space coordinates of the
+                    // model space origin, is by default unaffected by the
+                    // rotation. This is only correct if the center of rotation
+                    // is at the model space origin. If the center of rotation
+                    // is somewhere else, the model's reference frame must be
+                    // displaced in world space so that the center of rotation
+                    // does not move.
+                    position.0 += physics::compute_model_origin_shift_from_orientation_change(
+                        &orientation.0,
+                        &new_orientation,
+                        angular_velocity.0.center_of_rotation()
+                    );
+
+                    orientation.0 = new_orientation;
                 },
                 ![Static]
             );
