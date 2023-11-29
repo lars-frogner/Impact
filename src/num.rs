@@ -11,6 +11,7 @@ pub trait Float: Copy + nt::FloatConst + nt::FromPrimitive + na::RealField + na:
     const TWO: Self;
     const THREE: Self;
     const FOUR: Self;
+    const FIVE: Self;
     const EIGHT: Self;
     const ONE_HALF: Self;
     const ONE_THIRD: Self;
@@ -34,6 +35,7 @@ macro_rules! impl_float {
             const TWO: Self = 2.0;
             const THREE: Self = 3.0;
             const FOUR: Self = 4.0;
+            const FIVE: Self = 5.0;
             const EIGHT: Self = 8.0;
             const ONE_HALF: Self = 0.5;
             const ONE_THIRD: Self = 1.0 / 3.0;
