@@ -7,9 +7,9 @@ mod time;
 
 pub use inertia::InertialProperties;
 pub use motion::{
-    advance_orientation, AdvanceOrientations, AdvancePositions, AngularVelocity,
-    AngularVelocityComp, Orientation, OrientationComp, Position, PositionComp, Static, Velocity,
-    VelocityComp,
+    advance_orientation, compute_model_origin_shift_from_orientation_change, AdvanceOrientations,
+    AdvancePositions, AngularVelocity, AngularVelocityComp, Orientation, OrientationComp, Position,
+    PositionComp, Static, Velocity, VelocityComp,
 };
 pub use tasks::PhysicsTag;
 
