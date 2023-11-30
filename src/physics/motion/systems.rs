@@ -3,15 +3,17 @@
 use crate::{
     define_task,
     physics::{
-        DrivenAngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, Static, VelocityComp,
+        DrivenAngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, RigidBodyComp,
+        Static, VelocityComp,
     },
     world::World,
 };
 use impact_ecs::query;
 
 define_task!(
-    /// This [`Task`](crate::scheduling::Task) advances the position
-    /// of all entities with velocities by one time step.
+    /// This [`Task`](crate::scheduling::Task) advances the position of all
+    /// entities with velocities by one time step (unless the entity is static
+    /// or governed by rigid body physics).
     [pub] AdvancePositions,
     depends_on = [],
     execute_on = [PhysicsTag],
@@ -23,7 +25,7 @@ define_task!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
                     position.0 += velocity.0 * time_step_duration;
                 },
-                ![Static]
+                ![Static, RigidBodyComp]
             );
             Ok(())
         })
@@ -31,8 +33,9 @@ define_task!(
 );
 
 define_task!(
-    /// This [`Task`](crate::scheduling::Task) advances the orientation
-    /// of all entities with driven angluar velocities by one time step.
+    /// This [`Task`](crate::scheduling::Task) advances the orientation of all
+    /// entities with driven angluar velocities by one time step (unless the
+    /// entity is static or governed by rigid body physics).
     [pub] AdvanceOrientations,
     depends_on = [],
     execute_on = [PhysicsTag],
@@ -52,7 +55,7 @@ define_task!(
                         time_step_duration
                     );
                 },
-                ![Static]
+                ![Static, RigidBodyComp]
             );
             Ok(())
         })

@@ -54,7 +54,7 @@ impl PhysicsSimulator {
 
             let rigid_body = RigidBody::new(
                 inertial_properties,
-                position.0,
+                &position.0,
                 orientation.0,
                 velocity.0,
                 angular_velocity.0,

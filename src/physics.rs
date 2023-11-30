@@ -14,7 +14,8 @@ pub use motion::{
     PositionComp, Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
-    RigidBody, RigidBodyComp, RigidBodyID, RigidBodyManager, UniformRigidBodyComp,
+    RigidBody, RigidBodyComp, RigidBodyID, RigidBodyManager, SyncRigidBodyMotion,
+    UniformRigidBodyComp,
 };
 pub use tasks::PhysicsTag;
 
