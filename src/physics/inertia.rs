@@ -13,6 +13,7 @@ use simba::scalar::SubsetOf;
 #[derive(Clone, Debug, PartialEq)]
 pub struct InertialProperties {
     mass: fph,
+    inverse_mass: fph,
     center_of_mass: Position,
     inertia_tensor: InertiaTensor,
 }
@@ -26,8 +27,10 @@ pub struct InertiaTensor {
 impl InertialProperties {
     /// Creates a new set of inertial properties.
     pub fn new(mass: fph, center_of_mass: Position, inertia_tensor: InertiaTensor) -> Self {
+        assert_ne!(mass, 0.0, "Tried creating massless body");
         Self {
             mass,
+            inverse_mass: 1.0 / mass,
             center_of_mass,
             inertia_tensor,
         }
@@ -164,6 +167,11 @@ impl InertialProperties {
         self.mass
     }
 
+    /// Returns the reciprocal of the mass of the body.
+    pub fn inverse_mass(&self) -> fph {
+        self.inverse_mass
+    }
+
     /// Returns the center of mass of the body (in the body's reference frame).
     pub fn center_of_mass(&self) -> &Position {
         &self.center_of_mass
@@ -179,6 +187,7 @@ impl InertialProperties {
     /// body.
     pub fn transform(&mut self, transform: &Similarity3<fph>) {
         self.mass *= transform.scaling().powi(3);
+        self.inverse_mass = 1.0 / self.mass;
 
         self.center_of_mass = transform.transform_point(&self.center_of_mass);
 
@@ -194,6 +203,7 @@ impl InertialProperties {
     /// the body.
     pub fn scale(&mut self, scaling: fph) {
         self.mass *= scaling.powi(3);
+        self.inverse_mass = 1.0 / self.mass;
 
         self.center_of_mass *= scaling;
 
@@ -531,7 +541,7 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 mod test {
     use super::*;
     use crate::geometry::FrontFaceSide;
-    use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use approx::abs_diff_eq;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
     use proptest::prelude::*;
     use std::ops::Range;
@@ -565,12 +575,16 @@ mod test {
             let mut cube = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
             let initial_mass = cube.mass();
             cube.transform(&transform);
-            let mass_after_transforming = cube.mass();
             let correctly_transformed_mass = initial_mass * transform.scaling().powi(3);
             prop_assert!(abs_diff_eq!(
-                mass_after_transforming,
+                cube.mass(),
                 correctly_transformed_mass,
                 epsilon = 1e-9 * correctly_transformed_mass
+            ));
+            prop_assert!(abs_diff_eq!(
+                cube.inverse_mass(),
+                1.0 / correctly_transformed_mass,
+                epsilon = 1e-9 / correctly_transformed_mass
             ));
         }
     }
@@ -605,6 +619,26 @@ mod test {
                 inertia_tensor_after_transforming,
                 &correctly_transformed_inertia_tensor,
                 epsilon = 1e-7 * correctly_transformed_inertia_tensor.max_element()
+            ));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn should_scale_uniform_cube_properties(scaling in 1e-4..1e4) {
+            let mut scaling_transform = Similarity3::identity();
+            scaling_transform.set_scaling(scaling);
+
+            let mut transformed_cube = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
+            let mut scaled_cube = transformed_cube.clone();
+
+            transformed_cube.transform(&scaling_transform);
+            scaled_cube.scale(scaling);
+
+            prop_assert!(abs_diff_eq!(
+                transformed_cube,
+                scaled_cube,
+                epsilon = 1e-7 * scaling
             ));
         }
     }
@@ -777,11 +811,11 @@ mod test {
                 compute_uniform_triangle_mesh_inertia_tensor(&sphere_mesh, mass_density);
             let correct_inertia_tensor = sphere_properties.inertia_tensor();
 
-            assert_abs_diff_eq!(
+            prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
                 epsilon = 1e-2 * correct_inertia_tensor.max_element()
-            );
+            ));
         }
     }
 
@@ -802,11 +836,11 @@ mod test {
                 compute_uniform_triangle_mesh_inertia_tensor(&hemisphere_mesh, mass_density);
             let correct_inertia_tensor = hemisphere_properties.inertia_tensor();
 
-            assert_abs_diff_eq!(
+            prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
                 epsilon = 1e-2 * correct_inertia_tensor.max_element()
-            );
+            ));
         }
     }
 
@@ -829,11 +863,11 @@ mod test {
                 compute_uniform_triangle_mesh_inertia_tensor(&cone_mesh, mass_density);
             let correct_inertia_tensor = cone_properties.inertia_tensor();
 
-            assert_abs_diff_eq!(
+            prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
                 epsilon = 1e-2 * correct_inertia_tensor.max_element()
-            );
+            ));
         }
     }
 
@@ -856,11 +890,11 @@ mod test {
                 compute_uniform_triangle_mesh_inertia_tensor(&cylinder_mesh, mass_density);
             let correct_inertia_tensor = cylinder_properties.inertia_tensor();
 
-            assert_abs_diff_eq!(
+            prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
                 epsilon = 1e-2 * correct_inertia_tensor.max_element()
-            );
+            ));
         }
     }
 
@@ -883,11 +917,11 @@ mod test {
                 compute_uniform_triangle_mesh_inertia_tensor(&box_mesh, mass_density);
             let correct_inertia_tensor = box_properties.inertia_tensor();
 
-            assert_abs_diff_eq!(
+            prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
                 epsilon = 1e-2 * correct_inertia_tensor.max_element()
-            );
+            ));
         }
     }
 
