@@ -1,8 +1,10 @@
 //! Rigid body simulation.
 
 mod components;
+mod systems;
 
 pub use components::{RigidBodyComp, UniformRigidBodyComp};
+pub use systems::SyncRigidBodyMotion;
 
 use crate::physics::{
     fph, AngularVelocity, Force, InertialProperties, Orientation, Position, Torque, Velocity,
@@ -100,7 +102,7 @@ impl RigidBody {
     /// be different from the center of mass.
     pub fn new(
         inertial_properties: InertialProperties,
-        position: Position,
+        position: &Position,
         orientation: Orientation,
         velocity: Velocity,
         angular_velocity: AngularVelocity,
@@ -138,9 +140,33 @@ impl RigidBody {
         }
     }
 
+    /// Computes the body position (the world space coordinates of the body's
+    /// reference frame origin).
+    pub fn compute_position(&self) -> Position {
+        self.center_of_mass
+            - self
+                .orientation
+                .transform_vector(&self.inertial_properties.center_of_mass().coords)
+    }
+
     /// Returns the center of mass of the body (in world space).
     pub fn center_of_mass(&self) -> &Position {
         &self.center_of_mass
+    }
+
+    /// Returns the orientation of the body.
+    pub fn orientation(&self) -> &Orientation {
+        &self.orientation
+    }
+
+    /// Returns the velocity of the body.
+    pub fn velocity(&self) -> &Velocity {
+        &self.velocity
+    }
+
+    /// Returns the angular velocity of the body.
+    pub fn angular_velocity(&self) -> &AngularVelocity {
+        &self.angular_velocity
     }
 
     /// Returns the current total force on the body.
@@ -365,7 +391,7 @@ mod test {
             ) {
                 let body = RigidBody::new(
                     InertialProperties::new(1.0, model_space_center_of_mass, InertiaTensor::identity()),
-                    position,
+                    &position,
                     orientation,
                     Velocity::zeros(),
                     AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
@@ -374,6 +400,7 @@ mod test {
                     body.center_of_mass(),
                     &(position + orientation.transform_vector(&model_space_center_of_mass.coords))
                 );
+                assert_abs_diff_eq!(body.compute_position(), position, epsilon=1e-6);
             }
         }
     }

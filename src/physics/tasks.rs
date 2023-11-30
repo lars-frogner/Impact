@@ -2,14 +2,12 @@
 
 use crate::{
     define_execution_tag,
-    physics::{AdvancePositions, PhysicsSimulator},
+    physics::{AdvanceOrientations, AdvancePositions, PhysicsSimulator, SyncRigidBodyMotion},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::WorldTaskScheduler,
 };
 use anyhow::Result;
-
-use super::AdvanceOrientations;
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s
@@ -22,7 +20,8 @@ impl PhysicsSimulator {
     /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(AdvancePositions)?;
-        task_scheduler.register_task(AdvanceOrientations)
+        task_scheduler.register_task(AdvanceOrientations)?;
+        task_scheduler.register_task(SyncRigidBodyMotion)
     }
 
     /// Identifies physics-related errors that need special
