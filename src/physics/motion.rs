@@ -13,6 +13,7 @@ use crate::{
     geometry::{Angle, Radians},
     physics::fph,
 };
+use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, Vector3};
 
@@ -31,11 +32,17 @@ pub type Orientation = UnitQuaternion<fph>;
 /// An angular velocity in 3D space, represented by an axis of rotation and an
 /// angular speed.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct AngularVelocity {
     axis_of_rotation: Direction,
     angular_speed: Radians<fph>,
 }
+
+/// A 3D force.
+pub type Force = Vector3<fph>;
+
+/// A 3D torque.
+pub type Torque = Vector3<fph>;
 
 impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
@@ -55,6 +62,19 @@ impl AngularVelocity {
     /// Returns the angular speed.
     pub fn angular_speed(&self) -> Radians<fph> {
         self.angular_speed
+    }
+}
+
+impl AbsDiffEq for AngularVelocity {
+    type Epsilon = <fph as AbsDiffEq>::Epsilon;
+
+    fn default_epsilon() -> Self::Epsilon {
+        fph::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        Direction::abs_diff_eq(&self.axis_of_rotation, &other.axis_of_rotation, epsilon)
+            && Radians::abs_diff_eq(&self.angular_speed, &other.angular_speed, epsilon)
     }
 }
 
