@@ -6,22 +6,26 @@ use crate::{
     physics::{fph, Position},
 };
 use approx::AbsDiffEq;
+use bytemuck::{Pod, Zeroable};
 use nalgebra::{point, vector, Matrix3, Point3, Similarity3, UnitQuaternion, Vector3};
 use simba::scalar::SubsetOf;
 
 /// The inertia-related properties of a physical body.
-#[derive(Clone, Debug, PartialEq)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InertialProperties {
+    inertia_tensor: InertiaTensor,
+    center_of_mass: Position,
     mass: fph,
     inverse_mass: fph,
-    center_of_mass: Position,
-    inertia_tensor: InertiaTensor,
 }
 
 /// The inertia tensor of a physical body.
-#[derive(Clone, Debug, PartialEq)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InertiaTensor {
     matrix: Matrix3<fph>,
+    inverse_matrix: Matrix3<fph>,
 }
 
 impl InertialProperties {
@@ -152,12 +156,12 @@ impl InertialProperties {
         let center_of_mass = point![0.0, (3.0 / 8.0) * radius, 0.0];
 
         let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
+
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
+            moment_of_inertia - mass * center_of_mass.y.powi(2),
             moment_of_inertia,
-            moment_of_inertia,
-            moment_of_inertia,
-        )
-        .with_displaced_axis(mass, &center_of_mass.coords);
+            moment_of_inertia - mass * center_of_mass.y.powi(2),
+        );
 
         Self::new(mass, center_of_mass, inertia_tensor)
     }
@@ -227,59 +231,99 @@ impl AbsDiffEq for InertialProperties {
 
 impl InertiaTensor {
     /// Creates a new inertia tensor corresponding to the given matrix.
-    pub fn from_matrix(inertia_tensor: Matrix3<fph>) -> Self {
-        Self {
-            matrix: inertia_tensor,
-        }
+    pub fn from_matrix(matrix: Matrix3<fph>) -> Self {
+        let inverse_matrix = matrix
+            .try_inverse()
+            .expect("Could not invert inertia tensor");
+
+        Self::from_matrix_and_inverse(matrix, inverse_matrix)
     }
 
     /// Creates a new diagonal inertia tensor with the given diagonal elements.
     pub fn from_diagonal_elements(j_xx: fph, j_yy: fph, j_zz: fph) -> Self {
-        Self::from_matrix(Matrix3::from_diagonal(&vector![j_xx, j_yy, j_zz]))
+        assert!(j_xx > 0.0);
+        assert!(j_yy > 0.0);
+        assert!(j_zz > 0.0);
+
+        let matrix = Matrix3::from_diagonal(&vector![j_xx, j_yy, j_zz]);
+        let inverse_matrix = Matrix3::from_diagonal(&vector![1.0 / j_xx, 1.0 / j_yy, 1.0 / j_zz]);
+
+        Self::from_matrix_and_inverse(matrix, inverse_matrix)
     }
 
     /// Creates a new identity inertia tensor.
     pub fn identity() -> Self {
-        Self::from_matrix(Matrix3::identity())
+        Self::from_matrix_and_inverse(Matrix3::identity(), Matrix3::identity())
+    }
+
+    /// Returns a reference to the inertia matrix.
+    pub fn matrix(&self) -> &Matrix3<fph> {
+        &self.matrix
+    }
+
+    /// Returns a reference to the inverse of the inertia matrix.
+    pub fn inverse_matrix(&self) -> &Matrix3<fph> {
+        &self.inverse_matrix
     }
 
     /// Computes the inertia tensor corresponding to scaling the body uniformly
     /// by the given factor.
     pub fn scaled(&self, scaling: fph) -> Self {
         assert!(scaling >= 0.0);
+
         // Moment of inertia scales as mass * distance^2 = distance^5
-        Self::from_matrix(self.matrix.scale(scaling.powi(5)))
+        let total_scale_factor = scaling.powi(5);
+
+        Self::from_matrix_and_inverse(
+            self.matrix.scale(total_scale_factor),
+            self.inverse_matrix.scale(1.0 / total_scale_factor),
+        )
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the
     /// given rotation quaternion.
     pub fn rotated(&self, rotation: &UnitQuaternion<fph>) -> Self {
         let rotation_matrix = rotation.to_rotation_matrix();
-        let rotated_inertia_matrix = rotation_matrix * self.matrix * rotation_matrix.transpose();
-        Self::from_matrix(rotated_inertia_matrix)
+        let transpose_rotation_matrix = rotation_matrix.transpose();
+
+        let rotated_inertia_matrix = rotation_matrix * self.matrix * transpose_rotation_matrix;
+
+        let rotated_inverse_inertia_matrix =
+            rotation_matrix * self.inverse_matrix * transpose_rotation_matrix;
+
+        Self::from_matrix_and_inverse(rotated_inertia_matrix, rotated_inverse_inertia_matrix)
     }
 
-    /// Computes the inertia tensor with respect to the point at the given
-    /// displacement from the current point.
-    pub fn with_displaced_axis(&self, mass: fph, displacement: &Vector3<fph>) -> Self {
-        let squared_displacement = displacement.component_mul(displacement);
+    /// Computes the difference matrix between the inertia tensor with respect
+    /// to the center of mass and the inertia tensor with respect to a point at
+    /// the given displacement from the center of mass. Adding this difference
+    /// to the latter yields the center of mass inertia tensor.
+    pub fn compute_parallel_axis_inertia_matrix_difference(
+        mass: fph,
+        displacement_from_com: &Vector3<fph>,
+    ) -> Matrix3<fph> {
+        let squared_displacement = displacement_from_com.component_mul(displacement_from_com);
 
         let shift_xx = -mass * (squared_displacement.y + squared_displacement.z);
         let shift_yy = -mass * (squared_displacement.z + squared_displacement.x);
         let shift_zz = -mass * (squared_displacement.x + squared_displacement.y);
 
-        let shift_xy = mass * displacement.x * displacement.y;
-        let shift_yz = mass * displacement.y * displacement.z;
-        let shift_zx = mass * displacement.z * displacement.x;
+        let shift_xy = mass * displacement_from_com.x * displacement_from_com.y;
+        let shift_yz = mass * displacement_from_com.y * displacement_from_com.z;
+        let shift_zx = mass * displacement_from_com.z * displacement_from_com.x;
 
-        Self::from_matrix(
-            self.matrix
-                + Matrix3::from_columns(&[
-                    vector![shift_xx, shift_xy, shift_zx],
-                    vector![shift_xy, shift_yy, shift_yz],
-                    vector![shift_zx, shift_yz, shift_zz],
-                ]),
-        )
+        Matrix3::from_columns(&[
+            vector![shift_xx, shift_xy, shift_zx],
+            vector![shift_xy, shift_yy, shift_yz],
+            vector![shift_zx, shift_yz, shift_zz],
+        ])
+    }
+
+    fn from_matrix_and_inverse(matrix: Matrix3<fph>, inverse_matrix: Matrix3<fph>) -> Self {
+        Self {
+            matrix,
+            inverse_matrix,
+        }
     }
 
     #[cfg(test)]
@@ -442,12 +486,16 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph
     let j_yz = -mixed_second_moments.y;
     let j_zx = -mixed_second_moments.z;
 
-    let inertia_tensor = InertiaTensor::from_matrix(Matrix3::from_columns(&[
-        vector![j_xx, j_xy, j_zx],
-        vector![j_xy, j_yy, j_yz],
-        vector![j_zx, j_yz, j_zz],
-    ]))
-    .with_displaced_axis(mass, &center_of_mass.coords);
+    let inertia_tensor = InertiaTensor::from_matrix(
+        Matrix3::from_columns(&[
+            vector![j_xx, j_xy, j_zx],
+            vector![j_xy, j_yy, j_yz],
+            vector![j_zx, j_yz, j_zz],
+        ]) + InertiaTensor::compute_parallel_axis_inertia_matrix_difference(
+            mass,
+            &(-center_of_mass.coords),
+        ),
+    );
 
     (mass, center_of_mass, inertia_tensor)
 }
@@ -547,6 +595,16 @@ mod test {
     use std::ops::Range;
 
     prop_compose! {
+        fn rotation_strategy()(
+            rotation_roll in 0.0..fph::TWO_PI,
+            rotation_pitch in -fph::FRAC_PI_2..fph::FRAC_PI_2,
+            rotation_yaw in 0.0..fph::TWO_PI,
+        ) -> UnitQuaternion<fph> {
+            UnitQuaternion::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
+        }
+    }
+
+    prop_compose! {
         fn similarity_transform_strategy(
             max_translation: fph,
             scaling_range: Range<fph>
@@ -554,13 +612,10 @@ mod test {
             translation_x in -max_translation..max_translation,
             translation_y in -max_translation..max_translation,
             translation_z in -max_translation..max_translation,
-            rotation_roll in 0.0..fph::TWO_PI,
-            rotation_pitch in -fph::FRAC_PI_2..fph::FRAC_PI_2,
-            rotation_yaw in 0.0..fph::TWO_PI,
+            rotation in rotation_strategy(),
             scaling in scaling_range,
         ) -> Similarity3<fph> {
             let translation = Translation3::new(translation_x, translation_y, translation_z);
-            let rotation = UnitQuaternion::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw);
             Similarity3::from_parts(
                 translation,
                 rotation,
@@ -572,17 +627,20 @@ mod test {
     proptest! {
         #[test]
         fn should_transform_uniform_cube_mass(transform in similarity_transform_strategy(1e4, 1e-4..1e4)) {
-            let mut cube = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
-            let initial_mass = cube.mass();
-            cube.transform(&transform);
+            let mut cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
+            let initial_mass = cube_properties.mass();
+
+            cube_properties.transform(&transform);
+
             let correctly_transformed_mass = initial_mass * transform.scaling().powi(3);
+
             prop_assert!(abs_diff_eq!(
-                cube.mass(),
+                cube_properties.mass(),
                 correctly_transformed_mass,
                 epsilon = 1e-9 * correctly_transformed_mass
             ));
             prop_assert!(abs_diff_eq!(
-                cube.inverse_mass(),
+                cube_properties.inverse_mass(),
                 1.0 / correctly_transformed_mass,
                 epsilon = 1e-9 / correctly_transformed_mass
             ));
@@ -592,13 +650,15 @@ mod test {
     proptest! {
         #[test]
         fn should_transform_uniform_cube_center_of_mass(transform in similarity_transform_strategy(1e4, 1e-4..1e4)) {
-            let mut cube = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
-            let initial_center_of_mass = *cube.center_of_mass();
-            cube.transform(&transform);
-            let center_of_mass_after_transforming = cube.center_of_mass();
+            let mut cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
+            let initial_center_of_mass = *cube_properties.center_of_mass();
+
+            cube_properties.transform(&transform);
+
             let correctly_transformed_center_of_mass = transform.transform_point(&initial_center_of_mass);
+
             prop_assert!(abs_diff_eq!(
-                center_of_mass_after_transforming,
+                cube_properties.center_of_mass(),
                 &correctly_transformed_center_of_mass,
                 epsilon = 1e-7 * correctly_transformed_center_of_mass.coords.abs().max()
             ));
@@ -608,15 +668,17 @@ mod test {
     proptest! {
         #[test]
         fn should_transform_uniform_cube_inertia_tensor(transform in similarity_transform_strategy(1e4, 1e-4..1e4)) {
-            let mut cube = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
-            let initial_inertia_tensor = cube.inertia_tensor().clone();
-            cube.transform(&transform);
-            let inertia_tensor_after_transforming = cube.inertia_tensor().clone();
+            let mut cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
+            let initial_inertia_tensor = cube_properties.inertia_tensor().clone();
+
+            cube_properties.transform(&transform);
+
             let correctly_transformed_inertia_tensor = initial_inertia_tensor
                 .scaled(transform.scaling())
                 .rotated(&transform.isometry.rotation);
+
             prop_assert!(abs_diff_eq!(
-                inertia_tensor_after_transforming,
+                cube_properties.inertia_tensor(),
                 &correctly_transformed_inertia_tensor,
                 epsilon = 1e-7 * correctly_transformed_inertia_tensor.max_element()
             ));
@@ -638,6 +700,32 @@ mod test {
             prop_assert!(abs_diff_eq!(
                 transformed_cube,
                 scaled_cube,
+                epsilon = 1e-7 * scaling
+            ));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn should_invert_rotated_inertia_tensor(rotation in rotation_strategy()) {
+            let cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
+            let rotated_inertia_tensor = cube_properties.inertia_tensor().rotated(&rotation);
+            prop_assert!(abs_diff_eq!(
+                rotated_inertia_tensor.inverse_matrix(),
+                &rotated_inertia_tensor.matrix().try_inverse().unwrap(),
+                epsilon = 1e-7
+            ));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn should_invert_scaled_inertia_tensor(scaling in 1e-4..1e4) {
+            let cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
+            let scaled_inertia_tensor = cube_properties.inertia_tensor().scaled(scaling);
+            prop_assert!(abs_diff_eq!(
+                scaled_inertia_tensor.inverse_matrix(),
+                &scaled_inertia_tensor.matrix().try_inverse().unwrap(),
                 epsilon = 1e-7 * scaling
             ));
         }
