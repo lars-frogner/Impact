@@ -1,26 +1,31 @@
 //! Computation and representation of inertia-related properties.
 
-use crate::{geometry::TriangleMesh, num::Float};
+use crate::{
+    geometry::TriangleMesh,
+    num::Float,
+    physics::{fph, Position},
+};
 use approx::AbsDiffEq;
 use nalgebra::{point, vector, Matrix3, Point3, Similarity3, UnitQuaternion, Vector3};
+use simba::scalar::SubsetOf;
 
 /// The inertia-related properties of a physical body.
-#[derive(Debug)]
-pub struct InertialProperties<F: Float> {
-    mass: F,
-    center_of_mass: Point3<F>,
-    inertia_tensor: InertiaTensor<F>,
+#[derive(Clone, Debug, PartialEq)]
+pub struct InertialProperties {
+    mass: fph,
+    center_of_mass: Position,
+    inertia_tensor: InertiaTensor,
 }
 
 /// The inertia tensor of a physical body.
 #[derive(Clone, Debug, PartialEq)]
-pub struct InertiaTensor<F: Float> {
-    matrix: Matrix3<F>,
+pub struct InertiaTensor {
+    matrix: Matrix3<fph>,
 }
 
-impl<F: Float> InertialProperties<F> {
+impl InertialProperties {
     /// Creates a new set of inertial properties.
-    pub fn new(mass: F, center_of_mass: Point3<F>, inertia_tensor: InertiaTensor<F>) -> Self {
+    pub fn new(mass: fph, center_of_mass: Position, inertia_tensor: InertiaTensor) -> Self {
         Self {
             mass,
             center_of_mass,
@@ -30,9 +35,12 @@ impl<F: Float> InertialProperties<F> {
 
     /// Computes the inertial properties of the uniformly dense body represented
     /// by the given triangle mesh, which is assumed closed.
-    pub fn of_uniform_triangle_mesh(triangle_mesh: TriangleMesh<F>, mass_density: F) -> Self {
+    pub fn of_uniform_triangle_mesh<F: Float + SubsetOf<fph>>(
+        triangle_mesh: &TriangleMesh<F>,
+        mass_density: fph,
+    ) -> Self {
         let (mass, center_of_mass, inertia_tensor) =
-            compute_uniform_triangle_mesh_inertial_properties(&triangle_mesh, mass_density);
+            compute_uniform_triangle_mesh_inertial_properties(triangle_mesh, mass_density);
         Self::new(mass, center_of_mass, inertia_tensor)
     }
 
@@ -42,15 +50,15 @@ impl<F: Float> InertialProperties<F> {
     ///
     /// The box corresponds to the one created by calling
     /// [`TriangleMesh::create_box`] with the same dimensions.
-    pub fn of_uniform_box(extent_x: F, extent_y: F, extent_z: F, mass_density: F) -> Self {
+    pub fn of_uniform_box(extent_x: fph, extent_y: fph, extent_z: fph, mass_density: fph) -> Self {
         let mass = compute_box_volume(extent_x, extent_y, extent_z) * mass_density;
 
-        let center_of_mass = Point3::origin();
+        let center_of_mass = Position::origin();
 
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
-            (F::ONE_FOURTH * F::ONE_THIRD) * mass * (extent_y.powi(2) + extent_z.powi(2)),
-            (F::ONE_FOURTH * F::ONE_THIRD) * mass * (extent_x.powi(2) + extent_z.powi(2)),
-            (F::ONE_FOURTH * F::ONE_THIRD) * mass * (extent_x.powi(2) + extent_y.powi(2)),
+            (0.25 * fph::ONE_THIRD) * mass * (extent_y.powi(2) + extent_z.powi(2)),
+            (0.25 * fph::ONE_THIRD) * mass * (extent_x.powi(2) + extent_z.powi(2)),
+            (0.25 * fph::ONE_THIRD) * mass * (extent_x.powi(2) + extent_y.powi(2)),
         );
 
         Self::new(mass, center_of_mass, inertia_tensor)
@@ -62,15 +70,15 @@ impl<F: Float> InertialProperties<F> {
     ///
     /// The cylinder corresponds to the one created by calling
     /// [`TriangleMesh::create_cylinder`] with the same dimensions.
-    pub fn of_uniform_cylinder(length: F, diameter: F, mass_density: F) -> Self {
-        let radius = diameter * F::ONE_HALF;
+    pub fn of_uniform_cylinder(length: fph, diameter: fph, mass_density: fph) -> Self {
+        let radius = diameter * 0.5;
         let mass = compute_cylinder_volume(radius, length) * mass_density;
 
-        let center_of_mass = Point3::origin();
+        let center_of_mass = Position::origin();
 
-        let moment_of_inertia_y = F::ONE_HALF * mass * radius.powi(2);
+        let moment_of_inertia_y = 0.5 * mass * radius.powi(2);
         let moment_of_inertia_xz =
-            (F::ONE_FOURTH * F::ONE_THIRD) * mass * (F::THREE * radius.powi(2) + length.powi(2));
+            (0.25 * fph::ONE_THIRD) * mass * (3.0 * radius.powi(2) + length.powi(2));
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
             moment_of_inertia_xz,
             moment_of_inertia_y,
@@ -86,18 +94,17 @@ impl<F: Float> InertialProperties<F> {
     ///
     /// The cone corresponds to the one created by calling
     /// [`TriangleMesh::create_cone`] with the same dimensions.
-    pub fn of_uniform_cone(length: F, max_diameter: F, mass_density: F) -> Self {
-        let max_radius = max_diameter * F::ONE_HALF;
+    pub fn of_uniform_cone(length: fph, max_diameter: fph, mass_density: fph) -> Self {
+        let max_radius = max_diameter * 0.5;
         let mass = compute_cone_volume(max_radius, length) * mass_density;
 
         // The center of mass is one quarter of the way up from the center of
         // the disk toward the point
-        let center_of_mass = point![F::ZERO, -length * F::ONE_FOURTH, F::ZERO];
+        let center_of_mass = point![0.0, -length * 0.25, 0.0];
 
-        let moment_of_inertia_y =
-            (F::THREE * F::ONE_HALF * F::ONE_FIFTH) * mass * max_radius.powi(2);
-        let moment_of_inertia_xz = F::ONE_HALF * moment_of_inertia_y
-            + (F::THREE * F::ONE_FOURTH * F::ONE_FOURTH * F::ONE_FIFTH) * mass * length.powi(2);
+        let moment_of_inertia_y = (3.0 * 0.5 * 0.2) * mass * max_radius.powi(2);
+        let moment_of_inertia_xz =
+            0.5 * moment_of_inertia_y + (3.0 * 0.25 * 0.25 * 0.2) * mass * length.powi(2);
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
             moment_of_inertia_xz,
             moment_of_inertia_y,
@@ -112,13 +119,13 @@ impl<F: Float> InertialProperties<F> {
     ///
     /// The sphere corresponds to the one created by calling
     /// [`TriangleMesh::create_sphere`].
-    pub fn of_uniform_sphere(mass_density: F) -> Self {
-        let radius = F::ONE_HALF;
+    pub fn of_uniform_sphere(mass_density: fph) -> Self {
+        let radius = 0.5;
         let mass = compute_sphere_volume(radius) * mass_density;
 
-        let center_of_mass = Point3::origin();
+        let center_of_mass = Position::origin();
 
-        let moment_of_inertia = (F::TWO * F::ONE_FIFTH) * mass * radius.powi(2);
+        let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
             moment_of_inertia,
             moment_of_inertia,
@@ -133,15 +140,15 @@ impl<F: Float> InertialProperties<F> {
     ///
     /// The hemisphere corresponds to the one created by calling
     /// [`TriangleMesh::create_hemisphere`].
-    pub fn of_uniform_hemisphere(mass_density: F) -> Self {
-        let radius = F::ONE_HALF;
+    pub fn of_uniform_hemisphere(mass_density: fph) -> Self {
+        let radius = 0.5;
         let mass = compute_hemisphere_volume(radius) * mass_density;
 
         // The center of mass is (3/8) of the way up from the center of the disk
         // toward the top
-        let center_of_mass = point![F::ZERO, (F::THREE / F::EIGHT) * radius, F::ZERO];
+        let center_of_mass = point![0.0, (3.0 / 8.0) * radius, 0.0];
 
-        let moment_of_inertia = (F::TWO * F::ONE_FIFTH) * mass * radius.powi(2);
+        let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
             moment_of_inertia,
             moment_of_inertia,
@@ -153,24 +160,24 @@ impl<F: Float> InertialProperties<F> {
     }
 
     /// Returns the mass of the body.
-    pub fn mass(&self) -> F {
+    pub fn mass(&self) -> fph {
         self.mass
     }
 
-    /// Returns the center of mass of the body (in model space).
-    pub fn center_of_mass(&self) -> &Point3<F> {
+    /// Returns the center of mass of the body (in the body's reference frame).
+    pub fn center_of_mass(&self) -> &Position {
         &self.center_of_mass
     }
 
     /// Returns the inertia tensor of the body, defined with respect to the
     /// center of mass.
-    pub fn inertia_tensor(&self) -> &InertiaTensor<F> {
+    pub fn inertia_tensor(&self) -> &InertiaTensor {
         &self.inertia_tensor
     }
 
     /// Applies the given similarity transform to the inertial properties of the
     /// body.
-    pub fn transform(&mut self, transform: &Similarity3<F>) {
+    pub fn transform(&mut self, transform: &Similarity3<fph>) {
         self.mass *= transform.scaling().powi(3);
 
         self.center_of_mass = transform.transform_point(&self.center_of_mass);
@@ -182,30 +189,61 @@ impl<F: Float> InertialProperties<F> {
             .scaled(transform.scaling())
             .rotated(&transform.isometry.rotation);
     }
+
+    /// Applies the given uniform scaling factor to the inertial properties of
+    /// the body.
+    pub fn scale(&mut self, scaling: fph) {
+        self.mass *= scaling.powi(3);
+
+        self.center_of_mass *= scaling;
+
+        self.inertia_tensor = self.inertia_tensor.scaled(scaling);
+    }
 }
 
-impl<F: Float> InertiaTensor<F> {
-    fn from_matrix(inertia_tensor: Matrix3<F>) -> Self {
+impl AbsDiffEq for InertialProperties {
+    type Epsilon = <fph as AbsDiffEq>::Epsilon;
+
+    fn default_epsilon() -> Self::Epsilon {
+        fph::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        fph::abs_diff_eq(&self.mass, &other.mass, epsilon)
+            && Point3::abs_diff_eq(&self.center_of_mass, &other.center_of_mass, epsilon)
+            && InertiaTensor::abs_diff_eq(&self.inertia_tensor, &other.inertia_tensor, epsilon)
+    }
+}
+
+impl InertiaTensor {
+    /// Creates a new inertia tensor corresponding to the given matrix.
+    pub fn from_matrix(inertia_tensor: Matrix3<fph>) -> Self {
         Self {
             matrix: inertia_tensor,
         }
     }
 
-    fn from_diagonal_elements(j_xx: F, j_yy: F, j_zz: F) -> Self {
+    /// Creates a new diagonal inertia tensor with the given diagonal elements.
+    pub fn from_diagonal_elements(j_xx: fph, j_yy: fph, j_zz: fph) -> Self {
         Self::from_matrix(Matrix3::from_diagonal(&vector![j_xx, j_yy, j_zz]))
+    }
+
+    /// Creates a new identity inertia tensor.
+    pub fn identity() -> Self {
+        Self::from_matrix(Matrix3::identity())
     }
 
     /// Computes the inertia tensor corresponding to scaling the body uniformly
     /// by the given factor.
-    pub fn scaled(&self, scaling: F) -> Self {
-        assert!(scaling >= F::ZERO);
+    pub fn scaled(&self, scaling: fph) -> Self {
+        assert!(scaling >= 0.0);
         // Moment of inertia scales as mass * distance^2 = distance^5
         Self::from_matrix(self.matrix.scale(scaling.powi(5)))
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the
     /// given rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<fph>) -> Self {
         let rotation_matrix = rotation.to_rotation_matrix();
         let rotated_inertia_matrix = rotation_matrix * self.matrix * rotation_matrix.transpose();
         Self::from_matrix(rotated_inertia_matrix)
@@ -213,7 +251,7 @@ impl<F: Float> InertiaTensor<F> {
 
     /// Computes the inertia tensor with respect to the point at the given
     /// displacement from the current point.
-    pub fn with_displaced_axis(&self, mass: F, displacement: &Vector3<F>) -> Self {
+    pub fn with_displaced_axis(&self, mass: fph, displacement: &Vector3<fph>) -> Self {
         let squared_displacement = displacement.component_mul(displacement);
 
         let shift_xx = -mass * (squared_displacement.y + squared_displacement.z);
@@ -235,22 +273,19 @@ impl<F: Float> InertiaTensor<F> {
     }
 
     #[cfg(test)]
-    fn max_element(&self) -> F {
+    fn max_element(&self) -> fph {
         self.matrix.max()
     }
 }
 
-impl<F: AbsDiffEq + Float> AbsDiffEq for InertiaTensor<F>
-where
-    F::Epsilon: Copy,
-{
-    type Epsilon = F::Epsilon;
+impl AbsDiffEq for InertiaTensor {
+    type Epsilon = <fph as AbsDiffEq>::Epsilon;
 
-    fn default_epsilon() -> F::Epsilon {
-        F::default_epsilon()
+    fn default_epsilon() -> Self::Epsilon {
+        fph::default_epsilon()
     }
 
-    fn abs_diff_eq(&self, other: &Self, epsilon: F::Epsilon) -> bool {
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         Matrix3::abs_diff_eq(&self.matrix, &other.matrix, epsilon)
     }
 }
@@ -268,7 +303,7 @@ pub fn compute_cone_volume<F: Float>(max_radius: F, length: F) -> F {
 }
 
 pub fn compute_sphere_volume<F: Float>(radius: F) -> F {
-    (F::FOUR / F::THREE) * <F as Float>::PI * radius.powi(3)
+    (F::FOUR * F::ONE_THIRD) * <F as Float>::PI * radius.powi(3)
 }
 
 pub fn compute_hemisphere_volume<F: Float>(radius: F) -> F {
@@ -277,20 +312,27 @@ pub fn compute_hemisphere_volume<F: Float>(radius: F) -> F {
 
 /// Computes the mass of the unform body represented by the given triangle mesh,
 /// using the method described in Eberly (2004). The mesh is assumed closed.
-pub fn compute_uniform_triangle_mesh_mass<F: Float>(mesh: &TriangleMesh<F>, mass_density: F) -> F {
+pub fn compute_uniform_triangle_mesh_mass<F: Float + SubsetOf<fph>>(
+    mesh: &TriangleMesh<F>,
+    mass_density: fph,
+) -> fph {
     compute_triangle_mesh_volume(mesh) * mass_density
 }
 
 /// Computes the volume of the given triangle mesh, using the method described
 /// in Eberly (2004). The mesh is assumed closed.
-pub fn compute_triangle_mesh_volume<F: Float>(mesh: &TriangleMesh<F>) -> F {
-    let mut volume = F::ZERO;
+pub fn compute_triangle_mesh_volume<F: Float + SubsetOf<fph>>(mesh: &TriangleMesh<F>) -> fph {
+    let mut volume = 0.0;
 
     for [vertex_0, vertex_1, vertex_2] in mesh.triangle_vertex_positions() {
-        volume += compute_volume_contribution_for_triangle(vertex_0, vertex_1, vertex_2);
+        volume += compute_volume_contribution_for_triangle(
+            &vertex_0.cast::<fph>(),
+            &vertex_1.cast::<fph>(),
+            &vertex_2.cast::<fph>(),
+        );
     }
 
-    volume *= F::ONE_HALF * F::ONE_THIRD;
+    volume *= 0.5 * fph::ONE_THIRD;
 
     volume
 }
@@ -298,24 +340,26 @@ pub fn compute_triangle_mesh_volume<F: Float>(mesh: &TriangleMesh<F>) -> F {
 /// Computes the volume and center of mass of the uniformly dense body
 /// represented by the given triangle mesh, using the method described in Eberly
 /// (2004). The mesh is assumed closed.
-pub fn compute_uniform_triangle_mesh_volume_and_center_of_mass<F: Float>(
+pub fn compute_uniform_triangle_mesh_volume_and_center_of_mass<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
-) -> (F, Point3<F>) {
-    let mut volume = F::ZERO;
+) -> (fph, Position) {
+    let mut volume = 0.0;
     let mut first_moments = Vector3::zeros();
 
     for [vertex_0, vertex_1, vertex_2] in mesh.triangle_vertex_positions() {
         let (zeroth_moment_contrib, first_moment_contrib) =
             compute_zeroth_and_first_moment_contributions_for_triangle(
-                vertex_0, vertex_1, vertex_2,
+                &vertex_0.cast::<fph>(),
+                &vertex_1.cast::<fph>(),
+                &vertex_2.cast::<fph>(),
             );
 
         volume += zeroth_moment_contrib;
         first_moments += first_moment_contrib;
     }
 
-    volume *= F::ONE_HALF * F::ONE_THIRD;
-    first_moments *= F::ONE_HALF * F::ONE_HALF * F::ONE_HALF * F::ONE_THIRD;
+    volume *= 0.5 * fph::ONE_THIRD;
+    first_moments *= 0.5 * 0.5 * 0.5 * fph::ONE_THIRD;
 
     let center_of_mass = Point3::from(first_moments / volume);
 
@@ -325,7 +369,9 @@ pub fn compute_uniform_triangle_mesh_volume_and_center_of_mass<F: Float>(
 /// Computes the center of mass of the uniformly dense body represented by the
 /// given triangle mesh, using the method described in Eberly (2004). The mesh
 /// is assumed closed.
-pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float>(mesh: &TriangleMesh<F>) -> Point3<F> {
+pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float + SubsetOf<fph>>(
+    mesh: &TriangleMesh<F>,
+) -> Position {
     compute_uniform_triangle_mesh_volume_and_center_of_mass(mesh).1
 }
 
@@ -333,10 +379,10 @@ pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float>(mesh: &TriangleMes
 /// given triangle mesh, using the method described in Eberly (2004). The
 /// inertia tensor is defined relative to the center of mass. The mesh is
 /// assumed closed.
-pub fn compute_uniform_triangle_mesh_inertia_tensor<F: Float>(
+pub fn compute_uniform_triangle_mesh_inertia_tensor<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
-    mass_density: F,
-) -> InertiaTensor<F> {
+    mass_density: fph,
+) -> InertiaTensor {
     compute_uniform_triangle_mesh_inertial_properties(mesh, mass_density).2
 }
 
@@ -344,11 +390,11 @@ pub fn compute_uniform_triangle_mesh_inertia_tensor<F: Float>(
 /// body represented by the given triangle mesh, using the method described in
 /// Eberly (2004). The inertia tensor is defined relative to the center of mass.
 /// The mesh is assumed closed.
-pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float>(
+pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
-    mass_density: F,
-) -> (F, Point3<F>, InertiaTensor<F>) {
-    let mut mass = F::ZERO;
+    mass_density: fph,
+) -> (fph, Position, InertiaTensor) {
+    let mut mass = 0.0;
     let mut first_moments = Vector3::zeros();
     let mut diagonal_second_moments = Vector3::zeros();
     let mut mixed_second_moments = Vector3::zeros();
@@ -360,7 +406,9 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float>(
             diagonal_second_moment_contrib,
             mixed_second_moment_contrib,
         ) = compute_zeroth_first_and_second_moment_contributions_for_triangle(
-            vertex_0, vertex_1, vertex_2,
+            &vertex_0.cast::<fph>(),
+            &vertex_1.cast::<fph>(),
+            &vertex_2.cast::<fph>(),
         );
 
         mass += zeroth_moment_contrib;
@@ -369,11 +417,10 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float>(
         mixed_second_moments += mixed_second_moment_contrib;
     }
 
-    mass *= F::ONE_HALF * F::ONE_THIRD * mass_density;
-    first_moments *= F::ONE_HALF * F::ONE_FOURTH * F::ONE_THIRD * mass_density;
-    diagonal_second_moments *= F::ONE_THIRD * F::ONE_FOURTH * F::ONE_FIFTH * mass_density;
-    mixed_second_moments *=
-        F::ONE_HALF * F::ONE_THIRD * F::ONE_FOURTH * F::ONE_FIFTH * mass_density;
+    mass *= (0.5 * fph::ONE_THIRD) * mass_density;
+    first_moments *= (0.5 * 0.25 * fph::ONE_THIRD) * mass_density;
+    diagonal_second_moments *= (fph::ONE_THIRD * 0.25 * 0.2) * mass_density;
+    mixed_second_moments *= (0.5 * fph::ONE_THIRD * 0.25 * 0.2) * mass_density;
 
     let center_of_mass = Point3::from(first_moments / mass);
 
@@ -395,11 +442,11 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float>(
     (mass, center_of_mass, inertia_tensor)
 }
 
-fn compute_volume_contribution_for_triangle<F: Float>(
-    vertex_0: &Point3<F>,
-    vertex_1: &Point3<F>,
-    vertex_2: &Point3<F>,
-) -> F {
+fn compute_volume_contribution_for_triangle(
+    vertex_0: &Point3<fph>,
+    vertex_1: &Point3<fph>,
+    vertex_2: &Point3<fph>,
+) -> fph {
     let edge_1_y = vertex_1.y - vertex_0.y;
     let edge_1_z = vertex_1.z - vertex_0.z;
     let edge_2_y = vertex_2.y - vertex_0.y;
@@ -408,11 +455,11 @@ fn compute_volume_contribution_for_triangle<F: Float>(
     (edge_1_y * edge_2_z - edge_2_y * edge_1_z) * (vertex_0.x + vertex_1.x + vertex_2.x)
 }
 
-fn compute_zeroth_and_first_moment_contributions_for_triangle<F: Float>(
-    vertex_0: &Point3<F>,
-    vertex_1: &Point3<F>,
-    vertex_2: &Point3<F>,
-) -> (F, Vector3<F>) {
+fn compute_zeroth_and_first_moment_contributions_for_triangle(
+    vertex_0: &Point3<fph>,
+    vertex_1: &Point3<fph>,
+    vertex_2: &Point3<fph>,
+) -> (fph, Vector3<fph>) {
     let w_0 = vertex_0.coords;
     let w_1 = vertex_1.coords;
     let w_2 = vertex_2.coords;
@@ -434,11 +481,11 @@ fn compute_zeroth_and_first_moment_contributions_for_triangle<F: Float>(
     (zeroth_moment, first_moments)
 }
 
-fn compute_zeroth_first_and_second_moment_contributions_for_triangle<F: Float>(
-    vertex_0: &Point3<F>,
-    vertex_1: &Point3<F>,
-    vertex_2: &Point3<F>,
-) -> (F, Vector3<F>, Vector3<F>, Vector3<F>) {
+fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
+    vertex_0: &Point3<fph>,
+    vertex_1: &Point3<fph>,
+    vertex_2: &Point3<fph>,
+) -> (fph, Vector3<fph>, Vector3<fph>, Vector3<fph>) {
     let w_0 = vertex_0.coords;
     let w_1 = vertex_1.coords;
     let w_2 = vertex_2.coords;
@@ -487,21 +534,21 @@ mod test {
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
     use proptest::prelude::*;
-    use std::{f64::consts, ops::Range};
+    use std::ops::Range;
 
     prop_compose! {
         fn similarity_transform_strategy(
-            max_translation: f64,
-            scaling_range: Range<f64>
+            max_translation: fph,
+            scaling_range: Range<fph>
         )(
             translation_x in -max_translation..max_translation,
             translation_y in -max_translation..max_translation,
             translation_z in -max_translation..max_translation,
-            rotation_roll in 0.0..consts::TAU,
-            rotation_pitch in -consts::FRAC_PI_2..consts::FRAC_PI_2,
-            rotation_yaw in 0.0..consts::TAU,
+            rotation_roll in 0.0..fph::TWO_PI,
+            rotation_pitch in -fph::FRAC_PI_2..fph::FRAC_PI_2,
+            rotation_yaw in 0.0..fph::TWO_PI,
             scaling in scaling_range,
-        ) -> Similarity3<f64> {
+        ) -> Similarity3<fph> {
             let translation = Translation3::new(translation_x, translation_y, translation_z);
             let rotation = UnitQuaternion::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw);
             Similarity3::from_parts(
@@ -519,7 +566,7 @@ mod test {
             let initial_mass = cube.mass();
             cube.transform(&transform);
             let mass_after_transforming = cube.mass();
-            let correctly_transformed_mass = initial_mass * f64::powi(transform.scaling(), 3);
+            let correctly_transformed_mass = initial_mass * transform.scaling().powi(3);
             prop_assert!(abs_diff_eq!(
                 mass_after_transforming,
                 correctly_transformed_mass,
@@ -627,7 +674,7 @@ mod test {
             sphere_mesh.transform(&transform);
             sphere_properties.transform(&transform);
 
-            let computed_mass: f64 = compute_uniform_triangle_mesh_mass(&sphere_mesh, mass_density);
+            let computed_mass = compute_uniform_triangle_mesh_mass(&sphere_mesh, mass_density);
             let correct_mass = sphere_properties.mass();
 
             prop_assert!(abs_diff_eq!(
@@ -858,7 +905,7 @@ mod test {
             cone_mesh.transform(&transform);
             cone_properties.transform(&transform);
 
-            let cone_properties_from_mesh = InertialProperties::of_uniform_triangle_mesh(cone_mesh, mass_density);
+            let cone_properties_from_mesh = InertialProperties::of_uniform_triangle_mesh(&cone_mesh, mass_density);
 
             prop_assert!(abs_diff_eq!(
                 cone_properties_from_mesh.mass(),
