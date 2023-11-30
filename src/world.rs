@@ -264,6 +264,11 @@ impl World {
                 .declare_render_resources_desynchronized();
         }
 
+        self.simulator().read().unwrap().handle_entity_created(
+            &self.scene().read().unwrap().mesh_repository(),
+            &mut components,
+        );
+
         self.ecs_world.write().unwrap().create_entities(components)
     }
 
@@ -271,6 +276,11 @@ impl World {
         let mut ecs_world = self.ecs_world.write().unwrap();
 
         let entry = ecs_world.entity(entity);
+
+        self.simulator()
+            .read()
+            .unwrap()
+            .handle_entity_removed(&entry);
 
         let render_resources_desynchronized =
             self.scene().read().unwrap().handle_entity_removed(&entry);
