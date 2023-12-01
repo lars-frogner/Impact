@@ -8,7 +8,7 @@ mod rigid_body;
 mod tasks;
 mod time;
 
-pub use inertia::{InertiaTensor, InertialProperties};
+pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularMomentum, AngularVelocity,
     AngularVelocityComp, DrivenAngularVelocityComp, Force, Momentum, Orientation, OrientationComp,
