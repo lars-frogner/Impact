@@ -3,8 +3,8 @@
 use crate::{
     define_task,
     physics::{
-        AdvanceOrientations, AdvancePositions, OrientationComp, PositionComp, Static,
-        SyncRigidBodyMotion,
+        AdvanceOrientations, AdvancePositions, AdvanceSimulation, OrientationComp, PositionComp,
+        Static,
     },
     rendering::RenderingTag,
     scene::{
@@ -23,7 +23,7 @@ define_task!(
     /// an entity that also has the [`PositionComp`] component so that the
     /// translational part matches the position.
     [pub] SyncSceneObjectTransformsWithPositions,
-    depends_on = [AdvancePositions, AdvanceOrientations, SyncRigidBodyMotion],
+    depends_on = [AdvanceSimulation, AdvancePositions, AdvanceOrientations],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing scene graph node transforms with positions"; {
@@ -61,7 +61,7 @@ define_task!(
     /// an entity that also has the [`PositionComp`] component so that the
     /// rotational part matches the orientation.
     [pub] SyncSceneObjectTransformsWithOrientations,
-    depends_on = [AdvanceOrientations, SyncRigidBodyMotion],
+    depends_on = [AdvanceSimulation, AdvanceOrientations],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Synchronizing scene graph node transforms with orientations"; {
