@@ -1,7 +1,7 @@
 //! Spring force.
 
 use crate::physics::{
-    fph, AngularVelocity, AngularVelocityComp, DrivenAngularVelocityComp, Orientation,
+    fph, AngularVelocity, AngularVelocityComp, Direction, DrivenAngularVelocityComp, Orientation,
     OrientationComp, Position, PositionComp, RigidBodyComp, Velocity, VelocityComp,
 };
 use approx::abs_diff_eq;
@@ -11,7 +11,7 @@ use impact_ecs::{
     world::{Entity, EntityEntry, World as ECSWorld},
     Component,
 };
-use nalgebra::UnitVector3;
+use nalgebra::{UnitVector3, Vector3};
 use std::collections::LinkedList;
 
 /// A spring or elastic band.
@@ -26,6 +26,16 @@ pub struct Spring {
     pub rest_length: fph,
     /// The length below which the spring force is always zero.
     pub slack_length: fph,
+}
+
+/// The current state of a spring.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct SpringState {
+    /// The direction from the first to the second attachment point.
+    direction: Direction,
+    /// The position of the center of the spring.
+    center: Position,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
@@ -45,6 +55,8 @@ pub struct SpringComp {
     pub attachment_point_2: Position,
     /// The spring connecting the entities.
     pub spring: Spring,
+    /// The current state of the spring.
+    pub spring_state: SpringState,
 }
 
 /// The outcome of applying the forces from a spring.
@@ -94,6 +106,41 @@ impl Spring {
     }
 }
 
+impl SpringState {
+    /// Creates a new spring state (with dummy values).
+    pub fn new() -> Self {
+        Self {
+            direction: Vector3::y_axis(),
+            center: Position::origin(),
+        }
+    }
+
+    /// Returns the direction from the first to the second attachment point.
+    pub fn direction(&self) -> &Direction {
+        &self.direction
+    }
+
+    /// Returns the position of the center of the spring.
+    pub fn center(&self) -> &Position {
+        &self.center
+    }
+
+    /// Computes an orientation for the spring based on its direction.
+    pub fn compute_orientation(&self) -> Orientation {
+        Orientation::rotation_between_axis(&Vector3::y_axis(), &self.direction)
+            .unwrap_or_else(|| Orientation::from_axis_angle(&Vector3::y_axis(), 0.0))
+    }
+
+    fn update(&mut self, attachment_point_1: &Position, direction: Direction, length: fph) {
+        self.center = attachment_point_1 + direction.as_ref() * (0.5 * length);
+        self.direction = direction;
+    }
+
+    fn update_with_zero_length(&mut self, attachment_point_1: Position) {
+        self.center = attachment_point_1;
+    }
+}
+
 impl SpringComp {
     /// Creates a new component for a spring connecting two entities.
     pub fn new(
@@ -109,6 +156,7 @@ impl SpringComp {
             attachment_point_1,
             attachment_point_2,
             spring,
+            spring_state: SpringState::new(),
         }
     }
 
@@ -124,7 +172,7 @@ impl SpringComp {
         )
     }
 
-    fn apply_forces(&self, ecs_world: &ECSWorld) -> SpringForceApplicationOutcome {
+    fn apply_forces(&mut self, ecs_world: &ECSWorld) -> SpringForceApplicationOutcome {
         let (entity_1, entity_2) = match (
             ecs_world.get_entity(&self.entity_1),
             ecs_world.get_entity(&self.entity_2),
@@ -150,6 +198,9 @@ impl SpringComp {
         if let Some((spring_direction, length)) =
             UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
         {
+            self.spring_state
+                .update(&attachment_point_1, spring_direction, length);
+
             let rate_of_length_change = if abs_diff_eq!(self.spring.damping, 0.0) {
                 // The velocities are irrelevant if there is zero damping
                 0.0
@@ -183,7 +234,11 @@ impl SpringComp {
                     .0
                     .apply_force(&force_on_2, &attachment_point_2);
             }
+        } else {
+            self.spring_state
+                .update_with_zero_length(attachment_point_1);
         }
+
         SpringForceApplicationOutcome::Ok
     }
 
@@ -268,11 +323,20 @@ impl SpringComp {
 
 /// Applies spring forces to all applicable rigid bodies.
 pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut LinkedList<Entity>) {
-    query!(ecs_world, |entity: Entity, spring: &SpringComp| {
+    query!(ecs_world, |entity: Entity, spring: &mut SpringComp| {
         let outcome = spring.apply_forces(&ecs_world);
         if outcome == SpringForceApplicationOutcome::EntityMissing {
             entities_to_remove.push_back(entity);
         }
+    });
+}
+
+pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
+    query!(ecs_world, |position: &mut PositionComp,
+                       orientation: &mut OrientationComp,
+                       spring: &SpringComp| {
+        position.0 = *spring.spring_state.center();
+        orientation.0 = spring.spring_state.compute_orientation();
     });
 }
 

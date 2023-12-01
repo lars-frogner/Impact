@@ -28,4 +28,10 @@ impl RigidBodyForceManager {
         uniform_gravity::apply_uniform_gravity(ecs_world);
         spring::apply_spring_forces(ecs_world, entities_to_remove);
     }
+
+    /// Performs actions that should be performed after completion of a
+    /// simulation step.
+    pub fn perform_post_simulation_step_actions(&self, ecs_world: &ECSWorld) {
+        spring::synchronize_spring_positions_and_orientations(ecs_world);
+    }
 }

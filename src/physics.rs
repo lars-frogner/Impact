@@ -11,8 +11,8 @@ mod time;
 pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularMomentum, AngularVelocity,
-    AngularVelocityComp, DrivenAngularVelocityComp, Force, Momentum, Orientation, OrientationComp,
-    Position, PositionComp, Static, Torque, Velocity, VelocityComp,
+    AngularVelocityComp, Direction, DrivenAngularVelocityComp, Force, Momentum, Orientation,
+    OrientationComp, Position, PositionComp, Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
     RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
@@ -67,6 +67,8 @@ impl PhysicsSimulator {
             .apply_forces_and_torques(&ecs_world_readonly, &mut entities_to_remove);
 
         Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
+
+        rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
 
         if !entities_to_remove.is_empty() {
             drop(ecs_world_readonly);
