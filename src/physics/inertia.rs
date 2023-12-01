@@ -266,6 +266,20 @@ impl InertiaTensor {
         &self.inverse_matrix
     }
 
+    /// Computes the inertia tensor corresponding to rotating the body with the
+    /// given rotation quaternion and returns it as a matrix.
+    pub fn rotated_matrix(&self, rotation: &UnitQuaternion<fph>) -> Matrix3<fph> {
+        let rotation_matrix = rotation.to_rotation_matrix();
+        rotation_matrix * self.matrix * rotation_matrix.transpose()
+    }
+
+    /// Computes the inertia tensor corresponding to rotating the body with the
+    /// given rotation quaternion and returns its inverse as a matrix.
+    pub fn inverse_rotated_matrix(&self, rotation: &UnitQuaternion<fph>) -> Matrix3<fph> {
+        let rotation_matrix = rotation.to_rotation_matrix();
+        rotation_matrix * self.inverse_matrix * rotation_matrix.transpose()
+    }
+
     /// Computes the inertia tensor corresponding to scaling the body uniformly
     /// by the given factor.
     pub fn scaled(&self, scaling: fph) -> Self {
@@ -713,6 +727,11 @@ mod test {
             prop_assert!(abs_diff_eq!(
                 rotated_inertia_tensor.inverse_matrix(),
                 &rotated_inertia_tensor.matrix().try_inverse().unwrap(),
+                epsilon = 1e-7
+            ));
+            prop_assert!(abs_diff_eq!(
+                cube_properties.inertia_tensor().inverse_rotated_matrix(&rotation),
+                rotated_inertia_tensor.matrix().try_inverse().unwrap(),
                 epsilon = 1e-7
             ));
         }
