@@ -486,6 +486,12 @@ impl<'a> EntityEntry<'a> {
     /// Returns a reference to the component specified by the
     /// type parameter `C`. If the entity does not have this
     /// component, [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageEntry`]
+    /// that holds a read lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
     pub fn get_component<C: Component>(&self) -> Option<ComponentStorageEntry<'_, C>> {
         self.table.get_component_for_entity::<C>(self.entity_id)
     }
@@ -495,6 +501,12 @@ impl<'a> EntityEntry<'a> {
     ///
     /// # Panics
     /// If the entity does not have the specified component.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageEntry`]
+    /// that holds a read lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
     pub fn component<C: Component>(&self) -> ComponentStorageEntry<'_, C> {
         self.get_component::<C>()
             .expect("Requested invalid component")
@@ -503,6 +515,12 @@ impl<'a> EntityEntry<'a> {
     /// Returns a mutable reference to the component specified
     /// by the type parameter `C`. If the entity does not have
     /// this component, [`None`] is returned.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageEntryMut`]
+    /// that holds a write lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
     pub fn get_component_mut<C: Component>(&self) -> Option<ComponentStorageEntryMut<'_, C>> {
         self.table.get_component_for_entity_mut::<C>(self.entity_id)
     }
@@ -512,6 +530,12 @@ impl<'a> EntityEntry<'a> {
     ///
     /// # Panics
     /// If the entity does not have the specified component.
+    ///
+    /// # Concurrency
+    /// The returned reference is wrapped in a [`ComponentStorageEntryMut`]
+    /// that holds a write lock on the [`ComponentStorage`] where the
+    /// component resides. The lock is released when the entry is
+    /// dropped.
     pub fn component_mut<C: Component>(&self) -> ComponentStorageEntryMut<'_, C> {
         self.get_component_mut::<C>()
             .expect("Requested invalid component")
