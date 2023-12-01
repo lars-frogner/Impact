@@ -15,7 +15,7 @@ use crate::{
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, Vector3};
+use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, UnitVector3, Vector3};
 
 /// A unit vector in 3D space.
 pub type Direction = Unit<Vector3<fph>>;
@@ -38,6 +38,12 @@ pub struct AngularVelocity {
     angular_speed: Radians<fph>,
 }
 
+/// A momentum in 3D space.
+pub type Momentum = Vector3<fph>;
+
+/// An angular momentum in 3D space.
+pub type AngularMomentum = Vector3<fph>;
+
 /// A 3D force.
 pub type Force = Vector3<fph>;
 
@@ -54,6 +60,26 @@ impl AngularVelocity {
         }
     }
 
+    /// Creates a new [`AngularVelocity`] from the given angular velocity
+    /// vector.
+    pub fn new_from_vector(angular_velocity_vector: Vector3<fph>) -> Self {
+        if let Some((axis_of_rotation, angular_speed)) =
+            UnitVector3::try_new_and_get(angular_velocity_vector, fph::EPSILON)
+        {
+            Self::new(axis_of_rotation, Radians(angular_speed))
+        } else {
+            Self::zero()
+        }
+    }
+
+    /// Creates a new [`AngularVelocity`] with zero angular speed.
+    pub fn zero() -> Self {
+        Self {
+            axis_of_rotation: Vector3::y_axis(),
+            angular_speed: Radians(0.0),
+        }
+    }
+
     /// Returns the axis of rotation.
     pub fn axis_of_rotation(&self) -> &Direction {
         &self.axis_of_rotation
@@ -62,6 +88,11 @@ impl AngularVelocity {
     /// Returns the angular speed.
     pub fn angular_speed(&self) -> Radians<fph> {
         self.angular_speed
+    }
+
+    /// Computes the corresponding angular velocity vector.
+    pub fn as_vector(&self) -> Vector3<fph> {
+        self.axis_of_rotation.as_ref() * self.angular_speed.radians()
     }
 }
 
