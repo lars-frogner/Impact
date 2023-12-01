@@ -1,5 +1,6 @@
 //! Simulation of physics.
 
+mod collision;
 mod events;
 mod inertia;
 mod motion;
@@ -14,12 +15,13 @@ pub use motion::{
     Position, PositionComp, Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
-    RigidBody, RigidBodyComp, RigidBodyForceManager, UniformGravityComp, UniformRigidBodyComp,
+    RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
+    UniformRigidBodyComp,
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
 
 use impact_ecs::{query, world::World as ECSWorld};
-use std::sync::RwLock;
+use std::{collections::LinkedList, sync::RwLock};
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
@@ -56,13 +58,24 @@ impl PhysicsSimulator {
 
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(&self, ecs_world: &RwLock<ECSWorld>) {
-        let ecs_world = ecs_world.read().unwrap();
+        let mut entities_to_remove = LinkedList::new();
 
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
+        let ecs_world_readonly = ecs_world.read().unwrap();
 
-        rigid_body_force_manager.apply_forces_and_torques(&ecs_world);
+        rigid_body_force_manager
+            .apply_forces_and_torques(&ecs_world_readonly, &mut entities_to_remove);
 
-        Self::advance_rigid_body_motion(&ecs_world, self.time_step_duration());
+        Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
+
+        if !entities_to_remove.is_empty() {
+            drop(ecs_world_readonly);
+            let mut ecs_world_write = ecs_world.write().unwrap();
+
+            for entity in entities_to_remove {
+                ecs_world_write.remove_entity(&entity).unwrap();
+            }
+        }
     }
 
     fn advance_rigid_body_motion(ecs_world: &ECSWorld, duration: fph) {

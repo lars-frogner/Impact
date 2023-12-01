@@ -4,7 +4,7 @@ mod components;
 mod forces;
 
 pub use components::{RigidBodyComp, UniformRigidBodyComp};
-pub use forces::{RigidBodyForceManager, UniformGravityComp};
+pub use forces::{RigidBodyForceManager, Spring, SpringComp, UniformGravityComp};
 
 use crate::physics::{
     self, fph, AngularMomentum, AngularVelocity, Force, InertialProperties, Momentum, Orientation,
