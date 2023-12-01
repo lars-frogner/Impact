@@ -13,8 +13,9 @@ pub use motion::{
     AngularVelocityComp, DrivenAngularVelocityComp, Force, Momentum, Orientation, OrientationComp,
     Position, PositionComp, Static, Torque, Velocity, VelocityComp,
 };
-pub use rigid_body::{RigidBody, RigidBodyComp, UniformRigidBodyComp};
-pub use tasks::PhysicsTag;
+pub use rigid_body::{
+    RigidBody, RigidBodyComp, RigidBodyForceManager, UniformGravityComp, UniformRigidBodyComp,
+};
 
 use std::sync::RwLock;
 
@@ -25,7 +26,7 @@ pub type fph = f64;
 #[derive(Debug)]
 pub struct PhysicsSimulator {
     config: SimulatorConfig,
-    rigid_body_manager: RwLock<RigidBodyManager>,
+    rigid_body_force_manager: RwLock<RigidBodyForceManager>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,7 +38,7 @@ impl PhysicsSimulator {
     pub fn new(config: SimulatorConfig) -> Self {
         Self {
             config,
-            rigid_body_manager: RwLock::new(RigidBodyManager::new()),
+            rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new()),
         }
     }
 
@@ -45,10 +46,11 @@ impl PhysicsSimulator {
         self.config.time_step_duration
     }
 
-    /// Returns a reference to the [`RigidBodyManager`], guarded by a
+    /// Returns a reference to the [`RigidBodyForceManager`], guarded by a
     /// [`RwLock`].
-    pub fn rigid_body_manager(&self) -> &RwLock<RigidBodyManager> {
-        &self.rigid_body_manager
+    pub fn rigid_body_force_manager(&self) -> &RwLock<RigidBodyForceManager> {
+        &self.rigid_body_force_manager
+    }
     }
 }
 
