@@ -1,6 +1,6 @@
 //! [`Component`](impact_ecs::component::Component)s related to rigid bodies.
 
-use crate::physics::{fph, RigidBodyID};
+use crate::physics::{fph, RigidBody};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -14,10 +14,7 @@ pub struct UniformRigidBodyComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
-/// [`RigidBody`].
+/// rigid body. Transparently wraps a [`RigidBody`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct RigidBodyComp {
-    /// The ID of the entity's rigid body.
-    pub id: RigidBodyID,
-}
+pub struct RigidBodyComp(pub RigidBody);

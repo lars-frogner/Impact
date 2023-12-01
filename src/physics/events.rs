@@ -3,8 +3,7 @@
 use crate::{
     physics::{
         fph, AngularVelocityComp, InertialProperties, OrientationComp, PhysicsSimulator,
-        PositionComp, RigidBody, RigidBodyComp, RigidBodyManager, UniformRigidBodyComp,
-        VelocityComp,
+        PositionComp, RigidBody, RigidBodyComp, UniformRigidBodyComp, VelocityComp,
     },
     rendering::fre,
     scene::{
@@ -25,22 +24,20 @@ impl PhysicsSimulator {
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
     ) {
-        self.add_rigid_body_component_for_entity(mesh_repository, components);
+        Self::add_rigid_body_component_for_entity(mesh_repository, components);
     }
 
     /// Performs any modifications required to clean up the physics simulator
     /// when the given entity is removed.
     pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) {
-        self.remove_rigid_body_for_entity(entity);
+        Self::remove_rigid_body_for_entity(entity);
     }
 
     fn add_rigid_body_component_for_entity(
-        &self,
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
     ) {
         fn execute_setup(
-            rigid_body_manager: &RwLock<RigidBodyManager>,
             mut inertial_properties: InertialProperties,
             position: &PositionComp,
             orientation: &OrientationComp,
@@ -55,17 +52,12 @@ impl PhysicsSimulator {
             let rigid_body = RigidBody::new(
                 inertial_properties,
                 &position.0,
-                orientation.0,
-                velocity.0,
-                angular_velocity.0,
+                &orientation.0,
+                &velocity.0,
+                &angular_velocity.0,
             );
 
-            let rigid_body_id = rigid_body_manager
-                .write()
-                .unwrap()
-                .include_rigid_body(rigid_body);
-
-            RigidBodyComp { id: rigid_body_id }
+            RigidBodyComp(rigid_body)
         }
 
         setup!(
@@ -85,7 +77,6 @@ impl PhysicsSimulator {
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(
-                    &self.rigid_body_manager,
                     inertial_properties,
                     position,
                     orientation,
@@ -113,7 +104,6 @@ impl PhysicsSimulator {
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(
-                    &self.rigid_body_manager,
                     inertial_properties,
                     position,
                     orientation,
@@ -141,7 +131,6 @@ impl PhysicsSimulator {
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(
-                    &self.rigid_body_manager,
                     inertial_properties,
                     position,
                     orientation,
@@ -165,7 +154,6 @@ impl PhysicsSimulator {
                 let inertial_properties =
                     InertialProperties::of_uniform_sphere(uniform_rigid_body.mass_density);
                 execute_setup(
-                    &self.rigid_body_manager,
                     inertial_properties,
                     position,
                     orientation,
@@ -190,7 +178,6 @@ impl PhysicsSimulator {
                 let inertial_properties =
                     InertialProperties::of_uniform_hemisphere(uniform_rigid_body.mass_density);
                 execute_setup(
-                    &self.rigid_body_manager,
                     inertial_properties,
                     position,
                     orientation,
@@ -222,7 +209,6 @@ impl PhysicsSimulator {
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(
-                    &self.rigid_body_manager,
                     inertial_properties,
                     position,
                     orientation,
@@ -235,13 +221,5 @@ impl PhysicsSimulator {
         );
     }
 
-    fn remove_rigid_body_for_entity(&self, entity: &EntityEntry<'_>) {
-        if let Some(rigid_body) = entity.get_component::<RigidBodyComp>() {
-            let rigid_body_id = rigid_body.access().id;
-            self.rigid_body_manager
-                .write()
-                .unwrap()
-                .remove_rigid_body(rigid_body_id);
-        }
-    }
+    fn remove_rigid_body_for_entity(_entity: &EntityEntry<'_>) {}
 }

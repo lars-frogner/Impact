@@ -9,14 +9,11 @@ mod time;
 
 pub use inertia::{InertiaTensor, InertialProperties};
 pub use motion::{
-    advance_orientation, AdvanceOrientations, AdvancePositions, AngularVelocity,
-    AngularVelocityComp, DrivenAngularVelocityComp, Force, Orientation, OrientationComp, Position,
-    PositionComp, Static, Torque, Velocity, VelocityComp,
+    advance_orientation, AdvanceOrientations, AdvancePositions, AngularMomentum, AngularVelocity,
+    AngularVelocityComp, DrivenAngularVelocityComp, Force, Momentum, Orientation, OrientationComp,
+    Position, PositionComp, Static, Torque, Velocity, VelocityComp,
 };
-pub use rigid_body::{
-    RigidBody, RigidBodyComp, RigidBodyID, RigidBodyManager, SyncRigidBodyMotion,
-    UniformRigidBodyComp,
-};
+pub use rigid_body::{RigidBody, RigidBodyComp, UniformRigidBodyComp};
 pub use tasks::PhysicsTag;
 
 use std::sync::RwLock;
