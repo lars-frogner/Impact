@@ -41,8 +41,8 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense body represented
-    /// by the given triangle mesh, which is assumed closed.
-    pub fn of_uniform_triangle_mesh<F: Float + SubsetOf<fph>>(
+    /// by the given triangle mesh, which is assumed closed and convex.
+    pub fn of_uniform_convex_triangle_mesh<F: Float + SubsetOf<fph>>(
         triangle_mesh: &TriangleMesh<F>,
         mass_density: fph,
     ) -> Self {
@@ -378,18 +378,11 @@ pub fn compute_hemisphere_volume<F: Float>(radius: F) -> F {
     compute_sphere_volume(radius) * F::ONE_HALF
 }
 
-/// Computes the mass of the unform body represented by the given triangle mesh,
-/// using the method described in Eberly (2004). The mesh is assumed closed.
-pub fn compute_uniform_triangle_mesh_mass<F: Float + SubsetOf<fph>>(
-    mesh: &TriangleMesh<F>,
-    mass_density: fph,
-) -> fph {
-    compute_triangle_mesh_volume(mesh) * mass_density
-}
-
 /// Computes the volume of the given triangle mesh, using the method described
-/// in Eberly (2004). The mesh is assumed closed.
-pub fn compute_triangle_mesh_volume<F: Float + SubsetOf<fph>>(mesh: &TriangleMesh<F>) -> fph {
+/// in Eberly (2004). The mesh is assumed closed and convex.
+pub fn compute_convex_triangle_mesh_volume<F: Float + SubsetOf<fph>>(
+    mesh: &TriangleMesh<F>,
+) -> fph {
     let mut volume = 0.0;
 
     for [vertex_0, vertex_1, vertex_2] in mesh.triangle_vertex_positions() {
@@ -405,59 +398,10 @@ pub fn compute_triangle_mesh_volume<F: Float + SubsetOf<fph>>(mesh: &TriangleMes
     volume
 }
 
-/// Computes the volume and center of mass of the uniformly dense body
-/// represented by the given triangle mesh, using the method described in Eberly
-/// (2004). The mesh is assumed closed.
-pub fn compute_uniform_triangle_mesh_volume_and_center_of_mass<F: Float + SubsetOf<fph>>(
-    mesh: &TriangleMesh<F>,
-) -> (fph, Position) {
-    let mut volume = 0.0;
-    let mut first_moments = Vector3::zeros();
-
-    for [vertex_0, vertex_1, vertex_2] in mesh.triangle_vertex_positions() {
-        let (zeroth_moment_contrib, first_moment_contrib) =
-            compute_zeroth_and_first_moment_contributions_for_triangle(
-                &vertex_0.cast::<fph>(),
-                &vertex_1.cast::<fph>(),
-                &vertex_2.cast::<fph>(),
-            );
-
-        volume += zeroth_moment_contrib;
-        first_moments += first_moment_contrib;
-    }
-
-    volume *= 0.5 * fph::ONE_THIRD;
-    first_moments *= 0.5 * 0.5 * 0.5 * fph::ONE_THIRD;
-
-    let center_of_mass = Point3::from(first_moments / volume);
-
-    (volume, center_of_mass)
-}
-
-/// Computes the center of mass of the uniformly dense body represented by the
-/// given triangle mesh, using the method described in Eberly (2004). The mesh
-/// is assumed closed.
-pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float + SubsetOf<fph>>(
-    mesh: &TriangleMesh<F>,
-) -> Position {
-    compute_uniform_triangle_mesh_volume_and_center_of_mass(mesh).1
-}
-
-/// Computes the inertia tensor of the uniformly dense body represented by the
-/// given triangle mesh, using the method described in Eberly (2004). The
-/// inertia tensor is defined relative to the center of mass. The mesh is
-/// assumed closed.
-pub fn compute_uniform_triangle_mesh_inertia_tensor<F: Float + SubsetOf<fph>>(
-    mesh: &TriangleMesh<F>,
-    mass_density: fph,
-) -> InertiaTensor {
-    compute_uniform_triangle_mesh_inertial_properties(mesh, mass_density).2
-}
-
 /// Computes the mass, center of mass and inertia tensor of a uniformly dense
 /// body represented by the given triangle mesh, using the method described in
 /// Eberly (2004). The inertia tensor is defined relative to the center of mass.
-/// The mesh is assumed closed.
+/// The mesh is assumed closed and convex.
 pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
     mass_density: fph,
@@ -514,6 +458,39 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph
     (mass, center_of_mass, inertia_tensor)
 }
 
+/// Computes the mass of the unform body represented by the given triangle mesh,
+/// using the method described in Eberly (2004). The mesh is assumed closed and
+/// convex.
+#[cfg(test)]
+pub fn compute_uniform_triangle_mesh_mass<F: Float + SubsetOf<fph>>(
+    mesh: &TriangleMesh<F>,
+    mass_density: fph,
+) -> fph {
+    compute_convex_triangle_mesh_volume(mesh) * mass_density
+}
+
+/// Computes the center of mass of the uniformly dense body represented by the
+/// given triangle mesh, using the method described in Eberly (2004). The mesh
+/// is assumed closed and convex.
+#[cfg(test)]
+pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float + SubsetOf<fph>>(
+    mesh: &TriangleMesh<F>,
+) -> Position {
+    compute_uniform_triangle_mesh_inertial_properties(mesh, 1.0).1
+}
+
+/// Computes the inertia tensor of the uniformly dense body represented by the
+/// given triangle mesh, using the method described in Eberly (2004). The
+/// inertia tensor is defined relative to the center of mass. The mesh is
+/// assumed closed and convex.
+#[cfg(test)]
+pub fn compute_uniform_triangle_mesh_inertia_tensor<F: Float + SubsetOf<fph>>(
+    mesh: &TriangleMesh<F>,
+    mass_density: fph,
+) -> InertiaTensor {
+    compute_uniform_triangle_mesh_inertial_properties(mesh, mass_density).2
+}
+
 fn compute_volume_contribution_for_triangle(
     vertex_0: &Point3<fph>,
     vertex_1: &Point3<fph>,
@@ -525,32 +502,6 @@ fn compute_volume_contribution_for_triangle(
     let edge_2_z = vertex_2.z - vertex_0.z;
 
     (edge_1_y * edge_2_z - edge_2_y * edge_1_z) * (vertex_0.x + vertex_1.x + vertex_2.x)
-}
-
-fn compute_zeroth_and_first_moment_contributions_for_triangle(
-    vertex_0: &Point3<fph>,
-    vertex_1: &Point3<fph>,
-    vertex_2: &Point3<fph>,
-) -> (fph, Vector3<fph>) {
-    let w_0 = vertex_0.coords;
-    let w_1 = vertex_1.coords;
-    let w_2 = vertex_2.coords;
-
-    let tmp = w_0 + w_1;
-
-    let f_1 = tmp + w_2;
-    let f_2 = w_0.component_mul(&w_0) + w_1.component_mul(&tmp) + w_2.component_mul(&f_1);
-
-    let edge_1 = vertex_1 - vertex_0;
-    let edge_2 = vertex_2 - vertex_0;
-
-    let edge_cross_prod = edge_1.cross(&edge_2);
-
-    let zeroth_moment = edge_cross_prod.x * f_1.x;
-
-    let first_moments = edge_cross_prod.component_mul(&f_2);
-
-    (zeroth_moment, first_moments)
 }
 
 fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
@@ -1046,7 +997,7 @@ mod test {
             cone_mesh.transform(&transform);
             cone_properties.transform(&transform);
 
-            let cone_properties_from_mesh = InertialProperties::of_uniform_triangle_mesh(&cone_mesh, mass_density);
+            let cone_properties_from_mesh = InertialProperties::of_uniform_convex_triangle_mesh(&cone_mesh, mass_density);
 
             prop_assert!(abs_diff_eq!(
                 cone_properties_from_mesh.mass(),
