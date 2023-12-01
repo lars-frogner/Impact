@@ -2,7 +2,6 @@
 
 mod components;
 mod forces;
-mod systems;
 
 pub use components::{RigidBodyComp, UniformRigidBodyComp};
 pub use forces::{RigidBodyForceManager, UniformGravityComp};
