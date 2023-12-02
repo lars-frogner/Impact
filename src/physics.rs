@@ -249,7 +249,8 @@ impl PhysicsSimulator {
                     &mut angular_velocity.0,
                     duration,
                 );
-            }
+            },
+            ![Static]
         );
     }
 }
