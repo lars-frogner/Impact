@@ -160,7 +160,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default());
 
-    let motion_controller = SemiDirectionalMotionController::new(0.2, true);
+    let motion_controller = SemiDirectionalMotionController::new(8.0, true);
     let orientation_controller =
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
