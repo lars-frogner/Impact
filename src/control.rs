@@ -18,6 +18,9 @@ use impact_ecs::{query, world::World as ECSWorld};
 /// Represents controllers that are used for controlling
 /// the movement of entities.
 pub trait MotionController: Send + Sync + std::fmt::Debug {
+    /// Returns the current movement speed.
+    fn movement_speed(&self) -> fph;
+
     /// Updates the given world-space velocity of a controlled entity
     /// given its orientation.
     fn update_world_velocity(&self, velocity: &mut Velocity, orientation: &Orientation);

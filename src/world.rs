@@ -392,6 +392,38 @@ impl World {
         }
     }
 
+    /// Increases the simulation speed multiplier by the
+    /// `simulation_speed_multiplier_increment_factor` specified in the
+    /// simulation configuration and decrease the motion controller speed by the
+    /// same factor to compensate.
+    pub fn increment_simulation_speed_multiplier_and_compensate_controller_speed(&self) {
+        let mut simulator = self.simulator.write().unwrap();
+        simulator.increment_simulation_speed_multiplier();
+
+        if let Some(motion_controller) = &self.motion_controller {
+            let mut motion_controller = motion_controller.lock().unwrap();
+            let new_movement_speed = motion_controller.movement_speed()
+                / simulator.simulation_speed_multiplier_increment_factor();
+            motion_controller.set_movement_speed(new_movement_speed);
+        }
+    }
+
+    /// Decreases the simulation speed multiplier by the
+    /// `simulation_speed_multiplier_increment_factor` specified in the
+    /// simulation configuration and increase the motion controller speed by the
+    /// same factor to compensate.
+    pub fn decrement_simulation_speed_multiplier_and_compensate_controller_speed(&self) {
+        let mut simulator = self.simulator.write().unwrap();
+        simulator.decrement_simulation_speed_multiplier();
+
+        if let Some(motion_controller) = &self.motion_controller {
+            let mut motion_controller = motion_controller.lock().unwrap();
+            let new_movement_speed = motion_controller.movement_speed()
+                * simulator.simulation_speed_multiplier_increment_factor();
+            motion_controller.set_movement_speed(new_movement_speed);
+        }
+    }
+
     /// Performs any setup required before starting the game loop.
     pub fn perform_setup_for_game_loop(&self) {
         self.simulator
