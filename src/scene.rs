@@ -58,7 +58,10 @@ pub use mesh::{
 };
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
-pub use systems::SyncLightPositionsAndDirectionsInStorage;
+pub use systems::{
+    SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransformsWithOrientations,
+    SyncSceneObjectTransformsWithPositions,
+};
 pub use tasks::{
     BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,

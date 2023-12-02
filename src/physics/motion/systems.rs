@@ -6,6 +6,10 @@ use crate::{
         DrivenAngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, RigidBodyComp,
         Static, VelocityComp,
     },
+    scene::{
+        SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransformsWithPositions,
+    },
     world::World,
 };
 use impact_ecs::query;
@@ -15,7 +19,11 @@ define_task!(
     /// entities with velocities by one time step (unless the entity is static
     /// or governed by rigid body physics).
     [pub] AdvancePositions,
-    depends_on = [],
+    depends_on = [
+        SyncSceneObjectTransformsWithPositions,
+        SyncSceneObjectTransformsWithOrientations,
+        SyncLightPositionsAndDirectionsInStorage
+    ],
     execute_on = [PhysicsTag],
     |world: &World| {
         with_debug_logging!("Advancing positions"; {
@@ -37,7 +45,11 @@ define_task!(
     /// entities with driven angluar velocities by one time step (unless the
     /// entity is static or governed by rigid body physics).
     [pub] AdvanceOrientations,
-    depends_on = [],
+    depends_on = [
+        SyncSceneObjectTransformsWithPositions,
+        SyncSceneObjectTransformsWithOrientations,
+        SyncLightPositionsAndDirectionsInStorage
+    ],
     execute_on = [PhysicsTag],
     |world: &World| {
         with_debug_logging!("Advancing orientations"; {

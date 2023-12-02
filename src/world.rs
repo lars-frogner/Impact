@@ -392,6 +392,14 @@ impl World {
         }
     }
 
+    /// Performs any setup required before starting the game loop.
+    pub fn perform_setup_for_game_loop(&self) {
+        self.simulator
+            .read()
+            .unwrap()
+            .perform_setup_for_game_loop(self.ecs_world());
+    }
+
     /// Creates a new task scheduler with the given number of
     /// workers and registers all tasks in it.
     ///

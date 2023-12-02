@@ -3,6 +3,10 @@
 use crate::{
     define_execution_tag, define_task,
     physics::{AdvanceOrientations, AdvancePositions, PhysicsSimulator},
+    scene::{
+        SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransformsWithPositions,
+    },
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
@@ -19,7 +23,11 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) advances the physics simulation
     /// by one time step.
     [pub] AdvanceSimulation,
-    depends_on = [],
+    depends_on = [
+        SyncSceneObjectTransformsWithPositions,
+        SyncSceneObjectTransformsWithOrientations,
+        SyncLightPositionsAndDirectionsInStorage
+    ],
     execute_on = [PhysicsTag],
     |world: &World| {
         with_debug_logging!("Advancing simulation"; {
