@@ -9,7 +9,10 @@ pub use motion::{MotionDirection, MotionState, SemiDirectionalMotionController};
 pub use orientation::{CameraOrientationController, RollFreeCameraOrientationController};
 
 use crate::{
-    physics::{fph, Orientation, OrientationComp, Velocity, VelocityComp},
+    physics::{
+        fph, AngularVelocityComp, Orientation, OrientationComp, PositionComp, RigidBodyComp,
+        Velocity, VelocityComp,
+    },
     scene::PerspectiveCameraComp,
     window::Window,
 };
@@ -93,12 +96,34 @@ pub fn set_velocities_of_controlled_entities(
             motion_controller.update_world_velocity(&mut velocity.0, &orientation.0);
         },
         [Controllable],
-        ![PerspectiveCameraComp]
+        ![PerspectiveCameraComp, RigidBodyComp]
     );
     query!(
         ecs_world,
         |velocity: &mut VelocityComp, orientation: &OrientationComp| {
             motion_controller.update_world_velocity_for_camera(&mut velocity.0, &orientation.0);
+        },
+        [Controllable, PerspectiveCameraComp],
+        ![RigidBodyComp]
+    );
+    query!(
+        ecs_world,
+        |rigid_body: &mut RigidBodyComp,
+         velocity: &mut VelocityComp,
+         orientation: &OrientationComp| {
+            motion_controller.update_world_velocity(&mut velocity.0, &orientation.0);
+            rigid_body.0.synchronize_momentum(&velocity.0);
+        },
+        [Controllable],
+        ![PerspectiveCameraComp]
+    );
+    query!(
+        ecs_world,
+        |rigid_body: &mut RigidBodyComp,
+         velocity: &mut VelocityComp,
+         orientation: &OrientationComp| {
+            motion_controller.update_world_velocity_for_camera(&mut velocity.0, &orientation.0);
+            rigid_body.0.synchronize_momentum(&velocity.0);
         },
         [Controllable, PerspectiveCameraComp]
     );
@@ -114,6 +139,23 @@ pub fn update_orientations_of_controlled_entities(
         ecs_world,
         |orientation: &mut OrientationComp| {
             orientation_controller.update_orientation(&mut orientation.0);
+        },
+        [Controllable],
+        ![RigidBodyComp]
+    );
+    query!(
+        ecs_world,
+        |rigid_body: &mut RigidBodyComp,
+         orientation: &mut OrientationComp,
+         position: &PositionComp,
+         angular_velocity: &AngularVelocityComp| {
+            orientation_controller.update_orientation(&mut orientation.0);
+            rigid_body
+                .0
+                .synchronize_center_of_mass(&position.0, &orientation.0);
+            rigid_body
+                .0
+                .synchronize_angular_momentum(&orientation.0, &angular_velocity.0);
         },
         [Controllable]
     );
