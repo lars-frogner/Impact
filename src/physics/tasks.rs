@@ -31,7 +31,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |world: &World| {
         with_debug_logging!("Advancing simulation"; {
-            world.simulator().read().unwrap().advance_simulation(world.ecs_world());
+            world.simulator().write().unwrap().advance_simulation(world.ecs_world());
             Ok(())
         })
     }

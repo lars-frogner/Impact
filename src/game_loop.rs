@@ -24,6 +24,7 @@ pub struct GameLoop {
     task_scheduler: WorldTaskScheduler,
     input_handler: InputHandler,
     frame_rate_tracker: FrameDurationTracker,
+    start_time: Instant,
     previous_iter_end_time: Instant,
     config: GameLoopConfig,
 }
@@ -52,13 +53,15 @@ impl GameLoop {
         world.perform_setup_for_game_loop();
 
         let frame_rate_tracker = FrameDurationTracker::default();
-        let previous_iter_end_time = Instant::now();
+        let start_time = Instant::now();
+        let previous_iter_end_time = start_time;
 
         Ok(Self {
             world,
             task_scheduler,
             input_handler,
             frame_rate_tracker,
+            start_time,
             previous_iter_end_time,
             config,
         })
@@ -114,13 +117,23 @@ impl GameLoop {
         self.frame_rate_tracker.add_frame_duration(iter_duration);
         self.previous_iter_end_time = iter_end_time;
 
-        let smooth_fps =
-            frame_duration_to_fps(self.frame_rate_tracker.compute_smooth_frame_duration());
+        let smooth_frame_duration = self.frame_rate_tracker.compute_smooth_frame_duration();
+
+        self.world
+            .simulator()
+            .write()
+            .unwrap()
+            .update_time_step_duration(&smooth_frame_duration);
 
         log::info!(
             "Completed game loop iteration after {:.1} ms (~{} FPS)",
             iter_duration.as_secs_f64() * 1e3,
-            smooth_fps
+            frame_duration_to_fps(smooth_frame_duration)
+        );
+
+        log::info!(
+            "Elapsed time: {:.1} s",
+            self.start_time.elapsed().as_secs_f64()
         );
 
         Ok(())

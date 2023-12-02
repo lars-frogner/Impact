@@ -27,7 +27,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |world: &World| {
         with_debug_logging!("Advancing positions"; {
-            let time_step_duration = world.simulator().read().unwrap().time_step_duration();
+            let time_step_duration = world.simulator().read().unwrap().scaled_time_step_duration();
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
@@ -53,7 +53,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |world: &World| {
         with_debug_logging!("Advancing orientations"; {
-            let time_step_duration = world.simulator().read().unwrap().time_step_duration();
+            let time_step_duration = world.simulator().read().unwrap().scaled_time_step_duration();
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world,

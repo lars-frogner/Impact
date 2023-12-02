@@ -24,33 +24,69 @@ use impact_ecs::{
     query,
     world::{Entity, World as ECSWorld},
 };
-use std::{collections::LinkedList, sync::RwLock};
+use num_traits::FromPrimitive;
+use std::{collections::LinkedList, sync::RwLock, time::Duration};
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
 pub type fph = f64;
 
+/// The manager of the physics simulation.
 #[derive(Debug)]
 pub struct PhysicsSimulator {
     config: SimulatorConfig,
     rigid_body_force_manager: RwLock<RigidBodyForceManager>,
+    simulation_time: fph,
+    time_step_duration: fph,
+    simulation_speed_multiplier: fph,
 }
 
+/// Configuration parameters for the physics simulation.
 #[derive(Clone, Debug)]
 pub struct SimulatorConfig {
-    time_step_duration: fph,
+    /// The number of substeps to perform each simulation step. Increase to
+    /// improve accuracy.
+    pub n_substeps: u32,
+    /// The duration to use for the first time step.
+    pub initial_time_step_duration: fph,
+    /// If `true`, the time step duration will be updated regularly to match the
+    /// frame duration. This gives "real-time" simulation.
+    pub match_frame_duration: bool,
 }
 
 impl PhysicsSimulator {
+    /// Creates a new physics simulater with the given configuration parameters.
     pub fn new(config: SimulatorConfig) -> Self {
+        let time_step_duration = config.initial_time_step_duration;
         Self {
             config,
             rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new()),
+            simulation_time: 0.0,
+            time_step_duration,
+            simulation_speed_multiplier: 1.0,
         }
     }
 
+    /// Returns the current base duration used for each time step (without the
+    /// simulation speed multiplier).
     pub fn time_step_duration(&self) -> fph {
-        self.config.time_step_duration
+        self.time_step_duration
+    }
+
+    /// Returns the actual duration used for each time step (including the
+    /// simulation speed multiplier).
+    pub fn scaled_time_step_duration(&self) -> fph {
+        self.time_step_duration * self.simulation_speed_multiplier
+    }
+
+    /// Returns the time that have elapsed within the simulation.
+    pub fn current_simulation_time(&self) -> fph {
+        self.simulation_time
+    }
+
+    /// Returns the number of substeps performed each simulation step.
+    pub fn n_substeps(&self) -> u32 {
+        self.config.n_substeps
     }
 
     /// Returns a reference to the [`RigidBodyForceManager`], guarded by a
@@ -59,29 +95,79 @@ impl PhysicsSimulator {
         &self.rigid_body_force_manager
     }
 
+    /// If configured to do so, sets the time step duration to the given frame
+    /// duration.
+    pub fn update_time_step_duration(&mut self, frame_duration: &Duration) {
+        if self.config.match_frame_duration {
+            self.set_time_step_duration(frame_duration.as_secs_f64())
+        }
+    }
+
+    /// Will use the given duration as the time step duration.
+    pub fn set_time_step_duration(&mut self, time_step_duration: fph) {
+        self.time_step_duration = time_step_duration;
+    }
+
+    /// Will execute the given number of substeps each simulation step.
+    pub fn set_n_substeps(&mut self, n_substeps: u32) {
+        self.config.n_substeps = n_substeps;
+    }
+
+    /// Will use the given multiplier to scale the simulation time step
+    /// duration.
+    pub fn set_simulation_speed_multiplier(&mut self, simulation_speed_multiplier: fph) {
+        self.simulation_speed_multiplier = simulation_speed_multiplier;
+    }
+
     /// Performs any setup required before starting the game loop.
     pub fn perform_setup_for_game_loop(&self, ecs_world: &RwLock<ECSWorld>) {
         self.apply_forces_and_torques(ecs_world);
     }
 
     /// Advances the physics simulation by one time step.
-    pub fn advance_simulation(&self, ecs_world: &RwLock<ECSWorld>) {
-        with_timing_info_logging!("Simulation step"; {
+    pub fn advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
+        with_timing_info_logging!(
+            "Simulation step with duration {:.2} and {} substeps",
+            self.scaled_time_step_duration(), self.n_substeps(); {
+
             let mut entities_to_remove = LinkedList::new();
 
             let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
             let ecs_world_readonly = ecs_world.read().unwrap();
 
-            Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
-
-            rigid_body_force_manager
-                .apply_forces_and_torques(&ecs_world_readonly, &mut entities_to_remove);
+            let substep_duration = self.compute_substep_duration();
+            for _ in 0..self.n_substeps() {
+                Self::perform_substep(
+                    &ecs_world_readonly,
+                    &rigid_body_force_manager,
+                    substep_duration,
+                    &mut entities_to_remove,
+                );
+                self.simulation_time += substep_duration;
+            }
 
             rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
 
             drop(ecs_world_readonly);
             Self::remove_entities(ecs_world, &entities_to_remove);
-        })
+        });
+
+        log::info!("Simulation time: {:.1}", self.simulation_time);
+    }
+
+    fn compute_substep_duration(&self) -> fph {
+        self.scaled_time_step_duration() / fph::from_u32(self.n_substeps()).unwrap()
+    }
+
+    fn perform_substep(
+        ecs_world: &ECSWorld,
+        rigid_body_force_manager: &RigidBodyForceManager,
+        duration: fph,
+        entities_to_remove: &mut LinkedList<Entity>,
+    ) {
+        Self::advance_rigid_body_motion(ecs_world, duration);
+
+        rigid_body_force_manager.apply_forces_and_torques(ecs_world, entities_to_remove);
     }
 
     fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
@@ -128,7 +214,9 @@ impl PhysicsSimulator {
 impl Default for SimulatorConfig {
     fn default() -> Self {
         Self {
-            time_step_duration: 1.0,
+            n_substeps: 1,
+            initial_time_step_duration: 0.015,
+            match_frame_duration: true,
         }
     }
 }
