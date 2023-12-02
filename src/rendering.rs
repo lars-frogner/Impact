@@ -175,8 +175,10 @@ impl RenderingSystem {
     /// - The surface texture to render to can not be obtained.
     /// - Recording a render pass fails.
     pub fn render(&self) -> Result<()> {
-        let surface_texture = self.render_surface()?;
-        surface_texture.present();
+        with_timing_info_logging!("Rendering"; {
+            let surface_texture = self.render_surface()?;
+            surface_texture.present();
+        });
         Ok(())
     }
 
