@@ -49,6 +49,10 @@ pub enum KeyboardInputAction {
     ToggleBackFaceCulling,
     ToggleTriangleFill,
     ToggleAmbientOcclusion,
+    IncrementSimulationSubstepCount,
+    DecrementSimulationSubstepCount,
+    IncreaseSimulationSpeed,
+    DecreaseSimulationSpeed,
     SaveScreenshot,
     SaveDepthMap,
     SaveOmnidirectionalLightShadowMap,
@@ -173,6 +177,32 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::IncrementSimulationSubstepCount => {
+                        if state == &ElementState::Released {
+                            world.simulator().write().unwrap().increment_n_substeps();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::DecrementSimulationSubstepCount => {
+                        if state == &ElementState::Released {
+                            world.simulator().write().unwrap().decrement_n_substeps();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::IncreaseSimulationSpeed => {
+                        if state == &ElementState::Released {
+                            world
+                                .increment_simulation_speed_multiplier_and_compensate_controller_speed();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::DecreaseSimulationSpeed => {
+                        if state == &ElementState::Released {
+                            world
+                                .decrement_simulation_speed_multiplier_and_compensate_controller_speed()
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
                             world.screen_capturer().request_screenshot_save();
@@ -253,6 +283,10 @@ impl Default for KeyActionMap {
             ToggleBackFaceCulling => KeyB,
             ToggleTriangleFill => KeyF,
             ToggleAmbientOcclusion => KeyO,
+            IncrementSimulationSubstepCount => KeyM,
+            DecrementSimulationSubstepCount => KeyN,
+            IncreaseSimulationSpeed => Period,
+            DecreaseSimulationSpeed => Comma,
             SaveScreenshot => F12,
             SaveDepthMap => F11,
             SaveOmnidirectionalLightShadowMap => F10,

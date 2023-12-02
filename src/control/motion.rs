@@ -118,6 +118,10 @@ impl SemiDirectionalMotionController {
 }
 
 impl MotionController for SemiDirectionalMotionController {
+    fn movement_speed(&self) -> fph {
+        self.movement_speed
+    }
+
     fn update_world_velocity(&self, velocity: &mut Velocity, orientation: &Orientation) {
         let new_velocity = orientation.transform_vector(&self.local_velocity);
         velocity.x = new_velocity.x;

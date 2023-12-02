@@ -52,6 +52,12 @@ pub struct SimulatorConfig {
     /// If `true`, the time step duration will be updated regularly to match the
     /// frame duration. This gives "real-time" simulation.
     pub match_frame_duration: bool,
+    /// The factor by which to increase or decrease the simulation speed
+    /// multiplyer when calling
+    /// [`increment_simulation_speed_multiplier`](PhysicsSimulator::increment_simulation_speed_multiplier)
+    /// or
+    /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
+    pub simulation_speed_multiplier_increment_factor: fph,
 }
 
 impl PhysicsSimulator {
@@ -89,6 +95,15 @@ impl PhysicsSimulator {
         self.config.n_substeps
     }
 
+    /// Returns the factor by which to increase or decrease the simulation speed
+    /// multiplyer when calling
+    /// [`increment_simulation_speed_multiplier`](PhysicsSimulator::increment_simulation_speed_multiplier)
+    /// or
+    /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
+    pub fn simulation_speed_multiplier_increment_factor(&self) -> fph {
+        self.config.simulation_speed_multiplier_increment_factor
+    }
+
     /// Returns a reference to the [`RigidBodyForceManager`], guarded by a
     /// [`RwLock`].
     pub fn rigid_body_force_manager(&self) -> &RwLock<RigidBodyForceManager> {
@@ -113,10 +128,38 @@ impl PhysicsSimulator {
         self.config.n_substeps = n_substeps;
     }
 
+    /// Increment the number of substeps by one.
+    pub fn increment_n_substeps(&mut self) {
+        self.config.n_substeps += 1;
+    }
+
+    /// Decrement the number of substeps by one, to a minimum of unity.
+    pub fn decrement_n_substeps(&mut self) {
+        if self.config.n_substeps > 1 {
+            self.config.n_substeps -= 1;
+        }
+    }
+
     /// Will use the given multiplier to scale the simulation time step
     /// duration.
     pub fn set_simulation_speed_multiplier(&mut self, simulation_speed_multiplier: fph) {
         self.simulation_speed_multiplier = simulation_speed_multiplier;
+    }
+
+    /// Increases the simulation speed multiplier by the
+    /// `simulation_speed_multiplier_increment_factor` specified in the
+    /// configuration.
+    pub fn increment_simulation_speed_multiplier(&mut self) {
+        self.simulation_speed_multiplier *=
+            self.config.simulation_speed_multiplier_increment_factor;
+    }
+
+    /// Decreases the simulation speed multiplier by the
+    /// `simulation_speed_multiplier_increment_factor` specified in the
+    /// configuration.
+    pub fn decrement_simulation_speed_multiplier(&mut self) {
+        self.simulation_speed_multiplier /=
+            self.config.simulation_speed_multiplier_increment_factor;
     }
 
     /// Performs any setup required before starting the game loop.
@@ -127,8 +170,8 @@ impl PhysicsSimulator {
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
         with_timing_info_logging!(
-            "Simulation step with duration {:.2} and {} substeps",
-            self.scaled_time_step_duration(), self.n_substeps(); {
+            "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
+            self.scaled_time_step_duration(), self.simulation_speed_multiplier, self.n_substeps(); {
 
             let mut entities_to_remove = LinkedList::new();
 
@@ -217,6 +260,7 @@ impl Default for SimulatorConfig {
             n_substeps: 1,
             initial_time_step_duration: 0.015,
             match_frame_duration: true,
+            simulation_speed_multiplier_increment_factor: 1.1,
         }
     }
 }
