@@ -94,9 +94,10 @@ impl GameLoop {
         &mut self,
         event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
-        let execution_result = self
-            .task_scheduler
-            .execute_and_wait(&PHYSICS_AND_RENDERING_TAGS);
+        let execution_result = with_timing_info_logging!("Game loop iteration"; {
+            self.task_scheduler
+                .execute_and_wait(&PHYSICS_AND_RENDERING_TAGS)
+        });
 
         if let Err(mut task_errors) = execution_result {
             self.world
@@ -117,7 +118,7 @@ impl GameLoop {
             frame_duration_to_fps(self.frame_rate_tracker.compute_smooth_frame_duration());
 
         log::info!(
-            "Game loop iteration took {:.1} ms (~{} FPS)",
+            "Completed game loop iteration after {:.1} ms (~{} FPS)",
             iter_duration.as_secs_f64() * 1e3,
             smooth_fps
         );

@@ -9,6 +9,19 @@ macro_rules! with_debug_logging {
     }};
 }
 
+macro_rules! with_timing_info_logging {
+    ($message:expr $(,$arg:expr)*; $expression:expr) => {{
+        let _start_time = ::std::time::Instant::now();
+        let _result = $expression;
+        let _duration = _start_time.elapsed();
+        log::info!(
+            concat!($message, " took {:.2} ms")$(,$arg)*,
+            _duration.as_secs_f64() * 1e3,
+        );
+        _result
+    }};
+}
+
 /// This macro expands to a compile time constant equal
 /// to the number of arguments passed to the macro.
 #[doc(hidden)]

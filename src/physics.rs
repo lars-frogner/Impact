@@ -66,20 +66,22 @@ impl PhysicsSimulator {
 
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(&self, ecs_world: &RwLock<ECSWorld>) {
-        let mut entities_to_remove = LinkedList::new();
+        with_timing_info_logging!("Simulation step"; {
+            let mut entities_to_remove = LinkedList::new();
 
-        let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
-        let ecs_world_readonly = ecs_world.read().unwrap();
+            let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
+            let ecs_world_readonly = ecs_world.read().unwrap();
 
-        Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
+            Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
 
-        rigid_body_force_manager
-            .apply_forces_and_torques(&ecs_world_readonly, &mut entities_to_remove);
+            rigid_body_force_manager
+                .apply_forces_and_torques(&ecs_world_readonly, &mut entities_to_remove);
 
-        rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
+            rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
 
-        drop(ecs_world_readonly);
-        Self::remove_entities(ecs_world, &entities_to_remove);
+            drop(ecs_world_readonly);
+            Self::remove_entities(ecs_world, &entities_to_remove);
+        })
     }
 
     fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
