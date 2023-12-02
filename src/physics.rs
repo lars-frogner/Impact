@@ -20,7 +20,10 @@ pub use rigid_body::{
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
 
-use impact_ecs::{query, world::World as ECSWorld};
+use impact_ecs::{
+    query,
+    world::{Entity, World as ECSWorld},
+};
 use std::{collections::LinkedList, sync::RwLock};
 
 /// Floating point type used for physics simulation.
@@ -56,6 +59,11 @@ impl PhysicsSimulator {
         &self.rigid_body_force_manager
     }
 
+    /// Performs any setup required before starting the game loop.
+    pub fn perform_setup_for_game_loop(&self, ecs_world: &RwLock<ECSWorld>) {
+        self.apply_forces_and_torques(ecs_world);
+    }
+
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(&self, ecs_world: &RwLock<ECSWorld>) {
         let mut entities_to_remove = LinkedList::new();
@@ -63,15 +71,30 @@ impl PhysicsSimulator {
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
         let ecs_world_readonly = ecs_world.read().unwrap();
 
+        Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
+
         rigid_body_force_manager
             .apply_forces_and_torques(&ecs_world_readonly, &mut entities_to_remove);
 
-        Self::advance_rigid_body_motion(&ecs_world_readonly, self.time_step_duration());
-
         rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
 
+        drop(ecs_world_readonly);
+        Self::remove_entities(ecs_world, &entities_to_remove);
+    }
+
+    fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
+        let mut entities_to_remove = LinkedList::new();
+
+        self.rigid_body_force_manager
+            .read()
+            .unwrap()
+            .apply_forces_and_torques(&ecs_world.read().unwrap(), &mut entities_to_remove);
+
+        Self::remove_entities(ecs_world, &entities_to_remove);
+    }
+
+    fn remove_entities(ecs_world: &RwLock<ECSWorld>, entities_to_remove: &LinkedList<Entity>) {
         if !entities_to_remove.is_empty() {
-            drop(ecs_world_readonly);
             let mut ecs_world_write = ecs_world.write().unwrap();
 
             for entity in entities_to_remove {

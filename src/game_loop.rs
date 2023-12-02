@@ -49,6 +49,8 @@ impl GameLoop {
     pub fn new(world: World, input_handler: InputHandler, config: GameLoopConfig) -> Result<Self> {
         let (world, task_scheduler) = world.create_task_scheduler(config.n_worker_threads)?;
 
+        world.perform_setup_for_game_loop();
+
         let frame_rate_tracker = FrameDurationTracker::default();
         let previous_iter_end_time = Instant::now();
 
