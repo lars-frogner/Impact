@@ -30,8 +30,14 @@ pub struct InertiaTensor {
 
 impl InertialProperties {
     /// Creates a new set of inertial properties.
+    ///
+    /// # Panics
+    /// If the given mass does not exceed zero.
     pub fn new(mass: fph, center_of_mass: Position, inertia_tensor: InertiaTensor) -> Self {
-        assert_ne!(mass, 0.0, "Tried creating massless body");
+        assert!(
+            mass > 0.0,
+            "Tried creating body with mass not exceeding zero"
+        );
         Self {
             mass,
             inverse_mass: 1.0 / mass,
@@ -240,10 +246,22 @@ impl InertiaTensor {
     }
 
     /// Creates a new diagonal inertia tensor with the given diagonal elements.
+    ///
+    /// # Panics
+    /// If any of the given elements does not exceed zero.
     pub fn from_diagonal_elements(j_xx: fph, j_yy: fph, j_zz: fph) -> Self {
-        assert!(j_xx > 0.0);
-        assert!(j_yy > 0.0);
-        assert!(j_zz > 0.0);
+        assert!(
+            j_xx > 0.0,
+            "Tried creating inertia tensor with diagonal element not exceeding zero"
+        );
+        assert!(
+            j_yy > 0.0,
+            "Tried creating inertia tensor with diagonal element not exceeding zero"
+        );
+        assert!(
+            j_zz > 0.0,
+            "Tried creating inertia tensor with diagonal element not exceeding zero"
+        );
 
         let matrix = Matrix3::from_diagonal(&vector![j_xx, j_yy, j_zz]);
         let inverse_matrix = Matrix3::from_diagonal(&vector![1.0 / j_xx, 1.0 / j_yy, 1.0 / j_zz]);
@@ -282,8 +300,14 @@ impl InertiaTensor {
 
     /// Computes the inertia tensor corresponding to scaling the body uniformly
     /// by the given factor.
+    ///
+    /// # Panics
+    /// If the given scaling factor is negative.
     pub fn scaled(&self, scaling: fph) -> Self {
-        assert!(scaling >= 0.0);
+        assert!(
+            scaling >= 0.0,
+            "Tried scaling inertia tensor with negative scale factor"
+        );
 
         // Moment of inertia scales as mass * distance^2 = distance^5
         let total_scale_factor = scaling.powi(5);
