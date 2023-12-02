@@ -1,6 +1,6 @@
 //! Uniform gravitational acceleration.
 
-use crate::physics::{fph, RigidBodyComp};
+use crate::physics::{fph, RigidBodyComp, Static};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{query, world::World as ECSWorld, Component};
 use nalgebra::{vector, Vector3};
@@ -35,6 +35,7 @@ pub fn apply_uniform_gravity(ecs_world: &ECSWorld) {
         |rigid_body: &mut RigidBodyComp, gravity: &UniformGravityComp| {
             let force = gravity.acceleration * rigid_body.0.mass();
             rigid_body.0.apply_force_at_center_of_mass(&force);
-        }
+        },
+        ![Static]
     );
 }

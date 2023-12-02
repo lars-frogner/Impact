@@ -1,8 +1,12 @@
 //! Spring force.
 
-use crate::physics::{
-    fph, AngularVelocity, AngularVelocityComp, Direction, DrivenAngularVelocityComp, Orientation,
-    OrientationComp, Position, PositionComp, RigidBodyComp, Velocity, VelocityComp,
+use crate::{
+    control::Controllable,
+    physics::{
+        fph, AngularVelocity, AngularVelocityComp, Direction, DrivenAngularVelocityComp,
+        Orientation, OrientationComp, Position, PositionComp, RigidBodyComp, Static, Velocity,
+        VelocityComp,
+    },
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
@@ -184,7 +188,12 @@ impl SpringComp {
             }
         };
 
-        if !entity_1.has_component::<RigidBodyComp>() && !entity_2.has_component::<RigidBodyComp>()
+        let entity_1_is_static = entity_1.has_component::<Static>();
+        let entity_2_is_static = entity_2.has_component::<Static>();
+
+        if (!entity_1.has_component::<RigidBodyComp>()
+            && !entity_2.has_component::<RigidBodyComp>())
+            || (entity_1_is_static && entity_2_is_static)
         {
             // Nothing to apply the force to
             return SpringForceApplicationOutcome::Ok;
@@ -217,22 +226,26 @@ impl SpringComp {
             let force_on_2 =
                 self.spring.scalar_force(length, rate_of_length_change) * spring_direction.as_ref();
 
-            if let Some(mut rigid_body_1) = entity_1.get_component_mut::<RigidBodyComp>() {
-                rigid_body_1
-                    .access()
-                    .0
-                    .apply_force(&(-force_on_2), &attachment_point_1);
+            if !entity_1_is_static {
+                if let Some(mut rigid_body_1) = entity_1.get_component_mut::<RigidBodyComp>() {
+                    rigid_body_1
+                        .access()
+                        .0
+                        .apply_force(&(-force_on_2), &attachment_point_1);
 
-                // To prevent a potential deadlock, the entry to the
-                // `RigidBodyComp` storage for entity 1 must have been dropped
-                // before trying to access the storage for entity 2
-                drop(rigid_body_1);
+                    // To prevent a potential deadlock, the entry to the
+                    // `RigidBodyComp` storage for entity 1 must have been dropped
+                    // before trying to access the storage for entity 2
+                    drop(rigid_body_1);
+                }
             }
-            if let Some(mut rigid_body_2) = entity_2.get_component_mut::<RigidBodyComp>() {
-                rigid_body_2
-                    .access()
-                    .0
-                    .apply_force(&force_on_2, &attachment_point_2);
+            if !entity_2_is_static {
+                if let Some(mut rigid_body_2) = entity_2.get_component_mut::<RigidBodyComp>() {
+                    rigid_body_2
+                        .access()
+                        .0
+                        .apply_force(&force_on_2, &attachment_point_2);
+                }
             }
         } else {
             self.spring_state
@@ -332,12 +345,20 @@ pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut Linked
 }
 
 pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
-    query!(ecs_world, |position: &mut PositionComp,
-                       orientation: &mut OrientationComp,
-                       spring: &SpringComp| {
-        position.0 = *spring.spring_state.center();
-        orientation.0 = spring.spring_state.compute_orientation();
-    });
+    query!(
+        ecs_world,
+        |position: &mut PositionComp, orientation: &mut OrientationComp, spring: &SpringComp| {
+            position.0 = *spring.spring_state.center();
+            orientation.0 = spring.spring_state.compute_orientation();
+        },
+        ![
+            Static,
+            Controllable,
+            VelocityComp,
+            AngularVelocityComp,
+            DrivenAngularVelocityComp
+        ]
+    );
 }
 
 #[cfg(test)]
