@@ -10,8 +10,8 @@ pub use orientation::{CameraOrientationController, RollFreeCameraOrientationCont
 
 use crate::{
     physics::{
-        fph, AngularVelocityComp, Orientation, OrientationComp, PositionComp, RigidBodyComp,
-        Velocity, VelocityComp,
+        fph, AngularVelocityComp, Orientation, OrientationComp, RigidBodyComp, Velocity,
+        VelocityComp,
     },
     scene::PerspectiveCameraComp,
     window::Window,
@@ -147,12 +147,8 @@ pub fn update_orientations_of_controlled_entities(
         ecs_world,
         |rigid_body: &mut RigidBodyComp,
          orientation: &mut OrientationComp,
-         position: &PositionComp,
          angular_velocity: &AngularVelocityComp| {
             orientation_controller.update_orientation(&mut orientation.0);
-            rigid_body
-                .0
-                .synchronize_center_of_mass(&position.0, &orientation.0);
             rigid_body
                 .0
                 .synchronize_angular_momentum(&orientation.0, &angular_velocity.0);

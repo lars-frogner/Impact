@@ -206,7 +206,7 @@ impl OmnidirectionalLight {
              emission_extent: Option<&EmissionExtentComp>|
              -> OmnidirectionalLightComp {
                 let omnidirectional_light = Self::new(
-                    view_transform.transform_point(&position.0.cast()),
+                    view_transform.transform_point(&position.position.cast()),
                     radiance.0,
                     emission_extent.map_or(0.0, |extent| extent.0),
                 );

@@ -251,11 +251,11 @@ impl World {
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
 
-        let render_resources_desynchronized = self.scene().read().unwrap().handle_entity_created(
-            self.window(),
-            &self.ecs_world,
-            &mut components,
-        )?;
+        let render_resources_desynchronized = self
+            .scene()
+            .read()
+            .unwrap()
+            .handle_entity_created(self.window(), &mut components)?;
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()
@@ -268,6 +268,11 @@ impl World {
             &self.scene().read().unwrap().mesh_repository(),
             &mut components,
         );
+
+        self.scene()
+            .read()
+            .unwrap()
+            .add_entity_to_scene_graph(&self.ecs_world, &mut components);
 
         self.ecs_world.write().unwrap().create_entities(components)
     }

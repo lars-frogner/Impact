@@ -20,7 +20,6 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, World as ECSWorld},
 };
-use nalgebra::{Point3, UnitQuaternion};
 use std::sync::RwLock;
 
 /// Indicates whether an event caused the render resources to go out of sync
@@ -42,13 +41,14 @@ impl RenderResourcesDesynchronized {
 }
 
 impl Scene {
-    /// Performs any modifications to the scene required to accommodate a
-    /// new entity with components represented by the given component manager,
-    /// and adds any additional components to the entity's components.
+    /// Performs any modifications to the scene required to accommodate a new
+    /// entity with components represented by the given component manager, and
+    /// adds any additional components to the entity's components (except scene
+    /// graph components, which are added by calling
+    /// [`add_entity_to_scene_graph`](Self::add_entity_to_scene_graph)).
     pub fn handle_entity_created(
         &self,
         window: &Window,
-        ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
     ) -> Result<RenderResourcesDesynchronized> {
         let mut desynchronized = RenderResourcesDesynchronized::No;
@@ -58,13 +58,21 @@ impl Scene {
         self.add_light_component_for_entity(components, &mut desynchronized);
         self.add_material_component_for_entity(components, &mut desynchronized);
 
-        Self::add_parent_group_node_component_for_entity(ecs_world, components);
-        self.add_group_node_component_for_entity(components);
-        self.add_model_instance_node_component_for_entity(components);
-
         self.generate_missing_vertex_properties_for_mesh(components);
 
         Ok(desynchronized)
+    }
+
+    /// Adds the entity to the scene graph if required, and adds the
+    /// corresponding scene graph components to the entity.
+    pub fn add_entity_to_scene_graph(
+        &self,
+        ecs_world: &RwLock<ECSWorld>,
+        components: &mut ArchetypeComponentStorage,
+    ) {
+        Self::add_parent_group_node_component_for_entity(ecs_world, components);
+        self.add_group_node_component_for_entity(components);
+        self.add_model_instance_node_component_for_entity(components);
     }
 
     /// Performs any modifications required to clean up the scene when
@@ -225,13 +233,19 @@ impl Scene {
              scaling: Option<&ScalingComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphGroupNodeComp {
-                let position = position.map_or_else(Point3::origin, |position| position.0.cast());
-                let orientation = orientation
-                    .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
-                let scaling = scaling.map_or_else(|| 1.0, |scaling| scaling.0);
+                let PositionComp {
+                    origin_offset,
+                    position,
+                } = position.cloned().unwrap_or_default();
+                let orientation = orientation.cloned().unwrap_or_default().0;
+                let scaling = scaling.cloned().unwrap_or_default().0;
 
-                let group_to_parent_transform =
-                    scene::create_child_to_parent_transform(position, orientation, scaling);
+                let group_to_parent_transform = scene::create_child_to_parent_transform(
+                    origin_offset.cast(),
+                    position.cast(),
+                    orientation.cast(),
+                    scaling,
+                );
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
@@ -275,13 +289,19 @@ impl Scene {
                 );
                 instance_feature_manager.register_instance(&material_library, model_id);
 
-                let position = position.map_or_else(Point3::origin, |position| position.0.cast());
-                let orientation = orientation
-                    .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
-                let scaling = scaling.map_or_else(|| 1.0, |scaling| scaling.0);
+                let PositionComp {
+                    origin_offset,
+                    position,
+                } = position.cloned().unwrap_or_default();
+                let orientation = orientation.cloned().unwrap_or_default().0;
+                let scaling = scaling.cloned().unwrap_or_default().0;
 
-                let model_to_parent_transform =
-                    scene::create_child_to_parent_transform(position, orientation, scaling);
+                let model_to_parent_transform = scene::create_child_to_parent_transform(
+                    origin_offset.cast(),
+                    position.cast(),
+                    orientation.cast(),
+                    scaling,
+                );
 
                 let mut feature_ids = Vec::with_capacity(2);
 

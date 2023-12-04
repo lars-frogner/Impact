@@ -64,6 +64,12 @@ pub type SceneGraphModelInstanceNodeComp = SceneGraphNodeComp<ModelInstanceNodeI
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct Uncullable;
 
+impl Default for ScalingComp {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
 impl ParentComp {
     /// Creates a new component representing a direct child of the given
     /// [`Entity`].
