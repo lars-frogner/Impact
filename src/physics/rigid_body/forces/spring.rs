@@ -3,9 +3,8 @@
 use crate::{
     control::Controllable,
     physics::{
-        fph, AngularVelocity, AngularVelocityComp, Direction, DrivenAngularVelocityComp,
-        Orientation, OrientationComp, Position, PositionComp, RigidBodyComp, Static, Velocity,
-        VelocityComp,
+        fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, OrientationComp,
+        Position, PositionComp, RigidBodyComp, Static, Velocity, VelocityComp,
     },
 };
 use approx::abs_diff_eq;
@@ -199,10 +198,19 @@ impl SpringComp {
             return SpringForceApplicationOutcome::Ok;
         }
 
-        let attachment_point_1 =
-            Self::determine_attachment_point_in_world_space(&entity_1, &self.attachment_point_1);
-        let attachment_point_2 =
-            Self::determine_attachment_point_in_world_space(&entity_2, &self.attachment_point_2);
+        let position_1 = Self::determine_position(&entity_1);
+        let position_2 = Self::determine_position(&entity_2);
+
+        let attachment_point_1 = Self::determine_attachment_point_in_world_space(
+            &entity_1,
+            &position_1,
+            &self.attachment_point_1,
+        );
+        let attachment_point_2 = Self::determine_attachment_point_in_world_space(
+            &entity_2,
+            &position_2,
+            &self.attachment_point_2,
+        );
 
         if let Some((spring_direction, length)) =
             UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
@@ -214,10 +222,16 @@ impl SpringComp {
                 // The velocities are irrelevant if there is zero damping
                 0.0
             } else {
-                let attachment_velocity_1 =
-                    Self::determine_attachment_velocity(&entity_1, &attachment_point_1);
-                let attachment_velocity_2 =
-                    Self::determine_attachment_velocity(&entity_2, &attachment_point_2);
+                let attachment_velocity_1 = Self::determine_attachment_velocity(
+                    &entity_1,
+                    &position_1,
+                    &attachment_point_1,
+                );
+                let attachment_velocity_2 = Self::determine_attachment_velocity(
+                    &entity_2,
+                    &position_2,
+                    &attachment_point_2,
+                );
 
                 attachment_velocity_2.dot(&spring_direction)
                     - attachment_velocity_1.dot(&spring_direction)
@@ -255,21 +269,24 @@ impl SpringComp {
         SpringForceApplicationOutcome::Ok
     }
 
+    fn determine_position(entity: &EntityEntry<'_>) -> Position {
+        entity
+            .get_component::<PositionComp>()
+            .map_or_else(Position::origin, |p| p.access().position)
+    }
+
     fn determine_attachment_point_in_world_space(
         entity: &EntityEntry<'_>,
+        position: &Position,
         attachment_point_in_entity_frame: &Position,
     ) -> Position {
-        let position = entity
-            .get_component::<PositionComp>()
-            .map_or_else(Position::origin, |p| p.access().0);
-
         let orientation = entity
             .get_component::<OrientationComp>()
             .map(|o| o.access().0);
 
         Self::compute_attachment_point_in_world_space(
             attachment_point_in_entity_frame,
-            &position,
+            position,
             orientation,
         )
     }
@@ -288,31 +305,18 @@ impl SpringComp {
 
     fn determine_attachment_velocity(
         entity: &EntityEntry<'_>,
+        position: &Position,
         attachment_point: &Position,
     ) -> Velocity {
         let velocity = entity
             .get_component::<VelocityComp>()
             .map_or_else(Velocity::zeros, |v| v.access().0);
 
-        if let (Some(rigid_body), Some(angular_velocity)) = (
-            entity.get_component::<RigidBodyComp>(),
-            entity.get_component::<AngularVelocityComp>(),
-        ) {
-            let center_of_mass = rigid_body.access().0.center_of_mass();
+        if let Some(angular_velocity) = entity.get_component::<AngularVelocityComp>() {
+            let angular_velocity = angular_velocity.access().0;
             Self::compute_attachment_velocity(
                 attachment_point,
-                &center_of_mass,
-                &velocity,
-                &angular_velocity.access().0,
-            )
-        } else if let Some(driven_angular_velocity) =
-            entity.get_component::<DrivenAngularVelocityComp>()
-        {
-            let center_of_rotation = driven_angular_velocity.access().center_of_rotation;
-            let angular_velocity = driven_angular_velocity.access().angular_velocity;
-            Self::compute_attachment_velocity(
-                attachment_point,
-                &center_of_rotation,
+                position,
                 &velocity,
                 &angular_velocity,
             )
@@ -348,16 +352,10 @@ pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
         |position: &mut PositionComp, orientation: &mut OrientationComp, spring: &SpringComp| {
-            position.0 = *spring.spring_state.center();
+            position.position = *spring.spring_state.center();
             orientation.0 = spring.spring_state.compute_orientation();
         },
-        ![
-            Static,
-            Controllable,
-            VelocityComp,
-            AngularVelocityComp,
-            DrivenAngularVelocityComp
-        ]
+        ![Static, Controllable, VelocityComp, AngularVelocityComp]
     );
 }
 

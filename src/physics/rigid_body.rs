@@ -18,7 +18,7 @@ use bytemuck::{Pod, Zeroable};
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct RigidBody {
     inertial_properties: InertialProperties,
-    center_of_mass: Position,
+    position: Position,
     momentum: Momentum,
     angular_momentum: AngularMomentum,
     total_force: Force,
@@ -26,34 +26,11 @@ pub struct RigidBody {
 }
 
 impl RigidBody {
-    /// Creates a new rigid body based on the given inertial properties,
-    /// position, orientation, velocity and angular velocity. The position is
-    /// assumed to be the origin of the body's reference frame in world space,
-    /// which could be different from the center of mass.
+    /// Creates a new rigid body with the given inertial properties, position
+    /// (center of mass), orientation, velocity and angular velocity.
     pub fn new(
         inertial_properties: InertialProperties,
-        position: &Position,
-        orientation: &Orientation,
-        velocity: &Velocity,
-        angular_velocity: &AngularVelocity,
-    ) -> Self {
-        let center_of_mass =
-            Self::compute_center_of_mass(&inertial_properties, position, orientation);
-
-        Self::new_with_center_of_mass(
-            inertial_properties,
-            center_of_mass,
-            orientation,
-            velocity,
-            angular_velocity,
-        )
-    }
-
-    /// Creates a new rigid body with the given inertial properties, center of
-    /// mass, velocity and angular velocity.
-    pub fn new_with_center_of_mass(
-        inertial_properties: InertialProperties,
-        center_of_mass: Position,
+        position: Position,
         orientation: &Orientation,
         velocity: &Velocity,
         angular_velocity: &AngularVelocity,
@@ -63,7 +40,7 @@ impl RigidBody {
             Self::compute_angular_momentum(&inertial_properties, orientation, angular_velocity);
         Self {
             inertial_properties,
-            center_of_mass,
+            position,
             momentum,
             angular_momentum,
             total_force: Force::zeros(),
@@ -76,9 +53,9 @@ impl RigidBody {
         self.inertial_properties.mass()
     }
 
-    /// Returns the center of mass of the body (in world space).
-    pub fn center_of_mass(&self) -> &Position {
-        &self.center_of_mass
+    /// Returns the position (center of mass) of the body.
+    pub fn position(&self) -> &Position {
+        &self.position
     }
 
     /// Returns the momentum of the body.
@@ -115,14 +92,7 @@ impl RigidBody {
     /// torque around the center of mass.
     pub fn apply_force(&mut self, force: &Force, position: &Position) {
         self.apply_force_at_center_of_mass(force);
-        self.apply_torque(&(position - self.center_of_mass).cross(force));
-    }
-
-    /// Recomputes the body's center of mass according to the given position and
-    /// orientation.
-    pub fn synchronize_center_of_mass(&mut self, position: &Position, orientation: &Orientation) {
-        self.center_of_mass =
-            Self::compute_center_of_mass(&self.inertial_properties, position, orientation);
+        self.apply_torque(&(position - self.position).cross(force));
     }
 
     /// Recomputes the body's momentum according to the given velocity.
@@ -148,11 +118,12 @@ impl RigidBody {
     /// duration based on the current total force and torque. Updates the stored
     /// center of mass, momentum and angular momentum accordingly.
     ///
-    /// If the given position, orientation, velocity or angular velocity have
-    /// been modified after being returned from a previous call to this
-    /// function, make sure to call [`synchronize_center_of_mass`],
-    /// [`synchronize_momentum`] and/or [`synchronize_angular_momentum`]
-    /// accordingly befor calling this function.
+    /// If the given orientation, velocity or angular velocity have been
+    /// modified after being returned from a previous call to this function,
+    /// make sure to call [`synchronize_momentum`](Self::synchronize_momentum)
+    /// and/or
+    /// [`synchronize_angular_momentum`](Self::synchronize_angular_momentum)
+    /// accordingly before calling this function.
     ///
     /// This function resets the total force and torque.
     pub fn advance_motion(
@@ -163,12 +134,14 @@ impl RigidBody {
         angular_velocity: &mut AngularVelocity,
         duration: fph,
     ) {
+        self.position = *position;
+
         Self::advance_linear_motion(
             &self.inertial_properties,
             &self.total_force,
             &mut self.momentum,
             velocity,
-            &mut self.center_of_mass,
+            &mut self.position,
             duration,
         );
 
@@ -181,8 +154,7 @@ impl RigidBody {
             duration,
         );
 
-        *position =
-            Self::compute_position(&self.inertial_properties, &self.center_of_mass, orientation);
+        *position = self.position;
 
         self.reset_total_force();
         self.reset_total_torque();
@@ -201,12 +173,12 @@ impl RigidBody {
         total_force: &Force,
         momentum: &mut Momentum,
         velocity: &mut Velocity,
-        center_of_mass: &mut Position,
+        position: &mut Position,
         duration: fph,
     ) {
         *momentum += total_force * duration;
         *velocity = Self::compute_velocity(inertial_properties, momentum);
-        *center_of_mass += *velocity * duration;
+        *position += *velocity * duration;
     }
 
     fn advance_rotational_motion(
@@ -221,25 +193,6 @@ impl RigidBody {
         *angular_velocity =
             Self::compute_angular_velocity(inertial_properties, orientation, angular_momentum);
         *orientation = physics::advance_orientation(orientation, angular_velocity, duration);
-    }
-
-    /// Computes the center of mass in world space.
-    fn compute_center_of_mass(
-        inertial_properties: &InertialProperties,
-        position: &Position,
-        orientation: &Orientation,
-    ) -> Position {
-        position + orientation.transform_vector(&inertial_properties.center_of_mass().coords)
-    }
-
-    /// Computes the body position (the origin of the body's reference frame in
-    /// world space).
-    fn compute_position(
-        inertial_properties: &InertialProperties,
-        center_of_mass: &Position,
-        orientation: &Orientation,
-    ) -> Position {
-        center_of_mass - orientation.transform_vector(&inertial_properties.center_of_mass().coords)
     }
 
     fn compute_momentum(inertial_properties: &InertialProperties, velocity: &Velocity) -> Momentum {
@@ -286,7 +239,7 @@ impl AbsDiffEq for RigidBody {
             &self.inertial_properties,
             &other.inertial_properties,
             epsilon,
-        ) && Position::abs_diff_eq(&self.center_of_mass, &other.center_of_mass, epsilon)
+        ) && Position::abs_diff_eq(&self.position, &other.position, epsilon)
             && Force::abs_diff_eq(&self.total_force, &other.total_force, epsilon)
             && Torque::abs_diff_eq(&self.total_torque, &other.total_torque, epsilon)
     }
@@ -295,7 +248,7 @@ impl AbsDiffEq for RigidBody {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{geometry::Degrees, num::Float, physics::InertiaTensor};
+    use crate::{geometry::Degrees, num::Float};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use nalgebra::{point, vector, Vector3};
     use proptest::prelude::*;
@@ -345,7 +298,7 @@ mod test {
     }
 
     fn dummy_rigid_body() -> RigidBody {
-        RigidBody::new_with_center_of_mass(
+        RigidBody::new(
             dummy_inertial_properties(),
             Position::origin(),
             &Orientation::identity(),
@@ -354,10 +307,10 @@ mod test {
         )
     }
 
-    fn dummy_rigid_body_with_center_of_mass(center_of_mass: Position) -> RigidBody {
-        RigidBody::new_with_center_of_mass(
+    fn dummy_rigid_body_with_position(position: Position) -> RigidBody {
+        RigidBody::new(
             dummy_inertial_properties(),
-            center_of_mass,
+            position,
             &Orientation::identity(),
             &Velocity::zeros(),
             &AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
@@ -369,27 +322,6 @@ mod test {
         let body = dummy_rigid_body();
         assert_abs_diff_eq!(body.total_force(), &Force::zeros());
         assert_abs_diff_eq!(body.total_torque(), &Torque::zeros());
-    }
-
-    proptest! {
-        #[test]
-        fn should_get_correct_center_of_mass_from_position(
-            model_space_center_of_mass in position_strategy(1e3),
-            position in position_strategy(1e3),
-            orientation in orientation_strategy(),
-        ) {
-            let body = RigidBody::new(
-                InertialProperties::new(1.0, model_space_center_of_mass, InertiaTensor::identity()),
-                &position,
-                &orientation,
-                &Velocity::zeros(),
-                &AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
-            );
-            prop_assert!(abs_diff_eq!(
-                body.center_of_mass(),
-                &(position + orientation.transform_vector(&model_space_center_of_mass.coords))
-            ));
-        }
     }
 
     proptest! {
@@ -414,7 +346,7 @@ mod test {
             force_position_1 in position_strategy(1e3),
             force_position_2 in position_strategy(1e3),
         ) {
-            let mut body = dummy_rigid_body_with_center_of_mass(center_of_mass);
+            let mut body = dummy_rigid_body_with_position(center_of_mass);
             body.apply_force(&force_1, &force_position_1);
             body.apply_force(&force_2, &force_position_2);
             prop_assert!(abs_diff_eq!(body.total_force(), &(force_1 + force_2)));
@@ -441,7 +373,7 @@ mod test {
             force in force_strategy(1e3),
             force_position in position_strategy(1e3),
         ) {
-            let mut body = dummy_rigid_body_with_center_of_mass(center_of_mass);
+            let mut body = dummy_rigid_body_with_position(center_of_mass);
             body.apply_force(&force, &force_position);
             prop_assert!(abs_diff_eq!(
                 body.total_torque(),
@@ -480,7 +412,7 @@ mod test {
         let original_velocity = Velocity::z();
         let original_angular_velocity = AngularVelocity::new_from_vector(Vector3::x());
 
-        let mut body = RigidBody::new_with_center_of_mass(
+        let mut body = RigidBody::new(
             dummy_inertial_properties(),
             original_position.clone(),
             &original_orientation,
@@ -516,7 +448,7 @@ mod test {
         let original_velocity = Velocity::zeros();
         let original_angular_velocity = AngularVelocity::zero();
 
-        let mut body = RigidBody::new_with_center_of_mass(
+        let mut body = RigidBody::new(
             dummy_inertial_properties(),
             original_position.clone(),
             &original_orientation,
@@ -550,7 +482,7 @@ mod test {
         let original_velocity = Velocity::z();
         let original_angular_velocity = AngularVelocity::new_from_vector(Vector3::x());
 
-        let mut body = RigidBody::new_with_center_of_mass(
+        let mut body = RigidBody::new(
             dummy_inertial_properties(),
             original_position.clone(),
             &original_orientation,

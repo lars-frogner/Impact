@@ -2,7 +2,7 @@
 
 use crate::{
     define_task,
-    physics::{OrientationComp, PositionComp, Static},
+    physics::{OrientationComp, PositionComp},
     rendering::RenderingTag,
     scene::{
         CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
@@ -12,13 +12,13 @@ use crate::{
     world::World,
 };
 use impact_ecs::query;
-use nalgebra::{Similarity3, Translation3};
+use nalgebra::Similarity3;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform
     /// of each [`SceneGraph`](crate::scene::SceneGraph) node representing
     /// an entity that also has the [`PositionComp`] component so that the
-    /// translational part matches the position.
+    /// translational part matches the origin offset and position.
     [pub] SyncSceneObjectTransformsWithPositions,
     depends_on = [],
     execute_on = [RenderingTag],
@@ -30,21 +30,30 @@ define_task!(
 
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, position: &PositionComp| {
-                    scene_graph.set_translation_of_group_to_parent_transform(node.id, Translation3::from(position.0.cast()));
-                },
-                ![Static]
+                    scene_graph.update_translation_of_group_to_parent_transform(
+                        node.id,
+                        position.origin_offset.cast(),
+                        position.position.cast()
+                    );
+                }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, position: &PositionComp| {
-                    scene_graph.set_translation_of_model_to_parent_transform(node.id, Translation3::from(position.0.cast()));
-                },
-                ![Static]
+                    scene_graph.update_translation_of_model_to_parent_transform(
+                        node.id,
+                        position.origin_offset.cast(),
+                        position.position.cast()
+                    );
+                }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, position: &PositionComp| {
-                    scene_graph.set_translation_of_camera_to_parent_transform(node.id, Translation3::from(position.0.cast()));
-                },
-                ![Static]
+                    scene_graph.update_translation_of_camera_to_parent_transform(
+                        node.id,
+                        position.origin_offset.cast(),
+                        position.position.cast()
+                    );
+                }
             );
 
             Ok(())
@@ -53,9 +62,9 @@ define_task!(
 );
 
 define_task!(
-    /// This [`Task`](crate::scheduling::Task) updates the model transform
-    /// of each [`SceneGraph`](crate::scene::SceneGraph) node representing
-    /// an entity that also has the [`PositionComp`] component so that the
+    /// This [`Task`](crate::scheduling::Task) updates the model transform of
+    /// each [`SceneGraph`](crate::scene::SceneGraph) node representing an
+    /// entity that also has the [`OrientationComp`] component so that the
     /// rotational part matches the orientation.
     [pub] SyncSceneObjectTransformsWithOrientations,
     depends_on = [],
@@ -69,20 +78,17 @@ define_task!(
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, orientation: &OrientationComp| {
                     scene_graph.set_rotation_of_group_to_parent_transform(node.id, orientation.0.cast());
-                },
-                ![Static]
+                }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, orientation: &OrientationComp| {
                     scene_graph.set_rotation_of_model_to_parent_transform(node.id, orientation.0.cast());
-                },
-                ![Static]
+                }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, orientation: &OrientationComp| {
                     scene_graph.set_rotation_of_camera_to_parent_transform(node.id, orientation.0.cast());
-                },
-                ![Static]
+                }
             );
 
             Ok(())
@@ -121,7 +127,7 @@ define_task!(
                     let light_id = omnidirectional_light.id;
                     light_storage
                         .omnidirectional_light_mut(light_id)
-                        .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
+                        .set_camera_space_position(view_transform.transform_point(&position.position.cast()));
                 },
                 ![SceneGraphParentNodeComp]
             );
@@ -135,7 +141,7 @@ define_task!(
                     let light_id = omnidirectional_light.id;
                     light_storage
                         .omnidirectional_light_mut(light_id)
-                        .set_camera_space_position(view_transform.transform_point(&position.0.cast()));
+                        .set_camera_space_position(view_transform.transform_point(&position.position.cast()));
                 }
             );
 

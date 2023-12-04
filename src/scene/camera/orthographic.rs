@@ -13,7 +13,6 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use nalgebra::{Point3, UnitQuaternion};
 use std::sync::RwLock;
 
 impl OrthographicCamera<fre> {
@@ -66,12 +65,18 @@ impl OrthographicCamera<fre> {
                     ),
                 );
 
-                let position = position.map_or_else(Point3::origin, |position| position.0.cast());
-                let orientation = orientation
-                    .map_or_else(UnitQuaternion::identity, |orientation| orientation.0.cast());
+                let PositionComp {
+                    origin_offset,
+                    position,
+                } = position.cloned().unwrap_or_default();
+                let orientation = orientation.cloned().unwrap_or_default().0;
 
-                let camera_to_parent_transform =
-                    scene::create_child_to_parent_transform(position, orientation, 1.0);
+                let camera_to_parent_transform = scene::create_child_to_parent_transform(
+                    origin_offset.cast(),
+                    position.cast(),
+                    orientation.cast(),
+                    1.0,
+                );
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);

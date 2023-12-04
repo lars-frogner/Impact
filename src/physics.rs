@@ -11,8 +11,8 @@ mod time;
 pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularMomentum, AngularVelocity,
-    AngularVelocityComp, Direction, DrivenAngularVelocityComp, Force, Momentum, Orientation,
-    OrientationComp, Position, PositionComp, Static, Torque, Velocity, VelocityComp,
+    AngularVelocityComp, Direction, Force, Momentum, Orientation, OrientationComp, Position,
+    PositionComp, Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
     RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
@@ -243,7 +243,7 @@ impl PhysicsSimulator {
              angular_velocity: &mut AngularVelocityComp,
              rigid_body: &mut RigidBodyComp| {
                 rigid_body.0.advance_motion(
-                    &mut position.0,
+                    &mut position.position,
                     &mut orientation.0,
                     &mut velocity.0,
                     &mut angular_velocity.0,

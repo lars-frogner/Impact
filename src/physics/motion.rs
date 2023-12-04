@@ -3,10 +3,7 @@
 mod components;
 mod systems;
 
-pub use components::{
-    AngularVelocityComp, DrivenAngularVelocityComp, OrientationComp, PositionComp, Static,
-    VelocityComp,
-};
+pub use components::{AngularVelocityComp, OrientationComp, PositionComp, Static, VelocityComp};
 pub use systems::{AdvanceOrientations, AdvancePositions};
 
 use crate::{
@@ -96,6 +93,12 @@ impl AngularVelocity {
     }
 }
 
+impl Default for AngularVelocity {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
 impl AbsDiffEq for AngularVelocity {
     type Epsilon = <fph as AbsDiffEq>::Epsilon;
 
@@ -125,18 +128,6 @@ pub fn advance_orientation(
     );
 
     UnitQuaternion::new_normalize(rotation * orientation.into_inner())
-}
-
-/// Computes the world space displacement of the model space origin resulting
-/// from a change in model orientation around the given center of rotation,
-/// which is specified in the model's reference frame.
-pub fn compute_model_origin_shift_from_orientation_change(
-    old_orientation: &Orientation,
-    new_orientation: &Orientation,
-    center_of_rotation: &Position,
-) -> Vector3<fph> {
-    old_orientation.transform_point(center_of_rotation)
-        - new_orientation.transform_point(center_of_rotation)
 }
 
 #[cfg(test)]

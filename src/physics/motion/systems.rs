@@ -3,7 +3,7 @@
 use crate::{
     define_task,
     physics::{
-        DrivenAngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, RigidBodyComp,
+        self, AngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, RigidBodyComp,
         Static, VelocityComp,
     },
     scene::{
@@ -31,7 +31,7 @@ define_task!(
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
-                    position.0 += velocity.0 * time_step_duration;
+                    position.position += velocity.0 * time_step_duration;
                 },
                 ![Static, RigidBodyComp]
             );
@@ -42,8 +42,8 @@ define_task!(
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) advances the orientation of all
-    /// entities with driven angluar velocities by one time step (unless the
-    /// entity is static or governed by rigid body physics).
+    /// entities with angluar velocities by one time step (unless the entity is
+    /// static or governed by rigid body physics).
     [pub] AdvanceOrientations,
     depends_on = [
         SyncSceneObjectTransformsWithPositions,
@@ -58,14 +58,9 @@ define_task!(
             query!(
                 ecs_world,
                 |orientation: &mut OrientationComp,
-                 position: &mut PositionComp,
-                 driven_angular_velocity: &DrivenAngularVelocityComp|
+                 angular_velocity: &AngularVelocityComp|
                 {
-                    driven_angular_velocity.advance_orientation_and_shift_reference_frame(
-                        &mut orientation.0,
-                        &mut position.0,
-                        time_step_duration
-                    );
+                    orientation.0 = physics::advance_orientation(&orientation.0, &angular_velocity.0, time_step_duration);
                 },
                 ![Static, RigidBodyComp]
             );
