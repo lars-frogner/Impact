@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
-    physics::{OrientationComp, PositionComp},
+    physics::SpatialConfigurationComp,
     scene::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
@@ -228,16 +228,15 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+            |spatial: Option<&SpatialConfigurationComp>,
              scaling: Option<&ScalingComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphGroupNodeComp {
-                let PositionComp {
+                let SpatialConfigurationComp {
                     origin_offset,
                     position,
-                } = position.cloned().unwrap_or_default();
-                let orientation = orientation.cloned().unwrap_or_default().0;
+                    orientation,
+                } = spatial.cloned().unwrap_or_default();
                 let scaling = scaling.cloned().unwrap_or_default().0;
 
                 let group_to_parent_transform = scene::create_child_to_parent_transform(
@@ -277,8 +276,7 @@ impl Scene {
             components,
             |mesh: &MeshComp,
              material: &MaterialComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              scaling: Option<&ScalingComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphModelInstanceNodeComp {
@@ -289,11 +287,11 @@ impl Scene {
                 );
                 instance_feature_manager.register_instance(&material_library, model_id);
 
-                let PositionComp {
+                let SpatialConfigurationComp {
                     origin_offset,
                     position,
-                } = position.cloned().unwrap_or_default();
-                let orientation = orientation.cloned().unwrap_or_default().0;
+                    orientation,
+                } = spatial.cloned().unwrap_or_default();
                 let scaling = scaling.cloned().unwrap_or_default().0;
 
                 let model_to_parent_transform = scene::create_child_to_parent_transform(

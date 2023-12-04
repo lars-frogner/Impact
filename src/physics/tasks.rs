@@ -3,10 +3,7 @@
 use crate::{
     define_execution_tag, define_task,
     physics::{AdvanceOrientations, AdvancePositions, PhysicsSimulator},
-    scene::{
-        SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransformsWithOrientations,
-        SyncSceneObjectTransformsWithPositions,
-    },
+    scene::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
@@ -24,8 +21,7 @@ define_task!(
     /// by one time step.
     [pub] AdvanceSimulation,
     depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransforms,
         SyncLightPositionsAndDirectionsInStorage
     ],
     execute_on = [PhysicsTag],

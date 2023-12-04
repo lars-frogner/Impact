@@ -2,8 +2,8 @@
 
 use crate::{
     physics::{
-        fph, AngularVelocityComp, InertialProperties, OrientationComp, PhysicsSimulator,
-        PositionComp, RigidBody, RigidBodyComp, UniformRigidBodyComp, VelocityComp,
+        fph, AngularVelocityComp, InertialProperties, PhysicsSimulator, RigidBody, RigidBodyComp,
+        SpatialConfigurationComp, UniformRigidBodyComp, VelocityComp,
     },
     rendering::fre,
     scene::{
@@ -39,15 +39,13 @@ impl PhysicsSimulator {
     ) {
         fn execute_setup(
             mut inertial_properties: InertialProperties,
-            position: Option<&PositionComp>,
-            orientation: Option<&OrientationComp>,
+            spatial: Option<&SpatialConfigurationComp>,
             velocity: Option<&VelocityComp>,
             angular_velocity: Option<&AngularVelocityComp>,
             scaling: Option<&ScalingComp>,
         ) -> (
             RigidBodyComp,
-            PositionComp,
-            OrientationComp,
+            SpatialConfigurationComp,
             VelocityComp,
             AngularVelocityComp,
         ) {
@@ -55,27 +53,25 @@ impl PhysicsSimulator {
                 inertial_properties.scale(scaling.0.into());
             }
 
-            let position = position.cloned().unwrap_or_default().position;
-            let orientation = orientation.cloned().unwrap_or_default().0;
+            let mut spatial = spatial.cloned().unwrap_or_default();
             let velocity = velocity.cloned().unwrap_or_default().0;
             let angular_velocity = angular_velocity.cloned().unwrap_or_default().0;
 
             // Use center of mass as new origin, since all free rotation is
             // about the center of mass
-            let new_origin_offset = inertial_properties.center_of_mass().coords;
+            spatial.origin_offset = inertial_properties.center_of_mass().coords;
 
             let rigid_body = RigidBody::new(
                 inertial_properties,
-                position,
-                &orientation,
+                spatial.position,
+                &spatial.orientation,
                 &velocity,
                 &angular_velocity,
             );
 
             (
                 RigidBodyComp(rigid_body),
-                PositionComp::new(new_origin_offset, position),
-                OrientationComp(orientation),
+                spatial,
                 VelocityComp(velocity),
                 AngularVelocityComp(angular_velocity),
             )
@@ -85,15 +81,13 @@ impl PhysicsSimulator {
             components,
             |box_mesh: &BoxMeshComp,
              uniform_rigid_body: &UniformRigidBodyComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              velocity: Option<&VelocityComp>,
              angular_velocity: Option<&AngularVelocityComp>,
              scaling: Option<&ScalingComp>|
              -> (
                 RigidBodyComp,
-                PositionComp,
-                OrientationComp,
+                SpatialConfigurationComp,
                 VelocityComp,
                 AngularVelocityComp
             ) {
@@ -105,8 +99,7 @@ impl PhysicsSimulator {
                 );
                 execute_setup(
                     inertial_properties,
-                    position,
-                    orientation,
+                    spatial,
                     velocity,
                     angular_velocity,
                     scaling,
@@ -119,15 +112,13 @@ impl PhysicsSimulator {
             components,
             |cylinder_mesh: &CylinderMeshComp,
              uniform_rigid_body: &UniformRigidBodyComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              velocity: Option<&VelocityComp>,
              angular_velocity: Option<&AngularVelocityComp>,
              scaling: Option<&ScalingComp>|
              -> (
                 RigidBodyComp,
-                PositionComp,
-                OrientationComp,
+                SpatialConfigurationComp,
                 VelocityComp,
                 AngularVelocityComp
             ) {
@@ -138,8 +129,7 @@ impl PhysicsSimulator {
                 );
                 execute_setup(
                     inertial_properties,
-                    position,
-                    orientation,
+                    spatial,
                     velocity,
                     angular_velocity,
                     scaling,
@@ -152,15 +142,13 @@ impl PhysicsSimulator {
             components,
             |cone_mesh: &ConeMeshComp,
              uniform_rigid_body: &UniformRigidBodyComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              velocity: Option<&VelocityComp>,
              angular_velocity: Option<&AngularVelocityComp>,
              scaling: Option<&ScalingComp>|
              -> (
                 RigidBodyComp,
-                PositionComp,
-                OrientationComp,
+                SpatialConfigurationComp,
                 VelocityComp,
                 AngularVelocityComp
             ) {
@@ -171,8 +159,7 @@ impl PhysicsSimulator {
                 );
                 execute_setup(
                     inertial_properties,
-                    position,
-                    orientation,
+                    spatial,
                     velocity,
                     angular_velocity,
                     scaling,
@@ -184,15 +171,13 @@ impl PhysicsSimulator {
         setup!(
             components,
             |uniform_rigid_body: &UniformRigidBodyComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              velocity: Option<&VelocityComp>,
              angular_velocity: Option<&AngularVelocityComp>,
              scaling: Option<&ScalingComp>|
              -> (
                 RigidBodyComp,
-                PositionComp,
-                OrientationComp,
+                SpatialConfigurationComp,
                 VelocityComp,
                 AngularVelocityComp
             ) {
@@ -200,8 +185,7 @@ impl PhysicsSimulator {
                     InertialProperties::of_uniform_sphere(uniform_rigid_body.mass_density);
                 execute_setup(
                     inertial_properties,
-                    position,
-                    orientation,
+                    spatial,
                     velocity,
                     angular_velocity,
                     scaling,
@@ -214,15 +198,13 @@ impl PhysicsSimulator {
         setup!(
             components,
             |uniform_rigid_body: &UniformRigidBodyComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              velocity: Option<&VelocityComp>,
              angular_velocity: Option<&AngularVelocityComp>,
              scaling: Option<&ScalingComp>|
              -> (
                 RigidBodyComp,
-                PositionComp,
-                OrientationComp,
+                SpatialConfigurationComp,
                 VelocityComp,
                 AngularVelocityComp
             ) {
@@ -230,8 +212,7 @@ impl PhysicsSimulator {
                     InertialProperties::of_uniform_hemisphere(uniform_rigid_body.mass_density);
                 execute_setup(
                     inertial_properties,
-                    position,
-                    orientation,
+                    spatial,
                     velocity,
                     angular_velocity,
                     scaling,
@@ -245,15 +226,13 @@ impl PhysicsSimulator {
             components,
             |mesh: &MeshComp,
              uniform_rigid_body: &UniformRigidBodyComp,
-             position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+             spatial: Option<&SpatialConfigurationComp>,
              velocity: Option<&VelocityComp>,
              angular_velocity: Option<&AngularVelocityComp>,
              scaling: Option<&ScalingComp>|
              -> (
                 RigidBodyComp,
-                PositionComp,
-                OrientationComp,
+                SpatialConfigurationComp,
                 VelocityComp,
                 AngularVelocityComp
             ) {
@@ -267,8 +246,7 @@ impl PhysicsSimulator {
                 );
                 execute_setup(
                     inertial_properties,
-                    position,
-                    orientation,
+                    spatial,
                     velocity,
                     angular_velocity,
                     scaling,

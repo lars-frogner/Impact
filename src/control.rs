@@ -10,7 +10,7 @@ pub use orientation::{CameraOrientationController, RollFreeCameraOrientationCont
 
 use crate::{
     physics::{
-        fph, AngularVelocityComp, Orientation, OrientationComp, RigidBodyComp, Velocity,
+        fph, AngularVelocityComp, Orientation, RigidBodyComp, SpatialConfigurationComp, Velocity,
         VelocityComp,
     },
     scene::PerspectiveCameraComp,
@@ -92,16 +92,17 @@ pub fn set_velocities_of_controlled_entities(
 ) {
     query!(
         ecs_world,
-        |velocity: &mut VelocityComp, orientation: &OrientationComp| {
-            motion_controller.update_world_velocity(&mut velocity.0, &orientation.0);
+        |velocity: &mut VelocityComp, spatial: &SpatialConfigurationComp| {
+            motion_controller.update_world_velocity(&mut velocity.0, &spatial.orientation);
         },
         [Controllable],
         ![PerspectiveCameraComp, RigidBodyComp]
     );
     query!(
         ecs_world,
-        |velocity: &mut VelocityComp, orientation: &OrientationComp| {
-            motion_controller.update_world_velocity_for_camera(&mut velocity.0, &orientation.0);
+        |velocity: &mut VelocityComp, spatial: &SpatialConfigurationComp| {
+            motion_controller
+                .update_world_velocity_for_camera(&mut velocity.0, &spatial.orientation);
         },
         [Controllable, PerspectiveCameraComp],
         ![RigidBodyComp]
@@ -110,8 +111,8 @@ pub fn set_velocities_of_controlled_entities(
         ecs_world,
         |rigid_body: &mut RigidBodyComp,
          velocity: &mut VelocityComp,
-         orientation: &OrientationComp| {
-            motion_controller.update_world_velocity(&mut velocity.0, &orientation.0);
+         spatial: &SpatialConfigurationComp| {
+            motion_controller.update_world_velocity(&mut velocity.0, &spatial.orientation);
             rigid_body.0.synchronize_momentum(&velocity.0);
         },
         [Controllable],
@@ -121,8 +122,9 @@ pub fn set_velocities_of_controlled_entities(
         ecs_world,
         |rigid_body: &mut RigidBodyComp,
          velocity: &mut VelocityComp,
-         orientation: &OrientationComp| {
-            motion_controller.update_world_velocity_for_camera(&mut velocity.0, &orientation.0);
+         spatial: &SpatialConfigurationComp| {
+            motion_controller
+                .update_world_velocity_for_camera(&mut velocity.0, &spatial.orientation);
             rigid_body.0.synchronize_momentum(&velocity.0);
         },
         [Controllable, PerspectiveCameraComp]
@@ -137,8 +139,8 @@ pub fn update_orientations_of_controlled_entities(
 ) {
     query!(
         ecs_world,
-        |orientation: &mut OrientationComp| {
-            orientation_controller.update_orientation(&mut orientation.0);
+        |spatial: &mut SpatialConfigurationComp| {
+            orientation_controller.update_orientation(&mut spatial.orientation);
         },
         [Controllable],
         ![RigidBodyComp]
@@ -146,12 +148,12 @@ pub fn update_orientations_of_controlled_entities(
     query!(
         ecs_world,
         |rigid_body: &mut RigidBodyComp,
-         orientation: &mut OrientationComp,
+         spatial: &mut SpatialConfigurationComp,
          angular_velocity: &AngularVelocityComp| {
-            orientation_controller.update_orientation(&mut orientation.0);
+            orientation_controller.update_orientation(&mut spatial.orientation);
             rigid_body
                 .0
-                .synchronize_angular_momentum(&orientation.0, &angular_velocity.0);
+                .synchronize_angular_momentum(&spatial.orientation, &angular_velocity.0);
         },
         [Controllable]
     );

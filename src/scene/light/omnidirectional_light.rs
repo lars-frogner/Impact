@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::{AxisAlignedBox, CubeMapper, CubemapFace, Frustum, Sphere},
-    physics::PositionComp,
+    physics::SpatialConfigurationComp,
     rendering::fre,
     scene::{
         EmissionExtentComp, LightStorage, Omnidirectional, OmnidirectionalLightComp, Radiance,
@@ -178,8 +178,8 @@ impl OmnidirectionalLight {
 
     /// Checks if the entity-to-be with the given components has the right
     /// components for this light source, and if so, adds the corresponding
-    /// [`OmnidirectionalLight`] to the light storage and adds a [`OmnidirectionalLightComp`] with
-    /// the light's ID to the entity.
+    /// [`OmnidirectionalLight`] to the light storage and adds a
+    /// [`OmnidirectionalLightComp`] with the light's ID to the entity.
     pub fn add_omnidirectional_light_component_for_entity(
         scene_camera: &RwLock<Option<SceneCamera<fre>>>,
         light_storage: &RwLock<LightStorage>,
@@ -201,12 +201,12 @@ impl OmnidirectionalLight {
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
-            |position: &PositionComp,
+            |spatial: &SpatialConfigurationComp,
              radiance: &RadianceComp,
              emission_extent: Option<&EmissionExtentComp>|
              -> OmnidirectionalLightComp {
                 let omnidirectional_light = Self::new(
-                    view_transform.transform_point(&position.position.cast()),
+                    view_transform.transform_point(&spatial.position.cast()),
                     radiance.0,
                     emission_extent.map_or(0.0, |extent| extent.0),
                 );

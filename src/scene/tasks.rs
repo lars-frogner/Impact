@@ -4,10 +4,7 @@ use super::Scene;
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::systems::{
-        SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransformsWithOrientations,
-        SyncSceneObjectTransformsWithPositions,
-    },
+    scene::systems::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
@@ -18,10 +15,7 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the group-to-world
     /// transforms of all [`SceneGraph`](crate::scene::SceneGraph) group nodes.
     [pub] UpdateSceneGroupToWorldTransforms,
-    depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations
-    ],
+    depends_on = [SyncSceneObjectTransforms],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Updating scene object group-to-world transforms"; {
@@ -42,8 +36,7 @@ define_task!(
     /// the scene camera.
     [pub] SyncSceneCameraViewTransform,
     depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransforms,
         UpdateSceneGroupToWorldTransforms
     ],
     execute_on = [RenderingTag],
@@ -71,10 +64,7 @@ define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the bounding spheres of
     /// all [`SceneGraph`](crate::scene::SceneGraph) nodes.
     [pub] UpdateSceneObjectBoundingSpheres,
-    depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations
-    ],
+    depends_on = [SyncSceneObjectTransforms],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Updating scene object bounding spheres"; {
@@ -212,8 +202,7 @@ impl Scene {
     /// Registers all tasks needed for coordinate between systems
     /// in the scene in the given task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(SyncSceneObjectTransformsWithPositions)?;
-        task_scheduler.register_task(SyncSceneObjectTransformsWithOrientations)?;
+        task_scheduler.register_task(SyncSceneObjectTransforms)?;
         task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
         task_scheduler.register_task(SyncSceneCameraViewTransform)?;
         task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;

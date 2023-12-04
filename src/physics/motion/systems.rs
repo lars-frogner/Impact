@@ -3,13 +3,10 @@
 use crate::{
     define_task,
     physics::{
-        self, AngularVelocityComp, OrientationComp, PhysicsTag, PositionComp, RigidBodyComp,
-        Static, VelocityComp,
+        self, AngularVelocityComp, PhysicsTag, RigidBodyComp, SpatialConfigurationComp, Static,
+        VelocityComp,
     },
-    scene::{
-        SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransformsWithOrientations,
-        SyncSceneObjectTransformsWithPositions,
-    },
+    scene::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
     world::World,
 };
 use impact_ecs::query;
@@ -20,8 +17,7 @@ define_task!(
     /// or governed by rigid body physics).
     [pub] AdvancePositions,
     depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransforms,
         SyncLightPositionsAndDirectionsInStorage
     ],
     execute_on = [PhysicsTag],
@@ -30,8 +26,8 @@ define_task!(
             let time_step_duration = world.simulator().read().unwrap().scaled_time_step_duration();
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
-                ecs_world, |position: &mut PositionComp, velocity: &VelocityComp| {
-                    position.position += velocity.0 * time_step_duration;
+                ecs_world, |spatial: &mut SpatialConfigurationComp, velocity: &VelocityComp| {
+                    spatial.position += velocity.0 * time_step_duration;
                 },
                 ![Static, RigidBodyComp]
             );
@@ -46,8 +42,7 @@ define_task!(
     /// static or governed by rigid body physics).
     [pub] AdvanceOrientations,
     depends_on = [
-        SyncSceneObjectTransformsWithPositions,
-        SyncSceneObjectTransformsWithOrientations,
+        SyncSceneObjectTransforms,
         SyncLightPositionsAndDirectionsInStorage
     ],
     execute_on = [PhysicsTag],
@@ -57,10 +52,10 @@ define_task!(
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
                 ecs_world,
-                |orientation: &mut OrientationComp,
+                |spatial: &mut SpatialConfigurationComp,
                  angular_velocity: &AngularVelocityComp|
                 {
-                    orientation.0 = physics::advance_orientation(&orientation.0, &angular_velocity.0, time_step_duration);
+                    spatial.orientation = physics::advance_orientation(&spatial.orientation, &angular_velocity.0, time_step_duration);
                 },
                 ![Static, RigidBodyComp]
             );
