@@ -3,8 +3,8 @@
 use crate::{
     control::Controllable,
     physics::{
-        fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, OrientationComp,
-        Position, PositionComp, RigidBodyComp, Static, Velocity, VelocityComp,
+        fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, Position, RigidBodyComp,
+        SpatialConfigurationComp, Static, Velocity, VelocityComp,
     },
 };
 use approx::abs_diff_eq;
@@ -198,18 +198,17 @@ impl SpringComp {
             return SpringForceApplicationOutcome::Ok;
         }
 
-        let position_1 = Self::determine_position(&entity_1);
-        let position_2 = Self::determine_position(&entity_2);
+        let spatial_configuration_1 = Self::determine_spatial_configuration(&entity_1);
+        let spatial_configuration_2 = Self::determine_spatial_configuration(&entity_2);
 
-        let attachment_point_1 = Self::determine_attachment_point_in_world_space(
-            &entity_1,
-            &position_1,
+        let attachment_point_1 = Self::compute_attachment_point_in_world_space(
             &self.attachment_point_1,
+            &spatial_configuration_1,
         );
-        let attachment_point_2 = Self::determine_attachment_point_in_world_space(
-            &entity_2,
-            &position_2,
+
+        let attachment_point_2 = Self::compute_attachment_point_in_world_space(
             &self.attachment_point_2,
+            &spatial_configuration_2,
         );
 
         if let Some((spring_direction, length)) =
@@ -224,12 +223,12 @@ impl SpringComp {
             } else {
                 let attachment_velocity_1 = Self::determine_attachment_velocity(
                     &entity_1,
-                    &position_1,
+                    &spatial_configuration_1.position,
                     &attachment_point_1,
                 );
                 let attachment_velocity_2 = Self::determine_attachment_velocity(
                     &entity_2,
-                    &position_2,
+                    &spatial_configuration_2.position,
                     &attachment_point_2,
                 );
 
@@ -269,38 +268,22 @@ impl SpringComp {
         SpringForceApplicationOutcome::Ok
     }
 
-    fn determine_position(entity: &EntityEntry<'_>) -> Position {
+    fn determine_spatial_configuration(entity: &EntityEntry<'_>) -> SpatialConfigurationComp {
         entity
-            .get_component::<PositionComp>()
-            .map_or_else(Position::origin, |p| p.access().position)
-    }
-
-    fn determine_attachment_point_in_world_space(
-        entity: &EntityEntry<'_>,
-        position: &Position,
-        attachment_point_in_entity_frame: &Position,
-    ) -> Position {
-        let orientation = entity
-            .get_component::<OrientationComp>()
-            .map(|o| o.access().0);
-
-        Self::compute_attachment_point_in_world_space(
-            attachment_point_in_entity_frame,
-            position,
-            orientation,
-        )
+            .get_component::<SpatialConfigurationComp>()
+            .map_or_else(SpatialConfigurationComp::default, |spatial| {
+                spatial.access().clone()
+            })
     }
 
     fn compute_attachment_point_in_world_space(
         attachment_point_in_entity_frame: &Position,
-        position: &Position,
-        orientation: Option<Orientation>,
+        spatial_configuration: &SpatialConfigurationComp,
     ) -> Position {
-        if let Some(orientation) = orientation {
-            position + orientation.transform_vector(&attachment_point_in_entity_frame.coords)
-        } else {
-            position + attachment_point_in_entity_frame.coords
-        }
+        spatial_configuration.position
+            + spatial_configuration
+                .orientation
+                .transform_vector(&attachment_point_in_entity_frame.coords)
     }
 
     fn determine_attachment_velocity(
@@ -351,9 +334,9 @@ pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut Linked
 pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |position: &mut PositionComp, orientation: &mut OrientationComp, spring: &SpringComp| {
-            position.position = *spring.spring_state.center();
-            orientation.0 = spring.spring_state.compute_orientation();
+        |spatial: &mut SpatialConfigurationComp, spring: &SpringComp| {
+            spatial.position = *spring.spring_state.center();
+            spatial.orientation = spring.spring_state.compute_orientation();
         },
         ![Static, Controllable, VelocityComp, AngularVelocityComp]
     );

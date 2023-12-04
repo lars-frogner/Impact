@@ -3,7 +3,7 @@
 mod components;
 mod systems;
 
-pub use components::{AngularVelocityComp, OrientationComp, PositionComp, Static, VelocityComp};
+pub use components::{AngularVelocityComp, SpatialConfigurationComp, Static, VelocityComp};
 pub use systems::{AdvanceOrientations, AdvancePositions};
 
 use crate::{

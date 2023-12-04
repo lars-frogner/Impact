@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::{PerspectiveCamera, UpperExclusiveBounds},
-    physics::{OrientationComp, PositionComp},
+    physics::SpatialConfigurationComp,
     rendering::fre,
     scene::{
         self, PerspectiveCameraComp, RenderResourcesDesynchronized, ScalingComp, SceneCamera,
@@ -51,8 +51,7 @@ impl PerspectiveCamera<fre> {
                 let mut scene_graph = scene_graph.write().unwrap();
             },
             components,
-            |position: Option<&PositionComp>,
-             orientation: Option<&OrientationComp>,
+            |spatial: Option<&SpatialConfigurationComp>,
              camera_comp: &PerspectiveCameraComp,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphCameraNodeComp {
@@ -65,11 +64,11 @@ impl PerspectiveCamera<fre> {
                     ),
                 );
 
-                let PositionComp {
+                let SpatialConfigurationComp {
                     origin_offset,
                     position,
-                } = position.cloned().unwrap_or_default();
-                let orientation = orientation.cloned().unwrap_or_default().0;
+                    orientation,
+                } = spatial.cloned().unwrap_or_default();
 
                 let camera_to_parent_transform = scene::create_child_to_parent_transform(
                     origin_offset.cast(),

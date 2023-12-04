@@ -11,8 +11,8 @@ mod time;
 pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
 pub use motion::{
     advance_orientation, AdvanceOrientations, AdvancePositions, AngularMomentum, AngularVelocity,
-    AngularVelocityComp, Direction, Force, Momentum, Orientation, OrientationComp, Position,
-    PositionComp, Static, Torque, Velocity, VelocityComp,
+    AngularVelocityComp, Direction, Force, Momentum, Orientation, Position,
+    SpatialConfigurationComp, Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
     RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
@@ -237,14 +237,13 @@ impl PhysicsSimulator {
     fn advance_rigid_body_motion(ecs_world: &ECSWorld, duration: fph) {
         query!(
             ecs_world,
-            |position: &mut PositionComp,
-             orientation: &mut OrientationComp,
+            |spatial: &mut SpatialConfigurationComp,
              velocity: &mut VelocityComp,
              angular_velocity: &mut AngularVelocityComp,
              rigid_body: &mut RigidBodyComp| {
                 rigid_body.0.advance_motion(
-                    &mut position.position,
-                    &mut orientation.0,
+                    &mut spatial.position,
+                    &mut spatial.orientation,
                     &mut velocity.0,
                     &mut angular_velocity.0,
                     duration,
