@@ -2,7 +2,7 @@
 
 use crate::{
     define_execution_tag, define_task,
-    physics::{AdvanceOrientations, AdvancePositions, PhysicsSimulator},
+    physics::PhysicsSimulator,
     scene::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
@@ -37,9 +37,7 @@ impl PhysicsSimulator {
     /// Registers all tasks needed for physics in the given
     /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(AdvanceSimulation)?;
-        task_scheduler.register_task(AdvancePositions)?;
-        task_scheduler.register_task(AdvanceOrientations)
+        task_scheduler.register_task(AdvanceSimulation)
     }
 
     /// Identifies physics-related errors that need special

@@ -1,10 +1,13 @@
 //! Representation and computation of motion.
 
+mod analytical;
 mod components;
-mod systems;
 
+pub use analytical::{
+    AnalyticalMotionManager, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
+    ConstantRotationComp, HarmonicOscillatorTrajectoryComp, OrbitalTrajectoryComp,
+};
 pub use components::{AngularVelocityComp, SpatialConfigurationComp, Static, VelocityComp};
-pub use systems::{AdvanceOrientations, AdvancePositions};
 
 use crate::{
     geometry::{Angle, Radians},
@@ -40,6 +43,9 @@ pub type Momentum = Vector3<fph>;
 
 /// An angular momentum in 3D space.
 pub type AngularMomentum = Vector3<fph>;
+
+/// An acceleration in 3D space.
+pub type Acceleration = Vector3<fph>;
 
 /// A 3D force.
 pub type Force = Vector3<fph>;

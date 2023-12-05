@@ -28,8 +28,8 @@ pub struct SpatialConfigurationComp {
 pub struct VelocityComp(pub Velocity);
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
-/// angular velocity about their center of mass. Transparently wraps an
-/// [`AngularVelocity`].
+/// angular velocity about their reference frame's origin. Transparently wraps
+/// an [`AngularVelocity`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
 pub struct AngularVelocityComp(pub AngularVelocity);
@@ -54,6 +54,13 @@ impl SpatialConfigurationComp {
         Self::new(position, Orientation::identity())
     }
 
+    /// Creates a new spatial component with the given orientation, retaining
+    /// the original origin of the entity's reference frame and located at the
+    /// origin.
+    pub fn unlocated(orientation: Orientation) -> Self {
+        Self::new(Position::origin(), orientation)
+    }
+
     /// Creates a new spatial component with the given origin offset and
     /// position, and with the identity orientation.
     pub fn unoriented_with_offset_origin(origin_offset: Vector3<fph>, position: Position) -> Self {
@@ -72,5 +79,69 @@ impl SpatialConfigurationComp {
             position,
             orientation,
         }
+    }
+
+    /// Creates a new spatial component with the given position and orientation
+    /// for a rigid body. The origin offset will be set to the center of mass.
+    pub fn for_rigid_body(position: Position, orientation: Orientation) -> Self {
+        Self::new(position, orientation)
+    }
+
+    /// Creates a new spatial component with the given position for a rigid body
+    /// with the identity orientation. The origin offset will be set to the
+    /// center of mass.
+    pub fn for_unoriented_rigid_body(position: Position) -> Self {
+        Self::unoriented(position)
+    }
+
+    /// Creates a new spatial component with the given position for an entity
+    /// whose orientation will be evolved analytically (and thus should not be
+    /// initialised in this component).
+    pub fn for_driven_rotation(position: Position) -> Self {
+        Self::unoriented(position)
+    }
+
+    /// Creates a new spatial component with the given origin offset and
+    /// position for an entity whose orientation will be evolved analytically
+    /// (and thus should not be initialised in this component).
+    pub fn for_driven_rotation_around_offset_origin(
+        origin_offset: Vector3<fph>,
+        position: Position,
+    ) -> Self {
+        Self::unoriented_with_offset_origin(origin_offset, position)
+    }
+
+    /// Creates a new spatial component with the given orientation for an entity
+    /// whose trajectory will be evolved analytically (and whose position should
+    /// thus not be initialised in this component).
+    pub fn for_driven_trajectory(orientation: Orientation) -> Self {
+        Self::unlocated(orientation)
+    }
+
+    /// Creates a new spatial component with the given origin offset and
+    /// orientation for an entity whose trajectory will be evolved analytically
+    /// (and whose position should thus not be initialised in this component).
+    pub fn for_driven_trajectory_with_offset_origin(
+        origin_offset: Vector3<fph>,
+        orientation: Orientation,
+    ) -> Self {
+        Self::with_offset_origin(origin_offset, Position::origin(), orientation)
+    }
+
+    /// Creates a new spatial component for an entity whose trajectory and
+    /// orientation will be evolved analytically (and whose position and
+    /// orientation should thus not be initialised in this component).
+    pub fn for_driven_trajectory_and_rotation() -> Self {
+        Self::default()
+    }
+
+    /// Creates a new spatial component with the given origin offset for an
+    /// entity whose trajectory and orientation will be evolved analytically
+    /// (and whose position and orientation should thus not be initialised in
+    /// this component).
+    pub fn for_driven_trajectory_and_rotation_with_offset_origin(
+        origin_offset: Vector3<fph>,
+    ) -> Self {
+        Self::for_driven_trajectory_with_offset_origin(origin_offset, Orientation::identity())
     }
 }
