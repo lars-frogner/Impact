@@ -8,9 +8,11 @@ use crate::{
     control::{Controllable, RollFreeCameraOrientationController, SemiDirectionalMotionController},
     game_loop::{GameLoop, GameLoopConfig},
     physics::{
-        AngularVelocity, AngularVelocityComp, Orientation, PhysicsSimulator, Position,
-        SimulatorConfig, SpatialConfigurationComp, Spring, SpringComp, UniformGravityComp,
-        UniformRigidBodyComp, VelocityComp,
+        Acceleration, AngularVelocity, AngularVelocityComp, CircularTrajectoryComp,
+        ConstantAccelerationTrajectoryComp, ConstantRotationComp, HarmonicOscillatorTrajectoryComp,
+        OrbitalTrajectoryComp, Orientation, PhysicsSimulator, Position, SimulatorConfig,
+        SpatialConfigurationComp, Spring, SpringComp, UniformGravityComp, UniformRigidBodyComp,
+        VelocityComp,
     },
     rendering::{Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
     scene::{
@@ -206,7 +208,6 @@ async fn init_world(window: Window) -> Result<World> {
                 Point3::new(0.0, 1.5, 11.0),
                 Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
             ),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             &DiffuseColorComp(vector![0.1, 0.2, 0.6]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
             &RoughnessComp(0.4),
@@ -230,11 +231,12 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_object.obj")?,
             &ScalingComp(0.02),
-            &SpatialConfigurationComp::new(
-                Point3::new(7.0, 7.7, 5.0),
+            &SpatialConfigurationComp::for_driven_rotation(Point3::new(7.0, 7.7, 5.0)),
+            &ConstantRotationComp::new(
+                0.0,
                 Orientation::from_axis_angle(&Vector3::y_axis(), 0.0),
+                AngularVelocity::new(Vector3::y_axis(), Degrees(50.0)),
             ),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(50.0))),
             &SpecularColorComp::COPPER,
             &RoughnessComp(0.35),
             &MicrofacetSpecularReflection,
@@ -245,11 +247,12 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
             &ScalingComp(0.035),
-            &SpatialConfigurationComp::new(
-                Point3::new(-1.0, 9.0, 9.0),
+            &SpatialConfigurationComp::for_driven_rotation(Point3::new(-1.0, 9.0, 9.0)),
+            &ConstantRotationComp::new(
+                0.0,
                 Orientation::from_axis_angle(&Vector3::x_axis(), 0.4),
+                AngularVelocity::new(Vector3::y_axis(), Degrees(-60.0)),
             ),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(-60.0))),
             &DiffuseColorComp(vector![0.7, 0.3, 0.2]),
             &RoughnessComp(0.95),
             &MicrofacetDiffuseReflection,
@@ -261,7 +264,6 @@ async fn init_world(window: Window) -> Result<World> {
             &BoxMeshComp::UNIT_CUBE,
             &ScalingComp(2.0),
             &SpatialConfigurationComp::unoriented(Point3::new(-9.0, -1.0, 5.0)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(0.0))),
             &DiffuseColorComp(vector![0.1, 0.7, 0.3]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
             &RoughnessComp(0.55),
@@ -287,11 +289,12 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
             &ScalingComp(0.016),
-            &SpatialConfigurationComp::new(
-                Point3::new(-9.0, 5.8, 5.0),
+            &SpatialConfigurationComp::for_driven_rotation(Point3::new(-9.0, 5.8, 5.0)),
+            &ConstantRotationComp::new(
+                0.0,
                 Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
+                AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
             ),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::x_axis(), Degrees(30.0))),
             &SpecularColorComp::GOLD,
             &RoughnessComp(0.4),
             &MicrofacetSpecularReflection,
@@ -407,8 +410,12 @@ async fn init_world(window: Window) -> Result<World> {
 
     let parent = world
         .create_entity((
-            &SpatialConfigurationComp::unoriented(Point3::new(0.0, 15.0, 5.0)),
-            &AngularVelocityComp(AngularVelocity::new(Vector3::y_axis(), Degrees(35.0))),
+            &SpatialConfigurationComp::for_driven_rotation(Point3::new(0.0, 15.0, 5.0)),
+            &ConstantRotationComp::new(
+                0.0,
+                Orientation::identity(),
+                AngularVelocity::new(Vector3::y_axis(), Degrees(35.0)),
+            ),
             &SceneGraphGroup,
         ))
         .unwrap();

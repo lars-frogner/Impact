@@ -10,9 +10,11 @@ mod time;
 
 pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
 pub use motion::{
-    advance_orientation, AdvanceOrientations, AdvancePositions, AngularMomentum, AngularVelocity,
-    AngularVelocityComp, Direction, Force, Momentum, Orientation, Position,
-    SpatialConfigurationComp, Static, Torque, Velocity, VelocityComp,
+    advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
+    AngularVelocityComp, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
+    ConstantRotationComp, Direction, Force, HarmonicOscillatorTrajectoryComp, Momentum,
+    OrbitalTrajectoryComp, Orientation, Position, SpatialConfigurationComp, Static, Torque,
+    Velocity, VelocityComp,
 };
 pub use rigid_body::{
     RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
@@ -35,6 +37,7 @@ pub type fph = f64;
 #[derive(Debug)]
 pub struct PhysicsSimulator {
     config: SimulatorConfig,
+    analytical_motion_manager: RwLock<AnalyticalMotionManager>,
     rigid_body_force_manager: RwLock<RigidBodyForceManager>,
     simulation_time: fph,
     time_step_duration: fph,
@@ -66,6 +69,7 @@ impl PhysicsSimulator {
         let time_step_duration = config.initial_time_step_duration;
         Self {
             config,
+            analytical_motion_manager: RwLock::new(AnalyticalMotionManager::new()),
             rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new()),
             simulation_time: 0.0,
             time_step_duration,
@@ -102,6 +106,12 @@ impl PhysicsSimulator {
     /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
     pub fn simulation_speed_multiplier_increment_factor(&self) -> fph {
         self.config.simulation_speed_multiplier_increment_factor
+    }
+
+    /// Returns a reference to the [`AnalyticalMotionManager`], guarded by a
+    /// [`RwLock`].
+    pub fn analytical_motion_manager(&self) -> &RwLock<AnalyticalMotionManager> {
+        &self.analytical_motion_manager
     }
 
     /// Returns a reference to the [`RigidBodyForceManager`], guarded by a
@@ -164,6 +174,11 @@ impl PhysicsSimulator {
 
     /// Performs any setup required before starting the game loop.
     pub fn perform_setup_for_game_loop(&self, ecs_world: &RwLock<ECSWorld>) {
+        self.analytical_motion_manager
+            .read()
+            .unwrap()
+            .apply_analytical_motion(&ecs_world.read().unwrap(), self.simulation_time);
+
         self.apply_forces_and_torques(ecs_world);
     }
 
@@ -175,6 +190,7 @@ impl PhysicsSimulator {
 
             let mut entities_to_remove = LinkedList::new();
 
+            let analytical_motion_manager = self.analytical_motion_manager.read().unwrap();
             let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
             let ecs_world_readonly = ecs_world.read().unwrap();
 
@@ -182,7 +198,9 @@ impl PhysicsSimulator {
             for _ in 0..self.n_substeps() {
                 Self::perform_substep(
                     &ecs_world_readonly,
+                    &analytical_motion_manager,
                     &rigid_body_force_manager,
+                    self.simulation_time,
                     substep_duration,
                     &mut entities_to_remove,
                 );
@@ -204,10 +222,15 @@ impl PhysicsSimulator {
 
     fn perform_substep(
         ecs_world: &ECSWorld,
+        analytical_motion_manager: &AnalyticalMotionManager,
         rigid_body_force_manager: &RigidBodyForceManager,
+        current_simulation_time: fph,
         duration: fph,
         entities_to_remove: &mut LinkedList<Entity>,
     ) {
+        let new_simulation_time = current_simulation_time + duration;
+
+        analytical_motion_manager.apply_analytical_motion(ecs_world, new_simulation_time);
         Self::advance_rigid_body_motion(ecs_world, duration);
 
         rigid_body_force_manager.apply_forces_and_torques(ecs_world, entities_to_remove);
