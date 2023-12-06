@@ -6,8 +6,7 @@ use crate::{
     rendering::fre,
     scene::{
         self, OrthographicCameraComp, RenderResourcesDesynchronized, ScalingComp, SceneCamera,
-        SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupNodeComp,
-        SceneGraphModelInstanceNodeComp, SceneGraphParentNodeComp,
+        SceneGraph, SceneGraphCameraNodeComp, SceneGraphParentNodeComp,
     },
     window::Window,
 };
@@ -87,11 +86,7 @@ impl OrthographicCamera<fre> {
 
                 SceneGraphCameraNodeComp::new(node_id)
             },
-            ![
-                SceneGraphGroupNodeComp,
-                SceneGraphCameraNodeComp,
-                SceneGraphModelInstanceNodeComp
-            ]
+            ![SceneGraphCameraNodeComp]
         );
         Ok(())
     }

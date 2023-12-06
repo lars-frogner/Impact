@@ -8,9 +8,9 @@ use crate::{
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
         AmbientLight, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
         MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, ScalingComp,
-        Scene, SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
-        SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable,
-        UnidirectionalLight, VertexColorMaterial,
+        Scene, SceneGraphGroup, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
+        SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable, UnidirectionalLight,
+        VertexColorMaterial,
     },
     window::{self, Window},
 };
@@ -48,31 +48,32 @@ impl Scene {
     /// [`add_entity_to_scene_graph`](Self::add_entity_to_scene_graph)).
     pub fn handle_entity_created(
         &self,
-        window: &Window,
         components: &mut ArchetypeComponentStorage,
-    ) -> Result<RenderResourcesDesynchronized> {
-        let mut desynchronized = RenderResourcesDesynchronized::No;
-
-        self.add_mesh_component_for_entity(components, &mut desynchronized)?;
-        self.add_camera_component_for_entity(window, components, &mut desynchronized)?;
-        self.add_light_component_for_entity(components, &mut desynchronized);
-        self.add_material_component_for_entity(components, &mut desynchronized);
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) -> Result<()> {
+        self.add_mesh_component_for_entity(components, desynchronized)?;
+        self.add_light_component_for_entity(components, desynchronized);
+        self.add_material_component_for_entity(components, desynchronized);
 
         self.generate_missing_vertex_properties_for_mesh(components);
 
-        Ok(desynchronized)
+        Ok(())
     }
 
     /// Adds the entity to the scene graph if required, and adds the
     /// corresponding scene graph components to the entity.
     pub fn add_entity_to_scene_graph(
         &self,
+        window: &Window,
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
-    ) {
+        desynchronized: &mut RenderResourcesDesynchronized,
+    ) -> Result<()> {
         Self::add_parent_group_node_component_for_entity(ecs_world, components);
         self.add_group_node_component_for_entity(components);
+        self.add_camera_component_for_entity(window, components, desynchronized)?;
         self.add_model_instance_node_component_for_entity(components);
+        Ok(())
     }
 
     /// Performs any modifications required to clean up the scene when
@@ -213,12 +214,7 @@ impl Scene {
 
                 SceneGraphParentNodeComp::new(parent_group_node.access().id)
             },
-            ![
-                SceneGraphParentNodeComp,
-                SceneGraphGroupNodeComp,
-                SceneGraphCameraNodeComp,
-                SceneGraphModelInstanceNodeComp
-            ]
+            ![SceneGraphParentNodeComp]
         );
     }
 
@@ -254,11 +250,7 @@ impl Scene {
                 )
             },
             [SceneGraphGroup],
-            ![
-                SceneGraphGroupNodeComp,
-                SceneGraphCameraNodeComp,
-                SceneGraphModelInstanceNodeComp
-            ]
+            ![SceneGraphGroupNodeComp]
         );
     }
 
@@ -341,11 +333,7 @@ impl Scene {
                     feature_ids,
                 ))
             },
-            ![
-                SceneGraphGroupNodeComp,
-                SceneGraphCameraNodeComp,
-                SceneGraphModelInstanceNodeComp
-            ]
+            ![SceneGraphModelInstanceNodeComp]
         );
     }
 

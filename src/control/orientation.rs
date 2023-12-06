@@ -68,8 +68,16 @@ impl RollFreeCameraOrientationController {
 }
 
 impl OrientationController for CameraOrientationController {
+    fn sensitivity(&self) -> f64 {
+        self.base.sensitivity
+    }
+
     fn update_orientation(&self, orientation: &mut Orientation) {
         *orientation *= self.orientation_change;
+    }
+
+    fn orientation_has_changed(&self) -> bool {
+        self.base.orientation_has_changed
     }
 
     fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
@@ -89,14 +97,22 @@ impl OrientationController for CameraOrientationController {
         self.base.orientation_has_changed = false;
     }
 
-    fn orientation_has_changed(&self) -> bool {
-        self.base.orientation_has_changed
+    fn set_sensitivity(&mut self, sensitivity: f64) {
+        self.base.set_sensitivity(sensitivity);
     }
 }
 
 impl OrientationController for RollFreeCameraOrientationController {
+    fn sensitivity(&self) -> f64 {
+        self.base.sensitivity
+    }
+
     fn update_orientation(&self, orientation: &mut Orientation) {
         *orientation = self.yaw_change * (*orientation) * self.pitch_change;
+    }
+
+    fn orientation_has_changed(&self) -> bool {
+        self.base.orientation_has_changed
     }
 
     fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64)) {
@@ -119,8 +135,8 @@ impl OrientationController for RollFreeCameraOrientationController {
         self.base.orientation_has_changed = false;
     }
 
-    fn orientation_has_changed(&self) -> bool {
-        self.base.orientation_has_changed
+    fn set_sensitivity(&mut self, sensitivity: f64) {
+        self.base.set_sensitivity(sensitivity);
     }
 }
 
@@ -145,6 +161,14 @@ impl CameraOrientationControllerBase {
         let angular_displacement_y = degrees_per_pixel * (-mouse_displacement.1) * self.sensitivity;
 
         (angular_displacement_x, angular_displacement_y)
+    }
+
+    fn set_sensitivity(&mut self, sensitivity: f64) {
+        assert!(
+            sensitivity > 0.0,
+            "Tried to set orientation controller sensitivity not exceeding zero"
+        );
+        self.sensitivity = sensitivity;
     }
 
     fn compute_yaw_rotation(angular_displacement_x: Radians<f64>) -> Orientation {

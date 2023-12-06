@@ -55,9 +55,16 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 /// Represents controllers that are used for controlling
 /// the orientation of entities.
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
+    /// Returns the sensitivity of the controller.
+    fn sensitivity(&self) -> f64;
+
     /// Modifies the given orientation of a controlled entity so that the
     /// current changes in orientation are applied to it.
     fn update_orientation(&self, orientation: &mut Orientation);
+
+    /// Whether the orientation has changed since calling
+    /// [`reset_orientation_change`](Self::reset_orientation_change).
+    fn orientation_has_changed(&self) -> bool;
 
     /// Determines and registers the change in orientation of the
     /// controlled entity based on the given displacement of the mouse.
@@ -67,9 +74,11 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
     /// [`update_orientation_change`](Self::update_orientation_change).
     fn reset_orientation_change(&mut self);
 
-    /// Whether the orientation has changed since calling
-    /// [`reset_orientation_change`](Self::reset_orientation_change).
-    fn orientation_has_changed(&self) -> bool;
+    /// Sets the given sensitivity for the controller.
+    ///
+    /// # Panics
+    /// If the given sensitivity does not exceed zero.
+    fn set_sensitivity(&mut self, sensitivity: f64);
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -183,6 +192,7 @@ pub fn update_rotation_of_controlled_entities(
             } else {
                 AngularVelocity::zero()
             };
+            dbg!(&new_control_angular_velocity);
 
             orientation_control.apply_new_control_angular_velocity(
                 new_control_angular_velocity,

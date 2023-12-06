@@ -5,7 +5,7 @@ use crate::{
     geometry::TextureProjection,
     physics::PhysicsSimulator,
     rendering::{fre, RenderingSystem, ScreenCapturer},
-    scene::{io, MeshComp, Scene},
+    scene::{io, MeshComp, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
@@ -251,11 +251,24 @@ impl World {
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
 
-        let render_resources_desynchronized = self
-            .scene()
+        let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
+
+        self.scene()
             .read()
             .unwrap()
-            .handle_entity_created(self.window(), &mut components)?;
+            .handle_entity_created(&mut components, &mut render_resources_desynchronized)?;
+
+        self.simulator().read().unwrap().handle_entity_created(
+            &self.scene().read().unwrap().mesh_repository(),
+            &mut components,
+        );
+
+        self.scene().read().unwrap().add_entity_to_scene_graph(
+            self.window(),
+            &self.ecs_world,
+            &mut components,
+            &mut render_resources_desynchronized,
+        )?;
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()
@@ -263,16 +276,6 @@ impl World {
                 .unwrap()
                 .declare_render_resources_desynchronized();
         }
-
-        self.simulator().read().unwrap().handle_entity_created(
-            &self.scene().read().unwrap().mesh_repository(),
-            &mut components,
-        );
-
-        self.scene()
-            .read()
-            .unwrap()
-            .add_entity_to_scene_graph(&self.ecs_world, &mut components);
 
         self.ecs_world.write().unwrap().create_entities(components)
     }
