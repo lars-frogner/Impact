@@ -212,7 +212,7 @@ impl RigidBody {
             .inertia_tensor()
             .inverse_rotated_matrix(orientation);
 
-        AngularVelocity::new_from_vector(inverse_world_space_inertia_tensor * angular_momentum)
+        AngularVelocity::from_vector(inverse_world_space_inertia_tensor * angular_momentum)
     }
 
     fn compute_angular_momentum(
@@ -410,7 +410,7 @@ mod test {
         let original_position = Position::origin();
         let original_orientation = Orientation::identity();
         let original_velocity = Velocity::z();
-        let original_angular_velocity = AngularVelocity::new_from_vector(Vector3::x());
+        let original_angular_velocity = AngularVelocity::from_vector(Vector3::x());
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
@@ -480,7 +480,7 @@ mod test {
         let original_position = Position::origin();
         let original_orientation = Orientation::identity();
         let original_velocity = Velocity::z();
-        let original_angular_velocity = AngularVelocity::new_from_vector(Vector3::x());
+        let original_angular_velocity = AngularVelocity::from_vector(Vector3::x());
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),

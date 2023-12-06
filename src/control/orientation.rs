@@ -39,6 +39,7 @@ pub struct RollFreeCameraOrientationController {
 struct CameraOrientationControllerBase {
     vertical_field_of_view: Radians<f64>,
     sensitivity: f64,
+    orientation_has_changed: bool,
 }
 
 impl CameraOrientationController {
@@ -76,9 +77,20 @@ impl OrientationController for CameraOrientationController {
             .base
             .compute_angular_displacements(window, mouse_displacement);
 
-        self.orientation_change =
+        self.orientation_change *=
             CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y)
                 * CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x);
+
+        self.base.orientation_has_changed = true;
+    }
+
+    fn reset_orientation_change(&mut self) {
+        self.orientation_change = Orientation::identity();
+        self.base.orientation_has_changed = false;
+    }
+
+    fn orientation_has_changed(&self) -> bool {
+        self.base.orientation_has_changed
     }
 }
 
@@ -93,9 +105,22 @@ impl OrientationController for RollFreeCameraOrientationController {
             .compute_angular_displacements(window, mouse_displacement);
 
         self.yaw_change =
-            CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x);
-        self.pitch_change =
-            CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y);
+            CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x)
+                * self.yaw_change;
+        self.pitch_change = self.pitch_change
+            * CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y);
+
+        self.base.orientation_has_changed = true;
+    }
+
+    fn reset_orientation_change(&mut self) {
+        self.yaw_change = Orientation::identity();
+        self.pitch_change = Orientation::identity();
+        self.base.orientation_has_changed = false;
+    }
+
+    fn orientation_has_changed(&self) -> bool {
+        self.base.orientation_has_changed
     }
 }
 
@@ -104,6 +129,7 @@ impl CameraOrientationControllerBase {
         Self {
             vertical_field_of_view: vertical_field_of_view.as_radians(),
             sensitivity,
+            orientation_has_changed: false,
         }
     }
 

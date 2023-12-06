@@ -16,6 +16,7 @@ use crate::{
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, UnitVector3, Vector3};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A unit vector in 3D space.
 pub type Direction = Unit<Vector3<fph>>;
@@ -65,11 +66,27 @@ impl AngularVelocity {
 
     /// Creates a new [`AngularVelocity`] from the given angular velocity
     /// vector.
-    pub fn new_from_vector(angular_velocity_vector: Vector3<fph>) -> Self {
+    pub fn from_vector(angular_velocity_vector: Vector3<fph>) -> Self {
         if let Some((axis_of_rotation, angular_speed)) =
             UnitVector3::try_new_and_get(angular_velocity_vector, fph::EPSILON)
         {
             Self::new(axis_of_rotation, Radians(angular_speed))
+        } else {
+            Self::zero()
+        }
+    }
+
+    /// Creates the [`AngularVelocity`] that would change the given first
+    /// orientation to the given second orientation if applied for the given
+    /// duration.
+    pub fn from_consecutive_orientations(
+        first_orientation: &Orientation,
+        second_orientation: &Orientation,
+        duration: fph,
+    ) -> Self {
+        let difference = second_orientation * first_orientation.inverse();
+        if let Some((axis, angle)) = difference.axis_angle() {
+            Self::new(axis, Radians(angle / duration))
         } else {
             Self::zero()
         }
@@ -96,6 +113,34 @@ impl AngularVelocity {
     /// Computes the corresponding angular velocity vector.
     pub fn as_vector(&self) -> Vector3<fph> {
         self.axis_of_rotation.as_ref() * self.angular_speed.radians()
+    }
+}
+
+impl Add for &AngularVelocity {
+    type Output = AngularVelocity;
+
+    fn add(self, rhs: Self) -> AngularVelocity {
+        AngularVelocity::from_vector(self.as_vector() + rhs.as_vector())
+    }
+}
+
+impl Sub for &AngularVelocity {
+    type Output = AngularVelocity;
+
+    fn sub(self, rhs: Self) -> AngularVelocity {
+        AngularVelocity::from_vector(self.as_vector() - rhs.as_vector())
+    }
+}
+
+impl AddAssign for AngularVelocity {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = AngularVelocity::from_vector(self.as_vector() + rhs.as_vector())
+    }
+}
+
+impl SubAssign for AngularVelocity {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = AngularVelocity::from_vector(self.as_vector() - rhs.as_vector())
     }
 }
 

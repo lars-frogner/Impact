@@ -340,60 +340,54 @@ impl World {
                 state,
                 direction
             );
-
-            let mut motion_controller = motion_controller.lock().unwrap();
-
-            let result = motion_controller.update_motion(state, direction);
-
-            if result.motion_changed() {
-                control::set_velocities_of_controlled_entities(
-                    &self.ecs_world().read().unwrap(),
-                    motion_controller.as_ref(),
-                );
-            }
+            motion_controller
+                .lock()
+                .unwrap()
+                .update_motion(state, direction);
         }
     }
 
     fn stop_motion_controller(&self) {
         if let Some(motion_controller) = &self.motion_controller {
-            let mut motion_controller = motion_controller.lock().unwrap();
-
-            let result = motion_controller.stop();
-
-            if result.motion_changed() {
-                control::set_velocities_of_controlled_entities(
-                    &self.ecs_world().read().unwrap(),
-                    motion_controller.as_ref(),
-                );
-            }
+            motion_controller.lock().unwrap().stop();
         }
     }
 
-    /// Updates the orientation controller with the given mouse
-    /// displacement.
+    /// Updates the orientation controller with the given mouse displacement.
     pub fn update_orientation_controller(&self, mouse_displacement: (f64, f64)) {
         if let Some(orientation_controller) = &self.orientation_controller {
-            log::info!(
+            log::debug!(
                 "Updating orientation controller by mouse delta ({}, {})",
                 mouse_displacement.0,
                 mouse_displacement.1
             );
 
-            let mut orientation_controller = orientation_controller.lock().unwrap();
+            orientation_controller
+                .lock()
+                .unwrap()
+                .update_orientation_change(self.window(), mouse_displacement);
+        }
+    }
 
-            orientation_controller.update_orientation_change(self.window(), mouse_displacement);
+    /// Updates the orientations and motion of all controlled entities.
+    pub fn update_controlled_entities(&self) {
+        let ecs_world = self.ecs_world().read().unwrap();
+        let time_step_duration = self.simulator.read().unwrap().scaled_time_step_duration();
 
-            let ecs_world = self.ecs_world().read().unwrap();
-            control::update_orientations_of_controlled_entities(
+        if let Some(orientation_controller) = &self.orientation_controller {
+            control::update_rotation_of_controlled_entities(
                 &ecs_world,
-                orientation_controller.as_ref(),
+                orientation_controller.lock().unwrap().as_mut(),
+                time_step_duration,
             );
-            if let Some(motion_controller) = &self.motion_controller {
-                control::set_velocities_of_controlled_entities(
-                    &ecs_world,
-                    motion_controller.lock().unwrap().as_ref(),
-                );
-            }
+        }
+
+        if let Some(motion_controller) = &self.motion_controller {
+            control::update_motion_of_controlled_entities(
+                &ecs_world,
+                motion_controller.lock().unwrap().as_ref(),
+                time_step_duration,
+            );
         }
     }
 

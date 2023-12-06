@@ -122,22 +122,12 @@ impl MotionController for SemiDirectionalMotionController {
         self.movement_speed
     }
 
-    fn update_world_velocity(&self, velocity: &mut Velocity, orientation: &Orientation) {
-        let new_velocity = orientation.transform_vector(&self.local_velocity);
-        velocity.x = new_velocity.x;
-        velocity.z = new_velocity.z;
-        if self.vertical_control {
-            velocity.y = new_velocity.y;
+    fn compute_control_velocity(&self, orientation: &Orientation) -> Velocity {
+        let mut control_velocity = orientation.transform_vector(&self.local_velocity);
+        if !self.vertical_control {
+            control_velocity.y = 0.0;
         }
-    }
-
-    fn update_world_velocity_for_camera(&self, velocity: &mut Velocity, orientation: &Orientation) {
-        let new_velocity = orientation.transform_vector(&self.local_velocity);
-        velocity.x = new_velocity.x;
-        velocity.z = new_velocity.z;
-        if self.vertical_control {
-            velocity.y = new_velocity.y;
-        }
+        control_velocity
     }
 
     fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged {

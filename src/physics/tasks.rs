@@ -17,12 +17,30 @@ define_execution_tag!(
 );
 
 define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the orientations and
+    /// motion of all controlled entities.
+    [pub] UpdateControlledEntities,
+    depends_on = [
+        SyncSceneObjectTransforms,
+        SyncLightPositionsAndDirectionsInStorage
+    ],
+    execute_on = [PhysicsTag],
+    |world: &World| {
+        with_debug_logging!("Updating controlled entities"; {
+            world.update_controlled_entities();
+            Ok(())
+        })
+    }
+);
+
+define_task!(
     /// This [`Task`](crate::scheduling::Task) advances the physics simulation
     /// by one time step.
     [pub] AdvanceSimulation,
     depends_on = [
         SyncSceneObjectTransforms,
-        SyncLightPositionsAndDirectionsInStorage
+        SyncLightPositionsAndDirectionsInStorage,
+        UpdateControlledEntities
     ],
     execute_on = [PhysicsTag],
     |world: &World| {
@@ -37,6 +55,7 @@ impl PhysicsSimulator {
     /// Registers all tasks needed for physics in the given
     /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+        task_scheduler.register_task(UpdateControlledEntities)?;
         task_scheduler.register_task(AdvanceSimulation)
     }
 

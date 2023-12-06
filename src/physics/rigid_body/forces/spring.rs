@@ -1,7 +1,7 @@
 //! Spring force.
 
 use crate::{
-    control::Controllable,
+    control::{MotionControlComp, OrientationControlComp},
     physics::{
         fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, Position, RigidBodyComp,
         SpatialConfigurationComp, Static, Velocity, VelocityComp,
@@ -338,7 +338,13 @@ pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
             spatial.position = *spring.spring_state.center();
             spatial.orientation = spring.spring_state.compute_orientation();
         },
-        ![Static, Controllable, VelocityComp, AngularVelocityComp]
+        ![
+            Static,
+            OrientationControlComp,
+            MotionControlComp,
+            VelocityComp,
+            AngularVelocityComp
+        ]
     );
 }
 
