@@ -12,8 +12,11 @@ pub use constant_rotation::ConstantRotationComp;
 pub use harmonic_oscillation::HarmonicOscillatorTrajectoryComp;
 pub use orbit::OrbitalTrajectoryComp;
 
-use crate::physics::{
-    fph, Position, RigidBodyComp, SpatialConfigurationComp, Static, Velocity, VelocityComp,
+use crate::{
+    control::{MotionControlComp, OrientationControlComp},
+    physics::{
+        fph, Position, RigidBodyComp, SpatialConfigurationComp, Static, Velocity, VelocityComp,
+    },
 };
 use impact_ecs::{query, world::World as ECSWorld};
 
@@ -47,7 +50,7 @@ impl AnalyticalMotionManager {
                 velocity.0 = Velocity::zeros();
             },
             [ConstantAccelerationTrajectoryComp],
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
         query!(
             ecs_world,
@@ -56,7 +59,7 @@ impl AnalyticalMotionManager {
                 velocity.0 = Velocity::zeros();
             },
             [HarmonicOscillatorTrajectoryComp],
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
         query!(
             ecs_world,
@@ -65,7 +68,7 @@ impl AnalyticalMotionManager {
                 velocity.0 = Velocity::zeros();
             },
             [CircularTrajectoryComp],
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
         query!(
             ecs_world,
@@ -74,7 +77,7 @@ impl AnalyticalMotionManager {
                 velocity.0 = Velocity::zeros();
             },
             [OrbitalTrajectoryComp],
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
     }
 
@@ -89,7 +92,7 @@ impl AnalyticalMotionManager {
                 spatial.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
     }
 
@@ -104,7 +107,7 @@ impl AnalyticalMotionManager {
                 spatial.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
     }
 
@@ -119,7 +122,7 @@ impl AnalyticalMotionManager {
                 spatial.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
     }
 
@@ -134,7 +137,7 @@ impl AnalyticalMotionManager {
                 spatial.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
-            ![Static, RigidBodyComp]
+            ![Static, MotionControlComp, RigidBodyComp]
         );
     }
 
@@ -144,7 +147,7 @@ impl AnalyticalMotionManager {
             |spatial: &mut SpatialConfigurationComp, rotation: &ConstantRotationComp| {
                 spatial.orientation = rotation.compute_orientation(simulation_time);
             },
-            ![Static, RigidBodyComp]
+            ![Static, OrientationControlComp, RigidBodyComp]
         );
     }
 }

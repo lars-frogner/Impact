@@ -4,16 +4,15 @@ mod components;
 mod motion;
 mod orientation;
 
-pub use components::Controllable;
+pub use components::{MotionControlComp, OrientationControlComp};
 pub use motion::{MotionDirection, MotionState, SemiDirectionalMotionController};
 pub use orientation::{CameraOrientationController, RollFreeCameraOrientationController};
 
 use crate::{
     physics::{
-        fph, AngularVelocityComp, Orientation, RigidBodyComp, SpatialConfigurationComp, Velocity,
-        VelocityComp,
+        fph, AngularVelocity, AngularVelocityComp, Orientation, RigidBodyComp,
+        SpatialConfigurationComp, Velocity, VelocityComp,
     },
-    scene::PerspectiveCameraComp,
     window::Window,
 };
 use impact_ecs::{query, world::World as ECSWorld};
@@ -24,16 +23,9 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
     /// Returns the current movement speed.
     fn movement_speed(&self) -> fph;
 
-    /// Updates the given world-space velocity of a controlled entity
-    /// given its orientation.
-    fn update_world_velocity(&self, velocity: &mut Velocity, orientation: &Orientation);
-
-    /// Updates the given world-space velocity of a controlled camera entity
-    /// given its orientation. This differs from [`update_world_velocity`] in
-    /// that the x-velocity in the local coordinate system is inverted, which is
-    /// needed to get the expected motion for cameras that look along the
-    /// negative z-direction.
-    fn update_world_velocity_for_camera(&self, velocity: &mut Velocity, orientation: &Orientation);
+    /// Computes the world space velocity that should be added to the controlled
+    /// entity's velocity when in motion.
+    fn compute_control_velocity(&self, orientation: &Orientation) -> Velocity;
 
     /// Updates the overall motion state of the controlled entity based on the
     /// given [`MotionState`] specifying whether the entity should be moving
@@ -44,15 +36,15 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
     /// change.
     fn update_motion(&mut self, state: MotionState, direction: MotionDirection) -> MotionChanged;
 
-    /// Updates the speed in which the controlled entity should be moving when
-    /// in motion.
+    /// Updates the speed that should be added to the controlled entity's speed
+    /// when in motion.
     ///
     /// # Returns
     /// An enum indicating whether the update caused the local velocity to
     /// change.
     fn set_movement_speed(&mut self, movement_speed: fph) -> MotionChanged;
 
-    /// Stops any motion of the controlled entity.
+    /// Stops the controlled motion of the entity.
     ///
     /// # Returns
     /// An enum indicating whether the update caused the local velocity to
@@ -63,13 +55,21 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 /// Represents controllers that are used for controlling
 /// the orientation of entities.
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
-    /// Modifies the given orientation of a controlled entity so
-    /// that the current changes in orientation are applied to it.
+    /// Modifies the given orientation of a controlled entity so that the
+    /// current changes in orientation are applied to it.
     fn update_orientation(&self, orientation: &mut Orientation);
 
     /// Determines and registers the change in orientation of the
     /// controlled entity based on the given displacement of the mouse.
     fn update_orientation_change(&mut self, window: &Window, mouse_displacement: (f64, f64));
+
+    /// Resets the change in orientation accumulated by
+    /// [`update_orientation_change`](Self::update_orientation_change).
+    fn reset_orientation_change(&mut self);
+
+    /// Whether the orientation has changed since calling
+    /// [`reset_orientation_change`](Self::reset_orientation_change).
+    fn orientation_has_changed(&self) -> bool;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -84,77 +84,116 @@ impl MotionChanged {
     }
 }
 
-/// Sets the world-space velocities of all entities
-/// controlled by the given motion controller.
-pub fn set_velocities_of_controlled_entities(
+/// Updates the world-space velocities of all entities controlled by the given
+/// motion controller, and advances their positions by the given time step
+/// duration when applicable.
+pub fn update_motion_of_controlled_entities(
     ecs_world: &ECSWorld,
     motion_controller: &(impl MotionController + ?Sized),
+    time_step_duration: fph,
 ) {
     query!(
         ecs_world,
-        |velocity: &mut VelocityComp, spatial: &SpatialConfigurationComp| {
-            motion_controller.update_world_velocity(&mut velocity.0, &spatial.orientation);
+        |motion_control: &mut MotionControlComp,
+         velocity: &mut VelocityComp,
+         spatial: &mut SpatialConfigurationComp| {
+            let new_control_velocity =
+                motion_controller.compute_control_velocity(&spatial.orientation);
+            motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.0);
+
+            spatial.position += velocity.0 * time_step_duration;
         },
-        [Controllable],
-        ![PerspectiveCameraComp, RigidBodyComp]
-    );
-    query!(
-        ecs_world,
-        |velocity: &mut VelocityComp, spatial: &SpatialConfigurationComp| {
-            motion_controller
-                .update_world_velocity_for_camera(&mut velocity.0, &spatial.orientation);
-        },
-        [Controllable, PerspectiveCameraComp],
         ![RigidBodyComp]
     );
     query!(
         ecs_world,
-        |rigid_body: &mut RigidBodyComp,
+        |motion_control: &mut MotionControlComp,
+         rigid_body: &mut RigidBodyComp,
          velocity: &mut VelocityComp,
          spatial: &SpatialConfigurationComp| {
-            motion_controller.update_world_velocity(&mut velocity.0, &spatial.orientation);
+            let new_control_velocity =
+                motion_controller.compute_control_velocity(&spatial.orientation);
+            motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.0);
+
             rigid_body.0.synchronize_momentum(&velocity.0);
-        },
-        [Controllable],
-        ![PerspectiveCameraComp]
-    );
-    query!(
-        ecs_world,
-        |rigid_body: &mut RigidBodyComp,
-         velocity: &mut VelocityComp,
-         spatial: &SpatialConfigurationComp| {
-            motion_controller
-                .update_world_velocity_for_camera(&mut velocity.0, &spatial.orientation);
-            rigid_body.0.synchronize_momentum(&velocity.0);
-        },
-        [Controllable, PerspectiveCameraComp]
+        }
     );
 }
 
-/// Updates the orientations of all entities controlled
-/// by the given orientation controller.
-pub fn update_orientations_of_controlled_entities(
+/// Updates the angular velocities and/or orientations of all entities
+/// controlled by the given orientation controller.
+pub fn update_rotation_of_controlled_entities(
     ecs_world: &ECSWorld,
-    orientation_controller: &(impl OrientationController + ?Sized),
+    orientation_controller: &mut (impl OrientationController + ?Sized),
+    time_step_duration: fph,
 ) {
+    if orientation_controller.orientation_has_changed() {
+        query!(
+            ecs_world,
+            |spatial: &mut SpatialConfigurationComp| {
+                orientation_controller.update_orientation(&mut spatial.orientation);
+            },
+            [OrientationControlComp],
+            ![AngularVelocityComp, RigidBodyComp]
+        );
+    }
     query!(
         ecs_world,
-        |spatial: &mut SpatialConfigurationComp| {
-            orientation_controller.update_orientation(&mut spatial.orientation);
+        |orientation_control: &mut OrientationControlComp,
+         spatial: &mut SpatialConfigurationComp,
+         angular_velocity: &mut AngularVelocityComp| {
+            let new_control_angular_velocity = if orientation_controller.orientation_has_changed() {
+                let old_orientation = spatial.orientation.clone();
+                orientation_controller.update_orientation(&mut spatial.orientation);
+
+                AngularVelocity::from_consecutive_orientations(
+                    &old_orientation,
+                    &spatial.orientation,
+                    time_step_duration,
+                )
+            } else {
+                AngularVelocity::zero()
+            };
+
+            orientation_control.apply_new_control_angular_velocity(
+                new_control_angular_velocity,
+                &mut angular_velocity.0,
+            );
         },
-        [Controllable],
         ![RigidBodyComp]
     );
     query!(
         ecs_world,
-        |rigid_body: &mut RigidBodyComp,
-         spatial: &mut SpatialConfigurationComp,
-         angular_velocity: &AngularVelocityComp| {
-            orientation_controller.update_orientation(&mut spatial.orientation);
+        |orientation_control: &mut OrientationControlComp,
+         rigid_body: &mut RigidBodyComp,
+         spatial: &SpatialConfigurationComp,
+         angular_velocity: &mut AngularVelocityComp| {
+            let new_control_angular_velocity = if orientation_controller.orientation_has_changed() {
+                // We do not update the orientation here, as the rigid body
+                // motion system will handle that for us as long as we apply the
+                // correct angular velocity
+                let mut new_orientation = spatial.orientation.clone();
+                orientation_controller.update_orientation(&mut new_orientation);
+
+                AngularVelocity::from_consecutive_orientations(
+                    &spatial.orientation,
+                    &new_orientation,
+                    time_step_duration,
+                )
+            } else {
+                AngularVelocity::zero()
+            };
+
+            orientation_control.apply_new_control_angular_velocity(
+                new_control_angular_velocity,
+                &mut angular_velocity.0,
+            );
+
             rigid_body
                 .0
                 .synchronize_angular_momentum(&spatial.orientation, &angular_velocity.0);
-        },
-        [Controllable]
+        }
     );
+
+    orientation_controller.reset_orientation_change();
 }

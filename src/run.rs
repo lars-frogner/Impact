@@ -5,7 +5,10 @@ use super::{
     rendering::{CoreRenderingSystem, RenderingSystem},
 };
 use crate::{
-    control::{Controllable, RollFreeCameraOrientationController, SemiDirectionalMotionController},
+    control::{
+        MotionControlComp, OrientationControlComp, RollFreeCameraOrientationController,
+        SemiDirectionalMotionController,
+    },
     game_loop::{GameLoop, GameLoopConfig},
     physics::{
         Acceleration, AngularVelocity, AngularVelocityComp, CircularTrajectoryComp,
@@ -187,7 +190,8 @@ async fn init_world(window: Window) -> Result<World> {
             ),
             &VelocityComp(Vector3::zeros()),
             &AngularVelocityComp(AngularVelocity::zero()),
-            &Controllable,
+            &MotionControlComp::new(),
+            &OrientationControlComp::new(),
         ))
         .unwrap();
 
