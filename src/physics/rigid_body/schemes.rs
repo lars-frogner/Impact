@@ -1,11 +1,9 @@
 //! Schemes for evolving the motion of rigid bodies over time.
 
+use super::RigidBodyAdvancedState;
 use crate::{
     num::Float,
-    physics::{
-        self, fph, AngularMomentum, AngularVelocity, Force, Momentum, Orientation, Position,
-        RigidBody, Torque, Velocity,
-    },
+    physics::{self, fph, AngularVelocity, Force, RigidBody, Torque, Velocity},
 };
 use std::fmt;
 
@@ -63,14 +61,7 @@ pub trait SchemeSubstep {
         angular_velocity: &AngularVelocity,
         force: &Force,
         torque: &Torque,
-    ) -> (
-        Position,
-        Orientation,
-        Momentum,
-        AngularMomentum,
-        Velocity,
-        AngularVelocity,
-    ) {
+    ) -> RigidBodyAdvancedState {
         let substep_duration = self.substep_duration();
 
         let advanced_position =
@@ -100,14 +91,14 @@ pub trait SchemeSubstep {
             &advanced_angular_momentum,
         );
 
-        (
-            advanced_position,
-            advanced_orientation,
-            advanced_momentum,
-            advanced_angular_momentum,
-            advanced_velocity,
-            advanced_angular_velocity,
-        )
+        RigidBodyAdvancedState {
+            position: advanced_position,
+            orientation: advanced_orientation,
+            momentum: advanced_momentum,
+            angular_momentum: advanced_angular_momentum,
+            velocity: advanced_velocity,
+            angular_velocity: advanced_angular_velocity,
+        }
     }
 }
 
@@ -190,14 +181,7 @@ impl SchemeSubstep for EulerCromerStep {
         _angular_velocity: &AngularVelocity,
         force: &Force,
         torque: &Torque,
-    ) -> (
-        Position,
-        Orientation,
-        Momentum,
-        AngularMomentum,
-        Velocity,
-        AngularVelocity,
-    ) {
+    ) -> RigidBodyAdvancedState {
         let advanced_momentum =
             RigidBody::advance_momentum(rigid_body.momentum(), force, self.step_duration);
 
@@ -228,14 +212,14 @@ impl SchemeSubstep for EulerCromerStep {
             self.step_duration,
         );
 
-        (
-            advanced_position,
-            advanced_orientation,
-            advanced_momentum,
-            advanced_angular_momentum,
-            advanced_velocity,
-            advanced_angular_velocity,
-        )
+        RigidBodyAdvancedState {
+            position: advanced_position,
+            orientation: advanced_orientation,
+            momentum: advanced_momentum,
+            angular_momentum: advanced_angular_momentum,
+            velocity: advanced_velocity,
+            angular_velocity: advanced_angular_velocity,
+        }
     }
 }
 
