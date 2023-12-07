@@ -34,10 +34,14 @@ pub struct RigidBody {
     intermediate_states: RigidBodyIntermediateStates,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-struct RigidBodyIntermediateStates {
-    states: [RigidBodyDynamicState; MAX_INTERMEDIATE_STATES],
+#[derive(Clone, Debug)]
+pub struct RigidBodyAdvancedState {
+    position: Position,
+    orientation: Orientation,
+    momentum: Momentum,
+    angular_momentum: AngularMomentum,
+    velocity: Velocity,
+    angular_velocity: AngularVelocity,
 }
 
 #[repr(C)]
@@ -47,6 +51,12 @@ struct RigidBodyDynamicState {
     angular_velocity: Vector3<fph>,
     force: Force,
     torque: Torque,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+struct RigidBodyIntermediateStates {
+    states: [RigidBodyDynamicState; MAX_INTERMEDIATE_STATES],
 }
 
 impl RigidBody {
@@ -248,14 +258,14 @@ impl RigidBody {
         velocity: &mut Velocity,
         angular_velocity: &mut AngularVelocity,
     ) {
-        let (
-            advanced_position,
-            advanced_orientation,
-            advanced_velocity,
-            _advanced_momentum,
-            _advanced_angular_momentum,
-            advanced_angular_velocity,
-        ) = substep.advance_motion(
+        let RigidBodyAdvancedState {
+            position: advanced_position,
+            orientation: advanced_orientation,
+            momentum: _,
+            angular_momentum: _,
+            velocity: advanced_velocity,
+            angular_velocity: advanced_angular_velocity,
+        } = substep.advance_motion(
             &self,
             velocity,
             angular_velocity,
@@ -300,14 +310,14 @@ impl RigidBody {
 
         let average_angular_velocity = AngularVelocity::from_vector(average_angular_velocity);
 
-        let (
-            advanced_position,
-            advanced_orientation,
-            advanced_momentum,
-            advanced_angular_momentum,
-            advanced_velocity,
-            advanced_angular_velocity,
-        ) = last_substep.advance_motion(
+        let RigidBodyAdvancedState {
+            position: advanced_position,
+            orientation: advanced_orientation,
+            momentum: advanced_momentum,
+            angular_momentum: advanced_angular_momentum,
+            velocity: advanced_velocity,
+            angular_velocity: advanced_angular_velocity,
+        } = last_substep.advance_motion(
             &self,
             &average_velocity,
             &average_angular_velocity,
