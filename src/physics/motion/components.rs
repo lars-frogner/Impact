@@ -40,6 +40,19 @@ pub struct AngularVelocityComp(pub AngularVelocity);
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct Static;
 
+/// Marker [`Component`](impact_ecs::component::Component) for entities whose
+/// translational and rotational kinetic energy should be written to the log at
+/// each time step.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct LogsKineticEnergy;
+
+/// Marker [`Component`](impact_ecs::component::Component) for entities whose
+/// linear and angular momentum should be written to the log at each time step.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct LogsMomentum;
+
 impl SpatialConfigurationComp {
     /// Creates a new spatial component with the given position and orientation,
     /// retaining the original origin of the entity's reference frame.

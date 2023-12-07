@@ -2,12 +2,17 @@
 
 mod analytical;
 mod components;
+mod systems;
 
 pub use analytical::{
     AnalyticalMotionManager, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
     ConstantRotationComp, HarmonicOscillatorTrajectoryComp, OrbitalTrajectoryComp,
 };
-pub use components::{AngularVelocityComp, SpatialConfigurationComp, Static, VelocityComp};
+pub use components::{
+    AngularVelocityComp, LogsKineticEnergy, LogsMomentum, SpatialConfigurationComp, Static,
+    VelocityComp,
+};
+pub use systems::{LogKineticEnergy, LogMomentum};
 
 use crate::{
     geometry::{Angle, Radians},
