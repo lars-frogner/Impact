@@ -12,9 +12,9 @@ pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialPr
 pub use motion::{
     advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
     AngularVelocityComp, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
-    ConstantRotationComp, Direction, Force, HarmonicOscillatorTrajectoryComp, Momentum,
-    OrbitalTrajectoryComp, Orientation, Position, SpatialConfigurationComp, Static, Torque,
-    Velocity, VelocityComp,
+    ConstantRotationComp, Direction, Force, HarmonicOscillatorTrajectoryComp, LogsKineticEnergy,
+    LogsMomentum, Momentum, OrbitalTrajectoryComp, Orientation, Position, SpatialConfigurationComp,
+    Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
     RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,

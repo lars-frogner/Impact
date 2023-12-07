@@ -2,7 +2,10 @@
 
 use crate::{
     define_execution_tag, define_task,
-    physics::PhysicsSimulator,
+    physics::{
+        motion::{LogKineticEnergy, LogMomentum},
+        PhysicsSimulator,
+    },
     scene::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
@@ -56,7 +59,9 @@ impl PhysicsSimulator {
     /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         task_scheduler.register_task(UpdateControlledEntities)?;
-        task_scheduler.register_task(AdvanceSimulation)
+        task_scheduler.register_task(AdvanceSimulation)?;
+        task_scheduler.register_task(LogKineticEnergy)?;
+        task_scheduler.register_task(LogMomentum)
     }
 
     /// Identifies physics-related errors that need special
