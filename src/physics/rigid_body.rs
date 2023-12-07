@@ -2,16 +2,23 @@
 
 mod components;
 mod forces;
+mod schemes;
 
 pub use components::{RigidBodyComp, UniformRigidBodyComp};
 pub use forces::{RigidBodyForceManager, Spring, SpringComp, UniformGravityComp};
+pub use schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme};
 
 use crate::physics::{
-    self, fph, AngularMomentum, AngularVelocity, Force, InertialProperties, Momentum, Orientation,
+    fph, AngularMomentum, AngularVelocity, Force, InertialProperties, Momentum, Orientation,
     Position, Torque, Velocity,
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
+use nalgebra::Vector3;
+
+/// The maximum number of intermediate states from the substeps of a stepping
+/// scheme that can be stored in a rigid body.
+const MAX_INTERMEDIATE_STATES: usize = 4;
 
 /// A rigid body.
 #[repr(C)]
@@ -19,10 +26,27 @@ use bytemuck::{Pod, Zeroable};
 pub struct RigidBody {
     inertial_properties: InertialProperties,
     position: Position,
+    orientation: Orientation,
     momentum: Momentum,
     angular_momentum: AngularMomentum,
     total_force: Force,
     total_torque: Torque,
+    intermediate_states: RigidBodyIntermediateStates,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+struct RigidBodyIntermediateStates {
+    states: [RigidBodyDynamicState; MAX_INTERMEDIATE_STATES],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Zeroable, Pod)]
+struct RigidBodyDynamicState {
+    velocity: Velocity,
+    angular_velocity: Vector3<fph>,
+    force: Force,
+    torque: Torque,
 }
 
 impl RigidBody {
@@ -31,21 +55,28 @@ impl RigidBody {
     pub fn new(
         inertial_properties: InertialProperties,
         position: Position,
-        orientation: &Orientation,
+        orientation: Orientation,
         velocity: &Velocity,
         angular_velocity: &AngularVelocity,
     ) -> Self {
         let momentum = Self::compute_momentum(&inertial_properties, velocity);
         let angular_momentum =
-            Self::compute_angular_momentum(&inertial_properties, orientation, angular_velocity);
+            Self::compute_angular_momentum(&inertial_properties, &orientation, angular_velocity);
         Self {
             inertial_properties,
             position,
+            orientation,
             momentum,
             angular_momentum,
             total_force: Force::zeros(),
             total_torque: Torque::zeros(),
+            intermediate_states: RigidBodyIntermediateStates::new(),
         }
+    }
+
+    /// Returns the inertial properties of the body.
+    pub fn inertial_properties(&self) -> &InertialProperties {
+        &self.inertial_properties
     }
 
     /// Returns the mass of the body.
@@ -56,6 +87,11 @@ impl RigidBody {
     /// Returns the position (center of mass) of the body.
     pub fn position(&self) -> &Position {
         &self.position
+    }
+
+    /// Returns the orientation of the body.
+    pub fn orientation(&self) -> &Orientation {
+        &self.orientation
     }
 
     /// Returns the momentum of the body.
@@ -76,6 +112,30 @@ impl RigidBody {
     /// Returns the current total torque on the body around the center of mass.
     pub fn total_torque(&self) -> &Torque {
         &self.total_torque
+    }
+
+    /// Computes the total kinetic energy (translational and rotational) of the
+    /// body.
+    pub fn compute_kinetic_energy(&self) -> fph {
+        self.compute_translational_kinetic_energy() + self.compute_rotational_kinetic_energy()
+    }
+
+    /// Computes the translational kinetic energy of the body.
+    pub fn compute_translational_kinetic_energy(&self) -> fph {
+        let velocity = Self::compute_velocity(&self.inertial_properties, &self.momentum);
+
+        0.5 * self.mass() * velocity.norm_squared()
+    }
+
+    /// Computes the rotational kinetic energy of the body.
+    pub fn compute_rotational_kinetic_energy(&self) -> fph {
+        let angular_velocity = Self::compute_angular_velocity(
+            &self.inertial_properties,
+            &self.orientation,
+            &self.angular_momentum,
+        );
+
+        0.5 * angular_velocity.as_vector().dot(&self.angular_momentum)
     }
 
     /// Applies the given force at the body's center of mass.
@@ -114,7 +174,8 @@ impl RigidBody {
         );
     }
 
-    /// Advances the given motion-defining properties of the body for the given
+    /// Executes the given substep
+    ///  Upda the given position, orientation, velocity and angular velocity motion-defining properties of the body for the given
     /// duration based on the current total force and torque. Updates the stored
     /// center of mass, momentum and angular momentum accordingly.
     ///
@@ -126,38 +187,144 @@ impl RigidBody {
     /// accordingly before calling this function.
     ///
     /// This function resets the total force and torque.
-    pub fn advance_motion(
+    pub fn advance_motion<S: SchemeSubstep>(
         &mut self,
+        substep: &S,
         position: &mut Position,
         orientation: &mut Orientation,
         velocity: &mut Velocity,
         angular_velocity: &mut AngularVelocity,
-        duration: fph,
     ) {
-        self.position = *position;
+        // In the first substep, we update the current position and orientation
+        // in case they have been changed after the previous full step. To avoid
+        // unnecessary calculations, we assume that momentum and angular
+        // momentum have already been updated through the appropriate methods.
+        // In later substeps, the supplied state  we do not want to update the state stored in the rigid body
+        if substep.is_first() {
+            self.position = *position;
+            self.orientation = *orientation;
+        }
 
-        Self::advance_linear_motion(
-            &self.inertial_properties,
-            &self.total_force,
-            &mut self.momentum,
-            velocity,
-            &mut self.position,
-            duration,
-        );
+        if substep.is_last() {
+            self.perform_final_motion_advancement_substep(
+                substep,
+                position,
+                orientation,
+                velocity,
+                angular_velocity,
+            );
+        } else {
+            // Multi-step schemes will need access to the dynamic state
+            // (derivatives) produced by previous substeps, so we record the
+            // current state here before it is changed
+            self.intermediate_states.store_state(
+                substep,
+                RigidBodyDynamicState {
+                    velocity: velocity.clone(),
+                    angular_velocity: angular_velocity.as_vector(),
+                    force: self.total_force.clone(),
+                    torque: self.total_torque.clone(),
+                },
+            );
 
-        Self::advance_rotational_motion(
-            &self.inertial_properties,
-            &self.total_torque,
-            &mut self.angular_momentum,
-            angular_velocity,
-            orientation,
-            duration,
-        );
-
-        *position = self.position;
+            self.perform_intermediate_motion_advancement_substep(
+                substep,
+                position,
+                orientation,
+                velocity,
+                angular_velocity,
+            );
+        }
 
         self.reset_total_force();
         self.reset_total_torque();
+    }
+
+    fn perform_intermediate_motion_advancement_substep<S: SchemeSubstep>(
+        &self,
+        substep: &S,
+        position: &mut Position,
+        orientation: &mut Orientation,
+        velocity: &mut Velocity,
+        angular_velocity: &mut AngularVelocity,
+    ) {
+        let (
+            advanced_position,
+            advanced_orientation,
+            advanced_velocity,
+            _advanced_momentum,
+            _advanced_angular_momentum,
+            advanced_angular_velocity,
+        ) = substep.advance_motion(
+            &self,
+            velocity,
+            angular_velocity,
+            &self.total_force,
+            &self.total_torque,
+        );
+
+        *position = advanced_position;
+        *orientation = advanced_orientation;
+        *velocity = advanced_velocity;
+        *angular_velocity = advanced_angular_velocity;
+    }
+
+    fn perform_final_motion_advancement_substep<S: SchemeSubstep>(
+        &mut self,
+        last_substep: &S,
+        position: &mut Position,
+        orientation: &mut Orientation,
+        velocity: &mut Velocity,
+        angular_velocity: &mut AngularVelocity,
+    ) {
+        // In the final substep, the derivatives calculated by the previous
+        // substeps are averaged (with weights) to obtain the derivatives for
+        // performing the final step
+        let last_weight = last_substep.derivative_weight();
+        let mut average_velocity = *velocity * last_weight;
+        let mut average_angular_velocity = angular_velocity.as_vector() * last_weight;
+        let mut average_force = self.total_force * last_weight;
+        let mut average_torque = self.total_torque * last_weight;
+
+        for substep in S::all_substeps(last_substep.full_step_duration())
+            .rev()
+            .skip(1)
+        {
+            let weight = substep.derivative_weight();
+            let state = self.intermediate_states.state(&substep);
+            average_velocity += state.velocity * weight;
+            average_angular_velocity += state.angular_velocity * weight;
+            average_force += state.force * weight;
+            average_torque += state.torque * weight;
+        }
+
+        let average_angular_velocity = AngularVelocity::from_vector(average_angular_velocity);
+
+        let (
+            advanced_position,
+            advanced_orientation,
+            advanced_momentum,
+            advanced_angular_momentum,
+            advanced_velocity,
+            advanced_angular_velocity,
+        ) = last_substep.advance_motion(
+            &self,
+            &average_velocity,
+            &average_angular_velocity,
+            &average_force,
+            &average_torque,
+        );
+
+        *position = advanced_position;
+        *orientation = advanced_orientation;
+        *velocity = advanced_velocity;
+        *angular_velocity = advanced_angular_velocity;
+
+        // We record the final state as the new state of the rigid body
+        self.position = *position;
+        self.orientation = *orientation;
+        self.momentum = advanced_momentum;
+        self.angular_momentum = advanced_angular_momentum;
     }
 
     fn reset_total_force(&mut self) {
@@ -168,31 +335,20 @@ impl RigidBody {
         self.total_torque = Torque::zeros();
     }
 
-    fn advance_linear_motion(
-        inertial_properties: &InertialProperties,
-        total_force: &Force,
-        momentum: &mut Momentum,
-        velocity: &mut Velocity,
-        position: &mut Position,
-        duration: fph,
-    ) {
-        *momentum += total_force * duration;
-        *velocity = Self::compute_velocity(inertial_properties, momentum);
-        *position += *velocity * duration;
+    fn advance_position(position: &Position, velocity: &Velocity, duration: fph) -> Position {
+        *position + velocity * duration
     }
 
-    fn advance_rotational_motion(
-        inertial_properties: &InertialProperties,
-        total_torque: &Torque,
-        angular_momentum: &mut AngularMomentum,
-        angular_velocity: &mut AngularVelocity,
-        orientation: &mut Orientation,
+    fn advance_momentum(momentum: &Momentum, force: &Force, duration: fph) -> Momentum {
+        *momentum + force * duration
+    }
+
+    fn advance_angular_momentum(
+        angular_momentum: &AngularMomentum,
+        torque: &Torque,
         duration: fph,
-    ) {
-        *angular_momentum += total_torque * duration;
-        *angular_velocity =
-            Self::compute_angular_velocity(inertial_properties, orientation, angular_momentum);
-        *orientation = physics::advance_orientation(orientation, angular_velocity, duration);
+    ) -> AngularMomentum {
+        *angular_momentum + torque * duration
     }
 
     fn compute_momentum(inertial_properties: &InertialProperties, velocity: &Velocity) -> Momentum {
@@ -242,6 +398,22 @@ impl AbsDiffEq for RigidBody {
         ) && Position::abs_diff_eq(&self.position, &other.position, epsilon)
             && Force::abs_diff_eq(&self.total_force, &other.total_force, epsilon)
             && Torque::abs_diff_eq(&self.total_torque, &other.total_torque, epsilon)
+    }
+}
+
+impl RigidBodyIntermediateStates {
+    fn new() -> Self {
+        Self {
+            states: [RigidBodyDynamicState::default(); MAX_INTERMEDIATE_STATES],
+        }
+    }
+
+    fn store_state<S: SchemeSubstep>(&mut self, substep: &S, state: RigidBodyDynamicState) {
+        self.states[substep.idx()] = state;
+    }
+
+    fn state<S: SchemeSubstep>(&self, substep: &S) -> &RigidBodyDynamicState {
+        &self.states[substep.idx()]
     }
 }
 
@@ -301,7 +473,7 @@ mod test {
         RigidBody::new(
             dummy_inertial_properties(),
             Position::origin(),
-            &Orientation::identity(),
+            Orientation::identity(),
             &Velocity::zeros(),
             &AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
         )
@@ -311,7 +483,7 @@ mod test {
         RigidBody::new(
             dummy_inertial_properties(),
             position,
-            &Orientation::identity(),
+            Orientation::identity(),
             &Velocity::zeros(),
             &AngularVelocity::new(Vector3::y_axis(), Degrees(0.0)),
         )
@@ -394,11 +566,11 @@ mod test {
         let mut angular_velocity = AngularVelocity::zero();
 
         body.advance_motion(
+            &EulerCromerStep::new(1.0),
             &mut position,
             &mut orientation,
             &mut velocity,
             &mut angular_velocity,
-            1.0,
         );
 
         assert_abs_diff_eq!(body.total_force(), &Force::zeros());
@@ -415,7 +587,7 @@ mod test {
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
             original_position.clone(),
-            &original_orientation,
+            original_orientation.clone(),
             &original_velocity,
             &original_angular_velocity,
         );
@@ -428,11 +600,11 @@ mod test {
         let mut angular_velocity = original_angular_velocity.clone();
 
         body.advance_motion(
+            &EulerCromerStep::new(0.0),
             &mut position,
             &mut orientation,
             &mut velocity,
             &mut angular_velocity,
-            0.0,
         );
 
         assert_abs_diff_eq!(position, original_position);
@@ -451,7 +623,7 @@ mod test {
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
             original_position.clone(),
-            &original_orientation,
+            original_orientation.clone(),
             &original_velocity,
             &original_angular_velocity,
         );
@@ -462,11 +634,11 @@ mod test {
         let mut angular_velocity = original_angular_velocity.clone();
 
         body.advance_motion(
+            &EulerCromerStep::new(1.0),
             &mut position,
             &mut orientation,
             &mut velocity,
             &mut angular_velocity,
-            1.0,
         );
 
         assert_abs_diff_eq!(position, original_position);
@@ -485,7 +657,7 @@ mod test {
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
             original_position.clone(),
-            &original_orientation,
+            original_orientation.clone(),
             &original_velocity,
             &original_angular_velocity,
         );
@@ -498,11 +670,11 @@ mod test {
         let mut angular_velocity = original_angular_velocity.clone();
 
         body.advance_motion(
+            &EulerCromerStep::new(1.0),
             &mut position,
             &mut orientation,
             &mut velocity,
             &mut angular_velocity,
-            1.0,
         );
 
         assert_abs_diff_ne!(position, original_position);
