@@ -17,8 +17,8 @@ pub use motion::{
     Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
-    RigidBody, RigidBodyComp, RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
-    UniformRigidBodyComp,
+    EulerCromerStep, RigidBody, RigidBodyComp, RigidBodyForceManager, RungeKutta4Substep, Spring,
+    SpringComp, SteppingScheme, UniformGravityComp, UniformRigidBodyComp,
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
 
@@ -27,6 +27,7 @@ use impact_ecs::{
     world::{Entity, World as ECSWorld},
 };
 use num_traits::FromPrimitive;
+use rigid_body::SchemeSubstep;
 use std::{collections::LinkedList, sync::RwLock, time::Duration};
 
 /// Floating point type used for physics simulation.
@@ -47,6 +48,9 @@ pub struct PhysicsSimulator {
 /// Configuration parameters for the physics simulation.
 #[derive(Clone, Debug)]
 pub struct SimulatorConfig {
+    /// The iterative scheme to use for advancing the motion of rigid bodies
+    /// over time.
+    pub stepping_scheme: SteppingScheme,
     /// The number of substeps to perform each simulation step. Increase to
     /// improve accuracy.
     pub n_substeps: u32,
@@ -95,6 +99,11 @@ impl PhysicsSimulator {
     }
 
     /// Returns the number of substeps performed each simulation step.
+    pub fn stepping_scheme(&self) -> SteppingScheme {
+        self.config.stepping_scheme
+    }
+
+    /// Returns the number of substeps performed each simulation step.
     pub fn n_substeps(&self) -> u32 {
         self.config.n_substeps
     }
@@ -131,6 +140,11 @@ impl PhysicsSimulator {
     /// Will use the given duration as the time step duration.
     pub fn set_time_step_duration(&mut self, time_step_duration: fph) {
         self.time_step_duration = time_step_duration;
+    }
+
+    /// Will use the given stepping scheme for advancing rigid body motion.
+    pub fn set_stepping_scheme(&mut self, stepping_scheme: SteppingScheme) {
+        self.config.stepping_scheme = stepping_scheme;
     }
 
     /// Will execute the given number of substeps each simulation step.
@@ -185,55 +199,91 @@ impl PhysicsSimulator {
     /// Advances the physics simulation by one time step.
     pub fn advance_simulation(&mut self, ecs_world: &RwLock<ECSWorld>) {
         with_timing_info_logging!(
-            "Simulation step with duration {:.2} ({:.1}x) and {} substeps",
-            self.scaled_time_step_duration(), self.simulation_speed_multiplier, self.n_substeps(); {
+            "Simulation step ({}) with duration {:.2} ({:.1}x) and {} substeps",
+            self.stepping_scheme(),
+            self.scaled_time_step_duration(),
+            self.simulation_speed_multiplier,
+            self.n_substeps(); {
 
-            let mut entities_to_remove = LinkedList::new();
-
-            let analytical_motion_manager = self.analytical_motion_manager.read().unwrap();
-            let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
-            let ecs_world_readonly = ecs_world.read().unwrap();
-
-            let substep_duration = self.compute_substep_duration();
-            for _ in 0..self.n_substeps() {
-                Self::perform_substep(
-                    &ecs_world_readonly,
-                    &analytical_motion_manager,
-                    &rigid_body_force_manager,
-                    self.simulation_time,
-                    substep_duration,
-                    &mut entities_to_remove,
-                );
-                self.simulation_time += substep_duration;
+            match self.stepping_scheme() {
+                SteppingScheme::EulerCromer => {
+                    self.advance_simulation_with_scheme::<EulerCromerStep>(ecs_world);
+                }
+                SteppingScheme::RK4 => {
+                    self.advance_simulation_with_scheme::<RungeKutta4Substep>(ecs_world);
+                }
             }
-
-            rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
-
-            drop(ecs_world_readonly);
-            Self::remove_entities(ecs_world, &entities_to_remove);
         });
 
         log::info!("Simulation time: {:.1}", self.simulation_time);
+    }
+
+    fn advance_simulation_with_scheme<S: SchemeSubstep>(&mut self, ecs_world: &RwLock<ECSWorld>) {
+        let mut entities_to_remove = LinkedList::new();
+
+        let analytical_motion_manager = self.analytical_motion_manager.read().unwrap();
+        let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
+        let ecs_world_readonly = ecs_world.read().unwrap();
+
+        let substep_duration = self.compute_substep_duration();
+        for _ in 0..self.n_substeps() {
+            Self::perform_step::<S>(
+                &ecs_world_readonly,
+                &analytical_motion_manager,
+                &rigid_body_force_manager,
+                self.simulation_time,
+                substep_duration,
+                &mut entities_to_remove,
+            );
+            self.simulation_time += substep_duration;
+        }
+
+        rigid_body_force_manager.perform_post_simulation_step_actions(&ecs_world_readonly);
+
+        drop(ecs_world_readonly);
+        Self::remove_entities(ecs_world, &entities_to_remove);
     }
 
     fn compute_substep_duration(&self) -> fph {
         self.scaled_time_step_duration() / fph::from_u32(self.n_substeps()).unwrap()
     }
 
-    fn perform_substep(
+    fn perform_step<S: SchemeSubstep>(
         ecs_world: &ECSWorld,
         analytical_motion_manager: &AnalyticalMotionManager,
         rigid_body_force_manager: &RigidBodyForceManager,
         current_simulation_time: fph,
-        duration: fph,
+        step_duration: fph,
         entities_to_remove: &mut LinkedList<Entity>,
     ) {
-        let new_simulation_time = current_simulation_time + duration;
+        for scheme_substep in S::all_substeps(step_duration) {
+            let new_simulation_time = scheme_substep.new_simulation_time(current_simulation_time);
 
-        analytical_motion_manager.apply_analytical_motion(ecs_world, new_simulation_time);
-        Self::advance_rigid_body_motion(ecs_world, duration);
+            analytical_motion_manager.apply_analytical_motion(ecs_world, new_simulation_time);
 
-        rigid_body_force_manager.apply_forces_and_torques(ecs_world, entities_to_remove);
+            Self::advance_rigid_body_motion(ecs_world, &scheme_substep);
+
+            rigid_body_force_manager.apply_forces_and_torques(ecs_world, entities_to_remove);
+        }
+    }
+
+    fn advance_rigid_body_motion<S: SchemeSubstep>(ecs_world: &ECSWorld, scheme_substep: &S) {
+        query!(
+            ecs_world,
+            |rigid_body: &mut RigidBodyComp,
+             spatial: &mut SpatialConfigurationComp,
+             velocity: &mut VelocityComp,
+             angular_velocity: &mut AngularVelocityComp| {
+                rigid_body.0.advance_motion(
+                    scheme_substep,
+                    &mut spatial.position,
+                    &mut spatial.orientation,
+                    &mut velocity.0,
+                    &mut angular_velocity.0,
+                );
+            },
+            ![Static]
+        );
     }
 
     fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
@@ -256,30 +306,12 @@ impl PhysicsSimulator {
             }
         }
     }
-
-    fn advance_rigid_body_motion(ecs_world: &ECSWorld, duration: fph) {
-        query!(
-            ecs_world,
-            |spatial: &mut SpatialConfigurationComp,
-             velocity: &mut VelocityComp,
-             angular_velocity: &mut AngularVelocityComp,
-             rigid_body: &mut RigidBodyComp| {
-                rigid_body.0.advance_motion(
-                    &mut spatial.position,
-                    &mut spatial.orientation,
-                    &mut velocity.0,
-                    &mut angular_velocity.0,
-                    duration,
-                );
-            },
-            ![Static]
-        );
-    }
 }
 
 impl Default for SimulatorConfig {
     fn default() -> Self {
         Self {
+            stepping_scheme: SteppingScheme::RK4,
             n_substeps: 1,
             initial_time_step_duration: 0.015,
             match_frame_duration: true,

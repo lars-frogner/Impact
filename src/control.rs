@@ -192,7 +192,6 @@ pub fn update_rotation_of_controlled_entities(
             } else {
                 AngularVelocity::zero()
             };
-            dbg!(&new_control_angular_velocity);
 
             orientation_control.apply_new_control_angular_velocity(
                 new_control_angular_velocity,

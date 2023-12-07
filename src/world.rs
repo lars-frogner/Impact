@@ -3,7 +3,7 @@
 use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
-    physics::PhysicsSimulator,
+    physics::{PhysicsSimulator, SteppingScheme},
     rendering::{fre, RenderingSystem, ScreenCapturer},
     scene::{io, MeshComp, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
@@ -424,6 +424,16 @@ impl World {
                 * simulator.simulation_speed_multiplier_increment_factor();
             motion_controller.set_movement_speed(new_movement_speed);
         }
+    }
+
+    /// Changes to the next stepping scheme for the physcis simulation.
+    pub fn cycle_simulation_stepping_scheme(&self) {
+        let mut simulator = self.simulator.write().unwrap();
+        let new_stepping_scheme = match simulator.stepping_scheme() {
+            SteppingScheme::EulerCromer => SteppingScheme::RK4,
+            SteppingScheme::RK4 => SteppingScheme::EulerCromer,
+        };
+        simulator.set_stepping_scheme(new_stepping_scheme);
     }
 
     /// Performs any setup required before starting the game loop.
