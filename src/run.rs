@@ -15,7 +15,7 @@ use crate::{
         ConstantAccelerationTrajectoryComp, ConstantRotationComp, HarmonicOscillatorTrajectoryComp,
         OrbitalTrajectoryComp, Orientation, PhysicsSimulator, Position, SimulatorConfig,
         SpatialConfigurationComp, Spring, SpringComp, UniformGravityComp, UniformRigidBodyComp,
-        VelocityComp,
+        SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
     rendering::{Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
     scene::{
@@ -164,7 +164,7 @@ async fn init_world(window: Window) -> Result<World> {
     let vertical_field_of_view = Degrees(70.0);
     let renderer = RenderingSystem::new(core_system, assets).await?;
 
-    let simulator = PhysicsSimulator::new(SimulatorConfig::default());
+    let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
 
     let motion_controller = SemiDirectionalMotionController::new(8.0, true);
     let orientation_controller =
