@@ -15,6 +15,9 @@ pub struct UniformGravityComp {
 }
 
 impl UniformGravityComp {
+    /// The downward acceleration at the surface of Earth [m/s^2].
+    pub const EARTH_DOWNWARD_ACCELERATION: fph = 9.81;
+
     /// Creates a new component for uniform gravitational acceleration.
     pub fn new(acceleration: Vector3<fph>) -> Self {
         Self { acceleration }
@@ -24,6 +27,12 @@ impl UniformGravityComp {
     /// negative y-direction.
     pub fn downward(acceleration: fph) -> Self {
         Self::new(vector![0.0, -acceleration, 0.0])
+    }
+
+    /// Creates a new component for the gravitational acceleration at the
+    /// surface of Earth.
+    pub fn earth() -> Self {
+        Self::downward(Self::EARTH_DOWNWARD_ACCELERATION)
     }
 }
 
