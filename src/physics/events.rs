@@ -25,12 +25,22 @@ impl PhysicsSimulator {
         components: &mut ArchetypeComponentStorage,
     ) {
         Self::add_rigid_body_component_for_entity(mesh_repository, components);
+
+        self.rigid_body_force_manager
+            .read()
+            .unwrap()
+            .add_force_components_for_entity(mesh_repository, components)
     }
 
     /// Performs any modifications required to clean up the physics simulator
     /// when the given entity is removed.
     pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) {
         Self::remove_rigid_body_for_entity(entity);
+
+        self.rigid_body_force_manager
+            .read()
+            .unwrap()
+            .handle_entity_removed(entity)
     }
 
     fn add_rigid_body_component_for_entity(

@@ -5,7 +5,10 @@ mod forces;
 mod schemes;
 
 pub use components::{RigidBodyComp, UniformRigidBodyComp};
-pub use forces::{RigidBodyForceManager, Spring, SpringComp, UniformGravityComp};
+pub use forces::{
+    DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, RigidBodyForceConfig,
+    RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
+};
 pub use schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme};
 
 use crate::physics::{
@@ -95,11 +98,24 @@ impl RigidBody {
     }
 
     /// Returns the position (center of mass) of the body.
+    ///
+    /// # Warning
+    /// This position will be out of sync with the position in with the entity's
+    /// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp)
+    /// between the first and last substep in the stepping scheme, as it is only
+    /// updated with the final orientation after the last substep.
     pub fn position(&self) -> &Position {
         &self.position
     }
 
     /// Returns the orientation of the body.
+    ///
+    /// # Warning
+    /// This orientation will be out of sync with the orientation in with the
+    /// entity's
+    /// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp)
+    /// between the first and last substep in the stepping scheme, as it is only
+    /// updated with the final orientation after the last substep.
     pub fn orientation(&self) -> &Orientation {
         &self.orientation
     }

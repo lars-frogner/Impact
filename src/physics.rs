@@ -3,12 +3,15 @@
 mod collision;
 mod events;
 mod inertia;
+mod medium;
 mod motion;
 mod rigid_body;
 mod tasks;
 mod time;
 
+use anyhow::{bail, Result};
 pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
+pub use medium::UniformMedium;
 pub use motion::{
     advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
     AngularVelocityComp, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
@@ -17,7 +20,8 @@ pub use motion::{
     Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
-    EulerCromerStep, RigidBody, RigidBodyComp, RigidBodyForceManager, RungeKutta4Substep, Spring,
+    DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, EulerCromerStep, RigidBody,
+    RigidBodyComp, RigidBodyForceConfig, RigidBodyForceManager, RungeKutta4Substep, Spring,
     SpringComp, SteppingScheme, UniformGravityComp, UniformRigidBodyComp,
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
@@ -40,6 +44,7 @@ pub struct PhysicsSimulator {
     config: SimulatorConfig,
     analytical_motion_manager: RwLock<AnalyticalMotionManager>,
     rigid_body_force_manager: RwLock<RigidBodyForceManager>,
+    medium: UniformMedium,
     simulation_time: fph,
     time_step_duration: fph,
     simulation_speed_multiplier: fph,
@@ -65,20 +70,35 @@ pub struct SimulatorConfig {
     /// or
     /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
     pub simulation_speed_multiplier_increment_factor: fph,
+    /// Configuration parameters for rigid body force generation. If [`None`],
+    /// default parameters are used.
+    pub rigid_body_force_config: Option<RigidBodyForceConfig>,
 }
 
 impl PhysicsSimulator {
-    /// Creates a new physics simulater with the given configuration parameters.
-    pub fn new(config: SimulatorConfig) -> Self {
+    /// Creates a new physics simulator with the given configuration parameters
+    /// and uniform physical medium.
+    ///
+    /// # Errors
+    /// Returns an error if any of the configuration parameters are invalid.
+    pub fn new(mut config: SimulatorConfig, medium: UniformMedium) -> Result<Self> {
+        config.validate()?;
+
+        let rigid_body_force_config = config.rigid_body_force_config.take().unwrap_or_default();
+
         let time_step_duration = config.initial_time_step_duration;
-        Self {
+
+        Ok(Self {
             config,
             analytical_motion_manager: RwLock::new(AnalyticalMotionManager::new()),
-            rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new()),
+            rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new(
+                rigid_body_force_config,
+            )?),
+            medium,
             simulation_time: 0.0,
             time_step_duration,
             simulation_speed_multiplier: 1.0,
-        }
+        })
     }
 
     /// Returns the current base duration used for each time step (without the
@@ -127,6 +147,11 @@ impl PhysicsSimulator {
     /// [`RwLock`].
     pub fn rigid_body_force_manager(&self) -> &RwLock<RigidBodyForceManager> {
         &self.rigid_body_force_manager
+    }
+
+    /// Sets the given medium for the physics simulation.
+    pub fn set_medium(&mut self, medium: UniformMedium) {
+        self.medium = medium;
     }
 
     /// If configured to do so, sets the time step duration to the given frame
@@ -231,6 +256,7 @@ impl PhysicsSimulator {
                 &ecs_world_readonly,
                 &analytical_motion_manager,
                 &rigid_body_force_manager,
+                &self.medium,
                 self.simulation_time,
                 substep_duration,
                 &mut entities_to_remove,
@@ -252,6 +278,7 @@ impl PhysicsSimulator {
         ecs_world: &ECSWorld,
         analytical_motion_manager: &AnalyticalMotionManager,
         rigid_body_force_manager: &RigidBodyForceManager,
+        medium: &UniformMedium,
         current_simulation_time: fph,
         step_duration: fph,
         entities_to_remove: &mut LinkedList<Entity>,
@@ -263,7 +290,11 @@ impl PhysicsSimulator {
 
             Self::advance_rigid_body_motion(ecs_world, &scheme_substep);
 
-            rigid_body_force_manager.apply_forces_and_torques(ecs_world, entities_to_remove);
+            rigid_body_force_manager.apply_forces_and_torques(
+                ecs_world,
+                medium,
+                entities_to_remove,
+            );
         }
     }
 
@@ -292,7 +323,11 @@ impl PhysicsSimulator {
         self.rigid_body_force_manager
             .read()
             .unwrap()
-            .apply_forces_and_torques(&ecs_world.read().unwrap(), &mut entities_to_remove);
+            .apply_forces_and_torques(
+                &ecs_world.read().unwrap(),
+                &self.medium,
+                &mut entities_to_remove,
+            );
 
         Self::remove_entities(ecs_world, &entities_to_remove);
     }
@@ -308,6 +343,30 @@ impl PhysicsSimulator {
     }
 }
 
+impl SimulatorConfig {
+    fn validate(&self) -> Result<()> {
+        if self.n_substeps == 0 {
+            bail!(
+                "Invalid number of substeps for physics simulation: {}",
+                self.n_substeps
+            );
+        }
+        if self.initial_time_step_duration <= 0.0 {
+            bail!(
+                "Invalid initial time step duration for physics simulation: {}",
+                self.initial_time_step_duration
+            );
+        }
+        if self.simulation_speed_multiplier_increment_factor <= 1.0 {
+            bail!(
+                "Invalid simulation speed increment factor: {}",
+                self.simulation_speed_multiplier_increment_factor
+            );
+        }
+        Ok(())
+    }
+}
+
 impl Default for SimulatorConfig {
     fn default() -> Self {
         Self {
@@ -316,6 +375,7 @@ impl Default for SimulatorConfig {
             initial_time_step_duration: 0.015,
             match_frame_duration: true,
             simulation_speed_multiplier_increment_factor: 1.1,
+            rigid_body_force_config: None,
         }
     }
 }
