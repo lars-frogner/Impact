@@ -1049,6 +1049,7 @@ mod test {
 
     #[test]
     fn executing_tasks_works() {
+        // TODO: Investigate why this test occasionally fails
         let mut scheduler = create_scheduler(2);
         scheduler.register_task(DepDepTask1Task2).unwrap();
         scheduler.register_task(Task2).unwrap();
