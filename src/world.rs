@@ -1,7 +1,7 @@
 //! Container for all data in the world.
 
 use crate::{
-    components::ComponentRegistry,
+    components::{ComponentCategory, ComponentRegistry},
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
     physics::{self, PhysicsSimulator, SteppingScheme},
@@ -15,7 +15,7 @@ use crate::{
 use anyhow::Result;
 use impact_ecs::{
     archetype::{ArchetypeComponentStorage, ArchetypeComponents},
-    component::{ComponentArray, SingleInstance},
+    component::{ComponentArray, ComponentID, SingleInstance},
     world::{Entity, World as ECSWorld},
 };
 use std::{
@@ -292,6 +292,18 @@ impl World {
                 .declare_render_resources_desynchronized();
         }
 
+        let (setup_component_ids, setup_component_names, standard_component_names) =
+            self.extract_component_metadata(&components);
+
+        log::info!(
+            "Creating entities:\nSetup components:\n    {}\nStandard components:\n    {}",
+            setup_component_names.join("\n    "),
+            standard_component_names.join("\n    "),
+        );
+
+        // Remove all setup components
+        components.remove_component_types_with_ids(setup_component_ids)?;
+
         self.ecs_world.write().unwrap().create_entities(components)
     }
 
@@ -522,5 +534,35 @@ impl World {
         RenderingSystem::register_tasks(task_scheduler)?;
         PhysicsSimulator::register_tasks(task_scheduler)?;
         task_scheduler.complete_task_registration()
+    }
+
+    fn extract_component_metadata(
+        &self,
+        components: &ArchetypeComponentStorage,
+    ) -> (Vec<ComponentID>, Vec<&'static str>, Vec<&'static str>) {
+        let mut setup_component_ids = Vec::with_capacity(components.n_component_types());
+        let mut setup_component_names = Vec::with_capacity(components.n_component_types());
+        let mut standard_component_names = Vec::with_capacity(components.n_component_types());
+
+        let component_registry = self.component_registry.read().unwrap();
+
+        for component_id in components.component_ids() {
+            let entry = component_registry.component_with_id(component_id);
+            match entry.category {
+                ComponentCategory::Standard => {
+                    standard_component_names.push(entry.name);
+                }
+                ComponentCategory::Setup => {
+                    setup_component_ids.push(component_id);
+                    setup_component_names.push(entry.name);
+                }
+            }
+        }
+
+        (
+            setup_component_ids,
+            setup_component_names,
+            standard_component_names,
+        )
     }
 }
