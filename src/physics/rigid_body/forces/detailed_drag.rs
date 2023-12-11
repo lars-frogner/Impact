@@ -273,50 +273,50 @@ pub fn add_drag_load_map_component_for_entity(
         PathBuf::from(format!("assets/drag_load_maps/{}.mpk", sanitized_mesh_name))
     }
 
-    setup!(
-        components,
-        |mesh: &MeshComp,
-         rigid_body: &RigidBodyComp,
-         frame: &ReferenceFrameComp|
-         -> DragLoadMapComp {
-            let mesh_id = mesh.id;
+    setup!(components, |drag: &DetailedDragComp,
+                        mesh: &MeshComp,
+                        rigid_body: &RigidBodyComp,
+                        frame: &ReferenceFrameComp|
+     -> DragLoadMapComp {
+        let mesh_id = mesh.id;
 
-            let drag_load_map_repository_readonly = drag_load_map_repository.read().unwrap();
+        let drag_load_map_repository_readonly = drag_load_map_repository.read().unwrap();
 
-            if !drag_load_map_repository_readonly.has_drag_load_map_for_mesh(mesh_id) {
-                let config = drag_load_map_repository_readonly.config();
+        if !drag_load_map_repository_readonly.has_drag_load_map_for_mesh(mesh_id) {
+            let config = drag_load_map_repository_readonly.config();
 
-                let map_path = generate_map_path(mesh_id);
-                let map_file_exists = map_path.exists();
+            let map_path = generate_map_path(mesh_id);
+            let map_file_exists = map_path.exists();
 
-                let map = if config.use_saved_maps && map_file_exists {
-                    DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
-                        log::error!("Could not load drag load map from file: {}", err);
-                        generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
-                    })
-                } else {
+            let map = if config.use_saved_maps && map_file_exists {
+                DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
+                    log::error!("Could not load drag load map from file: {}", err);
                     generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
-                };
+                })
+            } else {
+                generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
+            };
 
-                if config.save_generated_maps
-                    && (config.overwrite_existing_map_files || !map_file_exists)
-                {
-                    if let Err(err) = map.save_to_file(&map_path) {
-                        log::error!("Could not save drag load map to file: {}", err);
-                    }
+            if config.save_generated_maps
+                && (config.overwrite_existing_map_files || !map_file_exists)
+            {
+                if let Err(err) = map.save_to_file(&map_path) {
+                    log::error!("Could not save drag load map to file: {}", err);
                 }
-
-                // Release read lock before attempting to write
-                drop(drag_load_map_repository_readonly);
-                drag_load_map_repository
-                    .write()
-                    .unwrap()
-                    .add_drag_load_map_unless_present(mesh_id, map);
             }
-            DragLoadMapComp { mesh_id }
-        },
-        [DetailedDragComp]
-    );
+
+            // Release read lock before attempting to write
+            drop(drag_load_map_repository_readonly);
+            drag_load_map_repository
+                .write()
+                .unwrap()
+                .add_drag_load_map_unless_present(mesh_id, map);
+        }
+        DragLoadMapComp {
+            mesh_id,
+            drag_coefficient: drag.drag_coefficient,
+        }
+    });
 }
 
 /// Applies the drag force and torque calculated from precomputed detailed
@@ -331,16 +331,14 @@ pub fn apply_detailed_drag(
         |rigid_body: &mut RigidBodyComp,
          frame: &ReferenceFrameComp,
          velocity: &VelocityComp,
-         detailed_drag: &DetailedDragComp,
-         drag_load_map_comp: &DragLoadMapComp| {
+         drag: &DragLoadMapComp| {
             apply_detailed_drag_for_entity(
                 drag_load_map_repository,
                 medium,
                 rigid_body,
                 frame,
                 velocity,
-                detailed_drag,
-                drag_load_map_comp,
+                drag,
             )
         },
         ![Static]
@@ -353,8 +351,7 @@ fn apply_detailed_drag_for_entity(
     rigid_body: &mut RigidBodyComp,
     frame: &ReferenceFrameComp,
     velocity: &VelocityComp,
-    detailed_drag: &DetailedDragComp,
-    drag_load_map_comp: &DragLoadMapComp,
+    drag: &DragLoadMapComp,
 ) {
     let velocity_relative_to_medium = velocity.linear - medium.velocity;
     let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
@@ -372,14 +369,14 @@ fn apply_detailed_drag_for_entity(
         let phi = compute_phi(&body_space_direction_of_motion_relative_to_medium);
         let theta = compute_theta(&body_space_direction_of_motion_relative_to_medium);
 
-        let drag_load_map = drag_load_map_repository.drag_load_map(drag_load_map_comp.mesh_id);
+        let drag_load_map = drag_load_map_repository.drag_load_map(drag.mesh_id);
 
         let drag_load = drag_load_map.value(phi, theta);
 
         let (force, torque) = drag_load.compute_world_space_drag_force_and_torque(
             frame.scaling,
             medium.mass_density,
-            detailed_drag.drag_coefficient,
+            drag.drag_coefficient,
             &frame.orientation,
             squared_body_speed_relative_to_medium,
         );
