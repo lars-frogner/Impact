@@ -7,8 +7,8 @@ pub use components::SpringComp;
 use crate::{
     control::{MotionControlComp, OrientationControlComp},
     physics::{
-        fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, Position,
-        ReferenceFrameComp, RigidBodyComp, Static, Velocity, VelocityComp,
+        fph, AngularVelocity, Direction, Orientation, Position, ReferenceFrameComp, RigidBodyComp,
+        Static, Velocity, VelocityComp,
     },
 };
 use approx::abs_diff_eq;
@@ -147,8 +147,7 @@ pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
             Static,
             OrientationControlComp,
             MotionControlComp,
-            VelocityComp,
-            AngularVelocityComp
+            VelocityComp
         ]
     );
 }
@@ -258,15 +257,16 @@ fn determine_attachment_velocity(
     position: &Position,
     attachment_point: &Position,
 ) -> Velocity {
-    let velocity = entity
-        .get_component::<VelocityComp>()
-        .map_or_else(Velocity::zeros, |v| v.access().0);
-
-    if let Some(angular_velocity) = entity.get_component::<AngularVelocityComp>() {
-        let angular_velocity = angular_velocity.access().0;
-        compute_attachment_velocity(attachment_point, position, &velocity, &angular_velocity)
+    if let Some(velocity) = entity.get_component::<VelocityComp>() {
+        let velocity = velocity.access();
+        compute_attachment_velocity(
+            attachment_point,
+            position,
+            &velocity.linear,
+            &velocity.angular,
+        )
     } else {
-        velocity
+        Velocity::zeros()
     }
 }
 

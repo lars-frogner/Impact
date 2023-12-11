@@ -14,10 +14,10 @@ pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialPr
 pub use medium::UniformMedium;
 pub use motion::{
     advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
-    AngularVelocityComp, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
-    ConstantRotationComp, Direction, Force, HarmonicOscillatorTrajectoryComp, LogsKineticEnergy,
-    LogsMomentum, Momentum, OrbitalTrajectoryComp, Orientation, Position, ReferenceFrameComp,
-    Static, Torque, Velocity, VelocityComp,
+    CircularTrajectoryComp, ConstantAccelerationTrajectoryComp, ConstantRotationComp, Direction,
+    Force, HarmonicOscillatorTrajectoryComp, LogsKineticEnergy, LogsMomentum, Momentum,
+    OrbitalTrajectoryComp, Orientation, Position, ReferenceFrameComp, Static, Torque, Velocity,
+    VelocityComp,
 };
 pub use rigid_body::{
     DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, EulerCromerStep, RigidBody,
@@ -305,14 +305,13 @@ impl PhysicsSimulator {
             ecs_world,
             |rigid_body: &mut RigidBodyComp,
              frame: &mut ReferenceFrameComp,
-             velocity: &mut VelocityComp,
-             angular_velocity: &mut AngularVelocityComp| {
+             velocity: &mut VelocityComp| {
                 rigid_body.0.advance_motion(
                     scheme_substep,
                     &mut frame.position,
                     &mut frame.orientation,
-                    &mut velocity.0,
-                    &mut angular_velocity.0,
+                    &mut velocity.linear,
+                    &mut velocity.angular,
                 );
             },
             ![Static]
