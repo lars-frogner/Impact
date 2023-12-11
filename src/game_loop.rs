@@ -97,6 +97,12 @@ impl GameLoop {
         &mut self,
         event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
+        if self.world.is_paused() {
+            let iter_end_time = self.wait_for_target_frame_duration();
+            self.previous_iter_end_time = iter_end_time;
+            return Ok(());
+        }
+
         let execution_result = with_timing_info_logging!("Game loop iteration"; {
             self.task_scheduler
                 .execute_and_wait(&PHYSICS_AND_RENDERING_TAGS)

@@ -350,6 +350,10 @@ impl World {
         self.user_interface().read().unwrap().control_mode_active()
     }
 
+    pub fn is_paused(&self) -> bool {
+        self.user_interface().read().unwrap().is_paused()
+    }
+
     /// Updates the motion controller with the given motion.
     pub fn update_motion_controller(&self, state: MotionState, direction: MotionDirection) {
         if let Some(motion_controller) = &self.motion_controller {
