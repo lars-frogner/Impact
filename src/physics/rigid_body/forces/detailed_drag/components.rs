@@ -16,12 +16,15 @@ pub struct DetailedDragComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
-/// associated [`DragLoadMap`] in the [`DragLoadMapRepository`].
-#[repr(transparent)]
+/// associated [`DragLoadMap`](crate::physics::DragLoadMap) in the
+/// [`DragLoadMapRepository`](crate::physics::rigid_body::forces::DragLoadMapRepository).
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DragLoadMapComp {
     /// The ID of the mesh from which the drag load map was computed.
     pub mesh_id: MeshID,
+    /// The drag coefficient of the body.
+    pub drag_coefficient: fph,
 }
 
 impl DetailedDragComp {

@@ -100,6 +100,6 @@ impl RigidBodyForceManager {
 pub fn register_rigid_body_force_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_component!(registry, UniformGravityComp)?;
     register_component!(registry, SpringComp)?;
-    register_component!(registry, DetailedDragComp)?;
+    register_setup_component!(registry, DetailedDragComp)?;
     register_component!(registry, DragLoadMapComp)
 }
