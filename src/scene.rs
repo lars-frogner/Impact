@@ -19,10 +19,9 @@ pub use camera::{
 };
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
-    create_child_to_parent_transform, register_scene_graph_components, CameraNodeID, GroupNodeID,
-    ModelInstanceNodeID, NodeStorage, NodeTransform, ParentComp, SceneGraph,
-    SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
-    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
+    register_scene_graph_components, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
+    NodeTransform, ParentComp, SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroup,
+    SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
     SceneGraphParentNodeComp, Uncullable,
 };
 pub use instance::InstanceFeatureManager;

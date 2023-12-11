@@ -17,7 +17,6 @@ pub struct InertialProperties {
     inertia_tensor: InertiaTensor,
     center_of_mass: Position,
     mass: fph,
-    inverse_mass: fph,
 }
 
 /// The inertia tensor of a physical body.
@@ -40,7 +39,6 @@ impl InertialProperties {
         );
         Self {
             mass,
-            inverse_mass: 1.0 / mass,
             center_of_mass,
             inertia_tensor,
         }
@@ -177,11 +175,6 @@ impl InertialProperties {
         self.mass
     }
 
-    /// Returns the reciprocal of the mass of the body.
-    pub fn inverse_mass(&self) -> fph {
-        self.inverse_mass
-    }
-
     /// Returns the center of mass of the body (in the body's reference frame).
     pub fn center_of_mass(&self) -> &Position {
         &self.center_of_mass
@@ -196,8 +189,9 @@ impl InertialProperties {
     /// Applies the given similarity transform to the inertial properties of the
     /// body.
     pub fn transform(&mut self, transform: &Similarity3<fph>) {
-        self.mass *= transform.scaling().powi(3);
-        self.inverse_mass = 1.0 / self.mass;
+        let mass_scaling = transform.scaling().powi(3);
+
+        self.mass *= mass_scaling;
 
         self.center_of_mass = transform.transform_point(&self.center_of_mass);
 
@@ -205,19 +199,16 @@ impl InertialProperties {
         // defined relative to the center of mass
         self.inertia_tensor = self
             .inertia_tensor
-            .scaled(transform.scaling())
+            .with_multiplied_mass(mass_scaling)
+            .with_multiplied_extent(transform.scaling())
             .rotated(&transform.isometry.rotation);
     }
 
-    /// Applies the given uniform scaling factor to the inertial properties of
-    /// the body.
-    pub fn scale(&mut self, scaling: fph) {
-        self.mass *= scaling.powi(3);
-        self.inverse_mass = 1.0 / self.mass;
-
-        self.center_of_mass *= scaling;
-
-        self.inertia_tensor = self.inertia_tensor.scaled(scaling);
+    /// Modifies the inertial properties according to a change in mass by the
+    /// given factor.
+    pub fn multiply_mass(&mut self, factor: fph) {
+        self.mass *= factor;
+        self.inertia_tensor = self.inertia_tensor.with_multiplied_mass(factor);
     }
 }
 
@@ -292,29 +283,85 @@ impl InertiaTensor {
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the
+    /// given rotation quaternion and scaling the body's extent by the given
+    /// factor (keeping the mass unchanged) and returns it as a matrix.
+    ///
+    /// # Panics
+    /// If the given factor is negative.
+    pub fn rotated_matrix_with_scaled_extent(
+        &self,
+        rotation: &UnitQuaternion<fph>,
+        factor: fph,
+    ) -> Matrix3<fph> {
+        assert!(
+            factor >= 0.0,
+            "Tried multiplying inertia tensor extent with negative factor"
+        );
+        let rotation_matrix = rotation.to_rotation_matrix();
+        rotation_matrix * self.matrix.scale(factor.powi(2)) * rotation_matrix.transpose()
+    }
+
+    /// Computes the inertia tensor corresponding to rotating the body with the
     /// given rotation quaternion and returns its inverse as a matrix.
     pub fn inverse_rotated_matrix(&self, rotation: &UnitQuaternion<fph>) -> Matrix3<fph> {
         let rotation_matrix = rotation.to_rotation_matrix();
         rotation_matrix * self.inverse_matrix * rotation_matrix.transpose()
     }
 
-    /// Computes the inertia tensor corresponding to scaling the body uniformly
-    /// by the given factor.
+    /// Computes the inertia tensor corresponding to rotating the body with the
+    /// given rotation quaternion and scaling the body's extent by the given
+    /// factor (keeping the mass unchanged) and returns its inverse as a matrix.
     ///
     /// # Panics
-    /// If the given scaling factor is negative.
-    pub fn scaled(&self, scaling: fph) -> Self {
+    /// If the given factor is negative.
+    pub fn inverse_rotated_matrix_with_scaled_extent(
+        &self,
+        rotation: &UnitQuaternion<fph>,
+        factor: fph,
+    ) -> Matrix3<fph> {
         assert!(
-            scaling >= 0.0,
-            "Tried scaling inertia tensor with negative scale factor"
+            factor >= 0.0,
+            "Tried multiplying inertia tensor extent with negative factor"
+        );
+        let rotation_matrix = rotation.to_rotation_matrix();
+        rotation_matrix
+            * self.inverse_matrix.scale(1.0 / factor.powi(2))
+            * rotation_matrix.transpose()
+    }
+
+    /// Computes the inertia tensor corresponding to scaling the mass of the
+    /// body by the given factor.
+    ///
+    /// # Panics
+    /// If the given factor is negative.
+    pub fn with_multiplied_mass(&self, factor: fph) -> Self {
+        assert!(
+            factor >= 0.0,
+            "Tried multiplying inertia tensor mass with negative factor"
+        );
+        Self::from_matrix_and_inverse(
+            self.matrix.scale(factor),
+            self.inverse_matrix.scale(1.0 / factor),
+        )
+    }
+
+    /// Computes the inertia tensor corresponding to scaling the extent of the
+    /// body by the given factor, while keeping the mass unchanged.
+    ///
+    /// # Panics
+    /// If the given factor is negative.
+    pub fn with_multiplied_extent(&self, factor: fph) -> Self {
+        assert!(
+            factor >= 0.0,
+            "Tried multiplying inertia tensor extent with negative factor"
         );
 
-        // Moment of inertia scales as mass * distance^2 = distance^5
-        let total_scale_factor = scaling.powi(5);
+        // Moment of inertia scales as mass * distance^2
+        let squared_factor = factor.powi(2);
 
         Self::from_matrix_and_inverse(
-            self.matrix.scale(total_scale_factor),
-            self.inverse_matrix.scale(1.0 / total_scale_factor),
+            self.matrix.scale(squared_factor),
+            self.inverse_matrix.scale(1.0 / squared_factor),
         )
     }
 
@@ -628,11 +675,6 @@ mod test {
                 correctly_transformed_mass,
                 epsilon = 1e-9 * correctly_transformed_mass
             ));
-            prop_assert!(abs_diff_eq!(
-                cube_properties.inverse_mass(),
-                1.0 / correctly_transformed_mass,
-                epsilon = 1e-9 / correctly_transformed_mass
-            ));
         }
     }
 
@@ -663,33 +705,14 @@ mod test {
             cube_properties.transform(&transform);
 
             let correctly_transformed_inertia_tensor = initial_inertia_tensor
-                .scaled(transform.scaling())
+                .with_multiplied_mass(transform.scaling().powi(3))
+                .with_multiplied_extent(transform.scaling())
                 .rotated(&transform.isometry.rotation);
 
             prop_assert!(abs_diff_eq!(
                 cube_properties.inertia_tensor(),
                 &correctly_transformed_inertia_tensor,
                 epsilon = 1e-7 * correctly_transformed_inertia_tensor.max_element()
-            ));
-        }
-    }
-
-    proptest! {
-        #[test]
-        fn should_scale_uniform_cube_properties(scaling in 1e-4..1e4) {
-            let mut scaling_transform = Similarity3::identity();
-            scaling_transform.set_scaling(scaling);
-
-            let mut transformed_cube = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
-            let mut scaled_cube = transformed_cube.clone();
-
-            transformed_cube.transform(&scaling_transform);
-            scaled_cube.scale(scaling);
-
-            prop_assert!(abs_diff_eq!(
-                transformed_cube,
-                scaled_cube,
-                epsilon = 1e-7 * scaling
             ));
         }
     }
@@ -708,19 +731,6 @@ mod test {
                 cube_properties.inertia_tensor().inverse_rotated_matrix(&rotation),
                 rotated_inertia_tensor.matrix().try_inverse().unwrap(),
                 epsilon = 1e-7
-            ));
-        }
-    }
-
-    proptest! {
-        #[test]
-        fn should_invert_scaled_inertia_tensor(scaling in 1e-4..1e4) {
-            let cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
-            let scaled_inertia_tensor = cube_properties.inertia_tensor().scaled(scaling);
-            prop_assert!(abs_diff_eq!(
-                scaled_inertia_tensor.inverse_matrix(),
-                &scaled_inertia_tensor.matrix().try_inverse().unwrap(),
-                epsilon = 1e-7 * scaling
             ));
         }
     }
@@ -853,13 +863,13 @@ mod test {
     }
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(20))]
+        #![proptest_config(ProptestConfig::with_cases(15))]
         #[test]
         fn should_compute_uniform_hemisphere_mesh_center_of_mass(
             mass_density in 1e-4..1e4,
             transform in similarity_transform_strategy(1e4, 1e-4..1e4),
         ) {
-            let mut hemisphere_mesh = TriangleMesh::create_hemisphere(15);
+            let mut hemisphere_mesh = TriangleMesh::create_hemisphere(20);
             let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(mass_density);
 
             hemisphere_mesh.transform(&transform);

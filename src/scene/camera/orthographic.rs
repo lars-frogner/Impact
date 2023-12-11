@@ -5,7 +5,7 @@ use crate::{
     physics::ReferenceFrameComp,
     rendering::fre,
     scene::{
-        self, OrthographicCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
+        OrthographicCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
         SceneGraphCameraNodeComp, SceneGraphParentNodeComp,
     },
     window::Window,
@@ -56,26 +56,18 @@ impl OrthographicCamera<fre> {
                     ),
                 );
 
-                let ReferenceFrameComp {
-                    origin_offset,
-                    position,
-                    orientation,
-                    scaling,
-                } = frame.cloned().unwrap_or_default();
+                let mut camera_to_parent_transform = frame
+                    .cloned()
+                    .unwrap_or_default()
+                    .create_transform_to_parent_space();
 
-                if scaling != 1.0 {
+                if camera_to_parent_transform.scaling() != 1.0 {
                     log::warn!(
                         "Added camera component to an entity with non-unity scaling:\n\
                          The scaling will be ignored since the view transform is assumed to contain no scaling"
-                    )
+                    );
+                    camera_to_parent_transform.set_scaling(1.0);
                 }
-
-                let camera_to_parent_transform = scene::create_child_to_parent_transform(
-                    origin_offset.cast(),
-                    position.cast(),
-                    orientation.cast(),
-                    1.0,
-                );
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);

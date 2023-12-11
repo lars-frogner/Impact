@@ -54,7 +54,10 @@ impl PhysicsSimulator {
         ) -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
             let mut frame = frame.cloned().unwrap_or_default();
 
-            inertial_properties.scale(frame.scaling);
+            // Scale the mass to be consistent with the initial scale factor. If
+            // the scale factor changes later on, we will conserve the mass and
+            // only let the scale change the extent of the body.
+            inertial_properties.multiply_mass(frame.scaling.powi(3));
 
             let velocity = velocity.cloned().unwrap_or_default();
 
@@ -66,6 +69,7 @@ impl PhysicsSimulator {
                 inertial_properties,
                 frame.position,
                 frame.orientation,
+                frame.scaling,
                 &velocity.linear,
                 &velocity.angular,
             );

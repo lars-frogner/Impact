@@ -52,11 +52,12 @@ pub trait SchemeSubstep {
 
     /// Given a velocity, angular velocity, force and torque, advances the
     /// current position, orientation, momentum, angular momentum, velocity and
-    /// angular velocity of the given rigid body based on the given full step
-    /// duration and returns the advanced quantities.
+    /// angular velocity of the given rigid body and returns the advanced
+    /// quantities.
     fn advance_motion(
         &self,
         rigid_body: &RigidBody,
+        scaling: fph,
         velocity: &Velocity,
         angular_velocity: &AngularVelocity,
         force: &Force,
@@ -88,6 +89,7 @@ pub trait SchemeSubstep {
         let advanced_angular_velocity = RigidBody::compute_angular_velocity(
             rigid_body.inertial_properties(),
             &advanced_orientation,
+            scaling,
             &advanced_angular_momentum,
         );
 
@@ -177,6 +179,7 @@ impl SchemeSubstep for EulerCromerStep {
     fn advance_motion(
         &self,
         rigid_body: &RigidBody,
+        scaling: fph,
         _velocity: &Velocity,
         _angular_velocity: &AngularVelocity,
         force: &Force,
@@ -197,6 +200,7 @@ impl SchemeSubstep for EulerCromerStep {
         let advanced_angular_velocity = RigidBody::compute_angular_velocity(
             rigid_body.inertial_properties(),
             rigid_body.orientation(),
+            scaling,
             &advanced_angular_momentum,
         );
 

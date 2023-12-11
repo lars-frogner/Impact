@@ -310,6 +310,7 @@ impl PhysicsSimulator {
                     scheme_substep,
                     &mut frame.position,
                     &mut frame.orientation,
+                    frame.scaling,
                     &mut velocity.linear,
                     &mut velocity.angular,
                 );

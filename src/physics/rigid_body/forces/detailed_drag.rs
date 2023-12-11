@@ -235,14 +235,8 @@ pub fn add_drag_load_map_component_for_entity(
         config: &DragLoadMapConfig,
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,
-        frame: &ReferenceFrameComp,
     ) -> DragLoadMap<fre> {
-        let mut center_of_mass = rigid_body.0.inertial_properties().center_of_mass().clone();
-
-        // Unscale the center of mass from the rigid body
-        // inertial properties to make it correct for the mesh
-        // (which is unscaled)
-        center_of_mass /= frame.scaling;
+        let center_of_mass = rigid_body.0.inertial_properties().center_of_mass();
 
         let mesh_repository = mesh_repository.read().unwrap();
         let mesh = mesh_repository
@@ -257,7 +251,7 @@ pub fn add_drag_load_map_component_for_entity(
             config.n_direction_samples; {
             DragLoadMap::<fre>::compute_from_mesh(
                 mesh,
-                &center_of_mass,
+                center_of_mass,
                 config.n_direction_samples,
                 config.n_theta_coords,
                 config.smoothness,
@@ -275,8 +269,7 @@ pub fn add_drag_load_map_component_for_entity(
 
     setup!(components, |drag: &DetailedDragComp,
                         mesh: &MeshComp,
-                        rigid_body: &RigidBodyComp,
-                        frame: &ReferenceFrameComp|
+                        rigid_body: &RigidBodyComp|
      -> DragLoadMapComp {
         let mesh_id = mesh.id;
 
@@ -291,10 +284,10 @@ pub fn add_drag_load_map_component_for_entity(
             let map = if config.use_saved_maps && map_file_exists {
                 DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
                     log::error!("Could not load drag load map from file: {}", err);
-                    generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
+                    generate_map(mesh_repository, config, mesh_id, rigid_body)
                 })
             } else {
-                generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
+                generate_map(mesh_repository, config, mesh_id, rigid_body)
             };
 
             if config.save_generated_maps

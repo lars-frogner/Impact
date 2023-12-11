@@ -22,7 +22,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
-use nalgebra::{Isometry3, Point3, Similarity3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::Similarity3;
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of
@@ -63,36 +63,10 @@ pub trait SceneGraphNode {
     /// Returns a mutable reference to the node's model-to-parent transform.
     fn model_to_parent_transform_mut(&mut self) -> &mut NodeTransform<Self::F>;
 
-    /// Uses the given origin offset and position to update the translational
-    /// part of the model space of the group or object the node represents to
-    /// the transform from the space of the node's parent.
-    fn update_translation_of_model_to_parent_transform(
-        &mut self,
-        origin_offset: Vector3<Self::F>,
-        position: Point3<Self::F>,
-    ) {
-        let model_to_parent_transform = self.model_to_parent_transform_mut();
-        model_to_parent_transform.isometry.translation = (position
-            + model_to_parent_transform
-                .isometry
-                .rotation
-                .transform_vector(&(-origin_offset)))
-        .into();
-    }
-
-    /// Sets the given rotation as the rotational part
-    /// of the model space of the group or object the node
-    /// represents to the transform from the space of the node's
-    /// parent.
-    fn set_rotation_of_model_to_parent_transform(&mut self, rotation: UnitQuaternion<Self::F>) {
-        self.model_to_parent_transform_mut().isometry.rotation = rotation;
-    }
-
-    /// Sets the given scaling as the scaling part of the model space of the
-    /// group or object the node represents to the transform from the space of
-    /// the node's parent.
-    fn set_scaling_of_model_to_parent_transform(&mut self, scaling: Self::F) {
-        self.model_to_parent_transform_mut().set_scaling(scaling);
+    /// Sets the given transform as the transform from the model space of the
+    /// group or object the node represents to the space of the node's parent.
+    fn set_model_to_parent_transform(&mut self, transform: NodeTransform<Self::F>) {
+        *self.model_to_parent_transform_mut() = transform;
     }
 }
 
@@ -358,109 +332,40 @@ impl<F: Float> SceneGraph<F> {
             .remove_child_camera_node(camera_node_id);
     }
 
-    /// Uses the given origin offset and position to update the translational
-    /// part of the group-to-parent transform for the [`GroupNode`] with the
-    /// given ID.
-    pub fn update_translation_of_group_to_parent_transform(
+    /// Sets the given transform as the parent-to-model transform for the
+    /// [`GroupNode`] with the given ID.
+    pub fn set_group_to_parent_transform(
         &mut self,
         group_node_id: GroupNodeID,
-        origin_offset: Vector3<<GroupNode<F> as SceneGraphNode>::F>,
-        position: Point3<<GroupNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform<<GroupNode<F> as SceneGraphNode>::F>,
     ) {
         self.group_nodes
             .node_mut(group_node_id)
-            .update_translation_of_model_to_parent_transform(origin_offset, position);
+            .set_model_to_parent_transform(transform);
     }
 
-    /// Uses the given origin offset and position to update the translational
-    /// part of the model-to-parent transform for the [`ModelInstanceNode`] with
-    /// the given ID.
-    pub fn update_translation_of_model_to_parent_transform(
+    /// Sets the given transform as the model-to-parent transform for the
+    /// [`ModelInstanceNode`] with the given ID.
+    pub fn set_model_to_parent_transform(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
-        origin_offset: Vector3<<ModelInstanceNode<F> as SceneGraphNode>::F>,
-        position: Point3<<ModelInstanceNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform<<ModelInstanceNode<F> as SceneGraphNode>::F>,
     ) {
         self.model_instance_nodes
             .node_mut(model_instance_node_id)
-            .update_translation_of_model_to_parent_transform(origin_offset, position);
+            .set_model_to_parent_transform(transform);
     }
 
-    /// Uses the given origin offset and position to update the translational
-    /// part of the camera-to-parent transform for the [`CameraNode`] with
-    /// the given ID.
-    pub fn update_translation_of_camera_to_parent_transform(
+    /// Sets the given transform as the camera-to-parent transform for the
+    /// [`CameraNode`] with the given ID.
+    pub fn set_camera_to_parent_transform(
         &mut self,
         camera_node_id: CameraNodeID,
-        origin_offset: Vector3<<CameraNode<F> as SceneGraphNode>::F>,
-        position: Point3<<CameraNode<F> as SceneGraphNode>::F>,
+        transform: NodeTransform<<CameraNode<F> as SceneGraphNode>::F>,
     ) {
         self.camera_nodes
             .node_mut(camera_node_id)
-            .update_translation_of_model_to_parent_transform(origin_offset, position);
-    }
-
-    /// Sets the given rotation as the rotational part of
-    /// the parent-to-model transform for the [`GroupNode`] with the
-    /// given ID.
-    pub fn set_rotation_of_group_to_parent_transform(
-        &mut self,
-        group_node_id: GroupNodeID,
-        rotation: UnitQuaternion<<GroupNode<F> as SceneGraphNode>::F>,
-    ) {
-        self.group_nodes
-            .node_mut(group_node_id)
-            .set_rotation_of_model_to_parent_transform(rotation);
-    }
-
-    /// Sets the given rotation as the rotational part of
-    /// the model-to-parent transform for the [`ModelInstanceNode`] with the
-    /// given ID.
-    pub fn set_rotation_of_model_to_parent_transform(
-        &mut self,
-        model_instance_node_id: ModelInstanceNodeID,
-        rotation: UnitQuaternion<<ModelInstanceNode<F> as SceneGraphNode>::F>,
-    ) {
-        self.model_instance_nodes
-            .node_mut(model_instance_node_id)
-            .set_rotation_of_model_to_parent_transform(rotation);
-    }
-
-    /// Sets the given rotation as the rotational part of
-    /// the camera-to-parent transform for the [`CameraNode`] with the
-    /// given ID.
-    pub fn set_rotation_of_camera_to_parent_transform(
-        &mut self,
-        camera_node_id: CameraNodeID,
-        rotation: UnitQuaternion<<CameraNode<F> as SceneGraphNode>::F>,
-    ) {
-        self.camera_nodes
-            .node_mut(camera_node_id)
-            .set_rotation_of_model_to_parent_transform(rotation);
-    }
-
-    /// Sets the given scaling as the scaling part of the parent-to-model
-    /// transform for the [`GroupNode`] with the given ID.
-    pub fn set_scaling_of_group_to_parent_transform(
-        &mut self,
-        group_node_id: GroupNodeID,
-        scaling: <GroupNode<F> as SceneGraphNode>::F,
-    ) {
-        self.group_nodes
-            .node_mut(group_node_id)
-            .set_scaling_of_model_to_parent_transform(scaling);
-    }
-
-    /// Sets the given scaling as the scaling part of the model-to-parent
-    /// transform for the [`ModelInstanceNode`] with the given ID.
-    pub fn set_scaling_of_model_to_parent_transform(
-        &mut self,
-        model_instance_node_id: ModelInstanceNodeID,
-        scaling: <ModelInstanceNode<F> as SceneGraphNode>::F,
-    ) {
-        self.model_instance_nodes
-            .node_mut(model_instance_node_id)
-            .set_scaling_of_model_to_parent_transform(scaling);
+            .set_model_to_parent_transform(transform);
     }
 
     /// Updates the transform from local space to the space of the root node for
@@ -1356,20 +1261,6 @@ impl_node_id_idx_traits!(GroupNodeID);
 impl_node_id_idx_traits!(ModelInstanceNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
 
-/// Creates a [`NodeTransform`] from child to parent space for a child with the
-/// given origin offset, position, orientation and scaling with respect to the
-/// parent.
-pub fn create_child_to_parent_transform<F: Float>(
-    origin_offset: Vector3<F>,
-    position: Point3<F>,
-    orientation: UnitQuaternion<F>,
-    scaling: F,
-) -> NodeTransform<F> {
-    Isometry3::from_parts(position.into(), orientation)
-        * Translation3::from(-origin_offset)
-        * Similarity3::from_scaling(scaling)
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1379,7 +1270,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use impact_utils::hash64;
-    use nalgebra::{point, vector, Point3, Rotation3, Scale3, Translation3, Vector3};
+    use nalgebra::{point, Point3, Rotation3, Scale3, Translation3};
 
     fn create_dummy_group_node<F: Float>(
         scene_graph: &mut SceneGraph<F>,
@@ -1616,112 +1507,6 @@ mod test {
         let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
         scene_graph.remove_camera_node(camera_node_id);
         scene_graph.remove_camera_node(camera_node_id);
-    }
-
-    #[test]
-    fn updating_translation_for_node_in_storage_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
-        let root_id = scene_graph.root_node_id();
-
-        let origin_offset = vector![20.7, 5.3, 9.1];
-        let position = point![8.0, 1.1, 1.2];
-        let orientation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 3.14);
-        let scaling = 9.81;
-        let transform =
-            create_child_to_parent_transform(origin_offset, position, orientation, scaling);
-
-        let group_node_id = scene_graph.create_group_node(root_id, transform);
-        let model_instance_node_id =
-            create_dummy_model_instance_node_with_transform(&mut scene_graph, root_id, transform);
-        let camera_node_id = scene_graph.create_camera_node(root_id, transform);
-
-        let new_origin_offset = vector![0.4, 0.3, 0.2];
-        let new_position = point![1.0, 2.0, 3.0];
-
-        let correct_updated_transform =
-            create_child_to_parent_transform(new_origin_offset, new_position, orientation, scaling);
-
-        scene_graph.update_translation_of_group_to_parent_transform(
-            group_node_id,
-            new_origin_offset,
-            new_position,
-        );
-        scene_graph.update_translation_of_model_to_parent_transform(
-            model_instance_node_id,
-            new_origin_offset,
-            new_position,
-        );
-        scene_graph.update_translation_of_camera_to_parent_transform(
-            camera_node_id,
-            new_origin_offset,
-            new_position,
-        );
-
-        assert_abs_diff_eq!(
-            scene_graph
-                .group_nodes()
-                .node(group_node_id)
-                .group_to_parent_transform(),
-            &correct_updated_transform
-        );
-        assert_abs_diff_eq!(
-            scene_graph
-                .model_instance_nodes()
-                .node(model_instance_node_id)
-                .model_to_parent_transform(),
-            &correct_updated_transform
-        );
-        assert_abs_diff_eq!(
-            scene_graph
-                .camera_nodes()
-                .node(camera_node_id)
-                .camera_to_parent_transform(),
-            &correct_updated_transform
-        );
-    }
-
-    #[test]
-    fn setting_rotation_for_node_in_storage_works() {
-        let mut scene_graph = SceneGraph::<f64>::new();
-        let root_id = scene_graph.root_node_id();
-
-        let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
-        let model_instance_node_id = create_dummy_model_instance_node(&mut scene_graph, root_id);
-        let camera_node_id = create_dummy_camera_node(&mut scene_graph, root_id);
-
-        let new_rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 1.2);
-
-        scene_graph.set_rotation_of_group_to_parent_transform(group_node_id, new_rotation);
-        scene_graph.set_rotation_of_model_to_parent_transform(model_instance_node_id, new_rotation);
-        scene_graph.set_rotation_of_camera_to_parent_transform(camera_node_id, new_rotation);
-
-        assert_eq!(
-            scene_graph
-                .group_nodes()
-                .node(group_node_id)
-                .group_to_parent_transform()
-                .isometry
-                .rotation,
-            new_rotation
-        );
-        assert_eq!(
-            scene_graph
-                .model_instance_nodes()
-                .node(model_instance_node_id)
-                .model_to_parent_transform()
-                .isometry
-                .rotation,
-            new_rotation
-        );
-        assert_eq!(
-            scene_graph
-                .camera_nodes()
-                .node(camera_node_id)
-                .camera_to_parent_transform()
-                .isometry
-                .rotation,
-            new_rotation
-        );
     }
 
     #[test]
