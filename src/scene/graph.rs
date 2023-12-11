@@ -87,6 +87,13 @@ pub trait SceneGraphNode {
     fn set_rotation_of_model_to_parent_transform(&mut self, rotation: UnitQuaternion<Self::F>) {
         self.model_to_parent_transform_mut().isometry.rotation = rotation;
     }
+
+    /// Sets the given scaling as the scaling part of the model space of the
+    /// group or object the node represents to the transform from the space of
+    /// the node's parent.
+    fn set_scaling_of_model_to_parent_transform(&mut self, scaling: Self::F) {
+        self.model_to_parent_transform_mut().set_scaling(scaling);
+    }
 }
 
 /// Represents the ID of a type of node in a [`SceneGraph`].
@@ -430,6 +437,30 @@ impl<F: Float> SceneGraph<F> {
         self.camera_nodes
             .node_mut(camera_node_id)
             .set_rotation_of_model_to_parent_transform(rotation);
+    }
+
+    /// Sets the given scaling as the scaling part of the parent-to-model
+    /// transform for the [`GroupNode`] with the given ID.
+    pub fn set_scaling_of_group_to_parent_transform(
+        &mut self,
+        group_node_id: GroupNodeID,
+        scaling: <GroupNode<F> as SceneGraphNode>::F,
+    ) {
+        self.group_nodes
+            .node_mut(group_node_id)
+            .set_scaling_of_model_to_parent_transform(scaling);
+    }
+
+    /// Sets the given scaling as the scaling part of the model-to-parent
+    /// transform for the [`ModelInstanceNode`] with the given ID.
+    pub fn set_scaling_of_model_to_parent_transform(
+        &mut self,
+        model_instance_node_id: ModelInstanceNodeID,
+        scaling: <ModelInstanceNode<F> as SceneGraphNode>::F,
+    ) {
+        self.model_instance_nodes
+            .node_mut(model_instance_node_id)
+            .set_scaling_of_model_to_parent_transform(scaling);
     }
 
     /// Updates the transform from local space to the space of the root node for
