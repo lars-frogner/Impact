@@ -369,6 +369,11 @@ where
         self.component_count
     }
 
+    /// Returns an iterator over the contained component IDs.
+    pub fn component_ids(&self) -> impl Iterator<Item = ComponentID> + '_ {
+        self.component_index_map.key_at_each_idx()
+    }
+
     /// Returns a slice with all the contained instances of
     /// component type `C`.
     ///
@@ -473,6 +478,30 @@ where
             .map_err(|_err| anyhow!("Tried to remove missing component type"))?;
 
         self.component_arrays.swap_remove(idx);
+
+        // Update archetype
+        self.archetype = Self::find_archetype(&self.component_arrays);
+
+        Ok(())
+    }
+
+    /// Removes all the instances for all the component types with the given
+    /// IDs. Note that this changes the corresponding archetype.
+    ///
+    /// # Errors
+    /// Returns an error if any of the component types to remove is not present.
+    pub fn remove_component_types_with_ids(
+        &mut self,
+        component_ids: impl IntoIterator<Item = ComponentID>,
+    ) -> Result<()> {
+        for component_id in component_ids {
+            let idx = self
+                .component_index_map
+                .try_swap_remove_key(component_id)
+                .map_err(|_err| anyhow!("Tried to remove missing component type"))?;
+
+            self.component_arrays.swap_remove(idx);
+        }
 
         // Update archetype
         self.archetype = Self::find_archetype(&self.component_arrays);
@@ -2144,6 +2173,45 @@ mod test {
         assert!(view.has_component_type::<Position>());
 
         view.remove_component_type_with_id(Position::component_id())
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!());
+        assert_eq!(view.n_component_types(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_multiple_components_from_archetype_view_when_one_is_missing_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &RECT).try_into().unwrap();
+        view.remove_component_types_with_ids([Byte::component_id(), Position::component_id()])
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_multiple_of_the_same_component_from_archetype_view_fails() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &RECT).try_into().unwrap();
+        view.remove_component_types_with_ids([Byte::component_id(), Byte::component_id()])
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn removing_multiple_components_from_empty_archetype_view_fails() {
+        let mut view = ArchetypeComponentView::empty();
+        view.remove_component_types_with_ids([Byte::component_id(), Position::component_id()])
+            .unwrap();
+    }
+
+    #[test]
+    fn removing_multiple_components_from_archetype_view_works() {
+        let mut view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
+        view.remove_component_types_with_ids([Byte::component_id(), Rectangle::component_id()])
+            .unwrap();
+        assert_eq!(view.archetype(), &archetype_of!(Position));
+        assert_eq!(view.n_component_types(), 1);
+        assert!(view.has_component_type::<Position>());
+
+        view.remove_component_types_with_ids([Position::component_id()])
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!());
         assert_eq!(view.n_component_types(), 0);
