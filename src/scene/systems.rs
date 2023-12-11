@@ -6,7 +6,7 @@ use crate::{
     rendering::RenderingTag,
     scene::{
         CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
-        OmnidirectionalLightComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+        OmnidirectionalLightComp, ScalingComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
         SyncSceneCameraViewTransform, UnidirectionalLightComp, UpdateSceneGroupToWorldTransforms,
     },
     world::World,
@@ -57,6 +57,16 @@ define_task!(
                         spatial.origin_offset.cast(),
                         spatial.position.cast()
                     );
+                }
+            );
+            query!(
+                ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, scaling: &ScalingComp| {
+                    scene_graph.set_scaling_of_group_to_parent_transform(node.id, scaling.0);
+                }
+            );
+            query!(
+                ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, scaling: &ScalingComp| {
+                    scene_graph.set_scaling_of_model_to_parent_transform(node.id, scaling.0);
                 }
             );
 
