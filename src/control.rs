@@ -198,9 +198,11 @@ pub fn update_rotation_of_controlled_entities(
                 &mut velocity.angular,
             );
 
-            rigid_body
-                .0
-                .synchronize_angular_momentum(&frame.orientation, &velocity.angular);
+            rigid_body.0.synchronize_angular_momentum(
+                &frame.orientation,
+                frame.scaling,
+                &velocity.angular,
+            );
         }
     );
 

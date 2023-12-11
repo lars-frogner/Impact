@@ -3,7 +3,6 @@
 use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
     physics::ReferenceFrameComp,
-    rendering::fre,
     scene::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
@@ -228,19 +227,10 @@ impl Scene {
             |frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphGroupNodeComp {
-                let ReferenceFrameComp {
-                    origin_offset,
-                    position,
-                    orientation,
-                    scaling,
-                } = frame.cloned().unwrap_or_default();
-
-                let group_to_parent_transform = scene::create_child_to_parent_transform(
-                    origin_offset.cast(),
-                    position.cast(),
-                    orientation.cast(),
-                    scaling as fre,
-                );
+                let group_to_parent_transform = frame
+                    .cloned()
+                    .unwrap_or_default()
+                    .create_transform_to_parent_space();
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
@@ -278,19 +268,10 @@ impl Scene {
                 );
                 instance_feature_manager.register_instance(&material_library, model_id);
 
-                let ReferenceFrameComp {
-                    origin_offset,
-                    position,
-                    orientation,
-                    scaling,
-                } = frame.cloned().unwrap_or_default();
-
-                let model_to_parent_transform = scene::create_child_to_parent_transform(
-                    origin_offset.cast(),
-                    position.cast(),
-                    orientation.cast(),
-                    scaling as fre,
-                );
+                let model_to_parent_transform = frame
+                    .cloned()
+                    .unwrap_or_default()
+                    .create_transform_to_parent_space();
 
                 let mut feature_ids = Vec::with_capacity(2);
 

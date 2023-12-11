@@ -2,21 +2,22 @@
 
 use crate::{
     components::ComponentRegistry,
+    num::Float,
     physics::{fph, AngularVelocity, Orientation, Position, Velocity},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
-use nalgebra::Vector3;
+use nalgebra::{Similarity3, Translation3, Vector3};
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// reference frame defined by position, orientation and scaling.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ReferenceFrameComp {
-    /// The offset, expressed in the entity's co-rotating reference frame after
-    /// scaling, from the original origin of the entity's reference frame to the
-    /// point that should be used as the actual origin.
+    /// The offset, expressed in the entity's reference frame (before scaling),
+    /// from the original origin of the entity's reference frame to the point
+    /// that should be used as the actual origin.
     pub origin_offset: Vector3<fph>,
     /// The coordinates of the origin of the entity's reference frame measured
     /// in the parent space.
@@ -294,6 +295,16 @@ impl ReferenceFrameComp {
             Orientation::identity(),
             scaling,
         )
+    }
+
+    /// Creates the [`Similarity3`] transform from the entity's reference frame
+    /// to the parent space.
+    pub fn create_transform_to_parent_space<F: Float>(&self) -> Similarity3<F> {
+        Similarity3::from_parts(
+            Translation3::from(self.position.cast::<F>()),
+            self.orientation.cast::<F>(),
+            F::from_f64(self.scaling).unwrap(),
+        ) * Translation3::from(-self.origin_offset.cast::<F>())
     }
 }
 

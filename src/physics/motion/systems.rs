@@ -2,7 +2,10 @@
 
 use crate::{
     define_task,
-    physics::{AdvanceSimulation, LogsKineticEnergy, LogsMomentum, PhysicsTag, RigidBodyComp},
+    physics::{
+        AdvanceSimulation, LogsKineticEnergy, LogsMomentum, PhysicsTag, ReferenceFrameComp,
+        RigidBodyComp,
+    },
     world::World,
 };
 use impact_ecs::query;
@@ -17,10 +20,10 @@ define_task!(
         with_debug_logging!("Logging kinetic energy"; {
             let ecs_world = world.ecs_world().read().unwrap();
             query!(
-                ecs_world, |rigid_body: &RigidBodyComp| {
+                ecs_world, |frame: &ReferenceFrameComp, rigid_body: &RigidBodyComp| {
                     let position = rigid_body.0.position();
                     let translational_kinetic_energy = rigid_body.0.compute_translational_kinetic_energy();
-                    let rotational_kinetic_energy = rigid_body.0.compute_rotational_kinetic_energy();
+                    let rotational_kinetic_energy = rigid_body.0.compute_rotational_kinetic_energy(frame.scaling);
                     let total_kinetic_energy = translational_kinetic_energy + rotational_kinetic_energy;
                     log::info!(
                         "Body at {{{:.1}, {:.1}, {:.1}}} has kinetic energy {:.2} ({:.2} translational, {:.2} rotational)",

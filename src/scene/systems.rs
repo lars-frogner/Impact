@@ -3,7 +3,7 @@
 use crate::{
     define_task,
     physics::ReferenceFrameComp,
-    rendering::{fre, RenderingTag},
+    rendering::RenderingTag,
     scene::{
         CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
         OmnidirectionalLightComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
@@ -31,34 +31,17 @@ define_task!(
 
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, frame: &ReferenceFrameComp| {
-                    scene_graph.set_scaling_of_group_to_parent_transform(node.id, frame.scaling as fre);
-                    scene_graph.set_rotation_of_group_to_parent_transform(node.id, frame.orientation.cast());
-                    scene_graph.update_translation_of_group_to_parent_transform(
-                        node.id,
-                        frame.origin_offset.cast(),
-                        frame.position.cast()
-                    );
+                    scene_graph.set_group_to_parent_transform(node.id, frame.create_transform_to_parent_space());
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, frame: &ReferenceFrameComp| {
-                    scene_graph.set_scaling_of_model_to_parent_transform(node.id, frame.scaling as fre);
-                    scene_graph.set_rotation_of_model_to_parent_transform(node.id, frame.orientation.cast());
-                    scene_graph.update_translation_of_model_to_parent_transform(
-                        node.id,
-                        frame.origin_offset.cast(),
-                        frame.position.cast()
-                    );
+                    scene_graph.set_model_to_parent_transform(node.id, frame.create_transform_to_parent_space());
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, frame: &ReferenceFrameComp| {
-                    scene_graph.set_rotation_of_camera_to_parent_transform(node.id, frame.orientation.cast());
-                    scene_graph.update_translation_of_camera_to_parent_transform(
-                        node.id,
-                        frame.origin_offset.cast(),
-                        frame.position.cast()
-                    );
+                    scene_graph.set_camera_to_parent_transform(node.id, frame.create_transform_to_parent_space());
                 }
             );
 
