@@ -22,7 +22,7 @@ pub use motion::{
 pub use rigid_body::{
     DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, EulerCromerStep, RigidBody,
     RigidBodyComp, RigidBodyForceConfig, RigidBodyForceManager, RungeKutta4Substep, Spring,
-    SpringComp, SteppingScheme, UniformGravityComp, UniformRigidBodyComp,
+    SpringComp, SpringState, SteppingScheme, UniformGravityComp, UniformRigidBodyComp,
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
 
@@ -33,6 +33,8 @@ use impact_ecs::{
 use num_traits::FromPrimitive;
 use rigid_body::SchemeSubstep;
 use std::{collections::LinkedList, sync::RwLock, time::Duration};
+
+use crate::components::ComponentRegistry;
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
@@ -378,4 +380,12 @@ impl Default for SimulatorConfig {
             rigid_body_force_config: None,
         }
     }
+}
+
+/// Registers all physics [`Component`](impact_ecs::component::Component)s.
+pub fn register_physics_components(registry: &mut ComponentRegistry) -> Result<()> {
+    motion::register_motion_components(registry)?;
+    motion::register_analytical_motion_components(registry)?;
+    rigid_body::register_rigid_body_components(registry)?;
+    rigid_body::register_rigid_body_force_components(registry)
 }

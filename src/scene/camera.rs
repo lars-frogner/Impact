@@ -4,7 +4,7 @@ mod components;
 mod orthographic;
 mod perspective;
 
-pub use components::{OrthographicCameraComp, PerspectiveCameraComp};
+pub use components::{register_camera_components, OrthographicCameraComp, PerspectiveCameraComp};
 
 use crate::{
     geometry::Camera,

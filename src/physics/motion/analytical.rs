@@ -13,11 +13,13 @@ pub use harmonic_oscillation::HarmonicOscillatorTrajectoryComp;
 pub use orbit::OrbitalTrajectoryComp;
 
 use crate::{
+    components::ComponentRegistry,
     control::{MotionControlComp, OrientationControlComp},
     physics::{
         fph, Position, RigidBodyComp, SpatialConfigurationComp, Static, Velocity, VelocityComp,
     },
 };
+use anyhow::Result;
 use impact_ecs::{query, world::World as ECSWorld};
 
 /// Manager of all systems controlling entity motion analytically.
@@ -150,4 +152,14 @@ impl AnalyticalMotionManager {
             ![Static, OrientationControlComp, RigidBodyComp]
         );
     }
+}
+
+/// Registers all analytical motion
+/// [`Component`](impact_ecs::component::Component)s.
+pub fn register_analytical_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, ConstantAccelerationTrajectoryComp)?;
+    register_component!(registry, HarmonicOscillatorTrajectoryComp)?;
+    register_component!(registry, CircularTrajectoryComp)?;
+    register_component!(registry, OrbitalTrajectoryComp)?;
+    register_component!(registry, ConstantRotationComp)
 }

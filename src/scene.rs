@@ -1,7 +1,6 @@
 //! Scene containing data to render.
 
 mod camera;
-mod components;
 mod events;
 mod graph;
 mod instance;
@@ -15,34 +14,36 @@ mod systems;
 mod tasks;
 mod texture_projection;
 
-pub use camera::{OrthographicCameraComp, PerspectiveCameraComp, SceneCamera};
-pub use components::{
-    ParentComp, ScalingComp, SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
-    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable,
+pub use camera::{
+    register_camera_components, OrthographicCameraComp, PerspectiveCameraComp, SceneCamera,
 };
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
-    create_child_to_parent_transform, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
-    NodeTransform, SceneGraph, SceneGraphNodeID,
+    create_child_to_parent_transform, register_scene_graph_components, CameraNodeID, GroupNodeID,
+    ModelInstanceNodeID, NodeStorage, NodeTransform, ParentComp, SceneGraph,
+    SceneGraphCameraNodeComp, SceneGraphGroup, SceneGraphGroupNodeComp,
+    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
+    SceneGraphParentNodeComp, Uncullable,
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    AmbientLight, AmbientLightComp, AngularExtentComp, DirectionComp, EmissionExtentComp,
-    Irradiance, LightDirection, LightID, LightStorage, LightType, Omnidirectional,
-    OmnidirectionalLight, OmnidirectionalLightComp, Radiance, RadianceComp, UnidirectionalLight,
-    UnidirectionalLightComp, UniformIrradianceComp, MAX_SHADOW_MAP_CASCADES,
+    register_light_components, AmbientLight, AmbientLightComp, AngularExtentComp, DirectionComp,
+    EmissionExtentComp, Irradiance, LightDirection, LightID, LightStorage, LightType,
+    Omnidirectional, OmnidirectionalLight, OmnidirectionalLightComp, Radiance, RadianceComp,
+    UnidirectionalLight, UnidirectionalLightComp, UniformIrradianceComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
     add_skybox_material_component_for_entity, register_ambient_occlusion_materials,
-    DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,
-    FixedColorMaterial, FixedMaterialResources, FixedTextureComp, FixedTextureMaterial,
-    MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-    MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
-    MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
-    RoughnessTextureComp, SkyboxComp, SpecularColorComp, SpecularTextureComp,
-    TexturedColorEmissiveMaterialFeature, TexturedColorParallaxMappingEmissiveMaterialFeature,
-    UniformDiffuseEmissiveMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
+    register_material_components, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
+    EmissiveTextureComp, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
+    FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle, MaterialID,
+    MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
+    NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
+    SpecularColorComp, SpecularTextureComp, TexturedColorEmissiveMaterialFeature,
+    TexturedColorParallaxMappingEmissiveMaterialFeature, UniformDiffuseEmissiveMaterialFeature,
+    UniformDiffuseParallaxMappingEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
     UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
@@ -52,9 +53,9 @@ pub use material::{
     AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use mesh::{
-    BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
-    MeshComp, MeshID, MeshRepository, RectangleMeshComp, SphereMeshComp,
-    SCREEN_FILLING_QUAD_MESH_ID,
+    register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
+    HemisphereMeshComp, MeshComp, MeshID, MeshRepository, RectangleMeshComp, ScalingComp,
+    SphereMeshComp, SCREEN_FILLING_QUAD_MESH_ID,
 };
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
@@ -64,7 +65,7 @@ pub use tasks::{
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
     SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
 };
-pub use texture_projection::PlanarTextureProjectionComp;
+pub use texture_projection::{register_texture_projection_components, PlanarTextureProjectionComp};
 
 use crate::rendering::fre;
 use material::{

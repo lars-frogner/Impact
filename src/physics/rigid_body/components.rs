@@ -1,6 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to rigid bodies.
 
-use crate::physics::{fph, RigidBody};
+use crate::{
+    components::ComponentRegistry,
+    physics::{fph, RigidBody},
+};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -18,3 +22,9 @@ pub struct UniformRigidBodyComp {
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RigidBodyComp(pub RigidBody);
+
+/// Registers all rigid body [`Component`](impact_ecs::component::Component)s.
+pub fn register_rigid_body_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_setup_component!(registry, UniformRigidBodyComp)?;
+    register_component!(registry, RigidBodyComp)
+}

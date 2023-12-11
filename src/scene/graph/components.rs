@@ -1,17 +1,12 @@
-//! [`Component`](impact_ecs::component::Component)s related to renderable scenes.
+//! [`Component`](impact_ecs::component::Component)s related to scene graphs.
 
 use crate::{
-    rendering::fre,
+    components::ComponentRegistry,
     scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeID},
 };
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{world::Entity, Component};
-
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a scaling factor.
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct ScalingComp(pub fre);
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// parent entity.
@@ -26,6 +21,13 @@ pub struct ParentComp {
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SceneGraphGroup;
+
+/// Marker [`Component`](impact_ecs::component::Component) for entities that
+/// should never be frustum culled in the
+/// [`SceneGraph`](crate::scene::SceneGraph).
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct Uncullable;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// parent group node in the [`SceneGraph`](crate::scene::SceneGraph).
@@ -57,19 +59,6 @@ pub type SceneGraphCameraNodeComp = SceneGraphNodeComp<CameraNodeID>;
 /// model instance node in the [`SceneGraph`](crate::scene::SceneGraph).
 pub type SceneGraphModelInstanceNodeComp = SceneGraphNodeComp<ModelInstanceNodeID>;
 
-/// Marker [`Component`](impact_ecs::component::Component) for entities that
-/// should never be frustum culled in the
-/// [`SceneGraph`](crate::scene::SceneGraph).
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct Uncullable;
-
-impl Default for ScalingComp {
-    fn default() -> Self {
-        Self(1.0)
-    }
-}
-
 impl ParentComp {
     /// Creates a new component representing a direct child of the given
     /// [`Entity`].
@@ -92,4 +81,15 @@ impl<ID: SceneGraphNodeID + Pod> SceneGraphNodeComp<ID> {
     pub fn new(node_id: ID) -> Self {
         Self { id: node_id }
     }
+}
+
+/// Registers all scene graph [`Component`](impact_ecs::component::Component)s.
+pub fn register_scene_graph_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_setup_component!(registry, ParentComp)?;
+    register_setup_component!(registry, SceneGraphGroup)?;
+    register_setup_component!(registry, Uncullable)?;
+    register_component!(registry, SceneGraphParentNodeComp)?;
+    register_component!(registry, SceneGraphGroupNodeComp)?;
+    register_component!(registry, SceneGraphCameraNodeComp)?;
+    register_component!(registry, SceneGraphModelInstanceNodeComp)
 }

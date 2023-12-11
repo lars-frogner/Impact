@@ -5,12 +5,15 @@ mod spring;
 mod uniform_gravity;
 
 pub use detailed_drag::{
-    DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, DragLoadMapRepository,
+    DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapComp, DragLoadMapConfig,
+    DragLoadMapRepository,
 };
-pub use spring::{Spring, SpringComp};
+pub use spring::{Spring, SpringComp, SpringState};
 pub use uniform_gravity::UniformGravityComp;
 
-use crate::{physics::UniformMedium, rendering::fre, scene::MeshRepository};
+use crate::{
+    components::ComponentRegistry, physics::UniformMedium, rendering::fre, scene::MeshRepository,
+};
 use anyhow::Result;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
@@ -56,7 +59,7 @@ impl RigidBodyForceManager {
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
     ) {
-        DetailedDragComp::add_drag_load_map_component_for_entity(
+        detailed_drag::add_drag_load_map_component_for_entity(
             mesh_repository,
             &self.drag_load_map_repository,
             components,
@@ -90,4 +93,13 @@ impl RigidBodyForceManager {
     pub fn perform_post_simulation_step_actions(&self, ecs_world: &ECSWorld) {
         spring::synchronize_spring_positions_and_orientations(ecs_world);
     }
+}
+
+/// Registers all rigid body force
+/// [`Component`](impact_ecs::component::Component)s.
+pub fn register_rigid_body_force_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, UniformGravityComp)?;
+    register_component!(registry, SpringComp)?;
+    register_component!(registry, DetailedDragComp)?;
+    register_component!(registry, DragLoadMapComp)
 }

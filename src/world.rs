@@ -1,11 +1,12 @@
 //! Container for all data in the world.
 
 use crate::{
+    components::ComponentRegistry,
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
-    physics::{PhysicsSimulator, SteppingScheme},
+    physics::{self, PhysicsSimulator, SteppingScheme},
     rendering::{fre, RenderingSystem, ScreenCapturer},
-    scene::{io, MeshComp, RenderResourcesDesynchronized, Scene},
+    scene::{self, io, MeshComp, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
@@ -30,6 +31,7 @@ use std::{
 pub struct World {
     window: Arc<Window>,
     user_interface: RwLock<UserInterface>,
+    component_registry: RwLock<ComponentRegistry>,
     ecs_world: RwLock<ECSWorld>,
     scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
@@ -51,9 +53,16 @@ impl World {
         orientation_controller: Option<Box<dyn OrientationController>>,
     ) -> Self {
         let window = Arc::new(window);
+
+        let mut component_registry = ComponentRegistry::new();
+        if let Err(err) = Self::register_all_components(&mut component_registry) {
+            panic!("Failed to register components: {}", err);
+        }
+
         Self {
             window: Arc::clone(&window),
             user_interface: RwLock::new(UserInterface::new(window)),
+            component_registry: RwLock::new(component_registry),
             ecs_world: RwLock::new(ECSWorld::new()),
             scene: RwLock::new(Scene::new()),
             renderer: RwLock::new(renderer),
@@ -73,6 +82,12 @@ impl World {
     /// by a [`RwLock`].
     pub fn user_interface(&self) -> &RwLock<UserInterface> {
         &self.user_interface
+    }
+
+    /// Returns a reference to the ECS [`ComponentRegistry`], guarded by a
+    /// [`RwLock`].
+    pub fn component_registry(&self) -> &RwLock<ComponentRegistry> {
+        &self.component_registry
     }
 
     /// Returns a reference to the ECS [`World`](impact_ecs::world::World), guarded
@@ -483,6 +498,18 @@ impl World {
             .read()
             .unwrap()
             .handle_task_errors(task_errors, event_loop_controller);
+    }
+
+    /// Registers all components in the given registry.
+    fn register_all_components(registry: &mut ComponentRegistry) -> Result<()> {
+        control::register_control_components(registry)?;
+        physics::register_physics_components(registry)?;
+        scene::register_scene_graph_components(registry)?;
+        scene::register_camera_components(registry)?;
+        scene::register_light_components(registry)?;
+        scene::register_mesh_components(registry)?;
+        scene::register_texture_projection_components(registry)?;
+        scene::register_material_components(registry)
     }
 
     /// Registers all tasks in the given task scheduler.

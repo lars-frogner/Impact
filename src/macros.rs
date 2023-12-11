@@ -22,6 +22,26 @@ macro_rules! with_timing_info_logging {
     }};
 }
 
+macro_rules! register_component {
+    ($registry:expr, $component:ty) => {{
+        $registry.add_component(
+            <$component as ::impact_ecs::component::Component>::component_id(),
+            stringify!($component),
+            crate::components::ComponentCategory::Standard,
+        )
+    }};
+}
+
+macro_rules! register_setup_component {
+    ($registry:expr, $component:ty) => {{
+        $registry.add_component(
+            <$component as ::impact_ecs::component::Component>::component_id(),
+            stringify!($component),
+            crate::components::ComponentCategory::Setup,
+        )
+    }};
+}
+
 /// This macro expands to a compile time constant equal
 /// to the number of arguments passed to the macro.
 #[doc(hidden)]

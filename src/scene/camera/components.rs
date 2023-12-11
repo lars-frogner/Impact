@@ -1,9 +1,11 @@
 //! [`Component`](impact_ecs::component::Component)s related to cameras.
 
 use crate::{
+    components::ComponentRegistry,
     geometry::{Angle, Bounds, Radians, UpperExclusiveBounds},
     rendering::fre,
 };
+use anyhow::Result;
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
@@ -104,4 +106,10 @@ impl OrthographicCameraComp {
     pub fn far_distance(&self) -> fre {
         self.far_distance
     }
+}
+
+/// Registers all camera [`Component`](impact_ecs::component::Component)s.
+pub fn register_camera_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_setup_component!(registry, PerspectiveCameraComp)?;
+    register_setup_component!(registry, OrthographicCameraComp)
 }

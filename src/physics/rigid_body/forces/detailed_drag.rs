@@ -1,6 +1,7 @@
 //! Drag force and torque computed from aggregating drag on each point on the
 //! body.
 
+mod components;
 mod drag_load;
 mod equirectangular_map;
 
@@ -15,10 +16,7 @@ use crate::{
     scene::{MeshComp, MeshID, MeshRepository, ScalingComp},
 };
 use anyhow::{anyhow, bail, Result};
-use bytemuck::{Pod, Zeroable};
-use impact_ecs::{
-    archetype::ArchetypeComponentStorage, query, setup, world::World as ECSWorld, Component,
-};
+use impact_ecs::{archetype::ArchetypeComponentStorage, query, setup, world::World as ECSWorld};
 use simba::scalar::SubsetOf;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -26,6 +24,7 @@ use std::{
     sync::RwLock,
 };
 
+pub use components::{DetailedDragComp, DragLoadMapComp};
 pub use drag_load::DragLoad;
 
 use drag_load::AveragingDragLoad;
@@ -36,25 +35,6 @@ use equirectangular_map::EquirectangularMap;
 /// equirectangular projection (meaning the grid coordinates are the spherical
 /// azimuthal angle phi and polar angle theta).
 pub type DragLoadMap<F> = EquirectangularMap<DragLoad<F>>;
-
-/// [`Component`](impact_ecs::component::Component) for entities that should be
-/// affected by a drag force and torque computed from aggregating drag on each
-/// point on the body.
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct DetailedDragComp {
-    /// The drag coefficient of the body.
-    pub drag_coefficient: fph,
-}
-
-/// [`Component`](impact_ecs::component::Component) for entities that have an
-/// associated [`DragLoadMap`] in the [`DragLoadMapRepository`].
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct DragLoadMapComp {
-    /// The ID of the mesh from which the drag load map was computed.
-    pub mesh_id: MeshID,
-}
 
 /// Repository where [`DragLoadMap`]s are stored under a unique [`MeshID`].
 #[derive(Debug)]
@@ -94,114 +74,6 @@ pub struct DragLoadMapConfig {
     pub use_saved_maps: bool,
 }
 
-impl DetailedDragComp {
-    /// Creates a new component for detailed drag with the given drag
-    /// coefficient.
-    pub fn new(drag_coefficient: fph) -> Self {
-        Self { drag_coefficient }
-    }
-
-    /// Checks if the entity-to-be with the given components has the components
-    /// for obtaining an associated drag load map, and if so, loads or generates
-    /// the map and adds it to the drag load map repository if not present, then
-    /// adds the appropriate drag load map component to the entity.
-    pub fn add_drag_load_map_component_for_entity(
-        mesh_repository: &RwLock<MeshRepository<fre>>,
-        drag_load_map_repository: &RwLock<DragLoadMapRepository<fre>>,
-        components: &mut ArchetypeComponentStorage,
-    ) {
-        fn generate_map(
-            mesh_repository: &RwLock<MeshRepository<fre>>,
-            config: &DragLoadMapConfig,
-            mesh_id: MeshID,
-            rigid_body: &RigidBodyComp,
-            scaling: Option<&ScalingComp>,
-        ) -> DragLoadMap<fre> {
-            let mut center_of_mass = rigid_body.0.inertial_properties().center_of_mass().clone();
-
-            // Unscale the center of mass from the rigid body
-            // inertial properties to make it correct for the mesh
-            // (which is unscaled)
-            if let Some(scaling) = scaling {
-                center_of_mass /= scaling.0.into();
-            }
-
-            let mesh_repository = mesh_repository.read().unwrap();
-            let mesh = mesh_repository
-                .get_mesh(mesh_id)
-                .expect("Missing mesh for generating drag load map");
-
-            let map = with_timing_info_logging!(
-                "Generating drag load map with resolution {} and smoothness {} for {} using {} direction samples",
-                config.n_theta_coords,
-                mesh_id,
-                config.smoothness,
-                config.n_direction_samples; {
-                DragLoadMap::<fre>::compute_from_mesh(
-                    mesh,
-                    &center_of_mass,
-                    config.n_direction_samples,
-                    config.n_theta_coords,
-                    config.smoothness,
-                )
-            });
-
-            map
-        }
-
-        fn generate_map_path(mesh_id: MeshID) -> PathBuf {
-            // Ensure there are no path delimiters
-            let sanitized_mesh_name = format!("{}", mesh_id).replace("/", "_").replace("\\", "_");
-            PathBuf::from(format!("assets/drag_load_maps/{}.mpk", sanitized_mesh_name))
-        }
-
-        setup!(
-            components,
-            |mesh: &MeshComp,
-             rigid_body: &RigidBodyComp,
-             scaling: Option<&ScalingComp>|
-             -> DragLoadMapComp {
-                let mesh_id = mesh.id;
-
-                let drag_load_map_repository_readonly = drag_load_map_repository.read().unwrap();
-
-                if !drag_load_map_repository_readonly.has_drag_load_map_for_mesh(mesh_id) {
-                    let config = drag_load_map_repository_readonly.config();
-
-                    let map_path = generate_map_path(mesh_id);
-                    let map_file_exists = map_path.exists();
-
-                    let map = if config.use_saved_maps && map_file_exists {
-                        DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
-                            log::error!("Could not load drag load map from file: {}", err);
-                            generate_map(mesh_repository, config, mesh_id, rigid_body, scaling)
-                        })
-                    } else {
-                        generate_map(mesh_repository, config, mesh_id, rigid_body, scaling)
-                    };
-
-                    if config.save_generated_maps
-                        && (config.overwrite_existing_map_files || !map_file_exists)
-                    {
-                        if let Err(err) = map.save_to_file(&map_path) {
-                            log::error!("Could not save drag load map to file: {}", err);
-                        }
-                    }
-
-                    // Release read lock before attempting to write
-                    drop(drag_load_map_repository_readonly);
-                    drag_load_map_repository
-                        .write()
-                        .unwrap()
-                        .add_drag_load_map_unless_present(mesh_id, map);
-                }
-                DragLoadMapComp { mesh_id }
-            },
-            [DetailedDragComp]
-        );
-    }
-}
-
 impl<F: Float> DragLoadMapRepository<F> {
     /// Creates a new empty drag load map repository with the given
     /// configuration parameters.
@@ -227,8 +99,7 @@ impl<F: Float> DragLoadMapRepository<F> {
     /// # Panics
     /// If no map is present for the mesh with the given ID.
     pub fn drag_load_map(&self, mesh_id: MeshID) -> &DragLoadMap<F> {
-        self.drag_load_maps
-            .get(&mesh_id)
+        self.get_drag_load_map(mesh_id)
             .expect("Tried to obtain missing drag load map")
     }
 
@@ -348,6 +219,106 @@ impl<F: Float> DragLoadMap<F> {
 
         map
     }
+}
+
+/// Checks if the entity-to-be with the given components has the components
+/// for obtaining an associated drag load map, and if so, loads or generates
+/// the map and adds it to the drag load map repository if not present, then
+/// adds the appropriate drag load map component to the entity.
+pub fn add_drag_load_map_component_for_entity(
+    mesh_repository: &RwLock<MeshRepository<fre>>,
+    drag_load_map_repository: &RwLock<DragLoadMapRepository<fre>>,
+    components: &mut ArchetypeComponentStorage,
+) {
+    fn generate_map(
+        mesh_repository: &RwLock<MeshRepository<fre>>,
+        config: &DragLoadMapConfig,
+        mesh_id: MeshID,
+        rigid_body: &RigidBodyComp,
+        scaling: Option<&ScalingComp>,
+    ) -> DragLoadMap<fre> {
+        let mut center_of_mass = rigid_body.0.inertial_properties().center_of_mass().clone();
+
+        // Unscale the center of mass from the rigid body
+        // inertial properties to make it correct for the mesh
+        // (which is unscaled)
+        if let Some(scaling) = scaling {
+            center_of_mass /= scaling.0.into();
+        }
+
+        let mesh_repository = mesh_repository.read().unwrap();
+        let mesh = mesh_repository
+            .get_mesh(mesh_id)
+            .expect("Missing mesh for generating drag load map");
+
+        let map = with_timing_info_logging!(
+            "Generating drag load map with resolution {} and smoothness {} for {} using {} direction samples",
+            config.n_theta_coords,
+            mesh_id,
+            config.smoothness,
+            config.n_direction_samples; {
+            DragLoadMap::<fre>::compute_from_mesh(
+                mesh,
+                &center_of_mass,
+                config.n_direction_samples,
+                config.n_theta_coords,
+                config.smoothness,
+            )
+        });
+
+        map
+    }
+
+    fn generate_map_path(mesh_id: MeshID) -> PathBuf {
+        // Ensure there are no path delimiters
+        let sanitized_mesh_name = format!("{}", mesh_id).replace("/", "_").replace("\\", "_");
+        PathBuf::from(format!("assets/drag_load_maps/{}.mpk", sanitized_mesh_name))
+    }
+
+    setup!(
+        components,
+        |mesh: &MeshComp,
+         rigid_body: &RigidBodyComp,
+         scaling: Option<&ScalingComp>|
+         -> DragLoadMapComp {
+            let mesh_id = mesh.id;
+
+            let drag_load_map_repository_readonly = drag_load_map_repository.read().unwrap();
+
+            if !drag_load_map_repository_readonly.has_drag_load_map_for_mesh(mesh_id) {
+                let config = drag_load_map_repository_readonly.config();
+
+                let map_path = generate_map_path(mesh_id);
+                let map_file_exists = map_path.exists();
+
+                let map = if config.use_saved_maps && map_file_exists {
+                    DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
+                        log::error!("Could not load drag load map from file: {}", err);
+                        generate_map(mesh_repository, config, mesh_id, rigid_body, scaling)
+                    })
+                } else {
+                    generate_map(mesh_repository, config, mesh_id, rigid_body, scaling)
+                };
+
+                if config.save_generated_maps
+                    && (config.overwrite_existing_map_files || !map_file_exists)
+                {
+                    if let Err(err) = map.save_to_file(&map_path) {
+                        log::error!("Could not save drag load map to file: {}", err);
+                    }
+                }
+
+                // Release read lock before attempting to write
+                drop(drag_load_map_repository_readonly);
+                drag_load_map_repository
+                    .write()
+                    .unwrap()
+                    .add_drag_load_map_unless_present(mesh_id, map);
+            }
+            DragLoadMapComp { mesh_id }
+        },
+        [DetailedDragComp]
+    );
 }
 
 /// Applies the drag force and torque calculated from precomputed detailed
