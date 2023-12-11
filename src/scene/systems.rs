@@ -2,11 +2,11 @@
 
 use crate::{
     define_task,
-    physics::SpatialConfigurationComp,
-    rendering::RenderingTag,
+    physics::ReferenceFrameComp,
+    rendering::{fre, RenderingTag},
     scene::{
         CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
-        OmnidirectionalLightComp, ScalingComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+        OmnidirectionalLightComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
         SyncSceneCameraViewTransform, UnidirectionalLightComp, UpdateSceneGroupToWorldTransforms,
     },
     world::World,
@@ -17,9 +17,9 @@ use nalgebra::Similarity3;
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform of
     /// each [`SceneGraph`](crate::scene::SceneGraph) node representing an
-    /// entity that also has the [`SpatialConfigurationComp`] component so that
-    /// the translational and rotational parts match the origin offset, position
-    /// and orientation.
+    /// entity that also has the [`ReferenceFrameComp`] component so that the
+    /// translational, rotational and scaling parts match the origin offset,
+    /// position, orientation and scaling.
     [pub] SyncSceneObjectTransforms,
     depends_on = [],
     execute_on = [RenderingTag],
@@ -30,43 +30,35 @@ define_task!(
             let mut scene_graph = scene.scene_graph().write().unwrap();
 
             query!(
-                ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, spatial: &SpatialConfigurationComp| {
-                    scene_graph.set_rotation_of_group_to_parent_transform(node.id, spatial.orientation.cast());
+                ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, frame: &ReferenceFrameComp| {
+                    scene_graph.set_scaling_of_group_to_parent_transform(node.id, frame.scaling as fre);
+                    scene_graph.set_rotation_of_group_to_parent_transform(node.id, frame.orientation.cast());
                     scene_graph.update_translation_of_group_to_parent_transform(
                         node.id,
-                        spatial.origin_offset.cast(),
-                        spatial.position.cast()
+                        frame.origin_offset.cast(),
+                        frame.position.cast()
                     );
                 }
             );
             query!(
-                ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, spatial: &SpatialConfigurationComp| {
-                    scene_graph.set_rotation_of_model_to_parent_transform(node.id, spatial.orientation.cast());
+                ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, frame: &ReferenceFrameComp| {
+                    scene_graph.set_scaling_of_model_to_parent_transform(node.id, frame.scaling as fre);
+                    scene_graph.set_rotation_of_model_to_parent_transform(node.id, frame.orientation.cast());
                     scene_graph.update_translation_of_model_to_parent_transform(
                         node.id,
-                        spatial.origin_offset.cast(),
-                        spatial.position.cast()
+                        frame.origin_offset.cast(),
+                        frame.position.cast()
                     );
                 }
             );
             query!(
-                ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, spatial: &SpatialConfigurationComp| {
-                    scene_graph.set_rotation_of_camera_to_parent_transform(node.id, spatial.orientation.cast());
+                ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, frame: &ReferenceFrameComp| {
+                    scene_graph.set_rotation_of_camera_to_parent_transform(node.id, frame.orientation.cast());
                     scene_graph.update_translation_of_camera_to_parent_transform(
                         node.id,
-                        spatial.origin_offset.cast(),
-                        spatial.position.cast()
+                        frame.origin_offset.cast(),
+                        frame.position.cast()
                     );
-                }
-            );
-            query!(
-                ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, scaling: &ScalingComp| {
-                    scene_graph.set_scaling_of_group_to_parent_transform(node.id, scaling.0);
-                }
-            );
-            query!(
-                ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, scaling: &ScalingComp| {
-                    scene_graph.set_scaling_of_model_to_parent_transform(node.id, scaling.0);
                 }
             );
 
@@ -104,11 +96,11 @@ define_task!(
             query!(
                 ecs_world,
                 |omnidirectional_light: &OmnidirectionalLightComp,
-                 spatial: &SpatialConfigurationComp| {
+                 frame: &ReferenceFrameComp| {
                     let light_id = omnidirectional_light.id;
                     light_storage
                         .omnidirectional_light_mut(light_id)
-                        .set_camera_space_position(view_transform.transform_point(&spatial.position.cast()));
+                        .set_camera_space_position(view_transform.transform_point(&frame.position.cast()));
                 },
                 ![SceneGraphParentNodeComp]
             );
@@ -116,7 +108,7 @@ define_task!(
             query!(
                 ecs_world,
                 |omnidirectional_light: &OmnidirectionalLightComp,
-                 spatial: &SpatialConfigurationComp,
+                 frame: &ReferenceFrameComp,
                  parent: &SceneGraphParentNodeComp| {
                     let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
@@ -125,7 +117,7 @@ define_task!(
                     let light_id = omnidirectional_light.id;
                     light_storage
                         .omnidirectional_light_mut(light_id)
-                        .set_camera_space_position(view_transform.transform_point(&spatial.position.cast()));
+                        .set_camera_space_position(view_transform.transform_point(&frame.position.cast()));
                 }
             );
 

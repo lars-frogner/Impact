@@ -15,9 +15,7 @@ pub use orbit::OrbitalTrajectoryComp;
 use crate::{
     components::ComponentRegistry,
     control::{MotionControlComp, OrientationControlComp},
-    physics::{
-        fph, Position, RigidBodyComp, SpatialConfigurationComp, Static, Velocity, VelocityComp,
-    },
+    physics::{fph, Position, ReferenceFrameComp, RigidBodyComp, Static, Velocity, VelocityComp},
 };
 use anyhow::Result;
 use impact_ecs::{query, world::World as ECSWorld};
@@ -47,8 +45,8 @@ impl AnalyticalMotionManager {
     fn reset_positions_and_velocities(ecs_world: &ECSWorld) {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp, velocity: &mut VelocityComp| {
-                spatial.position = Position::origin();
+            |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
+                frame.position = Position::origin();
                 velocity.0 = Velocity::zeros();
             },
             [ConstantAccelerationTrajectoryComp],
@@ -56,8 +54,8 @@ impl AnalyticalMotionManager {
         );
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp, velocity: &mut VelocityComp| {
-                spatial.position = Position::origin();
+            |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
+                frame.position = Position::origin();
                 velocity.0 = Velocity::zeros();
             },
             [HarmonicOscillatorTrajectoryComp],
@@ -65,8 +63,8 @@ impl AnalyticalMotionManager {
         );
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp, velocity: &mut VelocityComp| {
-                spatial.position = Position::origin();
+            |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
+                frame.position = Position::origin();
                 velocity.0 = Velocity::zeros();
             },
             [CircularTrajectoryComp],
@@ -74,8 +72,8 @@ impl AnalyticalMotionManager {
         );
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp, velocity: &mut VelocityComp| {
-                spatial.position = Position::origin();
+            |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
+                frame.position = Position::origin();
                 velocity.0 = Velocity::zeros();
             },
             [OrbitalTrajectoryComp],
@@ -86,12 +84,12 @@ impl AnalyticalMotionManager {
     fn apply_constant_acceleration_trajectories(ecs_world: &ECSWorld, simulation_time: fph) {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp,
+            |frame: &mut ReferenceFrameComp,
              velocity: &mut VelocityComp,
              trajectory: &ConstantAccelerationTrajectoryComp| {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
-                spatial.position += trajectory_position.coords;
+                frame.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
@@ -101,12 +99,12 @@ impl AnalyticalMotionManager {
     fn apply_harmonically_oscillating_trajectories(ecs_world: &ECSWorld, simulation_time: fph) {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp,
+            |frame: &mut ReferenceFrameComp,
              velocity: &mut VelocityComp,
              trajectory: &HarmonicOscillatorTrajectoryComp| {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
-                spatial.position += trajectory_position.coords;
+                frame.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
@@ -116,12 +114,12 @@ impl AnalyticalMotionManager {
     fn apply_circular_trajectories(ecs_world: &ECSWorld, simulation_time: fph) {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp,
+            |frame: &mut ReferenceFrameComp,
              velocity: &mut VelocityComp,
              trajectory: &CircularTrajectoryComp| {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
-                spatial.position += trajectory_position.coords;
+                frame.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
@@ -131,12 +129,12 @@ impl AnalyticalMotionManager {
     fn apply_orbital_trajectories(ecs_world: &ECSWorld, simulation_time: fph) {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp,
+            |frame: &mut ReferenceFrameComp,
              velocity: &mut VelocityComp,
              trajectory: &OrbitalTrajectoryComp| {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
-                spatial.position += trajectory_position.coords;
+                frame.position += trajectory_position.coords;
                 velocity.0 += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
@@ -146,8 +144,8 @@ impl AnalyticalMotionManager {
     fn apply_constant_rotations(ecs_world: &ECSWorld, simulation_time: fph) {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp, rotation: &ConstantRotationComp| {
-                spatial.orientation = rotation.compute_orientation(simulation_time);
+            |frame: &mut ReferenceFrameComp, rotation: &ConstantRotationComp| {
+                frame.orientation = rotation.compute_orientation(simulation_time);
             },
             ![Static, OrientationControlComp, RigidBodyComp]
         );

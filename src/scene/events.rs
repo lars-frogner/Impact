@@ -2,13 +2,14 @@
 
 use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
-    physics::SpatialConfigurationComp,
+    physics::ReferenceFrameComp,
+    rendering::fre,
     scene::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
         AmbientLight, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
-        MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, ScalingComp,
-        Scene, SceneGraphGroup, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
+        MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
+        SceneGraphGroup, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
         SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable, UnidirectionalLight,
         VertexColorMaterial,
     },
@@ -224,22 +225,21 @@ impl Scene {
                 let mut scene_graph = self.scene_graph().write().unwrap();
             },
             components,
-            |spatial: Option<&SpatialConfigurationComp>,
-             scaling: Option<&ScalingComp>,
+            |frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphGroupNodeComp {
-                let SpatialConfigurationComp {
+                let ReferenceFrameComp {
                     origin_offset,
                     position,
                     orientation,
-                } = spatial.cloned().unwrap_or_default();
-                let scaling = scaling.cloned().unwrap_or_default().0;
+                    scaling,
+                } = frame.cloned().unwrap_or_default();
 
                 let group_to_parent_transform = scene::create_child_to_parent_transform(
                     origin_offset.cast(),
                     position.cast(),
                     orientation.cast(),
-                    scaling,
+                    scaling as fre,
                 );
 
                 let parent_node_id =
@@ -268,8 +268,7 @@ impl Scene {
             components,
             |mesh: &MeshComp,
              material: &MaterialComp,
-             spatial: Option<&SpatialConfigurationComp>,
-             scaling: Option<&ScalingComp>,
+             frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphModelInstanceNodeComp {
                 let model_id = ModelID::for_mesh_and_material(
@@ -279,18 +278,18 @@ impl Scene {
                 );
                 instance_feature_manager.register_instance(&material_library, model_id);
 
-                let SpatialConfigurationComp {
+                let ReferenceFrameComp {
                     origin_offset,
                     position,
                     orientation,
-                } = spatial.cloned().unwrap_or_default();
-                let scaling = scaling.cloned().unwrap_or_default().0;
+                    scaling,
+                } = frame.cloned().unwrap_or_default();
 
                 let model_to_parent_transform = scene::create_child_to_parent_transform(
                     origin_offset.cast(),
                     position.cast(),
                     orientation.cast(),
-                    scaling,
+                    scaling as fre,
                 );
 
                 let mut feature_ids = Vec::with_capacity(2);

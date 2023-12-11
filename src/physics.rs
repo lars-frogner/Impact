@@ -16,7 +16,7 @@ pub use motion::{
     advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
     AngularVelocityComp, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
     ConstantRotationComp, Direction, Force, HarmonicOscillatorTrajectoryComp, LogsKineticEnergy,
-    LogsMomentum, Momentum, OrbitalTrajectoryComp, Orientation, Position, SpatialConfigurationComp,
+    LogsMomentum, Momentum, OrbitalTrajectoryComp, Orientation, Position, ReferenceFrameComp,
     Static, Torque, Velocity, VelocityComp,
 };
 pub use rigid_body::{
@@ -304,13 +304,13 @@ impl PhysicsSimulator {
         query!(
             ecs_world,
             |rigid_body: &mut RigidBodyComp,
-             spatial: &mut SpatialConfigurationComp,
+             frame: &mut ReferenceFrameComp,
              velocity: &mut VelocityComp,
              angular_velocity: &mut AngularVelocityComp| {
                 rigid_body.0.advance_motion(
                     scheme_substep,
-                    &mut spatial.position,
-                    &mut spatial.orientation,
+                    &mut frame.position,
+                    &mut frame.orientation,
                     &mut velocity.0,
                     &mut angular_velocity.0,
                 );

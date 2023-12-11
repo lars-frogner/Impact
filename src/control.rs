@@ -10,8 +10,8 @@ pub use orientation::{CameraOrientationController, RollFreeCameraOrientationCont
 
 use crate::{
     physics::{
-        fph, AngularVelocity, AngularVelocityComp, Orientation, RigidBodyComp,
-        SpatialConfigurationComp, Velocity, VelocityComp,
+        fph, AngularVelocity, AngularVelocityComp, Orientation, ReferenceFrameComp, RigidBodyComp,
+        Velocity, VelocityComp,
     },
     window::Window,
 };
@@ -105,12 +105,12 @@ pub fn update_motion_of_controlled_entities(
         ecs_world,
         |motion_control: &mut MotionControlComp,
          velocity: &mut VelocityComp,
-         spatial: &mut SpatialConfigurationComp| {
+         frame: &mut ReferenceFrameComp| {
             let new_control_velocity =
-                motion_controller.compute_control_velocity(&spatial.orientation);
+                motion_controller.compute_control_velocity(&frame.orientation);
             motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.0);
 
-            spatial.position += velocity.0 * time_step_duration;
+            frame.position += velocity.0 * time_step_duration;
         },
         ![RigidBodyComp]
     );
@@ -119,9 +119,9 @@ pub fn update_motion_of_controlled_entities(
         |motion_control: &mut MotionControlComp,
          rigid_body: &mut RigidBodyComp,
          velocity: &mut VelocityComp,
-         spatial: &SpatialConfigurationComp| {
+         frame: &ReferenceFrameComp| {
             let new_control_velocity =
-                motion_controller.compute_control_velocity(&spatial.orientation);
+                motion_controller.compute_control_velocity(&frame.orientation);
             motion_control.apply_new_control_velocity(new_control_velocity, &mut velocity.0);
 
             rigid_body.0.synchronize_momentum(&velocity.0);
@@ -139,8 +139,8 @@ pub fn update_rotation_of_controlled_entities(
     if orientation_controller.orientation_has_changed() {
         query!(
             ecs_world,
-            |spatial: &mut SpatialConfigurationComp| {
-                orientation_controller.update_orientation(&mut spatial.orientation);
+            |frame: &mut ReferenceFrameComp| {
+                orientation_controller.update_orientation(&mut frame.orientation);
             },
             [OrientationControlComp],
             ![AngularVelocityComp, RigidBodyComp]
@@ -149,15 +149,15 @@ pub fn update_rotation_of_controlled_entities(
     query!(
         ecs_world,
         |orientation_control: &mut OrientationControlComp,
-         spatial: &mut SpatialConfigurationComp,
+         frame: &mut ReferenceFrameComp,
          angular_velocity: &mut AngularVelocityComp| {
             let new_control_angular_velocity = if orientation_controller.orientation_has_changed() {
-                let old_orientation = spatial.orientation.clone();
-                orientation_controller.update_orientation(&mut spatial.orientation);
+                let old_orientation = frame.orientation.clone();
+                orientation_controller.update_orientation(&mut frame.orientation);
 
                 AngularVelocity::from_consecutive_orientations(
                     &old_orientation,
-                    &spatial.orientation,
+                    &frame.orientation,
                     time_step_duration,
                 )
             } else {
@@ -175,17 +175,17 @@ pub fn update_rotation_of_controlled_entities(
         ecs_world,
         |orientation_control: &mut OrientationControlComp,
          rigid_body: &mut RigidBodyComp,
-         spatial: &SpatialConfigurationComp,
+         frame: &ReferenceFrameComp,
          angular_velocity: &mut AngularVelocityComp| {
             let new_control_angular_velocity = if orientation_controller.orientation_has_changed() {
                 // We do not update the orientation here, as the rigid body
                 // motion system will handle that for us as long as we apply the
                 // correct angular velocity
-                let mut new_orientation = spatial.orientation.clone();
+                let mut new_orientation = frame.orientation.clone();
                 orientation_controller.update_orientation(&mut new_orientation);
 
                 AngularVelocity::from_consecutive_orientations(
-                    &spatial.orientation,
+                    &frame.orientation,
                     &new_orientation,
                     time_step_duration,
                 )
@@ -200,7 +200,7 @@ pub fn update_rotation_of_controlled_entities(
 
             rigid_body
                 .0
-                .synchronize_angular_momentum(&spatial.orientation, &angular_velocity.0);
+                .synchronize_angular_momentum(&frame.orientation, &angular_velocity.0);
         }
     );
 

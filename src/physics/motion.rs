@@ -11,7 +11,7 @@ pub use analytical::{
 };
 pub use components::{
     register_motion_components, AngularVelocityComp, LogsKineticEnergy, LogsMomentum,
-    SpatialConfigurationComp, Static, VelocityComp,
+    ReferenceFrameComp, Static, VelocityComp,
 };
 pub use systems::{LogKineticEnergy, LogMomentum};
 
