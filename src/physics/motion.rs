@@ -10,8 +10,8 @@ pub use analytical::{
     OrbitalTrajectoryComp,
 };
 pub use components::{
-    register_motion_components, AngularVelocityComp, LogsKineticEnergy, LogsMomentum,
-    ReferenceFrameComp, Static, VelocityComp,
+    register_motion_components, LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, Static,
+    VelocityComp,
 };
 pub use systems::{LogKineticEnergy, LogMomentum};
 

@@ -47,7 +47,7 @@ impl AnalyticalMotionManager {
             ecs_world,
             |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
                 frame.position = Position::origin();
-                velocity.0 = Velocity::zeros();
+                velocity.linear = Velocity::zeros();
             },
             [ConstantAccelerationTrajectoryComp],
             ![Static, MotionControlComp, RigidBodyComp]
@@ -56,7 +56,7 @@ impl AnalyticalMotionManager {
             ecs_world,
             |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
                 frame.position = Position::origin();
-                velocity.0 = Velocity::zeros();
+                velocity.linear = Velocity::zeros();
             },
             [HarmonicOscillatorTrajectoryComp],
             ![Static, MotionControlComp, RigidBodyComp]
@@ -65,7 +65,7 @@ impl AnalyticalMotionManager {
             ecs_world,
             |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
                 frame.position = Position::origin();
-                velocity.0 = Velocity::zeros();
+                velocity.linear = Velocity::zeros();
             },
             [CircularTrajectoryComp],
             ![Static, MotionControlComp, RigidBodyComp]
@@ -74,7 +74,7 @@ impl AnalyticalMotionManager {
             ecs_world,
             |frame: &mut ReferenceFrameComp, velocity: &mut VelocityComp| {
                 frame.position = Position::origin();
-                velocity.0 = Velocity::zeros();
+                velocity.linear = Velocity::zeros();
             },
             [OrbitalTrajectoryComp],
             ![Static, MotionControlComp, RigidBodyComp]
@@ -90,7 +90,7 @@ impl AnalyticalMotionManager {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
                 frame.position += trajectory_position.coords;
-                velocity.0 += trajectory_velocity;
+                velocity.linear += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
         );
@@ -105,7 +105,7 @@ impl AnalyticalMotionManager {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
                 frame.position += trajectory_position.coords;
-                velocity.0 += trajectory_velocity;
+                velocity.linear += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
         );
@@ -120,7 +120,7 @@ impl AnalyticalMotionManager {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
                 frame.position += trajectory_position.coords;
-                velocity.0 += trajectory_velocity;
+                velocity.linear += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
         );
@@ -135,7 +135,7 @@ impl AnalyticalMotionManager {
                 let (trajectory_position, trajectory_velocity) =
                     trajectory.compute_position_and_velocity(simulation_time);
                 frame.position += trajectory_position.coords;
-                velocity.0 += trajectory_velocity;
+                velocity.linear += trajectory_velocity;
             },
             ![Static, MotionControlComp, RigidBodyComp]
         );

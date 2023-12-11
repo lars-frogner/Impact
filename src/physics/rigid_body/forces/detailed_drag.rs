@@ -356,7 +356,7 @@ fn apply_detailed_drag_for_entity(
     detailed_drag: &DetailedDragComp,
     drag_load_map_comp: &DragLoadMapComp,
 ) {
-    let velocity_relative_to_medium = velocity.0 - medium.velocity;
+    let velocity_relative_to_medium = velocity.linear - medium.velocity;
     let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
 
     if squared_body_speed_relative_to_medium > 0.0 {

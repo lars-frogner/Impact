@@ -29,17 +29,16 @@ pub struct ReferenceFrameComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
-/// physical velocity. Transparently wraps a [`Velocity`].
-#[repr(transparent)]
+/// linear and/or angular velocity.
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
-pub struct VelocityComp(pub Velocity);
-
-/// [`Component`](impact_ecs::component::Component) for entities that have an
-/// angular velocity about their reference frame's origin. Transparently wraps
-/// an [`AngularVelocity`].
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Default, Zeroable, Pod, Component)]
-pub struct AngularVelocityComp(pub AngularVelocity);
+pub struct VelocityComp {
+    /// The linear velocity of the entity's reference frame in the parent space.
+    pub linear: Velocity,
+    /// The angular velocity of the entity's reference frame about its origin in
+    /// the parent space.
+    pub angular: AngularVelocity,
+}
 
 /// Marker [`Component`](impact_ecs::component::Component) for entities whose
 /// position and orientation are not supposed to change.
@@ -298,6 +297,32 @@ impl ReferenceFrameComp {
     }
 }
 
+impl VelocityComp {
+    /// Creates a new velocity component for an entity with the given linear and
+    /// angular velocity.
+    pub fn new(linear: Velocity, angular: AngularVelocity) -> Self {
+        Self { linear, angular }
+    }
+
+    /// Creates a new velocity component for an entity with the given linear
+    /// velocity and zero angular velocity.
+    pub fn linear(velocity: Velocity) -> Self {
+        Self::new(velocity, AngularVelocity::zero())
+    }
+
+    /// Creates a new velocity component for an entity with the given angular
+    /// velocity and zero linear velocity.
+    pub fn angular(velocity: AngularVelocity) -> Self {
+        Self::new(Velocity::zeros(), velocity)
+    }
+
+    /// Creates a new velocity component for an entity with the zero linear and
+    /// angular velocity.
+    pub fn stationary() -> Self {
+        Self::linear(Velocity::zeros())
+    }
+}
+
 impl Default for ReferenceFrameComp {
     fn default() -> Self {
         Self {
@@ -313,7 +338,6 @@ impl Default for ReferenceFrameComp {
 pub fn register_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_component!(registry, ReferenceFrameComp)?;
     register_component!(registry, VelocityComp)?;
-    register_component!(registry, AngularVelocityComp)?;
     register_component!(registry, Static)?;
     register_component!(registry, LogsKineticEnergy)?;
     register_component!(registry, LogsMomentum)

@@ -11,7 +11,7 @@ use crate::{
     },
     game_loop::{GameLoop, GameLoopConfig},
     physics::{
-        Acceleration, AngularVelocity, AngularVelocityComp, CircularTrajectoryComp,
+        fph, Acceleration, AngularVelocity, CircularTrajectoryComp,
         ConstantAccelerationTrajectoryComp, ConstantRotationComp, HarmonicOscillatorTrajectoryComp,
         OrbitalTrajectoryComp, Orientation, PhysicsSimulator, Position, SimulatorConfig,
         Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
@@ -188,8 +188,7 @@ async fn init_world(window: Window) -> Result<World> {
                 Point3::new(0.0, 7.0, -10.0),
                 Orientation::from_axis_angle(&Vector3::y_axis(), PI),
             ),
-            &VelocityComp(Vector3::zeros()),
-            &AngularVelocityComp(AngularVelocity::zero()),
+            &VelocityComp::stationary(),
             &MotionControlComp::new(),
             &OrientationControlComp::new(),
         ))
