@@ -7,8 +7,9 @@ mod unidirectional_light;
 
 pub use ambient_light::AmbientLight;
 pub use components::{
-    AmbientLightComp, AngularExtentComp, DirectionComp, EmissionExtentComp, Omnidirectional,
-    OmnidirectionalLightComp, RadianceComp, UnidirectionalLightComp, UniformIrradianceComp,
+    register_light_components, AmbientLightComp, AngularExtentComp, DirectionComp,
+    EmissionExtentComp, Omnidirectional, OmnidirectionalLightComp, RadianceComp,
+    UnidirectionalLightComp, UniformIrradianceComp,
 };
 pub use omnidirectional_light::OmnidirectionalLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};

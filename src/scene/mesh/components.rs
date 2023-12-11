@@ -1,11 +1,18 @@
 //! [`Component`](impact_ecs::component::Component)s related to meshes.
 
 use super::MeshID;
-use crate::{geometry::FrontFaceSide, rendering::fre};
+use crate::{components::ComponentRegistry, geometry::FrontFaceSide, rendering::fre};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use impact_utils::hash64;
 use std::fmt::Display;
+
+/// [`Component`](impact_ecs::component::Component) for entities that
+/// have a scaling factor.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct ScalingComp(pub fre);
 
 /// [`Component`](impact_ecs::component::Component) for entities whose mesh is
 /// an axis-aligned horizontal rectangle centered on the origin, whose front
@@ -108,6 +115,12 @@ pub struct HemisphereMeshComp {
 pub struct MeshComp {
     /// The ID of the entity's [`TriangleMesh`](crate::geometry::TriangleMesh).
     pub id: MeshID,
+}
+
+impl Default for ScalingComp {
+    fn default() -> Self {
+        Self(1.0)
+    }
 }
 
 impl MeshComp {
@@ -293,4 +306,17 @@ impl HemisphereMeshComp {
             self.n_rings, projection_label
         )))
     }
+}
+
+/// Registers all mesh [`Component`](impact_ecs::component::Component)s.
+pub fn register_mesh_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, ScalingComp)?;
+    register_setup_component!(registry, RectangleMeshComp)?;
+    register_setup_component!(registry, BoxMeshComp)?;
+    register_setup_component!(registry, CylinderMeshComp)?;
+    register_setup_component!(registry, ConeMeshComp)?;
+    register_setup_component!(registry, CircularFrustumMeshComp)?;
+    register_setup_component!(registry, SphereMeshComp)?;
+    register_setup_component!(registry, HemisphereMeshComp)?;
+    register_component!(registry, MeshComp)
 }

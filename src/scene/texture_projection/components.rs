@@ -1,6 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to texture projections.
 
-use crate::{geometry::PlanarTextureProjection, rendering::fre, scene::RectangleMeshComp};
+use crate::{
+    components::ComponentRegistry, geometry::PlanarTextureProjection, rendering::fre,
+    scene::RectangleMeshComp,
+};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{point, vector, Point3, Vector3};
@@ -54,4 +58,10 @@ impl PlanarTextureProjectionComp {
     pub fn create_projection(&self) -> PlanarTextureProjection<fre> {
         PlanarTextureProjection::new(self.origin, self.u_vector, self.v_vector)
     }
+}
+
+/// Registers all texture projection
+/// [`Component`](impact_ecs::component::Component)s.
+pub fn register_texture_projection_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_setup_component!(registry, PlanarTextureProjectionComp)
 }

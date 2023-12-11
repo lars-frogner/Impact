@@ -5,12 +5,13 @@ mod components;
 mod systems;
 
 pub use analytical::{
-    AnalyticalMotionManager, CircularTrajectoryComp, ConstantAccelerationTrajectoryComp,
-    ConstantRotationComp, HarmonicOscillatorTrajectoryComp, OrbitalTrajectoryComp,
+    register_analytical_motion_components, AnalyticalMotionManager, CircularTrajectoryComp,
+    ConstantAccelerationTrajectoryComp, ConstantRotationComp, HarmonicOscillatorTrajectoryComp,
+    OrbitalTrajectoryComp,
 };
 pub use components::{
-    AngularVelocityComp, LogsKineticEnergy, LogsMomentum, SpatialConfigurationComp, Static,
-    VelocityComp,
+    register_motion_components, AngularVelocityComp, LogsKineticEnergy, LogsMomentum,
+    SpatialConfigurationComp, Static, VelocityComp,
 };
 pub use systems::{LogKineticEnergy, LogMomentum};
 

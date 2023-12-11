@@ -1,6 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion.
 
-use crate::physics::{fph, AngularVelocity, Orientation, Position, Velocity};
+use crate::{
+    components::ComponentRegistry,
+    physics::{fph, AngularVelocity, Orientation, Position, Velocity},
+};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::Vector3;
@@ -157,4 +161,14 @@ impl SpatialConfigurationComp {
     ) -> Self {
         Self::for_driven_trajectory_with_offset_origin(origin_offset, Orientation::identity())
     }
+}
+
+/// Registers all motion [`Component`](impact_ecs::component::Component)s.
+pub fn register_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, SpatialConfigurationComp)?;
+    register_component!(registry, VelocityComp)?;
+    register_component!(registry, AngularVelocityComp)?;
+    register_component!(registry, Static)?;
+    register_component!(registry, LogsKineticEnergy)?;
+    register_component!(registry, LogsMomentum)
 }

@@ -80,6 +80,7 @@
 #[macro_use]
 mod macros;
 
+pub mod components;
 pub mod control;
 pub mod game_loop;
 pub mod geometry;

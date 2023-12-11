@@ -1,10 +1,12 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
 use crate::{
+    components::ComponentRegistry,
     geometry::Degrees,
     rendering::fre,
     scene::{Irradiance, LightDirection, LightID, Radiance},
 };
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -71,3 +73,16 @@ pub struct AngularExtentComp(pub Degrees<fre>);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct Omnidirectional;
+
+/// Registers all light [`Component`](impact_ecs::component::Component)s.
+pub fn register_light_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, AmbientLightComp)?;
+    register_component!(registry, OmnidirectionalLightComp)?;
+    register_component!(registry, UnidirectionalLightComp)?;
+    register_component!(registry, DirectionComp)?;
+    register_setup_component!(registry, RadianceComp)?;
+    register_setup_component!(registry, UniformIrradianceComp)?;
+    register_setup_component!(registry, EmissionExtentComp)?;
+    register_setup_component!(registry, AngularExtentComp)?;
+    register_setup_component!(registry, Omnidirectional)
+}

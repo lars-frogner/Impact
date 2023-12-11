@@ -4,7 +4,7 @@ mod components;
 mod motion;
 mod orientation;
 
-pub use components::{MotionControlComp, OrientationControlComp};
+pub use components::{register_control_components, MotionControlComp, OrientationControlComp};
 pub use motion::{MotionDirection, MotionState, SemiDirectionalMotionController};
 pub use orientation::{CameraOrientationController, RollFreeCameraOrientationController};
 

@@ -1,9 +1,11 @@
 //! [`Component`](impact_ecs::component::Component)s related to materials.
 
 use crate::{
+    components::ComponentRegistry,
     rendering::{fre, TextureID},
     scene::{MaterialHandle, RGBColor},
 };
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{vector, Vector2};
@@ -195,4 +197,25 @@ impl MaterialComp {
             Some(&self.prepass_material_handle)
         }
     }
+}
+
+/// Registers all material [`Component`](impact_ecs::component::Component)s.
+pub fn register_material_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_setup_component!(registry, VertexColorComp)?;
+    register_setup_component!(registry, FixedColorComp)?;
+    register_setup_component!(registry, FixedTextureComp)?;
+    register_setup_component!(registry, DiffuseColorComp)?;
+    register_setup_component!(registry, DiffuseTextureComp)?;
+    register_setup_component!(registry, SpecularColorComp)?;
+    register_setup_component!(registry, SpecularTextureComp)?;
+    register_setup_component!(registry, EmissiveColorComp)?;
+    register_setup_component!(registry, EmissiveTextureComp)?;
+    register_setup_component!(registry, RoughnessComp)?;
+    register_setup_component!(registry, RoughnessTextureComp)?;
+    register_setup_component!(registry, MicrofacetDiffuseReflection)?;
+    register_setup_component!(registry, MicrofacetSpecularReflection)?;
+    register_setup_component!(registry, NormalMapComp)?;
+    register_setup_component!(registry, ParallaxMapComp)?;
+    register_setup_component!(registry, SkyboxComp)?;
+    register_component!(registry, MaterialComp)
 }

@@ -1,6 +1,10 @@
 //! [`Component`](impact_ecs::component::Component)s related to user control.
 
-use crate::physics::{AngularVelocity, Velocity};
+use crate::{
+    components::ComponentRegistry,
+    physics::{AngularVelocity, Velocity},
+};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -60,4 +64,10 @@ impl OrientationControlComp {
         *angular_velocity += new_control_angular_velocity;
         self.control_angular_velocity = new_control_angular_velocity;
     }
+}
+
+/// Registers all control [`Component`](impact_ecs::component::Component)s.
+pub fn register_control_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, MotionControlComp)?;
+    register_component!(registry, OrientationControlComp)
 }

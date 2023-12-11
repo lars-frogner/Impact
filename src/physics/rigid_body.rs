@@ -4,10 +4,11 @@ mod components;
 mod forces;
 mod schemes;
 
-pub use components::{RigidBodyComp, UniformRigidBodyComp};
+pub use components::{register_rigid_body_components, RigidBodyComp, UniformRigidBodyComp};
 pub use forces::{
-    DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, RigidBodyForceConfig,
-    RigidBodyForceManager, Spring, SpringComp, UniformGravityComp,
+    register_rigid_body_force_components, DetailedDragComp, DragLoad, DragLoadMap,
+    DragLoadMapConfig, RigidBodyForceConfig, RigidBodyForceManager, Spring, SpringComp,
+    SpringState, UniformGravityComp,
 };
 pub use schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme};
 
