@@ -296,7 +296,8 @@ impl World {
             self.extract_component_metadata(&components);
 
         log::info!(
-            "Creating entities:\nSetup components:\n    {}\nStandard components:\n    {}",
+            "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
+            components.component_count(),
             setup_component_names.join("\n    "),
             standard_component_names.join("\n    "),
         );
