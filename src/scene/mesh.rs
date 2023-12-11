@@ -4,7 +4,7 @@ mod components;
 
 pub use components::{
     register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
-    HemisphereMeshComp, MeshComp, RectangleMeshComp, ScalingComp, SphereMeshComp,
+    HemisphereMeshComp, MeshComp, RectangleMeshComp, SphereMeshComp,
 };
 
 use crate::{

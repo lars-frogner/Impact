@@ -14,7 +14,7 @@ use crate::{
         Acceleration, AngularVelocity, AngularVelocityComp, CircularTrajectoryComp,
         ConstantAccelerationTrajectoryComp, ConstantRotationComp, HarmonicOscillatorTrajectoryComp,
         OrbitalTrajectoryComp, Orientation, PhysicsSimulator, Position, SimulatorConfig,
-        SpatialConfigurationComp, Spring, SpringComp, UniformGravityComp, UniformRigidBodyComp,
+        Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
     rendering::{Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
@@ -184,7 +184,7 @@ async fn init_world(window: Window) -> Result<World> {
                 vertical_field_of_view,
                 UpperExclusiveBounds::new(0.1, 100.0),
             ),
-            &SpatialConfigurationComp::new(
+            &ReferenceFrameComp::unscaled(
                 Point3::new(0.0, 7.0, -10.0),
                 Orientation::from_axis_angle(&Vector3::y_axis(), PI),
             ),
@@ -198,7 +198,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &BoxMeshComp::SKYBOX,
-            &SpatialConfigurationComp::default(),
+            &ReferenceFrameComp::default(),
             &SkyboxComp(skybox_texture_id),
             &Uncullable,
         ))
@@ -207,10 +207,10 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &world.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
-            &ScalingComp(0.06),
-            &SpatialConfigurationComp::new(
+            &ReferenceFrameComp::new(
                 Point3::new(0.0, 1.5, 11.0),
                 Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
+                0.06,
             ),
             &DiffuseColorComp(vector![0.1, 0.2, 0.6]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
@@ -223,8 +223,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &CylinderMeshComp::new(10.0, 0.6, 100),
-            &ScalingComp(1.0),
-            &SpatialConfigurationComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
+            &ReferenceFrameComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
             &SpecularColorComp::IRON,
             &RoughnessComp(0.5),
             &MicrofacetSpecularReflection,
@@ -234,8 +233,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_object.obj")?,
-            &ScalingComp(0.02),
-            &SpatialConfigurationComp::for_driven_rotation(Point3::new(7.0, 7.7, 5.0)),
+            &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(7.0, 7.7, 5.0), 0.02),
             &ConstantRotationComp::new(
                 0.0,
                 Orientation::from_axis_angle(&Vector3::y_axis(), 0.0),
@@ -250,8 +248,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
-            &ScalingComp(0.035),
-            &SpatialConfigurationComp::for_driven_rotation(Point3::new(-1.0, 9.0, 9.0)),
+            &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-1.0, 9.0, 9.0), 0.035),
             &ConstantRotationComp::new(
                 0.0,
                 Orientation::from_axis_angle(&Vector3::x_axis(), 0.4),
@@ -266,8 +263,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &BoxMeshComp::UNIT_CUBE,
-            &ScalingComp(2.0),
-            &SpatialConfigurationComp::unoriented(Point3::new(-9.0, -1.0, 5.0)),
+            &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0), 2.0),
             &DiffuseColorComp(vector![0.1, 0.7, 0.3]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
             &RoughnessComp(0.55),
@@ -279,8 +275,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &SphereMeshComp::new(100),
-            &ScalingComp(4.0),
-            &SpatialConfigurationComp::unoriented(Point3::new(-9.0, 2.0, 5.0)),
+            &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, 2.0, 5.0), 4.0),
             &DiffuseColorComp(vector![0.3, 0.2, 0.7]),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 0.5),
             &RoughnessComp(0.7),
@@ -292,8 +287,7 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &world.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
-            &ScalingComp(0.016),
-            &SpatialConfigurationComp::for_driven_rotation(Point3::new(-9.0, 5.8, 5.0)),
+            &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8, 5.0), 0.016),
             &ConstantRotationComp::new(
                 0.0,
                 Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
@@ -309,10 +303,10 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
             &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-            &ScalingComp(50.0),
-            &SpatialConfigurationComp::new(
+            &ReferenceFrameComp::new(
                 Point3::new(0.0, -2.0, 0.0),
                 Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
+                50.0,
             ),
             &DiffuseTextureComp(wood_floor_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::LIVING_TISSUE, 100.0),
@@ -327,11 +321,11 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
             &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-            &ScalingComp(50.0),
-            &SpatialConfigurationComp::new(
+            &ReferenceFrameComp::new(
                 Point3::new(25.0, 5.0, 0.0),
                 Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
                     * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
+                50.0,
             ),
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
@@ -350,11 +344,11 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
             &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-            &ScalingComp(50.0),
-            &SpatialConfigurationComp::new(
+            &ReferenceFrameComp::new(
                 Point3::new(-25.0, 5.0, 0.0),
                 Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
                     * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
+                50.0,
             ),
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
@@ -373,10 +367,10 @@ async fn init_world(window: Window) -> Result<World> {
         .create_entity((
             &RectangleMeshComp::UNIT_SQUARE,
             &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-            &ScalingComp(50.0),
-            &SpatialConfigurationComp::new(
+            &ReferenceFrameComp::new(
                 Point3::new(0.0, 5.0, 25.0),
                 Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
+                50.0,
             ),
             &DiffuseTextureComp(bricks_color_texture_id),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
@@ -394,9 +388,8 @@ async fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &SphereMeshComp::new(25),
-            &ScalingComp(0.7),
-            &SpatialConfigurationComp::unoriented(Point3::new(0.0, 15.0, 2.0)),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 30.0),
+            &ReferenceFrameComp::unoriented_scaled(Point3::new(-8.0, 14.0, -6.0), 0.7),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 60.0),
             &DiffuseColorComp(Vector3::zeros()),
             &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
             &Omnidirectional,

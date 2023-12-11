@@ -8,7 +8,7 @@ use impact_ecs::Component;
 /// with a constant angular velocity over time.
 ///
 /// For this component to have an effect, the entity also needs a
-/// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp).
+/// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ConstantRotationComp {

@@ -102,7 +102,7 @@ impl RigidBody {
     ///
     /// # Warning
     /// This position will be out of sync with the position in with the entity's
-    /// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp)
+    /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp)
     /// between the first and last substep in the stepping scheme, as it is only
     /// updated with the final orientation after the last substep.
     pub fn position(&self) -> &Position {
@@ -114,7 +114,7 @@ impl RigidBody {
     /// # Warning
     /// This orientation will be out of sync with the orientation in with the
     /// entity's
-    /// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp)
+    /// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp)
     /// between the first and last substep in the stepping scheme, as it is only
     /// updated with the final orientation after the last substep.
     pub fn orientation(&self) -> &Orientation {

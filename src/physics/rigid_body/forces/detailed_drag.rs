@@ -9,11 +9,11 @@ use crate::{
     geometry::{Angle, Radians, TriangleMesh},
     num::Float,
     physics::{
-        fph, Direction, Position, RigidBodyComp, SpatialConfigurationComp, Static, UniformMedium,
+        fph, Direction, Position, ReferenceFrameComp, RigidBodyComp, Static, UniformMedium,
         VelocityComp,
     },
     rendering::fre,
-    scene::{MeshComp, MeshID, MeshRepository, ScalingComp},
+    scene::{MeshComp, MeshID, MeshRepository},
 };
 use anyhow::{anyhow, bail, Result};
 use impact_ecs::{archetype::ArchetypeComponentStorage, query, setup, world::World as ECSWorld};
@@ -235,16 +235,14 @@ pub fn add_drag_load_map_component_for_entity(
         config: &DragLoadMapConfig,
         mesh_id: MeshID,
         rigid_body: &RigidBodyComp,
-        scaling: Option<&ScalingComp>,
+        frame: &ReferenceFrameComp,
     ) -> DragLoadMap<fre> {
         let mut center_of_mass = rigid_body.0.inertial_properties().center_of_mass().clone();
 
         // Unscale the center of mass from the rigid body
         // inertial properties to make it correct for the mesh
         // (which is unscaled)
-        if let Some(scaling) = scaling {
-            center_of_mass /= scaling.0.into();
-        }
+        center_of_mass /= frame.scaling;
 
         let mesh_repository = mesh_repository.read().unwrap();
         let mesh = mesh_repository
@@ -279,7 +277,7 @@ pub fn add_drag_load_map_component_for_entity(
         components,
         |mesh: &MeshComp,
          rigid_body: &RigidBodyComp,
-         scaling: Option<&ScalingComp>|
+         frame: &ReferenceFrameComp|
          -> DragLoadMapComp {
             let mesh_id = mesh.id;
 
@@ -294,10 +292,10 @@ pub fn add_drag_load_map_component_for_entity(
                 let map = if config.use_saved_maps && map_file_exists {
                     DragLoadMap::<fre>::read_from_file(&map_path).unwrap_or_else(|err| {
                         log::error!("Could not load drag load map from file: {}", err);
-                        generate_map(mesh_repository, config, mesh_id, rigid_body, scaling)
+                        generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
                     })
                 } else {
-                    generate_map(mesh_repository, config, mesh_id, rigid_body, scaling)
+                    generate_map(mesh_repository, config, mesh_id, rigid_body, frame)
                 };
 
                 if config.save_generated_maps
@@ -331,7 +329,7 @@ pub fn apply_detailed_drag(
     query!(
         ecs_world,
         |rigid_body: &mut RigidBodyComp,
-         spatial: &SpatialConfigurationComp,
+         frame: &ReferenceFrameComp,
          velocity: &VelocityComp,
          detailed_drag: &DetailedDragComp,
          drag_load_map_comp: &DragLoadMapComp| {
@@ -339,32 +337,10 @@ pub fn apply_detailed_drag(
                 drag_load_map_repository,
                 medium,
                 rigid_body,
-                spatial,
+                frame,
                 velocity,
                 detailed_drag,
                 drag_load_map_comp,
-                1.0,
-            )
-        },
-        ![Static, ScalingComp]
-    );
-    query!(
-        ecs_world,
-        |rigid_body: &mut RigidBodyComp,
-         spatial: &SpatialConfigurationComp,
-         velocity: &VelocityComp,
-         detailed_drag: &DetailedDragComp,
-         drag_load_map_comp: &DragLoadMapComp,
-         scaling: &ScalingComp| {
-            apply_detailed_drag_for_entity(
-                drag_load_map_repository,
-                medium,
-                rigid_body,
-                spatial,
-                velocity,
-                detailed_drag,
-                drag_load_map_comp,
-                scaling.0.into(),
             )
         },
         ![Static]
@@ -375,17 +351,16 @@ fn apply_detailed_drag_for_entity(
     drag_load_map_repository: &DragLoadMapRepository<fre>,
     medium: &UniformMedium,
     rigid_body: &mut RigidBodyComp,
-    spatial: &SpatialConfigurationComp,
+    frame: &ReferenceFrameComp,
     velocity: &VelocityComp,
     detailed_drag: &DetailedDragComp,
     drag_load_map_comp: &DragLoadMapComp,
-    mesh_scaling: fph,
 ) {
     let velocity_relative_to_medium = velocity.0 - medium.velocity;
     let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
 
     if squared_body_speed_relative_to_medium > 0.0 {
-        let body_space_velocity_relative_to_medium = spatial
+        let body_space_velocity_relative_to_medium = frame
             .orientation
             .inverse_transform_vector(&velocity_relative_to_medium);
 
@@ -402,10 +377,10 @@ fn apply_detailed_drag_for_entity(
         let drag_load = drag_load_map.value(phi, theta);
 
         let (force, torque) = drag_load.compute_world_space_drag_force_and_torque(
-            mesh_scaling,
+            frame.scaling,
             medium.mass_density,
             detailed_drag.drag_coefficient,
-            &spatial.orientation,
+            &frame.orientation,
             squared_body_speed_relative_to_medium,
         );
 

@@ -8,7 +8,7 @@ use impact_ecs::Component;
 /// fixed trajectory over time governed by a constant acceleration vector.
 ///
 /// For this component to have an effect, the entity also needs a
-/// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp) and a
+/// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
 /// [`VelocityComp`](crate::physics::VelocityComp).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]

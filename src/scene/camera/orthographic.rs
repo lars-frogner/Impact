@@ -2,11 +2,11 @@
 
 use crate::{
     geometry::{OrthographicCamera, UpperExclusiveBounds},
-    physics::SpatialConfigurationComp,
+    physics::ReferenceFrameComp,
     rendering::fre,
     scene::{
-        self, OrthographicCameraComp, RenderResourcesDesynchronized, ScalingComp, SceneCamera,
-        SceneGraph, SceneGraphCameraNodeComp, SceneGraphParentNodeComp,
+        self, OrthographicCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
+        SceneGraphCameraNodeComp, SceneGraphParentNodeComp,
     },
     window::Window,
 };
@@ -38,19 +38,12 @@ impl OrthographicCamera<fre> {
                     bail!("Tried to add camera for entity while another entity still has one")
                 }
 
-                if components.has_component_type::<ScalingComp>() {
-                    bail!(
-                        "Tried to add both camera and scaling component to the same entity\n\
-                         (not allowed because the view transform is assumed to contain no scaling)"
-                    )
-                }
-
                 desynchronized.set_yes();
 
                 let mut scene_graph = scene_graph.write().unwrap();
             },
             components,
-            |spatial: Option<&SpatialConfigurationComp>,
+            |frame: Option<&ReferenceFrameComp>,
              camera_comp: &OrthographicCameraComp,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphCameraNodeComp {
@@ -63,11 +56,19 @@ impl OrthographicCamera<fre> {
                     ),
                 );
 
-                let SpatialConfigurationComp {
+                let ReferenceFrameComp {
                     origin_offset,
                     position,
                     orientation,
-                } = spatial.cloned().unwrap_or_default();
+                    scaling,
+                } = frame.cloned().unwrap_or_default();
+
+                if scaling != 1.0 {
+                    log::warn!(
+                        "Added camera component to an entity with non-unity scaling:\n\
+                         The scaling will be ignored since the view transform is assumed to contain no scaling"
+                    )
+                }
 
                 let camera_to_parent_transform = scene::create_child_to_parent_transform(
                     origin_offset.cast(),

@@ -14,7 +14,7 @@ use roots::{self, SimpleConvergency};
 /// closed orbital trajectory over time.
 ///
 /// For this component to have an effect, the entity also needs a
-/// [`SpatialConfigurationComp`](crate::physics::SpatialConfigurationComp) and a
+/// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
 /// [`VelocityComp`](crate::physics::VelocityComp).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]

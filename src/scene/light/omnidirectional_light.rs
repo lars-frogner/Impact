@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::{AxisAlignedBox, CubeMapper, CubemapFace, Frustum, Sphere},
-    physics::SpatialConfigurationComp,
+    physics::ReferenceFrameComp,
     rendering::fre,
     scene::{
         EmissionExtentComp, LightStorage, Omnidirectional, OmnidirectionalLightComp, Radiance,
@@ -201,12 +201,12 @@ impl OmnidirectionalLight {
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
-            |spatial: &SpatialConfigurationComp,
+            |frame: &ReferenceFrameComp,
              radiance: &RadianceComp,
              emission_extent: Option<&EmissionExtentComp>|
              -> OmnidirectionalLightComp {
                 let omnidirectional_light = Self::new(
-                    view_transform.transform_point(&spatial.position.cast()),
+                    view_transform.transform_point(&frame.position.cast()),
                     radiance.0,
                     emission_extent.map_or(0.0, |extent| extent.0),
                 );

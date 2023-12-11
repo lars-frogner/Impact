@@ -7,8 +7,8 @@ pub use components::SpringComp;
 use crate::{
     control::{MotionControlComp, OrientationControlComp},
     physics::{
-        fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, Position, RigidBodyComp,
-        SpatialConfigurationComp, Static, Velocity, VelocityComp,
+        fph, AngularVelocity, AngularVelocityComp, Direction, Orientation, Position,
+        ReferenceFrameComp, RigidBodyComp, Static, Velocity, VelocityComp,
     },
 };
 use approx::abs_diff_eq;
@@ -139,9 +139,9 @@ pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut Linked
 pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
     query!(
         ecs_world,
-        |spatial: &mut SpatialConfigurationComp, spring: &SpringComp| {
-            spatial.position = *spring.spring_state.center();
-            spatial.orientation = spring.spring_state.compute_orientation();
+        |frame: &mut ReferenceFrameComp, spring: &SpringComp| {
+            frame.position = *spring.spring_state.center();
+            frame.orientation = spring.spring_state.compute_orientation();
         },
         ![
             Static,
@@ -175,18 +175,14 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
         return SpringForceApplicationOutcome::Ok;
     }
 
-    let spatial_configuration_1 = determine_spatial_configuration(&entity_1);
-    let spatial_configuration_2 = determine_spatial_configuration(&entity_2);
+    let frame_1 = determine_reference_frame(&entity_1);
+    let frame_2 = determine_reference_frame(&entity_2);
 
-    let attachment_point_1 = compute_attachment_point_in_world_space(
-        &spring.attachment_point_1,
-        &spatial_configuration_1,
-    );
+    let attachment_point_1 =
+        compute_attachment_point_in_world_space(&spring.attachment_point_1, &frame_1);
 
-    let attachment_point_2 = compute_attachment_point_in_world_space(
-        &spring.attachment_point_2,
-        &spatial_configuration_2,
-    );
+    let attachment_point_2 =
+        compute_attachment_point_in_world_space(&spring.attachment_point_2, &frame_2);
 
     if let Some((spring_direction, length)) =
         UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
@@ -199,16 +195,10 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
             // The velocities are irrelevant if there is zero damping
             0.0
         } else {
-            let attachment_velocity_1 = determine_attachment_velocity(
-                &entity_1,
-                &spatial_configuration_1.position,
-                &attachment_point_1,
-            );
-            let attachment_velocity_2 = determine_attachment_velocity(
-                &entity_2,
-                &spatial_configuration_2.position,
-                &attachment_point_2,
-            );
+            let attachment_velocity_1 =
+                determine_attachment_velocity(&entity_1, &frame_1.position, &attachment_point_1);
+            let attachment_velocity_2 =
+                determine_attachment_velocity(&entity_2, &frame_2.position, &attachment_point_2);
 
             attachment_velocity_2.dot(&spring_direction)
                 - attachment_velocity_1.dot(&spring_direction)
@@ -247,20 +237,18 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
     SpringForceApplicationOutcome::Ok
 }
 
-fn determine_spatial_configuration(entity: &EntityEntry<'_>) -> SpatialConfigurationComp {
+fn determine_reference_frame(entity: &EntityEntry<'_>) -> ReferenceFrameComp {
     entity
-        .get_component::<SpatialConfigurationComp>()
-        .map_or_else(SpatialConfigurationComp::default, |spatial| {
-            spatial.access().clone()
-        })
+        .get_component::<ReferenceFrameComp>()
+        .map_or_else(ReferenceFrameComp::default, |frame| frame.access().clone())
 }
 
 fn compute_attachment_point_in_world_space(
     attachment_point_in_entity_frame: &Position,
-    spatial_configuration: &SpatialConfigurationComp,
+    frame: &ReferenceFrameComp,
 ) -> Position {
-    spatial_configuration.position
-        + spatial_configuration
+    frame.position
+        + frame
             .orientation
             .transform_vector(&attachment_point_in_entity_frame.coords)
 }

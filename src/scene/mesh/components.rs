@@ -8,12 +8,6 @@ use impact_ecs::Component;
 use impact_utils::hash64;
 use std::fmt::Display;
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a scaling factor.
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct ScalingComp(pub fre);
-
 /// [`Component`](impact_ecs::component::Component) for entities whose mesh is
 /// an axis-aligned horizontal rectangle centered on the origin, whose front
 /// face is on the positive y side.
@@ -115,12 +109,6 @@ pub struct HemisphereMeshComp {
 pub struct MeshComp {
     /// The ID of the entity's [`TriangleMesh`](crate::geometry::TriangleMesh).
     pub id: MeshID,
-}
-
-impl Default for ScalingComp {
-    fn default() -> Self {
-        Self(1.0)
-    }
 }
 
 impl MeshComp {
@@ -310,7 +298,6 @@ impl HemisphereMeshComp {
 
 /// Registers all mesh [`Component`](impact_ecs::component::Component)s.
 pub fn register_mesh_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, ScalingComp)?;
     register_setup_component!(registry, RectangleMeshComp)?;
     register_setup_component!(registry, BoxMeshComp)?;
     register_setup_component!(registry, CylinderMeshComp)?;
