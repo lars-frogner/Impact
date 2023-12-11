@@ -19,7 +19,7 @@ enum InteractionMode {
 impl UserInterface {
     /// Creates a new user interface state.
     pub fn new(window: Arc<Window>) -> Self {
-        let interaction_mode = InteractionMode::control(&window);
+        let interaction_mode = InteractionMode::cursor(&window);
         Self {
             window,
             interaction_mode,
@@ -28,6 +28,10 @@ impl UserInterface {
 
     pub fn control_mode_active(&self) -> bool {
         self.interaction_mode == InteractionMode::Control
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.interaction_mode == InteractionMode::Cursor
     }
 
     pub fn activate_control_mode(&mut self) {
