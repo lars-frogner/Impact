@@ -168,7 +168,7 @@ impl PhysicsSimulator {
                 let triangle_mesh = mesh_repository_readonly
                     .get_mesh(mesh.id)
                     .expect("Invalid mesh ID when creating rigid body");
-                let inertial_properties = InertialProperties::of_uniform_convex_triangle_mesh(
+                let inertial_properties = InertialProperties::of_uniform_triangle_mesh(
                     triangle_mesh,
                     uniform_rigid_body.mass_density,
                 );

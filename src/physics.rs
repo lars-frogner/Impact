@@ -10,7 +10,7 @@ mod tasks;
 mod time;
 
 use anyhow::{bail, Result};
-pub use inertia::{compute_convex_triangle_mesh_volume, InertiaTensor, InertialProperties};
+pub use inertia::{compute_triangle_mesh_volume, InertiaTensor, InertialProperties};
 pub use medium::UniformMedium;
 pub use motion::{
     advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
