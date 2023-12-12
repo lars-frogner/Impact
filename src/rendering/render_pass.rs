@@ -91,6 +91,13 @@ pub struct RenderPassRecorder {
     disabled: bool,
 }
 
+/// The outcome of calling [`RenderPassRecorder::record_render_pass`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RenderPassOutcome {
+    Recorded,
+    Skipped,
+}
+
 bitflags! {
     /// Bitflag encoding a set of hints for configuring a render pass.
     #[derive(Debug, Clone, Copy)]
@@ -1787,10 +1794,10 @@ impl RenderPassRecorder {
         surface_texture: &wgpu::SurfaceTexture,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<()> {
+    ) -> Result<RenderPassOutcome> {
         if self.disabled() {
             log::debug!("Skipping render pass: {}", &self.specification.label);
-            return Ok(());
+            return Ok(RenderPassOutcome::Skipped);
         }
 
         log::debug!("Recording render pass: {}", &self.specification.label);
@@ -2001,7 +2008,7 @@ impl RenderPassRecorder {
             );
         }
 
-        Ok(())
+        Ok(RenderPassOutcome::Recorded)
     }
 
     /// Whether the render pass should be skipped.

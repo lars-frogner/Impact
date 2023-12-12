@@ -45,7 +45,7 @@ pub use texture::{
     RENDER_ATTACHMENT_FORMATS,
 };
 
-use self::resource::RenderResourceManager;
+use self::{render_pass::RenderPassOutcome, resource::RenderResourceManager};
 use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::EventLoopController};
 use anyhow::{Error, Result};
 use chrono::Utc;
@@ -244,18 +244,25 @@ impl RenderingSystem {
 
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
+        let mut n_recorded_passes = 0;
+
         {
             let render_resources_guard = self.render_resource_manager.read().unwrap();
             for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
-                render_pass_recorder.record_render_pass(
+                let outcome = render_pass_recorder.record_render_pass(
                     &self.core_system,
                     render_resources_guard.synchronized(),
                     &surface_texture,
                     &self.render_attachment_texture_manager,
                     &mut command_encoder,
                 )?;
+                if outcome == RenderPassOutcome::Recorded {
+                    n_recorded_passes += 1;
+                }
             }
         } // <- Lock on `self.render_resource_manager` is released here
+
+        log::info!("Performing {} render passes", n_recorded_passes);
 
         self.core_system
             .queue()
