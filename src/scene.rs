@@ -20,15 +20,15 @@ pub use camera::{
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
     register_scene_graph_components, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
-    NodeTransform, ParentComp, SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroup,
+    NodeTransform, ParentComp, SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupComp,
     SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
-    SceneGraphParentNodeComp, Uncullable,
+    SceneGraphParentNodeComp, UncullableComp,
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
     register_light_components, AmbientLight, AmbientLightComp, AngularExtentComp, DirectionComp,
     EmissionExtentComp, Irradiance, LightDirection, LightID, LightStorage, LightType,
-    Omnidirectional, OmnidirectionalLight, OmnidirectionalLightComp, Radiance, RadianceComp,
+    OmnidirectionalComp, OmnidirectionalLight, OmnidirectionalLightComp, Radiance, RadianceComp,
     UnidirectionalLight, UnidirectionalLightComp, UniformIrradianceComp, MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
@@ -38,7 +38,7 @@ pub use material::{
     EmissiveTextureComp, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
     FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle, MaterialID,
     MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
-    MaterialSpecification, MicrofacetDiffuseReflection, MicrofacetSpecularReflection,
+    MaterialSpecification, MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp,
     NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
     SpecularColorComp, SpecularTextureComp, TexturedColorEmissiveMaterialFeature,
     TexturedColorParallaxMappingEmissiveMaterialFeature, UniformDiffuseEmissiveMaterialFeature,

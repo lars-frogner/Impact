@@ -3,9 +3,9 @@
 mod components;
 
 pub use components::{
-    register_scene_graph_components, ParentComp, SceneGraphCameraNodeComp, SceneGraphGroup,
+    register_scene_graph_components, ParentComp, SceneGraphCameraNodeComp, SceneGraphGroupComp,
     SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp,
-    SceneGraphParentNodeComp, Uncullable,
+    SceneGraphParentNodeComp, UncullableComp,
 };
 
 use crate::{

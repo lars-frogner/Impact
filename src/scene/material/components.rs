@@ -10,52 +10,102 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{vector, Vector2};
 
-/// Marker [`Component`](impact_ecs::component::Component) for entities
-/// using the colors of the mesh vertices.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose appearance is based on the colors associated with the mesh
+/// vertices.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VertexColorComp;
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a fixed, uniform color that is independent of lighting.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a fixed, uniform color that is independent of lighting.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct FixedColorComp(pub RGBColor);
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a fixed, textured color that is independent of lighting.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a fixed, textured color that is independent of lighting.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct FixedTextureComp(pub TextureID);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a uniform diffuse color (reflectance).
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DiffuseColorComp(pub RGBColor);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a textured diffuse color (reflectance).
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DiffuseTextureComp(pub TextureID);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a uniform specular color (reflectance).
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SpecularColorComp(pub RGBColor);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a textured specular color (reflectance).
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SpecularTextureComp(pub TextureID);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a uniform emissive color.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct EmissiveColorComp(pub RGBColor);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a textured emissive color.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct EmissiveTextureComp(pub TextureID);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a uniform roughness affecting the reflected light.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RoughnessComp(pub fre);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a textured roughness affecting the reflected light.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RoughnessTextureComp {
@@ -63,18 +113,40 @@ pub struct RoughnessTextureComp {
     pub roughness_scale: fre,
 }
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose diffuse light reflection properties are described by a
+/// microfacet model.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct MicrofacetDiffuseReflection;
+pub struct MicrofacetDiffuseReflectionComp;
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose specular light reflection properties are described by a
+/// microfacet model.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct MicrofacetSpecularReflection;
+pub struct MicrofacetSpecularReflectionComp;
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose surface details are described by a normal map.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct NormalMapComp(pub TextureID);
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose surface details are described by a parallax map.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ParallaxMapComp {
@@ -83,6 +155,11 @@ pub struct ParallaxMapComp {
     pub uv_per_distance: Vector2<fre>,
 }
 
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities representing a textured skybox.
+///
+/// The purpose of this component is to aid in constructing a [`MaterialComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SkyboxComp(pub TextureID);
@@ -212,8 +289,8 @@ pub fn register_material_components(registry: &mut ComponentRegistry) -> Result<
     register_setup_component!(registry, EmissiveTextureComp)?;
     register_setup_component!(registry, RoughnessComp)?;
     register_setup_component!(registry, RoughnessTextureComp)?;
-    register_setup_component!(registry, MicrofacetDiffuseReflection)?;
-    register_setup_component!(registry, MicrofacetSpecularReflection)?;
+    register_setup_component!(registry, MicrofacetDiffuseReflectionComp)?;
+    register_setup_component!(registry, MicrofacetSpecularReflectionComp)?;
     register_setup_component!(registry, NormalMapComp)?;
     register_setup_component!(registry, ParallaxMapComp)?;
     register_setup_component!(registry, SkyboxComp)?;

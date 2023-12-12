@@ -8,26 +8,39 @@ use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{world::Entity, Component};
 
-/// [`Component`](impact_ecs::component::Component) for entities that have a
-/// parent entity.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a parent entity.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`SceneGraphParentNodeComp`] for the entity. It is therefore not kept after
+/// entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ParentComp {
     pub entity: Entity,
 }
 
-/// Marker [`Component`](impact_ecs::component::Component) for entities
-/// representing a group node in the [`SceneGraph`](crate::scene::SceneGraph).
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SceneGraphGroup;
-
-/// Marker [`Component`](impact_ecs::component::Component) for entities that
-/// should never be frustum culled in the
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities representing a group node in the
 /// [`SceneGraph`](crate::scene::SceneGraph).
+///
+/// The purpose of this component is to aid in constructing a
+/// [`SceneGraphGroupNodeComp`] for the entity. It is therefore not kept after
+/// entity creation.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct Uncullable;
+pub struct SceneGraphGroupComp;
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that should never be frustum culled in the
+/// [`SceneGraph`](crate::scene::SceneGraph).
+///
+/// The purpose of this component is to aid in constructing a
+/// [`SceneGraphModelInstanceNodeComp`] for the entity. It is therefore not kept
+/// after entity creation.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct UncullableComp;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// parent group node in the [`SceneGraph`](crate::scene::SceneGraph).
@@ -86,8 +99,8 @@ impl<ID: SceneGraphNodeID + Pod> SceneGraphNodeComp<ID> {
 /// Registers all scene graph [`Component`](impact_ecs::component::Component)s.
 pub fn register_scene_graph_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, ParentComp)?;
-    register_setup_component!(registry, SceneGraphGroup)?;
-    register_setup_component!(registry, Uncullable)?;
+    register_setup_component!(registry, SceneGraphGroupComp)?;
+    register_setup_component!(registry, UncullableComp)?;
     register_component!(registry, SceneGraphParentNodeComp)?;
     register_component!(registry, SceneGraphGroupNodeComp)?;
     register_component!(registry, SceneGraphCameraNodeComp)?;
