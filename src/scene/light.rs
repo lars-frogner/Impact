@@ -9,13 +9,14 @@ pub use ambient_light::AmbientLight;
 pub use components::{
     register_light_components, AmbientLightComp, AngularExtentComp, DirectionComp,
     EmissionExtentComp, OmnidirectionalComp, OmnidirectionalLightComp, RadianceComp,
-    UnidirectionalLightComp, UniformIrradianceComp,
+    UnidirectionalLightComp,
 };
 pub use omnidirectional_light::OmnidirectionalLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};
 
 use crate::{
     geometry::{InstanceFeatureBufferRangeID, UniformBuffer},
+    num::Float,
     rendering::fre,
 };
 use bytemuck::{Pod, Zeroable};
@@ -240,4 +241,10 @@ impl Default for LightStorage {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Computes the isotropic radiance incident on any surface in a light field
+/// with the given uniform irradiance.
+pub fn compute_radiance_for_uniform_irradiance(irradiance: &Irradiance) -> Radiance {
+    irradiance * fre::FRAC_1_PI
 }

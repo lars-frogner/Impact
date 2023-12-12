@@ -26,10 +26,11 @@ pub use graph::{
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    register_light_components, AmbientLight, AmbientLightComp, AngularExtentComp, DirectionComp,
-    EmissionExtentComp, Irradiance, LightDirection, LightID, LightStorage, LightType,
-    OmnidirectionalComp, OmnidirectionalLight, OmnidirectionalLightComp, Radiance, RadianceComp,
-    UnidirectionalLight, UnidirectionalLightComp, UniformIrradianceComp, MAX_SHADOW_MAP_CASCADES,
+    compute_radiance_for_uniform_irradiance, register_light_components, AmbientLight,
+    AmbientLightComp, AngularExtentComp, DirectionComp, EmissionExtentComp, Irradiance,
+    LightDirection, LightID, LightStorage, LightType, OmnidirectionalComp, OmnidirectionalLight,
+    OmnidirectionalLightComp, Radiance, RadianceComp, UnidirectionalLight, UnidirectionalLightComp,
+    MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
@@ -58,7 +59,10 @@ pub use mesh::{
 };
 pub use model::ModelID;
 pub use shader::{ShaderID, ShaderManager};
-pub use systems::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms};
+pub use systems::{
+    SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
+    SyncSceneObjectTransforms,
+};
 pub use tasks::{
     BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,

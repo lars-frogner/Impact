@@ -25,7 +25,7 @@ use crate::{
         OmnidirectionalComp, ParallaxMapComp, ParentComp, PerspectiveCameraComp,
         PlanarTextureProjectionComp, RadianceComp, RectangleMeshComp, RoughnessComp,
         RoughnessTextureComp, SceneGraphGroupComp, SkyboxComp, SpecularColorComp, SphereMeshComp,
-        UncullableComp, UniformIrradianceComp,
+        UncullableComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},

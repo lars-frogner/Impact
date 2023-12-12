@@ -86,6 +86,11 @@ impl OmnidirectionalLight {
         self.camera_space_position = camera_space_position;
     }
 
+    /// Sets the radiance of the light to the given value.
+    pub fn set_radiance(&mut self, radiance: Radiance) {
+        self.radiance = radiance;
+    }
+
     /// Updates the cubemap orientation and near and far distances to encompass
     /// all shadow casting models without wasting depth resolution or causing
     /// unnecessary draw calls.

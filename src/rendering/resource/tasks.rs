@@ -7,7 +7,8 @@ use crate::{
     scene::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
-        SyncLightPositionsAndDirectionsInStorage, SyncSceneCameraViewTransform,
+        SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
+        SyncSceneCameraViewTransform,
     },
     world::{World, WorldTaskScheduler},
 };
@@ -115,6 +116,7 @@ define_task!(
     SyncLightRenderBuffers,
     depends_on = [
         SyncLightPositionsAndDirectionsInStorage,
+        SyncLightRadiancesInStorage,
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
