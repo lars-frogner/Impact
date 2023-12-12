@@ -45,8 +45,9 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense body represented
-    /// by the given triangle mesh, which is assumed closed and convex.
-    pub fn of_uniform_convex_triangle_mesh<F: Float + SubsetOf<fph>>(
+    /// by the given triangle mesh, which is assumed closed, but may contain
+    /// disjoint parts.
+    pub fn of_uniform_triangle_mesh<F: Float + SubsetOf<fph>>(
         triangle_mesh: &TriangleMesh<F>,
         mass_density: fph,
     ) -> Self {
@@ -450,10 +451,9 @@ pub fn compute_hemisphere_volume<F: Float>(radius: F) -> F {
 }
 
 /// Computes the volume of the given triangle mesh, using the method described
-/// in Eberly (2004). The mesh is assumed closed and convex.
-pub fn compute_convex_triangle_mesh_volume<F: Float + SubsetOf<fph>>(
-    mesh: &TriangleMesh<F>,
-) -> fph {
+/// in Eberly (2004). The mesh is assumed closed, but may contain disjoint
+/// parts.
+pub fn compute_triangle_mesh_volume<F: Float + SubsetOf<fph>>(mesh: &TriangleMesh<F>) -> fph {
     let mut volume = 0.0;
 
     for [vertex_0, vertex_1, vertex_2] in mesh.triangle_vertex_positions() {
@@ -472,7 +472,7 @@ pub fn compute_convex_triangle_mesh_volume<F: Float + SubsetOf<fph>>(
 /// Computes the mass, center of mass and inertia tensor of a uniformly dense
 /// body represented by the given triangle mesh, using the method described in
 /// Eberly (2004). The inertia tensor is defined relative to the center of mass.
-/// The mesh is assumed closed and convex.
+/// The mesh is assumed closed, but may contain disjoint parts.
 pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
     mass_density: fph,
@@ -530,19 +530,19 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<F: Float + SubsetOf<fph
 }
 
 /// Computes the mass of the unform body represented by the given triangle mesh,
-/// using the method described in Eberly (2004). The mesh is assumed closed and
-/// convex.
+/// using the method described in Eberly (2004). The mesh is assumed closed, but
+/// may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_mass<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
     mass_density: fph,
 ) -> fph {
-    compute_convex_triangle_mesh_volume(mesh) * mass_density
+    compute_triangle_mesh_volume(mesh) * mass_density
 }
 
 /// Computes the center of mass of the uniformly dense body represented by the
 /// given triangle mesh, using the method described in Eberly (2004). The mesh
-/// is assumed closed and convex.
+/// is assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
@@ -553,7 +553,7 @@ pub fn compute_uniform_triangle_mesh_center_of_mass<F: Float + SubsetOf<fph>>(
 /// Computes the inertia tensor of the uniformly dense body represented by the
 /// given triangle mesh, using the method described in Eberly (2004). The
 /// inertia tensor is defined relative to the center of mass. The mesh is
-/// assumed closed and convex.
+/// assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_inertia_tensor<F: Float + SubsetOf<fph>>(
     mesh: &TriangleMesh<F>,
@@ -1031,7 +1031,7 @@ mod test {
             cone_mesh.transform(&transform);
             cone_properties.transform(&transform);
 
-            let cone_properties_from_mesh = InertialProperties::of_uniform_convex_triangle_mesh(&cone_mesh, mass_density);
+            let cone_properties_from_mesh = InertialProperties::of_uniform_triangle_mesh(&cone_mesh, mass_density);
 
             prop_assert!(abs_diff_eq!(
                 cone_properties_from_mesh.mass(),
