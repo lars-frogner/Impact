@@ -19,13 +19,13 @@ use crate::{
     },
     rendering::{Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
     scene::{
-        AngularExtentComp, BoxMeshComp, CylinderMeshComp, DiffuseColorComp, DiffuseTextureComp,
-        DirectionComp, EmissionExtentComp, EmissiveColorComp, LightDirection,
-        MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, Omnidirectional,
-        ParallaxMapComp, ParentComp, PerspectiveCameraComp, PlanarTextureProjectionComp,
-        RadianceComp, RectangleMeshComp, RoughnessComp, RoughnessTextureComp, ScalingComp,
-        SceneGraphGroup, SkyboxComp, SpecularColorComp, SphereMeshComp, Uncullable,
-        UniformIrradianceComp,
+        AngularExtentComp, BoxMeshComp, ConeMeshComp, CylinderMeshComp, DiffuseColorComp,
+        DiffuseTextureComp, DirectionComp, EmissionExtentComp, EmissiveColorComp, LightDirection,
+        MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
+        OmnidirectionalComp, ParallaxMapComp, ParentComp, PerspectiveCameraComp,
+        PlanarTextureProjectionComp, RadianceComp, RectangleMeshComp, RoughnessComp,
+        RoughnessTextureComp, SceneGraphGroupComp, SkyboxComp, SpecularColorComp, SphereMeshComp,
+        UncullableComp, UniformIrradianceComp,
     },
     window::InputHandler,
     window::{KeyActionMap, Window},
@@ -199,7 +199,7 @@ async fn init_world(window: Window) -> Result<World> {
             &BoxMeshComp::SKYBOX,
             &ReferenceFrameComp::default(),
             &SkyboxComp(skybox_texture_id),
-            &Uncullable,
+            &UncullableComp,
         ))
         .unwrap();
 
@@ -214,8 +214,8 @@ async fn init_world(window: Window) -> Result<World> {
             &DiffuseColorComp(vector![0.1, 0.2, 0.6]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 50.0),
             &RoughnessComp(0.4),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -225,7 +225,7 @@ async fn init_world(window: Window) -> Result<World> {
             &ReferenceFrameComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
             &SpecularColorComp::IRON,
             &RoughnessComp(0.5),
-            &MicrofacetSpecularReflection,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -240,7 +240,7 @@ async fn init_world(window: Window) -> Result<World> {
             ),
             &SpecularColorComp::COPPER,
             &RoughnessComp(0.35),
-            &MicrofacetSpecularReflection,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -255,7 +255,7 @@ async fn init_world(window: Window) -> Result<World> {
             ),
             &DiffuseColorComp(vector![0.7, 0.3, 0.2]),
             &RoughnessComp(0.95),
-            &MicrofacetDiffuseReflection,
+            &MicrofacetDiffuseReflectionComp,
         ))
         .unwrap();
 
@@ -266,8 +266,8 @@ async fn init_world(window: Window) -> Result<World> {
             &DiffuseColorComp(vector![0.1, 0.7, 0.3]),
             &SpecularColorComp::in_range_of(SpecularColorComp::PLASTIC, 0.0),
             &RoughnessComp(0.55),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -278,8 +278,8 @@ async fn init_world(window: Window) -> Result<World> {
             &DiffuseColorComp(vector![0.3, 0.2, 0.7]),
             &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 0.5),
             &RoughnessComp(0.7),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -294,7 +294,7 @@ async fn init_world(window: Window) -> Result<World> {
             ),
             &SpecularColorComp::GOLD,
             &RoughnessComp(0.4),
-            &MicrofacetSpecularReflection,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -311,8 +311,8 @@ async fn init_world(window: Window) -> Result<World> {
             &SpecularColorComp::in_range_of(SpecularColorComp::LIVING_TISSUE, 100.0),
             &RoughnessTextureComp::unscaled(wood_floor_roughness_texture_id),
             &NormalMapComp(wood_floor_normal_texture_id),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -334,8 +334,8 @@ async fn init_world(window: Window) -> Result<World> {
                 0.02,
                 vector![1.0 / 25.0, 1.0 / 25.0],
             ),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -357,8 +357,8 @@ async fn init_world(window: Window) -> Result<World> {
                 0.02,
                 vector![1.0 / 25.0, 1.0 / 25.0],
             ),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -379,8 +379,8 @@ async fn init_world(window: Window) -> Result<World> {
                 0.02,
                 vector![1.0 / 25.0, 1.0 / 25.0],
             ),
-            &MicrofacetDiffuseReflection,
-            &MicrofacetSpecularReflection,
+            &MicrofacetDiffuseReflectionComp,
+            &MicrofacetSpecularReflectionComp,
         ))
         .unwrap();
 
@@ -391,7 +391,7 @@ async fn init_world(window: Window) -> Result<World> {
             &RadianceComp(vector![1.0, 1.0, 1.0] * 60.0),
             &DiffuseColorComp(Vector3::zeros()),
             &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
-            &Omnidirectional,
+            &OmnidirectionalComp,
             &EmissionExtentComp(0.7),
         ))
         .unwrap();

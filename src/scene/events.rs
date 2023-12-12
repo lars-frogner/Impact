@@ -8,8 +8,8 @@ use crate::{
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
         AmbientLight, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
         MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
-        SceneGraphGroup, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
-        SceneGraphNodeComp, SceneGraphParentNodeComp, Uncullable, UnidirectionalLight,
+        SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
+        SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
         VertexColorMaterial,
     },
     window::{self, Window},
@@ -239,7 +239,7 @@ impl Scene {
                     scene_graph.create_group_node(parent_node_id, group_to_parent_transform),
                 )
             },
-            [SceneGraphGroup],
+            [SceneGraphGroupComp],
             ![SceneGraphGroupNodeComp]
         );
     }
@@ -289,7 +289,7 @@ impl Scene {
                     feature_ids.push(feature_id);
                 }
 
-                let bounding_sphere = if components.has_component_type::<Uncullable>() {
+                let bounding_sphere = if components.has_component_type::<UncullableComp>() {
                     // The scene graph will not cull models with no bounding sphere
                     None
                 } else {

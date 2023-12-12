@@ -5,9 +5,13 @@ use crate::{physics::fph, scene::MeshID};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
-/// [`Component`](impact_ecs::component::Component) for entities that should be
-/// affected by a drag force and torque computed from aggregating drag on each
-/// point on the body.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that should be affected by a drag force and torque computed from
+/// aggregating drag on each point on the body.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`DragLoadMapComp`] for the entity. It is therefore not kept after entity
+/// creation.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct DetailedDragComp {

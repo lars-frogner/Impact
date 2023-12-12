@@ -8,8 +8,11 @@ use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
-/// [`Component`](impact_ecs::component::Component) for entities that have a
-/// rigid body with a uniform mass density.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a rigid body with a uniform mass density.
+///
+/// The purpose of this component is to aid in constructing a [`RigidBodyComp`]
+/// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct UniformRigidBodyComp {

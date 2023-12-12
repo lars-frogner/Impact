@@ -5,7 +5,7 @@ use crate::{
     physics::ReferenceFrameComp,
     rendering::fre,
     scene::{
-        EmissionExtentComp, LightStorage, Omnidirectional, OmnidirectionalLightComp, Radiance,
+        EmissionExtentComp, LightStorage, OmnidirectionalComp, OmnidirectionalLightComp, Radiance,
         RadianceComp, RenderResourcesDesynchronized, SceneCamera,
     },
 };
@@ -214,7 +214,7 @@ impl OmnidirectionalLight {
 
                 OmnidirectionalLightComp { id }
             },
-            [Omnidirectional],
+            [OmnidirectionalComp],
             ![OmnidirectionalLightComp]
         );
     }

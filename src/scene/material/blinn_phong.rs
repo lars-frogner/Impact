@@ -10,8 +10,8 @@ use crate::{
     scene::{
         DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, InstanceFeatureManager,
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-        MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
-        MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
+        MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
+        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
         RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp, SpecularColorComp,
         SpecularTextureComp,
     },
@@ -64,8 +64,8 @@ pub fn add_blinn_phong_material_component_for_entity(
             MaterialComp,
             DiffuseTextureComp,
             RoughnessTextureComp,
-            MicrofacetDiffuseReflection,
-            MicrofacetSpecularReflection
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
         ]
     );
 
@@ -101,8 +101,8 @@ pub fn add_blinn_phong_material_component_for_entity(
             MaterialComp,
             SpecularTextureComp,
             RoughnessTextureComp,
-            MicrofacetDiffuseReflection,
-            MicrofacetSpecularReflection
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
         ]
     );
 
@@ -138,8 +138,8 @@ pub fn add_blinn_phong_material_component_for_entity(
             MaterialComp,
             DiffuseColorComp,
             RoughnessTextureComp,
-            MicrofacetDiffuseReflection,
-            MicrofacetSpecularReflection
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
         ]
     );
 
@@ -175,8 +175,8 @@ pub fn add_blinn_phong_material_component_for_entity(
             MaterialComp,
             SpecularColorComp,
             RoughnessTextureComp,
-            MicrofacetDiffuseReflection,
-            MicrofacetSpecularReflection
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
         ]
     );
 }

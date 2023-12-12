@@ -9,8 +9,12 @@ use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 use nalgebra::{point, vector, Point3, Vector3};
 
-/// [`Component`](impact_ecs::component::Component) for entities using a
-/// [`PlanarTextureProjection`].
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that use a [`PlanarTextureProjection`].
+///
+/// The purpose of this component is to aid in constructing a
+/// [`MeshComp`](crate::scene::MeshComp) for the entity. It is therefore not
+/// kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct PlanarTextureProjectionComp {

@@ -8,9 +8,12 @@ use impact_ecs::Component;
 use impact_utils::hash64;
 use std::fmt::Display;
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is
-/// an axis-aligned horizontal rectangle centered on the origin, whose front
-/// face is on the positive y side.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is an axis-aligned horizontal rectangle centered on the
+/// origin, whose front face is on the positive y side.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct RectangleMeshComp {
@@ -20,8 +23,11 @@ pub struct RectangleMeshComp {
     pub extent_z: fre,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is
-/// an axis-aligned box centered on the origin.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is an axis-aligned box centered on the origin.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct BoxMeshComp {
@@ -34,8 +40,11 @@ pub struct BoxMeshComp {
     front_faces_on_outside: u32,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
-/// vertical cylinder centered on the origin.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is a vertical cylinder centered on the origin.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CylinderMeshComp {
@@ -48,8 +57,11 @@ pub struct CylinderMeshComp {
     pub n_circumference_vertices: u32,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is
-/// an upward-pointing cone centered on the origin.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is an upward-pointing cone centered on the origin.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct ConeMeshComp {
@@ -62,8 +74,11 @@ pub struct ConeMeshComp {
     pub n_circumference_vertices: u32,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
-/// vertical circular frustum centered on the origin.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is a vertical circular frustum centered on the origin.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct CircularFrustumMeshComp {
@@ -78,8 +93,11 @@ pub struct CircularFrustumMeshComp {
     pub n_circumference_vertices: u32,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
-/// unit diameter sphere centered on the origin.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is a unit diameter sphere centered on the origin.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct SphereMeshComp {
@@ -89,9 +107,12 @@ pub struct SphereMeshComp {
     pub n_rings: u32,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities whose mesh is a
-/// unit diameter hemisphere whose disk lies in the xz-plane and is centered on
-/// the origin.
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities whose mesh is a unit diameter hemisphere whose disk lies in the
+/// xz-plane and is centered on the origin.
+///
+/// The purpose of this component is to aid in constructing a [`MeshComp`] for
+/// the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct HemisphereMeshComp {

@@ -11,8 +11,8 @@ use crate::{
     scene::{
         DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, InstanceFeatureManager,
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-        MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflection,
-        MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
+        MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
+        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
         RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp, SpecularColorComp,
         SpecularTextureComp,
     },
@@ -63,7 +63,7 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::None,
             )
         },
-        [MicrofacetDiffuseReflection],
+        [MicrofacetDiffuseReflectionComp],
         ![
             MaterialComp,
             SpecularColorComp,
@@ -102,7 +102,7 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::None,
             )
         },
-        [MicrofacetDiffuseReflection],
+        [MicrofacetDiffuseReflectionComp],
         ![
             MaterialComp,
             SpecularColorComp,
@@ -141,7 +141,7 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetSpecularReflection],
+        [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
             DiffuseColorComp,
@@ -180,7 +180,7 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetSpecularReflection],
+        [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
             DiffuseColorComp,
@@ -220,12 +220,12 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetSpecularReflection],
+        [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
             DiffuseTextureComp,
             SpecularTextureComp,
-            MicrofacetDiffuseReflection
+            MicrofacetDiffuseReflectionComp
         ]
     );
 
@@ -260,7 +260,10 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetDiffuseReflection, MicrofacetSpecularReflection],
+        [
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
+        ],
         ![MaterialComp, DiffuseTextureComp, SpecularTextureComp]
     );
 
@@ -295,12 +298,12 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetSpecularReflection],
+        [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
             SpecularColorComp,
             DiffuseTextureComp,
-            MicrofacetDiffuseReflection
+            MicrofacetDiffuseReflectionComp
         ]
     );
 
@@ -335,7 +338,10 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetDiffuseReflection, MicrofacetSpecularReflection],
+        [
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
+        ],
         ![MaterialComp, SpecularColorComp, DiffuseTextureComp]
     );
 
@@ -370,12 +376,12 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetSpecularReflection],
+        [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
             DiffuseColorComp,
             SpecularTextureComp,
-            MicrofacetDiffuseReflection
+            MicrofacetDiffuseReflectionComp
         ]
     );
 
@@ -410,7 +416,10 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetDiffuseReflection, MicrofacetSpecularReflection],
+        [
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
+        ],
         ![MaterialComp, DiffuseColorComp, SpecularTextureComp]
     );
 
@@ -445,12 +454,12 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetSpecularReflection],
+        [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
             DiffuseColorComp,
             SpecularColorComp,
-            MicrofacetDiffuseReflection
+            MicrofacetDiffuseReflectionComp
         ]
     );
 
@@ -485,7 +494,10 @@ pub fn add_microfacet_material_component_for_entity(
                 SpecularMicrofacetShadingModel::GGX,
             )
         },
-        [MicrofacetDiffuseReflection, MicrofacetSpecularReflection],
+        [
+            MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp
+        ],
         ![MaterialComp, DiffuseColorComp, SpecularColorComp]
     );
 }

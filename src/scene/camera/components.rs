@@ -10,8 +10,15 @@ use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have a [`PerspectiveCamera`](crate::geometry::PerspectiveCamera).
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have a
+/// [`PerspectiveCamera`](crate::geometry::PerspectiveCamera).
+///
+/// The purpose of this component is to aid in constructing a
+/// [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
+/// entity and a [`SceneCamera`](crate::scene::SceneCamera) for the
+/// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
+/// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct PerspectiveCameraComp {
@@ -20,8 +27,15 @@ pub struct PerspectiveCameraComp {
     far_distance: fre,
 }
 
-/// [`Component`](impact_ecs::component::Component) for entities that
-/// have an [`OrthographicCamera`](crate::geometry::OrthographicCamera).
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities that have an
+/// [`OrthographicCamera`](crate::geometry::OrthographicCamera).
+///
+/// The purpose of this component is to aid in constructing a
+/// [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
+/// entity and a [`SceneCamera`](crate::scene::SceneCamera) for the
+/// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
+/// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OrthographicCameraComp {

@@ -20,9 +20,9 @@ pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
     register_material_components, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
     EmissiveTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
-    MicrofacetDiffuseReflection, MicrofacetSpecularReflection, NormalMapComp, ParallaxMapComp,
-    RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularColorComp, SpecularTextureComp,
-    VertexColorComp,
+    MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
+    ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularColorComp,
+    SpecularTextureComp, VertexColorComp,
 };
 pub use features::{
     create_material_feature, TexturedColorEmissiveMaterialFeature, TexturedColorMaterialFeature,
