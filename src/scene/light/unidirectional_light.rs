@@ -110,6 +110,11 @@ impl UnidirectionalLight {
             Self::compute_camera_to_light_space_rotation(&camera_space_direction);
     }
 
+    /// Sets the radiance of the light to the given value.
+    pub fn set_radiance(&mut self, radiance: Radiance) {
+        self.radiance = radiance;
+    }
+
     /// Updates the partition of view frustum cascades for the light based on
     /// the near and far distance required for encompassing visible models.
     pub fn update_cascade_partition_depths(

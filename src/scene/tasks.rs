@@ -4,7 +4,10 @@ use super::Scene;
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::systems::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
+    scene::systems::{
+        SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
+        SyncSceneObjectTransforms,
+    },
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
@@ -208,6 +211,7 @@ impl Scene {
         task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
         task_scheduler.register_task(BufferVisibleModelInstances)?;
         task_scheduler.register_task(SyncLightPositionsAndDirectionsInStorage)?;
+        task_scheduler.register_task(SyncLightRadiancesInStorage)?;
         task_scheduler
             .register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;
         task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)

@@ -5,9 +5,10 @@ use crate::{
     physics::ReferenceFrameComp,
     rendering::RenderingTag,
     scene::{
-        CameraNodeID, DirectionComp, GroupNodeID, LightDirection, ModelInstanceNodeID,
-        OmnidirectionalLightComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
-        SyncSceneCameraViewTransform, UnidirectionalLightComp, UpdateSceneGroupToWorldTransforms,
+        AmbientLightComp, CameraNodeID, DirectionComp, GroupNodeID, LightDirection,
+        ModelInstanceNodeID, OmnidirectionalLightComp, RadianceComp, SceneGraphNodeComp,
+        SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UnidirectionalLightComp,
+        UpdateSceneGroupToWorldTransforms,
     },
     world::World,
 };
@@ -109,13 +110,18 @@ define_task!(
                     let light_id = unidirectional_light.id;
                     light_storage
                         .unidirectional_light_mut(light_id)
-                        .set_camera_space_direction(LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast())));
+                        .set_camera_space_direction(
+                            LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast()))
+                        );
                 },
-                ![SceneGraphParentNodeComp]
+                ![SceneGraphParentNodeComp, ReferenceFrameComp]
             );
 
             query!(
-                ecs_world, |unidirectional_light: &UnidirectionalLightComp, direction: &DirectionComp, parent: &SceneGraphParentNodeComp| {
+                ecs_world,
+                |unidirectional_light: &UnidirectionalLightComp,
+                 direction: &DirectionComp,
+                 parent: &SceneGraphParentNodeComp| {
                     let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
                     let view_transform = view_transform * parent_group_node.group_to_root_transform();
@@ -123,7 +129,92 @@ define_task!(
                     let light_id = unidirectional_light.id;
                     light_storage
                         .unidirectional_light_mut(light_id)
-                        .set_camera_space_direction(LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast())));
+                        .set_camera_space_direction(
+                            LightDirection::new_unchecked(view_transform.transform_vector(&direction.0.cast()))
+                        );
+                },
+                ![ReferenceFrameComp]
+            );
+
+            query!(
+                ecs_world,
+                |unidirectional_light: &UnidirectionalLightComp,
+                 direction: &DirectionComp,
+                 frame: &ReferenceFrameComp| {
+                    let light_id = unidirectional_light.id;
+
+                    let world_direction = frame.orientation.transform_vector(&direction.0.cast());
+
+                    light_storage
+                        .unidirectional_light_mut(light_id)
+                        .set_camera_space_direction(
+                            LightDirection::new_unchecked(view_transform.transform_vector(&world_direction.cast()))
+                        );
+                },
+                ![SceneGraphParentNodeComp]
+            );
+
+            query!(
+                ecs_world,
+                |unidirectional_light: &UnidirectionalLightComp,
+                 direction: &DirectionComp,
+                 frame: &ReferenceFrameComp,
+                 parent: &SceneGraphParentNodeComp| {
+                    let parent_group_node = scene_graph.group_nodes().node(parent.id);
+
+                    let view_transform = view_transform * parent_group_node.group_to_root_transform();
+                    let world_direction = frame.orientation.transform_vector(&direction.0.cast());
+
+                    let light_id = unidirectional_light.id;
+                    light_storage
+                        .unidirectional_light_mut(light_id)
+                        .set_camera_space_direction(
+                            LightDirection::new_unchecked(view_transform.transform_vector(&world_direction.cast()))
+                        );
+                }
+            );
+
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the radiance or
+    /// irradiance of every applicable light source in the
+    /// [`LightStorage`](crate::scene::LightStorage).
+    [pub] SyncLightRadiancesInStorage,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing radiance of lights in storage"; {
+            let scene = world.scene().read().unwrap();
+
+            let ecs_world = world.ecs_world().read().unwrap();
+            let mut light_storage = scene.light_storage().write().unwrap();
+
+            query!(
+                ecs_world, |radiance: &RadianceComp, ambient_light: &AmbientLightComp| {
+                    light_storage
+                        .ambient_light_mut(ambient_light.id)
+                        .set_radiance(radiance.0);
+                }
+            );
+
+            query!(
+                ecs_world,
+                |radiance: &RadianceComp, omnidirectional_light: &OmnidirectionalLightComp| {
+                    light_storage
+                        .omnidirectional_light_mut(omnidirectional_light.id)
+                        .set_radiance(radiance.0);
+                }
+            );
+
+            query!(
+                ecs_world, |radiance: &RadianceComp, unidirectional_light: &UnidirectionalLightComp| {
+                    light_storage
+                        .unidirectional_light_mut(unidirectional_light.id)
+                        .set_radiance(radiance.0);
                 }
             );
 
