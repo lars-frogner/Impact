@@ -42,6 +42,12 @@ pub trait InstanceFeature: Pod {
     fn feature_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
+
+    /// Returns a slice with the raw bytes representing the
+    /// given slice of features.
+    fn feature_slice_bytes(slice: &[Self]) -> &[u8] {
+        bytemuck::cast_slice(slice)
+    }
 }
 
 /// Identifier for a type of instance feature.
@@ -501,6 +507,15 @@ impl DynamicInstanceFeatureBuffer {
         self.add_feature_bytes(feature.feature_bytes());
     }
 
+    /// Pushes a copy of the given slice of feature values onto the buffer.
+    ///
+    /// # Panics
+    /// If `Fe` is not the feature type the buffer was initialized with.
+    pub fn add_feature_slice<Fe: InstanceFeature>(&mut self, features: &[Fe]) {
+        self.type_descriptor.validate_feature::<Fe>();
+        self.add_feature_slice_bytes(features.len(), Fe::feature_slice_bytes(features));
+    }
+
     /// Pushes a copy of the feature value stored in the given
     /// storage under the given identifier onto the buffer.
     ///
@@ -546,6 +561,30 @@ impl DynamicInstanceFeatureBuffer {
         if feature_size > 0 {
             let start_byte_idx = self.n_valid_bytes.fetch_add(feature_size, Ordering::SeqCst);
             let end_byte_idx = start_byte_idx + feature_size;
+
+            // If the buffer is full, grow it first
+            if end_byte_idx >= self.bytes.len() {
+                self.grow_buffer(end_byte_idx);
+            }
+
+            self.bytes[start_byte_idx..end_byte_idx]
+                .iter_mut()
+                .zip(feature_bytes.iter())
+                .for_each(|(dest, src)| {
+                    *dest = *src;
+                });
+        }
+    }
+
+    fn add_feature_slice_bytes(&mut self, feature_count: usize, feature_bytes: &[u8]) {
+        let feature_slice_size = self.feature_size() * feature_count;
+        assert_eq!(feature_bytes.len(), feature_slice_size);
+
+        if feature_slice_size > 0 {
+            let start_byte_idx = self
+                .n_valid_bytes
+                .fetch_add(feature_slice_size, Ordering::SeqCst);
+            let end_byte_idx = start_byte_idx + feature_slice_size;
 
             // If the buffer is full, grow it first
             if end_byte_idx >= self.bytes.len() {
@@ -1094,6 +1133,41 @@ mod test {
         buffer.add_feature(&feature_1);
         buffer.add_feature(&feature_2);
         buffer.add_feature(&feature_3);
+
+        let feature_slice = &[feature_1, feature_2, feature_3];
+        let feature_bytes = bytemuck::cast_slice(feature_slice);
+
+        assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
+        assert_eq!(buffer.n_valid_features(), 3);
+        assert_eq!(buffer.valid_bytes(), feature_bytes);
+        assert_eq!(buffer.valid_features::<Feature>(), feature_slice);
+    }
+
+    #[test]
+    fn adding_feature_slice_to_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature_1 = InstanceModelViewTransform::identity();
+        let feature_2 = create_dummy_feature();
+        buffer.add_feature_slice(&[feature_1, feature_2]);
+
+        let feature_slice = &[feature_1, feature_2];
+        let feature_bytes = bytemuck::cast_slice(feature_slice);
+
+        assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
+        assert_eq!(buffer.n_valid_features(), 2);
+        assert_eq!(buffer.valid_bytes(), feature_bytes);
+        assert_eq!(buffer.valid_features::<Feature>(), feature_slice);
+    }
+
+    #[test]
+    fn adding_two_feature_slices_to_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let feature_1 = InstanceModelViewTransform::identity();
+        let feature_2 = create_dummy_feature();
+        let feature_3 = create_dummy_feature();
+
+        buffer.add_feature_slice(&[feature_1, feature_2]);
+        buffer.add_feature_slice(&[feature_3]);
 
         let feature_slice = &[feature_1, feature_2, feature_3];
         let feature_bytes = bytemuck::cast_slice(feature_slice);
