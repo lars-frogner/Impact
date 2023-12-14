@@ -433,12 +433,13 @@ impl RenderPassManager {
                                 CubemapFace::all()
                                     .into_iter()
                                     .map(|face| {
-                                        !transform_buffer_manager
-                                            .feature_range(
-                                                light_id.as_instance_feature_buffer_range_id()
-                                                    + face.as_idx_u32(),
-                                            )
-                                            .is_empty()
+                                        config.shadow_mapping_enabled
+                                            && !transform_buffer_manager
+                                                .feature_range(
+                                                    light_id.as_instance_feature_buffer_range_id()
+                                                        + face.as_idx_u32(),
+                                                )
+                                                .is_empty()
                                     })
                                     .collect();
 
@@ -520,12 +521,13 @@ impl RenderPassManager {
                             let cascades_have_shadow_casting_model_instances: Vec<_> = (0
                                 ..MAX_SHADOW_MAP_CASCADES)
                                 .map(|cascade_idx| {
-                                    !transform_buffer_manager
-                                        .feature_range(
-                                            light_id.as_instance_feature_buffer_range_id()
-                                                + cascade_idx,
-                                        )
-                                        .is_empty()
+                                    config.shadow_mapping_enabled
+                                        && !transform_buffer_manager
+                                            .feature_range(
+                                                light_id.as_instance_feature_buffer_range_id()
+                                                    + cascade_idx,
+                                            )
+                                            .is_empty()
                                 })
                                 .collect();
 
@@ -650,9 +652,11 @@ impl RenderPassManager {
                                                 unreachable!()
                                             };
 
-                                        let no_shadow_casting_instances = transform_buffer_manager
-                                            .feature_range(range_id)
-                                            .is_empty();
+                                        let no_shadow_casting_instances = !config
+                                            .shadow_mapping_enabled
+                                            || transform_buffer_manager
+                                                .feature_range(range_id)
+                                                .is_empty();
 
                                         recorder.set_disabled(no_shadow_casting_instances);
                                     }

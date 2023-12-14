@@ -48,6 +48,7 @@ pub enum KeyboardInputAction {
     ToggleInteractionMode,
     ToggleBackFaceCulling,
     ToggleTriangleFill,
+    ToggleShadowMapping,
     ToggleAmbientOcclusion,
     IncrementSimulationSubstepCount,
     DecrementSimulationSubstepCount,
@@ -172,6 +173,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::ToggleShadowMapping => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().toggle_shadow_mapping();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::ToggleAmbientOcclusion => {
                         if state == &ElementState::Released {
                             world.renderer().write().unwrap().toggle_ambient_occlusion();
@@ -289,6 +296,7 @@ impl Default for KeyActionMap {
             ToggleInteractionMode => Tab,
             ToggleBackFaceCulling => KeyB,
             ToggleTriangleFill => KeyF,
+            ToggleShadowMapping => KeyI,
             ToggleAmbientOcclusion => KeyO,
             IncrementSimulationSubstepCount => KeyM,
             DecrementSimulationSubstepCount => KeyN,
