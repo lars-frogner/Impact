@@ -222,9 +222,9 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    &world
+                    &mut world
                         .scene().read().unwrap()
-                        .instance_feature_manager().read().unwrap(),
+                        .instance_feature_manager().write().unwrap(),
                 );
             }
             Ok(())

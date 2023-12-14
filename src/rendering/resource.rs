@@ -386,16 +386,17 @@ impl DesynchronizedRenderResources {
     fn sync_instance_feature_buffers_with_manager(
         core_system: &CoreRenderingSystem,
         feature_render_buffer_managers: &mut InstanceFeatureRenderBufferManagerMap,
-        instance_feature_manager: &InstanceFeatureManager,
+        instance_feature_manager: &mut InstanceFeatureManager,
     ) {
-        for (model_id, instance_feature_buffers) in instance_feature_manager.model_ids_and_buffers()
+        for (model_id, instance_feature_buffers) in
+            instance_feature_manager.model_ids_and_mutable_buffers()
         {
             match feature_render_buffer_managers.entry(model_id) {
                 Entry::Occupied(mut occupied_entry) => {
                     let feature_render_buffer_managers = occupied_entry.get_mut();
 
                     for (feature_buffer, render_buffer_manager) in instance_feature_buffers
-                        .iter()
+                        .iter_mut()
                         .zip(feature_render_buffer_managers.iter_mut())
                     {
                         render_buffer_manager
@@ -405,7 +406,7 @@ impl DesynchronizedRenderResources {
                 }
                 Entry::Vacant(vacant_entry) => {
                     let feature_render_buffer_managers = instance_feature_buffers
-                        .iter()
+                        .iter_mut()
                         .map(|feature_buffer| {
                             let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
                                 core_system,
