@@ -1,55 +1,76 @@
-//! Map for keeping track of which [`HashMap`] key
-//! corresponds to which index in an underlying [`Vec`].
+//! Map for keeping track of which [`HashMap`] key corresponds to which index in
+//! an underlying [`Vec`].
 
 use anyhow::{anyhow, Result};
-use std::collections::hash_map::Entry;
+use std::collections::hash_map::{Entry, RandomState};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash};
+use std::iter;
 
-/// Map for keeping track of which [`HashMap`] key
-/// corresponds to which index in an underlying [`Vec`].
+/// Map for keeping track of which [`HashMap`] key corresponds to which index in
+/// an underlying [`Vec`].
 ///
-/// This is useful if we want the flexibility of
-/// accessing data with a key but don't want to
-/// sacrifice the compact data storage provided by a
-/// `Vec`. It also enables us to reorder items in
-/// the `Vec` (like doing a swap remove) without
-/// invalidating the keys used to access the items.
+/// This is useful if we want the flexibility of accessing data with a key but
+/// don't want to sacrifice the compact data storage provided by a `Vec`. It
+/// also enables us to reorder items in the `Vec` (like doing a swap remove)
+/// without invalidating the keys used to access the items.
 #[derive(Clone, Debug)]
-pub struct KeyIndexMapper<K> {
-    indices_for_keys: HashMap<K, usize>,
+pub struct KeyIndexMapper<K, S = RandomState> {
+    indices_for_keys: HashMap<K, usize, S>,
     keys_at_indices: Vec<K>,
 }
 
-impl<K> KeyIndexMapper<K>
+impl<K> KeyIndexMapper<K, RandomState>
 where
     K: Copy + Hash + Eq + Debug,
 {
     /// Creates a new mapper with no keys.
     pub fn new() -> Self {
-        Self {
-            indices_for_keys: HashMap::new(),
-            keys_at_indices: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Creates a new mapper with the given key.
     pub fn new_with_key(key: K) -> Self {
-        Self {
-            indices_for_keys: [(key, 0)].into_iter().collect(),
-            keys_at_indices: vec![key],
-        }
+        Self::with_hasher_and_key(RandomState::default(), key)
     }
 
-    /// Creates a new mapper with the given set of keys.
-    /// The index of each key will correspond to the position
-    /// of the key in the provided iterator.
+    /// Creates a new mapper with the given set of keys. The index of each key
+    /// will correspond to the position of the key in the provided iterator.
     ///
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
     pub fn new_with_keys(key_iter: impl IntoIterator<Item = K>) -> Self {
-        let mut mapper = Self::new();
+        Self::with_hasher_and_keys(RandomState::default(), key_iter)
+    }
+}
+
+impl<K, S> KeyIndexMapper<K, S>
+where
+    K: Copy + Hash + Eq + Debug,
+    S: BuildHasher + Default,
+{
+    /// Creates a new mapper with the given hasher and with no keys.
+    pub fn with_hasher(hash_builder: S) -> Self {
+        Self {
+            indices_for_keys: HashMap::with_hasher(hash_builder),
+            keys_at_indices: Vec::new(),
+        }
+    }
+
+    /// Creates a new mapper with the given hasher and the given key.
+    pub fn with_hasher_and_key(hash_builder: S, key: K) -> Self {
+        Self::with_hasher_and_keys(hash_builder, iter::once(key))
+    }
+
+    /// Creates a new mapper with the given hasher and the given set of keys.
+    /// The index of each key will correspond to the position of the key in the
+    /// provided iterator.
+    ///
+    /// # Panics
+    /// If the iterator has multiple occurences of the same key.
+    pub fn with_hasher_and_keys(hash_builder: S, key_iter: impl IntoIterator<Item = K>) -> Self {
+        let mut mapper = Self::with_hasher(hash_builder);
         for key in key_iter {
             mapper.push_key(key);
         }
@@ -57,26 +78,23 @@ where
     }
 
     /// Returns a reference to the [`HashMap`] of keys to indices.
-    pub fn as_map(&self) -> &HashMap<K, usize> {
+    pub fn as_map(&self) -> &HashMap<K, usize, S> {
         &self.indices_for_keys
     }
 
-    /// Consumes the mapper and returns the [`HashMap`] of
-    /// keys to indices.
-    pub fn into_map(self) -> HashMap<K, usize> {
+    /// Consumes the mapper and returns the [`HashMap`] of keys to indices.
+    pub fn into_map(self) -> HashMap<K, usize, S> {
         self.indices_for_keys
     }
 
-    /// Returns an iterator over all keys in the order in
-    /// which their entries in the underlying [`Vec`] are
-    /// stored.
+    /// Returns an iterator over all keys in the order in which their entries in
+    /// the underlying [`Vec`] are stored.
     pub fn key_at_each_idx(&self) -> impl Iterator<Item = K> + '_ {
         self.keys_at_indices.iter().copied()
     }
 
-    /// Returns a slice with all keys in the order in
-    /// which their entries in the underlying [`Vec`] are
-    /// stored.
+    /// Returns a slice with all keys in the order in which their entries in the
+    /// underlying [`Vec`] are stored.
     pub fn keys_at_indices(&self) -> &[K] {
         &self.keys_at_indices
     }
@@ -104,8 +122,8 @@ where
         self.indices_for_keys[&key]
     }
 
-    /// Returns the index corresponding to the given key
-    /// if the key exists, otherwise returns [`None`].
+    /// Returns the index corresponding to the given key if the key exists,
+    /// otherwise returns [`None`].
     pub fn get(&self, key: K) -> Option<usize> {
         self.indices_for_keys.get(&key).cloned()
     }
@@ -121,8 +139,7 @@ where
     /// Adds the given key and maps it to the next index.
     ///
     /// # Errors
-    /// Returns an error with the index of the key if the
-    /// key already exists.
+    /// Returns an error with the index of the key if the key already exists.
     pub fn try_push_key(&mut self, key: K) -> Result<(), usize> {
         match self.indices_for_keys.entry(key) {
             Entry::Vacant(entry) => {
@@ -144,8 +161,7 @@ where
             .expect("Tried to add an existing key");
     }
 
-    /// Pushes each of the keys in the given iterator into the map
-    /// in order.
+    /// Pushes each of the keys in the given iterator into the map in order.
     ///
     /// # Panics
     /// If any of the keys already exists.
@@ -153,10 +169,9 @@ where
         keys.into_iter().for_each(|key| self.push_key(key));
     }
 
-    /// Removes the given key and assigns the key at the last
-    /// index to the index of the removed key (unless the key
-    /// to remove was at the last index) before popping the end
-    /// of the [`Vec`].
+    /// Removes the given key and assigns the key at the last index to the index
+    /// of the removed key (unless the key to remove was at the last index)
+    /// before popping the end of the [`Vec`].
     ///
     /// # Returns
     /// The index of the removed key.
@@ -177,10 +192,9 @@ where
         Ok(idx_of_removed_key)
     }
 
-    /// Removes the given key and assigns the key at the last
-    /// index to the index of the removed key (unless the key
-    /// to remove was at the last index) before popping the end
-    /// of the [`Vec`].
+    /// Removes the given key and assigns the key at the last index to the index
+    /// of the removed key (unless the key to remove was at the last index)
+    /// before popping the end of the [`Vec`].
     ///
     /// # Returns
     /// The index of the removed key.
@@ -192,10 +206,9 @@ where
             .expect("Tried to remove key that does not exist")
     }
 
-    /// Removes the key corresponding to the given index and
-    /// assigns the key at the last index to the index of the
-    /// removed key (unless the key to remove was at the last
-    /// index) before popping the end of the [`Vec`].
+    /// Removes the key corresponding to the given index and assigns the key at
+    /// the last index to the index of the removed key (unless the key to remove
+    /// was at the last index) before popping the end of the [`Vec`].
     ///
     /// # Panics
     /// If the index is outside the bounds of the [`Vec`].
@@ -215,12 +228,13 @@ where
     }
 }
 
-impl<K> Default for KeyIndexMapper<K>
+impl<K, S> Default for KeyIndexMapper<K, S>
 where
     K: Copy + Hash + Eq + Debug,
+    S: BuildHasher + Default,
 {
     fn default() -> Self {
-        Self::new()
+        Self::with_hasher(S::default())
     }
 }
 
