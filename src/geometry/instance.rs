@@ -7,6 +7,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector4};
+use nohash_hasher::BuildNoHashHasher;
 use std::{collections::HashMap, fmt::Debug, mem, ops::Range};
 
 /// Represents a piece of data associated with a model instance.
@@ -67,7 +68,7 @@ pub struct InstanceFeatureStorage {
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
-    index_map: KeyIndexMapper<usize>,
+    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
     feature_id_count: usize,
 }
 
@@ -165,7 +166,7 @@ impl InstanceFeatureStorage {
             vertex_buffer_layout: Fe::BUFFER_LAYOUT,
             shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
-            index_map: KeyIndexMapper::new(),
+            index_map: KeyIndexMapper::default(),
             feature_id_count: 0,
         }
     }
@@ -181,7 +182,7 @@ impl InstanceFeatureStorage {
                 Fe::FEATURE_ALIGNMENT,
                 feature_count * Fe::FEATURE_SIZE,
             ),
-            index_map: KeyIndexMapper::new(),
+            index_map: KeyIndexMapper::default(),
             feature_id_count: 0,
         }
     }
