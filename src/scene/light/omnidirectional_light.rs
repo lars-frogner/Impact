@@ -47,7 +47,7 @@ pub struct OmnidirectionalLight {
     inverse_distance_span: fre,
     // Padding to make size multiple of 16-bytes
     far_distance: fre,
-    _padding_3: fre,
+    _padding_2: fre,
 }
 
 impl OmnidirectionalLight {
@@ -64,7 +64,7 @@ impl OmnidirectionalLight {
             near_distance: 0.0,
             inverse_distance_span: 0.0,
             far_distance: 0.0,
-            _padding_3: 0.0,
+            _padding_2: 0.0,
         }
     }
 
@@ -76,9 +76,18 @@ impl OmnidirectionalLight {
         face: CubemapFace,
         transform_to_camera_space: &Similarity3<fre>,
     ) -> Similarity3<fre> {
+        self.create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
+            * transform_to_camera_space
+    }
+
+    /// Computes the transform from camera space into the space of the positive
+    /// z face for points lying in front of the given face.
+    pub fn create_transform_from_camera_space_to_positive_z_cubemap_face_space(
+        &self,
+        face: CubemapFace,
+    ) -> Similarity3<fre> {
         CubeMapper::rotation_to_positive_z_face_from_face(face)
             * self.create_camera_to_light_space_transform()
-            * transform_to_camera_space
     }
 
     /// Sets the camera space position of the light to the given position.

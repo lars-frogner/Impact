@@ -94,6 +94,12 @@ impl UnidirectionalLight {
         }
     }
 
+    /// Returns a reference to the quaternion that rotates camera space to light
+    /// space.
+    pub fn camera_to_light_space_rotation(&self) -> &UnitQuaternion<fre> {
+        &self.camera_to_light_space_rotation
+    }
+
     /// Takes a transform into camera space and returns the corresponding
     /// transform into the light's space.
     pub fn create_transform_to_light_space(

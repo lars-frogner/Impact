@@ -280,9 +280,10 @@ impl<F: Float> SceneGraph<F> {
 
     /// Creates a new [`ModelInstanceClusterNode`] for a collection of instances
     /// of the model with the given ID and feature IDs, using the given bounding
-    /// sphere for frustum culling. The node is included in the scene graph with
-    /// the given collection of transforms, one for each instance, relative to
-    /// the the given parent node.
+    /// sphere, defined in the cluster's reference frame, for frustum culling.
+    /// The node is included in the scene graph with the given collection of
+    /// transforms, one for each instance, relative to the the given parent
+    /// node.
     ///
     /// If no bounding sphere is provided, the collection of instances will not
     /// be frustum culled.
@@ -294,27 +295,27 @@ impl<F: Float> SceneGraph<F> {
     /// - If the specified parent group node does not exist.
     /// - If no bounding sphere is provided when the parent node is not the root
     ///   node.
-    /// - If the number of elements in each feature ID [`Vec`] is not
-    ///   equal to the given number of transforms.
+    /// - If the number of elements in each feature ID [`Vec`] is not equal to
+    ///   the given number of transforms.
     pub fn create_model_instance_cluster_node(
         &mut self,
         parent_node_id: GroupNodeID,
         model_to_parent_transforms: Vec<NodeTransform<F>>,
         model_id: ModelID,
-        frustum_culling_bounding_sphere: Option<Sphere<F>>,
+        cluster_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<Vec<InstanceFeatureID>>,
     ) -> ModelInstanceClusterNodeID {
         // Since we don't guarantee that any other parent node than the root is
         // never culled, allowing a non-root node to have an uncullable child
         // could lead to unexpected behavior, so we disallow it
         assert!(
-            frustum_culling_bounding_sphere.is_some() || parent_node_id == self.root_node_id(),
+            cluster_bounding_sphere.is_some() || parent_node_id == self.root_node_id(),
             "Tried to create model instance cluster node without bounding sphere and with a non-root parent"
         );
 
         let model_instance_cluster_node = ModelInstanceClusterNode::new(
             parent_node_id,
-            frustum_culling_bounding_sphere,
+            cluster_bounding_sphere,
             model_to_parent_transforms,
             model_id,
             feature_ids,
@@ -1145,16 +1146,16 @@ impl SceneGraph<fre> {
                 if !camera_space_face_frustum
                     .sphere_lies_outside(&model_instance_cluster_camera_space_bounding_sphere)
                 {
+                    let group_to_cubemap_face_transform = omnidirectional_light
+                        .create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
+                        * group_to_camera_transform;
+
                     let instance_model_light_transforms: Vec<_> = model_instance_cluster_node
                         .model_to_parent_transforms()
                         .iter()
                         .map(|transform| {
                             InstanceModelLightTransform::with_model_light_transform(
-                                omnidirectional_light
-                                    .create_transform_to_positive_z_cubemap_face_space(
-                                        face,
-                                        &(group_to_camera_transform * transform),
-                                    ),
+                                group_to_cubemap_face_transform * transform,
                             )
                         })
                         .collect();
@@ -1250,14 +1251,16 @@ impl SceneGraph<fre> {
                     cascade_idx,
                     &model_instance_cluster_camera_space_bounding_sphere,
                 ) {
+                    let group_to_light_transform = unidirectional_light
+                        .camera_to_light_space_rotation()
+                        * group_to_camera_transform;
+
                     let instance_model_light_transforms: Vec<_> = model_instance_cluster_node
                         .model_to_parent_transforms()
                         .iter()
                         .map(|transform| {
                             InstanceModelLightTransform::with_model_light_transform(
-                                unidirectional_light.create_transform_to_light_space(
-                                    &(group_to_camera_transform * transform),
-                                ),
+                                group_to_light_transform * transform,
                             )
                         })
                         .collect();
