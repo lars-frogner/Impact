@@ -7,16 +7,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector4};
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-    mem,
-    ops::Range,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Mutex,
-    },
-};
+use std::{collections::HashMap, fmt::Debug, mem, ops::Range};
 
 /// Represents a piece of data associated with a model instance.
 pub trait InstanceFeature: Pod {
@@ -99,7 +90,7 @@ pub struct DynamicInstanceFeatureBuffer {
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
-    n_valid_bytes: AtomicUsize,
+    n_valid_bytes: usize,
     range_manager: InstanceFeatureBufferRangeManager,
 }
 
@@ -111,7 +102,7 @@ pub type InstanceFeatureBufferRangeID = u32;
 #[derive(Debug)]
 pub struct InstanceFeatureBufferRangeManager {
     range_start_indices: Vec<u32>,
-    range_id_index_mapper: Mutex<KeyIndexMapper<InstanceFeatureBufferRangeID>>,
+    range_id_index_mapper: KeyIndexMapper<InstanceFeatureBufferRangeID>,
 }
 
 /// Describes the ranges defined in a [`DynamicInstanceFeatureBuffer`].
@@ -378,7 +369,7 @@ impl DynamicInstanceFeatureBuffer {
                 Fe::FEATURE_ALIGNMENT,
                 &vec![0; Fe::FEATURE_SIZE * Self::INITIAL_ALLOCATED_FEATURE_COUNT],
             ),
-            n_valid_bytes: AtomicUsize::new(0),
+            n_valid_bytes: 0,
             range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
         }
     }
@@ -395,7 +386,7 @@ impl DynamicInstanceFeatureBuffer {
                 type_descriptor.alignment(),
                 &vec![0; type_descriptor.size() * Self::INITIAL_ALLOCATED_FEATURE_COUNT],
             ),
-            n_valid_bytes: AtomicUsize::new(0),
+            n_valid_bytes: 0,
             range_manager: InstanceFeatureBufferRangeManager::new_with_initial_range(),
         }
     }
@@ -461,7 +452,7 @@ impl DynamicInstanceFeatureBuffer {
     /// Returns the number of bytes from the beginning of the buffer
     /// that are currently valid.
     pub fn n_valid_bytes(&self) -> usize {
-        self.n_valid_bytes.load(Ordering::Acquire)
+        self.n_valid_bytes
     }
 
     /// Returns a slice with the currently valid features in the buffer.
@@ -549,8 +540,8 @@ impl DynamicInstanceFeatureBuffer {
     ///
     /// Does not actually drop buffer contents, just resets the count of valid
     /// bytes to zero.
-    pub fn clear(&self) {
-        self.n_valid_bytes.store(0, Ordering::Release);
+    pub fn clear(&mut self) {
+        self.n_valid_bytes = 0;
         self.range_manager.clear();
     }
 
@@ -559,8 +550,9 @@ impl DynamicInstanceFeatureBuffer {
         assert_eq!(feature_bytes.len(), feature_size);
 
         if feature_size > 0 {
-            let start_byte_idx = self.n_valid_bytes.fetch_add(feature_size, Ordering::SeqCst);
-            let end_byte_idx = start_byte_idx + feature_size;
+            let start_byte_idx = self.n_valid_bytes;
+            self.n_valid_bytes += feature_size;
+            let end_byte_idx = self.n_valid_bytes;
 
             // If the buffer is full, grow it first
             if end_byte_idx >= self.bytes.len() {
@@ -581,10 +573,9 @@ impl DynamicInstanceFeatureBuffer {
         assert_eq!(feature_bytes.len(), feature_slice_size);
 
         if feature_slice_size > 0 {
-            let start_byte_idx = self
-                .n_valid_bytes
-                .fetch_add(feature_slice_size, Ordering::SeqCst);
-            let end_byte_idx = start_byte_idx + feature_slice_size;
+            let start_byte_idx = self.n_valid_bytes;
+            self.n_valid_bytes += feature_slice_size;
+            let end_byte_idx = self.n_valid_bytes;
 
             // If the buffer is full, grow it first
             if end_byte_idx >= self.bytes.len() {
@@ -624,7 +615,7 @@ impl InstanceFeatureBufferRangeManager {
     pub fn new_with_initial_range() -> Self {
         Self {
             range_start_indices: vec![0],
-            range_id_index_mapper: Mutex::new(KeyIndexMapper::new_with_key(Self::INITIAL_RANGE_ID)),
+            range_id_index_mapper: KeyIndexMapper::new_with_key(Self::INITIAL_RANGE_ID),
         }
     }
 
@@ -641,9 +632,8 @@ impl InstanceFeatureBufferRangeManager {
         range_id: InstanceFeatureBufferRangeID,
         get_buffer_length: impl Fn() -> usize,
     ) -> Range<u32> {
-        let range_id_index_mapper = self.range_id_index_mapper.lock().unwrap();
-
-        let range_idx = range_id_index_mapper
+        let range_idx = self
+            .range_id_index_mapper
             .get(range_id)
             .expect("Requested range with invalid ID in buffer range manager");
 
@@ -651,7 +641,7 @@ impl InstanceFeatureBufferRangeManager {
 
         let range_start_idx = self.range_start_indices[range_idx];
 
-        let range_end_idx = if next_range_idx < range_id_index_mapper.len() {
+        let range_end_idx = if next_range_idx < self.range_id_index_mapper.len() {
             self.range_start_indices[next_range_idx]
         } else {
             let buffer_length = u32::try_from(get_buffer_length()).unwrap();
@@ -673,8 +663,7 @@ impl InstanceFeatureBufferRangeManager {
     ///   previous range.
     /// - If a range with the given ID already exists.
     pub fn begin_range(&mut self, range_start_idx: usize, range_id: InstanceFeatureBufferRangeID) {
-        let mut range_id_index_mapper = self.range_id_index_mapper.lock().unwrap();
-        let range_idx = range_id_index_mapper.len();
+        let range_idx = self.range_id_index_mapper.len();
 
         let range_start_idx = u32::try_from(range_start_idx).unwrap();
 
@@ -683,7 +672,7 @@ impl InstanceFeatureBufferRangeManager {
             "Tried to create range starting before the previous range in buffer range manager"
         );
 
-        range_id_index_mapper.push_key(range_id);
+        self.range_id_index_mapper.push_key(range_id);
 
         if range_idx == self.range_start_indices.len() {
             self.range_start_indices.push(range_start_idx);
@@ -693,10 +682,9 @@ impl InstanceFeatureBufferRangeManager {
     }
 
     /// Forgets all ranges.
-    pub fn clear(&self) {
-        let mut range_id_index_mapper = self.range_id_index_mapper.lock().unwrap();
-        range_id_index_mapper.clear();
-        range_id_index_mapper.push_key(Self::INITIAL_RANGE_ID);
+    pub fn clear(&mut self) {
+        self.range_id_index_mapper.clear();
+        self.range_id_index_mapper.push_key(Self::INITIAL_RANGE_ID);
     }
 }
 
@@ -706,12 +694,10 @@ impl InstanceFeatureBufferRangeMap {
         InstanceFeatureBufferRangeManager::INITIAL_RANGE_ID;
 
     fn from_manager(manager: &InstanceFeatureBufferRangeManager) -> Self {
-        let range_id_index_mapper = manager.range_id_index_mapper.lock().unwrap();
-
         let range_start_indices =
-            manager.range_start_indices[..range_id_index_mapper.len()].to_vec();
+            manager.range_start_indices[..manager.range_id_index_mapper.len()].to_vec();
 
-        let range_id_index_map = range_id_index_mapper.as_map().clone();
+        let range_id_index_map = manager.range_id_index_mapper.as_map().clone();
 
         Self {
             range_start_indices,
@@ -1180,7 +1166,7 @@ mod test {
 
     #[test]
     fn clearing_empty_instance_feature_buffer_works() {
-        let buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
         buffer.clear();
 
         assert_eq!(buffer.n_valid_bytes(), 0);
