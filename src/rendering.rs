@@ -86,6 +86,8 @@ pub struct RenderingConfig {
     /// The width and height of the unidirectional light shadow map in number of
     /// texels.
     pub unidirectional_light_shadow_map_resolution: u32,
+    /// Whether shadow mapping is enabled.
+    pub shadow_mapping_enabled: bool,
     /// Whether ambient occlusion is enabled.
     pub ambient_occlusion_enabled: bool,
 }
@@ -220,6 +222,11 @@ impl RenderingSystem {
             .clear_model_render_pass_recorders();
     }
 
+    /// Toggles shadow mapping.
+    pub fn toggle_shadow_mapping(&mut self) {
+        self.config.shadow_mapping_enabled = !self.config.shadow_mapping_enabled;
+    }
+
     /// Toggles ambient occlusion.
     pub fn toggle_ambient_occlusion(&mut self) {
         self.config.ambient_occlusion_enabled = !self.config.ambient_occlusion_enabled;
@@ -292,6 +299,7 @@ impl Default for RenderingConfig {
             polygon_mode: wgpu::PolygonMode::Fill,
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
+            shadow_mapping_enabled: true,
             ambient_occlusion_enabled: true,
         }
     }

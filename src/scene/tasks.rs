@@ -135,27 +135,28 @@ define_task!(
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
-            let scene = world.scene().read().unwrap();
-            let maybe_scene_camera = scene.scene_camera().read().unwrap();
-            let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
-                anyhow!("Tried to bound omnidirectional lights without scene camera")
-            })?;
+            if world.renderer().read().unwrap().config().shadow_mapping_enabled {
+                let scene = world.scene().read().unwrap();
+                let maybe_scene_camera = scene.scene_camera().read().unwrap();
+                let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
+                    anyhow!("Tried to bound omnidirectional lights without scene camera")
+                })?;
 
-            scene.scene_graph()
-                .read()
-                .unwrap()
-                .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
-                    &mut scene.light_storage().write().unwrap(),
-                    &mut scene.instance_feature_manager().write().unwrap(),
-                    scene_camera,
-                );
+                scene.scene_graph()
+                    .read()
+                    .unwrap()
+                    .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
+                        &mut scene.light_storage().write().unwrap(),
+                        &mut scene.instance_feature_manager().write().unwrap(),
+                        scene_camera,
+                    );
 
-            world
-                .renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-
+                world
+                    .renderer()
+                    .read()
+                    .unwrap()
+                    .declare_render_resources_desynchronized();
+            }
             Ok(())
         })
     }
@@ -175,27 +176,28 @@ define_task!(
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
-            let scene = world.scene().read().unwrap();
-            let maybe_scene_camera = scene.scene_camera().read().unwrap();
-            let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
-                anyhow!("Tried to bound unidirectional lights without scene camera")
-            })?;
+            if world.renderer().read().unwrap().config().shadow_mapping_enabled {
+                let scene = world.scene().read().unwrap();
+                let maybe_scene_camera = scene.scene_camera().read().unwrap();
+                let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
+                    anyhow!("Tried to bound unidirectional lights without scene camera")
+                })?;
 
-            scene.scene_graph()
-                .read()
-                .unwrap()
-                .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
-                    &mut scene.light_storage().write().unwrap(),
-                    &mut scene.instance_feature_manager().write().unwrap(),
-                    scene_camera,
-                );
+                scene.scene_graph()
+                    .read()
+                    .unwrap()
+                    .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
+                        &mut scene.light_storage().write().unwrap(),
+                        &mut scene.instance_feature_manager().write().unwrap(),
+                        scene_camera,
+                    );
 
-            world
-                .renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-
+                world
+                    .renderer()
+                    .read()
+                    .unwrap()
+                    .declare_render_resources_desynchronized();
+            }
             Ok(())
         })
     }
