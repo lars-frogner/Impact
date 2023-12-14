@@ -104,6 +104,16 @@ impl InstanceFeatureManager {
             .map(|(model_id, (_, buffers))| (*model_id, buffers))
     }
 
+    /// Returns an iterator over the model IDs and their associated sets of
+    /// instance feature buffers, with the buffers being mutable.
+    pub fn model_ids_and_mutable_buffers(
+        &mut self,
+    ) -> impl Iterator<Item = (ModelID, &'_ mut Vec<DynamicInstanceFeatureBuffer>)> {
+        self.instance_feature_buffers
+            .iter_mut()
+            .map(|(model_id, (_, buffers))| (*model_id, buffers))
+    }
+
     /// Sets up a storage for features of type `Fe`, which is required for
     /// supporting instances with features of that type.
     ///
