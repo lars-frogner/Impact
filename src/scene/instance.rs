@@ -248,7 +248,7 @@ impl InstanceFeatureManager {
     pub fn buffer_multiple_instances(
         &mut self,
         model_id: ModelID,
-        transforms: &[InstanceModelViewTransform],
+        transforms: impl ExactSizeIterator<Item = InstanceModelViewTransform>,
         feature_ids: &[Vec<InstanceFeatureID>],
     ) where
         InstanceModelViewTransform: InstanceFeature,
@@ -267,8 +267,8 @@ impl InstanceFeatureManager {
             .next()
             .expect("Missing transform buffer for instance");
 
-        transform_buffer.add_feature_slice(transforms);
         let n_instances = transforms.len();
+        transform_buffer.add_features_from_iterator(transforms);
 
         for (feature_ids_for_feature_type, feature_buffer) in
             feature_ids.iter().zip(feature_buffers)
@@ -331,7 +331,7 @@ impl InstanceFeatureManager {
     pub fn buffer_multiple_instance_transforms(
         &mut self,
         model_id: ModelID,
-        transforms: &[InstanceModelViewTransform],
+        transforms: impl ExactSizeIterator<Item = InstanceModelViewTransform>,
     ) where
         InstanceModelViewTransform: InstanceFeature,
     {
@@ -344,7 +344,7 @@ impl InstanceFeatureManager {
         feature_buffers
             .get_mut(0)
             .expect("Missing transform buffer for instance")
-            .add_feature_slice(transforms);
+            .add_features_from_iterator(transforms);
     }
 
     fn register_instance_with_feature_type_ids(
@@ -629,7 +629,7 @@ mod test {
         let model_id = create_dummy_model_id("");
         manager.buffer_multiple_instances(
             model_id,
-            &[InstanceModelViewTransform::identity(); 2],
+            [InstanceModelViewTransform::identity(); 2].into_iter(),
             &[],
         );
     }
@@ -672,7 +672,7 @@ mod test {
         let transform_2 = create_dummy_transform_2();
         let transform_3 = InstanceModelViewTransform::identity();
 
-        manager.buffer_multiple_instances(model_id, &[transform_1, transform_2], &[]);
+        manager.buffer_multiple_instances(model_id, [transform_1, transform_2].into_iter(), &[]);
 
         let buffer = &manager.get_buffers(model_id).unwrap()[0];
         assert_eq!(buffer.n_valid_features(), 2);
@@ -681,7 +681,7 @@ mod test {
             &[transform_1, transform_2]
         );
 
-        manager.buffer_multiple_instances(model_id, &[transform_3], &[]);
+        manager.buffer_multiple_instances(model_id, [transform_3].into_iter(), &[]);
 
         let buffer = &manager.get_buffers(model_id).unwrap()[0];
         assert_eq!(buffer.n_valid_features(), 3);
@@ -827,7 +827,7 @@ mod test {
 
         manager.buffer_multiple_instances(
             model_id,
-            &[transform_instance_1, transform_instance_2],
+            [transform_instance_1, transform_instance_2].into_iter(),
             &[
                 vec![id_1_instance_1, id_1_instance_2],
                 vec![id_2_instance_1, id_2_instance_2],
@@ -854,7 +854,7 @@ mod test {
 
         manager.buffer_multiple_instances(
             model_id,
-            &[transform_instance_3],
+            [transform_instance_3].into_iter(),
             &[vec![id_1_instance_3], vec![id_2_instance_3]],
         );
 
@@ -919,11 +919,12 @@ mod test {
 
         manager.buffer_multiple_instances(
             model_id,
-            &[
+            [
                 transform_instance_1,
                 transform_instance_2,
                 transform_instance_3,
-            ],
+            ]
+            .into_iter(),
             &[vec![id_1], vec![id_2]],
         );
 
@@ -975,7 +976,7 @@ mod test {
 
         manager.buffer_multiple_instances(
             model_id,
-            &[InstanceModelViewTransform::identity()],
+            [InstanceModelViewTransform::identity()].into_iter(),
             &[vec![id]],
         );
     }
@@ -997,7 +998,11 @@ mod test {
         manager.register_feature_type::<Feature>();
         let model_id = create_dummy_model_id("");
         manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
-        manager.buffer_multiple_instances(model_id, &[InstanceModelViewTransform::identity()], &[]);
+        manager.buffer_multiple_instances(
+            model_id,
+            [InstanceModelViewTransform::identity()].into_iter(),
+            &[],
+        );
     }
 
     #[test]
@@ -1029,7 +1034,7 @@ mod test {
 
         manager.buffer_multiple_instances(
             model_id,
-            &[InstanceModelViewTransform::identity()],
+            [InstanceModelViewTransform::identity()].into_iter(),
             &[vec![id]],
         );
     }
@@ -1051,10 +1056,11 @@ mod test {
 
         manager.buffer_multiple_instances(
             model_id,
-            &[
+            [
                 create_dummy_transform(),
                 InstanceModelViewTransform::identity(),
-            ],
+            ]
+            .into_iter(),
             &[vec![id; 3]],
         );
     }

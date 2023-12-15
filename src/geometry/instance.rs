@@ -508,6 +508,38 @@ impl DynamicInstanceFeatureBuffer {
         self.add_feature_slice_bytes(features.len(), Fe::feature_slice_bytes(features));
     }
 
+    /// Pushes each feature from the given iterator into the buffer.
+    ///
+    /// # Panics
+    /// If `Fe` is not the feature type the buffer was initialized with.
+    pub fn add_features_from_iterator<Fe: InstanceFeature>(
+        &mut self,
+        features: impl ExactSizeIterator<Item = Fe>,
+    ) {
+        self.type_descriptor.validate_feature::<Fe>();
+
+        let feature_size = self.feature_size();
+        let n_features = features.len();
+
+        if feature_size > 0 && n_features > 0 {
+            let start_byte_idx = self.n_valid_bytes;
+            self.n_valid_bytes += feature_size.checked_mul(n_features).unwrap();
+            let end_byte_idx = self.n_valid_bytes;
+
+            // If the buffer is full, grow it first
+            if end_byte_idx >= self.bytes.len() {
+                self.grow_buffer(end_byte_idx);
+            }
+
+            self.bytes[start_byte_idx..end_byte_idx]
+                .chunks_exact_mut(feature_size)
+                .zip(features)
+                .for_each(|(dest, feature)| {
+                    dest.copy_from_slice(feature.feature_bytes());
+                });
+        }
+    }
+
     /// Pushes a copy of the feature value stored in the given
     /// storage under the given identifier onto the buffer.
     ///
@@ -1186,6 +1218,26 @@ mod test {
         buffer.add_feature_slice(&[feature_3]);
 
         let feature_slice = &[feature_1, feature_2, feature_3];
+        let feature_bytes = bytemuck::cast_slice(feature_slice);
+
+        assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
+        assert_eq!(buffer.n_valid_features(), 3);
+        assert_eq!(buffer.valid_bytes(), feature_bytes);
+        assert_eq!(buffer.valid_features::<Feature>(), feature_slice);
+    }
+
+    #[test]
+    fn adding_features_from_iterator_to_instance_feature_buffer_works() {
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        let features = vec![
+            InstanceModelViewTransform::identity(),
+            create_dummy_feature(),
+            create_dummy_feature(),
+        ];
+
+        buffer.add_features_from_iterator(features.iter().cloned());
+
+        let feature_slice = features.as_slice();
         let feature_bytes = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
