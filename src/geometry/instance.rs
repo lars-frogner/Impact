@@ -525,6 +525,23 @@ impl DynamicInstanceFeatureBuffer {
         self.add_feature_bytes(storage.feature_bytes(feature_id));
     }
 
+    /// Pushes the given number of copies of the feature value stored in the
+    /// given storage under the given identifier onto the buffer.
+    ///
+    /// # Panics
+    /// - If the feature types of the storage and buffer are not the same.
+    /// - If no feature with the given identifier exists in the storage.
+    pub fn add_feature_from_storage_repeatedly(
+        &mut self,
+        storage: &InstanceFeatureStorage,
+        feature_id: InstanceFeatureID,
+        n_copies: usize,
+    ) {
+        self.type_descriptor
+            .validate_feature_type_id(storage.feature_type_id());
+        self.add_feature_bytes_repeatedly(storage.feature_bytes(feature_id), n_copies);
+    }
+
     /// Begins a new range in the buffer starting at the location just after the
     /// current last feature (or at the beginning if the buffer is empty). The
     /// range is assigned the given ID. All features added between this and the
@@ -560,11 +577,28 @@ impl DynamicInstanceFeatureBuffer {
                 self.grow_buffer(end_byte_idx);
             }
 
+            self.bytes[start_byte_idx..end_byte_idx].copy_from_slice(feature_bytes);
+        }
+    }
+
+    fn add_feature_bytes_repeatedly(&mut self, feature_bytes: &[u8], n_copies: usize) {
+        let feature_size = self.feature_size();
+        assert_eq!(feature_bytes.len(), feature_size);
+
+        if feature_size > 0 && n_copies > 0 {
+            let start_byte_idx = self.n_valid_bytes;
+            self.n_valid_bytes += feature_size.checked_mul(n_copies).unwrap();
+            let end_byte_idx = self.n_valid_bytes;
+
+            // If the buffer is full, grow it first
+            if end_byte_idx >= self.bytes.len() {
+                self.grow_buffer(end_byte_idx);
+            }
+
             self.bytes[start_byte_idx..end_byte_idx]
-                .iter_mut()
-                .zip(feature_bytes.iter())
-                .for_each(|(dest, src)| {
-                    *dest = *src;
+                .chunks_exact_mut(feature_size)
+                .for_each(|dest| {
+                    dest.copy_from_slice(feature_bytes);
                 });
         }
     }
@@ -583,12 +617,7 @@ impl DynamicInstanceFeatureBuffer {
                 self.grow_buffer(end_byte_idx);
             }
 
-            self.bytes[start_byte_idx..end_byte_idx]
-                .iter_mut()
-                .zip(feature_bytes.iter())
-                .for_each(|(dest, src)| {
-                    *dest = *src;
-                });
+            self.bytes[start_byte_idx..end_byte_idx].copy_from_slice(feature_bytes);
         }
     }
 
@@ -1157,6 +1186,60 @@ mod test {
         buffer.add_feature_slice(&[feature_3]);
 
         let feature_slice = &[feature_1, feature_2, feature_3];
+        let feature_bytes = bytemuck::cast_slice(feature_slice);
+
+        assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
+        assert_eq!(buffer.n_valid_features(), 3);
+        assert_eq!(buffer.valid_bytes(), feature_bytes);
+        assert_eq!(buffer.valid_features::<Feature>(), feature_slice);
+    }
+
+    #[test]
+    fn adding_feature_from_storage_to_instance_feature_buffer_works() {
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let feature = create_dummy_feature();
+        let id = storage.add_feature(&feature);
+
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        buffer.add_feature_from_storage(&storage, id);
+
+        assert_eq!(buffer.n_valid_bytes(), mem::size_of::<Feature>());
+        assert_eq!(buffer.n_valid_features(), 1);
+        assert_eq!(buffer.valid_bytes(), bytemuck::bytes_of(&feature));
+        assert_eq!(buffer.valid_features::<Feature>(), &[feature]);
+    }
+
+    #[test]
+    fn adding_two_features_from_storage_to_instance_feature_buffer_works() {
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let feature_1 = InstanceModelViewTransform::identity();
+        let feature_2 = create_dummy_feature();
+        let id_1 = storage.add_feature(&feature_1);
+        let id_2 = storage.add_feature(&feature_2);
+
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        buffer.add_feature_from_storage(&storage, id_2);
+        buffer.add_feature_from_storage(&storage, id_1);
+
+        let feature_slice = &[feature_2, feature_1];
+        let feature_bytes = bytemuck::cast_slice(feature_slice);
+
+        assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
+        assert_eq!(buffer.n_valid_features(), 2);
+        assert_eq!(buffer.valid_bytes(), feature_bytes);
+        assert_eq!(buffer.valid_features::<Feature>(), feature_slice);
+    }
+
+    #[test]
+    fn adding_feature_from_storage_repeatedly_to_instance_feature_buffer_works() {
+        let mut storage = InstanceFeatureStorage::new::<Feature>();
+        let feature = create_dummy_feature();
+        let id = storage.add_feature(&feature);
+
+        let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
+        buffer.add_feature_from_storage_repeatedly(&storage, id, 3);
+
+        let feature_slice = &[feature; 3];
         let feature_bytes = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());

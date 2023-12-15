@@ -230,8 +230,9 @@ impl InstanceFeatureManager {
     /// Finds the instance feature buffers for the model with the given ID and
     /// pushes the given set of transforms (one for each instance) and the
     /// feature values corrsponding to the given sets of feature IDs (one
-    /// [`Vec`] for each feature type, each [`Vec`] containing the feature ID of
-    /// each instance) onto the buffers.
+    /// [`Vec`] for each feature type, each [`Vec`] containing either a single
+    /// feature ID, in which case this is assumed to apply to all instances, or
+    /// containing a separate feature ID for each instance) onto the buffers.
     ///
     /// # Panics
     /// - If no buffers exist for the model with the given ID.
@@ -242,8 +243,8 @@ impl InstanceFeatureManager {
     ///   to be the same as in the
     ///   [`MaterialSpecification`](crate::scene::MaterialSpecification) of the
     ///   model, which was used to initialize the buffers.
-    /// - If any of the [`Vec`] with feature IDs has a different length than the
-    ///   slice of transforms.
+    /// - If any of the [`Vec`] with feature IDs has a different length than one
+    ///   or the number of transforms.
     pub fn buffer_multiple_instances(
         &mut self,
         model_id: ModelID,
@@ -269,13 +270,9 @@ impl InstanceFeatureManager {
         transform_buffer.add_feature_slice(transforms);
         let n_instances = transforms.len();
 
-        for (feature_ids, feature_buffer) in feature_ids.iter().zip(feature_buffers) {
-            assert_eq!(
-                feature_ids.len(),
-                n_instances,
-                "Encountered different instance counts for different feature types when buffering multiple instances"
-            );
-
+        for (feature_ids_for_feature_type, feature_buffer) in
+            feature_ids.iter().zip(feature_buffers)
+        {
             let feature_type_id = feature_buffer.feature_type_id();
 
             let storage = self
@@ -283,8 +280,21 @@ impl InstanceFeatureManager {
                 .get(&feature_type_id)
                 .expect("Missing storage for model instance feature");
 
-            for &feature_id in feature_ids {
-                feature_buffer.add_feature_from_storage(storage, feature_id);
+            let n_features_for_feature_type = feature_ids_for_feature_type.len();
+            if n_features_for_feature_type == 1 && n_instances > 1 {
+                feature_buffer.add_feature_from_storage_repeatedly(
+                    storage,
+                    feature_ids_for_feature_type[0],
+                    n_instances,
+                );
+            } else {
+                assert_eq!(
+                    n_features_for_feature_type, n_instances,
+                    "Encountered different instance counts for different feature types when buffering multiple instances"
+                );
+                for &feature_id in feature_ids_for_feature_type {
+                    feature_buffer.add_feature_from_storage(storage, feature_id);
+                }
             }
         }
     }
@@ -880,6 +890,67 @@ mod test {
     }
 
     #[test]
+    fn buffering_multiple_instances_with_repeated_feature_in_instance_feature_manager_works() {
+        let mut manager = InstanceFeatureManager::new();
+
+        manager.register_feature_type::<Feature>();
+        manager.register_feature_type::<DifferentFeature>();
+
+        let model_id = create_dummy_model_id("");
+        manager.register_instance_with_feature_type_ids(
+            model_id,
+            &[Feature::FEATURE_TYPE_ID, DifferentFeature::FEATURE_TYPE_ID],
+        );
+
+        let transform_instance_1 = create_dummy_transform();
+        let transform_instance_2 = create_dummy_transform_2();
+        let transform_instance_3 = InstanceModelViewTransform::identity();
+        let feature_1 = Feature(22);
+        let feature_2 = DifferentFeature(-73.1);
+
+        let id_1 = manager
+            .get_storage_mut::<Feature>()
+            .unwrap()
+            .add_feature(&feature_1);
+        let id_2 = manager
+            .get_storage_mut::<DifferentFeature>()
+            .unwrap()
+            .add_feature(&feature_2);
+
+        manager.buffer_multiple_instances(
+            model_id,
+            &[
+                transform_instance_1,
+                transform_instance_2,
+                transform_instance_3,
+            ],
+            &[vec![id_1], vec![id_2]],
+        );
+
+        let buffers = manager.get_buffers(model_id).unwrap();
+        assert_eq!(buffers.len(), 3);
+        assert_eq!(buffers[0].n_valid_features(), 3);
+        assert_eq!(
+            buffers[0].valid_features::<InstanceModelViewTransform>(),
+            &[
+                transform_instance_1,
+                transform_instance_2,
+                transform_instance_3
+            ]
+        );
+        assert_eq!(buffers[1].n_valid_features(), 3);
+        assert_eq!(
+            buffers[1].valid_features::<Feature>(),
+            &[feature_1, feature_1, feature_1]
+        );
+        assert_eq!(buffers[2].n_valid_features(), 3);
+        assert_eq!(
+            buffers[2].valid_features::<DifferentFeature>(),
+            &[feature_2, feature_2, feature_2]
+        );
+    }
+
+    #[test]
     #[should_panic]
     fn buffering_instance_with_too_many_feature_ids_in_instance_feature_manager_fails() {
         let mut manager = InstanceFeatureManager::new();
@@ -973,8 +1044,10 @@ mod test {
         let model_id = create_dummy_model_id("");
         manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
 
-        let mut storage = InstanceFeatureStorage::new::<Feature>();
-        let id = storage.add_feature(&Feature(42));
+        let id = manager
+            .get_storage_mut::<Feature>()
+            .unwrap()
+            .add_feature(&Feature(42));
 
         manager.buffer_multiple_instances(
             model_id,
@@ -982,7 +1055,7 @@ mod test {
                 create_dummy_transform(),
                 InstanceModelViewTransform::identity(),
             ],
-            &[vec![id]],
+            &[vec![id; 3]],
         );
     }
 }
