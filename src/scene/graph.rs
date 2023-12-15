@@ -10,8 +10,8 @@ pub use components::{
 
 use crate::{
     geometry::{
-        CubemapFace, Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
-        InstanceModelViewTransform, Sphere,
+        ClusterInstanceTransform, CubemapFace, Frustum, InstanceFeature, InstanceFeatureID,
+        InstanceModelLightTransform, InstanceModelViewTransform, Sphere,
     },
     num::Float,
     rendering::{fre, CascadeIdx},
@@ -137,7 +137,7 @@ pub struct ModelInstanceNode<F: Float> {
 pub struct ModelInstanceClusterNode<F: Float> {
     parent_node_id: GroupNodeID,
     cluster_bounding_sphere: Option<Sphere<F>>,
-    model_to_parent_transforms: Vec<NodeTransform<F>>,
+    model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
     model_id: ModelID,
     feature_ids: Vec<Vec<InstanceFeatureID>>,
 }
@@ -300,7 +300,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn create_model_instance_cluster_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        model_to_parent_transforms: Vec<NodeTransform<F>>,
+        model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
         model_id: ModelID,
         cluster_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<Vec<InstanceFeatureID>>,
@@ -861,9 +861,7 @@ impl<F: Float> SceneGraph<F> {
             .model_to_parent_transforms()
             .iter()
             .map(|transform| {
-                InstanceModelViewTransform::with_model_view_transform(
-                    (parent_to_camera_transform * transform).cast(),
-                )
+                transform.transform_into_model_view_transform(&parent_to_camera_transform)
             });
 
         instance_feature_manager.buffer_multiple_instances(
@@ -1153,8 +1151,8 @@ impl SceneGraph<fre> {
                         .model_to_parent_transforms()
                         .iter()
                         .map(|transform| {
-                            InstanceModelLightTransform::with_model_light_transform(
-                                group_to_cubemap_face_transform * transform,
+                            transform.transform_into_model_view_transform(
+                                &group_to_cubemap_face_transform,
                             )
                         });
 
@@ -1257,9 +1255,7 @@ impl SceneGraph<fre> {
                         .model_to_parent_transforms()
                         .iter()
                         .map(|transform| {
-                            InstanceModelLightTransform::with_model_light_transform(
-                                group_to_light_transform * transform,
-                            )
+                            transform.transform_into_model_view_transform(&group_to_light_transform)
                         });
 
                     instance_feature_manager.buffer_multiple_instance_transforms(
@@ -1546,7 +1542,7 @@ impl<F: Float> ModelInstanceClusterNode<F> {
     fn new(
         parent_node_id: GroupNodeID,
         cluster_bounding_sphere: Option<Sphere<F>>,
-        model_to_parent_transforms: Vec<NodeTransform<F>>,
+        model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
         model_id: ModelID,
         feature_ids: Vec<Vec<InstanceFeatureID>>,
     ) -> Self {
@@ -1578,15 +1574,8 @@ impl<F: Float> ModelInstanceClusterNode<F> {
         self.model_to_parent_transforms.len()
     }
 
-    /// Returns an iterator over the parent-to-model transforms for the node.
-    pub fn parent_to_model_transforms(&self) -> impl Iterator<Item = NodeTransform<F>> + '_ {
-        self.model_to_parent_transforms
-            .iter()
-            .map(|transform| transform.inverse())
-    }
-
     /// Returns the model-to-parent transforms for the node.
-    pub fn model_to_parent_transforms(&self) -> &[NodeTransform<F>] {
+    pub fn model_to_parent_transforms(&self) -> &[ClusterInstanceTransform<F>] {
         &self.model_to_parent_transforms
     }
 
@@ -1610,7 +1599,7 @@ impl<F: Float> ModelInstanceClusterNode<F> {
     /// feature types in the cluster.
     pub fn push_instance(
         &mut self,
-        model_to_parent_transform: NodeTransform<F>,
+        model_to_parent_transform: ClusterInstanceTransform<F>,
         feature_ids: &[InstanceFeatureID],
     ) {
         assert_eq!(
@@ -1719,7 +1708,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use impact_utils::hash64;
-    use nalgebra::{point, Point3, Rotation3, Scale3, Translation3};
+    use nalgebra::{point, vector, Point3, Rotation3, Scale3, Translation3};
 
     fn create_dummy_group_node<F: Float>(
         scene_graph: &mut SceneGraph<F>,
@@ -1760,14 +1749,17 @@ mod test {
         create_dummy_model_instance_cluster_node_with_transforms(
             scene_graph,
             parent_node_id,
-            vec![Similarity3::identity(), Similarity3::identity()],
+            vec![
+                ClusterInstanceTransform::identity(),
+                ClusterInstanceTransform::identity(),
+            ],
         )
     }
 
     fn create_dummy_model_instance_cluster_node_with_transforms<F: Float>(
         scene_graph: &mut SceneGraph<F>,
         parent_node_id: GroupNodeID,
-        model_to_parent_transforms: Vec<Similarity3<F>>,
+        model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
     ) -> ModelInstanceClusterNodeID {
         scene_graph.create_model_instance_cluster_node(
             parent_node_id,
@@ -1797,12 +1789,8 @@ mod test {
         )
     }
 
-    fn create_dummy_transform() -> Similarity3<f64> {
-        Similarity3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
-            7.0,
-        )
+    fn create_dummy_cluster_instance_transform() -> ClusterInstanceTransform<f64> {
+        ClusterInstanceTransform::new(vector![2.1, -5.9, 0.01], 7.0)
     }
 
     #[test]
@@ -1868,7 +1856,7 @@ mod test {
         let root_id = scene_graph.root_node_id();
         scene_graph.create_model_instance_cluster_node(
             root_id,
-            vec![Similarity3::identity()],
+            vec![ClusterInstanceTransform::identity()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![]],
@@ -1882,7 +1870,7 @@ mod test {
         let root_id = scene_graph.root_node_id();
         scene_graph.create_model_instance_cluster_node(
             root_id,
-            vec![Similarity3::identity(); 2],
+            vec![ClusterInstanceTransform::identity(); 2],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![InstanceFeatureID::not_applicable()]],
@@ -1896,22 +1884,25 @@ mod test {
 
         let id = scene_graph.create_model_instance_cluster_node(
             root_id,
-            vec![Similarity3::identity()],
+            vec![ClusterInstanceTransform::identity()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![InstanceFeatureID::not_applicable()]],
         );
 
-        let new_transform = create_dummy_transform();
+        let new_transform = create_dummy_cluster_instance_transform();
 
         let node = scene_graph.model_instance_cluster_node_mut(id);
 
-        node.push_instance(new_transform, &[InstanceFeatureID::not_applicable()]);
+        node.push_instance(
+            new_transform.clone(),
+            &[InstanceFeatureID::not_applicable()],
+        );
 
         assert_eq!(node.n_instances(), 2);
         assert_abs_diff_eq!(
             node.model_to_parent_transforms(),
-            [Similarity3::identity(), new_transform].as_slice()
+            [ClusterInstanceTransform::identity(), new_transform].as_slice()
         );
         assert_eq!(node.feature_ids().len(), 1);
         assert_eq!(
@@ -1928,7 +1919,7 @@ mod test {
 
         let id = scene_graph.create_model_instance_cluster_node(
             root_id,
-            vec![Similarity3::identity()],
+            vec![ClusterInstanceTransform::identity()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![
@@ -1937,7 +1928,7 @@ mod test {
             ],
         );
 
-        let new_transform = create_dummy_transform();
+        let new_transform = create_dummy_cluster_instance_transform();
 
         let node = scene_graph.model_instance_cluster_node_mut(id);
 
@@ -1949,11 +1940,14 @@ mod test {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
 
-        let remaining_transform = create_dummy_transform();
+        let remaining_transform = create_dummy_cluster_instance_transform();
 
         let id = scene_graph.create_model_instance_cluster_node(
             root_id,
-            vec![Similarity3::identity(), remaining_transform],
+            vec![
+                ClusterInstanceTransform::identity(),
+                remaining_transform.clone(),
+            ],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![InstanceFeatureID::not_applicable(); 2]],
@@ -2293,7 +2287,10 @@ mod test {
 
         let model_instance_cluster_node_id = scene_graph.create_model_instance_cluster_node(
             group,
-            vec![Similarity3::identity(), Similarity3::identity()],
+            vec![
+                ClusterInstanceTransform::identity(),
+                ClusterInstanceTransform::identity(),
+            ],
             create_dummy_model_id(""),
             Some(bounding_sphere.clone()),
             Vec::new(),
