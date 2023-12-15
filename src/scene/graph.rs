@@ -296,7 +296,7 @@ impl<F: Float> SceneGraph<F> {
     /// - If no bounding sphere is provided when the parent node is not the root
     ///   node.
     /// - If the number of elements in each feature ID [`Vec`] is not equal to
-    ///   the given number of transforms.
+    ///   one or to the given number of transforms.
     pub fn create_model_instance_cluster_node(
         &mut self,
         parent_node_id: GroupNodeID,
@@ -1555,9 +1555,9 @@ impl<F: Float> ModelInstanceClusterNode<F> {
     ) -> Self {
         let n_instances = model_to_parent_transforms.len();
         for feature_ids in &feature_ids {
-            assert_eq!(
-                feature_ids.len(),
-                n_instances,
+            let n_feature_ids = feature_ids.len();
+            assert!(
+                n_feature_ids == 1 || n_feature_ids == n_instances,
                 "Tried to create model instance cluster node with inconsistent numbers of transforms and feature IDs"
             );
         }
@@ -1875,6 +1875,20 @@ mod test {
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![]],
+        );
+    }
+
+    #[test]
+    fn creating_model_instance_cluster_node_with_multiple_transforms_and_one_feature_id_is_allowed()
+    {
+        let mut scene_graph = SceneGraph::<f64>::new();
+        let root_id = scene_graph.root_node_id();
+        scene_graph.create_model_instance_cluster_node(
+            root_id,
+            vec![Similarity3::identity(); 2],
+            create_dummy_model_id(""),
+            Some(Sphere::new(Point3::origin(), 1.0)),
+            vec![vec![InstanceFeatureID::not_applicable()]],
         );
     }
 
