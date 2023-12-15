@@ -857,19 +857,18 @@ impl<F: Float> SceneGraph<F> {
         InstanceModelViewTransform: InstanceFeature,
         F: simba::scalar::SubsetOf<fre>,
     {
-        let instance_model_view_transforms: Vec<_> = model_instance_cluster_node
+        let instance_model_view_transforms = model_instance_cluster_node
             .model_to_parent_transforms()
             .iter()
             .map(|transform| {
                 InstanceModelViewTransform::with_model_view_transform(
                     (parent_to_camera_transform * transform).cast(),
                 )
-            })
-            .collect();
+            });
 
         instance_feature_manager.buffer_multiple_instances(
             model_instance_cluster_node.model_id(),
-            &instance_model_view_transforms,
+            instance_model_view_transforms,
             model_instance_cluster_node.feature_ids(),
         );
     }
@@ -1150,19 +1149,18 @@ impl SceneGraph<fre> {
                         .create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
                         * group_to_camera_transform;
 
-                    let instance_model_light_transforms: Vec<_> = model_instance_cluster_node
+                    let instance_model_light_transforms = model_instance_cluster_node
                         .model_to_parent_transforms()
                         .iter()
                         .map(|transform| {
                             InstanceModelLightTransform::with_model_light_transform(
                                 group_to_cubemap_face_transform * transform,
                             )
-                        })
-                        .collect();
+                        });
 
                     instance_feature_manager.buffer_multiple_instance_transforms(
                         model_instance_cluster_node.model_id(),
-                        &instance_model_light_transforms,
+                        instance_model_light_transforms,
                     );
                 }
             }
@@ -1255,19 +1253,18 @@ impl SceneGraph<fre> {
                         .camera_to_light_space_rotation()
                         * group_to_camera_transform;
 
-                    let instance_model_light_transforms: Vec<_> = model_instance_cluster_node
+                    let instance_model_light_transforms = model_instance_cluster_node
                         .model_to_parent_transforms()
                         .iter()
                         .map(|transform| {
                             InstanceModelLightTransform::with_model_light_transform(
                                 group_to_light_transform * transform,
                             )
-                        })
-                        .collect();
+                        });
 
                     instance_feature_manager.buffer_multiple_instance_transforms(
                         model_instance_cluster_node.model_id(),
-                        &instance_model_light_transforms,
+                        instance_model_light_transforms,
                     );
                 }
             }
