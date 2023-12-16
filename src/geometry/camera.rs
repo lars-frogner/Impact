@@ -65,7 +65,8 @@ impl<F: Float> PerspectiveCamera<F> {
     /// `aspect_ratio` is the ratio of width to height of the view plane.
     ///
     /// # Panics
-    /// If `aspect_ratio` or `vertical_field_of_view` is zero.
+    /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
+    /// zero.
     pub fn new<A: Angle<F>>(
         aspect_ratio: F,
         vertical_field_of_view: A,
