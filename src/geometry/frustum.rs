@@ -1,16 +1,12 @@
 //! Representation of frustums.
 
 use crate::{
-    geometry::{
-        plane::{IntersectsPlane, SphereRelationToPlane},
-        AxisAlignedBox, Bounds, Plane, Sphere, UpperExclusiveBounds,
-    },
+    geometry::{AxisAlignedBox, Bounds, Plane, Sphere, UpperExclusiveBounds},
     num::Float,
 };
 use approx::AbsDiffEq;
 use nalgebra::{
-    self as na, point, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion,
-    UnitVector3,
+    point, vector, Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3,
 };
 
 /// A frustum, which in general is a pyramid truncated at the
@@ -107,84 +103,15 @@ impl<F: Float> Frustum<F> {
             .all(|plane| plane.point_lies_in_positive_halfspace(point))
     }
 
-    /// Whether all of the given sphere is outside the frustum. If the
-    /// boundaries exactly touch each other, the sphere is considered inside.
-    pub fn sphere_lies_outside(&self, sphere: &Sphere<F>) -> bool {
-        let mut intersects_from_negative_halfspace = [false, false, false];
-
-        // For every plane that the sphere intersects and its
-        // center lies in the negative halfspace, we will set
-        // the corresponding coordinate in this point to the
-        // offset of that plane along its normal in normalized
-        // device coordinates, giving us a way to quickly find
-        // the point on the frustum closest to the sphere
-        let mut closest_point_ndc = Point3::origin();
-
-        for (plane, (plane_axis, plane_offset_ndc)) in self.planes.iter().zip(Self::CUBE_PLANES_NDC)
-        {
-            // If we already know that the sphere center lies in the
-            // negative halfspace of the opposite plane, there is no
-            // reason to test the sphere against this plane
-            if intersects_from_negative_halfspace[plane_axis] {
-                continue;
-            }
-            match plane.determine_sphere_relation(sphere) {
-                // If all of the sphere lies in the negative halfspace
-                // of any frustum plane is is sure to be outside
-                SphereRelationToPlane::CenterInNegativeHalfspace(IntersectsPlane::No) => {
-                    return true
-                }
-                SphereRelationToPlane::CenterInNegativeHalfspace(IntersectsPlane::Yes) => {
-                    intersects_from_negative_halfspace[plane_axis] = true;
-                    closest_point_ndc[plane_axis] = plane_offset_ndc;
-                }
-                SphereRelationToPlane::CenterInPositiveHalfspace(_) => {}
-            }
-        }
-
-        let negative_halfspace_intersection_count = intersects_from_negative_halfspace
-            .into_iter()
-            .filter(|intersects| *intersects)
-            .count();
-
-        // If the sphere intersects none or one plane with its center in
-        // the negative halfspace, it mut be at least partially inside
-        // the frustum
-        if negative_halfspace_intersection_count <= 1 {
-            false
-        }
-        // If the sphere intersects two or three planes with its center
-        // in the negative halfspace, it lies on the outside along an
-        // edge or near a corner of the frustum, respectively
-        else {
-            // If the sphere lies along an edge, the coordinate along the
-            // edge of the point closest to the sphere is as yet un-
-            // determined (that coordinate will not have been updated from
-            // `0.0` in `closest_point_ndc`) but must correspond to the
-            // coordinate along the edge of the center of the sphere
-            if negative_halfspace_intersection_count == 2 {
-                let sphere_center_ndc = self.transform_matrix.transform_point(sphere.center());
-                for (idx, intersects) in intersects_from_negative_halfspace.into_iter().enumerate()
-                {
-                    if !intersects {
-                        closest_point_ndc[idx] = sphere_center_ndc[idx];
-                        break;
-                    }
-                }
-            }
-
-            // We have found the normalized device coordinates of the closest
-            // point on the frustum, so we transform that into the space of
-            // the sphere using the stored inverse transform
-            let closest_point = self
-                .inverse_transform_matrix
-                .transform_point(&closest_point_ndc);
-
-            // Finally we can determine whether the sphere is fully outside
-            // the frustum by checking the distance from the sphere center to
-            // the closest point
-            na::distance_squared(sphere.center(), &closest_point) > sphere.radius_squared()
-        }
+    /// Whether any part of the given sphere could be inside the frustum. If the
+    /// sphere lies close to an edge or a corner, this method may return `true`
+    /// even if the sphere is really outside. However, this method is will
+    /// always return `true` if the sphere is really inside. If the boundaries
+    /// exactly touch each other, the sphere is considered inside.
+    pub fn could_contain_part_of_sphere(&self, sphere: &Sphere<F>) -> bool {
+        self.planes
+            .iter()
+            .all(|plane| plane.compute_signed_distance(sphere.center()) >= -sphere.radius())
     }
 
     /// Computes the 8 corners of the frustum.
@@ -324,20 +251,6 @@ impl<F: Float> Frustum<F> {
         }
     }
 
-    /// Each element represents the plane making up a face
-    /// of the frustum cube in normalized device coordinates,
-    /// with the first and second tuple element representing
-    /// the axis of the plane normal (0 => x, 1 => y, 2 => z)
-    /// and the offset of the plane along that axis, respectively.
-    const CUBE_PLANES_NDC: [(usize, F); 6] = [
-        (0, F::NEG_ONE),
-        (0, F::ONE),
-        (1, F::NEG_ONE),
-        (1, F::ONE),
-        (2, F::ZERO),
-        (2, F::ONE),
-    ];
-
     fn planes_from_transform_matrix(transform_matrix: &Matrix4<F>) -> [Plane<F>; 6] {
         let m = transform_matrix;
 
@@ -475,7 +388,7 @@ mod test {
     }
 
     #[test]
-    fn outside_spheres_are_reported_as_outside() {
+    fn safely_outside_spheres_are_reported_as_outside() {
         let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
@@ -490,12 +403,12 @@ mod test {
                         (0, _, _) | (_, 0, _) | (_, _, 0) => f64::sqrt(2.0),
                         _ => f64::sqrt(3.0),
                     };
-                    for dist_fraction in [0.999, 0.5, 0.1] {
+                    for dist_fraction in [0.5, 0.3, 0.1] {
                         let sphere = Sphere::new(
                             point![f64::from(x), f64::from(y), f64::from(z)],
                             dist_fraction * dist_to_frustum,
                         );
-                        assert!(frustum.sphere_lies_outside(&sphere));
+                        assert!(!frustum.could_contain_part_of_sphere(&sphere));
                     }
                 }
             }
@@ -522,7 +435,7 @@ mod test {
                         point![f64::from(x), f64::from(y), f64::from(z)],
                         1.001 * dist_to_frustum,
                     );
-                    assert!(!frustum.sphere_lies_outside(&sphere));
+                    assert!(frustum.could_contain_part_of_sphere(&sphere));
                 }
             }
         }
@@ -535,7 +448,7 @@ mod test {
         );
         for radius in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
             let sphere = Sphere::new(Point3::origin(), radius);
-            assert!(!frustum.sphere_lies_outside(&sphere));
+            assert!(frustum.could_contain_part_of_sphere(&sphere));
         }
     }
 
@@ -562,6 +475,18 @@ mod test {
             frustum_from_transformed,
             epsilon = 1e-9
         );
+    }
+
+    #[test]
+    fn inside_sphere_is_reported_as_not_outside() {
+        let frustum = Frustum::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
+                .as_projective(),
+        );
+
+        let sphere = Sphere::new(point![3.37632, -3.3647947, -2.6214356], 1.0);
+
+        assert!(frustum.could_contain_part_of_sphere(&sphere));
     }
 
     #[test]

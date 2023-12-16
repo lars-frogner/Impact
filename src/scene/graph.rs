@@ -534,7 +534,8 @@ impl<F: Float> SceneGraph<F> {
                 let bounding_sphere_camera_space =
                     bounding_sphere.transformed(&group_to_camera_transform);
 
-                !camera_space_view_frustum.sphere_lies_outside(&bounding_sphere_camera_space)
+                camera_space_view_frustum
+                    .could_contain_part_of_sphere(&bounding_sphere_camera_space)
             } else {
                 // If the group has no bounding sphere, buffer it unconditionally
                 true
@@ -556,17 +557,17 @@ impl<F: Float> SceneGraph<F> {
             let model_view_transform =
                 root_to_camera_transform * model_instance_node.model_to_parent_transform();
 
-            let should_buffer = if let Some(bounding_sphere) =
-                model_instance_node.get_model_bounding_sphere()
-            {
-                let child_bounding_sphere_camera_space =
-                    bounding_sphere.transformed(&model_view_transform);
+            let should_buffer =
+                if let Some(bounding_sphere) = model_instance_node.get_model_bounding_sphere() {
+                    let child_bounding_sphere_camera_space =
+                        bounding_sphere.transformed(&model_view_transform);
 
-                !camera_space_view_frustum.sphere_lies_outside(&child_bounding_sphere_camera_space)
-            } else {
-                // If the model has no bounding sphere, buffer it unconditionally
-                true
-            };
+                    camera_space_view_frustum
+                        .could_contain_part_of_sphere(&child_bounding_sphere_camera_space)
+                } else {
+                    // If the model has no bounding sphere, buffer it unconditionally
+                    true
+                };
 
             if should_buffer {
                 Self::buffer_model_view_transform_of_model_instance(
@@ -589,8 +590,8 @@ impl<F: Float> SceneGraph<F> {
                 let cluster_bounding_sphere_camera_space =
                     bounding_sphere.transformed(&root_to_camera_transform);
 
-                !camera_space_view_frustum
-                    .sphere_lies_outside(&cluster_bounding_sphere_camera_space)
+                camera_space_view_frustum
+                    .could_contain_part_of_sphere(&cluster_bounding_sphere_camera_space)
             } else {
                 // If the model has no bounding sphere, buffer it unconditionally
                 true
@@ -734,17 +735,17 @@ impl<F: Float> SceneGraph<F> {
             let child_group_to_camera_transform =
                 group_to_camera_transform * child_group_node.group_to_parent_transform();
 
-            let should_buffer = if let Some(child_bounding_sphere) =
-                child_group_node.get_bounding_sphere()
-            {
-                let child_bounding_sphere_camera_space =
-                    child_bounding_sphere.transformed(&child_group_to_camera_transform);
+            let should_buffer =
+                if let Some(child_bounding_sphere) = child_group_node.get_bounding_sphere() {
+                    let child_bounding_sphere_camera_space =
+                        child_bounding_sphere.transformed(&child_group_to_camera_transform);
 
-                !camera_space_view_frustum.sphere_lies_outside(&child_bounding_sphere_camera_space)
-            } else {
-                // If the group has no bounding sphere, buffer it unconditionally
-                true
-            };
+                    camera_space_view_frustum
+                        .could_contain_part_of_sphere(&child_bounding_sphere_camera_space)
+                } else {
+                    // If the group has no bounding sphere, buffer it unconditionally
+                    true
+                };
 
             if should_buffer {
                 self.buffer_transforms_of_visible_model_instances_in_group(
@@ -769,7 +770,8 @@ impl<F: Float> SceneGraph<F> {
                 let child_bounding_sphere_camera_space =
                     child_bounding_sphere.transformed(&child_model_view_transform);
 
-                !camera_space_view_frustum.sphere_lies_outside(&child_bounding_sphere_camera_space)
+                camera_space_view_frustum
+                    .could_contain_part_of_sphere(&child_bounding_sphere_camera_space)
             } else {
                 // If the model has no bounding sphere, buffer it unconditionally
                 true
@@ -798,8 +800,8 @@ impl<F: Float> SceneGraph<F> {
                 let cluster_bounding_sphere_camera_space =
                     child_bounding_sphere.transformed(group_to_camera_transform);
 
-                !camera_space_view_frustum
-                    .sphere_lies_outside(&cluster_bounding_sphere_camera_space)
+                camera_space_view_frustum
+                    .could_contain_part_of_sphere(&cluster_bounding_sphere_camera_space)
             } else {
                 // If the model has no bounding sphere, buffer it unconditionally
                 true
@@ -1080,8 +1082,8 @@ impl SceneGraph<fre> {
                 let child_camera_space_bounding_sphere =
                     child_bounding_sphere.transformed(&child_group_to_camera_transform);
 
-                if !camera_space_face_frustum
-                    .sphere_lies_outside(&child_camera_space_bounding_sphere)
+                if camera_space_face_frustum
+                    .could_contain_part_of_sphere(&child_camera_space_bounding_sphere)
                 {
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_omnidirectional_light_cubemap_face(
                         instance_feature_manager,
@@ -1108,8 +1110,8 @@ impl SceneGraph<fre> {
                 let model_instance_camera_space_bounding_sphere =
                     model_instance_bounding_sphere.transformed(&model_instance_to_camera_transform);
 
-                if !camera_space_face_frustum
-                    .sphere_lies_outside(&model_instance_camera_space_bounding_sphere)
+                if camera_space_face_frustum
+                    .could_contain_part_of_sphere(&model_instance_camera_space_bounding_sphere)
                 {
                     let instance_model_light_transform =
                         InstanceModelLightTransform::with_model_light_transform(
@@ -1140,9 +1142,9 @@ impl SceneGraph<fre> {
                 let model_instance_cluster_camera_space_bounding_sphere =
                     model_instance_cluster_bounding_sphere.transformed(group_to_camera_transform);
 
-                if !camera_space_face_frustum
-                    .sphere_lies_outside(&model_instance_cluster_camera_space_bounding_sphere)
-                {
+                if camera_space_face_frustum.could_contain_part_of_sphere(
+                    &model_instance_cluster_camera_space_bounding_sphere,
+                ) {
                     let group_to_cubemap_face_transform = omnidirectional_light
                         .create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
                         * group_to_camera_transform;
