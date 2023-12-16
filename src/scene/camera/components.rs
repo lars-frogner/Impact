@@ -50,7 +50,7 @@ impl PerspectiveCameraComp {
     /// vertical field of view and near and far distance.
     ///
     /// # Panics
-    /// If `vertical_field_of_view` is zero.
+    /// If `vertical_field_of_view` or the near distance is zero.
     pub fn new(
         vertical_field_of_view: impl Angle<fre>,
         near_and_far_distance: UpperExclusiveBounds<fre>,
@@ -59,6 +59,7 @@ impl PerspectiveCameraComp {
         assert_abs_diff_ne!(vertical_field_of_view_rad, 0.0);
 
         let (near_distance, far_distance) = near_and_far_distance.bounds();
+        assert_abs_diff_ne!(near_distance, 0.0);
 
         Self {
             vertical_field_of_view_rad,

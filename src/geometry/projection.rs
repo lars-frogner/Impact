@@ -55,7 +55,8 @@ impl<F: Float> PerspectiveTransform<F> {
     /// `aspect_ratio` is the ratio of width to height of the view plane.
     ///
     /// # Panics
-    /// If `aspect_ratio` or `vertical_field_of_view` is zero.
+    /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
+    /// zero.
     pub fn new<A: Angle<F>>(
         aspect_ratio: F,
         vertical_field_of_view: A,
@@ -149,6 +150,7 @@ impl<F: Float> PerspectiveTransform<F> {
 
     pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
         let (near_distance, far_distance) = near_and_far_distance.bounds();
+        assert_abs_diff_ne!(near_distance, F::ZERO);
 
         self.matrix.m33 = -far_distance / (far_distance - near_distance);
         self.matrix.m34 = self.matrix.m33 * near_distance;
