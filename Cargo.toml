@@ -26,6 +26,7 @@ lazy_static = "1.4"
 log = "0.4"
 naga = { version = "0.14.0", features = ["clone", "validate", "wgsl-out"] }
 nalgebra = { version = "0.32", features = ["bytemuck"] }
+nohash-hasher = "0.2.0"
 num-traits = "0.2"
 petgraph = { version = "0.6", default-features = false, features = [
     "graphmap",
