@@ -131,7 +131,7 @@ impl Assets {
         self.load_texture_from_stored_or_computed_lookup_table(
             core_system,
             Self::SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_PATH,
-            || create_specular_ggx_reflectance_lookup_tables(256, 256),
+            || create_specular_ggx_reflectance_lookup_tables(1024, 512),
         )?;
 
         Ok(())
