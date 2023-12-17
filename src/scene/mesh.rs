@@ -47,14 +47,18 @@ lazy_static! {
 impl<F: Float> MeshRepository<F> {
     /// Creates a new empty mesh repository.
     pub fn new() -> Self {
-        let mut meshes = HashMap::new();
+        Self {
+            meshes: HashMap::new(),
+        }
+    }
 
-        meshes.insert(
+    /// Generates the meshes that should be available by default and inserts
+    /// them into the repository.
+    pub fn create_default_meshes(&mut self) {
+        self.meshes.insert(
             *SCREEN_FILLING_QUAD_MESH_ID,
             TriangleMesh::create_screen_filling_quad(),
         );
-
-        Self { meshes }
     }
 
     /// Returns a reference to the [`TriangleMesh`] with the given ID, or

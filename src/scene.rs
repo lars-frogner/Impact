@@ -13,6 +13,7 @@ mod shader;
 mod systems;
 mod tasks;
 mod texture_projection;
+mod voxel;
 
 pub use camera::{
     register_camera_components, OrthographicCameraComp, PerspectiveCameraComp, SceneCamera,
@@ -70,15 +71,12 @@ pub use tasks::{
     SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
 };
 pub use texture_projection::{register_texture_projection_components, PlanarTextureProjectionComp};
+pub use voxel::{
+    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelManager, VoxelTreeComp,
+    VoxelTreeID, VoxelTypeComp,
+};
 
 use crate::rendering::fre;
-use material::{
-    TexturedColorMaterialFeature, TexturedColorParallaxMappingMaterialFeature,
-    UniformDiffuseMaterialFeature, UniformDiffuseParallaxMappingMaterialFeature,
-    UniformDiffuseUniformSpecularMaterialFeature,
-    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature, UniformSpecularMaterialFeature,
-    UniformSpecularParallaxMappingMaterialFeature,
-};
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
@@ -90,6 +88,7 @@ pub struct Scene {
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
     shader_manager: RwLock<ShaderManager>,
+    voxel_manager: RwLock<VoxelManager<fre>>,
     scene_graph: RwLock<SceneGraph<fre>>,
     scene_camera: RwLock<Option<SceneCamera<fre>>>,
 }
@@ -99,6 +98,7 @@ pub struct Scene {
 pub struct SceneConfig {
     ambient_occlusion_sample_count: u32,
     ambient_occlusion_sampling_radius: fre,
+    voxel_extent: fre,
 }
 
 impl Scene {
@@ -106,20 +106,36 @@ impl Scene {
     pub fn new() -> Self {
         let config = SceneConfig::default();
 
-        let scene = Self {
+        let mut mesh_repository = MeshRepository::new();
+        mesh_repository.create_default_meshes();
+
+        let mut instance_feature_manager = InstanceFeatureManager::new();
+
+        let mut material_library = MaterialLibrary::new();
+        material_library.register_materials(
+            &mut instance_feature_manager,
+            config.ambient_occlusion_sample_count,
+            config.ambient_occlusion_sampling_radius,
+        );
+
+        let voxel_manager = VoxelManager::create(
+            config.voxel_extent,
+            &mut mesh_repository,
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+
+        Self {
             config,
-            mesh_repository: RwLock::new(MeshRepository::new()),
-            material_library: RwLock::new(MaterialLibrary::new()),
+            mesh_repository: RwLock::new(mesh_repository),
+            material_library: RwLock::new(material_library),
             light_storage: RwLock::new(LightStorage::new()),
-            instance_feature_manager: RwLock::new(InstanceFeatureManager::new()),
+            instance_feature_manager: RwLock::new(instance_feature_manager),
             shader_manager: RwLock::new(ShaderManager::new()),
+            voxel_manager: RwLock::new(voxel_manager),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
-        };
-
-        scene.register_materials();
-
-        scene
+        }
     }
 
     /// Returns a reference to the global scene configuration.
@@ -127,88 +143,46 @@ impl Scene {
         &self.config
     }
 
-    /// Returns a reference to the [`MeshRepository`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`MeshRepository`], guarded by a [`RwLock`].
     pub fn mesh_repository(&self) -> &RwLock<MeshRepository<fre>> {
         &self.mesh_repository
     }
 
-    /// Returns a reference to the [`MaterialLibrary`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`MaterialLibrary`], guarded by a [`RwLock`].
     pub fn material_library(&self) -> &RwLock<MaterialLibrary> {
         &self.material_library
     }
 
-    /// Returns a reference to the [`LightStorage`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`LightStorage`], guarded by a [`RwLock`].
     pub fn light_storage(&self) -> &RwLock<LightStorage> {
         &self.light_storage
     }
 
-    /// Returns a reference to the [`InstanceFeatureManager`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`InstanceFeatureManager`], guarded by a
+    /// [`RwLock`].
     pub fn instance_feature_manager(&self) -> &RwLock<InstanceFeatureManager> {
         &self.instance_feature_manager
     }
 
-    /// Returns a reference to the [`ShaderManager`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`ShaderManager`], guarded by a [`RwLock`].
     pub fn shader_manager(&self) -> &RwLock<ShaderManager> {
         &self.shader_manager
     }
 
-    /// Returns a reference to the [`SceneGraph`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`VoxelManager`], guarded by a [`RwLock`].
+    pub fn voxel_manager(&self) -> &RwLock<VoxelManager<fre>> {
+        &self.voxel_manager
+    }
+
+    /// Returns a reference to the [`SceneGraph`], guarded by a [`RwLock`].
     pub fn scene_graph(&self) -> &RwLock<SceneGraph<fre>> {
         &self.scene_graph
     }
 
-    /// Returns a reference to the [`SceneCamera`], or [`None`] if no
-    /// scene camera has been set, guarded by a [`RwLock`].
+    /// Returns a reference to the [`SceneCamera`], or [`None`] if no scene
+    /// camera has been set, guarded by a [`RwLock`].
     pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<fre>>> {
         &self.scene_camera
-    }
-
-    fn register_materials(&self) {
-        let mut material_library = self.material_library.write().unwrap();
-        let mut instance_feature_manager = self.instance_feature_manager.write().unwrap();
-
-        instance_feature_manager.register_feature_type::<TexturedColorMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<TexturedColorParallaxMappingMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
-        instance_feature_manager.register_feature_type::<TexturedColorEmissiveMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<TexturedColorParallaxMappingEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformSpecularParallaxMappingEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature>();
-
-        VertexColorMaterial::register(&mut material_library);
-        FixedColorMaterial::register(&mut material_library, &mut instance_feature_manager);
-        FixedTextureMaterial::register(&mut material_library);
-
-        register_ambient_occlusion_materials(
-            &mut material_library,
-            self.config.ambient_occlusion_sample_count,
-            self.config.ambient_occlusion_sampling_radius,
-        );
     }
 }
 
@@ -223,6 +197,7 @@ impl Default for SceneConfig {
         Self {
             ambient_occlusion_sample_count: 4,
             ambient_occlusion_sampling_radius: 0.5,
+            voxel_extent: 0.25,
         }
     }
 }

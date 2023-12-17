@@ -526,7 +526,8 @@ impl World {
         scene::register_light_components(registry)?;
         scene::register_mesh_components(registry)?;
         scene::register_texture_projection_components(registry)?;
-        scene::register_material_components(registry)
+        scene::register_material_components(registry)?;
+        scene::register_voxel_components(registry)
     }
 
     /// Registers all tasks in the given task scheduler.

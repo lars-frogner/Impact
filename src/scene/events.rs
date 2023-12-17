@@ -10,7 +10,7 @@ use crate::{
         MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
         SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
         SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
-        VertexColorMaterial,
+        VertexColorMaterial, VoxelInstanceClusterComp, VoxelManager, VoxelTreeComp, VoxelTypeComp,
     },
     window::{self, Window},
 };
@@ -55,6 +55,8 @@ impl Scene {
         self.add_light_component_for_entity(components, desynchronized);
         self.add_material_component_for_entity(components, desynchronized);
 
+        self.add_voxel_tree_component_for_entity(components);
+
         self.generate_missing_vertex_properties_for_mesh(components);
 
         Ok(())
@@ -73,6 +75,7 @@ impl Scene {
         self.add_group_node_component_for_entity(components);
         self.add_camera_component_for_entity(window, components, desynchronized)?;
         self.add_model_instance_node_component_for_entity(components);
+        self.add_voxel_instance_cluster_component_for_entity(components);
         Ok(())
     }
 
@@ -191,6 +194,14 @@ impl Scene {
             self.material_library(),
             components,
             desynchronized,
+        );
+    }
+
+    fn add_voxel_tree_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
+        VoxelManager::add_voxel_tree_component_for_entity(
+            &self.voxel_manager,
+            components,
+            self.config.voxel_extent,
         );
     }
 
@@ -314,6 +325,87 @@ impl Scene {
                 ))
             },
             ![SceneGraphModelInstanceNodeComp]
+        );
+    }
+
+    fn add_voxel_instance_cluster_component_for_entity(
+        &self,
+        components: &mut ArchetypeComponentStorage,
+    ) {
+        setup!(
+            {
+                let voxel_manager = self.voxel_manager().read().unwrap();
+                let mut scene_graph = self.scene_graph().write().unwrap();
+            },
+            components,
+            |voxel_tree: &VoxelTreeComp,
+             voxel_type: &VoxelTypeComp,
+             frame: Option<&ReferenceFrameComp>,
+             parent: Option<&SceneGraphParentNodeComp>|
+             -> VoxelInstanceClusterComp {
+                let voxel_tree_id = voxel_tree.voxel_tree_id;
+                let voxel_tree = voxel_manager
+                    .get_voxel_tree(voxel_tree_id)
+                    .expect(
+                    "Tried to create voxel instance cluster entity with voxel tree not present in voxel manager",
+                );
+
+                let cluster_to_parent_transform = frame
+                    .cloned()
+                    .unwrap_or_default()
+                    .create_transform_to_parent_space();
+
+                let voxel_transforms = voxel_tree.compute_voxel_transforms();
+
+                let cluster_bounding_sphere = if components.has_component_type::<UncullableComp>() {
+                    // The scene graph will not cull clusters with no bounding sphere
+                    None
+                } else {
+                    voxel_tree.compute_bounding_sphere()
+                };
+
+                let appearance = voxel_manager.voxel_appearance(voxel_type.voxel_type());
+
+                let mut feature_ids = Vec::with_capacity(2);
+
+                // The main material feature comes first, followed by the
+                // prepass material feature (this order is also assumed
+                // elsewhere)
+                if let Some(feature_id) = appearance.material_handle.material_property_feature_id()
+                {
+                    // Each voxel uses the same feature, in which case we only
+                    // have to provide a single copy of the feature ID
+                    feature_ids.push(vec![feature_id]);
+                }
+                if let Some(feature_id) = appearance
+                    .prepass_material_handle
+                    .and_then(|handle| handle.material_property_feature_id())
+                {
+                    feature_ids.push(vec![feature_id]);
+                }
+
+                let parent_node_id =
+                    parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
+
+                let group_node_id =
+                    scene_graph.create_group_node(parent_node_id, cluster_to_parent_transform);
+
+                let model_instance_cluster_node_id = scene_graph
+                    .create_model_instance_cluster_node(
+                        group_node_id,
+                        voxel_transforms,
+                        appearance.model_id,
+                        cluster_bounding_sphere,
+                        feature_ids,
+                    );
+
+                VoxelInstanceClusterComp::new(
+                    voxel_tree_id,
+                    group_node_id,
+                    model_instance_cluster_node_id,
+                )
+            },
+            ![VoxelInstanceClusterComp]
         );
     }
 
