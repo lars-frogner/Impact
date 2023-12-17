@@ -904,6 +904,16 @@ impl<F: Float> ClusterInstanceTransform<F> {
         }
     }
 
+    /// Returns a reference to the translational part of the transform.
+    pub fn translation(&self) -> &Vector3<F> {
+        &self.translation
+    }
+
+    /// Returns the scaling part of the transform.
+    pub fn scaling(&self) -> F {
+        self.scaling
+    }
+
     /// Applies the given transform from the space of the cluster to camera
     /// space, yielding the model view transform of the instance.
     pub fn transform_into_model_view_transform(

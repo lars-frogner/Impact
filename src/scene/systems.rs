@@ -8,7 +8,7 @@ use crate::{
         AmbientLightComp, CameraNodeID, DirectionComp, GroupNodeID, LightDirection,
         ModelInstanceNodeID, OmnidirectionalLightComp, RadianceComp, SceneGraphNodeComp,
         SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UnidirectionalLightComp,
-        UpdateSceneGroupToWorldTransforms,
+        UpdateSceneGroupToWorldTransforms, VoxelInstanceClusterComp,
     },
     world::World,
 };
@@ -32,17 +32,34 @@ define_task!(
 
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<GroupNodeID>, frame: &ReferenceFrameComp| {
-                    scene_graph.set_group_to_parent_transform(node.id, frame.create_transform_to_parent_space());
+                    scene_graph.set_group_to_parent_transform(
+                        node.id,
+                        frame.create_transform_to_parent_space(),
+                    );
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<ModelInstanceNodeID>, frame: &ReferenceFrameComp| {
-                    scene_graph.set_model_to_parent_transform(node.id, frame.create_transform_to_parent_space());
+                    scene_graph.set_model_to_parent_transform(
+                        node.id,
+                        frame.create_transform_to_parent_space(),
+                    );
                 }
             );
             query!(
                 ecs_world, |node: &SceneGraphNodeComp<CameraNodeID>, frame: &ReferenceFrameComp| {
-                    scene_graph.set_camera_to_parent_transform(node.id, frame.create_transform_to_parent_space());
+                    scene_graph.set_camera_to_parent_transform(
+                        node.id,
+                        frame.create_transform_to_parent_space(),
+                    );
+                }
+            );
+            query!(
+                ecs_world, |voxel_instance_cluster: &VoxelInstanceClusterComp, frame: &ReferenceFrameComp| {
+                    scene_graph.set_group_to_parent_transform(
+                        voxel_instance_cluster.group_node_id,
+                        frame.create_transform_to_parent_space(),
+                    );
                 }
             );
 

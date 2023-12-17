@@ -47,7 +47,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(diffuse_color),
@@ -86,7 +86,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -125,7 +125,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -164,7 +164,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -204,7 +204,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(diffuse_color),
@@ -244,7 +244,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(diffuse_color),
@@ -282,7 +282,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(diffuse_color),
@@ -322,7 +322,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(diffuse_color),
@@ -360,7 +360,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -400,7 +400,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -438,7 +438,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -478,7 +478,7 @@ pub fn add_microfacet_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -502,7 +502,7 @@ pub fn add_microfacet_material_component_for_entity(
     );
 }
 
-fn execute_material_setup(
+pub fn setup_microfacet_material(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     diffuse_color: Option<&DiffuseColorComp>,

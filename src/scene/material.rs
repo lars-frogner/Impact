@@ -39,7 +39,7 @@ pub use features::{
     UniformSpecularParallaxMappingMaterialFeature,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
-pub use microfacet::add_microfacet_material_component_for_entity;
+pub use microfacet::{add_microfacet_material_component_for_entity, setup_microfacet_material};
 pub use prepass::create_prepass_material;
 pub use skybox::add_skybox_material_component_for_entity;
 pub use vertex_color::VertexColorMaterial;
@@ -50,6 +50,7 @@ use crate::{
         fre, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints, TextureID,
         UniformBufferable,
     },
+    scene::InstanceFeatureManager,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, Hash64, StringHash64};
@@ -344,6 +345,50 @@ impl MaterialLibrary {
     ) {
         self.material_property_texture_sets
             .insert(texture_set_id, texture_set);
+    }
+
+    pub fn register_materials(
+        &mut self,
+        instance_feature_manager: &mut InstanceFeatureManager,
+        ambient_occlusion_sample_count: u32,
+        ambient_occlusion_sampling_radius: fre,
+    ) {
+        instance_feature_manager.register_feature_type::<TexturedColorMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<TexturedColorParallaxMappingMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedColorEmissiveMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
+        instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<TexturedColorParallaxMappingEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformSpecularParallaxMappingEmissiveMaterialFeature>();
+        instance_feature_manager
+            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature>();
+
+        VertexColorMaterial::register(self);
+        FixedColorMaterial::register(self, instance_feature_manager);
+        FixedTextureMaterial::register(self);
+
+        register_ambient_occlusion_materials(
+            self,
+            ambient_occlusion_sample_count,
+            ambient_occlusion_sampling_radius,
+        );
     }
 }
 
