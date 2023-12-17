@@ -24,7 +24,7 @@ use std::num::NonZeroU32;
 pub fn create_specular_ggx_reflectance_lookup_tables(
     num_v_dot_n_samples: usize,
     num_roughness_samples: usize,
-) -> TextureLookupTable<u8> {
+) -> TextureLookupTable<f32> {
     const MIN_ROUGHNESS: fre = 0.05;
 
     assert!(num_v_dot_n_samples > 1);
@@ -48,7 +48,7 @@ pub fn create_specular_ggx_reflectance_lookup_tables(
                     },
                     v_dot_n,
                 );
-                data.push((reflectance.clamp(0.0, 1.0) * 255.0) as u8);
+                data.push(reflectance.clamp(0.0, 1.0));
 
                 v_dot_n += v_dot_n_delta;
             }

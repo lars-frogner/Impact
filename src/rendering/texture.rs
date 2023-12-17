@@ -49,7 +49,7 @@ pub enum ColorSpace {
 /// A texture holding multidimensional data.
 #[derive(Debug)]
 pub struct Texture {
-    _texture: wgpu::Texture,
+    texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
     view_dimension: wgpu::TextureViewDimension,
@@ -622,7 +622,7 @@ impl Texture {
         );
 
         Ok(Self {
-            _texture: texture,
+            texture,
             view,
             sampler,
             view_dimension,
@@ -649,7 +649,9 @@ impl Texture {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                sample_type: wgpu::TextureSampleType::Float {
+                    filterable: self.has_filterable_format(),
+                },
                 view_dimension: self.view_dimension,
                 multisampled: false,
             },
@@ -668,7 +670,11 @@ impl Texture {
             visibility: wgpu::ShaderStages::FRAGMENT,
             // The sampler binding type must be consistent with the `filterable`
             // field in the texture sample type.
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            ty: wgpu::BindingType::Sampler(if self.has_filterable_format() {
+                wgpu::SamplerBindingType::Filtering
+            } else {
+                wgpu::SamplerBindingType::NonFiltering
+            }),
             count: None,
         }
     }
@@ -688,6 +694,16 @@ impl Texture {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::Sampler(self.sampler()),
+        }
+    }
+
+    fn has_filterable_format(&self) -> bool {
+        if let Some(wgpu::TextureSampleType::Float { filterable }) =
+            self.texture.format().sample_type(None)
+        {
+            filterable
+        } else {
+            false
         }
     }
 
@@ -832,8 +848,8 @@ impl TextureFilteringConfig {
     };
 
     pub const LOOKUP: Self = Self {
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
         max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Nearest,
         lod_min_clamp: 0.0,
