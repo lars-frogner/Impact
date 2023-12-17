@@ -196,14 +196,14 @@ impl SpecularColorComp {
 }
 
 impl RoughnessComp {
-    /// Converts the roughness into a corresponding shininess exponent for
-    /// Blinn-Phong specular reflection.
+    /// Converts the given shininess exponent for Blinn-Phong specular
+    /// reflection into a corresponding roughness.
     pub fn from_blinn_phong_shininess(shininess: fre) -> Self {
         Self(fre::ln(8192.0 / shininess) / fre::ln(8192.0))
     }
 
-    /// Converts the given shininess exponent for Blinn-Phong specular
-    /// reflection into a corresponding roughness.
+    /// Converts the roughness into a corresponding shininess exponent for
+    /// Blinn-Phong specular reflection.
     pub fn to_blinn_phong_shininess(&self) -> fre {
         fre::powf(8192.0, 1.0 - self.0)
     }

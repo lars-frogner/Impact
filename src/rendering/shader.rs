@@ -159,7 +159,7 @@ pub enum LightShaderInput {
 }
 
 /// Input description for ambient light sources, specifying the bind group
-/// binding and the total size of the omnidirectional light uniform buffer.
+/// binding and the total size of the ambient light uniform buffer.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AmbientLightShaderInput {
     /// Bind group binding of the light uniform buffer.
