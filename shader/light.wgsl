@@ -203,7 +203,7 @@ fn computeOffsetFragmentDisplacementOmniLight(
 ) -> vec3<f32> {
     // The offset increases as the light becomes less perpendicular to the
     // surface.
-    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * 2e-3 / inverseDistanceSpan;
+    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * 4e-3 / inverseDistanceSpan;
 }
 
 fn generateSampleDisplacementOmniLight(
