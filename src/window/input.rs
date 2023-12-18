@@ -207,13 +207,13 @@ impl KeyInputHandler {
                     KeyboardInputAction::DecreaseSimulationSpeed => {
                         if state == &ElementState::Released {
                             world
-                                .decrement_simulation_speed_multiplier_and_compensate_controller_speed()
+                                .decrement_simulation_speed_multiplier_and_compensate_controller_speed();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::CycleSimulationSteppingScheme => {
                         if state == &ElementState::Released {
-                            world.cycle_simulation_stepping_scheme()
+                            world.cycle_simulation_stepping_scheme();
                         }
                         Ok(HandlingResult::Handled)
                     }

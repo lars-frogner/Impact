@@ -588,7 +588,7 @@ impl<F: Float> SceneGraph<F> {
             {
                 // The cluster bounding sphere is defined in its parent space
                 let cluster_bounding_sphere_camera_space =
-                    bounding_sphere.transformed(&root_to_camera_transform);
+                    bounding_sphere.transformed(root_to_camera_transform);
 
                 camera_space_view_frustum
                     .could_contain_part_of_sphere(&cluster_bounding_sphere_camera_space)
@@ -601,7 +601,7 @@ impl<F: Float> SceneGraph<F> {
                 Self::buffer_model_view_transforms_of_model_instance_cluster(
                     instance_feature_manager,
                     model_instance_cluster_node,
-                    &root_to_camera_transform,
+                    root_to_camera_transform,
                 );
             }
         }
@@ -863,7 +863,7 @@ impl<F: Float> SceneGraph<F> {
             .model_to_parent_transforms()
             .iter()
             .map(|transform| {
-                transform.transform_into_model_view_transform(&parent_to_camera_transform)
+                transform.transform_into_model_view_transform(parent_to_camera_transform)
             });
 
         instance_feature_manager.buffer_multiple_instances(
@@ -2311,7 +2311,7 @@ mod test {
             .get_cluster_bounding_sphere()
             .unwrap();
 
-        assert_spheres_equal(&cluster_bounding_sphere, &bounding_sphere);
+        assert_spheres_equal(cluster_bounding_sphere, &bounding_sphere);
     }
 
     #[test]

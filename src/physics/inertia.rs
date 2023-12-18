@@ -700,7 +700,7 @@ mod test {
         #[test]
         fn should_transform_uniform_cube_inertia_tensor(transform in similarity_transform_strategy(1e4, 1e-4..1e4)) {
             let mut cube_properties = InertialProperties::of_uniform_box(1.0, 1.0, 1.0, 1.0);
-            let initial_inertia_tensor = cube_properties.inertia_tensor().clone();
+            let initial_inertia_tensor = *cube_properties.inertia_tensor();
 
             cube_properties.transform(&transform);
 

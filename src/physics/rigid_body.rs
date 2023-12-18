@@ -260,10 +260,10 @@ impl RigidBody {
             self.intermediate_states.store_state(
                 substep,
                 RigidBodyDynamicState {
-                    velocity: velocity.clone(),
+                    velocity: *velocity,
                     angular_velocity: angular_velocity.as_vector(),
-                    force: self.total_force.clone(),
-                    torque: self.total_torque.clone(),
+                    force: self.total_force,
+                    torque: self.total_torque,
                 },
             );
 
@@ -298,7 +298,7 @@ impl RigidBody {
             velocity: advanced_velocity,
             angular_velocity: advanced_angular_velocity,
         } = substep.advance_motion(
-            &self,
+            self,
             scaling,
             velocity,
             angular_velocity,
@@ -352,7 +352,7 @@ impl RigidBody {
             velocity: advanced_velocity,
             angular_velocity: advanced_angular_velocity,
         } = last_substep.advance_motion(
-            &self,
+            self,
             scaling,
             &average_velocity,
             &average_angular_velocity,
@@ -636,8 +636,8 @@ mod test {
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
-            original_position.clone(),
-            original_orientation.clone(),
+            original_position,
+            original_orientation,
             1.0,
             &original_velocity,
             &original_angular_velocity,
@@ -645,10 +645,10 @@ mod test {
 
         body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
 
-        let mut position = original_position.clone();
-        let mut orientation = original_orientation.clone();
-        let mut velocity = original_velocity.clone();
-        let mut angular_velocity = original_angular_velocity.clone();
+        let mut position = original_position;
+        let mut orientation = original_orientation;
+        let mut velocity = original_velocity;
+        let mut angular_velocity = original_angular_velocity;
 
         body.advance_motion(
             &EulerCromerStep::new(0.0),
@@ -674,17 +674,17 @@ mod test {
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
-            original_position.clone(),
-            original_orientation.clone(),
+            original_position,
+            original_orientation,
             1.0,
             &original_velocity,
             &original_angular_velocity,
         );
 
-        let mut position = original_position.clone();
-        let mut orientation = original_orientation.clone();
-        let mut velocity = original_velocity.clone();
-        let mut angular_velocity = original_angular_velocity.clone();
+        let mut position = original_position;
+        let mut orientation = original_orientation;
+        let mut velocity = original_velocity;
+        let mut angular_velocity = original_angular_velocity;
 
         body.advance_motion(
             &EulerCromerStep::new(1.0),
@@ -710,8 +710,8 @@ mod test {
 
         let mut body = RigidBody::new(
             dummy_inertial_properties(),
-            original_position.clone(),
-            original_orientation.clone(),
+            original_position,
+            original_orientation,
             1.0,
             &original_velocity,
             &original_angular_velocity,
@@ -719,10 +719,10 @@ mod test {
 
         body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
 
-        let mut position = original_position.clone();
-        let mut orientation = original_orientation.clone();
-        let mut velocity = original_velocity.clone();
-        let mut angular_velocity = original_angular_velocity.clone();
+        let mut position = original_position;
+        let mut orientation = original_orientation;
+        let mut velocity = original_velocity;
+        let mut angular_velocity = original_angular_velocity;
 
         body.advance_motion(
             &EulerCromerStep::new(1.0),

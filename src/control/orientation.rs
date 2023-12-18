@@ -123,8 +123,8 @@ impl OrientationController for RollFreeCameraOrientationController {
         self.yaw_change =
             CameraOrientationControllerBase::compute_yaw_rotation(angular_displacement_x)
                 * self.yaw_change;
-        self.pitch_change = self.pitch_change
-            * CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y);
+        self.pitch_change *=
+            CameraOrientationControllerBase::compute_pitch_rotation(angular_displacement_y);
 
         self.base.orientation_has_changed = true;
     }

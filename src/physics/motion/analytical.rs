@@ -152,6 +152,12 @@ impl AnalyticalMotionManager {
     }
 }
 
+impl Default for AnalyticalMotionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Registers all analytical motion
 /// [`Component`](impact_ecs::component::Component)s.
 pub fn register_analytical_motion_components(registry: &mut ComponentRegistry) -> Result<()> {

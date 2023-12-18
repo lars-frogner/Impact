@@ -140,13 +140,13 @@ impl Sub for &AngularVelocity {
 
 impl AddAssign for AngularVelocity {
     fn add_assign(&mut self, rhs: Self) {
-        *self = AngularVelocity::from_vector(self.as_vector() + rhs.as_vector())
+        *self = AngularVelocity::from_vector(self.as_vector() + rhs.as_vector());
     }
 }
 
 impl SubAssign for AngularVelocity {
     fn sub_assign(&mut self, rhs: Self) {
-        *self = AngularVelocity::from_vector(self.as_vector() - rhs.as_vector())
+        *self = AngularVelocity::from_vector(self.as_vector() - rhs.as_vector());
     }
 }
 

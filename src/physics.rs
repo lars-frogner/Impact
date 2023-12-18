@@ -26,15 +26,14 @@ pub use rigid_body::{
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
 
+use crate::components::ComponentRegistry;
 use impact_ecs::{
     query,
     world::{Entity, World as ECSWorld},
 };
 use num_traits::FromPrimitive;
 use rigid_body::SchemeSubstep;
-use std::{collections::LinkedList, sync::RwLock, time::Duration};
-
-use crate::components::ComponentRegistry;
+use std::{sync::RwLock, time::Duration};
 
 /// Floating point type used for physics simulation.
 #[allow(non_camel_case_types)]
@@ -160,7 +159,7 @@ impl PhysicsSimulator {
     /// duration.
     pub fn update_time_step_duration(&mut self, frame_duration: &Duration) {
         if self.config.match_frame_duration {
-            self.set_time_step_duration(frame_duration.as_secs_f64())
+            self.set_time_step_duration(frame_duration.as_secs_f64());
         }
     }
 
@@ -246,7 +245,7 @@ impl PhysicsSimulator {
     }
 
     fn advance_simulation_with_scheme<S: SchemeSubstep>(&mut self, ecs_world: &RwLock<ECSWorld>) {
-        let mut entities_to_remove = LinkedList::new();
+        let mut entities_to_remove = Vec::new();
 
         let analytical_motion_manager = self.analytical_motion_manager.read().unwrap();
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
@@ -283,7 +282,7 @@ impl PhysicsSimulator {
         medium: &UniformMedium,
         current_simulation_time: fph,
         step_duration: fph,
-        entities_to_remove: &mut LinkedList<Entity>,
+        entities_to_remove: &mut Vec<Entity>,
     ) {
         for scheme_substep in S::all_substeps(step_duration) {
             let new_simulation_time = scheme_substep.new_simulation_time(current_simulation_time);
@@ -320,7 +319,7 @@ impl PhysicsSimulator {
     }
 
     fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {
-        let mut entities_to_remove = LinkedList::new();
+        let mut entities_to_remove = Vec::new();
 
         self.rigid_body_force_manager
             .read()
@@ -334,12 +333,12 @@ impl PhysicsSimulator {
         Self::remove_entities(ecs_world, &entities_to_remove);
     }
 
-    fn remove_entities(ecs_world: &RwLock<ECSWorld>, entities_to_remove: &LinkedList<Entity>) {
+    fn remove_entities(ecs_world: &RwLock<ECSWorld>, entities_to_remove: &Vec<Entity>) {
         if !entities_to_remove.is_empty() {
             let mut ecs_world_write = ecs_world.write().unwrap();
 
             for entity in entities_to_remove {
-                ecs_world_write.remove_entity(&entity).unwrap();
+                ecs_world_write.remove_entity(entity).unwrap();
             }
         }
     }

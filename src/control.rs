@@ -152,7 +152,7 @@ pub fn update_rotation_of_controlled_entities(
          frame: &mut ReferenceFrameComp,
          velocity: &mut VelocityComp| {
             let new_control_angular_velocity = if orientation_controller.orientation_has_changed() {
-                let old_orientation = frame.orientation.clone();
+                let old_orientation = frame.orientation;
                 orientation_controller.update_orientation(&mut frame.orientation);
 
                 AngularVelocity::from_consecutive_orientations(
@@ -181,7 +181,7 @@ pub fn update_rotation_of_controlled_entities(
                 // We do not update the orientation here, as the rigid body
                 // motion system will handle that for us as long as we apply the
                 // correct angular velocity
-                let mut new_orientation = frame.orientation.clone();
+                let mut new_orientation = frame.orientation;
                 orientation_controller.update_orientation(&mut new_orientation);
 
                 AngularVelocity::from_consecutive_orientations(
