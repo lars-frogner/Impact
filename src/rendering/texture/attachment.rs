@@ -80,7 +80,7 @@ pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_Q
     wgpu::TextureFormat::Rgba32Float,
     wgpu::TextureFormat::Rgba8Unorm,
     wgpu::TextureFormat::Rg32Float,
-    wgpu::TextureFormat::Rgba8Unorm,
+    wgpu::TextureFormat::Rgba8UnormSrgb,
     wgpu::TextureFormat::R8Unorm,
 ];
 
