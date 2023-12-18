@@ -41,6 +41,19 @@ pub struct VoxelBoxComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities comprised of voxels in a spherical configuration.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`VoxelInstanceClusterComp`] for the entity. It is therefore not kept after
+/// entity creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VoxelSphereComp {
+    /// The number of voxels along the diameter of the sphere.
+    n_voxels_across: usize,
+}
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities with voxels represented by a
 /// [`VoxelTree`](crate::geometry::VoxelTree).
 ///
@@ -98,6 +111,23 @@ impl VoxelBoxComp {
     }
 }
 
+impl VoxelSphereComp {
+    /// Creates a new component for a uniform sphere with the given number of
+    /// voxels across its diameter.
+    ///
+    /// # Panics
+    /// If the given number of voxels across is zero.
+    pub fn new(n_voxels_across: usize) -> Self {
+        assert_ne!(n_voxels_across, 0);
+        Self { n_voxels_across }
+    }
+
+    /// Returns the number of voxels across the sphere's diameter.
+    pub fn n_voxels_across(&self) -> usize {
+        self.n_voxels_across
+    }
+}
+
 impl VoxelInstanceClusterComp {
     pub fn new(
         voxel_tree_id: VoxelTreeID,
@@ -117,6 +147,7 @@ impl VoxelInstanceClusterComp {
 pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, VoxelTypeComp)?;
     register_setup_component!(registry, VoxelBoxComp)?;
+    register_setup_component!(registry, VoxelSphereComp)?;
     register_setup_component!(registry, VoxelTreeComp)?;
     register_component!(registry, VoxelInstanceClusterComp)
 }

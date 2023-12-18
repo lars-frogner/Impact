@@ -2,7 +2,7 @@
 
 mod generation;
 
-pub use generation::UniformBoxVoxelGenerator;
+pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
 
 use crate::{
     geometry::{ClusterInstanceTransform, Sphere},

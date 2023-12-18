@@ -72,8 +72,8 @@ pub use tasks::{
 };
 pub use texture_projection::{register_texture_projection_components, PlanarTextureProjectionComp};
 pub use voxel::{
-    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelManager, VoxelTreeComp,
-    VoxelTreeID, VoxelTypeComp,
+    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelManager,
+    VoxelSphereComp, VoxelTreeComp, VoxelTreeID, VoxelTypeComp,
 };
 
 use crate::rendering::fre;

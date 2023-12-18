@@ -3,11 +3,15 @@
 mod components;
 
 pub use components::{
-    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelTreeComp, VoxelTypeComp,
+    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelSphereComp,
+    VoxelTreeComp, VoxelTypeComp,
 };
 
 use crate::{
-    geometry::{FrontFaceSide, TriangleMesh, UniformBoxVoxelGenerator, VoxelTree, VoxelType},
+    geometry::{
+        FrontFaceSide, TriangleMesh, UniformBoxVoxelGenerator, UniformSphereVoxelGenerator,
+        VoxelTree, VoxelType,
+    },
     num::Float,
     rendering::{fre, DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
     scene::{
@@ -170,6 +174,27 @@ impl VoxelManager<fre> {
                     voxel_box.size_x,
                     voxel_box.size_y,
                     voxel_box.size_z,
+                );
+
+                let voxel_tree = VoxelTree::build(&generator);
+
+                let voxel_tree_id = voxel_manager.add_voxel_tree(voxel_tree);
+
+                VoxelTreeComp { voxel_tree_id }
+            },
+            ![VoxelTreeComp]
+        );
+
+        setup!(
+            {
+                let mut voxel_manager = voxel_manager.write().unwrap();
+            },
+            components,
+            |voxel_sphere: &VoxelSphereComp, voxel_type: &VoxelTypeComp| -> VoxelTreeComp {
+                let generator = UniformSphereVoxelGenerator::new(
+                    voxel_type.voxel_type(),
+                    voxel_extent,
+                    voxel_sphere.n_voxels_across(),
                 );
 
                 let voxel_tree = VoxelTree::build(&generator);
