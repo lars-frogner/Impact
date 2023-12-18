@@ -118,10 +118,14 @@ fn computeOmniLightQuantities(
     let LDotN = dot(lightCenterDirection, fragmentNormal);
     let LDotV = dot(lightCenterDirection, viewDirection);
 
-    // Add an offset to the fragment position along the fragment
-    // normal to avoid shadow acne. The offset increases as the
-    // light becomes less perpendicular to the surface.
-    let offsetFragmentDisplacement = -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotV, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
+    // Add an offset to the fragment position along the fragment normal to avoid
+    // shadow acne
+    let offsetFragmentDisplacement = computeOffsetFragmentDisplacementOmniLight(
+        lightCenterDisplacement,
+        fragmentNormal,
+        LDotN,
+        inverseDistanceSpan,
+    );
 
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
@@ -165,11 +169,15 @@ fn computeOmniAreaLightQuantities(
     let LDotN = dot(lightCenterDirection, fragmentNormal);
     let LDotV = dot(lightCenterDirection, viewDirection);
 
-    // Add an offset to the fragment position along the fragment
-    // normal to avoid shadow acne. The offset increases as the
-    // light becomes less perpendicular to the surface.
-    let offsetFragmentDisplacement = -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotV, 2e-2, 1.0) * 5e-3 / inverseDistanceSpan;
-
+    // Add an offset to the fragment position along the fragment normal to avoid
+    // shadow acne
+    let offsetFragmentDisplacement = computeOffsetFragmentDisplacementOmniLight(
+        lightCenterDisplacement,
+        fragmentNormal,
+        LDotN,
+        inverseDistanceSpan,
+    );
+    
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
 
@@ -185,6 +193,17 @@ fn computeOmniAreaLightQuantities(
     output.attenuatedLightRadiance *= computeRadianceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness);
 
     return output;
+}
+
+fn computeOffsetFragmentDisplacementOmniLight(
+    lightCenterDisplacement: vec3<f32>,
+    fragmentNormal: vec3<f32>,
+    LDotN: f32,
+    inverseDistanceSpan: f32,
+) -> vec3<f32> {
+    // The offset increases as the light becomes less perpendicular to the
+    // surface.
+    return -lightCenterDisplacement + fragmentNormal * clamp(1.0 - LDotN, 7e-2, 1.0) * 2e-3 / inverseDistanceSpan;
 }
 
 fn generateSampleDisplacementOmniLight(
