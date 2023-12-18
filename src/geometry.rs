@@ -39,7 +39,7 @@ pub use sphere::Sphere;
 pub use texture_projection::{PlanarTextureProjection, TextureProjection};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 pub use uniform::UniformBuffer;
-pub use voxel::{UniformBoxVoxelGenerator, VoxelTree, VoxelType};
+pub use voxel::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelTree, VoxelType};
 
 use crate::num::Float;
 use nalgebra::Point3;
