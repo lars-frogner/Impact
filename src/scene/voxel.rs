@@ -216,7 +216,7 @@ fn setup_microfacet_material_for_voxel(
     specular_color: Option<SpecularColorComp>,
     roughness: Option<f32>,
 ) -> MaterialComp {
-    let roughness = roughness.map(|roughness| RoughnessComp(roughness));
+    let roughness = roughness.map(RoughnessComp);
 
     let specular_shading_model = if specular_color.is_some() {
         SpecularMicrofacetShadingModel::GGX

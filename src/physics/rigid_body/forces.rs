@@ -19,7 +19,7 @@ use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     world::{Entity, EntityEntry, World as ECSWorld},
 };
-use std::{collections::LinkedList, sync::RwLock};
+use std::sync::RwLock;
 
 /// Manager of all systems resulting in forces and torques on rigid bodies.
 #[derive(Debug)]
@@ -75,7 +75,7 @@ impl RigidBodyForceManager {
         &self,
         ecs_world: &ECSWorld,
         medium: &UniformMedium,
-        entities_to_remove: &mut LinkedList<Entity>,
+        entities_to_remove: &mut Vec<Entity>,
     ) {
         uniform_gravity::apply_uniform_gravity(ecs_world);
 

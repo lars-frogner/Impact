@@ -18,7 +18,6 @@ use impact_ecs::{
     world::{Entity, EntityEntry, World as ECSWorld},
 };
 use nalgebra::{UnitVector3, Vector3};
-use std::collections::LinkedList;
 
 /// A spring or elastic band.
 #[repr(C)]
@@ -126,12 +125,18 @@ impl SpringState {
     }
 }
 
+impl Default for SpringState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Applies spring forces to all applicable rigid bodies.
-pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut LinkedList<Entity>) {
+pub fn apply_spring_forces(ecs_world: &ECSWorld, entities_to_remove: &mut Vec<Entity>) {
     query!(ecs_world, |entity: Entity, spring: &mut SpringComp| {
-        let outcome = apply_forces(spring, &ecs_world);
+        let outcome = apply_forces(spring, ecs_world);
         if outcome == SpringForceApplicationOutcome::EntityMissing {
-            entities_to_remove.push_back(entity);
+            entities_to_remove.push(entity);
         }
     });
 }
@@ -153,15 +158,14 @@ pub fn synchronize_spring_positions_and_orientations(ecs_world: &ECSWorld) {
 }
 
 fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApplicationOutcome {
-    let (entity_1, entity_2) = match (
+    let (entity_1, entity_2) = if let (Some(entity_1), Some(entity_2)) = (
         ecs_world.get_entity(&spring.entity_1),
         ecs_world.get_entity(&spring.entity_2),
     ) {
-        (Some(entity_1), Some(entity_2)) => (entity_1, entity_2),
-        _ => {
-            log::debug!("Missing spring attachment entity: spring component will be removed");
-            return SpringForceApplicationOutcome::EntityMissing;
-        }
+        (entity_1, entity_2)
+    } else {
+        log::debug!("Missing spring attachment entity: spring component will be removed");
+        return SpringForceApplicationOutcome::EntityMissing;
     };
 
     let entity_1_is_static = entity_1.has_component::<Static>();
@@ -239,7 +243,7 @@ fn apply_forces(spring: &mut SpringComp, ecs_world: &ECSWorld) -> SpringForceApp
 fn determine_reference_frame(entity: &EntityEntry<'_>) -> ReferenceFrameComp {
     entity
         .get_component::<ReferenceFrameComp>()
-        .map_or_else(ReferenceFrameComp::default, |frame| frame.access().clone())
+        .map_or_else(ReferenceFrameComp::default, |frame| *frame.access())
 }
 
 fn compute_attachment_point_in_world_space(

@@ -71,3 +71,9 @@ impl ComponentRegistry {
             .expect("Tried to access missing component in registry")
     }
 }
+
+impl Default for ComponentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}

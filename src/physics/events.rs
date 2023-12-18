@@ -29,7 +29,7 @@ impl PhysicsSimulator {
         self.rigid_body_force_manager
             .read()
             .unwrap()
-            .add_force_components_for_entity(mesh_repository, components)
+            .add_force_components_for_entity(mesh_repository, components);
     }
 
     /// Performs any modifications required to clean up the physics simulator
@@ -40,7 +40,7 @@ impl PhysicsSimulator {
         self.rigid_body_force_manager
             .read()
             .unwrap()
-            .handle_entity_removed(entity)
+            .handle_entity_removed(entity);
     }
 
     fn add_rigid_body_component_for_entity(
@@ -85,9 +85,9 @@ impl PhysicsSimulator {
              velocity: Option<&VelocityComp>|
              -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
                 let inertial_properties = InertialProperties::of_uniform_box(
-                    box_mesh.extent_x as fph,
-                    box_mesh.extent_y as fph,
-                    box_mesh.extent_z as fph,
+                    fph::from(box_mesh.extent_x),
+                    fph::from(box_mesh.extent_y),
+                    fph::from(box_mesh.extent_z),
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(inertial_properties, frame, velocity)
@@ -103,8 +103,8 @@ impl PhysicsSimulator {
              velocity: Option<&VelocityComp>|
              -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
                 let inertial_properties = InertialProperties::of_uniform_cylinder(
-                    cylinder_mesh.length as fph,
-                    cylinder_mesh.diameter as fph,
+                    fph::from(cylinder_mesh.length),
+                    fph::from(cylinder_mesh.diameter),
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(inertial_properties, frame, velocity)
@@ -120,8 +120,8 @@ impl PhysicsSimulator {
              velocity: Option<&VelocityComp>|
              -> (RigidBodyComp, ReferenceFrameComp, VelocityComp) {
                 let inertial_properties = InertialProperties::of_uniform_cone(
-                    cone_mesh.length as fph,
-                    cone_mesh.max_diameter as fph,
+                    fph::from(cone_mesh.length),
+                    fph::from(cone_mesh.max_diameter),
                     uniform_rigid_body.mass_density,
                 );
                 execute_setup(inertial_properties, frame, velocity)

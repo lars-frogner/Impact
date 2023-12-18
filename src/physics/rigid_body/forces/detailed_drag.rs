@@ -263,7 +263,7 @@ pub fn add_drag_load_map_component_for_entity(
 
     fn generate_map_path(mesh_id: MeshID) -> PathBuf {
         // Ensure there are no path delimiters
-        let sanitized_mesh_name = format!("{}", mesh_id).replace("/", "_").replace("\\", "_");
+        let sanitized_mesh_name = format!("{}", mesh_id).replace('/', "_").replace('\\', "_");
         PathBuf::from(format!("assets/drag_load_maps/{}.mpk", sanitized_mesh_name))
     }
 
@@ -332,7 +332,7 @@ pub fn apply_detailed_drag(
                 frame,
                 velocity,
                 drag,
-            )
+            );
         },
         ![Static]
     );

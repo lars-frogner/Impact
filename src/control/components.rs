@@ -45,6 +45,12 @@ impl MotionControlComp {
     }
 }
 
+impl Default for MotionControlComp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrientationControlComp {
     /// Creates a new component for orientation control.
     pub fn new() -> Self {
@@ -63,6 +69,12 @@ impl OrientationControlComp {
         *angular_velocity -= self.control_angular_velocity;
         *angular_velocity += new_control_angular_velocity;
         self.control_angular_velocity = new_control_angular_velocity;
+    }
+}
+
+impl Default for OrientationControlComp {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

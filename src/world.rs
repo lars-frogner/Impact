@@ -274,7 +274,7 @@ impl World {
             .handle_entity_created(&mut components, &mut render_resources_desynchronized)?;
 
         self.simulator().read().unwrap().handle_entity_created(
-            &self.scene().read().unwrap().mesh_repository(),
+            self.scene().read().unwrap().mesh_repository(),
             &mut components,
         );
 

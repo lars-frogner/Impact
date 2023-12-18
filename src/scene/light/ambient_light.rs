@@ -41,7 +41,7 @@ impl AmbientLight {
 
     /// Sets the uniform irradiance due to the light to the given value.
     pub fn set_irradiance(&mut self, irradiance: &Irradiance) {
-        self.radiance = scene::compute_radiance_for_uniform_irradiance(&irradiance);
+        self.radiance = scene::compute_radiance_for_uniform_irradiance(irradiance);
     }
 
     /// Checks if the entity-to-be with the given components has the right
