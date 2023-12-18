@@ -9,7 +9,7 @@ use crate::{
         RenderAttachmentQuantitySet, RenderPassHints, TextureID,
     },
     scene::{
-        EmissiveColorComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
         MaterialPropertyTextureSetID, MaterialSpecification, ParallaxMapComp,
     },
 };
@@ -38,7 +38,6 @@ pub fn create_prepass_material(
     feature_type_id: InstanceFeatureTypeID,
     feature_id: InstanceFeatureID,
     mut texture_ids: Vec<TextureID>,
-    emissive_color: Option<&EmissiveColorComp>,
     diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
     specular_texture_and_sampler_bindings: Option<(u32, u32)>,
     roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
@@ -48,8 +47,6 @@ pub fn create_prepass_material(
 ) -> MaterialHandle {
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
-
-    let mut render_pass_hints = RenderPassHints::empty();
 
     // These are required for ambient occlusion
     let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::POSITION
@@ -71,10 +68,6 @@ pub fn create_prepass_material(
         specular_reflectance_lookup_texture_and_sampler_bindings: None,
         bump_mapping_input: None,
     };
-
-    if emissive_color.is_some() {
-        render_pass_hints |= RenderPassHints::RENDERS_TO_SURFACE;
-    }
 
     if let Some(normal_map) = normal_map {
         assert!(
@@ -165,7 +158,10 @@ pub fn create_prepass_material(
                 output_render_attachment_quantities,
                 None,
                 vec![feature_type_id],
-                render_pass_hints,
+                // All prepass materials render to the surface, either an
+                // emissive color or a clear color to overwrite any existing
+                // emissive color from an object blocked by the new fragment
+                RenderPassHints::RENDERS_TO_SURFACE,
                 MaterialShaderInput::Prepass(texture_shader_input),
             )
         });

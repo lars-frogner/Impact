@@ -508,6 +508,31 @@ impl<'a> PrepassShaderGenerator<'a> {
                 VECTOR_4_SIZE,
                 emissive_rgba_color_expr,
             );
+        // If we do not write an emissive color, we need to write a clear color
+        // in case we are obscuring an emissive object, otherwise the emissive
+        // object will shine through
+        } else {
+            let clear_color_expr = source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "getBaseAmbientColor",
+                Vec::new(),
+            );
+
+            let clear_rgba_color_expr = append_unity_component_to_vec3(
+                &mut module.types,
+                fragment_function,
+                clear_color_expr,
+            );
+
+            output_struct_builder.add_field(
+                "clearColor",
+                vec4_type,
+                None,
+                None,
+                VECTOR_4_SIZE,
+                clear_rgba_color_expr,
+            );
         }
 
         if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {

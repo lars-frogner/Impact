@@ -619,7 +619,6 @@ pub fn setup_microfacet_material(
         feature_type_id,
         feature_id,
         texture_ids.clone(),
-        emissive_color,
         texture_shader_input.diffuse_texture_and_sampler_bindings,
         texture_shader_input.specular_texture_and_sampler_bindings,
         texture_shader_input.roughness_texture_and_sampler_bindings,
