@@ -52,11 +52,11 @@ impl<F: Float> VoxelGenerator<F> for UniformBoxVoxelGenerator<F> {
         [self.size_x, self.size_y, self.size_z]
     }
 
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
         if i < self.size_x && j < self.size_y && k < self.size_z {
-            self.voxel_type
+            Some(self.voxel_type)
         } else {
-            VoxelType::Empty
+            None
         }
     }
 }
@@ -93,15 +93,15 @@ impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
         [self.n_voxels_across; 3]
     }
 
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
         let squared_dist_from_center = (F::from_usize(i).unwrap() - self.center).powi(2)
             + (F::from_usize(j).unwrap() - self.center).powi(2)
             + (F::from_usize(k).unwrap() - self.center).powi(2);
 
         if squared_dist_from_center <= self.squared_radius {
-            self.voxel_type
+            Some(self.voxel_type)
         } else {
-            VoxelType::Empty
+            None
         }
     }
 }
