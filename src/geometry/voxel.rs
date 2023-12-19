@@ -8,6 +8,7 @@ use crate::{
     geometry::{ClusterInstanceTransform, Sphere},
     num::Float,
 };
+use impact_utils::{GenerationalIdx, GenerationalReusingVec};
 use nalgebra::{vector, Vector3};
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
@@ -17,8 +18,7 @@ use std::iter;
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, DeriveToPrimitive, DeriveFromPrimitive)]
 pub enum VoxelType {
-    Empty = 0,
-    Default = 1,
+    Default = 0,
 }
 
 /// Represents a voxel generator that provides a voxel type given the voxel
@@ -31,10 +31,10 @@ pub trait VoxelGenerator<F: Float> {
     /// respectively.
     fn grid_shape(&self) -> [usize; 3];
 
-    /// Returns the voxel type at the given indices in a voxel grid. If the
-    /// indices are outside the bounds of the grid, this method should return
-    /// [`VoxelType::Empty`].
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType;
+    /// Returns the voxel type at the given indices in a voxel grid, or [`None`]
+    /// if the voxel is absent or the indices are outside the bounds of the
+    /// grid.
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType>;
 }
 
 /// An octree representation of a voxel grid.
@@ -43,7 +43,59 @@ pub struct VoxelTree<F: Float> {
     voxel_extent: F,
     tree_height: u32,
     root_node: VoxelTreeNode,
+    internal_node_context: VoxelTreeInternalNodeContextStorage,
+    external_node_context: VoxelTreeExternalNodeContextStorage,
 }
+
+/// Flat storage for all contextual information associated with nodes in a
+/// [`VoxelTree`].
+#[derive(Clone, Debug)]
+struct VoxelTreeNodeContextStorage<C> {
+    storage: GenerationalReusingVec<C>,
+}
+
+/// Represents contectual information for a type of node in a voxel tree.
+pub trait VoxelTreeNodeContext {
+    /// Type of the node's ID.
+    type ID: VoxelTreeNodeStorageID;
+}
+
+/// Represents a type of voxel tree node identifier.
+pub trait VoxelTreeNodeStorageID {
+    /// Returns the index corresponding to the node ID.
+    fn idx(&self) -> GenerationalIdx;
+
+    /// Creates the node ID corresponding to the given index.
+    fn from_idx(idx: GenerationalIdx) -> Self;
+}
+
+/// Identifier for a [`VoxelTreeInternalNode`] in a [`VoxelTree`]. Can be used
+/// to access the associated [`VoxelTreeInternalNodeContext`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct VoxelTreeInternalNodeID(GenerationalIdx);
+
+/// Identifier for a [`VoxelTreeExternalNode`] in a [`VoxelTree`]. Can be used
+/// to access the associated [`VoxelTreeExternalNodeContext`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct VoxelTreeExternalNodeID(GenerationalIdx);
+
+/// Contextual information about a [`VoxelTreeInternalNode`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct VoxelTreeInternalNodeContext {
+    children: [Option<VoxelTreeNode>; 8],
+}
+
+/// Contextual information about a [`VoxelTreeExternalNode`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct VoxelTreeExternalNodeContext {
+    voxel_type: VoxelType,
+}
+
+type VoxelTreeInternalNodeContextStorage =
+    VoxelTreeNodeContextStorage<VoxelTreeInternalNodeContext>;
+
+type VoxelTreeExternalNodeContextStorage =
+    VoxelTreeNodeContextStorage<VoxelTreeExternalNodeContext>;
 
 /// A node in a voxel tree, which is either internal (it has child nodes) or
 /// external (it refers to a voxel).
@@ -57,7 +109,7 @@ enum VoxelTreeNode {
 /// region of the grid the node covers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct VoxelTreeInternalNode {
-    children: Box<[VoxelTreeNode; 8]>,
+    id: VoxelTreeInternalNodeID,
 }
 
 /// An external node in a voxel tree. It represents a voxel, which may either be
@@ -65,7 +117,8 @@ struct VoxelTreeInternalNode {
 /// adjacent identical voxels (if the node is not at the bottom).
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct VoxelTreeExternalNode {
-    pub voxel_type: VoxelType,
+    id: VoxelTreeExternalNodeID,
+    voxel_type: VoxelType,
 }
 
 /// Indices in the voxel grid at the level of detail of a particular depth in a
@@ -114,12 +167,7 @@ enum Octant {
 impl VoxelType {
     /// Returns an iterator over each voxel type in the order of their index.
     pub fn all() -> impl Iterator<Item = Self> {
-        (0..=1).map(|idx| Self::from_usize(idx).unwrap())
-    }
-
-    /// Whether the voxel is empty.
-    pub fn is_empty(&self) -> bool {
-        *self == Self::Empty
+        (0..=0).map(|idx| Self::from_usize(idx).unwrap())
     }
 }
 
@@ -127,7 +175,7 @@ impl<F: Float> VoxelTree<F> {
     /// Builds a new [`VoxelTree`] using the given [`VoxelGenerator`]. Groups of
     /// eight adjacent voxels of the same type will be recursively merged into
     /// larger voxels.
-    pub fn build<G>(generator: &G) -> Self
+    pub fn build<G>(generator: &G) -> Option<Self>
     where
         G: VoxelGenerator<F>,
     {
@@ -135,13 +183,23 @@ impl<F: Float> VoxelTree<F> {
 
         let tree_height = tree_height_from_shape(generator.grid_shape());
 
-        let root_node = VoxelTreeNode::build(generator, VoxelTreeIndices::at_root(tree_height));
+        let mut internal_node_context = VoxelTreeNodeContextStorage::new();
+        let mut external_node_context = VoxelTreeNodeContextStorage::new();
 
-        Self {
+        let root_node = VoxelTreeNode::build(
+            &mut internal_node_context,
+            &mut external_node_context,
+            generator,
+            VoxelTreeIndices::at_root(tree_height),
+        );
+
+        root_node.map(|root_node| Self {
             voxel_extent,
             tree_height,
             root_node,
-        }
+            internal_node_context,
+            external_node_context,
+        })
     }
 
     /// Returns the extent of single unmerged voxel in the tree.
@@ -180,12 +238,12 @@ impl<F: Float> VoxelTree<F> {
         transforms
     }
 
-    /// Returns the type of the voxel at the given indices in the voxel grid.
-    /// The voxel type will be [`VoxelType::Empty`] if the indices are outside
-    /// the bounds of the grid.
-    pub fn find_voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+    /// Returns the type of the voxel at the given indices in the voxel grid, or
+    /// [`None`] if the voxel is empty or the indices are outside the bounds of
+    /// the grid.
+    pub fn find_voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
         self.find_external_node_at_indices(i, j, k)
-            .map_or(VoxelType::Empty, |node| node.voxel_type)
+            .map(|node| node.voxel_type)
     }
 
     /// Returns a reference to the root node of the tree.
@@ -193,27 +251,39 @@ impl<F: Float> VoxelTree<F> {
         &self.root_node
     }
 
+    fn internal_node_context(&self, id: VoxelTreeInternalNodeID) -> &VoxelTreeInternalNodeContext {
+        self.internal_node_context.context(id)
+    }
+
+    fn external_node_context(&self, id: VoxelTreeExternalNodeID) -> &VoxelTreeExternalNodeContext {
+        self.external_node_context.context(id)
+    }
+
     fn find_external_node_at_indices(
         &self,
         i: usize,
         j: usize,
         k: usize,
-    ) -> Option<VoxelTreeExternalNode> {
+    ) -> Option<&VoxelTreeExternalNode> {
         if let Some(octants) = VoxelIndices::new(i, j, k).octants(self.tree_height) {
-            let mut node = self.root_node();
+            let mut node = Some(self.root_node());
 
             for octant in octants {
                 match node {
-                    VoxelTreeNode::External(_) => {
+                    Some(VoxelTreeNode::External(_)) => {
                         break;
                     }
-                    VoxelTreeNode::Internal(internal) => {
-                        node = &internal.children[octant.idx()];
+                    Some(VoxelTreeNode::Internal(internal)) => {
+                        node =
+                            self.internal_node_context(internal.id).children[octant.idx()].as_ref();
+                    }
+                    None => {
+                        return None;
                     }
                 }
             }
 
-            Some(node.get_external().unwrap().clone())
+            node.map(|node| node.get_external().unwrap())
         } else {
             None
         }
@@ -251,15 +321,88 @@ impl<F: Float> VoxelTree<F> {
     }
 }
 
+impl<C: VoxelTreeNodeContext> VoxelTreeNodeContextStorage<C> {
+    fn new() -> Self {
+        Self {
+            storage: GenerationalReusingVec::new(),
+        }
+    }
+
+    fn n_contexts(&self) -> usize {
+        self.storage.n_elements()
+    }
+
+    fn has_context(&self, node_id: C::ID) -> bool {
+        self.storage.get_element(node_id.idx()).is_some()
+    }
+
+    fn context(&self, node_id: C::ID) -> &C {
+        self.storage.element(node_id.idx())
+    }
+
+    fn context_mut(&mut self, node_id: C::ID) -> &mut C {
+        self.storage.element_mut(node_id.idx())
+    }
+
+    fn add_context(&mut self, context: C) -> C::ID {
+        C::ID::from_idx(self.storage.add_element(context))
+    }
+
+    fn remove_context(&mut self, node_id: C::ID) {
+        self.storage.free_element_at_idx(node_id.idx());
+    }
+}
+
+impl VoxelTreeNodeStorageID for VoxelTreeInternalNodeID {
+    fn idx(&self) -> GenerationalIdx {
+        self.0
+    }
+
+    fn from_idx(idx: GenerationalIdx) -> Self {
+        Self(idx)
+    }
+}
+
+impl VoxelTreeNodeStorageID for VoxelTreeExternalNodeID {
+    fn idx(&self) -> GenerationalIdx {
+        self.0
+    }
+
+    fn from_idx(idx: GenerationalIdx) -> Self {
+        Self(idx)
+    }
+}
+
+impl VoxelTreeExternalNodeContext {
+    fn new(voxel_type: VoxelType) -> Self {
+        Self { voxel_type }
+    }
+}
+
+impl VoxelTreeNodeContext for VoxelTreeInternalNodeContext {
+    type ID = VoxelTreeInternalNodeID;
+}
+
+impl VoxelTreeNodeContext for VoxelTreeExternalNodeContext {
+    type ID = VoxelTreeExternalNodeID;
+}
+
 impl VoxelTreeNode {
-    fn build<F, G>(generator: &G, current_indices: VoxelTreeIndices) -> Self
+    fn build<F, G>(
+        internal_node_context: &mut VoxelTreeInternalNodeContextStorage,
+        external_node_context: &mut VoxelTreeExternalNodeContextStorage,
+        generator: &G,
+        current_indices: VoxelTreeIndices,
+    ) -> Option<Self>
     where
         F: Float,
         G: VoxelGenerator<F>,
     {
         if current_indices.are_at_max_depth() {
-            Self::External(VoxelTreeExternalNode::create(generator, current_indices))
+            VoxelTreeExternalNode::create(external_node_context, generator, current_indices)
+                .map(Self::External)
         } else {
+            let mut has_children = false;
             let mut has_common_child_voxel_type = true;
             let mut common_child_voxel_type = None;
 
@@ -267,10 +410,19 @@ impl VoxelTreeNode {
                 .for_next_depth()
                 .unwrap()
                 .map(|next_indices| {
-                    let child = Self::build(generator, next_indices);
+                    let child = Self::build(
+                        internal_node_context,
+                        external_node_context,
+                        generator,
+                        next_indices,
+                    );
 
-                    match &child {
-                        Self::External(child) if has_common_child_voxel_type => {
+                    match child.as_ref() {
+                        None => {
+                            has_common_child_voxel_type = false;
+                        }
+                        Some(Self::External(child)) if has_common_child_voxel_type => {
+                            has_children = true;
                             if let Some(common_child_voxel_type) = common_child_voxel_type {
                                 has_common_child_voxel_type =
                                     child.voxel_type == common_child_voxel_type;
@@ -279,6 +431,7 @@ impl VoxelTreeNode {
                             }
                         }
                         _ => {
+                            has_children = true;
                             has_common_child_voxel_type = false;
                         }
                     }
@@ -286,15 +439,22 @@ impl VoxelTreeNode {
                     child
                 });
 
-            match common_child_voxel_type {
-                Some(common_child_voxel_type) if has_common_child_voxel_type => {
-                    Self::External(VoxelTreeExternalNode {
-                        voxel_type: common_child_voxel_type,
-                    })
+            if has_children {
+                if has_common_child_voxel_type {
+                    // Remove context for all children but one
+                    for child in &children[1..] {
+                        external_node_context
+                            .remove_context(child.as_ref().unwrap().get_external().unwrap().id);
+                    }
+                    // Return the remaining child
+                    Some(children[0].clone().unwrap())
+                } else {
+                    let id = internal_node_context
+                        .add_context(VoxelTreeInternalNodeContext::new(children));
+                    Some(Self::Internal(VoxelTreeInternalNode { id }))
                 }
-                _ => Self::Internal(VoxelTreeInternalNode {
-                    children: Box::new(children),
-                }),
+            } else {
+                None
             }
         }
     }
@@ -329,22 +489,22 @@ impl VoxelTreeNode {
         current_indices: VoxelTreeIndices,
     ) -> Option<Sphere<F>> {
         match self {
-            Self::External(external) => {
-                if !external.voxel_type.is_empty() {
-                    Some(tree.compute_bounding_sphere_of_voxel(current_indices))
-                } else {
-                    None
-                }
-            }
+            Self::External(_) => Some(tree.compute_bounding_sphere_of_voxel(current_indices)),
             Self::Internal(internal) => {
                 if let Some(next_indices) = current_indices.for_next_depth() {
                     let mut aggregate_bounding_sphere: Option<Sphere<F>> = None;
 
-                    for (child, next_indices) in internal.children.iter().zip(next_indices) {
-                        match (
-                            &mut aggregate_bounding_sphere,
-                            child.compute_bounding_sphere(tree, next_indices),
-                        ) {
+                    for (child, next_indices) in tree
+                        .internal_node_context(internal.id)
+                        .children
+                        .iter()
+                        .zip(next_indices)
+                    {
+                        let child_bounding_sphere = child
+                            .as_ref()
+                            .and_then(|child| child.compute_bounding_sphere(tree, next_indices));
+
+                        match (&mut aggregate_bounding_sphere, child_bounding_sphere) {
                             (Some(aggregate_bounding_sphere), Some(child_bounding_sphere)) => {
                                 *aggregate_bounding_sphere = child_bounding_sphere
                                     .bounding_sphere_with(iter::once(&*aggregate_bounding_sphere));
@@ -370,34 +530,39 @@ impl VoxelTreeNode {
         current_indices: VoxelTreeIndices,
     ) {
         match self {
-            Self::External(external) => {
-                if !external.voxel_type.is_empty() {
-                    let voxel_scale = tree.voxel_scale_at_depth(current_indices.depth());
-                    let voxel_center_offset =
-                        current_indices.voxel_center_offset(voxel_scale * tree.voxel_extent());
+            Self::External(_) => {
+                let voxel_scale = tree.voxel_scale_at_depth(current_indices.depth());
+                let voxel_center_offset =
+                    current_indices.voxel_center_offset(voxel_scale * tree.voxel_extent());
 
-                    transforms.push(ClusterInstanceTransform::new(
-                        voxel_center_offset,
-                        voxel_scale,
-                    ));
-                }
+                transforms.push(ClusterInstanceTransform::new(
+                    voxel_center_offset,
+                    voxel_scale,
+                ));
             }
             Self::Internal(internal) => {
-                for (child, next_indices) in internal
+                for (child, next_indices) in tree
+                    .internal_node_context(internal.id)
                     .children
                     .iter()
                     .zip(current_indices.for_next_depth().unwrap())
                 {
-                    child.add_voxel_transforms(tree, transforms, next_indices);
+                    if let Some(child) = child.as_ref() {
+                        child.add_voxel_transforms(tree, transforms, next_indices);
+                    }
                 }
             }
         }
     }
 }
 
-impl VoxelTreeInternalNode {
+impl VoxelTreeInternalNodeContext {
+    fn new(children: [Option<VoxelTreeNode>; 8]) -> Self {
+        Self { children }
+    }
+
     fn children(&self) -> impl Iterator<Item = &'_ VoxelTreeNode> {
-        self.children.iter()
+        self.children.iter().filter_map(|child| child.as_ref())
     }
 
     fn internal_children(&self) -> impl Iterator<Item = &'_ VoxelTreeInternalNode> {
@@ -408,9 +573,8 @@ impl VoxelTreeInternalNode {
         self.children().filter_map(|child| child.get_external())
     }
 
-    fn external_nonempty_children(&self) -> impl Iterator<Item = &'_ VoxelTreeExternalNode> {
-        self.external_children()
-            .filter(|child| !child.voxel_type.is_empty())
+    fn n_children(&self) -> usize {
+        self.children().count()
     }
 
     fn n_internal_children(&self) -> usize {
@@ -420,20 +584,30 @@ impl VoxelTreeInternalNode {
     fn n_external_children(&self) -> usize {
         self.external_children().count()
     }
-
-    fn n_external_nonempty_children(&self) -> usize {
-        self.external_nonempty_children().count()
-    }
 }
 
 impl VoxelTreeExternalNode {
-    fn create<F, G>(generator: &G, indices: VoxelTreeIndices) -> Self
+    fn new(
+        external_node_context: &mut VoxelTreeExternalNodeContextStorage,
+        voxel_type: VoxelType,
+    ) -> Self {
+        let context = VoxelTreeExternalNodeContext::new(voxel_type);
+        let id = external_node_context.add_context(context);
+        Self { id, voxel_type }
+    }
+
+    fn create<F, G>(
+        external_node_context: &mut VoxelTreeExternalNodeContextStorage,
+        generator: &G,
+        indices: VoxelTreeIndices,
+    ) -> Option<Self>
     where
         F: Float,
         G: VoxelGenerator<F>,
     {
-        let voxel_type = generator.voxel_at_indices(indices.i, indices.j, indices.k);
-        Self { voxel_type }
+        generator
+            .voxel_at_indices(indices.i, indices.j, indices.k)
+            .map(|voxel_type| Self::new(external_node_context, voxel_type))
     }
 }
 
@@ -636,8 +810,8 @@ mod test {
             self.shape
         }
 
-        fn voxel_at_indices(&self, _i: usize, _j: usize, _k: usize) -> VoxelType {
-            VoxelType::Empty
+        fn voxel_at_indices(&self, _i: usize, _j: usize, _k: usize) -> Option<VoxelType> {
+            None
         }
     }
 
@@ -650,11 +824,11 @@ mod test {
             self.shape
         }
 
-        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
             if i < self.shape[0] && j < self.shape[1] && k < self.shape[2] {
-                VoxelType::Default
+                Some(VoxelType::Default)
             } else {
-                VoxelType::Empty
+                None
             }
         }
     }
@@ -689,7 +863,7 @@ mod test {
             self.shape
         }
 
-        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
             self.call_counts
                 .lock()
                 .unwrap()
@@ -698,194 +872,159 @@ mod test {
                 .or_insert(1);
 
             if i < self.shape[0] && j < self.shape[1] && k < self.shape[2] {
-                VoxelType::Default
+                Some(VoxelType::Default)
             } else {
-                VoxelType::Empty
+                None
             }
         }
     }
 
     #[test]
-    fn should_get_voxel_extent_of_generator() {
+    fn should_get_no_tree_from_empty_voxel_generator() {
         let generator = EmptyVoxelGenerator { shape: [0; 3] };
-        let tree = VoxelTree::build(&generator);
+        assert!(VoxelTree::build(&generator).is_none());
+    }
+
+    #[test]
+    fn should_get_no_tree_for_zero_voxel_generator() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [0; 3] });
+        assert!(tree.is_none());
+    }
+
+    #[test]
+    fn should_get_voxel_extent_of_generator() {
+        let generator = DefaultVoxelGenerator { shape: [1; 3] };
+        let tree = VoxelTree::build(&generator).unwrap();
         assert_eq!(tree.voxel_extent(), generator.voxel_extent());
     }
 
     #[test]
-    fn should_build_tree_with_grid_size_one_for_zero_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [0; 3] });
-        assert_eq!(tree.tree_height(), 0);
-        assert_eq!(tree.grid_size(), 1);
-    }
-
-    #[test]
     fn should_build_tree_with_grid_size_one_for_single_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1; 3] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
         assert_eq!(tree.tree_height(), 0);
         assert_eq!(tree.grid_size(), 1);
     }
 
     #[test]
     fn should_build_tree_with_grid_size_two_for_two_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [2, 1, 1] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] }).unwrap();
         assert_eq!(tree.tree_height(), 1);
         assert_eq!(tree.grid_size(), 2);
 
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1, 2, 1] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 1] }).unwrap();
         assert_eq!(tree.tree_height(), 1);
         assert_eq!(tree.grid_size(), 2);
 
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1, 1, 2] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 1, 2] }).unwrap();
         assert_eq!(tree.tree_height(), 1);
         assert_eq!(tree.grid_size(), 2);
     }
 
     #[test]
     fn should_build_tree_with_grid_size_four_for_three_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [3, 1, 1] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3, 1, 1] }).unwrap();
         assert_eq!(tree.tree_height(), 2);
         assert_eq!(tree.grid_size(), 4);
 
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1, 3, 1] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 3, 1] }).unwrap();
         assert_eq!(tree.tree_height(), 2);
         assert_eq!(tree.grid_size(), 4);
 
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1, 1, 3] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 1, 3] }).unwrap();
         assert_eq!(tree.tree_height(), 2);
         assert_eq!(tree.grid_size(), 4);
-    }
-
-    #[test]
-    fn should_query_zero_voxel_generator_once() {
-        let generator = RecordingVoxelGenerator::new([0; 3]);
-        VoxelTree::build(&generator);
-        assert_eq!(generator.n_unique_queries(), 1);
     }
 
     #[test]
     fn should_query_one_voxel_generator_once() {
         let generator = RecordingVoxelGenerator::new([1; 3]);
-        VoxelTree::build(&generator);
+        VoxelTree::build(&generator).unwrap();
         assert_eq!(generator.n_unique_queries(), 1);
     }
 
     #[test]
     fn should_perform_8_unique_queries_on_two_voxel_generator() {
         let generator = RecordingVoxelGenerator::new([2, 1, 1]);
-        VoxelTree::build(&generator);
+        VoxelTree::build(&generator).unwrap();
         assert_eq!(generator.n_unique_queries(), 8);
     }
 
     #[test]
     fn should_perform_64_unique_queries_on_three_voxel_generator() {
         let generator = RecordingVoxelGenerator::new([3, 1, 1]);
-        VoxelTree::build(&generator);
+        VoxelTree::build(&generator).unwrap();
         assert_eq!(generator.n_unique_queries(), 64);
-    }
-
-    #[test]
-    fn should_not_query_same_indices_twice_for_zero_voxel_generator() {
-        let generator = RecordingVoxelGenerator::new([0; 3]);
-        VoxelTree::build(&generator);
-        assert!(generator.count_is_one_for_all_queries());
     }
 
     #[test]
     fn should_not_query_same_indices_twice_for_one_voxel_generator() {
         let generator = RecordingVoxelGenerator::new([1; 3]);
-        VoxelTree::build(&generator);
+        VoxelTree::build(&generator).unwrap();
         assert!(generator.count_is_one_for_all_queries());
     }
 
     #[test]
     fn should_not_query_same_indices_twice_for_two_voxel_generator() {
         let generator = RecordingVoxelGenerator::new([2, 1, 1]);
-        VoxelTree::build(&generator);
+        VoxelTree::build(&generator).unwrap();
         assert!(generator.count_is_one_for_all_queries());
     }
 
     #[test]
     fn should_not_query_same_indices_twice_for_three_voxel_generator() {
         let generator = RecordingVoxelGenerator::new([3, 1, 1]);
-        VoxelTree::build(&generator);
+        VoxelTree::build(&generator).unwrap();
         assert!(generator.count_is_one_for_all_queries());
     }
 
     #[test]
     fn should_have_external_root_node_for_single_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
         assert!(tree.root_node().is_external());
     }
 
     #[test]
     fn should_have_default_external_root_node_for_single_default_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
         let root_node = tree.root_node().get_external().unwrap();
         assert_eq!(root_node.voxel_type, VoxelType::Default);
     }
 
     #[test]
-    fn should_have_empty_external_root_node_for_single_empty_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1; 3] });
-        let root_node = tree.root_node().get_external().unwrap();
-        assert!(root_node.voxel_type.is_empty());
-    }
-
-    #[test]
-    fn should_have_internal_root_node_with_two_external_nonempty_children_for_two_default_voxel_generator(
-    ) {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] });
-        let root_node = tree.root_node().get_internal().unwrap();
-        assert_eq!(root_node.n_external_children(), 8);
-        assert_eq!(root_node.n_external_nonempty_children(), 2);
-    }
-
-    #[test]
-    fn should_have_empty_external_root_node_for_two_empty_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [2, 1, 1] });
-        let root_node = tree.root_node().get_external().unwrap();
-        assert!(root_node.voxel_type.is_empty());
-    }
-
-    #[test]
-    fn should_have_empty_external_root_node_for_8_empty_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [2; 3] });
-        let root_node = tree.root_node().get_external().unwrap();
-        assert!(root_node.voxel_type.is_empty());
+    fn should_have_internal_root_node_with_two_external_children_for_two_voxel_generator() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] }).unwrap();
+        let root_node = tree.internal_node_context(tree.root_node().get_internal().unwrap().id);
+        assert_eq!(root_node.n_children(), 2);
+        assert_eq!(root_node.n_external_children(), 2);
+        assert_eq!(root_node.n_internal_children(), 0);
     }
 
     #[test]
     fn should_have_default_external_root_node_for_8_default_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2; 3] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2; 3] }).unwrap();
         let root_node = tree.root_node().get_external().unwrap();
         assert_eq!(root_node.voxel_type, VoxelType::Default);
     }
 
     #[test]
-    fn should_have_internal_root_node_with_correct_internal_and_external_children_for_12_default_voxel_generator(
+    fn should_have_internal_root_node_with_correct_internal_and_external_children_for_12_voxel_generator(
     ) {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 2, 3] });
-        let root_node = tree.root_node().get_internal().unwrap();
-        assert_eq!(root_node.n_external_children(), 7);
-        assert_eq!(root_node.n_external_nonempty_children(), 1);
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 2, 3] }).unwrap();
+        let root_node = tree.internal_node_context(tree.root_node().get_internal().unwrap().id);
+        assert_eq!(root_node.n_children(), 2);
+        assert_eq!(root_node.n_external_children(), 1);
         assert_eq!(root_node.n_internal_children(), 1);
-        let internal_child = root_node.internal_children().next().unwrap();
-        assert_eq!(internal_child.n_external_children(), 8);
-        assert_eq!(internal_child.n_external_nonempty_children(), 4);
-    }
-
-    #[test]
-    fn should_compute_no_transform_for_empty_voxel_generator() {
-        let tree = VoxelTree::build(&EmptyVoxelGenerator { shape: [1; 3] });
-        let transforms = tree.compute_voxel_transforms();
-        assert!(transforms.is_empty());
+        let internal_child =
+            tree.internal_node_context(root_node.internal_children().next().unwrap().id);
+        assert_eq!(internal_child.n_children(), 4);
+        assert_eq!(internal_child.n_external_children(), 4);
+        assert_eq!(internal_child.n_internal_children(), 0);
     }
 
     #[test]
     fn should_compute_correct_transform_for_single_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [1; 3] };
-        let tree = VoxelTree::build(&generator);
+        let tree = VoxelTree::build(&generator).unwrap();
         let transforms = tree.compute_voxel_transforms();
 
         assert_eq!(transforms.len(), 1);
@@ -898,9 +1037,9 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transform_for_8_default_voxel_generator() {
+    fn should_compute_correct_transform_for_8_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [2; 3] };
-        let tree = VoxelTree::build(&generator);
+        let tree = VoxelTree::build(&generator).unwrap();
         let transforms = tree.compute_voxel_transforms();
 
         assert_eq!(transforms.len(), 1);
@@ -917,9 +1056,9 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transform_for_64_default_voxel_generator() {
+    fn should_compute_correct_transform_for_64_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [4; 3] };
-        let tree = VoxelTree::build(&generator);
+        let tree = VoxelTree::build(&generator).unwrap();
         let transforms = tree.compute_voxel_transforms();
 
         assert_eq!(transforms.len(), 1);
@@ -936,9 +1075,9 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transforms_for_12_default_voxel_generator() {
+    fn should_compute_correct_transforms_for_12_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [2, 2, 3] };
-        let tree = VoxelTree::build(&generator);
+        let tree = VoxelTree::build(&generator).unwrap();
         let transforms = tree.compute_voxel_transforms();
 
         assert_eq!(transforms.len(), 5);
@@ -1053,23 +1192,26 @@ mod test {
     #[test]
     fn should_find_no_voxel_at_indices_outside_grid() {
         let generator = DefaultVoxelGenerator { shape: [1; 3] };
-        let tree = VoxelTree::build(&generator);
-        assert_eq!(tree.find_voxel_at_indices(1, 0, 0), VoxelType::Empty);
-        assert_eq!(tree.find_voxel_at_indices(0, 1, 0), VoxelType::Empty);
-        assert_eq!(tree.find_voxel_at_indices(0, 0, 1), VoxelType::Empty);
+        let tree = VoxelTree::build(&generator).unwrap();
+        assert!(tree.find_voxel_at_indices(1, 0, 0).is_none());
+        assert!(tree.find_voxel_at_indices(0, 1, 0).is_none());
+        assert!(tree.find_voxel_at_indices(0, 0, 1).is_none());
     }
 
     #[test]
     fn should_find_root_voxel_at_zero_indices_for_single_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [1; 3] };
-        let tree = VoxelTree::build(&generator);
-        assert_eq!(tree.find_voxel_at_indices(0, 0, 0), VoxelType::Default);
+        let tree = VoxelTree::build(&generator).unwrap();
+        assert_eq!(
+            tree.find_voxel_at_indices(0, 0, 0).unwrap(),
+            VoxelType::Default
+        );
     }
 
     #[test]
-    fn should_find_correct_voxels_for_default_voxel_generator() {
+    fn should_find_same_voxels_as_provided_by_generator() {
         let generator = DefaultVoxelGenerator { shape: [1, 3, 2] };
-        let tree = VoxelTree::build(&generator);
+        let tree = VoxelTree::build(&generator).unwrap();
 
         for i in 0..tree.grid_size() {
             for j in 0..tree.grid_size() {

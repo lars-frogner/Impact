@@ -176,7 +176,8 @@ impl VoxelManager<fre> {
                     voxel_box.size_z,
                 );
 
-                let voxel_tree = VoxelTree::build(&generator);
+                let voxel_tree =
+                    VoxelTree::build(&generator).expect("Tried to build tree for empty voxel box");
 
                 let voxel_tree_id = voxel_manager.add_voxel_tree(voxel_tree);
 
@@ -197,7 +198,8 @@ impl VoxelManager<fre> {
                     voxel_sphere.n_voxels_across(),
                 );
 
-                let voxel_tree = VoxelTree::build(&generator);
+                let voxel_tree = VoxelTree::build(&generator)
+                    .expect("Tried to build tree for empty voxel sphere");
 
                 let voxel_tree_id = voxel_manager.add_voxel_tree(voxel_tree);
 
@@ -214,13 +216,6 @@ fn setup_voxel_material(
     instance_feature_manager: &mut InstanceFeatureManager,
 ) -> MaterialComp {
     match voxel_type {
-        VoxelType::Empty => setup_microfacet_material_for_voxel(
-            material_library,
-            instance_feature_manager,
-            RGBColor::zeros(),
-            None,
-            None,
-        ),
         VoxelType::Default => setup_microfacet_material_for_voxel(
             material_library,
             instance_feature_manager,
