@@ -45,27 +45,70 @@ pub struct VoxelTree<F: Float> {
     root_node: VoxelTreeNode,
 }
 
+/// A node in a voxel tree, which is either internal (it has child nodes) or
+/// external (it refers to a voxel).
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum VoxelTreeNode {
     Internal(VoxelTreeInternalNode),
     External(VoxelTreeExternalNode),
 }
 
+/// An internal node in a voxel tree. It has one child for each octant of the
+/// region of the grid the node covers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct VoxelTreeInternalNode {
     children: Box<[VoxelTreeNode; 8]>,
 }
 
+/// An external node in a voxel tree. It represents a voxel, which may either be
+/// unmerged (if the node is at the bottom of the tree) or a merged group of
+/// adjacent identical voxels (if the node is not at the bottom).
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct VoxelTreeExternalNode {
     pub voxel_type: VoxelType,
 }
 
+/// Indices in the voxel grid at the level of detail of a particular depth in a
+/// voxel tree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct VoxelTreeIndices {
+    max_depth: u32,
+    depth: u32,
+    i: usize,
+    j: usize,
+    k: usize,
+}
+
+/// Indices in the voxel grid at the bottom of a voxel tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct VoxelIndices {
     i: usize,
     j: usize,
     k: usize,
+}
+
+/// An iterator over the sequence of octants that must be followed from the root
+/// of a voxel tree to reach the voxel a given set of [`VoxelIndices`].
+struct OctantIterator {
+    indices: VoxelIndices,
+    octant_size: usize,
+    dividing_i: usize,
+    dividing_j: usize,
+    dividing_k: usize,
+}
+
+/// An octant in a voxel tree. The number associated with each variant is the
+/// index of the corresponding child node of a [`VoxelTreeInternalNode`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Octant {
+    BackBottomLeft = 0,
+    FrontBottomLeft = 1,
+    BackTopLeft = 2,
+    FrontTopLeft = 3,
+    BackBottomRight = 4,
+    FrontBottomRight = 5,
+    BackTopRight = 6,
+    FrontTopRight = 7,
 }
 
 impl VoxelType {
@@ -90,9 +133,9 @@ impl<F: Float> VoxelTree<F> {
     {
         let voxel_extent = generator.voxel_extent();
 
-        let tree_height = Self::tree_height_from_shape(generator.grid_shape());
+        let tree_height = tree_height_from_shape(generator.grid_shape());
 
-        let root_node = VoxelTreeNode::build(generator, tree_height, 0, VoxelIndices::zeros());
+        let root_node = VoxelTreeNode::build(generator, VoxelTreeIndices::at_root(tree_height));
 
         Self {
             voxel_extent,
@@ -123,15 +166,26 @@ impl<F: Float> VoxelTree<F> {
     /// the tree is empty.
     pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
         self.root_node
-            .compute_bounding_sphere(self, 0, 0, VoxelIndices::zeros())
+            .compute_bounding_sphere(self, VoxelTreeIndices::at_root(0))
     }
 
     /// Computes the transform of each (potentially merged) voxel in the tree.
     pub fn compute_voxel_transforms(&self) -> Vec<ClusterInstanceTransform<F>> {
         let mut transforms = Vec::new();
-        self.root_node
-            .add_voxel_transforms(self, &mut transforms, 0, VoxelIndices::zeros());
+        self.root_node.add_voxel_transforms(
+            self,
+            &mut transforms,
+            VoxelTreeIndices::at_root(self.tree_height),
+        );
         transforms
+    }
+
+    /// Returns the type of the voxel at the given indices in the voxel grid.
+    /// The voxel type will be [`VoxelType::Empty`] if the indices are outside
+    /// the bounds of the grid.
+    pub fn find_voxel_at_indices(&self, i: usize, j: usize, k: usize) -> VoxelType {
+        self.find_external_node_at_indices(i, j, k)
+            .map_or(VoxelType::Empty, |node| node.voxel_type)
     }
 
     /// Returns a reference to the root node of the tree.
@@ -139,11 +193,30 @@ impl<F: Float> VoxelTree<F> {
         &self.root_node
     }
 
-    fn compute_bounding_sphere_of_voxel(&self, depth: u32, indices: VoxelIndices) -> Sphere<F> {
-        let voxel_extent = self.voxel_extent_at_depth(depth);
-        let center = indices.voxel_center_offset(voxel_extent).into();
-        let radius = F::ONE_HALF * F::sqrt(F::THREE) * voxel_extent;
-        Sphere::new(center, radius)
+    fn find_external_node_at_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> Option<VoxelTreeExternalNode> {
+        if let Some(octants) = VoxelIndices::new(i, j, k).octants(self.tree_height) {
+            let mut node = self.root_node();
+
+            for octant in octants {
+                match node {
+                    VoxelTreeNode::External(_) => {
+                        break;
+                    }
+                    VoxelTreeNode::Internal(internal) => {
+                        node = &internal.children[octant.idx()];
+                    }
+                }
+            }
+
+            Some(node.get_external().unwrap().clone())
+        } else {
+            None
+        }
     }
 
     fn voxel_scale_at_depth(&self, depth: u32) -> F {
@@ -155,7 +228,7 @@ impl<F: Float> VoxelTree<F> {
     }
 
     fn grid_size_at_height(&self, height: u32) -> usize {
-        Self::grid_size_at_depth(self.height_to_depth(height))
+        grid_size_at_depth(self.height_to_depth(height))
     }
 
     fn height_to_depth(&self, height: u32) -> u32 {
@@ -167,63 +240,51 @@ impl<F: Float> VoxelTree<F> {
     }
 
     fn voxel_scale_at_height(height: u32) -> F {
-        F::from_usize(Self::grid_size_at_depth(height)).unwrap()
+        F::from_usize(grid_size_at_depth(height)).unwrap()
     }
 
-    fn grid_size_at_depth(depth: u32) -> usize {
-        1_usize.checked_shl(depth).unwrap()
-    }
-
-    fn tree_height_from_shape([shape_x, shape_y, shape_z]: [usize; 3]) -> u32 {
-        shape_x
-            .max(shape_y)
-            .max(shape_z)
-            .checked_next_power_of_two()
-            .unwrap()
-            .trailing_zeros()
+    fn compute_bounding_sphere_of_voxel(&self, indices: VoxelTreeIndices) -> Sphere<F> {
+        let voxel_extent = self.voxel_extent_at_depth(indices.depth());
+        let center = indices.voxel_center_offset(voxel_extent).into();
+        let radius = F::ONE_HALF * F::sqrt(F::THREE) * voxel_extent;
+        Sphere::new(center, radius)
     }
 }
 
 impl VoxelTreeNode {
-    fn build<F, G>(
-        generator: &G,
-        tree_height: u32,
-        current_depth: u32,
-        current_indices: VoxelIndices,
-    ) -> Self
+    fn build<F, G>(generator: &G, current_indices: VoxelTreeIndices) -> Self
     where
         F: Float,
         G: VoxelGenerator<F>,
     {
-        if current_depth == tree_height {
+        if current_indices.are_at_max_depth() {
             Self::External(VoxelTreeExternalNode::create(generator, current_indices))
         } else {
-            assert!(current_depth < tree_height);
-
-            let next_depth = current_depth + 1;
-
             let mut has_common_child_voxel_type = true;
             let mut common_child_voxel_type = None;
 
-            let children = current_indices.for_children().map(|next_indices| {
-                let child = Self::build(generator, tree_height, next_depth, next_indices);
+            let children = current_indices
+                .for_next_depth()
+                .unwrap()
+                .map(|next_indices| {
+                    let child = Self::build(generator, next_indices);
 
-                match &child {
-                    Self::External(child) if has_common_child_voxel_type => {
-                        if let Some(common_child_voxel_type) = common_child_voxel_type {
-                            has_common_child_voxel_type =
-                                child.voxel_type == common_child_voxel_type;
-                        } else {
-                            common_child_voxel_type = Some(child.voxel_type);
+                    match &child {
+                        Self::External(child) if has_common_child_voxel_type => {
+                            if let Some(common_child_voxel_type) = common_child_voxel_type {
+                                has_common_child_voxel_type =
+                                    child.voxel_type == common_child_voxel_type;
+                            } else {
+                                common_child_voxel_type = Some(child.voxel_type);
+                            }
+                        }
+                        _ => {
+                            has_common_child_voxel_type = false;
                         }
                     }
-                    _ => {
-                        has_common_child_voxel_type = false;
-                    }
-                }
 
-                child
-            });
+                    child
+                });
 
             match common_child_voxel_type {
                 Some(common_child_voxel_type) if has_common_child_voxel_type => {
@@ -265,35 +326,24 @@ impl VoxelTreeNode {
     fn compute_bounding_sphere<F: Float>(
         &self,
         tree: &VoxelTree<F>,
-        max_depth: u32,
-        current_depth: u32,
-        current_indices: VoxelIndices,
+        current_indices: VoxelTreeIndices,
     ) -> Option<Sphere<F>> {
         match self {
             Self::External(external) => {
                 if !external.voxel_type.is_empty() {
-                    Some(tree.compute_bounding_sphere_of_voxel(current_depth, current_indices))
+                    Some(tree.compute_bounding_sphere_of_voxel(current_indices))
                 } else {
                     None
                 }
             }
             Self::Internal(internal) => {
-                let next_depth = current_depth + 1;
-
-                if next_depth <= max_depth {
+                if let Some(next_indices) = current_indices.for_next_depth() {
                     let mut aggregate_bounding_sphere: Option<Sphere<F>> = None;
 
-                    for (child, next_indices) in
-                        internal.children.iter().zip(current_indices.for_children())
-                    {
+                    for (child, next_indices) in internal.children.iter().zip(next_indices) {
                         match (
                             &mut aggregate_bounding_sphere,
-                            child.compute_bounding_sphere(
-                                tree,
-                                max_depth,
-                                next_depth,
-                                next_indices,
-                            ),
+                            child.compute_bounding_sphere(tree, next_indices),
                         ) {
                             (Some(aggregate_bounding_sphere), Some(child_bounding_sphere)) => {
                                 *aggregate_bounding_sphere = child_bounding_sphere
@@ -305,10 +355,9 @@ impl VoxelTreeNode {
                             _ => {}
                         };
                     }
-
                     aggregate_bounding_sphere
                 } else {
-                    Some(tree.compute_bounding_sphere_of_voxel(current_depth, current_indices))
+                    Some(tree.compute_bounding_sphere_of_voxel(current_indices))
                 }
             }
         }
@@ -318,13 +367,12 @@ impl VoxelTreeNode {
         &self,
         tree: &VoxelTree<F>,
         transforms: &mut Vec<ClusterInstanceTransform<F>>,
-        current_depth: u32,
-        current_indices: VoxelIndices,
+        current_indices: VoxelTreeIndices,
     ) {
         match self {
             Self::External(external) => {
                 if !external.voxel_type.is_empty() {
-                    let voxel_scale = tree.voxel_scale_at_depth(current_depth);
+                    let voxel_scale = tree.voxel_scale_at_depth(current_indices.depth());
                     let voxel_center_offset =
                         current_indices.voxel_center_offset(voxel_scale * tree.voxel_extent());
 
@@ -335,11 +383,12 @@ impl VoxelTreeNode {
                 }
             }
             Self::Internal(internal) => {
-                let next_depth = current_depth + 1;
-                for (child, next_indices) in
-                    internal.children.iter().zip(current_indices.for_children())
+                for (child, next_indices) in internal
+                    .children
+                    .iter()
+                    .zip(current_indices.for_next_depth().unwrap())
                 {
-                    child.add_voxel_transforms(tree, transforms, next_depth, next_indices);
+                    child.add_voxel_transforms(tree, transforms, next_indices);
                 }
             }
         }
@@ -378,7 +427,7 @@ impl VoxelTreeInternalNode {
 }
 
 impl VoxelTreeExternalNode {
-    fn create<F, G>(generator: &G, indices: VoxelIndices) -> Self
+    fn create<F, G>(generator: &G, indices: VoxelTreeIndices) -> Self
     where
         F: Float,
         G: VoxelGenerator<F>,
@@ -388,33 +437,66 @@ impl VoxelTreeExternalNode {
     }
 }
 
-impl VoxelIndices {
-    fn new(i: usize, j: usize, k: usize) -> Self {
-        Self { i, j, k }
+impl VoxelTreeIndices {
+    fn new(max_depth: u32, depth: u32, i: usize, j: usize, k: usize) -> Self {
+        assert!(depth <= max_depth);
+        Self {
+            max_depth,
+            depth,
+            i,
+            j,
+            k,
+        }
     }
 
-    fn zeros() -> Self {
-        Self::new(0, 0, 0)
+    fn at_root(max_depth: u32) -> Self {
+        Self::new(max_depth, 0, 0, 0, 0)
     }
 
-    fn for_children(&self) -> [Self; 8] {
-        let i0 = 2 * self.i;
-        let i1 = i0 + 1;
-        let j0 = 2 * self.j;
-        let j1 = j0 + 1;
-        let k0 = 2 * self.k;
-        let k1 = k0 + 1;
+    fn at_max_depth(max_depth: u32, i: usize, j: usize, k: usize) -> Self {
+        Self::new(max_depth, max_depth, i, j, k)
+    }
 
-        [
-            Self::new(i0, j0, k0),
-            Self::new(i0, j0, k1),
-            Self::new(i0, j1, k0),
-            Self::new(i0, j1, k1),
-            Self::new(i1, j0, k0),
-            Self::new(i1, j0, k1),
-            Self::new(i1, j1, k0),
-            Self::new(i1, j1, k1),
-        ]
+    fn max_depth(&self) -> u32 {
+        self.max_depth
+    }
+
+    fn depth(&self) -> u32 {
+        self.depth
+    }
+
+    fn are_at_max_depth(&self) -> bool {
+        self.depth == self.max_depth
+    }
+
+    fn for_next_depth(&self) -> Option<[Self; 8]> {
+        let next_depth = self.depth + 1;
+
+        if next_depth <= self.max_depth {
+            let i0 = 2 * self.i;
+            let i1 = i0 + 1;
+            let j0 = 2 * self.j;
+            let j1 = j0 + 1;
+            let k0 = 2 * self.k;
+            let k1 = k0 + 1;
+
+            Some([
+                self.for_child(next_depth, i0, j0, k0),
+                self.for_child(next_depth, i0, j0, k1),
+                self.for_child(next_depth, i0, j1, k0),
+                self.for_child(next_depth, i0, j1, k1),
+                self.for_child(next_depth, i1, j0, k0),
+                self.for_child(next_depth, i1, j0, k1),
+                self.for_child(next_depth, i1, j1, k0),
+                self.for_child(next_depth, i1, j1, k1),
+            ])
+        } else {
+            None
+        }
+    }
+
+    fn for_child(&self, next_depth: u32, i: usize, j: usize, k: usize) -> Self {
+        Self::new(self.max_depth, next_depth, i, j, k)
     }
 
     fn voxel_center_offset<F: Float>(&self, voxel_extent: F) -> Vector3<F> {
@@ -425,6 +507,105 @@ impl VoxelIndices {
             F::from_usize(self.k).unwrap() * voxel_extent + half_voxel_extent
         ]
     }
+}
+
+impl VoxelIndices {
+    fn new(i: usize, j: usize, k: usize) -> Self {
+        Self { i, j, k }
+    }
+
+    fn are_inside_grid(&self, grid_size: usize) -> bool {
+        self.i < grid_size && self.j < grid_size && self.k < grid_size
+    }
+
+    fn octants(self, tree_height: u32) -> Option<impl Iterator<Item = Octant>> {
+        OctantIterator::new(tree_height, self)
+    }
+}
+
+impl OctantIterator {
+    fn new(tree_height: u32, indices: VoxelIndices) -> Option<Self> {
+        let grid_size = grid_size_at_depth(tree_height);
+
+        if indices.are_inside_grid(grid_size) {
+            let octant_size = grid_size / 2;
+            Some(Self {
+                indices,
+                octant_size,
+                dividing_i: octant_size,
+                dividing_j: octant_size,
+                dividing_k: octant_size,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl Iterator for OctantIterator {
+    type Item = Octant;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.octant_size < 1 {
+            return None;
+        }
+
+        self.octant_size /= 2;
+
+        let to_left = if self.indices.i < self.dividing_i {
+            self.dividing_i -= self.octant_size;
+            true
+        } else {
+            self.dividing_i += self.octant_size;
+            false
+        };
+        let at_bottom = if self.indices.j < self.dividing_j {
+            self.dividing_j -= self.octant_size;
+            true
+        } else {
+            self.dividing_j += self.octant_size;
+            false
+        };
+        let in_back = if self.indices.k < self.dividing_k {
+            self.dividing_k -= self.octant_size;
+            true
+        } else {
+            self.dividing_k += self.octant_size;
+            false
+        };
+
+        let octant = match (to_left, at_bottom, in_back) {
+            (true, true, true) => Octant::BackBottomLeft,
+            (true, true, false) => Octant::FrontBottomLeft,
+            (true, false, true) => Octant::BackTopLeft,
+            (true, false, false) => Octant::FrontTopLeft,
+            (false, true, true) => Octant::BackBottomRight,
+            (false, true, false) => Octant::FrontBottomRight,
+            (false, false, true) => Octant::BackTopRight,
+            (false, false, false) => Octant::FrontTopRight,
+        };
+
+        Some(octant)
+    }
+}
+
+impl Octant {
+    fn idx(&self) -> usize {
+        *self as usize
+    }
+}
+
+fn grid_size_at_depth(depth: u32) -> usize {
+    1_usize.checked_shl(depth).unwrap()
+}
+
+fn tree_height_from_shape([shape_x, shape_y, shape_z]: [usize; 3]) -> u32 {
+    shape_x
+        .max(shape_y)
+        .max(shape_z)
+        .checked_next_power_of_two()
+        .unwrap()
+        .trailing_zeros()
 }
 
 #[cfg(test)]
@@ -784,5 +965,121 @@ mod test {
         check_transform(1.5, 0.5, 2.5, 1.0);
         // Voxel at (1, 1, 2)
         check_transform(1.5, 1.5, 2.5, 1.0);
+    }
+
+    #[test]
+    fn should_get_no_octant_iterator_for_indices_outside_voxel_grid() {
+        assert!(VoxelIndices::new(0, 0, 1).octants(0).is_none());
+        assert!(VoxelIndices::new(0, 1, 0).octants(0).is_none());
+        assert!(VoxelIndices::new(1, 0, 0).octants(0).is_none());
+        assert!(VoxelIndices::new(0, 0, 2).octants(1).is_none());
+        assert!(VoxelIndices::new(0, 2, 0).octants(1).is_none());
+        assert!(VoxelIndices::new(2, 0, 0).octants(1).is_none());
+    }
+
+    #[test]
+    fn should_get_empty_octant_iterator_for_height_zero_tree() {
+        let octants = VoxelIndices::new(0, 0, 0).octants(0);
+        assert!(octants.is_some());
+        assert!(octants.unwrap().next().is_none());
+    }
+
+    #[test]
+    fn should_get_correct_single_octant_iterators_for_height_one_tree() {
+        let check_octant = |i, j, k, octant| {
+            assert_eq!(
+                VoxelIndices::new(i, j, k)
+                    .octants(1)
+                    .unwrap()
+                    .collect::<Vec<_>>(),
+                vec![octant]
+            );
+        };
+
+        check_octant(0, 0, 0, Octant::BackBottomLeft);
+        check_octant(0, 0, 1, Octant::FrontBottomLeft);
+        check_octant(0, 1, 0, Octant::BackTopLeft);
+        check_octant(0, 1, 1, Octant::FrontTopLeft);
+        check_octant(1, 0, 0, Octant::BackBottomRight);
+        check_octant(1, 0, 1, Octant::FrontBottomRight);
+        check_octant(1, 1, 0, Octant::BackTopRight);
+        check_octant(1, 1, 1, Octant::FrontTopRight);
+    }
+
+    #[test]
+    fn should_get_correct_octant_iterators_for_height_two_tree() {
+        use Octant::{
+            BackBottomLeft as BBL, BackBottomRight as BBR, BackTopLeft as BTL, BackTopRight as BTR,
+            FrontBottomLeft as FBL, FrontBottomRight as FBR, FrontTopLeft as FTL,
+            FrontTopRight as FTR,
+        };
+
+        let check_octants = |i, j, k, octants: [Octant; 2]| {
+            assert_eq!(
+                VoxelIndices::new(i, j, k)
+                    .octants(2)
+                    .unwrap()
+                    .collect::<Vec<_>>(),
+                octants.to_vec(),
+            );
+        };
+
+        let check_octants_for_offset = |i_offset, j_offset, k_offset, first_octant| {
+            check_octants(i_offset, j_offset, k_offset, [first_octant, BBL]);
+            check_octants(i_offset, j_offset, k_offset + 1, [first_octant, FBL]);
+            check_octants(i_offset, j_offset + 1, k_offset, [first_octant, BTL]);
+            check_octants(i_offset, j_offset + 1, k_offset + 1, [first_octant, FTL]);
+            check_octants(i_offset + 1, j_offset, k_offset, [first_octant, BBR]);
+            check_octants(i_offset + 1, j_offset, k_offset + 1, [first_octant, FBR]);
+            check_octants(i_offset + 1, j_offset + 1, k_offset, [first_octant, BTR]);
+            check_octants(
+                i_offset + 1,
+                j_offset + 1,
+                k_offset + 1,
+                [first_octant, FTR],
+            );
+        };
+
+        check_octants_for_offset(0, 0, 0, BBL);
+        check_octants_for_offset(0, 0, 2, FBL);
+        check_octants_for_offset(0, 2, 0, BTL);
+        check_octants_for_offset(0, 2, 2, FTL);
+        check_octants_for_offset(2, 0, 0, BBR);
+        check_octants_for_offset(2, 0, 2, FBR);
+        check_octants_for_offset(2, 2, 0, BTR);
+        check_octants_for_offset(2, 2, 2, FTR);
+    }
+
+    #[test]
+    fn should_find_no_voxel_at_indices_outside_grid() {
+        let generator = DefaultVoxelGenerator { shape: [1; 3] };
+        let tree = VoxelTree::build(&generator);
+        assert_eq!(tree.find_voxel_at_indices(1, 0, 0), VoxelType::Empty);
+        assert_eq!(tree.find_voxel_at_indices(0, 1, 0), VoxelType::Empty);
+        assert_eq!(tree.find_voxel_at_indices(0, 0, 1), VoxelType::Empty);
+    }
+
+    #[test]
+    fn should_find_root_voxel_at_zero_indices_for_single_voxel_generator() {
+        let generator = DefaultVoxelGenerator { shape: [1; 3] };
+        let tree = VoxelTree::build(&generator);
+        assert_eq!(tree.find_voxel_at_indices(0, 0, 0), VoxelType::Default);
+    }
+
+    #[test]
+    fn should_find_correct_voxels_for_default_voxel_generator() {
+        let generator = DefaultVoxelGenerator { shape: [1, 3, 2] };
+        let tree = VoxelTree::build(&generator);
+
+        for i in 0..tree.grid_size() {
+            for j in 0..tree.grid_size() {
+                for k in 0..tree.grid_size() {
+                    assert_eq!(
+                        tree.find_voxel_at_indices(i, j, k),
+                        generator.voxel_at_indices(i, j, k)
+                    );
+                }
+            }
+        }
     }
 }
