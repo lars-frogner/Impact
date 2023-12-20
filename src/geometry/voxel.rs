@@ -8,8 +8,9 @@ use crate::{
     geometry::{ClusterInstanceTransform, Sphere},
     num::Float,
 };
-use impact_utils::{GenerationalIdx, GenerationalReusingVec};
+use impact_utils::KeyIndexMapper;
 use nalgebra::{vector, Vector3};
+use nohash_hasher::BuildNoHashHasher;
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
 use std::iter;
@@ -41,83 +42,96 @@ pub trait VoxelGenerator<F: Float> {
 #[derive(Debug)]
 pub struct VoxelTree<F: Float> {
     voxel_extent: F,
-    tree_height: u32,
-    root_node: VoxelTreeNode,
-    internal_node_context: VoxelTreeInternalNodeContextStorage,
-    external_node_context: VoxelTreeExternalNodeContextStorage,
+    tree_height: VoxelTreeHeight,
+    root_node_id: VoxelTreeNodeID,
+    internal_nodes: VoxelTreeInternalNodeStorage,
+    external_nodes: VoxelTreeExternalNodeStorage,
 }
 
-/// Flat storage for all contextual information associated with nodes in a
-/// [`VoxelTree`].
-#[derive(Clone, Debug)]
-struct VoxelTreeNodeContextStorage<C> {
-    storage: GenerationalReusingVec<C>,
-}
-
-/// Represents contectual information for a type of node in a voxel tree.
-pub trait VoxelTreeNodeContext {
+/// Represents a type of node in a voxel tree.
+trait VoxelTreeNode {
     /// Type of the node's ID.
     type ID: VoxelTreeNodeStorageID;
 }
 
 /// Represents a type of voxel tree node identifier.
-pub trait VoxelTreeNodeStorageID {
-    /// Returns the index corresponding to the node ID.
-    fn idx(&self) -> GenerationalIdx;
+trait VoxelTreeNodeStorageID: Copy + std::hash::Hash + Eq + std::fmt::Debug {
+    /// Creates the node ID corresponding to the given numerical value.
+    fn from_number(number: usize) -> Self;
 
-    /// Creates the node ID corresponding to the given index.
-    fn from_idx(idx: GenerationalIdx) -> Self;
+    /// Returns the numerical value corresponding to the node ID.
+    fn number(&self) -> usize;
 }
 
-/// Identifier for a [`VoxelTreeInternalNode`] in a [`VoxelTree`]. Can be used
-/// to access the associated [`VoxelTreeInternalNodeContext`].
+/// The total number of levels in a voxel tree.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct VoxelTreeInternalNodeID(GenerationalIdx);
-
-/// Identifier for a [`VoxelTreeExternalNode`] in a [`VoxelTree`]. Can be used
-/// to access the associated [`VoxelTreeExternalNodeContext`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct VoxelTreeExternalNodeID(GenerationalIdx);
-
-/// Contextual information about a [`VoxelTreeInternalNode`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct VoxelTreeInternalNodeContext {
-    children: [Option<VoxelTreeNode>; 8],
+struct VoxelTreeHeight {
+    tree_height: u32,
 }
 
-/// Contextual information about a [`VoxelTreeExternalNode`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct VoxelTreeExternalNodeContext {
-    voxel_type: VoxelType,
+/// The ID of a node in a voxel tree, which is either internal (it has child
+/// nodes) or external (it refers to a voxel).
+#[derive(Clone, Debug)]
+enum VoxelTreeNodeID {
+    Internal(VoxelTreeInternalNodeID),
+    External(VoxelTreeExternalNodeID),
 }
 
-type VoxelTreeInternalNodeContextStorage =
-    VoxelTreeNodeContextStorage<VoxelTreeInternalNodeContext>;
-
-type VoxelTreeExternalNodeContextStorage =
-    VoxelTreeNodeContextStorage<VoxelTreeExternalNodeContext>;
-
-/// A node in a voxel tree, which is either internal (it has child nodes) or
-/// external (it refers to a voxel).
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum VoxelTreeNode {
-    Internal(VoxelTreeInternalNode),
-    External(VoxelTreeExternalNode),
+/// Flat storage for all nodes of a specific type in a [`VoxelTree`].
+#[derive(Clone, Debug)]
+struct VoxelTreeNodeStorage<C> {
+    nodes: Vec<C>,
+    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
+    node_id_count: usize,
 }
+
+type VoxelTreeInternalNodeStorage = VoxelTreeNodeStorage<VoxelTreeInternalNode>;
+
+type VoxelTreeExternalNodeStorage = VoxelTreeNodeStorage<VoxelTreeExternalNode>;
+
+/// Identifier for a [`VoxelTreeInternalNode`] in a [`VoxelTree`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct VoxelTreeInternalNodeID(usize);
+
+/// Identifier for a [`VoxelTreeExternalNode`] in a [`VoxelTree`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct VoxelTreeExternalNodeID(usize);
 
 /// An internal node in a voxel tree. It has one child for each octant of the
 /// region of the grid the node covers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct VoxelTreeInternalNode {
-    id: VoxelTreeInternalNodeID,
+    child_ids: [Option<VoxelTreeNodeID>; 8],
 }
 
 /// An external node in a voxel tree. It represents a voxel, which may either be
 /// unmerged (if the node is at the bottom of the tree) or a merged group of
 /// adjacent identical voxels (if the node is not at the bottom).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct VoxelTreeExternalNode {
-    id: VoxelTreeExternalNodeID,
+    voxel_type: VoxelType,
+    voxel_indices: VoxelIndices,
+    voxel_scale: u32,
+    adjacent_voxels: Vec<VoxelTreeExternalNodeID>,
+}
+
+/// Helper type used for constructing a voxel tree. Like [`VoxelTreeNodeID`],
+/// but uses a [`VoxelTreeExternalBuildNode`] instead of a
+/// [`VoxelTreeExternalNodeID`].
+#[derive(Clone, Debug)]
+enum VoxelTreeBuildNode {
+    Internal(VoxelTreeInternalNodeID),
+    External(VoxelTreeExternalBuildNode),
+}
+
+/// Temporary representation of an external node in a voxel tree, used during
+/// construction to avoid adding external nodes to the storage that will end up
+/// being merged.
+#[derive(Clone, Debug)]
+struct VoxelTreeExternalBuildNode {
+    indices: VoxelTreeIndices,
     voxel_type: VoxelType,
 }
 
@@ -125,7 +139,7 @@ struct VoxelTreeExternalNode {
 /// voxel tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct VoxelTreeIndices {
-    max_depth: u32,
+    tree_height: VoxelTreeHeight,
     depth: u32,
     i: usize,
     j: usize,
@@ -181,24 +195,24 @@ impl<F: Float> VoxelTree<F> {
     {
         let voxel_extent = generator.voxel_extent();
 
-        let tree_height = tree_height_from_shape(generator.grid_shape());
+        let tree_height = VoxelTreeHeight::from_shape(generator.grid_shape());
 
-        let mut internal_node_context = VoxelTreeNodeContextStorage::new();
-        let mut external_node_context = VoxelTreeNodeContextStorage::new();
+        let mut internal_nodes = VoxelTreeNodeStorage::new();
+        let mut external_nodes = VoxelTreeNodeStorage::new();
 
-        let root_node = VoxelTreeNode::build(
-            &mut internal_node_context,
-            &mut external_node_context,
+        let build_node = VoxelTreeBuildNode::build(
+            &mut internal_nodes,
+            &mut external_nodes,
             generator,
             VoxelTreeIndices::at_root(tree_height),
         );
 
-        root_node.map(|root_node| Self {
+        VoxelTreeNodeID::from_build_node(&mut external_nodes, build_node).map(|root_node_id| Self {
             voxel_extent,
             tree_height,
-            root_node,
-            internal_node_context,
-            external_node_context,
+            root_node_id,
+            internal_nodes,
+            external_nodes,
         })
     }
 
@@ -211,26 +225,29 @@ impl<F: Float> VoxelTree<F> {
     /// height zero. The grid size decreases by half for each successive height,
     /// down to one at the full height of the tree.
     pub fn tree_height(&self) -> u32 {
-        self.tree_height
+        self.tree_height.value()
     }
 
     /// Returns the number of unmerged voxels along one axis of the grid. The
     /// grid size is always a power of two.
     pub fn grid_size(&self) -> usize {
-        self.grid_size_at_height(0)
+        self.tree_height.grid_size_at_height(0)
     }
 
     /// Computes a sphere bounding the entire voxel tree. Returns [`None`] if
     /// the tree is empty.
     pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
-        self.root_node
-            .compute_bounding_sphere(self, VoxelTreeIndices::at_root(0))
+        let max_depth = 0;
+        self.root_node_id.compute_bounding_sphere(
+            self,
+            VoxelTreeIndices::at_root(VoxelTreeHeight::new(max_depth)),
+        )
     }
 
     /// Computes the transform of each (potentially merged) voxel in the tree.
     pub fn compute_voxel_transforms(&self) -> Vec<ClusterInstanceTransform<F>> {
         let mut transforms = Vec::new();
-        self.root_node.add_voxel_transforms(
+        self.root_node_id.add_voxel_transforms(
             self,
             &mut transforms,
             VoxelTreeIndices::at_root(self.tree_height),
@@ -242,40 +259,48 @@ impl<F: Float> VoxelTree<F> {
     /// [`None`] if the voxel is empty or the indices are outside the bounds of
     /// the grid.
     pub fn find_voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
-        self.find_external_node_at_indices(i, j, k)
-            .map(|node| node.voxel_type)
+        self.find_external_node_id_at_indices(i, j, k)
+            .map(|node_id| self.external_node(node_id).voxel_type)
     }
 
-    /// Returns a reference to the root node of the tree.
-    fn root_node(&self) -> &VoxelTreeNode {
-        &self.root_node
+    /// Rebuilds the list of adjacent voxels for every external node in the
+    /// tree.
+    pub fn determine_adjacent_voxels_for_all_external_nodes(&mut self) {
+        for idx in 0..self.external_nodes.n_nodes() {
+            self.external_nodes.node_at_idx_mut(idx).adjacent_voxels = self
+                .determine_adjacent_voxels_for_external_node(self.external_nodes.node_at_idx(idx));
+        }
     }
 
-    fn internal_node_context(&self, id: VoxelTreeInternalNodeID) -> &VoxelTreeInternalNodeContext {
-        self.internal_node_context.context(id)
+    /// Returns the ID of the root node of the tree.
+    fn root_node_id(&self) -> &VoxelTreeNodeID {
+        &self.root_node_id
     }
 
-    fn external_node_context(&self, id: VoxelTreeExternalNodeID) -> &VoxelTreeExternalNodeContext {
-        self.external_node_context.context(id)
+    fn internal_node(&self, id: VoxelTreeInternalNodeID) -> &VoxelTreeInternalNode {
+        self.internal_nodes.node(id)
     }
 
-    fn find_external_node_at_indices(
+    fn external_node(&self, id: VoxelTreeExternalNodeID) -> &VoxelTreeExternalNode {
+        self.external_nodes.node(id)
+    }
+
+    fn find_external_node_id_at_indices(
         &self,
         i: usize,
         j: usize,
         k: usize,
-    ) -> Option<&VoxelTreeExternalNode> {
-        if let Some(octants) = VoxelIndices::new(i, j, k).octants(self.tree_height) {
-            let mut node = Some(self.root_node());
+    ) -> Option<VoxelTreeExternalNodeID> {
+        if let Some(octants) = VoxelIndices::new(i, j, k).octants(self.tree_height.value()) {
+            let mut node_id = Some(self.root_node_id());
 
             for octant in octants {
-                match node {
-                    Some(VoxelTreeNode::External(_)) => {
+                match node_id {
+                    Some(VoxelTreeNodeID::External(_)) => {
                         break;
                     }
-                    Some(VoxelTreeNode::Internal(internal)) => {
-                        node =
-                            self.internal_node_context(internal.id).children[octant.idx()].as_ref();
+                    Some(VoxelTreeNodeID::Internal(internal_id)) => {
+                        node_id = self.internal_node(*internal_id).child_ids[octant.idx()].as_ref();
                     }
                     None => {
                         return None;
@@ -283,22 +308,248 @@ impl<F: Float> VoxelTree<F> {
                 }
             }
 
-            node.map(|node| node.get_external().unwrap())
+            node_id.map(|node_id| node_id.as_external().unwrap())
         } else {
             None
         }
     }
 
-    fn voxel_scale_at_depth(&self, depth: u32) -> F {
+    fn compute_bounding_sphere_of_voxel(&self, indices: VoxelTreeIndices) -> Sphere<F> {
+        let (voxel_scale, center) = indices.voxel_scale_and_center_offset(self.voxel_extent());
+        let radius = F::ONE_HALF * F::sqrt(F::THREE) * self.voxel_extent() * voxel_scale;
+        Sphere::new(center.into(), radius)
+    }
+
+    fn determine_adjacent_voxels_for_external_node_id(
+        &self,
+        node_id: VoxelTreeExternalNodeID,
+    ) -> Vec<VoxelTreeExternalNodeID> {
+        let node = self.external_nodes.node(node_id);
+        self.determine_adjacent_voxels_for_external_node(node)
+    }
+
+    fn determine_adjacent_voxels_for_external_node(
+        &self,
+        node: &VoxelTreeExternalNode,
+    ) -> Vec<VoxelTreeExternalNodeID> {
+        let mut adjacent_voxels = Vec::new();
+
+        if node.voxel_scale == 1 {
+            self.add_voxels_adjacent_to_unmerged_voxel(node, &mut adjacent_voxels);
+        } else {
+            self.add_voxels_adjacent_to_merged_voxel(node, &mut adjacent_voxels);
+        }
+
+        adjacent_voxels
+    }
+
+    fn add_voxels_adjacent_to_unmerged_voxel(
+        &self,
+        node: &VoxelTreeExternalNode,
+        adjacent_voxels: &mut Vec<VoxelTreeExternalNodeID>,
+    ) {
+        let grid_size = self.grid_size();
+
+        let i0 = node.voxel_indices.i;
+        let j0 = node.voxel_indices.j;
+        let k0 = node.voxel_indices.k;
+
+        if i0 > 0 {
+            if let Some(node_id) = self.find_external_node_id_at_indices(i0 - 1, j0, k0) {
+                adjacent_voxels.push(node_id);
+            }
+        }
+        if i0 + 1 < grid_size {
+            if let Some(node_id) = self.find_external_node_id_at_indices(i0 + 1, j0, k0) {
+                adjacent_voxels.push(node_id);
+            }
+        }
+        if j0 > 0 {
+            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0 - 1, k0) {
+                adjacent_voxels.push(node_id);
+            }
+        }
+        if j0 + 1 < grid_size {
+            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0 + 1, k0) {
+                adjacent_voxels.push(node_id);
+            }
+        }
+        if k0 > 0 {
+            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0, k0 - 1) {
+                adjacent_voxels.push(node_id);
+            }
+        }
+        if k0 + 1 < grid_size {
+            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0, k0 + 1) {
+                adjacent_voxels.push(node_id);
+            }
+        }
+    }
+
+    fn add_voxels_adjacent_to_merged_voxel(
+        &self,
+        node: &VoxelTreeExternalNode,
+        adjacent_voxels: &mut Vec<VoxelTreeExternalNodeID>,
+    ) {
+        let grid_size = self.grid_size();
+
+        let scale = node.voxel_scale as usize;
+        let i0 = node.voxel_indices.i;
+        let j0 = node.voxel_indices.j;
+        let k0 = node.voxel_indices.k;
+
+        let mut covered = vec![false; scale.pow(2)];
+
+        if i0 > 0 {
+            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
+                scale,
+                &mut covered,
+                adjacent_voxels,
+                |delta_j, delta_k| {
+                    self.find_external_node_id_at_indices(i0 - 1, j0 + delta_j, k0 + delta_k)
+                },
+            );
+        }
+        if i0 + scale < grid_size {
+            covered.fill(false);
+            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
+                scale,
+                &mut covered,
+                adjacent_voxels,
+                |delta_j, delta_k| {
+                    self.find_external_node_id_at_indices(i0 + scale, j0 + delta_j, k0 + delta_k)
+                },
+            );
+        }
+        if j0 > 0 {
+            covered.fill(false);
+            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
+                scale,
+                &mut covered,
+                adjacent_voxels,
+                |delta_i, delta_k| {
+                    self.find_external_node_id_at_indices(i0 + delta_i, j0 - 1, k0 + delta_k)
+                },
+            );
+        }
+        if j0 + scale < grid_size {
+            covered.fill(false);
+            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
+                scale,
+                &mut covered,
+                adjacent_voxels,
+                |delta_i, delta_k| {
+                    self.find_external_node_id_at_indices(i0 + delta_i, j0 + scale, k0 + delta_k)
+                },
+            );
+        }
+        if k0 > 0 {
+            covered.fill(false);
+            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
+                scale,
+                &mut covered,
+                adjacent_voxels,
+                |delta_i, delta_j| {
+                    self.find_external_node_id_at_indices(i0 + delta_i, j0 + delta_j, k0 - 1)
+                },
+            );
+        }
+        if k0 + scale < grid_size {
+            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
+                scale,
+                &mut covered,
+                adjacent_voxels,
+                |delta_i, delta_j| {
+                    self.find_external_node_id_at_indices(i0 + delta_i, j0 + delta_j, k0 + scale)
+                },
+            );
+        }
+    }
+
+    fn add_voxels_adjacent_to_merged_voxel_on_one_side(
+        &self,
+        scale: usize,
+        covered: &mut [bool],
+        adjacent_voxels: &mut Vec<VoxelTreeExternalNodeID>,
+        find_node: impl Fn(usize, usize) -> Option<VoxelTreeExternalNodeID>,
+    ) {
+        let mut delta_n = 0;
+        let mut delta_m = 0;
+        let mut idx = 0;
+
+        'outer: while delta_n < scale {
+            while delta_m < scale {
+                if !covered[idx] {
+                    if let Some(node_id) = find_node(delta_n, delta_m) {
+                        adjacent_voxels.push(node_id);
+
+                        let node = self.external_node(node_id);
+                        let neighbor_scale = node.voxel_scale as usize;
+
+                        if neighbor_scale >= scale {
+                            // If the neighbor is not smaller than us, there is
+                            // no room for more neighbors on this side
+                            break 'outer;
+                        } else if neighbor_scale > 1 {
+                            // If the neighbor is merged but smaller than
+                            // us, we mark all the later locations covered
+                            // by the neighbor so as not to query them later
+                            for n in delta_n..(delta_n + neighbor_scale) {
+                                for m in delta_m..(delta_m + neighbor_scale) {
+                                    covered[n * scale + m] = true;
+                                }
+                            }
+                            // We can immediately skip ahead to the end of the
+                            // neighbor
+                            delta_m += neighbor_scale - 1;
+                            idx += neighbor_scale - 1;
+                        }
+                    }
+                }
+
+                delta_m += 1;
+                idx += 1;
+            }
+            delta_m = 0;
+            delta_n += 1;
+        }
+    }
+}
+
+impl VoxelTreeHeight {
+    fn new(tree_height: u32) -> Self {
+        Self { tree_height }
+    }
+
+    fn from_shape([shape_x, shape_y, shape_z]: [usize; 3]) -> Self {
+        let tree_height = shape_x
+            .max(shape_y)
+            .max(shape_z)
+            .checked_next_power_of_two()
+            .unwrap()
+            .trailing_zeros();
+
+        Self { tree_height }
+    }
+
+    fn value(&self) -> u32 {
+        self.tree_height
+    }
+
+    fn depth_is_valid(&self, depth: u32) -> bool {
+        depth <= self.tree_height
+    }
+
+    fn depth_is_max(&self, depth: u32) -> bool {
+        depth == self.tree_height
+    }
+
+    fn voxel_scale_at_depth(&self, depth: u32) -> u32 {
         Self::voxel_scale_at_height(self.depth_to_height(depth))
     }
 
-    fn voxel_extent_at_depth(&self, depth: u32) -> F {
-        self.voxel_scale_at_depth(depth) * self.voxel_extent()
-    }
-
     fn grid_size_at_height(&self, height: u32) -> usize {
-        grid_size_at_depth(self.height_to_depth(height))
+        Self::grid_size_at_depth(self.height_to_depth(height))
     }
 
     fn height_to_depth(&self, height: u32) -> u32 {
@@ -309,175 +560,48 @@ impl<F: Float> VoxelTree<F> {
         self.height_to_depth(depth)
     }
 
-    fn voxel_scale_at_height(height: u32) -> F {
-        F::from_usize(grid_size_at_depth(height)).unwrap()
+    fn grid_size_at_depth(depth: u32) -> usize {
+        1_usize.checked_shl(depth).unwrap()
     }
 
-    fn compute_bounding_sphere_of_voxel(&self, indices: VoxelTreeIndices) -> Sphere<F> {
-        let voxel_extent = self.voxel_extent_at_depth(indices.depth());
-        let center = indices.voxel_center_offset(voxel_extent).into();
-        let radius = F::ONE_HALF * F::sqrt(F::THREE) * voxel_extent;
-        Sphere::new(center, radius)
+    fn voxel_scale_at_height(height: u32) -> u32 {
+        1_u32.checked_shl(height).unwrap()
     }
 }
 
-impl<C: VoxelTreeNodeContext> VoxelTreeNodeContextStorage<C> {
-    fn new() -> Self {
-        Self {
-            storage: GenerationalReusingVec::new(),
-        }
-    }
-
-    fn n_contexts(&self) -> usize {
-        self.storage.n_elements()
-    }
-
-    fn has_context(&self, node_id: C::ID) -> bool {
-        self.storage.get_element(node_id.idx()).is_some()
-    }
-
-    fn context(&self, node_id: C::ID) -> &C {
-        self.storage.element(node_id.idx())
-    }
-
-    fn context_mut(&mut self, node_id: C::ID) -> &mut C {
-        self.storage.element_mut(node_id.idx())
-    }
-
-    fn add_context(&mut self, context: C) -> C::ID {
-        C::ID::from_idx(self.storage.add_element(context))
-    }
-
-    fn remove_context(&mut self, node_id: C::ID) {
-        self.storage.free_element_at_idx(node_id.idx());
-    }
-}
-
-impl VoxelTreeNodeStorageID for VoxelTreeInternalNodeID {
-    fn idx(&self) -> GenerationalIdx {
-        self.0
-    }
-
-    fn from_idx(idx: GenerationalIdx) -> Self {
-        Self(idx)
-    }
-}
-
-impl VoxelTreeNodeStorageID for VoxelTreeExternalNodeID {
-    fn idx(&self) -> GenerationalIdx {
-        self.0
-    }
-
-    fn from_idx(idx: GenerationalIdx) -> Self {
-        Self(idx)
-    }
-}
-
-impl VoxelTreeExternalNodeContext {
-    fn new(voxel_type: VoxelType) -> Self {
-        Self { voxel_type }
-    }
-}
-
-impl VoxelTreeNodeContext for VoxelTreeInternalNodeContext {
-    type ID = VoxelTreeInternalNodeID;
-}
-
-impl VoxelTreeNodeContext for VoxelTreeExternalNodeContext {
-    type ID = VoxelTreeExternalNodeID;
-}
-
-impl VoxelTreeNode {
-    fn build<F, G>(
-        internal_node_context: &mut VoxelTreeInternalNodeContextStorage,
-        external_node_context: &mut VoxelTreeExternalNodeContextStorage,
-        generator: &G,
-        current_indices: VoxelTreeIndices,
-    ) -> Option<Self>
-    where
-        F: Float,
-        G: VoxelGenerator<F>,
-    {
-        if current_indices.are_at_max_depth() {
-            VoxelTreeExternalNode::create(external_node_context, generator, current_indices)
-                .map(Self::External)
-        } else {
-            let mut has_children = false;
-            let mut has_common_child_voxel_type = true;
-            let mut common_child_voxel_type = None;
-
-            let children = current_indices
-                .for_next_depth()
-                .unwrap()
-                .map(|next_indices| {
-                    let child = Self::build(
-                        internal_node_context,
-                        external_node_context,
-                        generator,
-                        next_indices,
-                    );
-
-                    match child.as_ref() {
-                        None => {
-                            has_common_child_voxel_type = false;
-                        }
-                        Some(Self::External(child)) if has_common_child_voxel_type => {
-                            has_children = true;
-                            if let Some(common_child_voxel_type) = common_child_voxel_type {
-                                has_common_child_voxel_type =
-                                    child.voxel_type == common_child_voxel_type;
-                            } else {
-                                common_child_voxel_type = Some(child.voxel_type);
-                            }
-                        }
-                        _ => {
-                            has_children = true;
-                            has_common_child_voxel_type = false;
-                        }
-                    }
-
-                    child
-                });
-
-            if has_children {
-                if has_common_child_voxel_type {
-                    // Remove context for all children but one
-                    for child in &children[1..] {
-                        external_node_context
-                            .remove_context(child.as_ref().unwrap().get_external().unwrap().id);
-                    }
-                    // Return the remaining child
-                    Some(children[0].clone().unwrap())
-                } else {
-                    let id = internal_node_context
-                        .add_context(VoxelTreeInternalNodeContext::new(children));
-                    Some(Self::Internal(VoxelTreeInternalNode { id }))
-                }
-            } else {
-                None
-            }
+impl VoxelTreeNodeID {
+    fn from_build_node(
+        external_nodes: &mut VoxelTreeExternalNodeStorage,
+        build_node: Option<VoxelTreeBuildNode>,
+    ) -> Option<Self> {
+        match build_node {
+            Some(VoxelTreeBuildNode::External(external_build_node)) => Some(Self::External(
+                VoxelTreeExternalNodeID::from_build_node(external_nodes, external_build_node),
+            )),
+            Some(VoxelTreeBuildNode::Internal(internal_id)) => Some(Self::Internal(internal_id)),
+            None => None,
         }
     }
 
     fn is_external(&self) -> bool {
-        self.get_external().is_some()
+        self.as_external().is_some()
     }
 
     fn is_internal(&self) -> bool {
-        self.get_internal().is_some()
+        self.as_internal().is_some()
     }
 
-    fn get_external(&self) -> Option<&VoxelTreeExternalNode> {
-        if let Self::External(external) = self {
-            Some(external)
+    fn as_external(&self) -> Option<VoxelTreeExternalNodeID> {
+        if let Self::External(external_id) = self {
+            Some(*external_id)
         } else {
             None
         }
     }
 
-    fn get_internal(&self) -> Option<&VoxelTreeInternalNode> {
-        if let Self::Internal(internal) = self {
-            Some(internal)
+    fn as_internal(&self) -> Option<VoxelTreeInternalNodeID> {
+        if let Self::Internal(internal_id) = self {
+            Some(*internal_id)
         } else {
             None
         }
@@ -490,19 +614,16 @@ impl VoxelTreeNode {
     ) -> Option<Sphere<F>> {
         match self {
             Self::External(_) => Some(tree.compute_bounding_sphere_of_voxel(current_indices)),
-            Self::Internal(internal) => {
+            Self::Internal(internal_id) => {
                 if let Some(next_indices) = current_indices.for_next_depth() {
+                    let child_ids = &tree.internal_node(*internal_id).child_ids;
+
                     let mut aggregate_bounding_sphere: Option<Sphere<F>> = None;
 
-                    for (child, next_indices) in tree
-                        .internal_node_context(internal.id)
-                        .children
-                        .iter()
-                        .zip(next_indices)
-                    {
-                        let child_bounding_sphere = child
-                            .as_ref()
-                            .and_then(|child| child.compute_bounding_sphere(tree, next_indices));
+                    for (child_id, next_indices) in child_ids.iter().zip(next_indices) {
+                        let child_bounding_sphere = child_id.as_ref().and_then(|child_id| {
+                            child_id.compute_bounding_sphere(tree, next_indices)
+                        });
 
                         match (&mut aggregate_bounding_sphere, child_bounding_sphere) {
                             (Some(aggregate_bounding_sphere), Some(child_bounding_sphere)) => {
@@ -531,24 +652,23 @@ impl VoxelTreeNode {
     ) {
         match self {
             Self::External(_) => {
-                let voxel_scale = tree.voxel_scale_at_depth(current_indices.depth());
-                let voxel_center_offset =
-                    current_indices.voxel_center_offset(voxel_scale * tree.voxel_extent());
+                let (voxel_scale, voxel_center_offset) =
+                    current_indices.voxel_scale_and_center_offset(tree.voxel_extent());
 
                 transforms.push(ClusterInstanceTransform::new(
                     voxel_center_offset,
                     voxel_scale,
                 ));
             }
-            Self::Internal(internal) => {
-                for (child, next_indices) in tree
-                    .internal_node_context(internal.id)
-                    .children
+            Self::Internal(internal_id) => {
+                let child_ids = &tree.internal_node(*internal_id).child_ids;
+
+                for (child_id, next_indices) in child_ids
                     .iter()
                     .zip(current_indices.for_next_depth().unwrap())
                 {
-                    if let Some(child) = child.as_ref() {
-                        child.add_voxel_transforms(tree, transforms, next_indices);
+                    if let Some(child_id) = child_id.as_ref() {
+                        child_id.add_voxel_transforms(tree, transforms, next_indices);
                     }
                 }
             }
@@ -556,66 +676,265 @@ impl VoxelTreeNode {
     }
 }
 
-impl VoxelTreeInternalNodeContext {
-    fn new(children: [Option<VoxelTreeNode>; 8]) -> Self {
-        Self { children }
+impl<C: VoxelTreeNode> VoxelTreeNodeStorage<C> {
+    fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            index_map: KeyIndexMapper::default(),
+            node_id_count: 0,
+        }
     }
 
-    fn children(&self) -> impl Iterator<Item = &'_ VoxelTreeNode> {
-        self.children.iter().filter_map(|child| child.as_ref())
+    fn n_nodes(&self) -> usize {
+        self.nodes.len()
     }
 
-    fn internal_children(&self) -> impl Iterator<Item = &'_ VoxelTreeInternalNode> {
-        self.children().filter_map(|child| child.get_internal())
+    fn has_node(&self, node_id: C::ID) -> bool {
+        self.index_map.contains_key(node_id.number())
     }
 
-    fn external_children(&self) -> impl Iterator<Item = &'_ VoxelTreeExternalNode> {
-        self.children().filter_map(|child| child.get_external())
+    fn node(&self, node_id: C::ID) -> &C {
+        let idx = self.index_map.idx(node_id.number());
+        self.node_at_idx(idx)
     }
 
-    fn n_children(&self) -> usize {
-        self.children().count()
+    fn node_at_idx(&self, idx: usize) -> &C {
+        &self.nodes[idx]
     }
 
-    fn n_internal_children(&self) -> usize {
-        self.internal_children().count()
+    fn node_mut(&mut self, node_id: C::ID) -> &mut C {
+        let idx = self.index_map.idx(node_id.number());
+        self.node_at_idx_mut(idx)
     }
 
-    fn n_external_children(&self) -> usize {
-        self.external_children().count()
+    fn node_at_idx_mut(&mut self, idx: usize) -> &mut C {
+        &mut self.nodes[idx]
+    }
+
+    fn nodes(&self) -> impl Iterator<Item = &C> {
+        self.nodes.iter()
+    }
+
+    fn nodes_mut(&mut self) -> impl Iterator<Item = &mut C> {
+        self.nodes.iter_mut()
+    }
+
+    fn add_node(&mut self, node: C) -> C::ID {
+        let node_id = self.create_new_node_id();
+        self.index_map.push_key(node_id.number());
+        self.nodes.push(node);
+        node_id
+    }
+
+    fn remove_node(&mut self, node_id: C::ID) {
+        let idx = self.index_map.swap_remove_key(node_id.number());
+        self.nodes.swap_remove(idx);
+    }
+
+    fn create_new_node_id(&mut self) -> C::ID {
+        let node_id = C::ID::from_number(self.node_id_count);
+        self.node_id_count += 1;
+        node_id
     }
 }
 
-impl VoxelTreeExternalNode {
-    fn new(
-        external_node_context: &mut VoxelTreeExternalNodeContextStorage,
-        voxel_type: VoxelType,
-    ) -> Self {
-        let context = VoxelTreeExternalNodeContext::new(voxel_type);
-        let id = external_node_context.add_context(context);
-        Self { id, voxel_type }
+impl VoxelTreeNodeStorageID for VoxelTreeInternalNodeID {
+    fn from_number(number: usize) -> Self {
+        Self(number)
     }
 
-    fn create<F, G>(
-        external_node_context: &mut VoxelTreeExternalNodeContextStorage,
+    fn number(&self) -> usize {
+        self.0
+    }
+}
+
+impl VoxelTreeExternalNodeID {
+    fn from_build_node(
+        external_nodes: &mut VoxelTreeExternalNodeStorage,
+        build_node: VoxelTreeExternalBuildNode,
+    ) -> Self {
+        let (voxel_scale, voxel_indices) = build_node.indices.voxel_scale_and_indices();
+        external_nodes.add_node(VoxelTreeExternalNode::new(
+            build_node.voxel_type,
+            voxel_indices,
+            voxel_scale,
+        ))
+    }
+}
+
+impl VoxelTreeNodeStorageID for VoxelTreeExternalNodeID {
+    fn from_number(number: usize) -> Self {
+        Self(number)
+    }
+
+    fn number(&self) -> usize {
+        self.0
+    }
+}
+
+impl VoxelTreeInternalNode {
+    fn new(child_ids: [Option<VoxelTreeNodeID>; 8]) -> Self {
+        Self { child_ids }
+    }
+
+    fn child_ids(&self) -> impl Iterator<Item = VoxelTreeNodeID> + '_ {
+        self.child_ids
+            .iter()
+            .filter_map(|child_id| child_id.clone())
+    }
+
+    fn internal_child_ids(&self) -> impl Iterator<Item = VoxelTreeInternalNodeID> + '_ {
+        self.child_ids()
+            .filter_map(|child_id| child_id.as_internal())
+    }
+
+    fn external_child_ids(&self) -> impl Iterator<Item = VoxelTreeExternalNodeID> + '_ {
+        self.child_ids()
+            .filter_map(|child_id| child_id.as_external())
+    }
+
+    fn n_children(&self) -> usize {
+        self.child_ids().count()
+    }
+
+    fn n_internal_children(&self) -> usize {
+        self.internal_child_ids().count()
+    }
+
+    fn n_external_children(&self) -> usize {
+        self.external_child_ids().count()
+    }
+}
+
+impl VoxelTreeNode for VoxelTreeInternalNode {
+    type ID = VoxelTreeInternalNodeID;
+}
+
+impl VoxelTreeExternalNode {
+    fn new(voxel_type: VoxelType, voxel_indices: VoxelIndices, voxel_scale: u32) -> Self {
+        Self {
+            voxel_type,
+            voxel_indices,
+            voxel_scale,
+            adjacent_voxels: Vec::new(),
+        }
+    }
+}
+
+impl VoxelTreeNode for VoxelTreeExternalNode {
+    type ID = VoxelTreeExternalNodeID;
+}
+
+impl VoxelTreeBuildNode {
+    fn build<F, G>(
+        internal_nodes: &mut VoxelTreeInternalNodeStorage,
+        external_nodes: &mut VoxelTreeExternalNodeStorage,
         generator: &G,
-        indices: VoxelTreeIndices,
+        current_indices: VoxelTreeIndices,
     ) -> Option<Self>
+    where
+        F: Float,
+        G: VoxelGenerator<F>,
+    {
+        if current_indices.are_at_max_depth() {
+            VoxelTreeExternalBuildNode::from_generator(generator, current_indices)
+                .map(Self::External)
+        } else {
+            let mut has_children = false;
+            let mut has_common_child_voxel_type = true;
+            let mut common_child_voxel_type = None;
+
+            let children = current_indices
+                .for_next_depth()
+                .unwrap()
+                .map(|next_indices| {
+                    let child =
+                        Self::build(internal_nodes, external_nodes, generator, next_indices);
+
+                    Self::check_child(
+                        child.as_ref(),
+                        &mut has_children,
+                        &mut has_common_child_voxel_type,
+                        &mut common_child_voxel_type,
+                    );
+
+                    child
+                });
+
+            if has_children {
+                Some(match common_child_voxel_type {
+                    Some(common_child_voxel_type) if has_common_child_voxel_type => Self::External(
+                        VoxelTreeExternalBuildNode::new(current_indices, common_child_voxel_type),
+                    ),
+                    _ => {
+                        let child_ids = children
+                            .map(|child| VoxelTreeNodeID::from_build_node(external_nodes, child));
+
+                        let id = internal_nodes.add_node(VoxelTreeInternalNode::new(child_ids));
+
+                        Self::Internal(id)
+                    }
+                })
+            } else {
+                None
+            }
+        }
+    }
+
+    fn check_child(
+        child: Option<&Self>,
+        has_children: &mut bool,
+        has_common_child_voxel_type: &mut bool,
+        common_child_voxel_type: &mut Option<VoxelType>,
+    ) {
+        match child {
+            None => {
+                *has_common_child_voxel_type = false;
+            }
+            Some(Self::External(child)) if *has_common_child_voxel_type => {
+                *has_children = true;
+
+                if let Some(common_child_voxel_type) = *common_child_voxel_type {
+                    *has_common_child_voxel_type = child.voxel_type == common_child_voxel_type;
+                } else {
+                    *common_child_voxel_type = Some(child.voxel_type);
+                }
+            }
+            _ => {
+                *has_children = true;
+                *has_common_child_voxel_type = false;
+            }
+        }
+    }
+}
+
+impl VoxelTreeExternalBuildNode {
+    fn new(indices: VoxelTreeIndices, voxel_type: VoxelType) -> Self {
+        Self {
+            indices,
+            voxel_type,
+        }
+    }
+
+    fn from_generator<F, G>(generator: &G, indices: VoxelTreeIndices) -> Option<Self>
     where
         F: Float,
         G: VoxelGenerator<F>,
     {
         generator
             .voxel_at_indices(indices.i, indices.j, indices.k)
-            .map(|voxel_type| Self::new(external_node_context, voxel_type))
+            .map(|voxel_type| Self {
+                indices,
+                voxel_type,
+            })
     }
 }
 
 impl VoxelTreeIndices {
-    fn new(max_depth: u32, depth: u32, i: usize, j: usize, k: usize) -> Self {
-        assert!(depth <= max_depth);
+    fn new(tree_height: VoxelTreeHeight, depth: u32, i: usize, j: usize, k: usize) -> Self {
+        assert!(tree_height.depth_is_valid(depth));
         Self {
-            max_depth,
+            tree_height,
             depth,
             i,
             j,
@@ -623,16 +942,16 @@ impl VoxelTreeIndices {
         }
     }
 
-    fn at_root(max_depth: u32) -> Self {
-        Self::new(max_depth, 0, 0, 0, 0)
+    fn at_root(tree_height: VoxelTreeHeight) -> Self {
+        Self::new(tree_height, 0, 0, 0, 0)
     }
 
-    fn at_max_depth(max_depth: u32, i: usize, j: usize, k: usize) -> Self {
-        Self::new(max_depth, max_depth, i, j, k)
+    fn at_max_depth(tree_height: VoxelTreeHeight, i: usize, j: usize, k: usize) -> Self {
+        Self::new(tree_height, tree_height.value(), i, j, k)
     }
 
-    fn max_depth(&self) -> u32 {
-        self.max_depth
+    fn tree_height(&self) -> VoxelTreeHeight {
+        self.tree_height
     }
 
     fn depth(&self) -> u32 {
@@ -640,13 +959,13 @@ impl VoxelTreeIndices {
     }
 
     fn are_at_max_depth(&self) -> bool {
-        self.depth == self.max_depth
+        self.tree_height.depth_is_max(self.depth)
     }
 
     fn for_next_depth(&self) -> Option<[Self; 8]> {
         let next_depth = self.depth + 1;
 
-        if next_depth <= self.max_depth {
+        if self.tree_height.depth_is_valid(next_depth) {
             let i0 = 2 * self.i;
             let i1 = i0 + 1;
             let j0 = 2 * self.j;
@@ -670,16 +989,37 @@ impl VoxelTreeIndices {
     }
 
     fn for_child(&self, next_depth: u32, i: usize, j: usize, k: usize) -> Self {
-        Self::new(self.max_depth, next_depth, i, j, k)
+        Self::new(self.tree_height, next_depth, i, j, k)
     }
 
-    fn voxel_center_offset<F: Float>(&self, voxel_extent: F) -> Vector3<F> {
-        let half_voxel_extent = F::ONE_HALF * voxel_extent;
-        vector![
-            F::from_usize(self.i).unwrap() * voxel_extent + half_voxel_extent,
-            F::from_usize(self.j).unwrap() * voxel_extent + half_voxel_extent,
-            F::from_usize(self.k).unwrap() * voxel_extent + half_voxel_extent
-        ]
+    fn voxel_scale(&self) -> u32 {
+        self.tree_height.voxel_scale_at_depth(self.depth)
+    }
+
+    fn voxel_scale_and_indices(&self) -> (u32, VoxelIndices) {
+        let voxel_scale = self.voxel_scale();
+        let voxel_scale_usize = voxel_scale as usize;
+        let voxel_indices = VoxelIndices::new(
+            self.i * voxel_scale_usize,
+            self.j * voxel_scale_usize,
+            self.k * voxel_scale_usize,
+        );
+        (voxel_scale, voxel_indices)
+    }
+
+    fn voxel_scale_and_center_offset<F: Float>(&self, voxel_extent: F) -> (F, Vector3<F>) {
+        let voxel_scale = F::from_u32(self.voxel_scale()).unwrap();
+
+        let scaled_voxel_extent = voxel_extent * voxel_scale;
+        let half_scaled_voxel_extent = F::ONE_HALF * scaled_voxel_extent;
+
+        let voxel_center_offset = vector![
+            F::from_usize(self.i).unwrap() * scaled_voxel_extent + half_scaled_voxel_extent,
+            F::from_usize(self.j).unwrap() * scaled_voxel_extent + half_scaled_voxel_extent,
+            F::from_usize(self.k).unwrap() * scaled_voxel_extent + half_scaled_voxel_extent
+        ];
+
+        (voxel_scale, voxel_center_offset)
     }
 }
 
@@ -699,7 +1039,7 @@ impl VoxelIndices {
 
 impl OctantIterator {
     fn new(tree_height: u32, indices: VoxelIndices) -> Option<Self> {
-        let grid_size = grid_size_at_depth(tree_height);
+        let grid_size = VoxelTreeHeight::grid_size_at_depth(tree_height);
 
         if indices.are_inside_grid(grid_size) {
             let octant_size = grid_size / 2;
@@ -769,19 +1109,6 @@ impl Octant {
     }
 }
 
-fn grid_size_at_depth(depth: u32) -> usize {
-    1_usize.checked_shl(depth).unwrap()
-}
-
-fn tree_height_from_shape([shape_x, shape_y, shape_z]: [usize; 3]) -> u32 {
-    shape_x
-        .max(shape_y)
-        .max(shape_z)
-        .checked_next_power_of_two()
-        .unwrap()
-        .trailing_zeros()
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -799,6 +1126,10 @@ mod test {
     struct RecordingVoxelGenerator {
         shape: [usize; 3],
         call_counts: Mutex<HashMap<(usize, usize, usize), usize>>,
+    }
+
+    struct ManualVoxelGenerator<const N: usize> {
+        voxels: [[[u8; N]; N]; N],
     }
 
     impl VoxelGenerator<f64> for EmptyVoxelGenerator {
@@ -872,6 +1203,24 @@ mod test {
                 .or_insert(1);
 
             if i < self.shape[0] && j < self.shape[1] && k < self.shape[2] {
+                Some(VoxelType::Default)
+            } else {
+                None
+            }
+        }
+    }
+
+    impl<const N: usize> VoxelGenerator<f64> for ManualVoxelGenerator<N> {
+        fn voxel_extent(&self) -> f64 {
+            0.25
+        }
+
+        fn grid_shape(&self) -> [usize; 3] {
+            [N; 3]
+        }
+
+        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+            if i < N && j < N && k < N && self.voxels[i][j][k] != 0 {
                 Some(VoxelType::Default)
             } else {
                 None
@@ -980,20 +1329,20 @@ mod test {
     #[test]
     fn should_have_external_root_node_for_single_voxel_generator() {
         let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
-        assert!(tree.root_node().is_external());
+        assert!(tree.root_node_id().is_external());
     }
 
     #[test]
     fn should_have_default_external_root_node_for_single_default_voxel_generator() {
         let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
-        let root_node = tree.root_node().get_external().unwrap();
+        let root_node = tree.external_node(tree.root_node_id().as_external().unwrap());
         assert_eq!(root_node.voxel_type, VoxelType::Default);
     }
 
     #[test]
     fn should_have_internal_root_node_with_two_external_children_for_two_voxel_generator() {
         let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] }).unwrap();
-        let root_node = tree.internal_node_context(tree.root_node().get_internal().unwrap().id);
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
         assert_eq!(root_node.n_children(), 2);
         assert_eq!(root_node.n_external_children(), 2);
         assert_eq!(root_node.n_internal_children(), 0);
@@ -1002,7 +1351,7 @@ mod test {
     #[test]
     fn should_have_default_external_root_node_for_8_default_voxel_generator() {
         let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2; 3] }).unwrap();
-        let root_node = tree.root_node().get_external().unwrap();
+        let root_node = tree.external_node(tree.root_node_id().as_external().unwrap());
         assert_eq!(root_node.voxel_type, VoxelType::Default);
     }
 
@@ -1010,12 +1359,11 @@ mod test {
     fn should_have_internal_root_node_with_correct_internal_and_external_children_for_12_voxel_generator(
     ) {
         let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 2, 3] }).unwrap();
-        let root_node = tree.internal_node_context(tree.root_node().get_internal().unwrap().id);
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
         assert_eq!(root_node.n_children(), 2);
         assert_eq!(root_node.n_external_children(), 1);
         assert_eq!(root_node.n_internal_children(), 1);
-        let internal_child =
-            tree.internal_node_context(root_node.internal_children().next().unwrap().id);
+        let internal_child = tree.internal_node(root_node.internal_child_ids().next().unwrap());
         assert_eq!(internal_child.n_children(), 4);
         assert_eq!(internal_child.n_external_children(), 4);
         assert_eq!(internal_child.n_internal_children(), 0);
@@ -1209,7 +1557,7 @@ mod test {
     }
 
     #[test]
-    fn should_find_same_voxels_as_provided_by_generator() {
+    fn should_find_same_voxel_types_as_provided_by_generator() {
         let generator = DefaultVoxelGenerator { shape: [1, 3, 2] };
         let tree = VoxelTree::build(&generator).unwrap();
 
@@ -1223,5 +1571,176 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn should_obtain_correct_external_node_indices_and_scales_for_12_voxel_generator() {
+        let generator = DefaultVoxelGenerator { shape: [2, 2, 3] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let check_node = |i, j, k, indices, scale| {
+            let node = tree.external_node(tree.find_external_node_id_at_indices(i, j, k).unwrap());
+            assert_eq!(node.voxel_indices, indices);
+            assert_eq!(node.voxel_scale, scale);
+        };
+
+        for i in 0..2 {
+            for j in 0..2 {
+                for k in 0..2 {
+                    check_node(i, j, k, VoxelIndices::new(0, 0, 0), 2);
+                }
+            }
+        }
+        check_node(0, 0, 2, VoxelIndices::new(0, 0, 2), 1);
+        check_node(0, 1, 2, VoxelIndices::new(0, 1, 2), 1);
+        check_node(1, 0, 2, VoxelIndices::new(1, 0, 2), 1);
+        check_node(1, 1, 2, VoxelIndices::new(1, 1, 2), 1);
+    }
+
+    #[test]
+    fn should_get_no_adjacent_voxels_for_single_voxel_tree() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
+        let node_id = tree.find_external_node_id_at_indices(0, 0, 0).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        assert!(adjacent_voxels.is_empty());
+    }
+
+    #[test]
+    fn should_get_no_adjacent_voxels_for_single_merged_voxel_tree() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [4; 3] }).unwrap();
+        let node_id = tree.find_external_node_id_at_indices(2, 2, 2).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        assert!(adjacent_voxels.is_empty());
+    }
+
+    #[test]
+    fn should_get_correct_voxels_adjacent_to_unmerged_voxel_in_four_voxel_tree() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 2] }).unwrap();
+        let node_id = tree.find_external_node_id_at_indices(0, 1, 1).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+
+        let check_neighbor_present = |i, j, k| {
+            assert!(adjacent_voxels
+                .iter()
+                .any(|node_id| tree.external_node(*node_id).voxel_indices
+                    == VoxelIndices::new(i, j, k)));
+        };
+
+        assert_eq!(adjacent_voxels.len(), 2);
+        check_neighbor_present(0, 1, 0);
+        check_neighbor_present(0, 0, 1);
+    }
+
+    #[test]
+    fn should_get_correct_voxels_adjacent_to_unmerged_voxel_in_9_voxel_tree() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
+        let node_id = tree.find_external_node_id_at_indices(2, 1, 1).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+
+        let check_neighbor_present = |i, j, k| {
+            assert!(adjacent_voxels
+                .iter()
+                .any(|node_id| tree.external_node(*node_id).voxel_indices
+                    == VoxelIndices::new(i, j, k)));
+        };
+
+        assert_eq!(adjacent_voxels.len(), 5);
+        check_neighbor_present(0, 0, 0);
+        check_neighbor_present(2, 0, 1);
+        check_neighbor_present(2, 2, 1);
+        check_neighbor_present(2, 1, 0);
+        check_neighbor_present(2, 1, 2);
+    }
+
+    #[test]
+    fn should_get_correct_voxels_adjacent_to_merged_voxel_in_9_voxel_tree() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
+        let node_id = tree.find_external_node_id_at_indices(0, 0, 0).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+
+        let check_neighbor_present = |i, j, k| {
+            assert!(adjacent_voxels
+                .iter()
+                .any(|node_id| tree.external_node(*node_id).voxel_indices
+                    == VoxelIndices::new(i, j, k)));
+        };
+
+        assert_eq!(adjacent_voxels.len(), 12);
+        check_neighbor_present(2, 0, 0);
+        check_neighbor_present(2, 0, 1);
+        check_neighbor_present(2, 1, 0);
+        check_neighbor_present(2, 1, 1);
+        check_neighbor_present(0, 2, 0);
+        check_neighbor_present(0, 2, 1);
+        check_neighbor_present(1, 2, 0);
+        check_neighbor_present(1, 2, 1);
+        check_neighbor_present(0, 0, 2);
+        check_neighbor_present(0, 1, 2);
+        check_neighbor_present(1, 0, 2);
+        check_neighbor_present(1, 1, 2);
+    }
+
+    #[test]
+    fn should_get_correct_voxels_adjacent_to_merged_voxel_in_complex_voxel_tree() {
+        let empty = [0; 8];
+        let empty_by_empty = [empty; 8];
+        let four = [1, 1, 1, 1, 0, 0, 0, 0];
+        let four_by_four = [four, four, four, four, empty, empty, empty, empty];
+
+        let voxels = [
+            four_by_four,
+            four_by_four,
+            four_by_four,
+            four_by_four,
+            [
+                [1, 1, 0, 1, 0, 0, 0, 0],
+                [1, 1, 1, 0, 0, 0, 0, 0],
+                [0, 0, 1, 1, 0, 0, 0, 0],
+                [1, 0, 1, 1, 0, 0, 0, 0],
+                empty,
+                empty,
+                empty,
+                empty,
+            ],
+            [
+                [1, 1, 0, 0, 0, 0, 0, 0],
+                [1, 1, 0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 1, 0, 0, 0, 0],
+                [0, 0, 1, 1, 0, 0, 0, 0],
+                empty,
+                empty,
+                empty,
+                empty,
+            ],
+            empty_by_empty,
+            empty_by_empty,
+        ];
+
+        let generator = ManualVoxelGenerator { voxels };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let check_neighbor_present = |adjacent_voxels: &[VoxelTreeExternalNodeID], i, j, k| {
+            assert!(adjacent_voxels
+                .iter()
+                .any(|node_id| tree.external_node(*node_id).voxel_indices
+                    == VoxelIndices::new(i, j, k)));
+        };
+
+        let node_id = tree.find_external_node_id_at_indices(0, 0, 0).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+
+        assert_eq!(adjacent_voxels.len(), 5);
+        check_neighbor_present(&adjacent_voxels, 4, 0, 0);
+        check_neighbor_present(&adjacent_voxels, 4, 0, 3);
+        check_neighbor_present(&adjacent_voxels, 4, 1, 2);
+        check_neighbor_present(&adjacent_voxels, 4, 2, 2);
+        check_neighbor_present(&adjacent_voxels, 4, 3, 0);
+
+        let node_id = tree.find_external_node_id_at_indices(4, 2, 2).unwrap();
+        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+
+        assert_eq!(adjacent_voxels.len(), 2);
+        check_neighbor_present(&adjacent_voxels, 0, 0, 0);
+        check_neighbor_present(&adjacent_voxels, 4, 1, 2);
     }
 }
