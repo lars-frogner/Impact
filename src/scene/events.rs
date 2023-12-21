@@ -361,7 +361,7 @@ impl Scene {
                     // The scene graph will not cull clusters with no bounding sphere
                     None
                 } else {
-                    voxel_tree.compute_bounding_sphere()
+                    Some(voxel_tree.compute_bounding_sphere(0))
                 };
 
                 let appearance = voxel_manager.voxel_appearance(voxel_type.voxel_type());

@@ -126,6 +126,23 @@ impl<F: Float> Sphere<F> {
         min_squared_distance_from_center > self.radius_squared()
     }
 
+    /// Whether all of the the given axis-aligned box is inside the sphere. The
+    /// box is considered inside if the boundaries exactly touch each other.
+    pub fn contains_axis_aligned_box(&self, axis_aligned_box: &AxisAlignedBox<F>) -> bool {
+        let lower_corner = axis_aligned_box.lower_corner();
+        let upper_corner = axis_aligned_box.upper_corner();
+
+        let mut max_squared_distance_from_center = F::ZERO;
+        for idx in 0..3 {
+            max_squared_distance_from_center += F::max(
+                (lower_corner[idx] - self.center[idx]).powi(2),
+                (upper_corner[idx] - self.center[idx]).powi(2),
+            );
+        }
+
+        max_squared_distance_from_center <= self.radius_squared()
+    }
+
     /// Computes the sphere resulting from rotating this sphere with the given
     /// rotation quaternion.
     pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
@@ -342,5 +359,47 @@ mod test {
         let sphere = Sphere::new(point![3.0, 3.0, 3.0], 0.0);
         let axis_aligned_box = AxisAlignedBox::new(point![4.0, 4.0, 4.0], point![6.0, 6.0, 6.0]);
         assert!(sphere.is_outside_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn aligned_bounding_box_completely_outside_sphere_is_not_contained() {
+        let sphere = Sphere::new(Point3::origin(), 1.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![2.0, 2.0, 2.0], point![3.0, 4.0, 5.0]);
+        assert!(!sphere.contains_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn aligned_bounding_box_partially_inside_sphere_is_not_contained() {
+        let sphere = Sphere::new(point![4.0, 2.0, 2.1], 2.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![1.1, 1.2, 1.3], point![3.2, 3.1, 3.0]);
+        assert!(!sphere.contains_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn aligned_bounding_box_encompassing_sphere_is_not_contained() {
+        let sphere = Sphere::new(point![3.01, 3.06, 3.02], 0.9);
+        let axis_aligned_box = AxisAlignedBox::new(point![1.7, 1.6, 1.9], point![4.0, 5.0, 6.0]);
+        assert!(!sphere.contains_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn aligned_bounding_box_completely_inside_sphere_is_contained() {
+        let sphere = Sphere::new(point![1.0, 1.0, 1.0], 2.0);
+        let axis_aligned_box = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        assert!(sphere.contains_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn aligned_bounding_box_barely_inside_sphere_is_contained() {
+        let sphere = Sphere::new(point![1.0, 1.0, 1.0], f64::sqrt(3.0) + 1e-9);
+        let axis_aligned_box = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        assert!(sphere.contains_axis_aligned_box(&axis_aligned_box));
+    }
+
+    #[test]
+    fn aligned_bounding_box_barely_outside_sphere_is_not_contained() {
+        let sphere = Sphere::new(point![1.0, 1.0, 1.0], f64::sqrt(3.0) - 1e-9);
+        let axis_aligned_box = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        assert!(!sphere.contains_axis_aligned_box(&axis_aligned_box));
     }
 }

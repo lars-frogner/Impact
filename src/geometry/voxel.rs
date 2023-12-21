@@ -240,13 +240,18 @@ impl<F: Float> VoxelTree<F> {
         self.tree_height.grid_size_at_height(0)
     }
 
-    /// Computes a sphere bounding the entire voxel tree. Returns [`None`] if
-    /// the tree is empty.
-    pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
-        let max_depth = 0;
+    /// Computes a sphere bounding the entire voxel tree by aggregating the
+    /// bounding spheres of nodes down to the give depth. A larger maximum depth
+    /// gives a tighter bounding sphere.
+    ///
+    /// # Panics
+    /// If `max_depth` exceeds the tree height.
+    pub fn compute_bounding_sphere(&self, max_depth: u32) -> Sphere<F> {
+        assert!(self.tree_height.depth_is_valid(max_depth));
         self.root_node_id.compute_bounding_sphere(
             self,
-            VoxelTreeIndices::at_root(VoxelTreeHeight::new(max_depth)),
+            max_depth,
+            VoxelTreeIndices::at_root(self.tree_height),
         )
     }
 
@@ -800,19 +805,22 @@ impl VoxelTreeNodeID {
     fn compute_bounding_sphere<F: Float>(
         &self,
         tree: &VoxelTree<F>,
+        max_depth: u32,
         current_indices: VoxelTreeIndices,
-    ) -> Option<Sphere<F>> {
+    ) -> Sphere<F> {
         match self {
-            Self::External(_) => Some(tree.compute_bounding_sphere_of_voxel(current_indices)),
+            Self::External(_) => tree.compute_bounding_sphere_of_voxel(current_indices),
             Self::Internal(internal_id) => {
-                if let Some(next_indices) = current_indices.for_next_depth() {
+                if current_indices.depth() < max_depth {
                     let child_ids = &tree.internal_node(*internal_id).child_ids;
 
                     let mut aggregate_bounding_sphere: Option<Sphere<F>> = None;
 
-                    for (child_id, next_indices) in child_ids.iter().zip(next_indices) {
-                        let child_bounding_sphere = child_id.as_ref().and_then(|child_id| {
-                            child_id.compute_bounding_sphere(tree, next_indices)
+                    for (child_id, next_indices) in
+                        child_ids.iter().zip(current_indices.for_next_depth())
+                    {
+                        let child_bounding_sphere = child_id.as_ref().map(|child_id| {
+                            child_id.compute_bounding_sphere(tree, max_depth, next_indices)
                         });
 
                         match (&mut aggregate_bounding_sphere, child_bounding_sphere) {
@@ -826,9 +834,9 @@ impl VoxelTreeNodeID {
                             _ => {}
                         };
                     }
-                    aggregate_bounding_sphere
+                    aggregate_bounding_sphere.unwrap()
                 } else {
-                    Some(tree.compute_bounding_sphere_of_voxel(current_indices))
+                    tree.compute_bounding_sphere_of_voxel(current_indices)
                 }
             }
         }
@@ -853,9 +861,8 @@ impl VoxelTreeNodeID {
             Self::Internal(internal_id) => {
                 let child_ids = &tree.internal_node(*internal_id).child_ids;
 
-                for (child_id, next_indices) in child_ids
-                    .iter()
-                    .zip(current_indices.for_next_depth().unwrap())
+                for (child_id, next_indices) in
+                    child_ids.iter().zip(current_indices.for_next_depth())
                 {
                     if let Some(child_id) = child_id.as_ref() {
                         child_id.add_voxel_transforms(tree, transforms, next_indices);
@@ -1045,22 +1052,18 @@ impl VoxelTreeBuildNode {
             let mut has_common_child_voxel_type = true;
             let mut common_child_voxel_type = None;
 
-            let children = current_indices
-                .for_next_depth()
-                .unwrap()
-                .map(|next_indices| {
-                    let child =
-                        Self::build(internal_nodes, external_nodes, generator, next_indices);
+            let children = current_indices.for_next_depth().map(|next_indices| {
+                let child = Self::build(internal_nodes, external_nodes, generator, next_indices);
 
-                    Self::check_child(
-                        child.as_ref(),
-                        &mut has_children,
-                        &mut has_common_child_voxel_type,
-                        &mut common_child_voxel_type,
-                    );
+                Self::check_child(
+                    child.as_ref(),
+                    &mut has_children,
+                    &mut has_common_child_voxel_type,
+                    &mut common_child_voxel_type,
+                );
 
-                    child
-                });
+                child
+            });
 
             if has_children {
                 Some(match common_child_voxel_type {
@@ -1163,30 +1166,26 @@ impl VoxelTreeIndices {
         self.tree_height.depth_is_max(self.depth)
     }
 
-    fn for_next_depth(&self) -> Option<[Self; 8]> {
+    fn for_next_depth(&self) -> [Self; 8] {
         let next_depth = self.depth + 1;
+        assert!(self.tree_height.depth_is_valid(next_depth));
 
-        if self.tree_height.depth_is_valid(next_depth) {
-            let i0 = 2 * self.i;
-            let i1 = i0 + 1;
-            let j0 = 2 * self.j;
-            let j1 = j0 + 1;
-            let k0 = 2 * self.k;
-            let k1 = k0 + 1;
-
-            Some([
-                self.for_child(next_depth, i0, j0, k0),
-                self.for_child(next_depth, i0, j0, k1),
-                self.for_child(next_depth, i0, j1, k0),
-                self.for_child(next_depth, i0, j1, k1),
-                self.for_child(next_depth, i1, j0, k0),
-                self.for_child(next_depth, i1, j0, k1),
-                self.for_child(next_depth, i1, j1, k0),
-                self.for_child(next_depth, i1, j1, k1),
-            ])
-        } else {
-            None
-        }
+        let i0 = 2 * self.i;
+        let i1 = i0 + 1;
+        let j0 = 2 * self.j;
+        let j1 = j0 + 1;
+        let k0 = 2 * self.k;
+        let k1 = k0 + 1;
+        [
+            self.for_child(next_depth, i0, j0, k0),
+            self.for_child(next_depth, i0, j0, k1),
+            self.for_child(next_depth, i0, j1, k0),
+            self.for_child(next_depth, i0, j1, k1),
+            self.for_child(next_depth, i1, j0, k0),
+            self.for_child(next_depth, i1, j0, k1),
+            self.for_child(next_depth, i1, j1, k0),
+            self.for_child(next_depth, i1, j1, k1),
+        ]
     }
 
     fn for_child(&self, next_depth: u32, i: usize, j: usize, k: usize) -> Self {
@@ -1313,7 +1312,9 @@ impl Octant {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::geometry::AxisAlignedBox;
     use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use nalgebra::{point, Point3};
     use std::{collections::HashMap, sync::Mutex};
 
     struct EmptyVoxelGenerator {
@@ -1568,6 +1569,111 @@ mod test {
         assert_eq!(internal_child.n_children(), 4);
         assert_eq!(internal_child.n_external_children(), 4);
         assert_eq!(internal_child.n_internal_children(), 0);
+    }
+
+    #[test]
+    fn should_compute_valid_bounding_sphere_for_single_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [1; 3] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let aabb = AxisAlignedBox::new(
+            Point3::origin(),
+            point![
+                generator.voxel_extent(),
+                generator.voxel_extent(),
+                generator.voxel_extent()
+            ],
+        );
+
+        let bounding_sphere = tree.compute_bounding_sphere(0);
+        let bumped_bounding_sphere =
+            Sphere::new(*bounding_sphere.center(), bounding_sphere.radius() + 1e-9);
+
+        assert!(bumped_bounding_sphere.contains_axis_aligned_box(&aabb));
+    }
+
+    #[test]
+    fn should_compute_valid_bounding_sphere_for_two_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [1, 2, 1] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let aabb = AxisAlignedBox::new(
+            Point3::origin(),
+            point![
+                generator.voxel_extent(),
+                2.0 * generator.voxel_extent(),
+                generator.voxel_extent()
+            ],
+        );
+
+        for max_depth in 0..tree.tree_height() {
+            let bounding_sphere = tree.compute_bounding_sphere(max_depth);
+            let bumped_bounding_sphere =
+                Sphere::new(*bounding_sphere.center(), bounding_sphere.radius() + 1e-9);
+
+            assert!(bumped_bounding_sphere.contains_axis_aligned_box(&aabb));
+        }
+    }
+
+    #[test]
+    fn should_compute_valid_bounding_sphere_for_five_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [1, 1, 5] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let aabb = AxisAlignedBox::new(
+            Point3::origin(),
+            point![
+                generator.voxel_extent(),
+                generator.voxel_extent(),
+                5.0 * generator.voxel_extent()
+            ],
+        );
+
+        for max_depth in 0..tree.tree_height() {
+            let bounding_sphere = tree.compute_bounding_sphere(max_depth);
+            let bumped_bounding_sphere =
+                Sphere::new(*bounding_sphere.center(), bounding_sphere.radius() + 1e-9);
+
+            assert!(bumped_bounding_sphere.contains_axis_aligned_box(&aabb));
+        }
+    }
+
+    #[test]
+    fn should_compute_valid_bounding_sphere_for_16_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [4, 2, 2] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let aabb = AxisAlignedBox::new(
+            Point3::origin(),
+            point![
+                4.0 * generator.voxel_extent(),
+                2.0 * generator.voxel_extent(),
+                2.0 * generator.voxel_extent()
+            ],
+        );
+
+        for max_depth in 0..tree.tree_height() {
+            let bounding_sphere = tree.compute_bounding_sphere(max_depth);
+            let bumped_bounding_sphere =
+                Sphere::new(*bounding_sphere.center(), bounding_sphere.radius() + 1e-9);
+
+            assert!(bumped_bounding_sphere.contains_axis_aligned_box(&aabb));
+        }
+    }
+
+    #[test]
+    fn should_compute_tighter_bounding_sphere_for_higher_max_depth() {
+        let generator = DefaultVoxelGenerator { shape: [5, 1, 1] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let bounding_sphere_0 = tree.compute_bounding_sphere(0);
+        let bounding_sphere_1 = tree.compute_bounding_sphere(1);
+        let bounding_sphere_2 = tree.compute_bounding_sphere(2);
+        let bounding_sphere_3 = tree.compute_bounding_sphere(3);
+
+        assert!(bounding_sphere_0.radius() > bounding_sphere_1.radius());
+        assert!(bounding_sphere_1.radius() > bounding_sphere_2.radius());
+        assert!(bounding_sphere_2.radius() > bounding_sphere_3.radius());
     }
 
     #[test]
