@@ -1,5 +1,7 @@
 //! Representation and manipulation of voxels.
 
+#![allow(dead_code)]
+
 mod generation;
 
 pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
@@ -71,7 +73,7 @@ struct VoxelTreeHeight {
 
 /// The ID of a node in a voxel tree, which is either internal (it has child
 /// nodes) or external (it refers to a voxel).
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 enum VoxelTreeNodeID {
     Internal(VoxelTreeInternalNodeID),
     External(VoxelTreeExternalNodeID),
@@ -114,7 +116,7 @@ struct VoxelTreeExternalNode {
     voxel_type: VoxelType,
     voxel_indices: VoxelIndices,
     voxel_scale: u32,
-    adjacent_voxels: Vec<VoxelTreeExternalNodeID>,
+    adjacent_voxels: Vec<(VoxelIndices, VoxelTreeExternalNodeID)>,
 }
 
 /// Helper type used for constructing a voxel tree. Like [`VoxelTreeNodeID`],
@@ -147,7 +149,7 @@ struct VoxelTreeIndices {
 }
 
 /// Indices in the voxel grid at the bottom of a voxel tree.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 struct VoxelIndices {
     i: usize,
     j: usize,
@@ -207,12 +209,16 @@ impl<F: Float> VoxelTree<F> {
             VoxelTreeIndices::at_root(tree_height),
         );
 
-        VoxelTreeNodeID::from_build_node(&mut external_nodes, build_node).map(|root_node_id| Self {
-            voxel_extent,
-            tree_height,
-            root_node_id,
-            internal_nodes,
-            external_nodes,
+        VoxelTreeNodeID::from_build_node(&mut external_nodes, build_node).map(|root_node_id| {
+            let mut tree = Self {
+                voxel_extent,
+                tree_height,
+                root_node_id,
+                internal_nodes,
+                external_nodes,
+            };
+            tree.update_adjacent_voxels_for_all_external_nodes();
+            tree
         })
     }
 
@@ -265,10 +271,15 @@ impl<F: Float> VoxelTree<F> {
 
     /// Rebuilds the list of adjacent voxels for every external node in the
     /// tree.
-    pub fn determine_adjacent_voxels_for_all_external_nodes(&mut self) {
-        for idx in 0..self.external_nodes.n_nodes() {
-            self.external_nodes.node_at_idx_mut(idx).adjacent_voxels = self
-                .determine_adjacent_voxels_for_external_node(self.external_nodes.node_at_idx(idx));
+    ///
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction. It also does not remove previously registered
+    /// adjacent voxels.
+    fn update_adjacent_voxels_for_all_external_nodes(&mut self) {
+        for node_idx in 0..self.external_nodes.n_nodes() {
+            self.update_adjacent_voxels_for_external_node(node_idx);
         }
     }
 
@@ -285,13 +296,44 @@ impl<F: Float> VoxelTree<F> {
         self.external_nodes.node(id)
     }
 
+    fn find_external_node_at_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> Option<&VoxelTreeExternalNode> {
+        self.find_external_node_id_at_indices(i, j, k)
+            .map(|node_id| self.external_node(node_id))
+    }
+
     fn find_external_node_id_at_indices(
         &self,
         i: usize,
         j: usize,
         k: usize,
     ) -> Option<VoxelTreeExternalNodeID> {
-        if let Some(octants) = VoxelIndices::new(i, j, k).octants(self.tree_height.value()) {
+        self.find_external_node_id_at_indices_generic(VoxelIndices::new(i, j, k), |node_id| {
+            self.internal_node(node_id)
+        })
+    }
+
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    fn find_external_node_idx_at_indices(&self, indices: VoxelIndices) -> Option<usize> {
+        self.find_external_node_id_at_indices_generic(indices, |node_id| {
+            self.internal_nodes.node_at_idx(node_id.number())
+        })
+        .map(|node_id| node_id.number())
+    }
+
+    fn find_external_node_id_at_indices_generic<'a>(
+        &'a self,
+        indices: VoxelIndices,
+        internal_node_from_id: impl Fn(VoxelTreeInternalNodeID) -> &'a VoxelTreeInternalNode,
+    ) -> Option<VoxelTreeExternalNodeID> {
+        if let Some(octants) = indices.octants(self.tree_height.value()) {
             let mut node_id = Some(self.root_node_id());
 
             for octant in octants {
@@ -300,7 +342,8 @@ impl<F: Float> VoxelTree<F> {
                         break;
                     }
                     Some(VoxelTreeNodeID::Internal(internal_id)) => {
-                        node_id = self.internal_node(*internal_id).child_ids[octant.idx()].as_ref();
+                        node_id =
+                            internal_node_from_id(*internal_id).child_ids[octant.idx()].as_ref();
                     }
                     None => {
                         return None;
@@ -314,195 +357,336 @@ impl<F: Float> VoxelTree<F> {
         }
     }
 
-    fn compute_bounding_sphere_of_voxel(&self, indices: VoxelTreeIndices) -> Sphere<F> {
-        let (voxel_scale, center) = indices.voxel_scale_and_center_offset(self.voxel_extent());
-        let radius = F::ONE_HALF * F::sqrt(F::THREE) * self.voxel_extent() * voxel_scale;
-        Sphere::new(center.into(), radius)
-    }
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    fn update_adjacent_voxels_for_external_node(&mut self, node_idx: usize) {
+        let node = self.external_nodes.node_at_idx(node_idx);
+        let voxel_scale = node.voxel_scale;
+        let voxel_indices = node.voxel_indices;
 
-    fn determine_adjacent_voxels_for_external_node_id(
-        &self,
-        node_id: VoxelTreeExternalNodeID,
-    ) -> Vec<VoxelTreeExternalNodeID> {
-        let node = self.external_nodes.node(node_id);
-        self.determine_adjacent_voxels_for_external_node(node)
-    }
-
-    fn determine_adjacent_voxels_for_external_node(
-        &self,
-        node: &VoxelTreeExternalNode,
-    ) -> Vec<VoxelTreeExternalNodeID> {
-        let mut adjacent_voxels = Vec::new();
-
-        if node.voxel_scale == 1 {
-            self.add_voxels_adjacent_to_unmerged_voxel(node, &mut adjacent_voxels);
+        if voxel_scale == 1 {
+            self.update_adjacent_voxels_for_unmerged_voxel(node_idx, voxel_indices);
         } else {
-            self.add_voxels_adjacent_to_merged_voxel(node, &mut adjacent_voxels);
+            self.update_adjacent_voxels_for_merged_voxel(node_idx, voxel_scale, voxel_indices);
         }
-
-        adjacent_voxels
     }
 
-    fn add_voxels_adjacent_to_unmerged_voxel(
-        &self,
-        node: &VoxelTreeExternalNode,
-        adjacent_voxels: &mut Vec<VoxelTreeExternalNodeID>,
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    fn update_adjacent_voxels_for_unmerged_voxel(
+        &mut self,
+        node_idx: usize,
+        voxel_indices: VoxelIndices,
     ) {
         let grid_size = self.grid_size();
 
-        let i0 = node.voxel_indices.i;
-        let j0 = node.voxel_indices.j;
-        let k0 = node.voxel_indices.k;
+        if voxel_indices.i > 0 {
+            self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+                node_idx,
+                voxel_indices,
+                VoxelIndices::new(voxel_indices.i - 1, voxel_indices.j, voxel_indices.k),
+            );
+        }
+        if voxel_indices.i + 1 < grid_size {
+            self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+                node_idx,
+                voxel_indices,
+                VoxelIndices::new(voxel_indices.i + 1, voxel_indices.j, voxel_indices.k),
+            );
+        }
+        if voxel_indices.j > 0 {
+            self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+                node_idx,
+                voxel_indices,
+                VoxelIndices::new(voxel_indices.i, voxel_indices.j - 1, voxel_indices.k),
+            );
+        }
+        if voxel_indices.j + 1 < grid_size {
+            self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+                node_idx,
+                voxel_indices,
+                VoxelIndices::new(voxel_indices.i, voxel_indices.j + 1, voxel_indices.k),
+            );
+        }
+        if voxel_indices.k > 0 {
+            self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+                node_idx,
+                voxel_indices,
+                VoxelIndices::new(voxel_indices.i, voxel_indices.j, voxel_indices.k - 1),
+            );
+        }
+        if voxel_indices.k + 1 < grid_size {
+            self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+                node_idx,
+                voxel_indices,
+                VoxelIndices::new(voxel_indices.i, voxel_indices.j, voxel_indices.k + 1),
+            );
+        }
+    }
 
-        if i0 > 0 {
-            if let Some(node_id) = self.find_external_node_id_at_indices(i0 - 1, j0, k0) {
-                adjacent_voxels.push(node_id);
-            }
-        }
-        if i0 + 1 < grid_size {
-            if let Some(node_id) = self.find_external_node_id_at_indices(i0 + 1, j0, k0) {
-                adjacent_voxels.push(node_id);
-            }
-        }
-        if j0 > 0 {
-            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0 - 1, k0) {
-                adjacent_voxels.push(node_id);
-            }
-        }
-        if j0 + 1 < grid_size {
-            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0 + 1, k0) {
-                adjacent_voxels.push(node_id);
-            }
-        }
-        if k0 > 0 {
-            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0, k0 - 1) {
-                adjacent_voxels.push(node_id);
-            }
-        }
-        if k0 + 1 < grid_size {
-            if let Some(node_id) = self.find_external_node_id_at_indices(i0, j0, k0 + 1) {
-                adjacent_voxels.push(node_id);
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    fn update_adjacent_voxel_for_unmerged_voxel_on_one_side(
+        &mut self,
+        node_idx: usize,
+        voxel_indices: VoxelIndices,
+        adjacent_indices: VoxelIndices,
+    ) {
+        // We only need to search for the node at the adjacent indices if we do
+        // not already have a neighbor registered at those indices
+        if !self
+            .external_nodes
+            .node_at_idx(node_idx)
+            .is_adjacent_to_voxel(adjacent_indices)
+        {
+            if let Some(adjacent_node_idx) =
+                self.find_external_node_idx_at_indices(adjacent_indices)
+            {
+                let adjacent_node = self.external_nodes.node_at_idx_mut(adjacent_node_idx);
+
+                // If the scale of the adjacent voxel is larger than one, it
+                // could already be registered as an adjacent voxel to us, just
+                // not not at the exact indices we searched at. Now that we have
+                // the adjacent node, we can check this and make sure to only
+                // register the voxels as neighbors if they truly have not been
+                // registered before.
+                if adjacent_node.voxel_scale == 1
+                    || !adjacent_node.is_adjacent_to_voxel(voxel_indices)
+                {
+                    // These are the indices of the adjacent voxel's origin,
+                    // which may be different from the indices we searched at
+                    let adjacent_voxel_indices = adjacent_node.voxel_indices;
+
+                    // Add this voxel as an adjacent voxel to the adjacent voxel
+                    adjacent_node.adjacent_voxels.push((
+                        voxel_indices,
+                        VoxelTreeExternalNodeID::from_number(node_idx),
+                    ));
+
+                    // Add the adjacent voxel as an adjacent voxel to this voxel
+                    self.external_nodes
+                        .node_at_idx_mut(node_idx)
+                        .adjacent_voxels
+                        .push((
+                            adjacent_voxel_indices,
+                            VoxelTreeExternalNodeID::from_number(adjacent_node_idx),
+                        ));
+                }
             }
         }
     }
 
-    fn add_voxels_adjacent_to_merged_voxel(
-        &self,
-        node: &VoxelTreeExternalNode,
-        adjacent_voxels: &mut Vec<VoxelTreeExternalNodeID>,
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    fn update_adjacent_voxels_for_merged_voxel(
+        &mut self,
+        node_idx: usize,
+        voxel_scale: u32,
+        voxel_indices: VoxelIndices,
     ) {
         let grid_size = self.grid_size();
 
-        let scale = node.voxel_scale as usize;
-        let i0 = node.voxel_indices.i;
-        let j0 = node.voxel_indices.j;
-        let k0 = node.voxel_indices.k;
+        let voxel_scale = voxel_scale as usize;
 
-        let mut covered = vec![false; scale.pow(2)];
+        let mut covered = vec![false; voxel_scale.pow(2)];
 
-        if i0 > 0 {
-            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
-                scale,
+        if voxel_indices.i > 0 {
+            self.update_adjacent_voxels_for_merged_voxel_on_one_side(
+                node_idx,
+                voxel_scale,
+                voxel_indices,
                 &mut covered,
-                adjacent_voxels,
                 |delta_j, delta_k| {
-                    self.find_external_node_id_at_indices(i0 - 1, j0 + delta_j, k0 + delta_k)
+                    VoxelIndices::new(
+                        voxel_indices.i - 1,
+                        voxel_indices.j + delta_j,
+                        voxel_indices.k + delta_k,
+                    )
                 },
             );
         }
-        if i0 + scale < grid_size {
+        if voxel_indices.i + voxel_scale < grid_size {
             covered.fill(false);
-            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
-                scale,
+            self.update_adjacent_voxels_for_merged_voxel_on_one_side(
+                node_idx,
+                voxel_scale,
+                voxel_indices,
                 &mut covered,
-                adjacent_voxels,
                 |delta_j, delta_k| {
-                    self.find_external_node_id_at_indices(i0 + scale, j0 + delta_j, k0 + delta_k)
+                    VoxelIndices::new(
+                        voxel_indices.i + voxel_scale,
+                        voxel_indices.j + delta_j,
+                        voxel_indices.k + delta_k,
+                    )
                 },
             );
         }
-        if j0 > 0 {
+        if voxel_indices.j > 0 {
             covered.fill(false);
-            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
-                scale,
+            self.update_adjacent_voxels_for_merged_voxel_on_one_side(
+                node_idx,
+                voxel_scale,
+                voxel_indices,
                 &mut covered,
-                adjacent_voxels,
                 |delta_i, delta_k| {
-                    self.find_external_node_id_at_indices(i0 + delta_i, j0 - 1, k0 + delta_k)
+                    VoxelIndices::new(
+                        voxel_indices.i + delta_i,
+                        voxel_indices.j - 1,
+                        voxel_indices.k + delta_k,
+                    )
                 },
             );
         }
-        if j0 + scale < grid_size {
+        if voxel_indices.j + voxel_scale < grid_size {
             covered.fill(false);
-            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
-                scale,
+            self.update_adjacent_voxels_for_merged_voxel_on_one_side(
+                node_idx,
+                voxel_scale,
+                voxel_indices,
                 &mut covered,
-                adjacent_voxels,
                 |delta_i, delta_k| {
-                    self.find_external_node_id_at_indices(i0 + delta_i, j0 + scale, k0 + delta_k)
+                    VoxelIndices::new(
+                        voxel_indices.i + delta_i,
+                        voxel_indices.j + voxel_scale,
+                        voxel_indices.k + delta_k,
+                    )
                 },
             );
         }
-        if k0 > 0 {
+        if voxel_indices.k > 0 {
             covered.fill(false);
-            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
-                scale,
+            self.update_adjacent_voxels_for_merged_voxel_on_one_side(
+                node_idx,
+                voxel_scale,
+                voxel_indices,
                 &mut covered,
-                adjacent_voxels,
                 |delta_i, delta_j| {
-                    self.find_external_node_id_at_indices(i0 + delta_i, j0 + delta_j, k0 - 1)
+                    VoxelIndices::new(
+                        voxel_indices.i + delta_i,
+                        voxel_indices.j + delta_j,
+                        voxel_indices.k - 1,
+                    )
                 },
             );
         }
-        if k0 + scale < grid_size {
-            self.add_voxels_adjacent_to_merged_voxel_on_one_side(
-                scale,
+        if voxel_indices.k + voxel_scale < grid_size {
+            covered.fill(false);
+            self.update_adjacent_voxels_for_merged_voxel_on_one_side(
+                node_idx,
+                voxel_scale,
+                voxel_indices,
                 &mut covered,
-                adjacent_voxels,
                 |delta_i, delta_j| {
-                    self.find_external_node_id_at_indices(i0 + delta_i, j0 + delta_j, k0 + scale)
+                    VoxelIndices::new(
+                        voxel_indices.i + delta_i,
+                        voxel_indices.j + delta_j,
+                        voxel_indices.k + voxel_scale,
+                    )
                 },
             );
         }
     }
 
-    fn add_voxels_adjacent_to_merged_voxel_on_one_side(
-        &self,
-        scale: usize,
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    fn update_adjacent_voxels_for_merged_voxel_on_one_side(
+        &mut self,
+        node_idx: usize,
+        voxel_scale: usize,
+        voxel_indices: VoxelIndices,
         covered: &mut [bool],
-        adjacent_voxels: &mut Vec<VoxelTreeExternalNodeID>,
-        find_node: impl Fn(usize, usize) -> Option<VoxelTreeExternalNodeID>,
+        get_adjacent_indices: impl Fn(usize, usize) -> VoxelIndices,
     ) {
         let mut delta_n = 0;
         let mut delta_m = 0;
         let mut idx = 0;
 
-        'outer: while delta_n < scale {
-            while delta_m < scale {
+        'outer: while delta_n < voxel_scale {
+            while delta_m < voxel_scale {
                 if !covered[idx] {
-                    if let Some(node_id) = find_node(delta_n, delta_m) {
-                        adjacent_voxels.push(node_id);
+                    let adjacent_indices = get_adjacent_indices(delta_n, delta_m);
 
-                        let node = self.external_node(node_id);
-                        let neighbor_scale = node.voxel_scale as usize;
+                    let adjacent_voxel_scale = if let Some(adjacent_node_id) = self
+                        .external_nodes
+                        .node_at_idx(node_idx)
+                        .adjacent_voxel(adjacent_indices)
+                    {
+                        // If there is already a voxel registered at the
+                        // adjacent indices, we only need to obtain its scale to
+                        // update the `covered` map
+                        Some(
+                            self.external_nodes
+                                .node_at_idx(adjacent_node_id.number())
+                                .voxel_scale as usize,
+                        )
+                    } else if let Some(adjacent_node_idx) =
+                        self.find_external_node_idx_at_indices(adjacent_indices)
+                    {
+                        let adjacent_node = self.external_nodes.node_at_idx_mut(adjacent_node_idx);
+                        let adjacent_voxel_scale = adjacent_node.voxel_scale as usize;
 
-                        if neighbor_scale >= scale {
+                        // If the scale of the adjacent voxel is larger than one, it
+                        // could already be registered as an adjacent voxel to us, just
+                        // not not at the exact indices we searched at. Now that we have
+                        // the adjacent node, we can check this and make sure to only
+                        // register the voxels as neighbors if they truly have not been
+                        // registered before.
+                        if adjacent_voxel_scale == 1
+                            || !adjacent_node.is_adjacent_to_voxel(voxel_indices)
+                        {
+                            // These are the indices of the adjacent voxel's origin,
+                            // which may be different from the indices we searched at
+                            let adjacent_voxel_indices = adjacent_node.voxel_indices;
+
+                            // Add this voxel as an adjacent voxel to the adjacent voxel
+                            adjacent_node.adjacent_voxels.push((
+                                voxel_indices,
+                                VoxelTreeExternalNodeID::from_number(node_idx),
+                            ));
+
+                            // Add the adjacent voxel as an adjacent voxel to this voxel
+                            self.external_nodes
+                                .node_at_idx_mut(node_idx)
+                                .adjacent_voxels
+                                .push((
+                                    adjacent_voxel_indices,
+                                    VoxelTreeExternalNodeID::from_number(adjacent_node_idx),
+                                ));
+                        }
+
+                        Some(adjacent_voxel_scale)
+                    } else {
+                        None
+                    };
+
+                    if let Some(adjacent_voxel_scale) = adjacent_voxel_scale {
+                        if adjacent_voxel_scale >= voxel_scale {
                             // If the neighbor is not smaller than us, there is
                             // no room for more neighbors on this side
                             break 'outer;
-                        } else if neighbor_scale > 1 {
+                        } else if adjacent_voxel_scale > 1 {
                             // If the neighbor is merged but smaller than
                             // us, we mark all the later locations covered
                             // by the neighbor so as not to query them later
-                            for n in delta_n..(delta_n + neighbor_scale) {
-                                for m in delta_m..(delta_m + neighbor_scale) {
-                                    covered[n * scale + m] = true;
+                            for n in delta_n..(delta_n + adjacent_voxel_scale) {
+                                for m in delta_m..(delta_m + adjacent_voxel_scale) {
+                                    covered[n * voxel_scale + m] = true;
                                 }
                             }
                             // We can immediately skip ahead to the end of the
                             // neighbor
-                            delta_m += neighbor_scale - 1;
-                            idx += neighbor_scale - 1;
+                            delta_m += adjacent_voxel_scale - 1;
+                            idx += adjacent_voxel_scale - 1;
                         }
                     }
                 }
@@ -513,6 +697,12 @@ impl<F: Float> VoxelTree<F> {
             delta_m = 0;
             delta_n += 1;
         }
+    }
+
+    fn compute_bounding_sphere_of_voxel(&self, indices: VoxelTreeIndices) -> Sphere<F> {
+        let (voxel_scale, center) = indices.voxel_scale_and_center_offset(self.voxel_extent());
+        let radius = F::ONE_HALF * F::sqrt(F::THREE) * self.voxel_extent() * voxel_scale;
+        Sphere::new(center.into(), radius)
     }
 }
 
@@ -778,9 +968,7 @@ impl VoxelTreeInternalNode {
     }
 
     fn child_ids(&self) -> impl Iterator<Item = VoxelTreeNodeID> + '_ {
-        self.child_ids
-            .iter()
-            .filter_map(|child_id| child_id.clone())
+        self.child_ids.iter().filter_map(|child_id| *child_id)
     }
 
     fn internal_child_ids(&self) -> impl Iterator<Item = VoxelTreeInternalNodeID> + '_ {
@@ -818,6 +1006,19 @@ impl VoxelTreeExternalNode {
             voxel_scale,
             adjacent_voxels: Vec::new(),
         }
+    }
+
+    fn adjacent_voxel(&self, voxel_indices: VoxelIndices) -> Option<VoxelTreeExternalNodeID> {
+        self.adjacent_voxels
+            .iter()
+            .find(|(adjacent_voxel_indices, _)| adjacent_voxel_indices == &voxel_indices)
+            .map(|(_, adjacent_node_id)| *adjacent_node_id)
+    }
+
+    fn is_adjacent_to_voxel(&self, voxel_indices: VoxelIndices) -> bool {
+        self.adjacent_voxels
+            .iter()
+            .any(|(adjacent_voxel_indices, _)| adjacent_voxel_indices == &voxel_indices)
     }
 }
 
@@ -1579,7 +1780,7 @@ mod test {
         let tree = VoxelTree::build(&generator).unwrap();
 
         let check_node = |i, j, k, indices, scale| {
-            let node = tree.external_node(tree.find_external_node_id_at_indices(i, j, k).unwrap());
+            let node = tree.find_external_node_at_indices(i, j, k).unwrap();
             assert_eq!(node.voxel_indices, indices);
             assert_eq!(node.voxel_scale, scale);
         };
@@ -1599,52 +1800,54 @@ mod test {
 
     #[test]
     fn should_get_no_adjacent_voxels_for_single_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
-        let node_id = tree.find_external_node_id_at_indices(0, 0, 0).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
-        assert!(adjacent_voxels.is_empty());
+        let mut tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] }).unwrap();
+        tree.update_adjacent_voxels_for_all_external_nodes();
+        let node = tree.find_external_node_at_indices(0, 0, 0).unwrap();
+        assert!(node.adjacent_voxels.is_empty());
     }
 
     #[test]
     fn should_get_no_adjacent_voxels_for_single_merged_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [4; 3] }).unwrap();
-        let node_id = tree.find_external_node_id_at_indices(2, 2, 2).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
-        assert!(adjacent_voxels.is_empty());
+        let mut tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [4; 3] }).unwrap();
+        tree.update_adjacent_voxels_for_all_external_nodes();
+        let node = tree.find_external_node_at_indices(2, 2, 2).unwrap();
+        assert!(node.adjacent_voxels.is_empty());
     }
 
     #[test]
     fn should_get_correct_voxels_adjacent_to_unmerged_voxel_in_four_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 2] }).unwrap();
-        let node_id = tree.find_external_node_id_at_indices(0, 1, 1).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        let mut tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 2] }).unwrap();
+        tree.update_adjacent_voxels_for_all_external_nodes();
+        let node = tree.find_external_node_at_indices(0, 1, 1).unwrap();
 
         let check_neighbor_present = |i, j, k| {
-            assert!(adjacent_voxels
+            assert!(node
+                .adjacent_voxels
                 .iter()
-                .any(|node_id| tree.external_node(*node_id).voxel_indices
-                    == VoxelIndices::new(i, j, k)));
+                .any(|(adjacent_voxel_indices, _)| adjacent_voxel_indices
+                    == &VoxelIndices::new(i, j, k)));
         };
 
-        assert_eq!(adjacent_voxels.len(), 2);
+        assert_eq!(node.adjacent_voxels.len(), 2);
         check_neighbor_present(0, 1, 0);
         check_neighbor_present(0, 0, 1);
     }
 
     #[test]
     fn should_get_correct_voxels_adjacent_to_unmerged_voxel_in_9_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
-        let node_id = tree.find_external_node_id_at_indices(2, 1, 1).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        let mut tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
+        tree.update_adjacent_voxels_for_all_external_nodes();
+        let node = tree.find_external_node_at_indices(2, 1, 1).unwrap();
 
         let check_neighbor_present = |i, j, k| {
-            assert!(adjacent_voxels
+            assert!(node
+                .adjacent_voxels
                 .iter()
-                .any(|node_id| tree.external_node(*node_id).voxel_indices
-                    == VoxelIndices::new(i, j, k)));
+                .any(|(adjacent_voxel_indices, _)| adjacent_voxel_indices
+                    == &VoxelIndices::new(i, j, k)));
         };
 
-        assert_eq!(adjacent_voxels.len(), 5);
+        assert_eq!(node.adjacent_voxels.len(), 5);
         check_neighbor_present(0, 0, 0);
         check_neighbor_present(2, 0, 1);
         check_neighbor_present(2, 2, 1);
@@ -1654,18 +1857,19 @@ mod test {
 
     #[test]
     fn should_get_correct_voxels_adjacent_to_merged_voxel_in_9_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
-        let node_id = tree.find_external_node_id_at_indices(0, 0, 0).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        let mut tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
+        tree.update_adjacent_voxels_for_all_external_nodes();
+        let node = tree.find_external_node_at_indices(0, 0, 0).unwrap();
 
         let check_neighbor_present = |i, j, k| {
-            assert!(adjacent_voxels
+            assert!(node
+                .adjacent_voxels
                 .iter()
-                .any(|node_id| tree.external_node(*node_id).voxel_indices
-                    == VoxelIndices::new(i, j, k)));
+                .any(|(adjacent_voxel_indices, _)| adjacent_voxel_indices
+                    == &VoxelIndices::new(i, j, k)));
         };
 
-        assert_eq!(adjacent_voxels.len(), 12);
+        assert_eq!(node.adjacent_voxels.len(), 12);
         check_neighbor_present(2, 0, 0);
         check_neighbor_present(2, 0, 1);
         check_neighbor_present(2, 1, 0);
@@ -1717,30 +1921,37 @@ mod test {
         ];
 
         let generator = ManualVoxelGenerator { voxels };
-        let tree = VoxelTree::build(&generator).unwrap();
+        let mut tree = VoxelTree::build(&generator).unwrap();
+        tree.update_adjacent_voxels_for_all_external_nodes();
 
-        let check_neighbor_present = |adjacent_voxels: &[VoxelTreeExternalNodeID], i, j, k| {
-            assert!(adjacent_voxels
+        let check_neighbor_present = |node: &VoxelTreeExternalNode, i, j, k| {
+            assert!(node
+                .adjacent_voxels
                 .iter()
-                .any(|node_id| tree.external_node(*node_id).voxel_indices
-                    == VoxelIndices::new(i, j, k)));
+                .any(|(adjacent_voxel_indices, _)| adjacent_voxel_indices
+                    == &VoxelIndices::new(i, j, k)));
         };
 
-        let node_id = tree.find_external_node_id_at_indices(0, 0, 0).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        let node = tree.find_external_node_at_indices(0, 0, 0).unwrap();
 
-        assert_eq!(adjacent_voxels.len(), 5);
-        check_neighbor_present(&adjacent_voxels, 4, 0, 0);
-        check_neighbor_present(&adjacent_voxels, 4, 0, 3);
-        check_neighbor_present(&adjacent_voxels, 4, 1, 2);
-        check_neighbor_present(&adjacent_voxels, 4, 2, 2);
-        check_neighbor_present(&adjacent_voxels, 4, 3, 0);
+        assert_eq!(node.adjacent_voxels.len(), 5);
+        check_neighbor_present(node, 4, 0, 0);
+        check_neighbor_present(node, 4, 0, 3);
+        check_neighbor_present(node, 4, 1, 2);
+        check_neighbor_present(node, 4, 2, 2);
+        check_neighbor_present(node, 4, 3, 0);
 
-        let node_id = tree.find_external_node_id_at_indices(4, 2, 2).unwrap();
-        let adjacent_voxels = tree.determine_adjacent_voxels_for_external_node_id(node_id);
+        let node = tree.find_external_node_at_indices(4, 2, 2).unwrap();
 
-        assert_eq!(adjacent_voxels.len(), 2);
-        check_neighbor_present(&adjacent_voxels, 0, 0, 0);
-        check_neighbor_present(&adjacent_voxels, 4, 1, 2);
+        assert_eq!(node.adjacent_voxels.len(), 2);
+        check_neighbor_present(node, 0, 0, 0);
+        check_neighbor_present(node, 4, 1, 2);
+
+        let node = tree.find_external_node_at_indices(4, 1, 2).unwrap();
+
+        assert_eq!(node.adjacent_voxels.len(), 3);
+        check_neighbor_present(node, 0, 0, 0);
+        check_neighbor_present(node, 4, 0, 0);
+        check_neighbor_present(node, 4, 2, 2);
     }
 }
