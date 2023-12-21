@@ -2,6 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use impact::geometry::{
     DynamicInstanceFeatureBuffer, InstanceFeatureStorage, InstanceModelViewTransform,
 };
+use pprof::criterion::{Output, PProfProfiler};
 
 pub fn bench_dynamic_instance_feature_buffer_add_feature_from_storage(c: &mut Criterion) {
     c.bench_function("instance_feature_buffer_add_feature_from_storage", |b| {
@@ -33,8 +34,10 @@ pub fn bench_dynamic_instance_feature_buffer_add_feature_from_storage_repeatedly
 }
 
 criterion_group!(
-    benches,
-    bench_dynamic_instance_feature_buffer_add_feature_from_storage,
-    bench_dynamic_instance_feature_buffer_add_feature_from_storage_repeatedly
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    targets =
+        bench_dynamic_instance_feature_buffer_add_feature_from_storage,
+        bench_dynamic_instance_feature_buffer_add_feature_from_storage_repeatedly
 );
 criterion_main!(benches);
