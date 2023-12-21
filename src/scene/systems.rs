@@ -8,7 +8,7 @@ use crate::{
         AmbientLightComp, CameraNodeID, DirectionComp, GroupNodeID, LightDirection,
         ModelInstanceNodeID, OmnidirectionalLightComp, RadianceComp, SceneGraphNodeComp,
         SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UnidirectionalLightComp,
-        UpdateSceneGroupToWorldTransforms, VoxelInstanceClusterComp,
+        UpdateSceneGroupToWorldTransforms, VoxelTreeNodeComp,
     },
     world::World,
 };
@@ -55,9 +55,9 @@ define_task!(
                 }
             );
             query!(
-                ecs_world, |voxel_instance_cluster: &VoxelInstanceClusterComp, frame: &ReferenceFrameComp| {
+                ecs_world, |voxel_tree_node: &VoxelTreeNodeComp, frame: &ReferenceFrameComp| {
                     scene_graph.set_group_to_parent_transform(
-                        voxel_instance_cluster.group_node_id,
+                        voxel_tree_node.group_node_id,
                         frame.create_transform_to_parent_space(),
                     );
                 }

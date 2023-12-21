@@ -20,11 +20,10 @@ pub use camera::{
 };
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
-    register_scene_graph_components, CameraNodeID, GroupNodeID, ModelInstanceClusterNode,
-    ModelInstanceClusterNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, ParentComp,
-    SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
-    SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
-    SceneGraphParentNodeComp, UncullableComp,
+    register_scene_graph_components, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
+    NodeTransform, ParentComp, SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupComp,
+    SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
+    SceneGraphParentNodeComp, UncullableComp, VoxelTreeNode, VoxelTreeNodeID,
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
@@ -72,8 +71,8 @@ pub use tasks::{
 };
 pub use texture_projection::{register_texture_projection_components, PlanarTextureProjectionComp};
 pub use voxel::{
-    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelManager,
-    VoxelSphereComp, VoxelTreeComp, VoxelTreeID, VoxelTypeComp,
+    register_voxel_components, VoxelBoxComp, VoxelManager, VoxelSphereComp, VoxelTreeComp,
+    VoxelTreeID, VoxelTreeNodeComp, VoxelTypeComp,
 };
 
 use crate::rendering::fre;

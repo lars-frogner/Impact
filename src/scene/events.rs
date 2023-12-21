@@ -10,7 +10,7 @@ use crate::{
         MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
         SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
         SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
-        VertexColorMaterial, VoxelInstanceClusterComp, VoxelManager, VoxelTreeComp, VoxelTypeComp,
+        VertexColorMaterial, VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
     },
     window::{self, Window},
 };
@@ -75,7 +75,7 @@ impl Scene {
         self.add_group_node_component_for_entity(components);
         self.add_camera_component_for_entity(window, components, desynchronized)?;
         self.add_model_instance_node_component_for_entity(components);
-        self.add_voxel_instance_cluster_component_for_entity(components);
+        self.add_voxel_tree_node_component_for_entity(components);
         Ok(())
     }
 
@@ -328,10 +328,7 @@ impl Scene {
         );
     }
 
-    fn add_voxel_instance_cluster_component_for_entity(
-        &self,
-        components: &mut ArchetypeComponentStorage,
-    ) {
+    fn add_voxel_tree_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
         setup!(
             {
                 let voxel_manager = self.voxel_manager().read().unwrap();
@@ -342,27 +339,28 @@ impl Scene {
              voxel_type: &VoxelTypeComp,
              frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>|
-             -> VoxelInstanceClusterComp {
+             -> VoxelTreeNodeComp {
                 let voxel_tree_id = voxel_tree.voxel_tree_id;
                 let voxel_tree = voxel_manager
                     .get_voxel_tree(voxel_tree_id)
                     .expect(
-                    "Tried to create voxel instance cluster entity with voxel tree not present in voxel manager",
+                    "Tried to create voxel tree node entity with voxel tree not present in voxel manager",
                 );
 
-                let cluster_to_parent_transform = frame
+                let voxel_tree_to_parent_transform = frame
                     .cloned()
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                let voxel_transforms = voxel_tree.compute_voxel_transforms();
+                let voxel_transforms = voxel_tree.compute_exposed_voxel_transforms();
 
-                let cluster_bounding_sphere = if components.has_component_type::<UncullableComp>() {
-                    // The scene graph will not cull clusters with no bounding sphere
-                    None
-                } else {
-                    Some(voxel_tree.compute_bounding_sphere(0))
-                };
+                let voxel_tree_bounding_sphere =
+                    if components.has_component_type::<UncullableComp>() {
+                        // The scene graph will not cull voxel trees with no bounding sphere
+                        None
+                    } else {
+                        Some(voxel_tree.compute_bounding_sphere(0))
+                    };
 
                 let appearance = voxel_manager.voxel_appearance(voxel_type.voxel_type());
 
@@ -388,24 +386,19 @@ impl Scene {
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
                 let group_node_id =
-                    scene_graph.create_group_node(parent_node_id, cluster_to_parent_transform);
+                    scene_graph.create_group_node(parent_node_id, voxel_tree_to_parent_transform);
 
-                let model_instance_cluster_node_id = scene_graph
-                    .create_model_instance_cluster_node(
-                        group_node_id,
-                        voxel_transforms,
-                        appearance.model_id,
-                        cluster_bounding_sphere,
-                        feature_ids,
-                    );
-
-                VoxelInstanceClusterComp::new(
-                    voxel_tree_id,
+                let voxel_tree_node_id = scene_graph.create_voxel_tree_node(
                     group_node_id,
-                    model_instance_cluster_node_id,
-                )
+                    voxel_transforms,
+                    appearance.model_id,
+                    voxel_tree_bounding_sphere,
+                    feature_ids,
+                );
+
+                VoxelTreeNodeComp::new(voxel_tree_id, group_node_id, voxel_tree_node_id)
             },
-            ![VoxelInstanceClusterComp]
+            ![VoxelTreeNodeComp]
         );
     }
 

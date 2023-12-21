@@ -2,15 +2,12 @@
 
 use crate::{
     impl_InstanceFeature,
-    num::Float,
     rendering::{fre, InstanceFeatureShaderInput, ModelViewTransformShaderInput},
 };
-use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
 use nohash_hasher::BuildNoHashHasher;
-use simba::scalar::{SubsetOf, SupersetOf};
 use std::{collections::HashMap, fmt::Debug, mem, ops::Range};
 
 /// Represents a piece of data associated with a model instance.
@@ -126,14 +123,6 @@ pub struct InstanceModelViewTransform {
     pub rotation: UnitQuaternion<fre>,
     pub translation: Vector3<fre>,
     pub scaling: fre,
-}
-
-/// A transform from the space of an instance in a cluster to the space of the
-/// whole cluster.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ClusterInstanceTransform<F: Float> {
-    translation: Vector3<F>,
-    scaling: F,
 }
 
 /// A model-to-light transform for a specific instance of a model.
@@ -887,87 +876,6 @@ impl Default for InstanceModelViewTransform {
     }
 }
 
-impl<F: Float> ClusterInstanceTransform<F> {
-    /// Creates a new transform with the given translation and scaling.
-    pub fn new(translation: Vector3<F>, scaling: F) -> Self {
-        Self {
-            translation,
-            scaling,
-        }
-    }
-
-    /// Creates a new identity transform.
-    pub fn identity() -> Self {
-        Self {
-            translation: Vector3::zeros(),
-            scaling: F::ONE,
-        }
-    }
-
-    /// Returns a reference to the translational part of the transform.
-    pub fn translation(&self) -> &Vector3<F> {
-        &self.translation
-    }
-
-    /// Returns the scaling part of the transform.
-    pub fn scaling(&self) -> F {
-        self.scaling
-    }
-
-    /// Applies the given transform from the space of the cluster to camera
-    /// space, yielding the model view transform of the instance.
-    pub fn transform_into_model_view_transform(
-        &self,
-        transform_from_cluster_to_camera_space: &Similarity3<F>,
-    ) -> InstanceModelViewTransform
-    where
-        F: SubsetOf<fre>,
-    {
-        let scaling_from_cluster_to_camera_space = transform_from_cluster_to_camera_space.scaling();
-        let rotation_from_cluster_to_camera_space =
-            transform_from_cluster_to_camera_space.isometry.rotation;
-        let translation_from_cluster_to_camera_space = transform_from_cluster_to_camera_space
-            .isometry
-            .translation
-            .vector;
-
-        let new_scaling = scaling_from_cluster_to_camera_space * self.scaling;
-
-        let new_translation = translation_from_cluster_to_camera_space
-            + rotation_from_cluster_to_camera_space.transform_vector(&self.translation)
-                * scaling_from_cluster_to_camera_space;
-
-        InstanceModelViewTransform {
-            rotation: rotation_from_cluster_to_camera_space.cast::<fre>(),
-            translation: new_translation.cast::<fre>(),
-            scaling: fre::from_subset(&new_scaling),
-        }
-    }
-}
-
-impl<F: Float> Default for ClusterInstanceTransform<F> {
-    fn default() -> Self {
-        Self::identity()
-    }
-}
-
-impl<F> AbsDiffEq for ClusterInstanceTransform<F>
-where
-    F: Float + AbsDiffEq,
-    <F as AbsDiffEq>::Epsilon: Clone,
-{
-    type Epsilon = <F as AbsDiffEq>::Epsilon;
-
-    fn default_epsilon() -> Self::Epsilon {
-        <F as AbsDiffEq>::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Vector3::abs_diff_eq(&self.translation, &other.translation, epsilon)
-            && F::abs_diff_eq(&self.scaling, &other.scaling, epsilon)
-    }
-}
-
 impl_InstanceFeature!(
     InstanceModelViewTransform,
     wgpu::vertex_attr_array![
@@ -1004,8 +912,7 @@ macro_rules! impl_InstanceFeature {
 #[cfg(test)]
 mod test {
     use super::*;
-    use approx::assert_abs_diff_eq;
-    use nalgebra::{vector, Similarity3, Translation3, UnitQuaternion};
+    use nalgebra::{Similarity3, Translation3, UnitQuaternion};
 
     type Feature = InstanceModelViewTransform;
 
@@ -1666,41 +1573,5 @@ mod test {
         assert_eq!(buffer.valid_feature_range(1), 2..3);
         assert_eq!(buffer.valid_feature_range(2), 3..5);
         assert_eq!(buffer.valid_feature_range(3), 5..8);
-    }
-
-    #[test]
-    fn transforming_cluster_instance_transform_works() {
-        let translation = vector![0.1, -0.2, 0.3];
-        let scaling = 0.8;
-
-        let cluster_instance_transform = ClusterInstanceTransform::new(translation, scaling);
-
-        let cluster_instance_similarity =
-            Similarity3::from_parts(translation.into(), UnitQuaternion::identity(), scaling);
-
-        let transform_from_cluster_to_camera_space = Similarity3::from_parts(
-            vector![-1.2, 9.7, 0.4].into(),
-            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.1),
-            2.7,
-        );
-
-        let model_view_transform = cluster_instance_transform
-            .transform_into_model_view_transform(&transform_from_cluster_to_camera_space);
-
-        let correct_model_view_transform =
-            transform_from_cluster_to_camera_space * cluster_instance_similarity;
-
-        assert_abs_diff_eq!(
-            model_view_transform.translation,
-            correct_model_view_transform.isometry.translation.vector
-        );
-        assert_abs_diff_eq!(
-            model_view_transform.rotation,
-            correct_model_view_transform.isometry.rotation
-        );
-        assert_abs_diff_eq!(
-            model_view_transform.scaling,
-            correct_model_view_transform.scaling()
-        );
     }
 }

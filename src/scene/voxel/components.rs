@@ -3,7 +3,7 @@
 use crate::{
     components::ComponentRegistry,
     geometry::VoxelType,
-    scene::{GroupNodeID, ModelInstanceClusterNodeID, VoxelTreeID},
+    scene::{GroupNodeID, VoxelTreeID, VoxelTreeNodeID},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -14,8 +14,8 @@ use num_traits::{FromPrimitive, ToPrimitive};
 /// entities comprised of identical voxels.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelInstanceClusterComp`] for the entity. It is therefore not kept after
-/// entity creation.
+/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelTypeComp {
@@ -27,8 +27,8 @@ pub struct VoxelTypeComp {
 /// entities comprised of voxels in a box configuration.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelInstanceClusterComp`] for the entity. It is therefore not kept after
-/// entity creation.
+/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelBoxComp {
@@ -44,8 +44,8 @@ pub struct VoxelBoxComp {
 /// entities comprised of voxels in a spherical configuration.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelInstanceClusterComp`] for the entity. It is therefore not kept after
-/// entity creation.
+/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelSphereComp {
@@ -58,8 +58,8 @@ pub struct VoxelSphereComp {
 /// [`VoxelTree`](crate::geometry::VoxelTree).
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelInstanceClusterComp`] for the entity. It is therefore not kept after
-/// entity creation.
+/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelTreeComp {
@@ -68,18 +68,18 @@ pub struct VoxelTreeComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities representing a
-/// cluster of multiple voxel model instances.
+/// [`VoxelTreeNodeID`] in the [`SceneGraph`](crate::scene::SceneGraph).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct VoxelInstanceClusterComp {
+pub struct VoxelTreeNodeComp {
     /// The group node in the [`SceneGraph`](crate::scene::SceneGraph) holding
-    /// the transform to the parent space of the cluster.
+    /// the transform to the parent space of the tree.
     pub group_node_id: GroupNodeID,
-    /// The model instance cluster node in the
-    /// [`SceneGraph`](crate::scene::SceneGraph) holding the transforms locating
-    /// each voxel instance to render in the cluster's reference frame.
-    pub model_instance_cluster_node_id: ModelInstanceClusterNodeID,
-    /// The ID of cluster's [`VoxelTree`](crate::geometry::VoxelTree).
+    /// The voxel tree node in the [`SceneGraph`](crate::scene::SceneGraph)
+    /// holding the transforms locating each voxel instance to render in the
+    /// tree's reference frame.
+    pub voxel_tree_node_id: VoxelTreeNodeID,
+    /// The ID of the [`VoxelTree`](crate::geometry::VoxelTree).
     pub voxel_tree_id: VoxelTreeID,
     _pad: [u8; 4],
 }
@@ -128,15 +128,15 @@ impl VoxelSphereComp {
     }
 }
 
-impl VoxelInstanceClusterComp {
+impl VoxelTreeNodeComp {
     pub fn new(
         voxel_tree_id: VoxelTreeID,
         group_node_id: GroupNodeID,
-        model_instance_cluster_node_id: ModelInstanceClusterNodeID,
+        voxel_tree_node_id: VoxelTreeNodeID,
     ) -> Self {
         Self {
             group_node_id,
-            model_instance_cluster_node_id,
+            voxel_tree_node_id,
             voxel_tree_id,
             _pad: [0; 4],
         }
@@ -149,5 +149,5 @@ pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()>
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
     register_setup_component!(registry, VoxelTreeComp)?;
-    register_component!(registry, VoxelInstanceClusterComp)
+    register_component!(registry, VoxelTreeNodeComp)
 }

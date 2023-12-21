@@ -7,14 +7,17 @@ mod generation;
 pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
 
 use crate::{
-    geometry::{ClusterInstanceTransform, Sphere},
+    geometry::{InstanceModelViewTransform, Sphere},
     num::Float,
+    rendering::fre,
 };
+use approx::AbsDiffEq;
 use impact_utils::KeyIndexMapper;
-use nalgebra::{vector, Vector3};
+use nalgebra::{vector, Similarity3, Vector3};
 use nohash_hasher::BuildNoHashHasher;
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
+use simba::scalar::{SubsetOf, SupersetOf};
 use std::iter;
 
 /// A type identifier that determines all the properties of a voxel.
@@ -48,6 +51,14 @@ pub struct VoxelTree<F: Float> {
     root_node_id: VoxelTreeNodeID,
     internal_nodes: VoxelTreeInternalNodeStorage,
     external_nodes: VoxelTreeExternalNodeStorage,
+}
+
+/// A transform from the space of an voxel in a voxel tree to the space of the
+/// whole tree.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VoxelTransform<F: Float> {
+    translation: Vector3<F>,
+    scaling: F,
 }
 
 /// Represents a type of node in a voxel tree.
@@ -269,12 +280,26 @@ impl<F: Float> VoxelTree<F> {
     }
 
     /// Computes the transform of each (potentially merged) voxel in the tree.
-    pub fn compute_voxel_transforms(&self) -> Vec<ClusterInstanceTransform<F>> {
+    pub fn compute_voxel_transforms(&self) -> Vec<VoxelTransform<F>> {
         let mut transforms = Vec::new();
         self.root_node_id.add_voxel_transforms(
             self,
             &mut transforms,
             VoxelTreeIndices::at_root(self.tree_height),
+            &|_| true,
+        );
+        transforms
+    }
+
+    /// Computes the transform of each (potentially merged) voxel in the tree
+    /// that has at least one face not fully obscured by adjacent voxels.
+    pub fn compute_exposed_voxel_transforms(&self) -> Vec<VoxelTransform<F>> {
+        let mut transforms = Vec::new();
+        self.root_node_id.add_voxel_transforms(
+            self,
+            &mut transforms,
+            VoxelTreeIndices::at_root(self.tree_height),
+            &|node_id| !self.external_node(node_id).has_only_fully_obscured_faces(),
         );
         transforms
     }
@@ -753,6 +778,87 @@ impl<F: Float> VoxelTree<F> {
     }
 }
 
+impl<F: Float> VoxelTransform<F> {
+    /// Creates a new voxel transform with the given translation and scaling.
+    pub fn new(translation: Vector3<F>, scaling: F) -> Self {
+        Self {
+            translation,
+            scaling,
+        }
+    }
+
+    /// Creates a new identity voxel transform.
+    pub fn identity() -> Self {
+        Self {
+            translation: Vector3::zeros(),
+            scaling: F::ONE,
+        }
+    }
+
+    /// Returns a reference to the translational part of the voxel transform.
+    pub fn translation(&self) -> &Vector3<F> {
+        &self.translation
+    }
+
+    /// Returns the scaling part of the voxel transform.
+    pub fn scaling(&self) -> F {
+        self.scaling
+    }
+
+    /// Applies the given transform from the space of the voxel tree to camera
+    /// space, yielding the model view transform of the voxel.
+    pub fn transform_into_model_view_transform(
+        &self,
+        transform_from_tree_to_camera_space: &Similarity3<F>,
+    ) -> InstanceModelViewTransform
+    where
+        F: SubsetOf<fre>,
+    {
+        let scaling_from_tree_to_camera_space = transform_from_tree_to_camera_space.scaling();
+        let rotation_from_tree_to_camera_space =
+            transform_from_tree_to_camera_space.isometry.rotation;
+        let translation_from_tree_to_camera_space = transform_from_tree_to_camera_space
+            .isometry
+            .translation
+            .vector;
+
+        let new_scaling = scaling_from_tree_to_camera_space * self.scaling;
+
+        let new_translation = translation_from_tree_to_camera_space
+            + rotation_from_tree_to_camera_space.transform_vector(&self.translation)
+                * scaling_from_tree_to_camera_space;
+
+        InstanceModelViewTransform {
+            rotation: rotation_from_tree_to_camera_space.cast::<fre>(),
+            translation: new_translation.cast::<fre>(),
+            scaling: fre::from_subset(&new_scaling),
+        }
+    }
+}
+
+impl<F: Float> Default for VoxelTransform<F> {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
+impl<F> AbsDiffEq for VoxelTransform<F>
+where
+    F: Float + AbsDiffEq,
+    <F as AbsDiffEq>::Epsilon: Clone,
+{
+    type Epsilon = <F as AbsDiffEq>::Epsilon;
+
+    fn default_epsilon() -> Self::Epsilon {
+        <F as AbsDiffEq>::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        Vector3::abs_diff_eq(&self.translation, &other.translation, epsilon)
+            && F::abs_diff_eq(&self.scaling, &other.scaling, epsilon)
+    }
+}
+
 impl VoxelTreeHeight {
     fn new(tree_height: u32) -> Self {
         Self { tree_height }
@@ -887,18 +993,18 @@ impl VoxelTreeNodeID {
     fn add_voxel_transforms<F: Float>(
         &self,
         tree: &VoxelTree<F>,
-        transforms: &mut Vec<ClusterInstanceTransform<F>>,
+        transforms: &mut Vec<VoxelTransform<F>>,
         current_indices: VoxelTreeIndices,
+        criterion: &impl Fn(VoxelTreeExternalNodeID) -> bool,
     ) {
         match self {
-            Self::External(_) => {
-                let (voxel_scale, voxel_center_offset) =
-                    current_indices.voxel_scale_and_center_offset(tree.voxel_extent());
+            Self::External(external_id) => {
+                if criterion(*external_id) {
+                    let (voxel_scale, voxel_center_offset) =
+                        current_indices.voxel_scale_and_center_offset(tree.voxel_extent());
 
-                transforms.push(ClusterInstanceTransform::new(
-                    voxel_center_offset,
-                    voxel_scale,
-                ));
+                    transforms.push(VoxelTransform::new(voxel_center_offset, voxel_scale));
+                }
             }
             Self::Internal(internal_id) => {
                 let child_ids = &tree.internal_node(*internal_id).child_ids;
@@ -907,7 +1013,7 @@ impl VoxelTreeNodeID {
                     child_ids.iter().zip(current_indices.for_next_depth())
                 {
                     if let Some(child_id) = child_id.as_ref() {
-                        child_id.add_voxel_transforms(tree, transforms, next_indices);
+                        child_id.add_voxel_transforms(tree, transforms, next_indices, criterion);
                     }
                 }
             }
@@ -1428,7 +1534,7 @@ mod test {
     use super::*;
     use crate::geometry::AxisAlignedBox;
     use approx::{abs_diff_eq, assert_abs_diff_eq};
-    use nalgebra::{point, Point3};
+    use nalgebra::{point, Point3, UnitQuaternion};
     use std::{collections::HashMap, sync::Mutex};
 
     struct EmptyVoxelGenerator {
@@ -2211,5 +2317,40 @@ mod test {
         assert!(node.face_is_fully_obscured(VoxelFace::UpperY));
         assert!(node.face_is_fully_obscured(VoxelFace::LowerZ));
         assert!(node.face_is_fully_exposed(VoxelFace::UpperZ));
+    }
+
+    #[test]
+    fn should_correctly_transform_voxel_transform() {
+        let translation = vector![0.1, -0.2, 0.3];
+        let scaling = 0.8;
+
+        let voxel_transform = VoxelTransform::new(translation, scaling);
+
+        let voxel_similarity =
+            Similarity3::from_parts(translation.into(), UnitQuaternion::identity(), scaling);
+
+        let transform_from_tree_to_camera_space = Similarity3::from_parts(
+            vector![-1.2, 9.7, 0.4].into(),
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.1),
+            2.7,
+        );
+
+        let model_view_transform = voxel_transform
+            .transform_into_model_view_transform(&transform_from_tree_to_camera_space);
+
+        let correct_model_view_transform = transform_from_tree_to_camera_space * voxel_similarity;
+
+        assert_abs_diff_eq!(
+            model_view_transform.translation,
+            correct_model_view_transform.isometry.translation.vector
+        );
+        assert_abs_diff_eq!(
+            model_view_transform.rotation,
+            correct_model_view_transform.isometry.rotation
+        );
+        assert_abs_diff_eq!(
+            model_view_transform.scaling,
+            correct_model_view_transform.scaling()
+        );
     }
 }
