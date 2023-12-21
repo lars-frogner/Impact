@@ -10,7 +10,6 @@ use crate::{
     geometry::{ClusterInstanceTransform, Sphere},
     num::Float,
 };
-use bitflags::bitflags;
 use impact_utils::KeyIndexMapper;
 use nalgebra::{vector, Vector3};
 use nohash_hasher::BuildNoHashHasher;
@@ -118,20 +117,19 @@ struct VoxelTreeExternalNode {
     voxel_indices: VoxelIndices,
     voxel_scale: u32,
     adjacent_voxels: Vec<(VoxelIndices, VoxelTreeExternalNodeID)>,
-    fully_exposed_faces: VoxelFaces,
+    exposed_face_areas: [u32; 6],
 }
 
-bitflags! {
-    /// Bitflag encoding a set of voxel faces.
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub struct VoxelFaces: u8 {
-        const LOWER_X = 0b00000001;
-        const UPPER_X = 0b00000010;
-        const LOWER_Y = 0b00000100;
-        const UPPER_Y = 0b00001000;
-        const LOWER_Z = 0b00010000;
-        const UPPER_Z = 0b00100000;
-    }
+/// One of the six faces of a voxel.
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum VoxelFace {
+    LowerX = 0,
+    UpperX = 1,
+    LowerY = 2,
+    UpperY = 3,
+    LowerZ = 4,
+    UpperZ = 5,
 }
 
 /// Helper type used for constructing a voxel tree. Like [`VoxelTreeNodeID`],
@@ -408,7 +406,7 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
                 node_idx,
                 voxel_indices,
-                VoxelFaces::LOWER_X,
+                VoxelFace::LowerX,
                 VoxelIndices::new(voxel_indices.i - 1, voxel_indices.j, voxel_indices.k),
             );
         }
@@ -416,7 +414,7 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
                 node_idx,
                 voxel_indices,
-                VoxelFaces::UPPER_X,
+                VoxelFace::UpperX,
                 VoxelIndices::new(voxel_indices.i + 1, voxel_indices.j, voxel_indices.k),
             );
         }
@@ -424,7 +422,7 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
                 node_idx,
                 voxel_indices,
-                VoxelFaces::LOWER_Y,
+                VoxelFace::LowerY,
                 VoxelIndices::new(voxel_indices.i, voxel_indices.j - 1, voxel_indices.k),
             );
         }
@@ -432,7 +430,7 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
                 node_idx,
                 voxel_indices,
-                VoxelFaces::UPPER_Y,
+                VoxelFace::UpperY,
                 VoxelIndices::new(voxel_indices.i, voxel_indices.j + 1, voxel_indices.k),
             );
         }
@@ -440,7 +438,7 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
                 node_idx,
                 voxel_indices,
-                VoxelFaces::LOWER_Z,
+                VoxelFace::LowerZ,
                 VoxelIndices::new(voxel_indices.i, voxel_indices.j, voxel_indices.k - 1),
             );
         }
@@ -448,7 +446,7 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxel_for_unmerged_voxel_on_one_side(
                 node_idx,
                 voxel_indices,
-                VoxelFaces::UPPER_Z,
+                VoxelFace::UpperZ,
                 VoxelIndices::new(voxel_indices.i, voxel_indices.j, voxel_indices.k + 1),
             );
         }
@@ -462,15 +460,15 @@ impl<F: Float> VoxelTree<F> {
         &mut self,
         node_idx: usize,
         voxel_indices: VoxelIndices,
-        face: VoxelFaces,
+        face: VoxelFace,
         adjacent_indices: VoxelIndices,
     ) {
         // We only need to search for the node at the adjacent indices if we do
         // not already have a neighbor registered at this side
-        if self
+        if !self
             .external_nodes
             .node_at_idx(node_idx)
-            .face_is_fully_exposed(face)
+            .face_is_fully_obscured(face)
         {
             if let Some(adjacent_node_idx) =
                 self.find_external_node_idx_at_indices(adjacent_indices)
@@ -487,7 +485,7 @@ impl<F: Float> VoxelTree<F> {
                     VoxelTreeExternalNodeID::from_number(node_idx),
                 ));
 
-                adjacent_node.mark_face_not_fully_exposed(face.opposite_face());
+                adjacent_node.add_obscured_face_area(face.opposite_face(), 1);
 
                 let node = self.external_nodes.node_at_idx_mut(node_idx);
 
@@ -497,7 +495,7 @@ impl<F: Float> VoxelTree<F> {
                     VoxelTreeExternalNodeID::from_number(adjacent_node_idx),
                 ));
 
-                node.mark_face_not_fully_exposed(face);
+                node.add_obscured_face_area(face, 1);
             }
         }
     }
@@ -514,16 +512,18 @@ impl<F: Float> VoxelTree<F> {
     ) {
         let grid_size = self.grid_size();
 
+        let face_area = voxel_scale.pow(2);
         let voxel_scale = voxel_scale as usize;
 
-        let mut covered = vec![false; voxel_scale.pow(2)];
+        let mut covered = vec![false; face_area as usize];
 
         if voxel_indices.i > 0 {
             self.update_adjacent_voxels_for_merged_voxel_on_one_side(
                 node_idx,
                 voxel_scale,
+                face_area,
                 voxel_indices,
-                VoxelFaces::LOWER_X,
+                VoxelFace::LowerX,
                 &mut covered,
                 |delta_j, delta_k| {
                     VoxelIndices::new(
@@ -539,8 +539,9 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxels_for_merged_voxel_on_one_side(
                 node_idx,
                 voxel_scale,
+                face_area,
                 voxel_indices,
-                VoxelFaces::UPPER_X,
+                VoxelFace::UpperX,
                 &mut covered,
                 |delta_j, delta_k| {
                     VoxelIndices::new(
@@ -556,8 +557,9 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxels_for_merged_voxel_on_one_side(
                 node_idx,
                 voxel_scale,
+                face_area,
                 voxel_indices,
-                VoxelFaces::LOWER_Y,
+                VoxelFace::LowerY,
                 &mut covered,
                 |delta_i, delta_k| {
                     VoxelIndices::new(
@@ -573,8 +575,9 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxels_for_merged_voxel_on_one_side(
                 node_idx,
                 voxel_scale,
+                face_area,
                 voxel_indices,
-                VoxelFaces::UPPER_Y,
+                VoxelFace::UpperY,
                 &mut covered,
                 |delta_i, delta_k| {
                     VoxelIndices::new(
@@ -590,8 +593,9 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxels_for_merged_voxel_on_one_side(
                 node_idx,
                 voxel_scale,
+                face_area,
                 voxel_indices,
-                VoxelFaces::LOWER_Z,
+                VoxelFace::LowerZ,
                 &mut covered,
                 |delta_i, delta_j| {
                     VoxelIndices::new(
@@ -607,8 +611,9 @@ impl<F: Float> VoxelTree<F> {
             self.update_adjacent_voxels_for_merged_voxel_on_one_side(
                 node_idx,
                 voxel_scale,
+                face_area,
                 voxel_indices,
-                VoxelFaces::UPPER_Z,
+                VoxelFace::UpperZ,
                 &mut covered,
                 |delta_i, delta_j| {
                     VoxelIndices::new(
@@ -629,8 +634,9 @@ impl<F: Float> VoxelTree<F> {
         &mut self,
         node_idx: usize,
         voxel_scale: usize,
+        face_area: u32,
         voxel_indices: VoxelIndices,
-        face: VoxelFaces,
+        face: VoxelFace,
         covered: &mut [bool],
         get_adjacent_indices: impl Fn(usize, usize) -> VoxelIndices,
     ) {
@@ -677,6 +683,12 @@ impl<F: Float> VoxelTree<F> {
                             // we searched at
                             let adjacent_voxel_indices = adjacent_node.voxel_indices;
 
+                            // Either this voxel will completely obscure the
+                            // adjacent voxel or vice versa, so we should add
+                            // the minimum of the face areas of the two voxels
+                            // as the obscured area for both
+                            let obscured_area = u32::min(face_area, adjacent_node.face_area());
+
                             // Add this voxel as an adjacent voxel to the
                             // adjacent voxel
                             adjacent_node.adjacent_voxels.push((
@@ -684,7 +696,8 @@ impl<F: Float> VoxelTree<F> {
                                 VoxelTreeExternalNodeID::from_number(node_idx),
                             ));
 
-                            adjacent_node.mark_face_not_fully_exposed(face.opposite_face());
+                            adjacent_node
+                                .add_obscured_face_area(face.opposite_face(), obscured_area);
 
                             let node = self.external_nodes.node_at_idx_mut(node_idx);
 
@@ -695,7 +708,7 @@ impl<F: Float> VoxelTree<F> {
                                 VoxelTreeExternalNodeID::from_number(adjacent_node_idx),
                             ));
 
-                            node.mark_face_not_fully_exposed(face);
+                            node.add_obscured_face_area(face, obscured_area);
                         }
 
                         Some(adjacent_voxel_scale)
@@ -1041,14 +1054,60 @@ impl VoxelTreeExternalNode {
             voxel_indices,
             voxel_scale,
             adjacent_voxels: Vec::new(),
-            fully_exposed_faces: VoxelFaces::all(),
+            exposed_face_areas: [voxel_scale.pow(2); 6],
         }
     }
 
-    fn face_is_fully_exposed(&self, face: VoxelFaces) -> bool {
-        self.fully_exposed_faces.contains(face)
+    /// Returns the number of unmerged voxels that would cover one face of this
+    /// voxel.
+    fn face_area(&self) -> u32 {
+        self.voxel_scale.pow(2)
     }
 
+    /// Returns the number of unmerged voxels that are exposed at the given face
+    /// of this voxel.
+    fn exposed_face_area(&self, face: VoxelFace) -> u32 {
+        self.exposed_face_areas[face as usize]
+    }
+
+    /// Whether the given face of this voxel is completely obscured by adjacent
+    /// voxels.
+    fn face_is_fully_obscured(&self, face: VoxelFace) -> bool {
+        self.exposed_face_area(face) == 0
+    }
+
+    /// Whether the given face of this voxel is completely exposed.
+    fn face_is_fully_exposed(&self, face: VoxelFace) -> bool {
+        self.exposed_face_area(face) == self.face_area()
+    }
+
+    /// Whether any of the faces of this voxel is completely obscured by
+    /// adjacent voxels.
+    fn has_fully_obscured_face(&self) -> bool {
+        self.exposed_face_areas
+            .iter()
+            .any(|exposed_area| *exposed_area == 0)
+    }
+
+    /// Whether all the faces of this voxel are completely obscured by adjacent
+    /// voxels.
+    fn has_only_fully_obscured_faces(&self) -> bool {
+        self.exposed_face_areas
+            .iter()
+            .all(|exposed_area| *exposed_area == 0)
+    }
+
+    /// Whether all the faces of this voxel are completely exposed.
+    fn has_only_fully_exposed_faces(&self) -> bool {
+        let face_area = self.face_area();
+        self.exposed_face_areas
+            .iter()
+            .all(|exposed_area| *exposed_area == face_area)
+    }
+
+    /// Returns the ID of the external node for the adjacent voxel with the
+    /// given indices, or [`None`] if the voxel with the given indices is not
+    /// adjacent to this one.
     fn adjacent_voxel(&self, voxel_indices: VoxelIndices) -> Option<VoxelTreeExternalNodeID> {
         self.adjacent_voxels
             .iter()
@@ -1056,14 +1115,18 @@ impl VoxelTreeExternalNode {
             .map(|(_, adjacent_node_id)| *adjacent_node_id)
     }
 
+    /// Whether the voxel with the given indices is adjacent to this voxel.
     fn is_adjacent_to_voxel(&self, voxel_indices: VoxelIndices) -> bool {
         self.adjacent_voxels
             .iter()
             .any(|(adjacent_voxel_indices, _)| adjacent_voxel_indices == &voxel_indices)
     }
 
-    fn mark_face_not_fully_exposed(&mut self, face: VoxelFaces) {
-        self.fully_exposed_faces.remove(face);
+    /// Reduces the exposed area of the given face of this voxel by the given
+    /// area.
+    fn add_obscured_face_area(&mut self, face: VoxelFace, obscured_area: u32) {
+        let exposed_area = &mut self.exposed_face_areas[face as usize];
+        *exposed_area = exposed_area.checked_sub(obscured_area).unwrap();
     }
 }
 
@@ -1071,16 +1134,15 @@ impl VoxelTreeNode for VoxelTreeExternalNode {
     type ID = VoxelTreeExternalNodeID;
 }
 
-impl VoxelFaces {
+impl VoxelFace {
     fn opposite_face(&self) -> Self {
         match *self {
-            Self::LOWER_X => Self::UPPER_X,
-            Self::UPPER_X => Self::LOWER_X,
-            Self::LOWER_Y => Self::UPPER_Y,
-            Self::UPPER_Y => Self::LOWER_Y,
-            Self::LOWER_Z => Self::UPPER_Z,
-            Self::UPPER_Z => Self::LOWER_Z,
-            _ => panic!("Invalid bitflag for single voxel face"),
+            Self::LowerX => Self::UpperX,
+            Self::UpperX => Self::LowerX,
+            Self::LowerY => Self::UpperY,
+            Self::UpperY => Self::LowerY,
+            Self::LowerZ => Self::UpperZ,
+            Self::UpperZ => Self::LowerZ,
         }
     }
 }
@@ -1962,7 +2024,7 @@ mod test {
         tree.update_adjacent_voxels_for_all_external_nodes();
         let node = tree.find_external_node_at_indices(0, 0, 0).unwrap();
         assert!(node.adjacent_voxels.is_empty());
-        assert!(node.fully_exposed_faces.is_all());
+        assert!(node.has_only_fully_exposed_faces());
     }
 
     #[test]
@@ -1971,7 +2033,7 @@ mod test {
         tree.update_adjacent_voxels_for_all_external_nodes();
         let node = tree.find_external_node_at_indices(2, 2, 2).unwrap();
         assert!(node.adjacent_voxels.is_empty());
-        assert!(node.fully_exposed_faces.is_all());
+        assert!(node.has_only_fully_exposed_faces());
     }
 
     #[test]
@@ -1991,10 +2053,12 @@ mod test {
         assert_eq!(node.adjacent_voxels.len(), 2);
         check_neighbor_present(0, 1, 0);
         check_neighbor_present(0, 0, 1);
-        assert!(
-            node.fully_exposed_faces
-                == VoxelFaces::all() - VoxelFaces::LOWER_Y - VoxelFaces::LOWER_Z
-        );
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerX));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperX));
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerY));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperY));
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerZ));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperZ));
     }
 
     #[test]
@@ -2017,7 +2081,12 @@ mod test {
         check_neighbor_present(2, 2, 1);
         check_neighbor_present(2, 1, 0);
         check_neighbor_present(2, 1, 2);
-        assert!(node.fully_exposed_faces == VoxelFaces::UPPER_X);
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerX));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperX));
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerY));
+        assert!(node.face_is_fully_obscured(VoxelFace::UpperY));
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerZ));
+        assert!(node.face_is_fully_obscured(VoxelFace::UpperZ));
     }
 
     #[test]
@@ -2047,10 +2116,12 @@ mod test {
         check_neighbor_present(0, 1, 2);
         check_neighbor_present(1, 0, 2);
         check_neighbor_present(1, 1, 2);
-        assert!(
-            node.fully_exposed_faces
-                == VoxelFaces::LOWER_X | VoxelFaces::LOWER_Y | VoxelFaces::LOWER_Z
-        );
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerX));
+        assert!(node.face_is_fully_obscured(VoxelFace::UpperX));
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerY));
+        assert!(node.face_is_fully_obscured(VoxelFace::UpperY));
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerZ));
+        assert!(node.face_is_fully_obscured(VoxelFace::UpperZ));
     }
 
     #[test]
@@ -2109,17 +2180,24 @@ mod test {
         check_neighbor_present(node, 4, 1, 2);
         check_neighbor_present(node, 4, 2, 2);
         check_neighbor_present(node, 4, 3, 0);
-        assert!(node.fully_exposed_faces == VoxelFaces::all() - VoxelFaces::UPPER_X);
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerX));
+        assert_eq!(node.exposed_face_area(VoxelFace::UpperX), 5);
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerY));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperY));
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerZ));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperZ));
 
         let node = tree.find_external_node_at_indices(4, 2, 2).unwrap();
 
         assert_eq!(node.adjacent_voxels.len(), 2);
         check_neighbor_present(node, 0, 0, 0);
         check_neighbor_present(node, 4, 1, 2);
-        assert!(
-            node.fully_exposed_faces
-                == VoxelFaces::all() - VoxelFaces::LOWER_X - VoxelFaces::LOWER_Y
-        );
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerX));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperX));
+        assert_eq!(node.exposed_face_area(VoxelFace::LowerY), 3);
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperY));
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerZ));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperZ));
 
         let node = tree.find_external_node_at_indices(4, 1, 2).unwrap();
 
@@ -2127,12 +2205,11 @@ mod test {
         check_neighbor_present(node, 0, 0, 0);
         check_neighbor_present(node, 4, 0, 0);
         check_neighbor_present(node, 4, 2, 2);
-        assert!(
-            node.fully_exposed_faces
-                == VoxelFaces::all()
-                    - VoxelFaces::LOWER_X
-                    - VoxelFaces::UPPER_Y
-                    - VoxelFaces::LOWER_Z
-        );
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerX));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperX));
+        assert!(node.face_is_fully_exposed(VoxelFace::LowerY));
+        assert!(node.face_is_fully_obscured(VoxelFace::UpperY));
+        assert!(node.face_is_fully_obscured(VoxelFace::LowerZ));
+        assert!(node.face_is_fully_exposed(VoxelFace::UpperZ));
     }
 }
