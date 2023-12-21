@@ -3,8 +3,8 @@
 mod components;
 
 pub use components::{
-    register_voxel_components, VoxelBoxComp, VoxelInstanceClusterComp, VoxelSphereComp,
-    VoxelTreeComp, VoxelTypeComp,
+    register_voxel_components, VoxelBoxComp, VoxelSphereComp, VoxelTreeComp, VoxelTreeNodeComp,
+    VoxelTypeComp,
 };
 
 use crate::{

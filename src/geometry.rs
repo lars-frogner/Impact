@@ -22,10 +22,9 @@ pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
 pub use camera::{Camera, OrthographicCamera, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use instance::{
-    ClusterInstanceTransform, DynamicInstanceFeatureBuffer, InstanceFeature,
-    InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap, InstanceFeatureID,
-    InstanceFeatureStorage, InstanceFeatureTypeID, InstanceModelLightTransform,
-    InstanceModelViewTransform,
+    DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeID,
+    InstanceFeatureBufferRangeMap, InstanceFeatureID, InstanceFeatureStorage,
+    InstanceFeatureTypeID, InstanceModelLightTransform, InstanceModelViewTransform,
 };
 pub use mesh::{
     FrontFaceSide, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor,
@@ -39,7 +38,9 @@ pub use sphere::Sphere;
 pub use texture_projection::{PlanarTextureProjection, TextureProjection};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 pub use uniform::UniformBuffer;
-pub use voxel::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelTree, VoxelType};
+pub use voxel::{
+    UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelTransform, VoxelTree, VoxelType,
+};
 
 use crate::num::Float;
 use nalgebra::Point3;

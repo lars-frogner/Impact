@@ -10,8 +10,8 @@ pub use components::{
 
 use crate::{
     geometry::{
-        ClusterInstanceTransform, CubemapFace, Frustum, InstanceFeature, InstanceFeatureID,
-        InstanceModelLightTransform, InstanceModelViewTransform, Sphere,
+        CubemapFace, Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
+        InstanceModelViewTransform, Sphere, VoxelTransform,
     },
     num::Float,
     rendering::{fre, CascadeIdx},
@@ -38,7 +38,7 @@ pub struct SceneGraph<F: Float> {
     root_node_id: GroupNodeID,
     group_nodes: NodeStorage<GroupNode<F>>,
     model_instance_nodes: NodeStorage<ModelInstanceNode<F>>,
-    model_instance_cluster_nodes: NodeStorage<ModelInstanceClusterNode<F>>,
+    voxel_tree_nodes: NodeStorage<VoxelTreeNode<F>>,
     camera_nodes: NodeStorage<CameraNode<F>>,
 }
 
@@ -73,10 +73,10 @@ pub struct GroupNodeID(GenerationalIdx);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct ModelInstanceNodeID(GenerationalIdx);
 
-/// Identifier for a [`ModelInstanceClusterNode`] in a [`SceneGraph`].
+/// Identifier for a [`VoxelTreeNode`] in a [`SceneGraph`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-pub struct ModelInstanceClusterNodeID(GenerationalIdx);
+pub struct VoxelTreeNodeID(GenerationalIdx);
 
 /// Identifier for a [`CameraNode`] in a [`SceneGraph`].
 #[repr(transparent)]
@@ -97,16 +97,16 @@ pub trait IdxToNodeID {
 }
 
 /// A [`SceneGraph`] node that has a group of other nodes as children. The
-/// children may be [`ModelInstanceNode`]s, [`ModelInstanceClusterNode`]s,
-/// [`CameraNode`]s and/or other group nodes. It holds a transform representing
-/// group's spatial relationship with its parent group.
+/// children may be [`ModelInstanceNode`]s, [`VoxelTreeNode`]s, [`CameraNode`]s
+/// and/or other group nodes. It holds a transform representing group's spatial
+/// relationship with its parent group.
 #[derive(Clone, Debug)]
 pub struct GroupNode<F: Float> {
     parent_node_id: Option<GroupNodeID>,
     group_to_parent_transform: NodeTransform<F>,
     child_group_node_ids: HashSet<GroupNodeID>,
     child_model_instance_node_ids: HashSet<ModelInstanceNodeID>,
-    child_model_instance_cluster_node_ids: HashSet<ModelInstanceClusterNodeID>,
+    child_voxel_tree_node_ids: HashSet<VoxelTreeNodeID>,
     child_camera_node_ids: HashSet<CameraNodeID>,
     bounding_sphere: Option<Sphere<F>>,
     group_to_root_transform: NodeTransform<F>,
@@ -124,20 +124,16 @@ pub struct ModelInstanceNode<F: Float> {
     feature_ids: Vec<InstanceFeatureID>,
 }
 
-/// A [`SceneGraph`] leaf node representing a cluster of model instance. It
-/// holds a list of transforms representing the spatial relationship of each
-/// instance in the cluster with their parent group, as well as a nested list of
-/// instance feature IDs, one list for each feature type. It also holds a
-/// bounding sphere for the entire cluster, defined in the parent space.
-///
-/// The usecase for this node type compared to [`ModelInstanceNode`]s is to
-/// efficiently handle a large group of instances, like a block of voxels, that
-/// should not be culled individually.
+/// A [`SceneGraph`] leaf node representing a voxel tree. It holds a list of
+/// transforms representing the spatial relationship of each voxel instance in
+/// the tree with their parent group, as well as a nested list of instance
+/// feature IDs, one list for each feature type. It also holds a bounding sphere
+/// for the entire tree, defined in the parent space.
 #[derive(Clone, Debug)]
-pub struct ModelInstanceClusterNode<F: Float> {
+pub struct VoxelTreeNode<F: Float> {
     parent_node_id: GroupNodeID,
-    cluster_bounding_sphere: Option<Sphere<F>>,
-    model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
+    voxel_tree_bounding_sphere: Option<Sphere<F>>,
+    voxel_to_parent_transforms: Vec<VoxelTransform<F>>,
     model_id: ModelID,
     feature_ids: Vec<Vec<InstanceFeatureID>>,
 }
@@ -156,7 +152,7 @@ impl<F: Float> SceneGraph<F> {
     pub fn new() -> Self {
         let mut group_nodes = NodeStorage::new();
         let model_instance_nodes = NodeStorage::new();
-        let model_instance_cluster_nodes = NodeStorage::new();
+        let voxel_tree_nodes = NodeStorage::new();
         let camera_nodes = NodeStorage::new();
 
         let root_node_id = group_nodes.add_node(GroupNode::root(Similarity3::identity()));
@@ -165,7 +161,7 @@ impl<F: Float> SceneGraph<F> {
             root_node_id,
             group_nodes,
             model_instance_nodes,
-            model_instance_cluster_nodes,
+            voxel_tree_nodes,
             camera_nodes,
         }
     }
@@ -186,10 +182,10 @@ impl<F: Float> SceneGraph<F> {
         &self.model_instance_nodes
     }
 
-    /// Returns a reference to the storage of model instance cluter nodes in the
-    /// scene graph.
-    pub fn model_instance_cluster_nodes(&self) -> &NodeStorage<ModelInstanceClusterNode<F>> {
-        &self.model_instance_cluster_nodes
+    /// Returns a reference to the storage of voxel tree nodes in the scene
+    /// graph.
+    pub fn voxel_tree_nodes(&self) -> &NodeStorage<VoxelTreeNode<F>> {
+        &self.voxel_tree_nodes
     }
 
     /// Returns a reference to the storage of camera nodes in the scene graph.
@@ -197,17 +193,15 @@ impl<F: Float> SceneGraph<F> {
         &self.camera_nodes
     }
 
-    /// Returns a mutable reference to the model instance cluster node with the
-    /// given ID.
+    /// Returns a mutable reference to the voxel tree node with the given ID.
     ///
     /// # Panics
-    /// If no model instance cluster node with the given ID exists.
-    pub fn model_instance_cluster_node_mut(
+    /// If no voxel tree node with the given ID exists.
+    pub fn voxel_tree_node_mut(
         &mut self,
-        model_instance_cluster_node_id: ModelInstanceClusterNodeID,
-    ) -> &mut ModelInstanceClusterNode<F> {
-        self.model_instance_cluster_nodes
-            .node_mut(model_instance_cluster_node_id)
+        voxel_tree_node_id: VoxelTreeNodeID,
+    ) -> &mut VoxelTreeNode<F> {
+        self.voxel_tree_nodes.node_mut(voxel_tree_node_id)
     }
 
     /// Creates a new empty [`GroupNode`] with the given parent and
@@ -278,18 +272,18 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node_id
     }
 
-    /// Creates a new [`ModelInstanceClusterNode`] for a collection of instances
-    /// of the model with the given ID and feature IDs, using the given bounding
-    /// sphere, defined in the cluster's reference frame, for frustum culling.
-    /// The node is included in the scene graph with the given collection of
-    /// transforms, one for each instance, relative to the the given parent
-    /// node.
+    /// Creates a new [`VoxelTreeNode`] for a collection of instances of the
+    /// voxel model with the given ID and feature IDs, using the given bounding
+    /// sphere, defined in the tree's reference frame, for frustum culling. The
+    /// node is included in the scene graph with the given collection of
+    /// transforms, one for each voxel instance, relative to the the given
+    /// parent node.
     ///
-    /// If no bounding sphere is provided, the collection of instances will not
-    /// be frustum culled.
+    /// If no bounding sphere is provided, the collection of voxel instances
+    /// will not be frustum culled.
     ///
     /// # Returns
-    /// The ID of the created model instance cluster node.
+    /// The ID of the created voxel tree node.
     ///
     /// # Panics
     /// - If the specified parent group node does not exist.
@@ -297,39 +291,37 @@ impl<F: Float> SceneGraph<F> {
     ///   node.
     /// - If the number of elements in each feature ID [`Vec`] is not equal to
     ///   one or to the given number of transforms.
-    pub fn create_model_instance_cluster_node(
+    pub fn create_voxel_tree_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
+        voxel_to_parent_transforms: Vec<VoxelTransform<F>>,
         model_id: ModelID,
-        cluster_bounding_sphere: Option<Sphere<F>>,
+        voxel_tree_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<Vec<InstanceFeatureID>>,
-    ) -> ModelInstanceClusterNodeID {
+    ) -> VoxelTreeNodeID {
         // Since we don't guarantee that any other parent node than the root is
         // never culled, allowing a non-root node to have an uncullable child
         // could lead to unexpected behavior, so we disallow it
         assert!(
-            cluster_bounding_sphere.is_some() || parent_node_id == self.root_node_id(),
-            "Tried to create model instance cluster node without bounding sphere and with a non-root parent"
+            voxel_tree_bounding_sphere.is_some() || parent_node_id == self.root_node_id(),
+            "Tried to create voxel tree node without bounding sphere and with a non-root parent"
         );
 
-        let model_instance_cluster_node = ModelInstanceClusterNode::new(
+        let voxel_tree_node = VoxelTreeNode::new(
             parent_node_id,
-            cluster_bounding_sphere,
-            model_to_parent_transforms,
+            voxel_tree_bounding_sphere,
+            voxel_to_parent_transforms,
             model_id,
             feature_ids,
         );
 
-        let model_instance_cluster_node_id = self
-            .model_instance_cluster_nodes
-            .add_node(model_instance_cluster_node);
+        let voxel_tree_node_id = self.voxel_tree_nodes.add_node(voxel_tree_node);
 
         self.group_nodes
             .node_mut(parent_node_id)
-            .add_child_model_instance_cluster_node(model_instance_cluster_node_id);
+            .add_child_voxel_tree_node(voxel_tree_node_id);
 
-        model_instance_cluster_node_id
+        voxel_tree_node_id
     }
 
     /// Creates a new [`CameraNode`] with the given transform relative to the
@@ -367,7 +359,7 @@ impl<F: Float> SceneGraph<F> {
         let (
             child_group_node_ids,
             child_model_instance_node_ids,
-            child_model_instance_cluster_node_ids,
+            child_voxel_tree_node_ids,
             child_camera_node_ids,
         ) = group_node.obtain_child_node_ids();
 
@@ -377,8 +369,8 @@ impl<F: Float> SceneGraph<F> {
         for child_model_instance_node_id in child_model_instance_node_ids {
             self.remove_model_instance_node(child_model_instance_node_id);
         }
-        for child_model_instance_cluster_node_id in child_model_instance_cluster_node_ids {
-            self.remove_model_instance_cluster_node(child_model_instance_cluster_node_id);
+        for child_voxel_tree_node_id in child_voxel_tree_node_ids {
+            self.remove_voxel_tree_node(child_voxel_tree_node_id);
         }
         for child_camera_node_id in child_camera_node_ids {
             self.remove_camera_node(child_camera_node_id);
@@ -410,25 +402,18 @@ impl<F: Float> SceneGraph<F> {
         model_id
     }
 
-    /// Removes the [`ModelInstanceClusterNode`] with the given ID from the
-    /// scene graph.
+    /// Removes the [`VoxelTreeNode`] with the given ID from the scene graph.
     ///
     /// # Panics
-    /// If the specified model instance cluster node does not exist.
-    pub fn remove_model_instance_cluster_node(
-        &mut self,
-        model_instance_cluster_node_id: ModelInstanceClusterNodeID,
-    ) -> ModelID {
-        let model_instance_cluster_node = self
-            .model_instance_cluster_nodes
-            .node(model_instance_cluster_node_id);
-        let model_id = model_instance_cluster_node.model_id();
-        let parent_node_id = model_instance_cluster_node.parent_node_id();
-        self.model_instance_cluster_nodes
-            .remove_node(model_instance_cluster_node_id);
+    /// If the specified voxel tree node does not exist.
+    pub fn remove_voxel_tree_node(&mut self, voxel_tree_node_id: VoxelTreeNodeID) -> ModelID {
+        let voxel_tree_node = self.voxel_tree_nodes.node(voxel_tree_node_id);
+        let model_id = voxel_tree_node.model_id();
+        let parent_node_id = voxel_tree_node.parent_node_id();
+        self.voxel_tree_nodes.remove_node(voxel_tree_node_id);
         self.group_nodes
             .node_mut(parent_node_id)
-            .remove_child_model_instance_cluster_node(model_instance_cluster_node_id);
+            .remove_child_voxel_tree_node(voxel_tree_node_id);
         model_id
     }
 
@@ -578,29 +563,28 @@ impl<F: Float> SceneGraph<F> {
             }
         }
 
-        for &model_instance_cluster_node_id in root_node.child_model_instance_cluster_node_ids() {
-            let model_instance_cluster_node = self
-                .model_instance_cluster_nodes
-                .node(model_instance_cluster_node_id);
+        for &voxel_tree_node_id in root_node.child_voxel_tree_node_ids() {
+            let voxel_tree_node = self.voxel_tree_nodes.node(voxel_tree_node_id);
 
-            let should_buffer = if let Some(bounding_sphere) =
-                model_instance_cluster_node.get_cluster_bounding_sphere()
-            {
-                // The cluster bounding sphere is defined in its parent space
-                let cluster_bounding_sphere_camera_space =
-                    bounding_sphere.transformed(root_to_camera_transform);
+            let should_buffer =
+                if let Some(bounding_sphere) = voxel_tree_node.get_voxel_tree_bounding_sphere() {
+                    // The voxel tree bounding sphere is defined in its parent
+                    // space
+                    let voxel_tree_bounding_sphere_camera_space =
+                        bounding_sphere.transformed(root_to_camera_transform);
 
-                camera_space_view_frustum
-                    .could_contain_part_of_sphere(&cluster_bounding_sphere_camera_space)
-            } else {
-                // If the model has no bounding sphere, buffer it unconditionally
-                true
-            };
+                    camera_space_view_frustum
+                        .could_contain_part_of_sphere(&voxel_tree_bounding_sphere_camera_space)
+                } else {
+                    // If the voxel tree has no bounding sphere, buffer it
+                    // unconditionally
+                    true
+                };
 
             if should_buffer {
-                Self::buffer_model_view_transforms_of_model_instance_cluster(
+                Self::buffer_model_view_transforms_of_voxel_tree(
                     instance_feature_manager,
-                    model_instance_cluster_node,
+                    voxel_tree_node,
                     root_to_camera_transform,
                 );
             }
@@ -652,13 +636,10 @@ impl<F: Float> SceneGraph<F> {
 
         let child_group_node_ids = group_node.obtain_child_group_node_ids();
         let model_instance_node_ids = group_node.obtain_child_model_instance_node_ids();
-        let model_instance_cluster_node_ids =
-            group_node.obtain_child_model_instance_cluster_node_ids();
+        let voxel_tree_node_ids = group_node.obtain_child_voxel_tree_node_ids();
 
         let mut child_bounding_spheres = Vec::with_capacity(
-            child_group_node_ids.len()
-                + model_instance_node_ids.len()
-                + model_instance_cluster_node_ids.len(),
+            child_group_node_ids.len() + model_instance_node_ids.len() + voxel_tree_node_ids.len(),
         );
 
         child_bounding_spheres.extend(
@@ -679,13 +660,13 @@ impl<F: Float> SceneGraph<F> {
             },
         ));
 
-        child_bounding_spheres.extend(model_instance_cluster_node_ids.into_iter().filter_map(
-            |model_instance_cluster_node_id| {
-                // The cluster bounding sphere is defined in its parent space,
-                // so we do not transform it
-                self.model_instance_cluster_nodes
-                    .node(model_instance_cluster_node_id)
-                    .get_cluster_bounding_sphere()
+        child_bounding_spheres.extend(voxel_tree_node_ids.into_iter().filter_map(
+            |voxel_tree_node_id| {
+                // The voxel tree bounding sphere is defined in its parent
+                // space, so we do not transform it
+                self.voxel_tree_nodes
+                    .node(voxel_tree_node_id)
+                    .get_voxel_tree_bounding_sphere()
                     .cloned()
             },
         ));
@@ -709,13 +690,12 @@ impl<F: Float> SceneGraph<F> {
     }
 
     /// Determines the group/model-to-camera transforms of the group nodes,
-    /// model instance nodes and model instance cluster nodes that are children
-    /// of the specified group node and whose bounding spheres lie within the
-    /// given camera frustum. The given group-to-camera transform is prepended
-    /// to the transforms of the children. For the children that are model
-    /// instance nodes or model instance cluster nodes, their final
-    /// model-to-camera transforms are added to the given instance feature
-    /// manager.
+    /// model instance nodes and voxel tree nodes that are children of the
+    /// specified group node and whose bounding spheres lie within the given
+    /// camera frustum. The given group-to-camera transform is prepended to the
+    /// transforms of the children. For the children that are model instance
+    /// nodes or voxel tree nodes, their final model-to-camera transforms are
+    /// added to the given instance feature manager.
     ///
     /// # Panics
     /// If any of the child nodes of the group node does not exist.
@@ -786,31 +766,28 @@ impl<F: Float> SceneGraph<F> {
             }
         }
 
-        for &child_model_instance_cluster_node_id in
-            group_node.child_model_instance_cluster_node_ids()
-        {
-            let child_model_instance_cluster_node = self
-                .model_instance_cluster_nodes
-                .node(child_model_instance_cluster_node_id);
+        for &child_voxel_tree_node_id in group_node.child_voxel_tree_node_ids() {
+            let child_voxel_tree_node = self.voxel_tree_nodes.node(child_voxel_tree_node_id);
 
             let should_buffer = if let Some(child_bounding_sphere) =
-                child_model_instance_cluster_node.get_cluster_bounding_sphere()
+                child_voxel_tree_node.get_voxel_tree_bounding_sphere()
             {
-                // The cluster bounding sphere is defined in its parent space
-                let cluster_bounding_sphere_camera_space =
+                // The voxel tree bounding sphere is defined in its parent space
+                let voxel_tree_bounding_sphere_camera_space =
                     child_bounding_sphere.transformed(group_to_camera_transform);
 
                 camera_space_view_frustum
-                    .could_contain_part_of_sphere(&cluster_bounding_sphere_camera_space)
+                    .could_contain_part_of_sphere(&voxel_tree_bounding_sphere_camera_space)
             } else {
-                // If the model has no bounding sphere, buffer it unconditionally
+                // If the voxel tree has no bounding sphere, buffer it
+                // unconditionally
                 true
             };
 
             if should_buffer {
-                Self::buffer_model_view_transforms_of_model_instance_cluster(
+                Self::buffer_model_view_transforms_of_voxel_tree(
                     instance_feature_manager,
-                    child_model_instance_cluster_node,
+                    child_voxel_tree_node,
                     group_to_camera_transform,
                 );
             }
@@ -840,36 +817,36 @@ impl<F: Float> SceneGraph<F> {
         );
     }
 
-    /// Adds instances corresponding to the given model instance cluster node
-    /// with the given model-to-camera transforms to the given instance feature
-    /// manager.
+    /// Adds voxel instances from to the given voxel tree node to the given
+    /// instance feature manager.
     ///
     /// Prepends the given parent group-to-camera transform to each
-    /// model-to-parent transform in the specified model instance cluster node
-    /// and adds instances with each resulting transform to the given instance
-    /// feature manager.
+    /// voxel-to-parent transform in the specified voxel tree node and adds
+    /// instances with each resulting transform to the given instance feature
+    /// manager.
     ///
     /// # Panics
-    /// If the specified model instance cluster node does not exist.
-    fn buffer_model_view_transforms_of_model_instance_cluster(
+    /// If the specified voxel tree node does not exist.
+    fn buffer_model_view_transforms_of_voxel_tree(
         instance_feature_manager: &mut InstanceFeatureManager,
-        model_instance_cluster_node: &ModelInstanceClusterNode<F>,
+        voxel_tree_node: &VoxelTreeNode<F>,
         parent_to_camera_transform: &NodeTransform<F>,
     ) where
         InstanceModelViewTransform: InstanceFeature,
         F: simba::scalar::SubsetOf<fre>,
     {
-        let instance_model_view_transforms = model_instance_cluster_node
-            .model_to_parent_transforms()
-            .iter()
-            .map(|transform| {
-                transform.transform_into_model_view_transform(parent_to_camera_transform)
-            });
+        let voxel_model_view_transforms =
+            voxel_tree_node
+                .voxel_to_parent_transforms()
+                .iter()
+                .map(|transform| {
+                    transform.transform_into_model_view_transform(parent_to_camera_transform)
+                });
 
         instance_feature_manager.buffer_multiple_instances(
-            model_instance_cluster_node.model_id(),
-            instance_model_view_transforms,
-            model_instance_cluster_node.feature_ids(),
+            voxel_tree_node.model_id(),
+            voxel_model_view_transforms,
+            voxel_tree_node.feature_ids(),
         );
     }
 
@@ -898,15 +875,15 @@ impl<F: Float> SceneGraph<F> {
     }
 
     #[cfg(test)]
-    fn node_has_model_instance_cluster_node_as_child(
+    fn node_has_voxel_tree_node_as_child(
         &self,
         group_node_id: GroupNodeID,
-        child_model_instance_cluster_node_id: ModelInstanceClusterNodeID,
+        child_voxel_tree_node_id: VoxelTreeNodeID,
     ) -> bool {
         self.group_nodes
             .node(group_node_id)
-            .child_model_instance_cluster_node_ids()
-            .contains(&child_model_instance_cluster_node_id)
+            .child_voxel_tree_node_ids()
+            .contains(&child_voxel_tree_node_id)
     }
 
     #[cfg(test)]
@@ -1130,27 +1107,25 @@ impl SceneGraph<fre> {
             }
         }
 
-        for &model_instance_cluster_node_id in group_node.child_model_instance_cluster_node_ids() {
-            let model_instance_cluster_node = self
-                .model_instance_cluster_nodes
-                .node(model_instance_cluster_node_id);
+        for &voxel_tree_node_id in group_node.child_voxel_tree_node_ids() {
+            let voxel_tree_node = self.voxel_tree_nodes.node(voxel_tree_node_id);
 
             // We assume that only objects with bounding spheres will cast shadows
-            if let Some(model_instance_cluster_bounding_sphere) =
-                model_instance_cluster_node.get_cluster_bounding_sphere()
+            if let Some(voxel_tree_bounding_sphere) =
+                voxel_tree_node.get_voxel_tree_bounding_sphere()
             {
-                let model_instance_cluster_camera_space_bounding_sphere =
-                    model_instance_cluster_bounding_sphere.transformed(group_to_camera_transform);
+                let voxel_tree_camera_space_bounding_sphere =
+                    voxel_tree_bounding_sphere.transformed(group_to_camera_transform);
 
-                if camera_space_face_frustum.could_contain_part_of_sphere(
-                    &model_instance_cluster_camera_space_bounding_sphere,
-                ) {
+                if camera_space_face_frustum
+                    .could_contain_part_of_sphere(&voxel_tree_camera_space_bounding_sphere)
+                {
                     let group_to_cubemap_face_transform = omnidirectional_light
                         .create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
                         * group_to_camera_transform;
 
-                    let instance_model_light_transforms = model_instance_cluster_node
-                        .model_to_parent_transforms()
+                    let instance_model_light_transforms = voxel_tree_node
+                        .voxel_to_parent_transforms()
                         .iter()
                         .map(|transform| {
                             transform.transform_into_model_view_transform(
@@ -1159,7 +1134,7 @@ impl SceneGraph<fre> {
                         });
 
                     instance_feature_manager.buffer_multiple_instance_transforms(
-                        model_instance_cluster_node.model_id(),
+                        voxel_tree_node.model_id(),
                         instance_model_light_transforms,
                     );
                 }
@@ -1233,35 +1208,33 @@ impl SceneGraph<fre> {
             }
         }
 
-        for &model_instance_cluster_node_id in group_node.child_model_instance_cluster_node_ids() {
-            let model_instance_cluster_node = self
-                .model_instance_cluster_nodes
-                .node(model_instance_cluster_node_id);
+        for &voxel_tree_node_id in group_node.child_voxel_tree_node_ids() {
+            let voxel_tree_node = self.voxel_tree_nodes.node(voxel_tree_node_id);
 
             // We assume that only objects with bounding spheres will cast shadows
-            if let Some(model_instance_cluster_bounding_sphere) =
-                model_instance_cluster_node.get_cluster_bounding_sphere()
+            if let Some(voxel_tree_bounding_sphere) =
+                voxel_tree_node.get_voxel_tree_bounding_sphere()
             {
-                let model_instance_cluster_camera_space_bounding_sphere =
-                    model_instance_cluster_bounding_sphere.transformed(group_to_camera_transform);
+                let voxel_tree_camera_space_bounding_sphere =
+                    voxel_tree_bounding_sphere.transformed(group_to_camera_transform);
 
                 if unidirectional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
                     cascade_idx,
-                    &model_instance_cluster_camera_space_bounding_sphere,
+                    &voxel_tree_camera_space_bounding_sphere,
                 ) {
                     let group_to_light_transform = unidirectional_light
                         .camera_to_light_space_rotation()
                         * group_to_camera_transform;
 
-                    let instance_model_light_transforms = model_instance_cluster_node
-                        .model_to_parent_transforms()
+                    let instance_model_light_transforms = voxel_tree_node
+                        .voxel_to_parent_transforms()
                         .iter()
                         .map(|transform| {
                             transform.transform_into_model_view_transform(&group_to_light_transform)
                         });
 
                     instance_feature_manager.buffer_multiple_instance_transforms(
-                        model_instance_cluster_node.model_id(),
+                        voxel_tree_node.model_id(),
                         instance_model_light_transforms,
                     );
                 }
@@ -1326,7 +1299,7 @@ impl<F: Float> GroupNode<F> {
             group_to_parent_transform,
             child_group_node_ids: HashSet::new(),
             child_model_instance_node_ids: HashSet::new(),
-            child_model_instance_cluster_node_ids: HashSet::new(),
+            child_voxel_tree_node_ids: HashSet::new(),
             child_camera_node_ids: HashSet::new(),
             bounding_sphere: None,
             group_to_root_transform: NodeTransform::identity(),
@@ -1361,8 +1334,8 @@ impl<F: Float> GroupNode<F> {
         &self.child_model_instance_node_ids
     }
 
-    fn child_model_instance_cluster_node_ids(&self) -> &HashSet<ModelInstanceClusterNodeID> {
-        &self.child_model_instance_cluster_node_ids
+    fn child_voxel_tree_node_ids(&self) -> &HashSet<VoxelTreeNodeID> {
+        &self.child_voxel_tree_node_ids
     }
 
     #[cfg(test)]
@@ -1382,11 +1355,8 @@ impl<F: Float> GroupNode<F> {
         self.child_model_instance_node_ids.iter().cloned().collect()
     }
 
-    fn obtain_child_model_instance_cluster_node_ids(&self) -> Vec<ModelInstanceClusterNodeID> {
-        self.child_model_instance_cluster_node_ids
-            .iter()
-            .cloned()
-            .collect()
+    fn obtain_child_voxel_tree_node_ids(&self) -> Vec<VoxelTreeNodeID> {
+        self.child_voxel_tree_node_ids.iter().cloned().collect()
     }
 
     fn obtain_child_camera_node_ids(&self) -> Vec<CameraNodeID> {
@@ -1398,13 +1368,13 @@ impl<F: Float> GroupNode<F> {
     ) -> (
         Vec<GroupNodeID>,
         Vec<ModelInstanceNodeID>,
-        Vec<ModelInstanceClusterNodeID>,
+        Vec<VoxelTreeNodeID>,
         Vec<CameraNodeID>,
     ) {
         (
             self.obtain_child_group_node_ids(),
             self.obtain_child_model_instance_node_ids(),
-            self.obtain_child_model_instance_cluster_node_ids(),
+            self.obtain_child_voxel_tree_node_ids(),
             self.obtain_child_camera_node_ids(),
         )
     }
@@ -1418,12 +1388,8 @@ impl<F: Float> GroupNode<F> {
             .insert(model_instance_node_id);
     }
 
-    fn add_child_model_instance_cluster_node(
-        &mut self,
-        model_instance_cluster_node_id: ModelInstanceClusterNodeID,
-    ) {
-        self.child_model_instance_cluster_node_ids
-            .insert(model_instance_cluster_node_id);
+    fn add_child_voxel_tree_node(&mut self, voxel_tree_node_id: VoxelTreeNodeID) {
+        self.child_voxel_tree_node_ids.insert(voxel_tree_node_id);
     }
 
     fn add_child_camera_node(&mut self, camera_node_id: CameraNodeID) {
@@ -1439,12 +1405,8 @@ impl<F: Float> GroupNode<F> {
             .remove(&model_instance_node_id);
     }
 
-    fn remove_child_model_instance_cluster_node(
-        &mut self,
-        model_instance_cluster_node_id: ModelInstanceClusterNodeID,
-    ) {
-        self.child_model_instance_cluster_node_ids
-            .remove(&model_instance_cluster_node_id);
+    fn remove_child_voxel_tree_node(&mut self, voxel_tree_node_id: VoxelTreeNodeID) {
+        self.child_voxel_tree_node_ids.remove(&voxel_tree_node_id);
     }
 
     fn remove_child_camera_node(&mut self, camera_node_id: CameraNodeID) {
@@ -1536,31 +1498,31 @@ impl<F: Float> SceneGraphNode for ModelInstanceNode<F> {
     type F = F;
 }
 
-impl<F: Float> ModelInstanceClusterNode<F> {
-    pub fn set_cluster_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<F>>) {
-        self.cluster_bounding_sphere = bounding_sphere;
+impl<F: Float> VoxelTreeNode<F> {
+    pub fn set_voxel_tree_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<F>>) {
+        self.voxel_tree_bounding_sphere = bounding_sphere;
     }
 
     fn new(
         parent_node_id: GroupNodeID,
-        cluster_bounding_sphere: Option<Sphere<F>>,
-        model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
+        voxel_tree_bounding_sphere: Option<Sphere<F>>,
+        voxel_to_parent_transforms: Vec<VoxelTransform<F>>,
         model_id: ModelID,
         feature_ids: Vec<Vec<InstanceFeatureID>>,
     ) -> Self {
-        let n_instances = model_to_parent_transforms.len();
+        let n_instances = voxel_to_parent_transforms.len();
         for feature_ids in &feature_ids {
             let n_feature_ids = feature_ids.len();
             assert!(
                 n_feature_ids == 1 || n_feature_ids == n_instances,
-                "Tried to create model instance cluster node with inconsistent numbers of transforms and feature IDs"
+                "Tried to create voxel tree node with inconsistent numbers of transforms and feature IDs"
             );
         }
 
         Self {
             parent_node_id,
-            cluster_bounding_sphere,
-            model_to_parent_transforms,
+            voxel_tree_bounding_sphere,
+            voxel_to_parent_transforms,
             model_id,
             feature_ids,
         }
@@ -1571,18 +1533,17 @@ impl<F: Float> ModelInstanceClusterNode<F> {
         self.parent_node_id
     }
 
-    /// Returns the number of instances in the cluster.
+    /// Returns the number of voxel instances in the voxel tree node.
     pub fn n_instances(&self) -> usize {
-        self.model_to_parent_transforms.len()
+        self.voxel_to_parent_transforms.len()
     }
 
-    /// Returns the model-to-parent transforms for the node.
-    pub fn model_to_parent_transforms(&self) -> &[ClusterInstanceTransform<F>] {
-        &self.model_to_parent_transforms
+    /// Returns the voxel-to-parent transforms for the node.
+    pub fn voxel_to_parent_transforms(&self) -> &[VoxelTransform<F>] {
+        &self.voxel_to_parent_transforms
     }
 
-    /// Returns the ID of the model the node represents an cluster of instance
-    /// of.
+    /// Returns the ID of the model the voxels in the node are instances of.
     pub fn model_id(&self) -> ModelID {
         self.model_id
     }
@@ -1592,57 +1553,57 @@ impl<F: Float> ModelInstanceClusterNode<F> {
         &self.feature_ids
     }
 
-    /// Adds a model instance represented by the given model-to-parent transform
-    /// and set of feature IDs to the cluster. This information will be pushed
-    /// to the end of the [`Vec`]s holding the existing information.
+    /// Adds a voxel instance represented by the given voxel-to-parent transform
+    /// and set of feature IDs to the node. This information will be pushed to
+    /// the end of the [`Vec`]s holding the existing information.
     ///
     /// # Panics
     /// If the given number of feature IDs is different from the number of
-    /// feature types in the cluster.
+    /// feature types in the node.
     pub fn push_instance(
         &mut self,
-        model_to_parent_transform: ClusterInstanceTransform<F>,
+        voxel_to_parent_transform: VoxelTransform<F>,
         feature_ids: &[InstanceFeatureID],
     ) {
         assert_eq!(
             feature_ids.len(),
             self.feature_ids.len(),
-            "Tried to push instance with inconsistent feature ID count to model instance cluster node"
+            "Tried to push instance with inconsistent feature ID count to voxel tree node"
         );
 
-        self.model_to_parent_transforms
-            .push(model_to_parent_transform);
+        self.voxel_to_parent_transforms
+            .push(voxel_to_parent_transform);
 
         for (existing_ids, &id) in self.feature_ids.iter_mut().zip(feature_ids.iter()) {
             existing_ids.push(id);
         }
     }
 
-    /// Removes the transformation and feature IDs of the instance at the given
+    /// Removes the transform and feature IDs of the voxel instance at the given
     /// index. The removed instance information will be replaced with that of
     /// the last instance, so this does not preserve ordering.
     ///
     /// # Panics
     /// If the given index is not smaller than the number of instances present.
     pub fn swap_remove_instance(&mut self, instance_idx: usize) {
-        self.model_to_parent_transforms.swap_remove(instance_idx);
+        self.voxel_to_parent_transforms.swap_remove(instance_idx);
 
         for feature_ids in &mut self.feature_ids {
             feature_ids.swap_remove(instance_idx);
         }
     }
 
-    /// Returns the bounding sphere of the model instance cluster, or [`None`]
-    /// if it has no bounding sphere.
-    fn get_cluster_bounding_sphere(&self) -> Option<&Sphere<F>> {
-        self.cluster_bounding_sphere.as_ref()
+    /// Returns the bounding sphere of the voxel tree, or [`None`] if it has no
+    /// bounding sphere.
+    fn get_voxel_tree_bounding_sphere(&self) -> Option<&Sphere<F>> {
+        self.voxel_tree_bounding_sphere.as_ref()
     }
 }
 
-impl SceneGraphNodeID for ModelInstanceClusterNodeID {}
+impl SceneGraphNodeID for VoxelTreeNodeID {}
 
-impl<F: Float> SceneGraphNode for ModelInstanceClusterNode<F> {
-    type ID = ModelInstanceClusterNodeID;
+impl<F: Float> SceneGraphNode for VoxelTreeNode<F> {
+    type ID = VoxelTreeNodeID;
     type F = F;
 }
 
@@ -1698,7 +1659,7 @@ macro_rules! impl_node_id_idx_traits {
 
 impl_node_id_idx_traits!(GroupNodeID);
 impl_node_id_idx_traits!(ModelInstanceNodeID);
-impl_node_id_idx_traits!(ModelInstanceClusterNodeID);
+impl_node_id_idx_traits!(VoxelTreeNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
 
 #[cfg(test)]
@@ -1744,26 +1705,23 @@ mod test {
         )
     }
 
-    fn create_dummy_model_instance_cluster_node<F: Float>(
+    fn create_dummy_voxel_tree_node<F: Float>(
         scene_graph: &mut SceneGraph<F>,
         parent_node_id: GroupNodeID,
-    ) -> ModelInstanceClusterNodeID {
-        create_dummy_model_instance_cluster_node_with_transforms(
+    ) -> VoxelTreeNodeID {
+        create_dummy_voxel_tree_node_with_transforms(
             scene_graph,
             parent_node_id,
-            vec![
-                ClusterInstanceTransform::identity(),
-                ClusterInstanceTransform::identity(),
-            ],
+            vec![VoxelTransform::identity(), VoxelTransform::identity()],
         )
     }
 
-    fn create_dummy_model_instance_cluster_node_with_transforms<F: Float>(
+    fn create_dummy_voxel_tree_node_with_transforms<F: Float>(
         scene_graph: &mut SceneGraph<F>,
         parent_node_id: GroupNodeID,
-        model_to_parent_transforms: Vec<ClusterInstanceTransform<F>>,
-    ) -> ModelInstanceClusterNodeID {
-        scene_graph.create_model_instance_cluster_node(
+        model_to_parent_transforms: Vec<VoxelTransform<F>>,
+    ) -> VoxelTreeNodeID {
+        scene_graph.create_voxel_tree_node(
             parent_node_id,
             model_to_parent_transforms,
             create_dummy_model_id(""),
@@ -1791,8 +1749,8 @@ mod test {
         )
     }
 
-    fn create_dummy_cluster_instance_transform() -> ClusterInstanceTransform<f64> {
-        ClusterInstanceTransform::new(vector![2.1, -5.9, 0.01], 7.0)
+    fn create_dummy_voxel_transform() -> VoxelTransform<f64> {
+        VoxelTransform::new(vector![2.1, -5.9, 0.01], 7.0)
     }
 
     #[test]
@@ -1837,28 +1795,27 @@ mod test {
     }
 
     #[test]
-    fn creating_model_instance_cluster_node_works() {
+    fn creating_voxel_tree_node_works() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
-        let id = create_dummy_model_instance_cluster_node(&mut scene_graph, root_id);
+        let id = create_dummy_voxel_tree_node(&mut scene_graph, root_id);
 
-        assert!(scene_graph.model_instance_cluster_nodes().has_node(id));
-        assert!(scene_graph.node_has_model_instance_cluster_node_as_child(root_id, id));
+        assert!(scene_graph.voxel_tree_nodes().has_node(id));
+        assert!(scene_graph.node_has_voxel_tree_node_as_child(root_id, id));
 
         assert_eq!(scene_graph.group_nodes().n_nodes(), 1);
-        assert_eq!(scene_graph.model_instance_cluster_nodes().n_nodes(), 1);
+        assert_eq!(scene_graph.voxel_tree_nodes().n_nodes(), 1);
         assert_eq!(scene_graph.camera_nodes().n_nodes(), 0);
     }
 
     #[test]
     #[should_panic]
-    fn creating_model_instance_cluster_node_with_inconsistent_transform_and_feature_id_counts_fails(
-    ) {
+    fn creating_voxel_tree_node_with_inconsistent_transform_and_feature_id_counts_fails() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
-        scene_graph.create_model_instance_cluster_node(
+        scene_graph.create_voxel_tree_node(
             root_id,
-            vec![ClusterInstanceTransform::identity()],
+            vec![VoxelTransform::identity()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![]],
@@ -1866,13 +1823,12 @@ mod test {
     }
 
     #[test]
-    fn creating_model_instance_cluster_node_with_multiple_transforms_and_one_feature_id_is_allowed()
-    {
+    fn creating_voxel_tree_node_with_multiple_transforms_and_one_feature_id_is_allowed() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
-        scene_graph.create_model_instance_cluster_node(
+        scene_graph.create_voxel_tree_node(
             root_id,
-            vec![ClusterInstanceTransform::identity(); 2],
+            vec![VoxelTransform::identity(); 2],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![InstanceFeatureID::not_applicable()]],
@@ -1880,21 +1836,21 @@ mod test {
     }
 
     #[test]
-    fn pushing_instance_to_model_instance_cluster_node_works() {
+    fn pushing_instance_to_voxel_tree_node_works() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
 
-        let id = scene_graph.create_model_instance_cluster_node(
+        let id = scene_graph.create_voxel_tree_node(
             root_id,
-            vec![ClusterInstanceTransform::identity()],
+            vec![VoxelTransform::identity()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![InstanceFeatureID::not_applicable()]],
         );
 
-        let new_transform = create_dummy_cluster_instance_transform();
+        let new_transform = create_dummy_voxel_transform();
 
-        let node = scene_graph.model_instance_cluster_node_mut(id);
+        let node = scene_graph.voxel_tree_node_mut(id);
 
         node.push_instance(
             new_transform.clone(),
@@ -1903,8 +1859,8 @@ mod test {
 
         assert_eq!(node.n_instances(), 2);
         assert_abs_diff_eq!(
-            node.model_to_parent_transforms(),
-            [ClusterInstanceTransform::identity(), new_transform].as_slice()
+            node.voxel_to_parent_transforms(),
+            [VoxelTransform::identity(), new_transform].as_slice()
         );
         assert_eq!(node.feature_ids().len(), 1);
         assert_eq!(
@@ -1915,13 +1871,13 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn pushing_instance_with_inconsistent_feature_id_count_to_model_instance_cluster_node_fails() {
+    fn pushing_instance_with_inconsistent_feature_id_count_to_voxel_tree_node_fails() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
 
-        let id = scene_graph.create_model_instance_cluster_node(
+        let id = scene_graph.create_voxel_tree_node(
             root_id,
-            vec![ClusterInstanceTransform::identity()],
+            vec![VoxelTransform::identity()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![
@@ -1930,38 +1886,35 @@ mod test {
             ],
         );
 
-        let new_transform = create_dummy_cluster_instance_transform();
+        let new_transform = create_dummy_voxel_transform();
 
-        let node = scene_graph.model_instance_cluster_node_mut(id);
+        let node = scene_graph.voxel_tree_node_mut(id);
 
         node.push_instance(new_transform, &[InstanceFeatureID::not_applicable()]);
     }
 
     #[test]
-    fn swap_removing_instance_from_model_instance_cluster_node_works() {
+    fn swap_removing_instance_from_voxel_tree_node_works() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
 
-        let remaining_transform = create_dummy_cluster_instance_transform();
+        let remaining_transform = create_dummy_voxel_transform();
 
-        let id = scene_graph.create_model_instance_cluster_node(
+        let id = scene_graph.create_voxel_tree_node(
             root_id,
-            vec![
-                ClusterInstanceTransform::identity(),
-                remaining_transform.clone(),
-            ],
+            vec![VoxelTransform::identity(), remaining_transform.clone()],
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), 1.0)),
             vec![vec![InstanceFeatureID::not_applicable(); 2]],
         );
 
-        let node = scene_graph.model_instance_cluster_node_mut(id);
+        let node = scene_graph.voxel_tree_node_mut(id);
 
         node.swap_remove_instance(0);
 
         assert_eq!(node.n_instances(), 1);
         assert_abs_diff_eq!(
-            node.model_to_parent_transforms(),
+            node.voxel_to_parent_transforms(),
             [remaining_transform].as_slice()
         );
         assert_eq!(node.feature_ids().len(), 1);
@@ -1999,18 +1952,18 @@ mod test {
     }
 
     #[test]
-    fn removing_model_instance_cluster_node_works() {
+    fn removing_voxel_tree_node_works() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
-        let id = create_dummy_model_instance_cluster_node(&mut scene_graph, root_id);
-        let model_id = scene_graph.remove_model_instance_cluster_node(id);
+        let id = create_dummy_voxel_tree_node(&mut scene_graph, root_id);
+        let model_id = scene_graph.remove_voxel_tree_node(id);
 
         assert_eq!(model_id, create_dummy_model_id(""));
-        assert!(!scene_graph.model_instance_cluster_nodes().has_node(id));
-        assert!(!scene_graph.node_has_model_instance_cluster_node_as_child(root_id, id));
+        assert!(!scene_graph.voxel_tree_nodes().has_node(id));
+        assert!(!scene_graph.node_has_voxel_tree_node_as_child(root_id, id));
 
         assert_eq!(scene_graph.group_nodes().n_nodes(), 1);
-        assert_eq!(scene_graph.model_instance_cluster_nodes().n_nodes(), 0);
+        assert_eq!(scene_graph.voxel_tree_nodes().n_nodes(), 0);
         assert_eq!(scene_graph.camera_nodes().n_nodes(), 0);
     }
 
@@ -2082,14 +2035,14 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn creating_model_instance_cluster_node_with_missing_parent_fails() {
+    fn creating_voxel_tree_node_with_missing_parent_fails() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
 
         let group_node_id = create_dummy_group_node(&mut scene_graph, root_id);
         scene_graph.remove_group_node(group_node_id);
 
-        create_dummy_model_instance_cluster_node(&mut scene_graph, group_node_id);
+        create_dummy_voxel_tree_node(&mut scene_graph, group_node_id);
     }
 
     #[test]
@@ -2133,13 +2086,12 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn removing_model_instance_cluster_node_twice_fails() {
+    fn removing_voxel_tree_node_twice_fails() {
         let mut scene_graph = SceneGraph::<f64>::new();
         let root_id = scene_graph.root_node_id();
-        let model_instance_cluster_node_id =
-            create_dummy_model_instance_cluster_node(&mut scene_graph, root_id);
-        scene_graph.remove_model_instance_cluster_node(model_instance_cluster_node_id);
-        scene_graph.remove_model_instance_cluster_node(model_instance_cluster_node_id);
+        let voxel_tree_node_id = create_dummy_voxel_tree_node(&mut scene_graph, root_id);
+        scene_graph.remove_voxel_tree_node(voxel_tree_node_id);
+        scene_graph.remove_voxel_tree_node(voxel_tree_node_id);
     }
 
     #[test]
@@ -2274,7 +2226,7 @@ mod test {
     }
 
     #[test]
-    fn updating_bounding_spheres_with_transformed_instance_cluster_in_group_works() {
+    fn updating_bounding_spheres_with_transformed_voxel_tree_in_group_works() {
         let group_to_parent_transform = Similarity3::from_parts(
             Translation3::new(2.1, -5.9, 0.01),
             Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
@@ -2287,12 +2239,9 @@ mod test {
 
         let group = scene_graph.create_group_node(root, group_to_parent_transform);
 
-        let model_instance_cluster_node_id = scene_graph.create_model_instance_cluster_node(
+        let voxel_tree_node_id = scene_graph.create_voxel_tree_node(
             group,
-            vec![
-                ClusterInstanceTransform::identity(),
-                ClusterInstanceTransform::identity(),
-            ],
+            vec![VoxelTransform::identity(), VoxelTransform::identity()],
             create_dummy_model_id(""),
             Some(bounding_sphere.clone()),
             Vec::new(),
@@ -2304,14 +2253,10 @@ mod test {
             &bounding_sphere.transformed(&group_to_parent_transform),
         );
 
-        let model_instance_cluster_node = scene_graph
-            .model_instance_cluster_nodes
-            .node(model_instance_cluster_node_id);
-        let cluster_bounding_sphere = model_instance_cluster_node
-            .get_cluster_bounding_sphere()
-            .unwrap();
+        let voxel_tree_node = scene_graph.voxel_tree_nodes.node(voxel_tree_node_id);
+        let voxel_tree_bounding_sphere = voxel_tree_node.get_voxel_tree_bounding_sphere().unwrap();
 
-        assert_spheres_equal(cluster_bounding_sphere, &bounding_sphere);
+        assert_spheres_equal(voxel_tree_bounding_sphere, &bounding_sphere);
     }
 
     #[test]
