@@ -963,32 +963,28 @@ impl RenderPassSpecification {
                 // transforms
                 None
             } else if use_prepass_material {
-                // When using a prepass material we have to check both whether
-                // the main material has a buffer (which would be placed
-                // directly after the transform buffer) and whether the prepass
-                // material has a buffer (which would be placed directly after
-                // the main material buffer) to determine the existance and
-                // location of the prepass material buffer
-
                 let prepass_material_handle = model_id
                     .prepass_material_handle()
                     .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?;
 
-                if prepass_material_handle
-                    .material_property_feature_id()
-                    .is_some()
-                {
-                    if model_id
-                        .material_handle()
-                        .material_property_feature_id()
-                        .is_some()
-                    {
-                        Some(&buffers[2])
-                    } else {
+                // We assume that if both the prepass material and main material
+                // have material property features, they are the same, so we can
+                // use the same instance feature buffer (which will be placed
+                // directly after the transform buffer)
+
+                match (
+                    prepass_material_handle.material_property_feature_id(),
+                    model_id.material_handle().material_property_feature_id(),
+                ) {
+                    (None, _) => None,
+                    (Some(_), None) => Some(&buffers[1]),
+                    (Some(prepass_feature_id), Some(main_feature_id)) => {
+                        assert_eq!(
+                            prepass_feature_id, main_feature_id,
+                            "Prepass material must use the same feature as main material"
+                        );
                         Some(&buffers[1])
                     }
-                } else {
-                    None
                 }
             } else {
                 // When using the main material we know its buffer, if it

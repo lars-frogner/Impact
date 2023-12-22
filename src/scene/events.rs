@@ -284,21 +284,24 @@ impl Scene {
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                let mut feature_ids = Vec::with_capacity(2);
-
-                // The main material feature comes first, followed by the
-                // prepass material feature (this order is also assumed
-                // elsewhere)
-                if let Some(feature_id) = material.material_handle().material_property_feature_id()
-                {
-                    feature_ids.push(feature_id);
-                }
-                if let Some(feature_id) = material
-                    .prepass_material_handle()
-                    .and_then(MaterialHandle::material_property_feature_id)
-                {
-                    feature_ids.push(feature_id);
-                }
+                let feature_ids = match (
+                    material.material_handle().material_property_feature_id(),
+                    material
+                        .prepass_material_handle()
+                        .and_then(MaterialHandle::material_property_feature_id),
+                ) {
+                    (None, None) => Vec::new(),
+                    (Some(feature_id), None) | (None, Some(feature_id)) => {
+                        vec![feature_id]
+                    }
+                    (Some(feature_id), Some(prepass_feature_id)) => {
+                        assert_eq!(
+                            prepass_feature_id, feature_id,
+                            "Prepass material must use the same feature as main material"
+                        );
+                        vec![feature_id]
+                    }
+                };
 
                 let bounding_sphere = if components.has_component_type::<UncullableComp>() {
                     // The scene graph will not cull models with no bounding sphere
@@ -364,23 +367,27 @@ impl Scene {
 
                 let appearance = voxel_manager.voxel_appearance(voxel_type.voxel_type());
 
-                let mut feature_ids = Vec::with_capacity(2);
-
-                // The main material feature comes first, followed by the
-                // prepass material feature (this order is also assumed
-                // elsewhere)
-                if let Some(feature_id) = appearance.material_handle.material_property_feature_id()
-                {
-                    // Each voxel uses the same feature, in which case we only
-                    // have to provide a single copy of the feature ID
-                    feature_ids.push(vec![feature_id]);
-                }
-                if let Some(feature_id) = appearance
-                    .prepass_material_handle
-                    .and_then(|handle| handle.material_property_feature_id())
-                {
-                    feature_ids.push(vec![feature_id]);
-                }
+                let feature_ids = match (
+                    appearance.material_handle.material_property_feature_id(),
+                    appearance
+                        .prepass_material_handle
+                        .as_ref()
+                        .and_then(MaterialHandle::material_property_feature_id),
+                ) {
+                    (None, None) => Vec::new(),
+                    (Some(feature_id), None) | (None, Some(feature_id)) => {
+                        // Each voxel uses the same feature, in which case we only
+                        // have to provide a single copy of the feature ID
+                        vec![vec![feature_id]]
+                    }
+                    (Some(feature_id), Some(prepass_feature_id)) => {
+                        assert_eq!(
+                            prepass_feature_id, feature_id,
+                            "Prepass material must use the same feature as main material"
+                        );
+                        vec![vec![feature_id]]
+                    }
+                };
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);

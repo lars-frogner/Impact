@@ -136,25 +136,26 @@ impl InstanceFeatureManager {
     where
         InstanceModelViewTransform: InstanceFeature,
     {
-        let mut feature_type_ids = Vec::with_capacity(2);
-
-        feature_type_ids.extend_from_slice(
-            material_library
-                .get_material_specification(model_id.material_handle().material_id())
-                .expect("Missing material specification for model material")
-                .instance_feature_type_ids(),
-        );
+        let material_feature_type_ids = material_library
+            .get_material_specification(model_id.material_handle().material_id())
+            .expect("Missing material specification for model material")
+            .instance_feature_type_ids();
 
         if let Some(prepass_material_handle) = model_id.prepass_material_handle() {
-            feature_type_ids.extend_from_slice(
-                material_library
-                    .get_material_specification(prepass_material_handle.material_id())
-                    .expect("Missing material specification for model prepass material")
-                    .instance_feature_type_ids(),
-            );
+            let prepass_material_feature_type_ids = material_library
+                .get_material_specification(prepass_material_handle.material_id())
+                .expect("Missing material specification for model prepass material")
+                .instance_feature_type_ids();
+
+            if !prepass_material_feature_type_ids.is_empty() {
+                assert_eq!(
+                    prepass_material_feature_type_ids, material_feature_type_ids,
+                    "Prepass material must use the same feature types as main material"
+                );
+            }
         }
 
-        self.register_instance_with_feature_type_ids(model_id, &feature_type_ids);
+        self.register_instance_with_feature_type_ids(model_id, material_feature_type_ids);
     }
 
     /// Informs the manager that an instance of the model with the given ID has
