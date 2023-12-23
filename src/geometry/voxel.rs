@@ -118,6 +118,7 @@ struct VoxelTreeExternalNodeID(usize);
 struct VoxelTreeInternalNode<F: Float> {
     child_ids: [Option<VoxelTreeNodeID>; 8],
     aabb: AxisAlignedBox<F>,
+    exposed_descendant_count: usize,
 }
 
 /// An external node in a voxel tree. It represents a voxel, which may either be
@@ -242,8 +243,12 @@ impl<F: Float> VoxelTree<F> {
                 internal_nodes,
                 external_nodes,
             };
-            tree.update_internal_node_aabbs();
+
+            // The order here is important: we must update adjacent voxels first
+            // since this information is used when updating internal node data
             tree.update_adjacent_voxels_for_all_external_nodes();
+            tree.update_internal_node_data();
+
             tree
         })
     }
@@ -328,17 +333,12 @@ impl<F: Float> VoxelTree<F> {
         }
     }
 
-    /// Updates the axis-aligned bounding box (AABB) of every internal node in
-    /// the tree based on the AABBs of its children.
-    ///
-    /// # Warning
-    /// This method uses the raw value of the node IDs as indices into the node
-    /// storage, which is only valid if no nodes have been removed from the tree
-    /// after construction.
-    pub fn update_internal_node_aabbs(&mut self) {
+    /// Updates the axis-aligned bounding box (AABB) and count of exposed
+    /// children for every internal node in the tree.
+    pub fn update_internal_node_data(&mut self) {
         self.root_node_id
             .clone()
-            .update_internal_node_aabbs(self, VoxelTreeIndices::at_root(self.tree_height));
+            .update_internal_node_data(self, VoxelTreeIndices::at_root(self.tree_height));
     }
 
     /// Returns the ID of the root node of the tree.
@@ -975,32 +975,45 @@ impl VoxelTreeNodeID {
         }
     }
 
-    fn update_internal_node_aabbs<F: Float>(
+    fn update_internal_node_data<F: Float>(
         &self,
         tree: &mut VoxelTree<F>,
         current_indices: VoxelTreeIndices,
-    ) -> AxisAlignedBox<F> {
+    ) -> (AxisAlignedBox<F>, usize) {
         match self {
-            Self::External(_) => tree.compute_aabb_of_voxel(current_indices),
+            Self::External(external_id) => {
+                let aabb = tree.compute_aabb_of_voxel(current_indices);
+
+                let node = tree.external_node(*external_id);
+                let is_exposed = usize::from(!node.has_only_fully_obscured_faces());
+
+                (aabb, is_exposed)
+            }
             Self::Internal(internal_id) => {
                 let child_ids = tree.internal_node(*internal_id).child_ids;
 
                 let mut aggregate_aabb: Option<AxisAlignedBox<F>> = None;
+                let mut exposed_descendant_count = 0;
 
                 for (child_id, next_indices) in
                     child_ids.iter().zip(current_indices.for_next_depth())
                 {
-                    let child_aabb = child_id
+                    let child_aabb_and_exposed_descendant_count = child_id
                         .as_ref()
-                        .map(|child_id| child_id.update_internal_node_aabbs(tree, next_indices));
+                        .map(|child_id| child_id.update_internal_node_data(tree, next_indices));
 
-                    match (&mut aggregate_aabb, child_aabb) {
-                        (Some(aggregate_aabb), Some(child_aabb)) => {
+                    match (&mut aggregate_aabb, child_aabb_and_exposed_descendant_count) {
+                        (
+                            Some(aggregate_aabb),
+                            Some((child_aabb, child_exposed_descendant_count)),
+                        ) => {
                             *aggregate_aabb =
                                 AxisAlignedBox::aabb_from_pair(&*aggregate_aabb, &child_aabb);
+                            exposed_descendant_count += child_exposed_descendant_count;
                         }
-                        (None, Some(child_aabb)) => {
+                        (None, Some((child_aabb, child_exposed_descendant_count))) => {
                             aggregate_aabb = Some(child_aabb);
+                            exposed_descendant_count += child_exposed_descendant_count;
                         }
                         _ => {}
                     };
@@ -1008,9 +1021,11 @@ impl VoxelTreeNodeID {
 
                 let aggregate_aabb = aggregate_aabb.unwrap();
 
-                tree.internal_node_mut(*internal_id).aabb = aggregate_aabb.clone();
+                let internal_node = tree.internal_node_mut(*internal_id);
+                internal_node.aabb = aggregate_aabb.clone();
+                internal_node.exposed_descendant_count = exposed_descendant_count;
 
-                aggregate_aabb
+                (aggregate_aabb, exposed_descendant_count)
             }
         }
     }
@@ -1187,6 +1202,7 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         Self {
             child_ids,
             aabb: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
+            exposed_descendant_count: 0,
         }
     }
 
@@ -1218,6 +1234,14 @@ impl<F: Float> VoxelTreeInternalNode<F> {
 
     fn aabb(&self) -> &AxisAlignedBox<F> {
         &self.aabb
+    }
+
+    fn exposed_descendant_count(&self) -> usize {
+        self.exposed_descendant_count
+    }
+
+    fn has_exposed_descendants(&self) -> bool {
+        self.exposed_descendant_count > 0
     }
 }
 
@@ -2024,6 +2048,26 @@ mod test {
             [2, 0, 4],
             [3, 2, 5],
         );
+    }
+
+    #[test]
+    fn should_have_correct_exposed_descendant_count_in_two_voxel_tree() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 1] }).unwrap();
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
+        assert_eq!(root_node.exposed_descendant_count(), 2);
+    }
+
+    #[test]
+    fn should_have_correct_exposed_descendant_count_in_spherical_voxel_tree() {
+        let voxels = [
+            [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]],
+            [[0, 1, 1, 0], [1, 1, 1, 1], [1, 1, 1, 1], [0, 1, 1, 0]],
+            [[0, 1, 1, 0], [1, 1, 1, 1], [1, 1, 1, 1], [0, 1, 1, 0]],
+            [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]],
+        ];
+        let tree = VoxelTree::build(&ManualVoxelGenerator { voxels }).unwrap();
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
+        assert_eq!(root_node.exposed_descendant_count(), 24);
     }
 
     #[test]
