@@ -7,13 +7,13 @@ mod generation;
 pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
 
 use crate::{
-    geometry::{InstanceModelViewTransform, Sphere},
+    geometry::{AxisAlignedBox, Frustum, InstanceModelViewTransform, OrientedBox, Sphere},
     num::Float,
     rendering::fre,
 };
 use approx::AbsDiffEq;
 use impact_utils::KeyIndexMapper;
-use nalgebra::{vector, Similarity3, Vector3};
+use nalgebra::{point, vector, Point3, Similarity3, Vector3};
 use nohash_hasher::BuildNoHashHasher;
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
@@ -49,7 +49,7 @@ pub struct VoxelTree<F: Float> {
     voxel_extent: F,
     tree_height: VoxelTreeHeight,
     root_node_id: VoxelTreeNodeID,
-    internal_nodes: VoxelTreeInternalNodeStorage,
+    internal_nodes: VoxelTreeInternalNodeStorage<F>,
     external_nodes: VoxelTreeExternalNodeStorage,
 }
 
@@ -98,7 +98,7 @@ struct VoxelTreeNodeStorage<C> {
     node_id_count: usize,
 }
 
-type VoxelTreeInternalNodeStorage = VoxelTreeNodeStorage<VoxelTreeInternalNode>;
+type VoxelTreeInternalNodeStorage<F> = VoxelTreeNodeStorage<VoxelTreeInternalNode<F>>;
 
 type VoxelTreeExternalNodeStorage = VoxelTreeNodeStorage<VoxelTreeExternalNode>;
 
@@ -115,8 +115,9 @@ struct VoxelTreeExternalNodeID(usize);
 /// An internal node in a voxel tree. It has one child for each octant of the
 /// region of the grid the node covers.
 #[derive(Clone, Debug)]
-struct VoxelTreeInternalNode {
+struct VoxelTreeInternalNode<F: Float> {
     child_ids: [Option<VoxelTreeNodeID>; 8],
+    aabb: AxisAlignedBox<F>,
 }
 
 /// An external node in a voxel tree. It represents a voxel, which may either be
@@ -241,6 +242,7 @@ impl<F: Float> VoxelTree<F> {
                 internal_nodes,
                 external_nodes,
             };
+            tree.update_internal_node_aabbs();
             tree.update_adjacent_voxels_for_all_external_nodes();
             tree
         })
@@ -326,13 +328,30 @@ impl<F: Float> VoxelTree<F> {
         }
     }
 
+    /// Updates the axis-aligned bounding box (AABB) of every internal node in
+    /// the tree based on the AABBs of its children.
+    ///
+    /// # Warning
+    /// This method uses the raw value of the node IDs as indices into the node
+    /// storage, which is only valid if no nodes have been removed from the tree
+    /// after construction.
+    pub fn update_internal_node_aabbs(&mut self) {
+        self.root_node_id
+            .clone()
+            .update_internal_node_aabbs(self, VoxelTreeIndices::at_root(self.tree_height));
+    }
+
     /// Returns the ID of the root node of the tree.
     fn root_node_id(&self) -> &VoxelTreeNodeID {
         &self.root_node_id
     }
 
-    fn internal_node(&self, id: VoxelTreeInternalNodeID) -> &VoxelTreeInternalNode {
+    fn internal_node(&self, id: VoxelTreeInternalNodeID) -> &VoxelTreeInternalNode<F> {
         self.internal_nodes.node(id)
+    }
+
+    fn internal_node_mut(&mut self, id: VoxelTreeInternalNodeID) -> &mut VoxelTreeInternalNode<F> {
+        self.internal_nodes.node_mut(id)
     }
 
     fn external_node(&self, id: VoxelTreeExternalNodeID) -> &VoxelTreeExternalNode {
@@ -374,7 +393,7 @@ impl<F: Float> VoxelTree<F> {
     fn find_external_node_id_at_indices_generic<'a>(
         &'a self,
         indices: VoxelIndices,
-        internal_node_from_id: impl Fn(VoxelTreeInternalNodeID) -> &'a VoxelTreeInternalNode,
+        internal_node_from_id: impl Fn(VoxelTreeInternalNodeID) -> &'a VoxelTreeInternalNode<F>,
     ) -> Option<VoxelTreeExternalNodeID> {
         if let Some(octants) = indices.octants(self.tree_height.value()) {
             let mut node_id = Some(self.root_node_id());
@@ -776,6 +795,12 @@ impl<F: Float> VoxelTree<F> {
         let radius = F::ONE_HALF * F::sqrt(F::THREE) * self.voxel_extent() * voxel_scale;
         Sphere::new(center.into(), radius)
     }
+
+    fn compute_aabb_of_voxel(&self, indices: VoxelTreeIndices) -> AxisAlignedBox<F> {
+        let (lower_corner, upper_corner) =
+            indices.voxel_lower_and_upper_corner(self.voxel_extent());
+        AxisAlignedBox::new(lower_corner, upper_corner)
+    }
 }
 
 impl<F: Float> VoxelTransform<F> {
@@ -950,6 +975,46 @@ impl VoxelTreeNodeID {
         }
     }
 
+    fn update_internal_node_aabbs<F: Float>(
+        &self,
+        tree: &mut VoxelTree<F>,
+        current_indices: VoxelTreeIndices,
+    ) -> AxisAlignedBox<F> {
+        match self {
+            Self::External(_) => tree.compute_aabb_of_voxel(current_indices),
+            Self::Internal(internal_id) => {
+                let child_ids = tree.internal_node(*internal_id).child_ids;
+
+                let mut aggregate_aabb: Option<AxisAlignedBox<F>> = None;
+
+                for (child_id, next_indices) in
+                    child_ids.iter().zip(current_indices.for_next_depth())
+                {
+                    let child_aabb = child_id
+                        .as_ref()
+                        .map(|child_id| child_id.update_internal_node_aabbs(tree, next_indices));
+
+                    match (&mut aggregate_aabb, child_aabb) {
+                        (Some(aggregate_aabb), Some(child_aabb)) => {
+                            *aggregate_aabb =
+                                AxisAlignedBox::aabb_from_pair(&*aggregate_aabb, &child_aabb);
+                        }
+                        (None, Some(child_aabb)) => {
+                            aggregate_aabb = Some(child_aabb);
+                        }
+                        _ => {}
+                    };
+                }
+
+                let aggregate_aabb = aggregate_aabb.unwrap();
+
+                tree.internal_node_mut(*internal_id).aabb = aggregate_aabb.clone();
+
+                aggregate_aabb
+            }
+        }
+    }
+
     fn compute_bounding_sphere<F: Float>(
         &self,
         tree: &VoxelTree<F>,
@@ -1117,9 +1182,12 @@ impl VoxelTreeNodeStorageID for VoxelTreeExternalNodeID {
     }
 }
 
-impl VoxelTreeInternalNode {
+impl<F: Float> VoxelTreeInternalNode<F> {
     fn new(child_ids: [Option<VoxelTreeNodeID>; 8]) -> Self {
-        Self { child_ids }
+        Self {
+            child_ids,
+            aabb: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
+        }
     }
 
     fn child_ids(&self) -> impl Iterator<Item = VoxelTreeNodeID> + '_ {
@@ -1147,9 +1215,13 @@ impl VoxelTreeInternalNode {
     fn n_external_children(&self) -> usize {
         self.external_child_ids().count()
     }
+
+    fn aabb(&self) -> &AxisAlignedBox<F> {
+        &self.aabb
+    }
 }
 
-impl VoxelTreeNode for VoxelTreeInternalNode {
+impl<F: Float> VoxelTreeNode for VoxelTreeInternalNode<F> {
     type ID = VoxelTreeInternalNodeID;
 }
 
@@ -1255,7 +1327,7 @@ impl VoxelFace {
 
 impl VoxelTreeBuildNode {
     fn build<F, G>(
-        internal_nodes: &mut VoxelTreeInternalNodeStorage,
+        internal_nodes: &mut VoxelTreeInternalNodeStorage<F>,
         external_nodes: &mut VoxelTreeExternalNodeStorage,
         generator: &G,
         current_indices: VoxelTreeIndices,
@@ -1440,6 +1512,25 @@ impl VoxelTreeIndices {
         ];
 
         (voxel_scale, voxel_center_offset)
+    }
+
+    fn voxel_lower_and_upper_corner<F: Float>(&self, voxel_extent: F) -> (Point3<F>, Point3<F>) {
+        let voxel_scale = F::from_u32(self.voxel_scale()).unwrap();
+        let scaled_voxel_extent = voxel_extent * voxel_scale;
+
+        let lower_corner = point![
+            F::from_usize(self.i).unwrap() * scaled_voxel_extent,
+            F::from_usize(self.j).unwrap() * scaled_voxel_extent,
+            F::from_usize(self.k).unwrap() * scaled_voxel_extent
+        ];
+
+        let upper_corner = point![
+            lower_corner.x + scaled_voxel_extent,
+            lower_corner.y + scaled_voxel_extent,
+            lower_corner.z + scaled_voxel_extent
+        ];
+
+        (lower_corner, upper_corner)
     }
 }
 
@@ -1789,6 +1880,150 @@ mod test {
         assert_eq!(internal_child.n_children(), 4);
         assert_eq!(internal_child.n_external_children(), 4);
         assert_eq!(internal_child.n_internal_children(), 0);
+    }
+
+    #[test]
+    fn should_have_correct_aabb_in_two_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [1, 2, 1] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
+
+        let root_aabb = AxisAlignedBox::new(
+            Point3::origin(),
+            point![
+                generator.voxel_extent(),
+                2.0 * generator.voxel_extent(),
+                generator.voxel_extent()
+            ],
+        );
+        assert_abs_diff_eq!(root_node.aabb(), &root_aabb);
+    }
+
+    #[test]
+    fn should_have_correct_aabbs_in_three_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [1, 1, 3] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let internal_child = |parent_node: &VoxelTreeInternalNode<f64>, octant| {
+            tree.internal_node(
+                parent_node.child_ids[octant as usize]
+                    .unwrap()
+                    .as_internal()
+                    .unwrap(),
+            )
+        };
+
+        let check_aabb = |node: &VoxelTreeInternalNode<f64>,
+                          [l0, l1, l2]: [u32; 3],
+                          [u0, u1, u2]: [u32; 3]| {
+            let child_aabb = AxisAlignedBox::new(
+                Point3::from(
+                    vector![f64::from(l0), f64::from(l1), f64::from(l2)] * generator.voxel_extent(),
+                ),
+                Point3::from(
+                    vector![f64::from(u0), f64::from(u1), f64::from(u2)] * generator.voxel_extent(),
+                ),
+            );
+            assert_abs_diff_eq!(node.aabb(), &child_aabb);
+        };
+
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
+
+        check_aabb(root_node, [0, 0, 0], [1, 1, 3]);
+
+        check_aabb(
+            internal_child(root_node, Octant::BackBottomLeft),
+            [0, 0, 0],
+            [1, 1, 2],
+        );
+
+        check_aabb(
+            internal_child(root_node, Octant::FrontBottomLeft),
+            [0, 0, 2],
+            [1, 1, 3],
+        );
+    }
+
+    #[test]
+    fn should_have_correct_aabbs_in_three_by_two_by_five_voxel_tree() {
+        let generator = DefaultVoxelGenerator { shape: [3, 2, 5] };
+        let tree = VoxelTree::build(&generator).unwrap();
+
+        let internal_child = |parent_node: &VoxelTreeInternalNode<f64>, octant| {
+            tree.internal_node(
+                parent_node.child_ids[octant as usize]
+                    .unwrap()
+                    .as_internal()
+                    .unwrap(),
+            )
+        };
+
+        let check_aabb = |node: &VoxelTreeInternalNode<f64>,
+                          [l0, l1, l2]: [u32; 3],
+                          [u0, u1, u2]: [u32; 3]| {
+            let child_aabb = AxisAlignedBox::new(
+                Point3::from(
+                    vector![f64::from(l0), f64::from(l1), f64::from(l2)] * generator.voxel_extent(),
+                ),
+                Point3::from(
+                    vector![f64::from(u0), f64::from(u1), f64::from(u2)] * generator.voxel_extent(),
+                ),
+            );
+            assert_abs_diff_eq!(node.aabb(), &child_aabb);
+        };
+
+        let root_node = tree.internal_node(tree.root_node_id().as_internal().unwrap());
+
+        check_aabb(root_node, [0, 0, 0], [3, 2, 5]);
+
+        check_aabb(
+            internal_child(root_node, Octant::BackBottomLeft),
+            [0, 0, 0],
+            [3, 2, 4],
+        );
+
+        check_aabb(
+            internal_child(root_node, Octant::FrontBottomLeft),
+            [0, 0, 4],
+            [3, 2, 5],
+        );
+
+        check_aabb(
+            internal_child(
+                internal_child(root_node, Octant::BackBottomLeft),
+                Octant::BackBottomRight,
+            ),
+            [2, 0, 0],
+            [3, 2, 2],
+        );
+
+        check_aabb(
+            internal_child(
+                internal_child(root_node, Octant::BackBottomLeft),
+                Octant::FrontBottomRight,
+            ),
+            [2, 0, 2],
+            [3, 2, 4],
+        );
+
+        check_aabb(
+            internal_child(
+                internal_child(root_node, Octant::FrontBottomLeft),
+                Octant::BackBottomLeft,
+            ),
+            [0, 0, 4],
+            [2, 2, 5],
+        );
+
+        check_aabb(
+            internal_child(
+                internal_child(root_node, Octant::FrontBottomLeft),
+                Octant::BackBottomRight,
+            ),
+            [2, 0, 4],
+            [3, 2, 5],
+        );
     }
 
     #[test]
