@@ -1,7 +1,7 @@
 //! Representation of boxes with arbitrary orientations.
 
-use crate::num::Float;
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
+use crate::{geometry::AxisAlignedBox, num::Float};
+use nalgebra::{Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 
 /// A box with arbitrary position, orientation and extents.
 #[derive(Clone, Debug)]
@@ -42,6 +42,17 @@ impl<F: Float> OrientedBox<F> {
             half_width,
             half_height,
             half_depth,
+        )
+    }
+
+    /// Creates a new box corresponding to the given axis aligned box.
+    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox<F>) -> Self {
+        Self::new(
+            axis_aligned_box.center(),
+            UnitQuaternion::identity(),
+            F::ONE_HALF * axis_aligned_box.extent_x(),
+            F::ONE_HALF * axis_aligned_box.extent_y(),
+            F::ONE_HALF * axis_aligned_box.extent_z(),
         )
     }
 
@@ -98,6 +109,18 @@ impl<F: Float> OrientedBox<F> {
     /// Computes the unit vector representing the depth axis of the box.
     pub fn compute_depth_axis(&self) -> UnitVector3<F> {
         UnitVector3::new_unchecked(self.orientation.transform_vector(&Vector3::z_axis()))
+    }
+
+    /// Creates a new box corresponding to transforming this box with the given
+    /// similarity transform.
+    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+        Self::new(
+            transform.transform_point(&self.center),
+            transform.isometry.rotation * self.orientation,
+            transform.scaling() * self.half_width,
+            transform.scaling() * self.half_height,
+            transform.scaling() * self.half_depth,
+        )
     }
 }
 
