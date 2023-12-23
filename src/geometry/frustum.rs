@@ -18,6 +18,7 @@ use nalgebra::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frustum<F: Float> {
     planes: [Plane<F>; 6],
+    largest_signed_dist_aab_corner_indices_for_planes: [usize; 6],
     transform_matrix: Matrix4<F>,
     inverse_transform_matrix: Matrix4<F>,
 }
@@ -30,8 +31,14 @@ impl<F: Float> Frustum<F> {
     /// "Fast Extraction of Viewing Frustum Planes from the
     /// World-View-Projection Matrix".
     pub fn from_transform(transform: &Projective3<F>) -> Self {
+        let planes = Self::planes_from_transform_matrix(transform.matrix());
+
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+
         Self {
-            planes: Self::planes_from_transform_matrix(transform.matrix()),
+            planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix: transform.to_homogeneous(),
             inverse_transform_matrix: transform.inverse().to_homogeneous(),
         }
@@ -43,8 +50,14 @@ impl<F: Float> Frustum<F> {
         transform_matrix: Matrix4<F>,
         inverse_transform_matrix: Matrix4<F>,
     ) -> Self {
+        let planes = Self::planes_from_transform_matrix(&transform_matrix);
+
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+
         Self {
-            planes: Self::planes_from_transform_matrix(&transform_matrix),
+            planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix,
             inverse_transform_matrix,
         }
@@ -112,6 +125,28 @@ impl<F: Float> Frustum<F> {
         self.planes
             .iter()
             .all(|plane| plane.compute_signed_distance(sphere.center()) >= -sphere.radius())
+    }
+
+    /// Whether any part of the given axis-aligned box could be inside the
+    /// frustum. If the box lies close to an edge or a corner, this method may
+    /// return `true` even if the box is really outside. However, this method is
+    /// will always return `true` if the box is really inside. If the boundaries
+    /// exactly touch each other, the box is considered inside.
+    pub fn could_contain_part_of_axis_aligned_box(
+        &self,
+        axis_aligned_box: &AxisAlignedBox<F>,
+    ) -> bool {
+        self.planes
+            .iter()
+            .zip(
+                self.largest_signed_dist_aab_corner_indices_for_planes
+                    .iter(),
+            )
+            .all(|(plane, &largest_signed_dist_corner_idx)| {
+                plane.compute_signed_distance(
+                    &axis_aligned_box.corner(largest_signed_dist_corner_idx),
+                ) >= F::ZERO
+            })
     }
 
     /// Computes the 8 corners of the frustum.
@@ -213,6 +248,9 @@ impl<F: Float> Frustum<F> {
             self.planes[5].rotated(rotation),
         ];
 
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&rotated_planes);
+
         let rotated_inverse_transform_matrix =
             rotation.to_homogeneous() * self.inverse_transform_matrix;
 
@@ -221,6 +259,7 @@ impl<F: Float> Frustum<F> {
 
         Self {
             planes: rotated_planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix: inverse_of_rotated_inverse_transform_matrix,
             inverse_transform_matrix: rotated_inverse_transform_matrix,
         }
@@ -238,6 +277,11 @@ impl<F: Float> Frustum<F> {
             self.planes[5].transformed(transformation),
         ];
 
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(
+                &transformed_planes,
+            );
+
         let transformed_inverse_transform_matrix =
             transformation.to_homogeneous() * self.inverse_transform_matrix;
 
@@ -246,6 +290,7 @@ impl<F: Float> Frustum<F> {
 
         Self {
             planes: transformed_planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix: inverse_of_transformed_inverse_transform_matrix,
             inverse_transform_matrix: transformed_inverse_transform_matrix,
         }
@@ -305,11 +350,46 @@ impl<F: Float> Frustum<F> {
 
     #[cfg(test)]
     fn from_transform_matrix(transform_matrix: Matrix4<F>) -> Self {
+        let planes = Self::planes_from_transform_matrix(&transform_matrix);
+
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+
         Self {
-            planes: Self::planes_from_transform_matrix(&transform_matrix),
+            planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix,
             inverse_transform_matrix: transform_matrix.try_inverse().unwrap(),
         }
+    }
+
+    fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane<F>) -> usize {
+        let normal = plane.unit_normal();
+        match (
+            normal.x.is_sign_negative(),
+            normal.y.is_sign_negative(),
+            normal.z.is_sign_negative(),
+        ) {
+            (true, true, true) => 0,
+            (true, true, false) => 1,
+            (true, false, true) => 2,
+            (true, false, false) => 3,
+            (false, true, true) => 4,
+            (false, true, false) => 5,
+            (false, false, true) => 6,
+            (false, false, false) => 7,
+        }
+    }
+
+    fn determine_largest_signed_dist_aab_corner_indices_for_all_planes(
+        planes: &[Plane<F>; 6],
+    ) -> [usize; 6] {
+        planes
+            .iter()
+            .map(Self::determine_largest_signed_dist_aab_corner_index_for_plane)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
     }
 }
 
@@ -453,6 +533,74 @@ mod test {
     }
 
     #[test]
+    fn inside_sphere_is_reported_as_not_outside() {
+        let frustum = Frustum::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
+                .as_projective(),
+        );
+
+        let sphere = Sphere::new(point![3.37632, -3.3647947, -2.6214356], 1.0);
+
+        assert!(frustum.could_contain_part_of_sphere(&sphere));
+    }
+
+    #[test]
+    fn outside_aabs_are_reported_as_outside() {
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
+        for x in [-2, 0, 2] {
+            for y in [-2, 0, 2] {
+                for z in [-2, 0, 2] {
+                    for offset_fraction in [0.9, 0.7, 0.5] {
+                        if x == 0 && y == 0 && z == 0 {
+                            continue;
+                        }
+                        let center = point![f64::from(x), f64::from(y), f64::from(z)];
+                        let corner_offset =
+                            vector![offset_fraction, offset_fraction, offset_fraction];
+                        let aab =
+                            AxisAlignedBox::new(center - corner_offset, center + corner_offset);
+                        assert!(!frustum.could_contain_part_of_axis_aligned_box(&aab));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn barely_inside_aabs_are_reported_as_not_outside() {
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
+        for x in [-2, 0, 2] {
+            for y in [-2, 0, 2] {
+                for z in [-2, 0, 2] {
+                    let center = point![f64::from(x), f64::from(y), f64::from(z)];
+                    let corner_offset = vector![1.0, 1.0, 1.0] * 1.001;
+                    let aab = AxisAlignedBox::new(center - corner_offset, center + corner_offset);
+                    assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn centered_aabs_are_reported_as_not_outside() {
+        let frustum = Frustum::from_transform(
+            OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
+        );
+        for half_extent in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
+            let corner_offset = vector![1.0, 1.0, 1.0] * half_extent;
+            let aab = AxisAlignedBox::new(
+                Point3::origin() - corner_offset,
+                Point3::origin() + corner_offset,
+            );
+            assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
+        }
+    }
+
+    #[test]
     fn creating_frustum_for_transform_of_transformed_frustum_gives_transformed_frustum() {
         let frustum = Frustum::<f64>::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
@@ -475,18 +623,6 @@ mod test {
             frustum_from_transformed,
             epsilon = 1e-9
         );
-    }
-
-    #[test]
-    fn inside_sphere_is_reported_as_not_outside() {
-        let frustum = Frustum::from_transform(
-            PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
-                .as_projective(),
-        );
-
-        let sphere = Sphere::new(point![3.37632, -3.3647947, -2.6214356], 1.0);
-
-        assert!(frustum.could_contain_part_of_sphere(&sphere));
     }
 
     #[test]
@@ -603,5 +739,28 @@ mod test {
             &point![right, top, new_far],
             epsilon = 1e-9
         );
+    }
+
+    #[test]
+    fn should_determine_correct_largest_signed_dist_aab_corner_indices() {
+        let frustum = Frustum::from_transform(
+            PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
+                .as_projective(),
+        );
+
+        let aab = AxisAlignedBox::new(Point3::origin(), point![1.0, 1.0, 1.0]);
+
+        for plane_idx in 0..6 {
+            let plane = &frustum.planes[plane_idx];
+            let largest_signed_dist_aab_corner_idx =
+                frustum.largest_signed_dist_aab_corner_indices_for_planes[plane_idx];
+            let largest_signed_dist =
+                plane.compute_signed_distance(&aab.corner(largest_signed_dist_aab_corner_idx));
+            for corner_idx in 0..8 {
+                assert!(
+                    plane.compute_signed_distance(&aab.corner(corner_idx)) <= largest_signed_dist
+                );
+            }
+        }
     }
 }
