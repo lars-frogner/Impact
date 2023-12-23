@@ -1,7 +1,7 @@
 //! Representation of axis-aligned boxes.
 
-use super::Point;
-use crate::num::Float;
+use crate::{geometry::Point, num::Float};
+use approx::AbsDiffEq;
 use na::point;
 use nalgebra::{self as na, Point3};
 
@@ -219,6 +219,23 @@ impl<F: Float> AxisAlignedBox<F> {
         } else {
             Some(Self::new(lower_corner, upper_corner))
         }
+    }
+}
+
+impl<F> AbsDiffEq for AxisAlignedBox<F>
+where
+    F: Float + AbsDiffEq,
+    <F as AbsDiffEq>::Epsilon: Clone,
+{
+    type Epsilon = <F as AbsDiffEq>::Epsilon;
+
+    fn default_epsilon() -> Self::Epsilon {
+        <F as AbsDiffEq>::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        Point3::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
+            && Point3::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
     }
 }
 
