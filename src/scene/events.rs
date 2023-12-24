@@ -355,39 +355,9 @@ impl Scene {
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                let voxel_transforms = voxel_tree.compute_exposed_voxel_transforms();
-
-                let voxel_tree_bounding_sphere =
-                    if components.has_component_type::<UncullableComp>() {
-                        // The scene graph will not cull voxel trees with no bounding sphere
-                        None
-                    } else {
-                        Some(voxel_tree.compute_bounding_sphere(0))
-                    };
+                let voxel_tree_bounding_sphere = voxel_tree.compute_bounding_sphere(0);
 
                 let appearance = voxel_manager.voxel_appearance(voxel_type.voxel_type());
-
-                let feature_ids = match (
-                    appearance.material_handle.material_property_feature_id(),
-                    appearance
-                        .prepass_material_handle
-                        .as_ref()
-                        .and_then(MaterialHandle::material_property_feature_id),
-                ) {
-                    (None, None) => Vec::new(),
-                    (Some(feature_id), None) | (None, Some(feature_id)) => {
-                        // Each voxel uses the same feature, in which case we only
-                        // have to provide a single copy of the feature ID
-                        vec![vec![feature_id]]
-                    }
-                    (Some(feature_id), Some(prepass_feature_id)) => {
-                        assert_eq!(
-                            prepass_feature_id, feature_id,
-                            "Prepass material must use the same feature as main material"
-                        );
-                        vec![vec![feature_id]]
-                    }
-                };
 
                 let parent_node_id =
                     parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
@@ -397,10 +367,9 @@ impl Scene {
 
                 let voxel_tree_node_id = scene_graph.create_voxel_tree_node(
                     group_node_id,
-                    voxel_transforms,
                     appearance.model_id,
+                    voxel_tree_id,
                     voxel_tree_bounding_sphere,
-                    feature_ids,
                 );
 
                 VoxelTreeNodeComp::new(voxel_tree_id, group_node_id, voxel_tree_node_id)

@@ -64,6 +64,54 @@ impl InstanceFeatureManager {
         })
     }
 
+    /// Returns a mutable reference to the buffer of model instance transforms
+    /// for the model with the given ID.
+    pub fn transform_buffer_mut(&mut self, model_id: ModelID) -> &mut DynamicInstanceFeatureBuffer {
+        self.instance_feature_buffers
+            .get_mut(&model_id)
+            .expect("Tried to buffer instances of missing model")
+            .1
+            .get_mut(0)
+            .expect("Missing transform buffer for model")
+    }
+
+    /// Returns a mutable reference to the buffer of model instance transforms
+    /// for the model with the given ID and another mutable reference to the
+    /// first instance feature buffer following the transform buffer, along with
+    /// a reference to the feature storage associated with the latter.
+    ///
+    /// # Panics
+    /// If any of the requested buffers are not present.
+    pub fn transform_and_next_feature_buffer_mut_with_storage(
+        &mut self,
+        model_id: ModelID,
+    ) -> (
+        &mut DynamicInstanceFeatureBuffer,
+        (&InstanceFeatureStorage, &mut DynamicInstanceFeatureBuffer),
+    ) {
+        let feature_buffers = &mut self
+            .instance_feature_buffers
+            .get_mut(&model_id)
+            .expect("Tried to buffer instances of missing model")
+            .1;
+
+        let (transform_buffer, remaining_buffers) = feature_buffers
+            .split_first_mut()
+            .expect("Missing instance feature buffer for transforms");
+
+        let (next_feature_buffer, _) = remaining_buffers
+            .split_first_mut()
+            .expect("Missing instance feature buffer following transform buffer");
+
+        let feature_type_id = next_feature_buffer.feature_type_id();
+
+        let storage = self.feature_storages.get(&feature_type_id).expect(
+            "Missing storage associated with instance feature buffer following transform buffer",
+        );
+
+        (transform_buffer, (storage, next_feature_buffer))
+    }
+
     /// Returns a reference to the storage of instance features of type `Fe`, or
     /// [`None`] if no storage exists for that type.
     pub fn get_storage<Fe: InstanceFeature>(&self) -> Option<&InstanceFeatureStorage> {

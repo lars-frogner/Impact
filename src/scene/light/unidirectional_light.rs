@@ -109,6 +109,16 @@ impl UnidirectionalLight {
         self.camera_to_light_space_rotation * transform_to_camera_space
     }
 
+    /// Creates an axis-aligned bounding box in the light's reference frame
+    /// containing all models that may cast visible shadows into the given
+    /// cascade.
+    pub fn create_light_space_orthographic_aabb_for_cascade(
+        &self,
+        cascade_idx: CascadeIdx,
+    ) -> AxisAlignedBox<fre> {
+        self.orthographic_transforms[cascade_idx as usize].compute_aabb()
+    }
+
     /// Sets the camera space direction of the light to the given direction.
     pub fn set_camera_space_direction(&mut self, camera_space_direction: LightDirection) {
         self.camera_space_direction = camera_space_direction;
@@ -245,7 +255,7 @@ impl UnidirectionalLight {
         let light_space_bounding_sphere =
             camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
 
-        let orthographic_aabb = self.orthographic_transforms[cascade_idx as usize].compute_aabb();
+        let orthographic_aabb = self.create_light_space_orthographic_aabb_for_cascade(cascade_idx);
 
         !light_space_bounding_sphere.is_outside_axis_aligned_box(&orthographic_aabb)
     }

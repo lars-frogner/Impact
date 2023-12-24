@@ -107,6 +107,7 @@ define_task!(
                 .unwrap()
                 .buffer_transforms_of_visible_model_instances(
                     &mut scene.instance_feature_manager().write().unwrap(),
+                    &scene.voxel_manager().read().unwrap(),
                     scene_camera,
                 );
 
@@ -148,6 +149,7 @@ define_task!(
                     .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut scene.light_storage().write().unwrap(),
                         &mut scene.instance_feature_manager().write().unwrap(),
+                        &scene.voxel_manager().read().unwrap(),
                         scene_camera,
                     );
 
@@ -189,6 +191,7 @@ define_task!(
                     .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut scene.light_storage().write().unwrap(),
                         &mut scene.instance_feature_manager().write().unwrap(),
+                        &scene.voxel_manager().read().unwrap(),
                         scene_camera,
                     );
 
