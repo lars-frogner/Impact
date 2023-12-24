@@ -16,7 +16,7 @@ use crate::{
 };
 use approx::AbsDiffEq;
 use impact_utils::KeyIndexMapper;
-use nalgebra::{point, vector, Point3, Similarity3, Vector3};
+use nalgebra::{point, vector, Point3, Similarity3, UnitVector3, Vector3};
 use nohash_hasher::BuildNoHashHasher;
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
@@ -349,11 +349,16 @@ impl<F: Float> VoxelTree<F> {
     ) where
         F: SubsetOf<fre>,
     {
+        let camera_space_axes_in_tree_space =
+            VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
+
         transform_buffer.add_features_from_iterator(
-            self.voxel_instances()
-                .transforms()
-                .iter()
-                .map(|transform| transform.transform_into_model_view_transform(view_transform)),
+            self.voxel_instances().transforms().iter().map(|transform| {
+                transform.transform_into_model_view_transform(
+                    view_transform,
+                    &camera_space_axes_in_tree_space,
+                )
+            }),
         );
 
         let feature_id = feature_id_map.value(VoxelType::Default);
@@ -374,11 +379,16 @@ impl<F: Float> VoxelTree<F> {
     ) where
         F: SubsetOf<fre>,
     {
+        let camera_space_axes_in_tree_space =
+            VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
+
         transform_buffer.add_features_from_iterator(
-            self.voxel_instances()
-                .transforms()
-                .iter()
-                .map(|transform| transform.transform_into_model_view_transform(view_transform)),
+            self.voxel_instances().transforms().iter().map(|transform| {
+                transform.transform_into_model_view_transform(
+                    view_transform,
+                    &camera_space_axes_in_tree_space,
+                )
+            }),
         );
     }
 
@@ -393,11 +403,16 @@ impl<F: Float> VoxelTree<F> {
     ) where
         F: SubsetOf<fre>,
     {
+        let camera_space_axes_in_tree_space =
+            VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
+
         transform_buffer.add_features_from_iterator(
-            self.voxel_instances()
-                .transforms()
-                .iter()
-                .map(|transform| transform.transform_into_model_view_transform(view_transform)),
+            self.voxel_instances().transforms().iter().map(|transform| {
+                transform.transform_into_model_view_transform(
+                    view_transform,
+                    &camera_space_axes_in_tree_space,
+                )
+            }),
         );
     }
 
@@ -933,9 +948,10 @@ impl<F: Float> VoxelTransform<F> {
 
     /// Applies the given transform from the space of the voxel tree to camera
     /// space, yielding the model view transform of the voxel.
-    pub fn transform_into_model_view_transform(
+    fn transform_into_model_view_transform(
         &self,
         transform_from_tree_to_camera_space: &Similarity3<F>,
+        camera_space_axes_in_tree_space: &(UnitVector3<F>, UnitVector3<F>, UnitVector3<F>),
     ) -> InstanceModelViewTransform
     where
         F: SubsetOf<fre>,
@@ -951,14 +967,28 @@ impl<F: Float> VoxelTransform<F> {
         let new_scaling = scaling_from_tree_to_camera_space * self.scaling;
 
         let new_translation = translation_from_tree_to_camera_space
-            + rotation_from_tree_to_camera_space.transform_vector(&self.translation)
-                * scaling_from_tree_to_camera_space;
+            + vector![
+                camera_space_axes_in_tree_space.0.dot(&self.translation),
+                camera_space_axes_in_tree_space.1.dot(&self.translation),
+                camera_space_axes_in_tree_space.2.dot(&self.translation)
+            ] * scaling_from_tree_to_camera_space;
 
         InstanceModelViewTransform {
             rotation: rotation_from_tree_to_camera_space.cast::<fre>(),
             translation: new_translation.cast::<fre>(),
             scaling: fre::from_subset(&new_scaling),
         }
+    }
+
+    fn compute_camera_space_axes_in_tree_space(
+        transform_from_tree_to_camera_space: &Similarity3<F>,
+    ) -> (UnitVector3<F>, UnitVector3<F>, UnitVector3<F>) {
+        let rotation = &transform_from_tree_to_camera_space.isometry.rotation;
+        (
+            rotation.inverse_transform_unit_vector(&Vector3::x_axis()),
+            rotation.inverse_transform_unit_vector(&Vector3::y_axis()),
+            rotation.inverse_transform_unit_vector(&Vector3::z_axis()),
+        )
     }
 }
 
@@ -2749,8 +2779,12 @@ mod test {
             2.7,
         );
 
-        let model_view_transform = voxel_transform
-            .transform_into_model_view_transform(&transform_from_tree_to_camera_space);
+        let model_view_transform = voxel_transform.transform_into_model_view_transform(
+            &transform_from_tree_to_camera_space,
+            &VoxelTransform::compute_camera_space_axes_in_tree_space(
+                &transform_from_tree_to_camera_space,
+            ),
+        );
 
         let correct_model_view_transform = transform_from_tree_to_camera_space * voxel_similarity;
 
