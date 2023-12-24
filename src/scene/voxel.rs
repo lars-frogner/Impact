@@ -9,8 +9,8 @@ pub use components::{
 
 use crate::{
     geometry::{
-        FrontFaceSide, TriangleMesh, UniformBoxVoxelGenerator, UniformSphereVoxelGenerator,
-        VoxelTree, VoxelType,
+        FrontFaceSide, InstanceFeatureID, TriangleMesh, UniformBoxVoxelGenerator,
+        UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree, VoxelType,
     },
     num::Float,
     rendering::{fre, DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
@@ -25,7 +25,6 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
 use nalgebra::vector;
-use num_traits::ToPrimitive;
 use std::{collections::HashMap, sync::RwLock};
 
 /// Descriptor for the appearance of a voxel type.
@@ -47,7 +46,8 @@ pub struct VoxelTreeID(u32);
 /// Manager of all [`VoxelTree`]s in a scene.
 #[derive(Debug)]
 pub struct VoxelManager<F: Float> {
-    voxel_appearances: Vec<VoxelAppearance>,
+    voxel_appearances: VoxelPropertyMap<VoxelAppearance>,
+    voxel_material_feature_ids: VoxelPropertyMap<InstanceFeatureID>,
     voxel_trees: HashMap<VoxelTreeID, VoxelTree<F>>,
     voxel_tree_id_counter: u32,
 }
@@ -58,6 +58,15 @@ lazy_static! {
     pub static ref VOXEL_MESH_ID: MeshID = MeshID(hash64!("VoxelMesh"));
 }
 
+#[cfg(test)]
+impl VoxelTreeID {
+    /// Creates a dummy [`VoxelTreeID`] that will never match an actual ID
+    /// returned from the [`VoxelManager`]. Used for testing purposes.
+    pub fn dummy() -> Self {
+        Self(0)
+    }
+}
+
 impl std::fmt::Display for VoxelTreeID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -65,9 +74,15 @@ impl std::fmt::Display for VoxelTreeID {
 }
 
 impl<F: Float> VoxelManager<F> {
+    /// Returns a reference to the map from voxel types to material property
+    /// feature IDs.
+    pub fn voxel_material_feature_ids(&self) -> &VoxelPropertyMap<InstanceFeatureID> {
+        &self.voxel_material_feature_ids
+    }
+
     /// Returns a reference to the [`VoxelAppearance`] for the given voxel type.
     pub fn voxel_appearance(&self, voxel_type: VoxelType) -> &VoxelAppearance {
-        &self.voxel_appearances[voxel_type.to_usize().unwrap()]
+        self.voxel_appearances.value(voxel_type)
     }
 
     /// Returns a reference to the [`VoxelTree`] with the given ID, or [`None`]
@@ -126,34 +141,45 @@ impl VoxelManager<fre> {
             ),
         );
 
-        let voxel_appearances = VoxelType::all()
-            .map(|voxel_type| {
-                let material =
-                    setup_voxel_material(voxel_type, material_library, instance_feature_manager);
+        let voxel_appearances = VoxelType::all().map(|voxel_type| {
+            let material =
+                setup_voxel_material(voxel_type, material_library, instance_feature_manager);
 
-                let material_handle = *material.material_handle();
-                let prepass_material_handle = material.prepass_material_handle().cloned();
+            let material_handle = *material.material_handle();
+            let prepass_material_handle = material.prepass_material_handle().cloned();
 
-                let model_id = ModelID::for_mesh_and_material(
-                    *VOXEL_MESH_ID,
-                    material_handle,
-                    prepass_material_handle,
-                );
+            let model_id = ModelID::for_mesh_and_material(
+                *VOXEL_MESH_ID,
+                material_handle,
+                prepass_material_handle,
+            );
 
-                instance_feature_manager.register_instance(material_library, model_id);
+            instance_feature_manager.register_instance(material_library, model_id);
 
-                VoxelAppearance {
-                    model_id,
-                    material_handle,
-                    prepass_material_handle,
-                }
+            VoxelAppearance {
+                model_id,
+                material_handle,
+                prepass_material_handle,
+            }
+        });
+
+        let voxel_material_feature_ids = voxel_appearances
+            .iter()
+            .map(|appearance| {
+                appearance
+                    .material_handle
+                    .material_property_feature_id()
+                    .unwrap()
             })
-            .collect();
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
         Self {
-            voxel_appearances,
+            voxel_appearances: VoxelPropertyMap::new(voxel_appearances),
+            voxel_material_feature_ids: VoxelPropertyMap::new(voxel_material_feature_ids),
             voxel_trees: HashMap::new(),
-            voxel_tree_id_counter: 0,
+            voxel_tree_id_counter: 1,
         }
     }
 

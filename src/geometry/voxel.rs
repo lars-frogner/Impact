@@ -7,7 +7,10 @@ mod generation;
 pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
 
 use crate::{
-    geometry::{AxisAlignedBox, Frustum, InstanceModelViewTransform, OrientedBox, Sphere},
+    geometry::{
+        AxisAlignedBox, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureID,
+        InstanceFeatureStorage, InstanceModelViewTransform, OrientedBox, Sphere,
+    },
     num::Float,
     rendering::fre,
 };
@@ -25,6 +28,16 @@ use std::iter;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, DeriveToPrimitive, DeriveFromPrimitive)]
 pub enum VoxelType {
     Default = 0,
+}
+
+/// The total number of separate [`VoxelType`]s.
+pub const N_VOXEL_TYPES: usize = 1;
+
+/// A mapping from voxel types to the corresponding values of a specific voxel
+/// property.
+#[derive(Debug)]
+pub struct VoxelPropertyMap<P> {
+    property_values: [P; N_VOXEL_TYPES],
 }
 
 /// Represents a voxel generator that provides a voxel type given the voxel
@@ -51,6 +64,7 @@ pub struct VoxelTree<F: Float> {
     root_node_id: VoxelTreeNodeID,
     internal_nodes: VoxelTreeInternalNodeStorage<F>,
     external_nodes: VoxelTreeExternalNodeStorage,
+    voxel_instances: VoxelInstanceStorage<F>,
 }
 
 /// A transform from the space of an voxel in a voxel tree to the space of the
@@ -101,6 +115,14 @@ struct VoxelTreeNodeStorage<C> {
 type VoxelTreeInternalNodeStorage<F> = VoxelTreeNodeStorage<VoxelTreeInternalNode<F>>;
 
 type VoxelTreeExternalNodeStorage = VoxelTreeNodeStorage<VoxelTreeExternalNode>;
+
+/// Storage for voxel instance data to be passed to the GPU.
+#[derive(Clone, Debug)]
+struct VoxelInstanceStorage<F: Float> {
+    voxel_types: Vec<VoxelType>,
+    transforms: Vec<VoxelTransform<F>>,
+    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
+}
 
 /// Identifier for a [`VoxelTreeInternalNode`] in a [`VoxelTree`].
 #[repr(transparent)]
@@ -207,9 +229,23 @@ enum Octant {
 }
 
 impl VoxelType {
-    /// Returns an iterator over each voxel type in the order of their index.
-    pub fn all() -> impl Iterator<Item = Self> {
-        (0..=0).map(|idx| Self::from_usize(idx).unwrap())
+    /// Returns an array with each voxel type in the order of their index.
+    pub fn all() -> [Self; N_VOXEL_TYPES] {
+        std::array::from_fn(|idx| Self::from_usize(idx).unwrap())
+    }
+}
+
+impl<P> VoxelPropertyMap<P> {
+    /// Creates a new voxel property map using the given property values, with
+    /// the value for a given voxel type residing at the numerical value of the
+    /// corresponding [`VoxelType`] enum variant.
+    pub fn new(property_values: [P; N_VOXEL_TYPES]) -> Self {
+        Self { property_values }
+    }
+
+    /// Returns a reference to the property value for the given voxel type.
+    pub fn value(&self, voxel_type: VoxelType) -> &P {
+        &self.property_values[voxel_type as usize]
     }
 }
 
@@ -228,6 +264,8 @@ impl<F: Float> VoxelTree<F> {
         let mut internal_nodes = VoxelTreeNodeStorage::new();
         let mut external_nodes = VoxelTreeNodeStorage::new();
 
+        let voxel_instances = VoxelInstanceStorage::new();
+
         let build_node = VoxelTreeBuildNode::build(
             &mut internal_nodes,
             &mut external_nodes,
@@ -242,12 +280,15 @@ impl<F: Float> VoxelTree<F> {
                 root_node_id,
                 internal_nodes,
                 external_nodes,
+                voxel_instances,
             };
 
             // The order here is important: we must update adjacent voxels first
             // since this information is used when updating internal node data
+            // and creating instances for unexposed voxels
             tree.update_adjacent_voxels_for_all_external_nodes();
             tree.update_internal_node_data();
+            tree.create_instances_for_unexposed_voxels();
 
             tree
         })
@@ -286,37 +327,78 @@ impl<F: Float> VoxelTree<F> {
         )
     }
 
-    /// Computes the transform of each (potentially merged) voxel in the tree.
-    pub fn compute_voxel_transforms(&self) -> Vec<VoxelTransform<F>> {
-        let mut transforms = Vec::new();
-        self.root_node_id.add_voxel_transforms(
-            self,
-            &mut transforms,
-            VoxelTreeIndices::at_root(self.tree_height),
-            &|_| true,
-        );
-        transforms
-    }
-
-    /// Computes the transform of each (potentially merged) voxel in the tree
-    /// that has at least one face not fully obscured by adjacent voxels.
-    pub fn compute_exposed_voxel_transforms(&self) -> Vec<VoxelTransform<F>> {
-        let mut transforms = Vec::new();
-        self.root_node_id.add_voxel_transforms(
-            self,
-            &mut transforms,
-            VoxelTreeIndices::at_root(self.tree_height),
-            &|node_id| !self.external_node(node_id).has_only_fully_obscured_faces(),
-        );
-        transforms
-    }
-
     /// Returns the type of the voxel at the given indices in the voxel grid, or
     /// [`None`] if the voxel is empty or the indices are outside the bounds of
     /// the grid.
     pub fn find_voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
         self.find_external_node_id_at_indices(i, j, k)
             .map(|node_id| self.external_node(node_id).voxel_type)
+    }
+
+    /// Determines the voxels that may be visible based on the given view
+    /// frustum and writes their model view transforms and instance features to
+    /// the given buffers.
+    pub fn buffer_visible_voxel_model_view_transforms_and_features(
+        &self,
+        feature_id_map: &VoxelPropertyMap<InstanceFeatureID>,
+        feature_storage: &InstanceFeatureStorage,
+        transform_buffer: &mut DynamicInstanceFeatureBuffer,
+        feature_buffer: &mut DynamicInstanceFeatureBuffer,
+        view_frustum: &Frustum<F>,
+        view_transform: &Similarity3<F>,
+    ) where
+        F: SubsetOf<fre>,
+    {
+        transform_buffer.add_features_from_iterator(
+            self.voxel_instances()
+                .transforms()
+                .iter()
+                .map(|transform| transform.transform_into_model_view_transform(view_transform)),
+        );
+
+        let feature_id = feature_id_map.value(VoxelType::Default);
+        feature_buffer.add_feature_from_storage_repeatedly(
+            feature_storage,
+            *feature_id,
+            self.voxel_instances().n_instances(),
+        );
+    }
+
+    /// Determines the voxels that may be visible based on the given view
+    /// frustum and writes their model view transforms to the given buffer.
+    pub fn buffer_visible_voxel_model_view_transforms(
+        &self,
+        transform_buffer: &mut DynamicInstanceFeatureBuffer,
+        view_frustum: &Frustum<F>,
+        view_transform: &Similarity3<F>,
+    ) where
+        F: SubsetOf<fre>,
+    {
+        transform_buffer.add_features_from_iterator(
+            self.voxel_instances()
+                .transforms()
+                .iter()
+                .map(|transform| transform.transform_into_model_view_transform(view_transform)),
+        );
+    }
+
+    /// Determines the voxels that may be visible based on the given
+    /// orthographic view frustum and writes their model view transforms to the
+    /// given buffer.
+    pub fn buffer_visible_voxel_model_view_transforms_orthographic(
+        &self,
+        transform_buffer: &mut DynamicInstanceFeatureBuffer,
+        view_frustum: &OrientedBox<F>,
+        view_transform: &Similarity3<F>,
+    ) where
+        F: SubsetOf<fre>,
+    {
+        transform_buffer.add_features_from_iterator(
+            self.voxel_instances()
+                .transforms()
+                .iter()
+                .map(|transform| transform.transform_into_model_view_transform(view_transform)),
+        );
     }
 
     /// Rebuilds the list of adjacent voxels for every external node in the
@@ -335,10 +417,25 @@ impl<F: Float> VoxelTree<F> {
 
     /// Updates the axis-aligned bounding box (AABB) and count of exposed
     /// children for every internal node in the tree.
-    pub fn update_internal_node_data(&mut self) {
+    fn update_internal_node_data(&mut self) {
         self.root_node_id
             .clone()
             .update_internal_node_data(self, VoxelTreeIndices::at_root(self.tree_height));
+    }
+
+    /// Computes the transform of each (potentially merged) voxel in the tree
+    /// that has at least one face not fully obscured by adjacent voxels and
+    /// adds it along with the voxel type in the voxel instance storage under
+    /// the external node ID.
+    fn create_instances_for_unexposed_voxels(&mut self) {
+        let mut voxel_instance_storage = VoxelInstanceStorage::new();
+        self.root_node_id.add_voxel_instances(
+            self,
+            &mut voxel_instance_storage,
+            VoxelTreeIndices::at_root(self.tree_height),
+            &|node_id| !self.external_node(node_id).has_only_fully_obscured_faces(),
+        );
+        self.voxel_instances = voxel_instance_storage;
     }
 
     /// Returns the ID of the root node of the tree.
@@ -356,6 +453,10 @@ impl<F: Float> VoxelTree<F> {
 
     fn external_node(&self, id: VoxelTreeExternalNodeID) -> &VoxelTreeExternalNode {
         self.external_nodes.node(id)
+    }
+
+    fn voxel_instances(&self) -> &VoxelInstanceStorage<F> {
+        &self.voxel_instances
     }
 
     fn find_external_node_at_indices(
@@ -1030,6 +1131,39 @@ impl VoxelTreeNodeID {
         }
     }
 
+    fn add_voxel_instances<F: Float>(
+        &self,
+        tree: &VoxelTree<F>,
+        storage: &mut VoxelInstanceStorage<F>,
+        current_indices: VoxelTreeIndices,
+        criterion: &impl Fn(VoxelTreeExternalNodeID) -> bool,
+    ) {
+        match self {
+            Self::External(external_id) => {
+                if criterion(*external_id) {
+                    let (voxel_scale, voxel_center_offset) =
+                        current_indices.voxel_scale_and_center_offset(tree.voxel_extent());
+
+                    let voxel_type = tree.external_node(*external_id).voxel_type;
+                    let voxel_transform = VoxelTransform::new(voxel_center_offset, voxel_scale);
+
+                    storage.add_instance(*external_id, voxel_type, voxel_transform);
+                }
+            }
+            Self::Internal(internal_id) => {
+                let child_ids = &tree.internal_node(*internal_id).child_ids;
+
+                for (child_id, next_indices) in
+                    child_ids.iter().zip(current_indices.for_next_depth())
+                {
+                    if let Some(child_id) = child_id.as_ref() {
+                        child_id.add_voxel_instances(tree, storage, next_indices, criterion);
+                    }
+                }
+            }
+        }
+    }
+
     fn compute_bounding_sphere<F: Float>(
         &self,
         tree: &VoxelTree<F>,
@@ -1065,36 +1199,6 @@ impl VoxelTreeNodeID {
                     aggregate_bounding_sphere.unwrap()
                 } else {
                     tree.compute_bounding_sphere_of_voxel(current_indices)
-                }
-            }
-        }
-    }
-
-    fn add_voxel_transforms<F: Float>(
-        &self,
-        tree: &VoxelTree<F>,
-        transforms: &mut Vec<VoxelTransform<F>>,
-        current_indices: VoxelTreeIndices,
-        criterion: &impl Fn(VoxelTreeExternalNodeID) -> bool,
-    ) {
-        match self {
-            Self::External(external_id) => {
-                if criterion(*external_id) {
-                    let (voxel_scale, voxel_center_offset) =
-                        current_indices.voxel_scale_and_center_offset(tree.voxel_extent());
-
-                    transforms.push(VoxelTransform::new(voxel_center_offset, voxel_scale));
-                }
-            }
-            Self::Internal(internal_id) => {
-                let child_ids = &tree.internal_node(*internal_id).child_ids;
-
-                for (child_id, next_indices) in
-                    child_ids.iter().zip(current_indices.for_next_depth())
-                {
-                    if let Some(child_id) = child_id.as_ref() {
-                        child_id.add_voxel_transforms(tree, transforms, next_indices, criterion);
-                    }
                 }
             }
         }
@@ -1160,6 +1264,40 @@ impl<C: VoxelTreeNode> VoxelTreeNodeStorage<C> {
         let node_id = C::ID::from_number(self.node_id_count);
         self.node_id_count += 1;
         node_id
+    }
+}
+
+impl<F: Float> VoxelInstanceStorage<F> {
+    fn new() -> Self {
+        Self {
+            voxel_types: Vec::new(),
+            transforms: Vec::new(),
+            index_map: KeyIndexMapper::default(),
+        }
+    }
+
+    fn n_instances(&self) -> usize {
+        self.index_map.len()
+    }
+
+    fn transforms(&self) -> &[VoxelTransform<F>] {
+        &self.transforms
+    }
+
+    fn transform(&self, node_id: VoxelTreeExternalNodeID) -> &VoxelTransform<F> {
+        let idx = self.index_map.idx(node_id.number());
+        &self.transforms[idx]
+    }
+
+    fn add_instance(
+        &mut self,
+        node_id: VoxelTreeExternalNodeID,
+        voxel_type: VoxelType,
+        transform: VoxelTransform<F>,
+    ) {
+        self.index_map.push_key(node_id.number());
+        self.voxel_types.push(voxel_type);
+        self.transforms.push(transform);
     }
 }
 
@@ -1648,7 +1786,7 @@ impl Octant {
 mod test {
     use super::*;
     use crate::geometry::AxisAlignedBox;
-    use approx::{abs_diff_eq, assert_abs_diff_eq};
+    use approx::assert_abs_diff_eq;
     use nalgebra::{point, Point3, UnitQuaternion};
     use std::{collections::HashMap, sync::Mutex};
 
@@ -2176,10 +2314,10 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transform_for_single_voxel_generator() {
+    fn should_have_correct_voxel_transform_for_single_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [1; 3] };
         let tree = VoxelTree::build(&generator).unwrap();
-        let transforms = tree.compute_voxel_transforms();
+        let transforms = tree.voxel_instances().transforms();
 
         assert_eq!(transforms.len(), 1);
         let transform = &transforms[0];
@@ -2191,10 +2329,10 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transform_for_8_voxel_generator() {
+    fn should_have_correct_voxel_transform_for_8_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [2; 3] };
         let tree = VoxelTree::build(&generator).unwrap();
-        let transforms = tree.compute_voxel_transforms();
+        let transforms = tree.voxel_instances().transforms();
 
         assert_eq!(transforms.len(), 1);
         let transform = &transforms[0];
@@ -2210,10 +2348,10 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transform_for_64_voxel_generator() {
+    fn should_have_correct_voxel_transform_for_64_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [4; 3] };
         let tree = VoxelTree::build(&generator).unwrap();
-        let transforms = tree.compute_voxel_transforms();
+        let transforms = tree.voxel_instances().transforms();
 
         assert_eq!(transforms.len(), 1);
         let transform = &transforms[0];
@@ -2229,35 +2367,32 @@ mod test {
     }
 
     #[test]
-    fn should_compute_correct_transforms_for_12_voxel_generator() {
+    fn should_have_correct_voxel_transforms_for_12_voxel_generator() {
         let generator = DefaultVoxelGenerator { shape: [2, 2, 3] };
         let tree = VoxelTree::build(&generator).unwrap();
-        let transforms = tree.compute_voxel_transforms();
+        let voxel_instances = tree.voxel_instances();
 
-        assert_eq!(transforms.len(), 5);
+        assert_eq!(voxel_instances.n_instances(), 5);
 
-        let check_transform = |x, y, z, scaling| {
-            assert!(transforms.iter().any(|transform| {
-                let correct_translation = vector![
-                    x * generator.voxel_extent(),
-                    y * generator.voxel_extent(),
-                    z * generator.voxel_extent()
-                ];
-                abs_diff_eq!(transform.translation(), &correct_translation)
-                    && abs_diff_eq!(transform.scaling(), scaling)
-            }));
+        let check_transform = |i, j, k, x, y, z, scaling| {
+            let node_id = tree.find_external_node_id_at_indices(i, j, k).unwrap();
+            let transform = voxel_instances.transform(node_id);
+
+            let correct_translation = vector![
+                x * generator.voxel_extent(),
+                y * generator.voxel_extent(),
+                z * generator.voxel_extent()
+            ];
+
+            assert_abs_diff_eq!(transform.translation(), &correct_translation);
+            assert_abs_diff_eq!(transform.scaling(), scaling);
         };
 
-        // Merged voxel
-        check_transform(1.0, 1.0, 1.0, 2.0);
-        // Voxel at (0, 0, 2)
-        check_transform(0.5, 0.5, 2.5, 1.0);
-        // Voxel at (0, 1, 2)
-        check_transform(0.5, 1.5, 2.5, 1.0);
-        // Voxel at (1, 0, 2)
-        check_transform(1.5, 0.5, 2.5, 1.0);
-        // Voxel at (1, 1, 2)
-        check_transform(1.5, 1.5, 2.5, 1.0);
+        check_transform(0, 0, 0, 1.0, 1.0, 1.0, 2.0);
+        check_transform(0, 0, 2, 0.5, 0.5, 2.5, 1.0);
+        check_transform(0, 1, 2, 0.5, 1.5, 2.5, 1.0);
+        check_transform(1, 0, 2, 1.5, 0.5, 2.5, 1.0);
+        check_transform(1, 1, 2, 1.5, 1.5, 2.5, 1.0);
     }
 
     #[test]
