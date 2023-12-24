@@ -21,7 +21,7 @@ use crate::{
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, Quaternion, SimdComplexField, Unit, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, UnitVector3, Vector3};
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A unit vector in 3D space.
@@ -177,7 +177,7 @@ pub fn advance_orientation(
     duration: fph,
 ) -> Orientation {
     let angle = angular_velocity.angular_speed().radians() * duration;
-    let (sin_half_angle, cos_half_angle) = (0.5 * angle).simd_sin_cos();
+    let (sin_half_angle, cos_half_angle) = (0.5 * angle).sin_cos();
 
     let rotation = Quaternion::from_parts(
         cos_half_angle,
