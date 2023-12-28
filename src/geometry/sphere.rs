@@ -160,9 +160,12 @@ impl<F: Float> Sphere<F> {
 
     /// Finds the smallest sphere that fully encloses this and
     /// all the given spheres.
-    pub fn bounding_sphere_with<'a>(self, spheres: impl IntoIterator<Item = &'a Self>) -> Self {
+    pub fn bounding_sphere_with<I>(self, spheres: impl IntoIterator<Item = I>) -> Self
+    where
+        I: std::borrow::Borrow<Self>,
+    {
         spheres.into_iter().fold(self, |bounding_sphere, sphere| {
-            Self::bounding_sphere_from_pair(&bounding_sphere, sphere)
+            Self::bounding_sphere_from_pair(&bounding_sphere, sphere.borrow())
         })
     }
 
