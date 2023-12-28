@@ -58,8 +58,8 @@ pub trait VoxelGenerator<F: Float> {
 #[derive(Debug)]
 pub struct VoxelTree<F: Float> {
     properties: VoxelTreeProperties<F>,
-    root_node: VoxelTreeInternalNode<F>,
-    external_node_aux_storage: VoxelTreeExternalNodeAuxiliaryStorage,
+    root_node: InternalNode<F>,
+    external_node_aux_storage: ExternalNodeAuxiliaryStorage,
     voxel_instances: VoxelInstanceStorage<F>,
 }
 
@@ -79,8 +79,8 @@ struct VoxelTreeHeight {
 /// Storage for auxiliary data associated with individual external nodes in a
 /// [`VoxelTree`].
 #[derive(Clone, Debug)]
-struct VoxelTreeExternalNodeAuxiliaryStorage {
-    data: Vec<VoxelTreeExternalNodeAuxiliaryData>,
+struct ExternalNodeAuxiliaryStorage {
+    data: Vec<ExternalNodeAuxiliaryData>,
     index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
     node_id_count: usize,
 }
@@ -96,10 +96,10 @@ struct VoxelInstanceStorage<F: Float> {
 /// An internal node in a voxel tree. It has one child for each non-empty octant
 /// of the region of the grid the node covers.
 #[derive(Clone, Debug)]
-struct VoxelTreeInternalNode<F: Float> {
-    internal_children: Vec<VoxelTreeInternalNode<F>>,
-    external_children: Vec<VoxelTreeExternalNode>,
-    octant_child_indices: [VoxelTreeOctantChildNodeIdx; 8],
+struct InternalNode<F: Float> {
+    internal_children: Vec<InternalNode<F>>,
+    external_children: Vec<ExternalNode>,
+    octant_child_indices: [OctantChildNodeIdx; 8],
     scale: u32,
     aabb: AxisAlignedBox<F>,
     exposed_descendant_count: usize,
@@ -110,7 +110,7 @@ struct VoxelTreeInternalNode<F: Float> {
 /// Encodes the type and index of the child node in a specific octant of an
 /// internal node.
 #[derive(Copy, Clone, Debug)]
-enum VoxelTreeOctantChildNodeIdx {
+enum OctantChildNodeIdx {
     /// The internal node has no child for this octant.
     None,
     /// The internal node has an internal child node for this octant, located at
@@ -125,8 +125,8 @@ enum VoxelTreeOctantChildNodeIdx {
 /// unmerged (if the node is at the bottom of the tree) or a merged group of
 /// adjacent identical voxels (if the node is not at the bottom).
 #[derive(Clone, Debug)]
-struct VoxelTreeExternalNode {
-    id: VoxelTreeExternalNodeID,
+struct ExternalNode {
+    id: ExternalNodeID,
     voxel_type: VoxelType,
     voxel_indices: VoxelIndices,
     voxel_scale: u32,
@@ -134,17 +134,17 @@ struct VoxelTreeExternalNode {
     directional_obscuredness: DirectionalObscurednessLookupTable,
 }
 
-/// Identifier for a [`VoxelTreeExternalNode`] in a [`VoxelTree`].
+/// Identifier for an [`ExternalNode`] in a [`VoxelTree`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct VoxelTreeExternalNodeID(usize);
+struct ExternalNodeID(usize);
 
-/// Auxiliary data for a specific [`VoxelTreeExternalNode`].
+/// Auxiliary data for a specific [`ExternalNode`].
 #[derive(Clone, Debug)]
-struct VoxelTreeExternalNodeAuxiliaryData {
+struct ExternalNodeAuxiliaryData {
     voxel_indices: VoxelIndices,
     voxel_scale: u32,
-    adjacent_voxels: Vec<(VoxelIndices, VoxelTreeExternalNodeID)>,
+    adjacent_voxels: Vec<(VoxelIndices, ExternalNodeID)>,
     exposed_face_areas: [u32; 6],
 }
 
@@ -208,7 +208,7 @@ struct OctantIterator {
 }
 
 /// An octant in a voxel tree. The number associated with each variant is the
-/// index of the corresponding child node of a [`VoxelTreeInternalNode`].
+/// index of the corresponding child node of a [`InternalNode`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Octant {
     BackBottomLeft = 0,
@@ -254,9 +254,9 @@ impl<F: Float> VoxelTree<F> {
     {
         let properties = VoxelTreeProperties::from_generator(generator);
 
-        let mut external_node_aux_storage = VoxelTreeExternalNodeAuxiliaryStorage::new();
+        let mut external_node_aux_storage = ExternalNodeAuxiliaryStorage::new();
 
-        VoxelTreeInternalNode::build_root_node(
+        InternalNode::build_root_node(
             &mut external_node_aux_storage,
             generator,
             properties.tree_height(),
@@ -441,15 +441,12 @@ impl<F: Float> VoxelTree<F> {
     }
 
     /// Returns the root node (which is an internal node) of the tree.
-    fn root_node(&self) -> &VoxelTreeInternalNode<F> {
+    fn root_node(&self) -> &InternalNode<F> {
         &self.root_node
     }
 
     #[cfg(test)]
-    fn external_node_aux_data(
-        &self,
-        id: VoxelTreeExternalNodeID,
-    ) -> &VoxelTreeExternalNodeAuxiliaryData {
+    fn external_node_aux_data(&self, id: ExternalNodeID) -> &ExternalNodeAuxiliaryData {
         self.external_node_aux_storage.data(id)
     }
 
@@ -457,18 +454,12 @@ impl<F: Float> VoxelTree<F> {
         &self.voxel_instances
     }
 
-    fn find_external_node_at_indices(
-        &self,
-        indices: VoxelIndices,
-    ) -> Option<&VoxelTreeExternalNode> {
+    fn find_external_node_at_indices(&self, indices: VoxelIndices) -> Option<&ExternalNode> {
         self.root_node
             .find_external_node_at_indices(self.tree_height(), indices)
     }
 
-    fn find_external_node_id_at_indices(
-        &self,
-        indices: VoxelIndices,
-    ) -> Option<VoxelTreeExternalNodeID> {
+    fn find_external_node_id_at_indices(&self, indices: VoxelIndices) -> Option<ExternalNodeID> {
         self.find_external_node_at_indices(indices)
             .map(|external_node| external_node.id())
     }
@@ -589,10 +580,9 @@ impl<F: Float> VoxelTree<F> {
                 let adjacent_voxel_indices = adjacent_node_data.voxel_indices;
 
                 // Add this voxel as an adjacent voxel to the adjacent voxel
-                adjacent_node_data.adjacent_voxels.push((
-                    voxel_indices,
-                    VoxelTreeExternalNodeID::from_number(node_idx),
-                ));
+                adjacent_node_data
+                    .adjacent_voxels
+                    .push((voxel_indices, ExternalNodeID::from_number(node_idx)));
 
                 adjacent_node_data.add_obscured_face_area(face.opposite_face(), 1);
 
@@ -601,7 +591,7 @@ impl<F: Float> VoxelTree<F> {
                 // Add the adjacent voxel as an adjacent voxel to this voxel
                 node_data.adjacent_voxels.push((
                     adjacent_voxel_indices,
-                    VoxelTreeExternalNodeID::from_number(adjacent_node_idx),
+                    ExternalNodeID::from_number(adjacent_node_idx),
                 ));
 
                 node_data.add_obscured_face_area(face, 1);
@@ -802,10 +792,9 @@ impl<F: Float> VoxelTree<F> {
 
                             // Add this voxel as an adjacent voxel to the
                             // adjacent voxel
-                            adjacent_node_data.adjacent_voxels.push((
-                                voxel_indices,
-                                VoxelTreeExternalNodeID::from_number(node_idx),
-                            ));
+                            adjacent_node_data
+                                .adjacent_voxels
+                                .push((voxel_indices, ExternalNodeID::from_number(node_idx)));
 
                             adjacent_node_data
                                 .add_obscured_face_area(face.opposite_face(), obscured_area);
@@ -817,7 +806,7 @@ impl<F: Float> VoxelTree<F> {
                             // this voxel
                             node_data.adjacent_voxels.push((
                                 adjacent_voxel_indices,
-                                VoxelTreeExternalNodeID::from_number(adjacent_node_idx),
+                                ExternalNodeID::from_number(adjacent_node_idx),
                             ));
 
                             node_data.add_obscured_face_area(face, obscured_area);
@@ -936,7 +925,7 @@ impl VoxelTreeHeight {
 }
 
 #[allow(dead_code)]
-impl VoxelTreeExternalNodeAuxiliaryStorage {
+impl ExternalNodeAuxiliaryStorage {
     fn new() -> Self {
         Self {
             data: Vec::new(),
@@ -949,53 +938,50 @@ impl VoxelTreeExternalNodeAuxiliaryStorage {
         self.data.len()
     }
 
-    fn has_data_for_node(&self, node_id: VoxelTreeExternalNodeID) -> bool {
+    fn has_data_for_node(&self, node_id: ExternalNodeID) -> bool {
         self.index_map.contains_key(node_id.number())
     }
 
-    fn data(&self, node_id: VoxelTreeExternalNodeID) -> &VoxelTreeExternalNodeAuxiliaryData {
+    fn data(&self, node_id: ExternalNodeID) -> &ExternalNodeAuxiliaryData {
         let idx = self.index_map.idx(node_id.number());
         self.data_at_idx(idx)
     }
 
-    fn data_at_idx(&self, idx: usize) -> &VoxelTreeExternalNodeAuxiliaryData {
+    fn data_at_idx(&self, idx: usize) -> &ExternalNodeAuxiliaryData {
         &self.data[idx]
     }
 
-    fn data_mut(
-        &mut self,
-        node_id: VoxelTreeExternalNodeID,
-    ) -> &mut VoxelTreeExternalNodeAuxiliaryData {
+    fn data_mut(&mut self, node_id: ExternalNodeID) -> &mut ExternalNodeAuxiliaryData {
         let idx = self.index_map.idx(node_id.number());
         self.data_at_idx_mut(idx)
     }
 
-    fn data_at_idx_mut(&mut self, idx: usize) -> &mut VoxelTreeExternalNodeAuxiliaryData {
+    fn data_at_idx_mut(&mut self, idx: usize) -> &mut ExternalNodeAuxiliaryData {
         &mut self.data[idx]
     }
 
-    fn all_data(&self) -> impl Iterator<Item = &VoxelTreeExternalNodeAuxiliaryData> {
+    fn all_data(&self) -> impl Iterator<Item = &ExternalNodeAuxiliaryData> {
         self.data.iter()
     }
 
-    fn all_data_mut(&mut self) -> impl Iterator<Item = &mut VoxelTreeExternalNodeAuxiliaryData> {
+    fn all_data_mut(&mut self) -> impl Iterator<Item = &mut ExternalNodeAuxiliaryData> {
         self.data.iter_mut()
     }
 
-    fn add_data(&mut self, node: VoxelTreeExternalNodeAuxiliaryData) -> VoxelTreeExternalNodeID {
+    fn add_data(&mut self, node: ExternalNodeAuxiliaryData) -> ExternalNodeID {
         let node_id = self.create_new_node_id();
         self.index_map.push_key(node_id.number());
         self.data.push(node);
         node_id
     }
 
-    fn remove_data(&mut self, node_id: VoxelTreeExternalNodeID) {
+    fn remove_data(&mut self, node_id: ExternalNodeID) {
         let idx = self.index_map.swap_remove_key(node_id.number());
         self.data.swap_remove(idx);
     }
 
-    fn create_new_node_id(&mut self) -> VoxelTreeExternalNodeID {
-        let node_id = VoxelTreeExternalNodeID::from_number(self.node_id_count);
+    fn create_new_node_id(&mut self) -> ExternalNodeID {
+        let node_id = ExternalNodeID::from_number(self.node_id_count);
         self.node_id_count += 1;
         node_id
     }
@@ -1019,14 +1005,14 @@ impl<F: Float> VoxelInstanceStorage<F> {
         &self.transforms
     }
 
-    fn transform(&self, node_id: VoxelTreeExternalNodeID) -> &VoxelTransform<F> {
+    fn transform(&self, node_id: ExternalNodeID) -> &VoxelTransform<F> {
         let idx = self.index_map.idx(node_id.number());
         &self.transforms[idx]
     }
 
     fn add_instance(
         &mut self,
-        node_id: VoxelTreeExternalNodeID,
+        node_id: ExternalNodeID,
         voxel_type: VoxelType,
         transform: VoxelTransform<F>,
     ) {
@@ -1036,9 +1022,9 @@ impl<F: Float> VoxelInstanceStorage<F> {
     }
 }
 
-impl<F: Float> VoxelTreeInternalNode<F> {
+impl<F: Float> InternalNode<F> {
     fn build_root_node<G>(
-        external_node_aux_storage: &mut VoxelTreeExternalNodeAuxiliaryStorage,
+        external_node_aux_storage: &mut ExternalNodeAuxiliaryStorage,
         generator: &G,
         tree_height: VoxelTreeHeight,
     ) -> Option<Self>
@@ -1071,7 +1057,7 @@ impl<F: Float> VoxelTreeInternalNode<F> {
                 external_child.create_aux_storage_entry(external_node_aux_storage);
             }
 
-            Some(VoxelTreeInternalNode::new(
+            Some(InternalNode::new(
                 octant_child_indices,
                 internal_children,
                 external_children,
@@ -1081,9 +1067,9 @@ impl<F: Float> VoxelTreeInternalNode<F> {
     }
 
     fn new(
-        octant_child_indices: [VoxelTreeOctantChildNodeIdx; 8],
-        internal_children: Vec<VoxelTreeInternalNode<F>>,
-        external_children: Vec<VoxelTreeExternalNode>,
+        octant_child_indices: [OctantChildNodeIdx; 8],
+        internal_children: Vec<InternalNode<F>>,
+        external_children: Vec<ExternalNode>,
         scale: u32,
     ) -> Self {
         Self {
@@ -1098,28 +1084,28 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         }
     }
 
-    fn octant_child_idx(&self, octant: Octant) -> VoxelTreeOctantChildNodeIdx {
+    fn octant_child_idx(&self, octant: Octant) -> OctantChildNodeIdx {
         self.octant_child_indices[octant.idx()]
     }
 
-    fn internal_children(&self) -> &[VoxelTreeInternalNode<F>] {
+    fn internal_children(&self) -> &[InternalNode<F>] {
         &self.internal_children
     }
 
-    fn external_children(&self) -> &[VoxelTreeExternalNode] {
+    fn external_children(&self) -> &[ExternalNode] {
         &self.external_children
     }
 
-    fn internal_child_at_idx(&self, idx: usize) -> &VoxelTreeInternalNode<F> {
+    fn internal_child_at_idx(&self, idx: usize) -> &InternalNode<F> {
         &self.internal_children[idx]
     }
 
-    fn external_child_at_idx(&self, idx: usize) -> &VoxelTreeExternalNode {
+    fn external_child_at_idx(&self, idx: usize) -> &ExternalNode {
         &self.external_children[idx]
     }
 
     #[cfg(test)]
-    fn get_internal_child_in_octant(&self, octant: Octant) -> Option<&VoxelTreeInternalNode<F>> {
+    fn get_internal_child_in_octant(&self, octant: Octant) -> Option<&InternalNode<F>> {
         self.octant_child_idx(octant)
             .as_internal()
             .map(|idx| self.internal_child_at_idx(idx))
@@ -1181,19 +1167,19 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         &self,
         tree_height: u32,
         indices: VoxelIndices,
-    ) -> Option<&VoxelTreeExternalNode> {
+    ) -> Option<&ExternalNode> {
         if let Some(octants) = indices.octants(tree_height) {
             let mut internal_node = self;
 
             for octant in octants {
                 match internal_node.octant_child_idx(octant) {
-                    VoxelTreeOctantChildNodeIdx::External(idx) => {
+                    OctantChildNodeIdx::External(idx) => {
                         return Some(internal_node.external_child_at_idx(idx));
                     }
-                    VoxelTreeOctantChildNodeIdx::Internal(idx) => {
+                    OctantChildNodeIdx::Internal(idx) => {
                         internal_node = internal_node.internal_child_at_idx(idx);
                     }
-                    VoxelTreeOctantChildNodeIdx::None => {
+                    OctantChildNodeIdx::None => {
                         return None;
                     }
                 }
@@ -1207,7 +1193,7 @@ impl<F: Float> VoxelTreeInternalNode<F> {
     fn update_derived_node_data(
         &mut self,
         tree_properties: &VoxelTreeProperties<F>,
-        aux_storage: &VoxelTreeExternalNodeAuxiliaryStorage,
+        aux_storage: &ExternalNodeAuxiliaryStorage,
     ) {
         let mut external_children = self.external_children.iter_mut();
         let mut internal_children = self.internal_children.iter_mut();
@@ -1278,7 +1264,7 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         &self,
         voxel_instances: &mut VoxelInstanceStorage<F>,
         tree_properties: &VoxelTreeProperties<F>,
-        criterion: &impl Fn(&VoxelTreeExternalNode) -> bool,
+        criterion: &impl Fn(&ExternalNode) -> bool,
     ) {
         let mut stack = vec![self];
 
@@ -1337,8 +1323,8 @@ impl<F: Float> VoxelTreeInternalNode<F> {
 
     fn perform_action_for_exposed_external_nodes(
         &self,
-        internal_node_criterion: &impl Fn(&VoxelTreeInternalNode<F>) -> bool,
-        perform_action: &mut impl FnMut(&VoxelTreeExternalNode),
+        internal_node_criterion: &impl Fn(&InternalNode<F>) -> bool,
+        perform_action: &mut impl FnMut(&ExternalNode),
     ) {
         let mut stack = vec![self];
 
@@ -1360,7 +1346,7 @@ impl<F: Float> VoxelTreeInternalNode<F> {
     }
 }
 
-impl VoxelTreeOctantChildNodeIdx {
+impl OctantChildNodeIdx {
     #[cfg(test)]
     fn as_internal(&self) -> Option<usize> {
         if let Self::Internal(idx) = self {
@@ -1371,7 +1357,7 @@ impl VoxelTreeOctantChildNodeIdx {
     }
 }
 
-impl VoxelTreeExternalNode {
+impl ExternalNode {
     fn from_generator<F, G>(generator: &G, indices: VoxelTreeIndices) -> Option<Self>
     where
         F: Float,
@@ -1385,7 +1371,7 @@ impl VoxelTreeExternalNode {
     fn new(voxel_type: VoxelType, indices: VoxelTreeIndices) -> Self {
         let (voxel_scale, voxel_indices) = indices.voxel_scale_and_indices();
         Self {
-            id: VoxelTreeExternalNodeID::not_applicable(),
+            id: ExternalNodeID::not_applicable(),
             voxel_type,
             voxel_indices,
             voxel_scale,
@@ -1394,12 +1380,8 @@ impl VoxelTreeExternalNode {
         }
     }
 
-    fn create_aux_storage_entry(
-        &mut self,
-        aux_storage: &mut VoxelTreeExternalNodeAuxiliaryStorage,
-    ) {
-        let aux_data =
-            VoxelTreeExternalNodeAuxiliaryData::new(self.voxel_indices, self.voxel_scale);
+    fn create_aux_storage_entry(&mut self, aux_storage: &mut ExternalNodeAuxiliaryStorage) {
+        let aux_data = ExternalNodeAuxiliaryData::new(self.voxel_indices, self.voxel_scale);
         self.id = aux_storage.add_data(aux_data);
     }
 
@@ -1415,7 +1397,7 @@ impl VoxelTreeExternalNode {
         self.voxel_scale
     }
 
-    fn id(&self) -> VoxelTreeExternalNodeID {
+    fn id(&self) -> ExternalNodeID {
         self.id
     }
 
@@ -1429,12 +1411,12 @@ impl VoxelTreeExternalNode {
 
     fn aux_data<'a>(
         &self,
-        aux_storage: &'a VoxelTreeExternalNodeAuxiliaryStorage,
-    ) -> &'a VoxelTreeExternalNodeAuxiliaryData {
+        aux_storage: &'a ExternalNodeAuxiliaryStorage,
+    ) -> &'a ExternalNodeAuxiliaryData {
         aux_storage.data(self.id())
     }
 
-    fn update_exposedness(&mut self, aux_storage: &VoxelTreeExternalNodeAuxiliaryStorage) {
+    fn update_exposedness(&mut self, aux_storage: &ExternalNodeAuxiliaryStorage) {
         let aux_data = self.aux_data(aux_storage);
 
         self.directional_obscuredness =
@@ -1484,7 +1466,7 @@ impl VoxelTreeExternalNode {
     }
 }
 
-impl VoxelTreeExternalNodeID {
+impl ExternalNodeID {
     fn not_applicable() -> Self {
         Self(usize::MAX)
     }
@@ -1498,7 +1480,7 @@ impl VoxelTreeExternalNodeID {
     }
 }
 
-impl VoxelTreeExternalNodeAuxiliaryData {
+impl ExternalNodeAuxiliaryData {
     fn new(voxel_indices: VoxelIndices, voxel_scale: u32) -> Self {
         Self {
             voxel_indices,
@@ -1552,7 +1534,7 @@ impl VoxelTreeExternalNodeAuxiliaryData {
     /// Returns the ID of the external node for the adjacent voxel with the
     /// given indices, or [`None`] if the voxel with the given indices is not
     /// adjacent to this one.
-    fn adjacent_voxel(&self, voxel_indices: VoxelIndices) -> Option<VoxelTreeExternalNodeID> {
+    fn adjacent_voxel(&self, voxel_indices: VoxelIndices) -> Option<ExternalNodeID> {
         self.adjacent_voxels
             .iter()
             .find(|(adjacent_voxel_indices, _)| adjacent_voxel_indices == &voxel_indices)
@@ -1599,7 +1581,7 @@ impl DirectionalObscurednessLookupTable {
         }
     }
 
-    fn for_external_node(aux_data: &VoxelTreeExternalNodeAuxiliaryData) -> Self {
+    fn for_external_node(aux_data: &ExternalNodeAuxiliaryData) -> Self {
         let is_obscured_from_direction = array::from_fn(|i| {
             let obscured_x = aux_data.face_is_fully_obscured(VoxelFace::X_FACES[i]);
             array::from_fn(|j| {
@@ -1936,25 +1918,23 @@ impl Octant {
 }
 
 fn create_voxel_tree_node<F, G>(
-    external_node_aux_storage: &mut VoxelTreeExternalNodeAuxiliaryStorage,
-    internal_nodes: &mut Vec<VoxelTreeInternalNode<F>>,
-    external_nodes: &mut Vec<VoxelTreeExternalNode>,
+    external_node_aux_storage: &mut ExternalNodeAuxiliaryStorage,
+    internal_nodes: &mut Vec<InternalNode<F>>,
+    external_nodes: &mut Vec<ExternalNode>,
     generator: &G,
     current_indices: VoxelTreeIndices,
-) -> VoxelTreeOctantChildNodeIdx
+) -> OctantChildNodeIdx
 where
     F: Float,
     G: VoxelGenerator<F>,
 {
     if current_indices.are_at_max_depth() {
-        if let Some(external_node) =
-            VoxelTreeExternalNode::from_generator(generator, current_indices)
-        {
+        if let Some(external_node) = ExternalNode::from_generator(generator, current_indices) {
             let idx = external_nodes.len();
             external_nodes.push(external_node);
-            VoxelTreeOctantChildNodeIdx::External(idx)
+            OctantChildNodeIdx::External(idx)
         } else {
-            VoxelTreeOctantChildNodeIdx::None
+            OctantChildNodeIdx::None
         }
     } else {
         let mut internal_children = Vec::new();
@@ -1981,11 +1961,9 @@ where
                     .all(|external_child| external_child.voxel_type == common_child_voxel_type)
                 {
                     let idx = external_nodes.len();
-                    external_nodes.push(VoxelTreeExternalNode::new(
-                        common_child_voxel_type,
-                        current_indices,
-                    ));
-                    return VoxelTreeOctantChildNodeIdx::External(idx);
+                    external_nodes
+                        .push(ExternalNode::new(common_child_voxel_type, current_indices));
+                    return OctantChildNodeIdx::External(idx);
                 }
             }
 
@@ -1994,16 +1972,16 @@ where
             }
 
             let idx = internal_nodes.len();
-            internal_nodes.push(VoxelTreeInternalNode::new(
+            internal_nodes.push(InternalNode::new(
                 octant_child_indices,
                 internal_children,
                 external_children,
                 current_indices.voxel_scale(),
             ));
 
-            VoxelTreeOctantChildNodeIdx::Internal(idx)
+            OctantChildNodeIdx::Internal(idx)
         } else {
-            VoxelTreeOctantChildNodeIdx::None
+            OctantChildNodeIdx::None
         }
     }
 }
@@ -2270,7 +2248,7 @@ mod test {
         let generator = DefaultVoxelGenerator { shape: [1, 1, 3] };
         let tree = VoxelTree::build(&generator).unwrap();
 
-        let check_aabb = |node: &VoxelTreeInternalNode<f64>,
+        let check_aabb = |node: &InternalNode<f64>,
                           [l0, l1, l2]: [u32; 3],
                           [u0, u1, u2]: [u32; 3]| {
             let child_aabb = AxisAlignedBox::new(
@@ -2310,7 +2288,7 @@ mod test {
         let generator = DefaultVoxelGenerator { shape: [3, 2, 5] };
         let tree = VoxelTree::build(&generator).unwrap();
 
-        let check_aabb = |node: &VoxelTreeInternalNode<f64>,
+        let check_aabb = |node: &InternalNode<f64>,
                           [l0, l1, l2]: [u32; 3],
                           [u0, u1, u2]: [u32; 3]| {
             let child_aabb = AxisAlignedBox::new(
@@ -2775,7 +2753,7 @@ mod test {
         let generator = ManualVoxelGenerator { voxels };
         let tree = VoxelTree::build(&generator).unwrap();
 
-        let check_neighbor_present = |aux_data: &VoxelTreeExternalNodeAuxiliaryData, i, j, k| {
+        let check_neighbor_present = |aux_data: &ExternalNodeAuxiliaryData, i, j, k| {
             assert!(aux_data.is_adjacent_to_voxel(VoxelIndices::new(i, j, k)));
         };
 
