@@ -19,6 +19,7 @@ use nohash_hasher::BuildNoHashHasher;
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
 use simba::scalar::{SubsetOf, SupersetOf};
+use std::array;
 
 /// A type identifier that determines all the properties of a voxel.
 #[repr(u8)]
@@ -99,9 +100,11 @@ struct VoxelTreeInternalNode<F: Float> {
     internal_children: Vec<VoxelTreeInternalNode<F>>,
     external_children: Vec<VoxelTreeExternalNode>,
     octant_child_indices: [VoxelTreeOctantChildNodeIdx; 8],
+    scale: u32,
     aabb: AxisAlignedBox<F>,
     exposed_descendant_count: usize,
     has_exposed_descendants: bool,
+    directional_obscuredness: DirectionalObscurednessLookupTable,
 }
 
 /// Encodes the type and index of the child node in a specific octant of an
@@ -128,6 +131,7 @@ struct VoxelTreeExternalNode {
     voxel_indices: VoxelIndices,
     voxel_scale: u32,
     is_exposed: bool,
+    directional_obscuredness: DirectionalObscurednessLookupTable,
 }
 
 /// Identifier for a [`VoxelTreeExternalNode`] in a [`VoxelTree`].
@@ -142,6 +146,16 @@ struct VoxelTreeExternalNodeAuxiliaryData {
     voxel_scale: u32,
     adjacent_voxels: Vec<(VoxelIndices, VoxelTreeExternalNodeID)>,
     exposed_face_areas: [u32; 6],
+}
+
+/// Lookup table for whether a voxel or group of voxels is fully obscured by
+/// adjacent voxels when viewed from a specific direction. A rectangular region
+/// of voxels is guranteed to be obscured from a direction when the three faces
+/// of the region visible from the direction are fully covered by adjacent
+/// voxels.
+#[derive(Copy, Clone, Debug)]
+struct DirectionalObscurednessLookupTable {
+    is_obscured_from_direction: [[[bool; 2]; 2]; 2],
 }
 
 /// A transform from the space of an voxel in a voxel tree to the space of the
@@ -210,7 +224,7 @@ enum Octant {
 impl VoxelType {
     /// Returns an array with each voxel type in the order of their index.
     pub fn all() -> [Self; N_VOXEL_TYPES] {
-        std::array::from_fn(|idx| Self::from_usize(idx).unwrap())
+        array::from_fn(|idx| Self::from_usize(idx).unwrap())
     }
 }
 
@@ -304,16 +318,18 @@ impl<F: Float> VoxelTree<F> {
             .map(|external_node| external_node.voxel_type)
     }
 
-    /// Determines the voxels that may be visible based on the given view
-    /// frustum and writes their model view transforms and instance features to
-    /// the given buffers.
+    /// Determines the voxels that may be visible based on the given camera
+    /// position and view frustum and writes their model view transforms and
+    /// instance features to the given buffers. The camera position and view
+    /// frustum are assumed to be represented in the space of the voxel tree.
     pub fn buffer_visible_voxel_model_view_transforms_and_features(
         &self,
         feature_id_map: &VoxelPropertyMap<InstanceFeatureID>,
         feature_storage: &InstanceFeatureStorage,
         transform_buffer: &mut DynamicInstanceFeatureBuffer,
         feature_buffer: &mut DynamicInstanceFeatureBuffer,
-        view_frustum: &Frustum<F>,
+        tree_space_camera_position: &Point3<F>,
+        tree_space_view_frustum: &Frustum<F>,
         view_transform: &Similarity3<F>,
     ) where
         F: SubsetOf<fre>,
@@ -338,12 +354,15 @@ impl<F: Float> VoxelTree<F> {
         );
     }
 
-    /// Determines the voxels that may be visible based on the given view
-    /// frustum and writes their model view transforms to the given buffer.
+    /// Determines the voxels that may be visible based on the given camera
+    /// position and view frustum and writes their model view transforms to the
+    /// given buffer. The camera position and view frustum are assumed to be
+    /// represented in the space of the voxel tree.
     pub fn buffer_visible_voxel_model_view_transforms(
         &self,
         transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        view_frustum: &Frustum<F>,
+        tree_space_camera_position: &Point3<F>,
+        tree_space_view_frustum: &Frustum<F>,
         view_transform: &Similarity3<F>,
     ) where
         F: SubsetOf<fre>,
@@ -363,11 +382,12 @@ impl<F: Float> VoxelTree<F> {
 
     /// Determines the voxels that may be visible based on the given
     /// orthographic view frustum and writes their model view transforms to the
-    /// given buffer.
+    /// given buffer. The view frustum (an oriented box) is assumed to be
+    /// represented in the space of the voxel tree.
     pub fn buffer_visible_voxel_model_view_transforms_orthographic(
         &self,
         transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        view_frustum: &OrientedBox<F>,
+        tree_space_view_frustum: &OrientedBox<F>,
         view_transform: &Similarity3<F>,
     ) where
         F: SubsetOf<fre>,
@@ -1055,6 +1075,7 @@ impl<F: Float> VoxelTreeInternalNode<F> {
                 octant_child_indices,
                 internal_children,
                 external_children,
+                current_indices.voxel_scale(),
             ))
         }
     }
@@ -1063,14 +1084,17 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         octant_child_indices: [VoxelTreeOctantChildNodeIdx; 8],
         internal_children: Vec<VoxelTreeInternalNode<F>>,
         external_children: Vec<VoxelTreeExternalNode>,
+        scale: u32,
     ) -> Self {
         Self {
             octant_child_indices,
             internal_children,
             external_children,
+            scale,
             aabb: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
             exposed_descendant_count: 0,
             has_exposed_descendants: false,
+            directional_obscuredness: DirectionalObscurednessLookupTable::fully_obscured(),
         }
     }
 
@@ -1128,6 +1152,15 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         self.has_exposed_descendants
     }
 
+    fn directional_obscuredness(&self) -> &DirectionalObscurednessLookupTable {
+        &self.directional_obscuredness
+    }
+
+    fn is_fully_obscured_from_direction(&self, direction: &Vector3<F>) -> bool {
+        self.directional_obscuredness
+            .is_fully_obscured_from_direction(direction)
+    }
+
     fn set_aabb(&mut self, aabb: AxisAlignedBox<F>) {
         self.aabb = aabb;
     }
@@ -1135,6 +1168,13 @@ impl<F: Float> VoxelTreeInternalNode<F> {
     fn set_exposed_descendant_count(&mut self, exposed_descendant_count: usize) {
         self.exposed_descendant_count = exposed_descendant_count;
         self.has_exposed_descendants = exposed_descendant_count > 0;
+    }
+
+    fn set_directional_obscuredness(
+        &mut self,
+        directional_obscuredness: DirectionalObscurednessLookupTable,
+    ) {
+        self.directional_obscuredness = directional_obscuredness;
     }
 
     fn find_external_node_at_indices(
@@ -1172,17 +1212,35 @@ impl<F: Float> VoxelTreeInternalNode<F> {
         let mut external_children = self.external_children.iter_mut();
         let mut internal_children = self.internal_children.iter_mut();
 
-        let (mut aggregate_aabb, mut exposed_descendant_count) =
+        let (mut aggregate_aabb, mut exposed_descendant_count, mut merged_directional_obscuredness) =
             if let Some(external_child) = external_children.next() {
                 external_child.update_exposedness(aux_storage);
+
                 let aggregate_aabb = external_child.compute_aabb(tree_properties.voxel_extent());
+
                 let exposed_descendant_count = usize::from(external_child.is_exposed());
-                (aggregate_aabb, exposed_descendant_count)
+
+                let merged_directional_obscuredness = *external_child.directional_obscuredness();
+
+                (
+                    aggregate_aabb,
+                    exposed_descendant_count,
+                    merged_directional_obscuredness,
+                )
             } else if let Some(internal_child) = internal_children.next() {
                 internal_child.update_derived_node_data(tree_properties, aux_storage);
+
                 let aggregate_aabb = internal_child.aabb().clone();
+
                 let exposed_descendant_count = internal_child.exposed_descendant_count();
-                (aggregate_aabb, exposed_descendant_count)
+
+                let merged_directional_obscuredness = *internal_child.directional_obscuredness();
+
+                (
+                    aggregate_aabb,
+                    exposed_descendant_count,
+                    merged_directional_obscuredness,
+                )
             } else {
                 // All internal nodes should have at least one child
                 unreachable!();
@@ -1195,18 +1253,25 @@ impl<F: Float> VoxelTreeInternalNode<F> {
                 &aggregate_aabb,
                 &external_child.compute_aabb(tree_properties.voxel_extent()),
             );
+
             exposed_descendant_count += usize::from(external_child.is_exposed());
+
+            merged_directional_obscuredness.merge_with(external_child.directional_obscuredness());
         }
 
         for internal_child in internal_children {
             internal_child.update_derived_node_data(tree_properties, aux_storage);
 
             aggregate_aabb = AxisAlignedBox::aabb_from_pair(&aggregate_aabb, internal_child.aabb());
+
             exposed_descendant_count += internal_child.exposed_descendant_count();
+
+            merged_directional_obscuredness.merge_with(internal_child.directional_obscuredness());
         }
 
         self.set_aabb(aggregate_aabb);
         self.set_exposed_descendant_count(exposed_descendant_count);
+        self.set_directional_obscuredness(merged_directional_obscuredness);
     }
 
     fn add_voxel_instances(
@@ -1325,6 +1390,7 @@ impl VoxelTreeExternalNode {
             voxel_indices,
             voxel_scale,
             is_exposed: true,
+            directional_obscuredness: DirectionalObscurednessLookupTable::fully_exposed(),
         }
     }
 
@@ -1353,6 +1419,10 @@ impl VoxelTreeExternalNode {
         self.id
     }
 
+    fn directional_obscuredness(&self) -> &DirectionalObscurednessLookupTable {
+        &self.directional_obscuredness
+    }
+
     fn is_exposed(&self) -> bool {
         self.is_exposed
     }
@@ -1366,6 +1436,10 @@ impl VoxelTreeExternalNode {
 
     fn update_exposedness(&mut self, aux_storage: &VoxelTreeExternalNodeAuxiliaryStorage) {
         let aux_data = self.aux_data(aux_storage);
+
+        self.directional_obscuredness =
+            DirectionalObscurednessLookupTable::for_external_node(aux_data);
+
         self.is_exposed = !aux_data.has_only_fully_obscured_faces();
     }
 
@@ -1512,6 +1586,56 @@ impl VoxelTreeExternalNodeAuxiliaryData {
     }
 }
 
+impl DirectionalObscurednessLookupTable {
+    fn fully_exposed() -> Self {
+        Self {
+            is_obscured_from_direction: [[[false; 2]; 2]; 2],
+        }
+    }
+
+    fn fully_obscured() -> Self {
+        Self {
+            is_obscured_from_direction: [[[true; 2]; 2]; 2],
+        }
+    }
+
+    fn for_external_node(aux_data: &VoxelTreeExternalNodeAuxiliaryData) -> Self {
+        let is_obscured_from_direction = array::from_fn(|i| {
+            let obscured_x = aux_data.face_is_fully_obscured(VoxelFace::X_FACES[i]);
+            array::from_fn(|j| {
+                let obscured_y = aux_data.face_is_fully_obscured(VoxelFace::Y_FACES[j]);
+                array::from_fn(|k| {
+                    let obscured_z = aux_data.face_is_fully_obscured(VoxelFace::Z_FACES[k]);
+                    obscured_x && obscured_y && obscured_z
+                })
+            })
+        });
+
+        Self {
+            is_obscured_from_direction,
+        }
+    }
+
+    /// Whether the voxel or group of voxels is fully obscured when from the
+    /// given direction. The direction is from the viewer towards the voxel(s).
+    fn is_fully_obscured_from_direction<F: Float>(&self, direction: &Vector3<F>) -> bool {
+        self.is_obscured_from_direction[usize::from(direction.x.is_negative())]
+            [usize::from(direction.y.is_negative())][usize::from(direction.z.is_negative())]
+    }
+
+    fn merge_with(&mut self, other: &Self) {
+        for i in 0..2 {
+            for j in 0..2 {
+                for k in 0..2 {
+                    self.is_obscured_from_direction[i][j][k] = self.is_obscured_from_direction[i]
+                        [j][k]
+                        && other.is_obscured_from_direction[i][j][k];
+                }
+            }
+        }
+    }
+}
+
 impl<F: Float> VoxelTransform<F> {
     /// Creates a new voxel transform with the given translation and scaling.
     fn new(translation: Vector3<F>, scaling: F) -> Self {
@@ -1611,6 +1735,10 @@ where
 }
 
 impl VoxelFace {
+    const X_FACES: [Self; 2] = [Self::LowerX, Self::UpperX];
+    const Y_FACES: [Self; 2] = [Self::LowerY, Self::UpperY];
+    const Z_FACES: [Self; 2] = [Self::LowerZ, Self::UpperZ];
+
     fn opposite_face(&self) -> Self {
         match *self {
             Self::LowerX => Self::UpperX,
@@ -1832,7 +1960,7 @@ where
         let mut internal_children = Vec::new();
         let mut external_children = Vec::new();
 
-        let octant_indices = current_indices.for_next_depth().map(|next_indices| {
+        let octant_child_indices = current_indices.for_next_depth().map(|next_indices| {
             create_voxel_tree_node(
                 external_node_aux_storage,
                 &mut internal_children,
@@ -1867,9 +1995,10 @@ where
 
             let idx = internal_nodes.len();
             internal_nodes.push(VoxelTreeInternalNode::new(
-                octant_indices,
+                octant_child_indices,
                 internal_children,
                 external_children,
+                current_indices.voxel_scale(),
             ));
 
             VoxelTreeOctantChildNodeIdx::Internal(idx)
