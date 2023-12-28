@@ -22,7 +22,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
-use nalgebra::Similarity3;
+use nalgebra::{Point3, Similarity3};
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
@@ -564,8 +564,13 @@ impl<F: Float> SceneGraph<F> {
                     .get_voxel_tree(voxel_tree_node.voxel_tree_id())
                     .expect("Missing voxel tree for voxel tree node in scene graph");
 
+                let camera_to_root_transform = root_to_camera_transform.inverse();
+
                 let view_frustum_in_voxel_tree_space =
-                    camera_space_view_frustum.transformed(&root_to_camera_transform.inverse());
+                    camera_space_view_frustum.transformed(&camera_to_root_transform);
+
+                let camera_position_in_voxel_tree_space =
+                    camera_to_root_transform.transform_point(&Point3::origin());
 
                 let (transform_buffer, (material_feature_storage, material_feature_buffer)) =
                     instance_feature_manager.transform_and_next_feature_buffer_mut_with_storage(
@@ -577,6 +582,7 @@ impl<F: Float> SceneGraph<F> {
                     material_feature_storage,
                     transform_buffer,
                     material_feature_buffer,
+                    &camera_position_in_voxel_tree_space,
                     &view_frustum_in_voxel_tree_space,
                     root_to_camera_transform,
                 );
@@ -769,8 +775,13 @@ impl<F: Float> SceneGraph<F> {
                     .get_voxel_tree(voxel_tree_node.voxel_tree_id())
                     .expect("Missing voxel tree for voxel tree node in scene graph");
 
+                let camera_to_group_transform = group_to_camera_transform.inverse();
+
                 let view_frustum_in_voxel_tree_space =
-                    camera_space_view_frustum.transformed(&group_to_camera_transform.inverse());
+                    camera_space_view_frustum.transformed(&camera_to_group_transform);
+
+                let camera_position_in_voxel_tree_space =
+                    camera_to_group_transform.transform_point(&Point3::origin());
 
                 let (transform_buffer, (material_feature_storage, material_feature_buffer)) =
                     instance_feature_manager.transform_and_next_feature_buffer_mut_with_storage(
@@ -782,6 +793,7 @@ impl<F: Float> SceneGraph<F> {
                     material_feature_storage,
                     transform_buffer,
                     material_feature_buffer,
+                    &camera_position_in_voxel_tree_space,
                     &view_frustum_in_voxel_tree_space,
                     group_to_camera_transform,
                 );
@@ -1091,14 +1103,20 @@ impl SceneGraph<fre> {
                     .create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
                     * group_to_camera_transform;
 
+                let camera_to_group_transform = group_to_camera_transform.inverse();
+
                 let face_frustum_in_voxel_tree_space =
-                    camera_space_face_frustum.transformed(&group_to_camera_transform.inverse());
+                    camera_space_face_frustum.transformed(&camera_to_group_transform);
+
+                let light_position_in_voxel_tree_space = camera_to_group_transform
+                    .transform_point(omnidirectional_light.camera_space_position());
 
                 let transform_buffer =
                     instance_feature_manager.transform_buffer_mut(voxel_tree_node.model_id());
 
                 voxel_tree.buffer_visible_voxel_model_view_transforms(
                     transform_buffer,
+                    &light_position_in_voxel_tree_space,
                     &face_frustum_in_voxel_tree_space,
                     &voxel_tree_to_cubemap_face_transform,
                 );

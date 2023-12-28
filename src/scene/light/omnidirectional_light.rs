@@ -90,6 +90,11 @@ impl OmnidirectionalLight {
             * self.create_camera_to_light_space_transform()
     }
 
+    /// Returns a reference to the camera space position of the light.
+    pub fn camera_space_position(&self) -> &Point3<fre> {
+        &self.camera_space_position
+    }
+
     /// Sets the camera space position of the light to the given position.
     pub fn set_camera_space_position(&mut self, camera_space_position: Point3<fre>) {
         self.camera_space_position = camera_space_position;
