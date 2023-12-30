@@ -11,7 +11,7 @@ pub use components::{
 use crate::{
     geometry::{
         CubemapFace, Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
-        InstanceModelViewTransform, OrientedBox, Sphere,
+        InstanceModelViewTransform, OrthographicTransform, Sphere,
     },
     num::Float,
     rendering::{fre, CascadeIdx},
@@ -22,7 +22,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
-use nalgebra::{Point3, Similarity3};
+use nalgebra::{Point3, Similarity3, Vector3};
 use std::collections::HashSet;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
@@ -1208,11 +1208,18 @@ impl SceneGraph<fre> {
             if !light_space_bounding_sphere
                 .is_outside_axis_aligned_box(&cascade_aabb_in_light_space)
             {
-                let cascade_bounding_box_in_light_space =
-                    OrientedBox::from_axis_aligned_box(&cascade_aabb_in_light_space);
+                let light_to_voxel_tree_transform = voxel_tree_to_light_transform.inverse();
 
-                let cascade_bounding_box_in_voxel_tree_space = cascade_bounding_box_in_light_space
-                    .transformed(&voxel_tree_to_light_transform.inverse());
+                let view_direction_in_voxel_tree_space =
+                    light_to_voxel_tree_transform.isometry.rotation * (-Vector3::z_axis());
+
+                let cascade_frustum_in_light_space = Frustum::from_transform(
+                    OrthographicTransform::from_axis_aligned_box(&cascade_aabb_in_light_space)
+                        .as_projective(),
+                );
+
+                let cascade_frustum_in_voxel_tree_space =
+                    cascade_frustum_in_light_space.transformed(&light_to_voxel_tree_transform);
 
                 let voxel_tree = voxel_manager
                     .get_voxel_tree(voxel_tree_node.voxel_tree_id())
@@ -1223,7 +1230,8 @@ impl SceneGraph<fre> {
 
                 voxel_tree.buffer_visible_voxel_model_view_transforms_orthographic(
                     transform_buffer,
-                    &cascade_bounding_box_in_voxel_tree_space,
+                    &view_direction_in_voxel_tree_space,
+                    &cascade_frustum_in_voxel_tree_space,
                     &voxel_tree_to_light_transform,
                 );
             }

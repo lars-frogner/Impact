@@ -1,7 +1,7 @@
 //! Projection transformations.
 
 use crate::{
-    geometry::{Angle, Bounds, Frustum, Radians, UpperExclusiveBounds},
+    geometry::{Angle, AxisAlignedBox, Bounds, Frustum, Radians, UpperExclusiveBounds},
     num::Float,
 };
 use approx::assert_abs_diff_ne;
@@ -202,6 +202,14 @@ impl<F: Float> OrthographicTransform<F> {
             near_distance,
             far_distance,
         )
+    }
+
+    /// Creates a new orthographic transformation with the given axis-aligned
+    /// box as the view box.
+    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox<F>) -> Self {
+        let lower = axis_aligned_box.lower_corner();
+        let upper = axis_aligned_box.upper_corner();
+        Self::new(lower.x, upper.x, lower.y, upper.y, lower.z, upper.z)
     }
 
     /// Computes the translation and nonuniform scaling representing the
