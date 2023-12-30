@@ -7,7 +7,7 @@ pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
 use crate::{
     geometry::{
         AxisAlignedBox, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureID,
-        InstanceFeatureStorage, InstanceModelViewTransform, OrientedBox, Sphere,
+        InstanceFeatureStorage, InstanceModelViewTransform, Sphere,
     },
     num::Float,
     rendering::fre,
@@ -392,6 +392,8 @@ impl<F: Float> VoxelTree<F> {
                         let displacement_from_camera =
                             internal_node.aabb().center() - tree_space_camera_position;
                         !internal_node.is_fully_obscured_from_direction(&displacement_from_camera)
+                            && tree_space_view_frustum
+                                .could_contain_part_of_axis_aligned_box(internal_node.aabb())
                     } else {
                         false
                     }
@@ -451,6 +453,8 @@ impl<F: Float> VoxelTree<F> {
                         let displacement_from_camera =
                             internal_node.aabb().center() - tree_space_camera_position;
                         !internal_node.is_fully_obscured_from_direction(&displacement_from_camera)
+                            && tree_space_view_frustum
+                                .could_contain_part_of_axis_aligned_box(internal_node.aabb())
                     } else {
                         false
                     }
@@ -470,14 +474,15 @@ impl<F: Float> VoxelTree<F> {
         }
     }
 
-    /// Determines the voxels that may be visible based on the given
-    /// orthographic view frustum and writes their model view transforms to the
-    /// given buffer. The view frustum (an oriented box) is assumed to be
-    /// represented in the space of the voxel tree.
+    /// Determines the voxels that may be visible based on the given view
+    /// direction and orthographic view frustum and writes their model view
+    /// transforms to the given buffer. The view direction and frustum are
+    /// assumed to be represented in the space of the voxel tree.
     pub fn buffer_visible_voxel_model_view_transforms_orthographic(
         &self,
         transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        tree_space_view_frustum: &OrientedBox<F>,
+        tree_space_view_direction: &UnitVector3<F>,
+        tree_space_view_frustum: &Frustum<F>,
         view_transform: &Similarity3<F>,
     ) where
         F: SubsetOf<fre>,
@@ -496,13 +501,14 @@ impl<F: Float> VoxelTree<F> {
         );
 
         if self.properties.has_intermediate_instance_group_scale() {
-            let light_direction = -tree_space_view_frustum.compute_depth_axis();
-
             self.root_node().buffer_features_for_internal_nodes(
                 &self.properties,
                 &|internal_node: &InternalNode<F>| {
                     internal_node.has_exposed_descendants()
-                        && !internal_node.is_fully_obscured_from_direction(&light_direction)
+                        && !internal_node
+                            .is_fully_obscured_from_direction(tree_space_view_direction)
+                        && tree_space_view_frustum
+                            .could_contain_part_of_axis_aligned_box(internal_node.aabb())
                 },
                 &mut |internal_node: &InternalNode<F>| {
                     let voxel_instance_group = self
