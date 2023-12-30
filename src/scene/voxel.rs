@@ -222,6 +222,7 @@ impl VoxelManager<fre> {
                     voxel_type.voxel_type(),
                     voxel_extent,
                     voxel_sphere.n_voxels_across(),
+                    voxel_sphere.instance_group_height(),
                 );
 
                 let voxel_tree = VoxelTree::build(&generator)

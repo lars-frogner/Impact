@@ -51,6 +51,10 @@ pub struct VoxelBoxComp {
 pub struct VoxelSphereComp {
     /// The number of voxels along the diameter of the sphere.
     n_voxels_across: usize,
+    /// The height above the bottom of the voxel tree below which decisions on
+    /// whether to pass voxel instances to the GPU should be made for entire
+    /// octants at once.
+    instance_group_height: usize,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
@@ -117,14 +121,24 @@ impl VoxelSphereComp {
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
-    pub fn new(n_voxels_across: usize) -> Self {
+    pub fn new(n_voxels_across: usize, instance_group_height: u32) -> Self {
         assert_ne!(n_voxels_across, 0);
-        Self { n_voxels_across }
+        Self {
+            n_voxels_across,
+            instance_group_height: instance_group_height as usize,
+        }
     }
 
     /// Returns the number of voxels across the sphere's diameter.
     pub fn n_voxels_across(&self) -> usize {
         self.n_voxels_across
+    }
+
+    /// Returns the height above the bottom of the voxel tree below which
+    /// decisions on whether to pass voxel instances to the GPU should be made
+    /// for entire octants at once.
+    pub fn instance_group_height(&self) -> u32 {
+        self.instance_group_height as u32
     }
 }
 

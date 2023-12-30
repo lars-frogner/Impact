@@ -52,6 +52,12 @@ pub trait VoxelGenerator<F: Float> {
     /// if the voxel is absent or the indices are outside the bounds of the
     /// grid.
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType>;
+
+    /// Returns the scale below which decisions on whether to pass voxel
+    /// instances to the GPU should be made for entire octants at once.
+    fn instance_group_scale(&self) -> u32 {
+        1
+    }
 }
 
 /// An octree representation of a grid of voxels.
@@ -60,7 +66,7 @@ pub struct VoxelTree<F: Float> {
     properties: VoxelTreeProperties<F>,
     root_node: InternalNode<F>,
     external_node_aux_storage: ExternalNodeAuxiliaryStorage,
-    voxel_instances: VoxelInstanceStorage<F>,
+    voxel_instances: GroupedVoxelInstanceStorage<F>,
 }
 
 /// The basic properties of a voxel tree.
@@ -68,6 +74,7 @@ pub struct VoxelTree<F: Float> {
 struct VoxelTreeProperties<F> {
     voxel_extent: F,
     height: VoxelTreeHeight,
+    instance_group_scale: u32,
 }
 
 /// The total number of levels in a voxel tree.
@@ -93,6 +100,15 @@ struct VoxelInstanceStorage<F: Float> {
     index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
 }
 
+/// A collection of [`VoxelInstanceStorage`]s for holding separate groups of
+/// voxel instances.
+#[derive(Clone, Debug)]
+struct GroupedVoxelInstanceStorage<F: Float> {
+    groups: Vec<VoxelInstanceStorage<F>>,
+    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
+    group_id_count: usize,
+}
+
 /// An internal node in a voxel tree. It has one child for each non-empty octant
 /// of the region of the grid the node covers.
 #[derive(Clone, Debug)]
@@ -100,6 +116,7 @@ struct InternalNode<F: Float> {
     internal_children: Vec<InternalNode<F>>,
     external_children: Vec<ExternalNode>,
     octant_child_indices: [OctantChildNodeIdx; 8],
+    instance_group_id: InstanceGroupID,
     scale: u32,
     aabb: AxisAlignedBox<F>,
     exposed_descendant_count: usize,
@@ -138,6 +155,12 @@ struct ExternalNode {
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ExternalNodeID(usize);
+
+/// Identifier for a [`VoxelInstanceStorage`] in a
+/// [`GroupedVoxelInstanceStorage`].
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct InstanceGroupID(usize);
 
 /// Auxiliary data for a specific [`ExternalNode`].
 #[derive(Clone, Debug)]
@@ -255,9 +278,11 @@ impl<F: Float> VoxelTree<F> {
         let properties = VoxelTreeProperties::from_generator(generator);
 
         let mut external_node_aux_storage = ExternalNodeAuxiliaryStorage::new();
+        let mut voxel_instances = GroupedVoxelInstanceStorage::new();
 
         InternalNode::build_root_node(
             &mut external_node_aux_storage,
+            &mut voxel_instances,
             generator,
             properties.tree_height(),
         )
@@ -266,7 +291,7 @@ impl<F: Float> VoxelTree<F> {
                 properties,
                 root_node,
                 external_node_aux_storage,
-                voxel_instances: VoxelInstanceStorage::new(),
+                voxel_instances,
             };
 
             // The order here is important: we must update adjacent voxels first
@@ -295,7 +320,7 @@ impl<F: Float> VoxelTree<F> {
     /// Returns the number of unmerged voxels along one axis of the grid. The
     /// grid size is always a power of two.
     pub fn grid_size(&self) -> usize {
-        self.properties.tree_height().grid_size_at_height(0)
+        self.properties.grid_size()
     }
 
     /// Computes a sphere bounding the entire voxel tree by aggregating the
@@ -337,21 +362,59 @@ impl<F: Float> VoxelTree<F> {
         let camera_space_axes_in_tree_space =
             VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
 
-        transform_buffer.add_features_from_iterator(
-            self.voxel_instances().transforms().iter().map(|transform| {
-                transform.transform_into_model_view_transform(
-                    view_transform,
-                    &camera_space_axes_in_tree_space,
-                )
-            }),
+        let root_voxel_instance_group = self
+            .voxel_instances()
+            .group(self.root_node().instance_group_id());
+
+        // We buffer all instances in the root group unconditionally, as
+        // evaluating their individual visibility creates more work than it
+        // saves
+        root_voxel_instance_group.buffer_all_transforms(
+            transform_buffer,
+            view_transform,
+            &camera_space_axes_in_tree_space,
         );
 
-        let feature_id = feature_id_map.value(VoxelType::Default);
-        feature_buffer.add_feature_from_storage_repeatedly(
+        root_voxel_instance_group.buffer_all_features(
+            feature_id_map,
             feature_storage,
-            *feature_id,
-            self.voxel_instances().n_instances(),
+            feature_buffer,
         );
+
+        // If we have instance groups in addition to the root group, we traverse
+        // the tree and buffer all the instances in each group that may be
+        // visible
+        if self.properties.has_intermediate_instance_group_scale() {
+            self.root_node().buffer_features_for_internal_nodes(
+                &self.properties,
+                &|internal_node: &InternalNode<F>| {
+                    if internal_node.has_exposed_descendants() {
+                        let displacement_from_camera =
+                            internal_node.aabb().center() - tree_space_camera_position;
+                        !internal_node.is_fully_obscured_from_direction(&displacement_from_camera)
+                    } else {
+                        false
+                    }
+                },
+                &mut |internal_node: &InternalNode<F>| {
+                    let voxel_instance_group = self
+                        .voxel_instances()
+                        .group(internal_node.instance_group_id());
+
+                    voxel_instance_group.buffer_all_transforms(
+                        transform_buffer,
+                        view_transform,
+                        &camera_space_axes_in_tree_space,
+                    );
+
+                    voxel_instance_group.buffer_all_features(
+                        feature_id_map,
+                        feature_storage,
+                        feature_buffer,
+                    );
+                },
+            );
+        }
     }
 
     /// Determines the voxels that may be visible based on the given camera
@@ -370,14 +433,41 @@ impl<F: Float> VoxelTree<F> {
         let camera_space_axes_in_tree_space =
             VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
 
-        transform_buffer.add_features_from_iterator(
-            self.voxel_instances().transforms().iter().map(|transform| {
-                transform.transform_into_model_view_transform(
-                    view_transform,
-                    &camera_space_axes_in_tree_space,
-                )
-            }),
+        let root_voxel_instance_group = self
+            .voxel_instances()
+            .group(self.root_node().instance_group_id());
+
+        root_voxel_instance_group.buffer_all_transforms(
+            transform_buffer,
+            view_transform,
+            &camera_space_axes_in_tree_space,
         );
+
+        if self.properties.has_intermediate_instance_group_scale() {
+            self.root_node().buffer_features_for_internal_nodes(
+                &self.properties,
+                &|internal_node: &InternalNode<F>| {
+                    if internal_node.has_exposed_descendants() {
+                        let displacement_from_camera =
+                            internal_node.aabb().center() - tree_space_camera_position;
+                        !internal_node.is_fully_obscured_from_direction(&displacement_from_camera)
+                    } else {
+                        false
+                    }
+                },
+                &mut |internal_node: &InternalNode<F>| {
+                    let voxel_instance_group = self
+                        .voxel_instances()
+                        .group(internal_node.instance_group_id());
+
+                    voxel_instance_group.buffer_all_transforms(
+                        transform_buffer,
+                        view_transform,
+                        &camera_space_axes_in_tree_space,
+                    );
+                },
+            );
+        }
     }
 
     /// Determines the voxels that may be visible based on the given
@@ -395,14 +485,38 @@ impl<F: Float> VoxelTree<F> {
         let camera_space_axes_in_tree_space =
             VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
 
-        transform_buffer.add_features_from_iterator(
-            self.voxel_instances().transforms().iter().map(|transform| {
-                transform.transform_into_model_view_transform(
-                    view_transform,
-                    &camera_space_axes_in_tree_space,
-                )
-            }),
+        let root_voxel_instance_group = self
+            .voxel_instances()
+            .group(self.root_node().instance_group_id());
+
+        root_voxel_instance_group.buffer_all_transforms(
+            transform_buffer,
+            view_transform,
+            &camera_space_axes_in_tree_space,
         );
+
+        if self.properties.has_intermediate_instance_group_scale() {
+            let light_direction = -tree_space_view_frustum.compute_depth_axis();
+
+            self.root_node().buffer_features_for_internal_nodes(
+                &self.properties,
+                &|internal_node: &InternalNode<F>| {
+                    internal_node.has_exposed_descendants()
+                        && !internal_node.is_fully_obscured_from_direction(&light_direction)
+                },
+                &mut |internal_node: &InternalNode<F>| {
+                    let voxel_instance_group = self
+                        .voxel_instances()
+                        .group(internal_node.instance_group_id());
+
+                    voxel_instance_group.buffer_all_transforms(
+                        transform_buffer,
+                        view_transform,
+                        &camera_space_axes_in_tree_space,
+                    );
+                },
+            );
+        }
     }
 
     /// Rebuilds the list of adjacent voxels for every external node in the
@@ -450,7 +564,7 @@ impl<F: Float> VoxelTree<F> {
         self.external_node_aux_storage.data(id)
     }
 
-    fn voxel_instances(&self) -> &VoxelInstanceStorage<F> {
+    fn voxel_instances(&self) -> &GroupedVoxelInstanceStorage<F> {
         &self.voxel_instances
     }
 
@@ -855,10 +969,14 @@ impl<F: Float> VoxelTreeProperties<F> {
     {
         let voxel_extent = generator.voxel_extent();
         let height = VoxelTreeHeight::from_shape(generator.grid_shape());
+        let instance_group_scale = generator.instance_group_scale();
+
+        assert!(instance_group_scale.is_power_of_two());
 
         Self {
             voxel_extent,
             height,
+            instance_group_scale,
         }
     }
 
@@ -868,6 +986,18 @@ impl<F: Float> VoxelTreeProperties<F> {
 
     fn tree_height(&self) -> VoxelTreeHeight {
         self.height
+    }
+
+    fn instance_group_scale(&self) -> u32 {
+        self.instance_group_scale
+    }
+
+    fn grid_size(&self) -> usize {
+        self.height.grid_size_at_height(0)
+    }
+
+    fn has_intermediate_instance_group_scale(&self) -> bool {
+        self.instance_group_scale > 1 && (self.instance_group_scale as usize) < self.grid_size()
     }
 }
 
@@ -1020,11 +1150,86 @@ impl<F: Float> VoxelInstanceStorage<F> {
         self.voxel_types.push(voxel_type);
         self.transforms.push(transform);
     }
+
+    fn buffer_all_transforms(
+        &self,
+        transform_buffer: &mut DynamicInstanceFeatureBuffer,
+        view_transform: &Similarity3<F>,
+        camera_space_axes_in_tree_space: &(UnitVector3<F>, UnitVector3<F>, UnitVector3<F>),
+    ) where
+        F: SubsetOf<fre>,
+    {
+        transform_buffer.add_features_from_iterator(self.transforms().iter().map(|transform| {
+            transform.transform_into_model_view_transform(
+                view_transform,
+                camera_space_axes_in_tree_space,
+            )
+        }));
+    }
+
+    fn buffer_all_features(
+        &self,
+        feature_id_map: &VoxelPropertyMap<InstanceFeatureID>,
+        feature_storage: &InstanceFeatureStorage,
+        feature_buffer: &mut DynamicInstanceFeatureBuffer,
+    ) {
+        let feature_id = feature_id_map.value(VoxelType::Default);
+
+        feature_buffer.add_feature_from_storage_repeatedly(
+            feature_storage,
+            *feature_id,
+            self.n_instances(),
+        );
+    }
+}
+
+impl<F: Float> GroupedVoxelInstanceStorage<F> {
+    fn new() -> Self {
+        Self {
+            groups: Vec::new(),
+            index_map: KeyIndexMapper::default(),
+            group_id_count: 0,
+        }
+    }
+
+    #[cfg(test)]
+    fn n_groups(&self) -> usize {
+        self.index_map.len()
+    }
+
+    fn group(&self, group_id: InstanceGroupID) -> &VoxelInstanceStorage<F> {
+        let idx = self.index_map.idx(group_id.0);
+        &self.groups[idx]
+    }
+
+    fn group_mut(&mut self, group_id: InstanceGroupID) -> &mut VoxelInstanceStorage<F> {
+        let idx = self.index_map.idx(group_id.0);
+        &mut self.groups[idx]
+    }
+
+    fn create_group(&mut self) -> InstanceGroupID {
+        let group_id = self.create_new_group_id();
+        self.index_map.push_key(group_id.0);
+        self.groups.push(VoxelInstanceStorage::new());
+        group_id
+    }
+
+    fn remove_group(&mut self, group_id: InstanceGroupID) {
+        let idx = self.index_map.swap_remove_key(group_id.0);
+        self.groups.swap_remove(idx);
+    }
+
+    fn create_new_group_id(&mut self) -> InstanceGroupID {
+        let group_id = InstanceGroupID(self.group_id_count);
+        self.group_id_count += 1;
+        group_id
+    }
 }
 
 impl<F: Float> InternalNode<F> {
     fn build_root_node<G>(
         external_node_aux_storage: &mut ExternalNodeAuxiliaryStorage,
+        voxel_instances: &mut GroupedVoxelInstanceStorage<F>,
         generator: &G,
         tree_height: VoxelTreeHeight,
     ) -> Option<Self>
@@ -1040,12 +1245,18 @@ impl<F: Float> InternalNode<F> {
         let mut internal_children = Vec::new();
         let mut external_children = Vec::new();
 
+        // This instance group will contain the instances for all external nodes
+        // down to the `instance_group_scale`
+        let instance_group_id = voxel_instances.create_group();
+
         let octant_child_indices = current_indices.for_next_depth().map(|next_indices| {
             create_voxel_tree_node(
                 external_node_aux_storage,
+                voxel_instances,
                 &mut internal_children,
                 &mut external_children,
                 generator,
+                instance_group_id,
                 next_indices,
             )
         });
@@ -1061,6 +1272,7 @@ impl<F: Float> InternalNode<F> {
                 octant_child_indices,
                 internal_children,
                 external_children,
+                instance_group_id,
                 current_indices.voxel_scale(),
             ))
         }
@@ -1070,12 +1282,14 @@ impl<F: Float> InternalNode<F> {
         octant_child_indices: [OctantChildNodeIdx; 8],
         internal_children: Vec<InternalNode<F>>,
         external_children: Vec<ExternalNode>,
+        instance_group_id: InstanceGroupID,
         scale: u32,
     ) -> Self {
         Self {
             octant_child_indices,
             internal_children,
             external_children,
+            instance_group_id,
             scale,
             aabb: AxisAlignedBox::new(Point3::origin(), Point3::origin()),
             exposed_descendant_count: 0,
@@ -1124,6 +1338,10 @@ impl<F: Float> InternalNode<F> {
     #[cfg(test)]
     fn n_external_children(&self) -> usize {
         self.external_children.len()
+    }
+
+    fn instance_group_id(&self) -> InstanceGroupID {
+        self.instance_group_id
     }
 
     fn aabb(&self) -> &AxisAlignedBox<F> {
@@ -1262,23 +1480,34 @@ impl<F: Float> InternalNode<F> {
 
     fn add_voxel_instances(
         &self,
-        voxel_instances: &mut VoxelInstanceStorage<F>,
+        voxel_instances: &mut GroupedVoxelInstanceStorage<F>,
         tree_properties: &VoxelTreeProperties<F>,
         criterion: &impl Fn(&ExternalNode) -> bool,
     ) {
         let mut stack = vec![self];
 
+        let mut current_instance_group_id = self.instance_group_id();
+        let mut current_voxel_instance_group = voxel_instances.group_mut(current_instance_group_id);
+
         while let Some(internal_node) = stack.pop() {
+            // Change the instance group to that of the current internal node if
+            // neccessary, so that the instances for the external ancestors are
+            // added to the correct instance group
+            if internal_node.instance_group_id() != current_instance_group_id {
+                current_instance_group_id = internal_node.instance_group_id();
+                current_voxel_instance_group = voxel_instances.group_mut(current_instance_group_id);
+            }
+
             for external_child in internal_node.external_children() {
                 if criterion(external_child) {
-                    external_child
-                        .add_voxel_instance_entry(voxel_instances, tree_properties.voxel_extent());
+                    external_child.add_voxel_instance_entry(
+                        current_voxel_instance_group,
+                        tree_properties.voxel_extent(),
+                    );
                 }
             }
 
-            for internal_child in internal_node.internal_children() {
-                stack.push(internal_child);
-            }
+            stack.extend(internal_node.internal_children().iter());
         }
     }
 
@@ -1321,25 +1550,26 @@ impl<F: Float> InternalNode<F> {
         }
     }
 
-    fn perform_action_for_exposed_external_nodes(
+    fn buffer_features_for_internal_nodes(
         &self,
-        internal_node_criterion: &impl Fn(&InternalNode<F>) -> bool,
-        perform_action: &mut impl FnMut(&ExternalNode),
+        tree_properties: &VoxelTreeProperties<F>,
+        criterion: &impl Fn(&InternalNode<F>) -> bool,
+        buffer_features: &mut impl FnMut(&InternalNode<F>),
     ) {
         let mut stack = vec![self];
 
         while let Some(internal_node) = stack.pop() {
-            for external_child in internal_node.external_children() {
-                if external_child.is_exposed() {
-                    perform_action(external_child);
+            if internal_node.scale == 2 * tree_properties.instance_group_scale() {
+                for internal_child in internal_node.internal_children() {
+                    if criterion(internal_child) {
+                        buffer_features(internal_child);
+                    }
                 }
-            }
-
-            for internal_child in internal_node.internal_children() {
-                if internal_child.has_exposed_descendants()
-                    && internal_node_criterion(internal_child)
-                {
-                    stack.push(internal_child);
+            } else {
+                for internal_child in internal_node.internal_children() {
+                    if criterion(internal_child) {
+                        stack.push(internal_child);
+                    }
                 }
             }
         }
@@ -1919,9 +2149,11 @@ impl Octant {
 
 fn create_voxel_tree_node<F, G>(
     external_node_aux_storage: &mut ExternalNodeAuxiliaryStorage,
+    voxel_instances: &mut GroupedVoxelInstanceStorage<F>,
     internal_nodes: &mut Vec<InternalNode<F>>,
     external_nodes: &mut Vec<ExternalNode>,
     generator: &G,
+    parent_instance_group_id: InstanceGroupID,
     current_indices: VoxelTreeIndices,
 ) -> OctantChildNodeIdx
 where
@@ -1937,15 +2169,29 @@ where
             OctantChildNodeIdx::None
         }
     } else {
+        let scale = current_indices.voxel_scale();
+
+        // If the current internal node is at the `instance_group_scale`, we
+        // need to create a new group for the instances of its external
+        // ancestors
+        let create_new_instance_group = scale == generator.instance_group_scale();
+        let instance_group_id = if create_new_instance_group {
+            voxel_instances.create_group()
+        } else {
+            parent_instance_group_id
+        };
+
         let mut internal_children = Vec::new();
         let mut external_children = Vec::new();
 
         let octant_child_indices = current_indices.for_next_depth().map(|next_indices| {
             create_voxel_tree_node(
                 external_node_aux_storage,
+                voxel_instances,
                 &mut internal_children,
                 &mut external_children,
                 generator,
+                instance_group_id,
                 next_indices,
             )
         });
@@ -1960,9 +2206,17 @@ where
                     .iter()
                     .all(|external_child| external_child.voxel_type == common_child_voxel_type)
                 {
+                    // If it turns out that we can make this an external node,
+                    // we must remove the instance group we created for this
+                    // node
+                    if create_new_instance_group {
+                        voxel_instances.remove_group(instance_group_id);
+                    }
+
                     let idx = external_nodes.len();
                     external_nodes
                         .push(ExternalNode::new(common_child_voxel_type, current_indices));
+
                     return OctantChildNodeIdx::External(idx);
                 }
             }
@@ -1976,7 +2230,8 @@ where
                 octant_child_indices,
                 internal_children,
                 external_children,
-                current_indices.voxel_scale(),
+                instance_group_id,
+                scale,
             ));
 
             OctantChildNodeIdx::Internal(idx)
@@ -2000,6 +2255,7 @@ mod test {
 
     struct DefaultVoxelGenerator {
         shape: [usize; 3],
+        instance_group_scale: u32,
     }
 
     struct RecordingVoxelGenerator {
@@ -2025,6 +2281,19 @@ mod test {
         }
     }
 
+    impl DefaultVoxelGenerator {
+        fn new(shape: [usize; 3]) -> Self {
+            Self::new_with_instance_group_scale(shape, 1)
+        }
+
+        fn new_with_instance_group_scale(shape: [usize; 3], instance_group_scale: u32) -> Self {
+            Self {
+                shape,
+                instance_group_scale,
+            }
+        }
+    }
+
     impl VoxelGenerator<f64> for DefaultVoxelGenerator {
         fn voxel_extent(&self) -> f64 {
             0.25
@@ -2040,6 +2309,10 @@ mod test {
             } else {
                 None
             }
+        }
+
+        fn instance_group_scale(&self) -> u32 {
+            self.instance_group_scale
         }
     }
 
@@ -2119,49 +2392,49 @@ mod test {
 
     #[test]
     fn should_get_no_tree_for_single_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1; 3] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1; 3]));
         assert!(tree.is_none());
     }
 
     #[test]
     fn should_get_tree_for_more_than_one_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] });
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([2, 1, 1]));
         assert!(tree.is_some());
     }
 
     #[test]
     fn should_get_voxel_extent_of_generator() {
-        let generator = DefaultVoxelGenerator { shape: [2; 3] };
+        let generator = DefaultVoxelGenerator::new([2; 3]);
         let tree = VoxelTree::build(&generator).unwrap();
         assert_eq!(tree.voxel_extent(), generator.voxel_extent());
     }
 
     #[test]
     fn should_build_tree_with_grid_size_two_for_two_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([2, 1, 1])).unwrap();
         assert_eq!(tree.tree_height(), 1);
         assert_eq!(tree.grid_size(), 2);
 
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 1] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1, 2, 1])).unwrap();
         assert_eq!(tree.tree_height(), 1);
         assert_eq!(tree.grid_size(), 2);
 
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 1, 2] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1, 1, 2])).unwrap();
         assert_eq!(tree.tree_height(), 1);
         assert_eq!(tree.grid_size(), 2);
     }
 
     #[test]
     fn should_build_tree_with_grid_size_four_for_three_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3, 1, 1] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([3, 1, 1])).unwrap();
         assert_eq!(tree.tree_height(), 2);
         assert_eq!(tree.grid_size(), 4);
 
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 3, 1] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1, 3, 1])).unwrap();
         assert_eq!(tree.tree_height(), 2);
         assert_eq!(tree.grid_size(), 4);
 
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 1, 3] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1, 1, 3])).unwrap();
         assert_eq!(tree.tree_height(), 2);
         assert_eq!(tree.grid_size(), 4);
     }
@@ -2196,7 +2469,7 @@ mod test {
 
     #[test]
     fn should_have_root_node_with_two_external_children_for_two_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 1, 1] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([2, 1, 1])).unwrap();
         let root_node = tree.root_node();
         assert_eq!(root_node.n_children(), 2);
         assert_eq!(root_node.n_external_children(), 2);
@@ -2205,7 +2478,7 @@ mod test {
 
     #[test]
     fn should_have_root_node_with_8_external_children_for_two_cubed_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2; 3] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([2; 3])).unwrap();
         let root_node = tree.root_node();
         assert_eq!(root_node.n_children(), 8);
         assert_eq!(root_node.n_external_children(), 8);
@@ -2214,7 +2487,7 @@ mod test {
 
     #[test]
     fn should_have_root_node_with_correct_internal_and_external_children_for_12_voxel_generator() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [2, 2, 3] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([2, 2, 3])).unwrap();
         let root_node = tree.root_node();
         assert_eq!(root_node.n_children(), 2);
         assert_eq!(root_node.n_external_children(), 1);
@@ -2227,7 +2500,7 @@ mod test {
 
     #[test]
     fn should_have_correct_aabb_in_two_voxel_tree() {
-        let generator = DefaultVoxelGenerator { shape: [1, 2, 1] };
+        let generator = DefaultVoxelGenerator::new([1, 2, 1]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let root_node = tree.root_node();
@@ -2245,7 +2518,7 @@ mod test {
 
     #[test]
     fn should_have_correct_aabbs_in_three_voxel_tree() {
-        let generator = DefaultVoxelGenerator { shape: [1, 1, 3] };
+        let generator = DefaultVoxelGenerator::new([1, 1, 3]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let check_aabb = |node: &InternalNode<f64>,
@@ -2285,7 +2558,7 @@ mod test {
 
     #[test]
     fn should_have_correct_aabbs_in_three_by_two_by_five_voxel_tree() {
-        let generator = DefaultVoxelGenerator { shape: [3, 2, 5] };
+        let generator = DefaultVoxelGenerator::new([3, 2, 5]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let check_aabb = |node: &InternalNode<f64>,
@@ -2365,7 +2638,7 @@ mod test {
 
     #[test]
     fn should_have_correct_exposed_descendant_count_in_two_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 1] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1, 2, 1])).unwrap();
         let root_node = tree.root_node();
         assert_eq!(root_node.exposed_descendant_count(), 2);
     }
@@ -2385,7 +2658,7 @@ mod test {
 
     #[test]
     fn should_compute_valid_bounding_sphere_for_two_voxel_tree() {
-        let generator = DefaultVoxelGenerator { shape: [1, 2, 1] };
+        let generator = DefaultVoxelGenerator::new([1, 2, 1]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let aabb = AxisAlignedBox::new(
@@ -2408,7 +2681,7 @@ mod test {
 
     #[test]
     fn should_compute_valid_bounding_sphere_for_five_voxel_tree() {
-        let generator = DefaultVoxelGenerator { shape: [1, 1, 5] };
+        let generator = DefaultVoxelGenerator::new([1, 1, 5]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let aabb = AxisAlignedBox::new(
@@ -2431,7 +2704,7 @@ mod test {
 
     #[test]
     fn should_compute_valid_bounding_sphere_for_four_by_two_by_two_voxel_tree() {
-        let generator = DefaultVoxelGenerator { shape: [4, 2, 2] };
+        let generator = DefaultVoxelGenerator::new([4, 2, 2]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let aabb = AxisAlignedBox::new(
@@ -2454,9 +2727,11 @@ mod test {
 
     #[test]
     fn should_have_correct_voxel_transforms_for_two_by_two_by_three_voxel_generator() {
-        let generator = DefaultVoxelGenerator { shape: [2, 2, 3] };
+        let generator = DefaultVoxelGenerator::new([2, 2, 3]);
         let tree = VoxelTree::build(&generator).unwrap();
-        let voxel_instances = tree.voxel_instances();
+        let voxel_instances = tree
+            .voxel_instances()
+            .group(tree.root_node().instance_group_id());
 
         assert_eq!(voxel_instances.n_instances(), 5);
 
@@ -2568,7 +2843,7 @@ mod test {
 
     #[test]
     fn should_find_no_voxel_at_indices_outside_grid() {
-        let generator = DefaultVoxelGenerator { shape: [2; 3] };
+        let generator = DefaultVoxelGenerator::new([2; 3]);
         let tree = VoxelTree::build(&generator).unwrap();
         assert!(tree.find_voxel_at_indices(2, 0, 0).is_none());
         assert!(tree.find_voxel_at_indices(0, 2, 0).is_none());
@@ -2577,7 +2852,7 @@ mod test {
 
     #[test]
     fn should_find_same_voxel_types_as_provided_by_generator() {
-        let generator = DefaultVoxelGenerator { shape: [1, 3, 2] };
+        let generator = DefaultVoxelGenerator::new([1, 3, 2]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         for i in 0..tree.grid_size() {
@@ -2594,7 +2869,7 @@ mod test {
 
     #[test]
     fn should_obtain_correct_external_node_indices_and_scales_for_12_voxel_generator() {
-        let generator = DefaultVoxelGenerator { shape: [2, 2, 3] };
+        let generator = DefaultVoxelGenerator::new([2, 2, 3]);
         let tree = VoxelTree::build(&generator).unwrap();
 
         let check_node = |i, j, k, indices, scale| {
@@ -2634,7 +2909,7 @@ mod test {
 
     #[test]
     fn should_get_correct_voxels_adjacent_to_unmerged_voxel_in_one_by_two_by_two_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [1, 2, 2] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([1, 2, 2])).unwrap();
         let aux_data = tree.external_node_aux_data(
             tree.find_external_node_id_at_indices(VoxelIndices::new(0, 1, 1))
                 .unwrap(),
@@ -2657,7 +2932,7 @@ mod test {
 
     #[test]
     fn should_get_correct_voxels_adjacent_to_unmerged_voxel_in_three_cubed_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([3; 3])).unwrap();
         let aux_data = tree.external_node_aux_data(
             tree.find_external_node_id_at_indices(VoxelIndices::new(2, 1, 1))
                 .unwrap(),
@@ -2683,7 +2958,7 @@ mod test {
 
     #[test]
     fn should_get_correct_voxels_adjacent_to_merged_voxel_in_three_cubed_voxel_tree() {
-        let tree = VoxelTree::build(&DefaultVoxelGenerator { shape: [3; 3] }).unwrap();
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new([3; 3])).unwrap();
         let aux_data = tree.external_node_aux_data(
             tree.find_external_node_id_at_indices(VoxelIndices::new(0, 0, 0))
                 .unwrap(),
@@ -2844,5 +3119,45 @@ mod test {
             model_view_transform.scaling,
             correct_model_view_transform.scaling()
         );
+    }
+
+    #[test]
+    fn should_have_single_instance_group_for_instance_scale_one() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new_with_instance_group_scale(
+            [4, 1, 1],
+            1,
+        ))
+        .unwrap();
+        assert_eq!(tree.voxel_instances().n_groups(), 1);
+    }
+
+    #[test]
+    fn should_have_single_instance_group_for_instance_scale_equal_to_grid_size() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new_with_instance_group_scale(
+            [4, 1, 1],
+            4,
+        ))
+        .unwrap();
+        assert_eq!(tree.voxel_instances().n_groups(), 1);
+    }
+
+    #[test]
+    fn should_have_single_instance_group_for_instance_scale_exceeding_grid_size() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new_with_instance_group_scale(
+            [4, 1, 1],
+            8,
+        ))
+        .unwrap();
+        assert_eq!(tree.voxel_instances().n_groups(), 1);
+    }
+
+    #[test]
+    fn should_have_9_instance_groups_for_instance_scale_two_with_grid_size_four() {
+        let tree = VoxelTree::build(&DefaultVoxelGenerator::new_with_instance_group_scale(
+            [4, 1, 1],
+            2,
+        ))
+        .unwrap();
+        assert_eq!(tree.voxel_instances().n_groups(), 9);
     }
 }
