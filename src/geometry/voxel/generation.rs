@@ -2,6 +2,7 @@
 
 use super::{VoxelGenerator, VoxelType};
 use crate::num::Float;
+use nalgebra::{point, Point3};
 
 /// Generator for a box configuration of identical voxels.
 #[derive(Clone, Debug)]
@@ -21,6 +22,7 @@ pub struct UniformSphereVoxelGenerator<F> {
     n_voxels_across: usize,
     center: F,
     squared_radius: F,
+    instance_group_scale: u32,
 }
 
 impl<F: Float> UniformBoxVoxelGenerator<F> {
@@ -67,12 +69,19 @@ impl<F: Float> UniformSphereVoxelGenerator<F> {
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
-    pub fn new(voxel_type: VoxelType, voxel_extent: F, n_voxels_across: usize) -> Self {
+    pub fn new(
+        voxel_type: VoxelType,
+        voxel_extent: F,
+        n_voxels_across: usize,
+        instance_group_height: u32,
+    ) -> Self {
         assert_ne!(n_voxels_across, 0);
 
         let center = F::ONE_HALF * F::from_usize(n_voxels_across - 1).unwrap();
         let radius = center + F::ONE_HALF;
         let squared_radius = radius.powi(2);
+
+        let instance_group_scale = 2_u32.pow(instance_group_height);
 
         Self {
             voxel_type,
@@ -80,7 +89,20 @@ impl<F: Float> UniformSphereVoxelGenerator<F> {
             n_voxels_across,
             center,
             squared_radius,
+            instance_group_scale,
         }
+    }
+
+    /// Returns the position of the sphere center relative to the position of
+    /// the origin of the voxel grid.
+    pub fn center(&self) -> Point3<F> {
+        let center_coord = self.center * self.voxel_extent;
+        point![center_coord, center_coord, center_coord]
+    }
+
+    /// Returns the radius of the sphere.
+    pub fn radius(&self) -> F {
+        F::sqrt(self.squared_radius) * self.voxel_extent
     }
 }
 
@@ -103,5 +125,9 @@ impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
         } else {
             None
         }
+    }
+
+    fn instance_group_scale(&self) -> u32 {
+        self.instance_group_scale
     }
 }
