@@ -9,8 +9,9 @@ pub use components::{
 
 use crate::{
     geometry::{
-        FrontFaceSide, InstanceFeatureID, TriangleMesh, UniformBoxVoxelGenerator,
-        UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree, VoxelType,
+        FrontFaceSide, InstanceFeatureID, Radians, TriangleMesh, UniformBoxVoxelGenerator,
+        UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree, VoxelTreeLODController,
+        VoxelType,
     },
     num::Float,
     rendering::{fre, DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
@@ -48,6 +49,7 @@ pub struct VoxelTreeID(u32);
 pub struct VoxelManager<F: Float> {
     voxel_appearances: VoxelPropertyMap<VoxelAppearance>,
     voxel_material_feature_ids: VoxelPropertyMap<InstanceFeatureID>,
+    voxel_tree_lod_controller: VoxelTreeLODController<F>,
     voxel_trees: HashMap<VoxelTreeID, VoxelTree<F>>,
     voxel_tree_id_counter: u32,
 }
@@ -85,10 +87,24 @@ impl<F: Float> VoxelManager<F> {
         self.voxel_appearances.value(voxel_type)
     }
 
+    /// Returns a reference to the voxel tree LOD controller.
+    pub fn voxel_tree_lod_controller(&self) -> &VoxelTreeLODController<F> {
+        &self.voxel_tree_lod_controller
+    }
+
     /// Returns a reference to the [`VoxelTree`] with the given ID, or [`None`]
     /// if the voxel tree is not present.
     pub fn get_voxel_tree(&self, voxel_tree_id: VoxelTreeID) -> Option<&VoxelTree<F>> {
         self.voxel_trees.get(&voxel_tree_id)
+    }
+
+    /// Scales the minimum angular voxel extent in the voxel tree LOD controller
+    /// by the given factor. The extent should be scaled to remain proportional
+    /// to the field of view and inversely proportional to the number of pixels
+    /// across the window.
+    pub fn scale_min_angular_voxel_extent_for_lod(&mut self, scale: F) {
+        self.voxel_tree_lod_controller
+            .scale_min_angular_voxel_extent(scale);
     }
 
     /// Returns a mutable reference to the [`VoxelTree`] with the given ID, or
@@ -127,6 +143,7 @@ impl<F: Float> VoxelManager<F> {
 impl VoxelManager<fre> {
     pub fn create(
         voxel_extent: fre,
+        initial_min_angular_voxel_extent_for_lod: Radians<fre>,
         mesh_repository: &mut MeshRepository<fre>,
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
@@ -178,6 +195,9 @@ impl VoxelManager<fre> {
         Self {
             voxel_appearances: VoxelPropertyMap::new(voxel_appearances),
             voxel_material_feature_ids: VoxelPropertyMap::new(voxel_material_feature_ids),
+            voxel_tree_lod_controller: VoxelTreeLODController::new(
+                initial_min_angular_voxel_extent_for_lod,
+            ),
             voxel_trees: HashMap::new(),
             voxel_tree_id_counter: 1,
         }

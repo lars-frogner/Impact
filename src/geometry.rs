@@ -39,7 +39,8 @@ pub use texture_projection::{PlanarTextureProjection, TextureProjection};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
 pub use uniform::UniformBuffer;
 pub use voxel::{
-    UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree, VoxelType,
+    UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree,
+    VoxelTreeLODController, VoxelType,
 };
 
 use crate::num::Float;

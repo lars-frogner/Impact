@@ -75,7 +75,7 @@ pub use voxel::{
     VoxelTreeID, VoxelTreeNodeComp, VoxelTypeComp,
 };
 
-use crate::rendering::fre;
+use crate::{geometry::Radians, rendering::fre};
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
@@ -95,16 +95,15 @@ pub struct Scene {
 /// Global scene configuration options.
 #[derive(Clone, Debug)]
 pub struct SceneConfig {
-    ambient_occlusion_sample_count: u32,
-    ambient_occlusion_sampling_radius: fre,
-    voxel_extent: fre,
+    pub ambient_occlusion_sample_count: u32,
+    pub ambient_occlusion_sampling_radius: fre,
+    pub voxel_extent: fre,
+    pub initial_min_angular_voxel_extent_for_lod: Radians<fre>,
 }
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new() -> Self {
-        let config = SceneConfig::default();
-
+    pub fn new(config: SceneConfig) -> Self {
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
 
@@ -119,6 +118,7 @@ impl Scene {
 
         let voxel_manager = VoxelManager::create(
             config.voxel_extent,
+            config.initial_min_angular_voxel_extent_for_lod,
             &mut mesh_repository,
             &mut material_library,
             &mut instance_feature_manager,
@@ -187,7 +187,7 @@ impl Scene {
 
 impl Default for Scene {
     fn default() -> Self {
-        Self::new()
+        Self::new(SceneConfig::default())
     }
 }
 
@@ -197,6 +197,7 @@ impl Default for SceneConfig {
             ambient_occlusion_sample_count: 4,
             ambient_occlusion_sampling_radius: 0.5,
             voxel_extent: 0.25,
+            initial_min_angular_voxel_extent_for_lod: Radians(0.0),
         }
     }
 }
