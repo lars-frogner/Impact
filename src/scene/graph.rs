@@ -582,6 +582,7 @@ impl<F: Float> SceneGraph<F> {
                     material_feature_storage,
                     transform_buffer,
                     material_feature_buffer,
+                    voxel_manager.voxel_tree_lod_controller(),
                     &camera_position_in_voxel_tree_space,
                     &view_frustum_in_voxel_tree_space,
                     root_to_camera_transform,
@@ -793,6 +794,7 @@ impl<F: Float> SceneGraph<F> {
                     material_feature_storage,
                     transform_buffer,
                     material_feature_buffer,
+                    voxel_manager.voxel_tree_lod_controller(),
                     &camera_position_in_voxel_tree_space,
                     &view_frustum_in_voxel_tree_space,
                     group_to_camera_transform,
@@ -1116,6 +1118,7 @@ impl SceneGraph<fre> {
 
                 voxel_tree.buffer_visible_voxel_model_view_transforms(
                     transform_buffer,
+                    voxel_manager.voxel_tree_lod_controller(),
                     &light_position_in_voxel_tree_space,
                     &face_frustum_in_voxel_tree_space,
                     &voxel_tree_to_cubemap_face_transform,
@@ -1230,6 +1233,7 @@ impl SceneGraph<fre> {
 
                 voxel_tree.buffer_visible_voxel_model_view_transforms_orthographic(
                     transform_buffer,
+                    voxel_manager.voxel_tree_lod_controller(),
                     &view_direction_in_voxel_tree_space,
                     &cascade_frustum_in_voxel_tree_space,
                     &voxel_tree_to_light_transform,

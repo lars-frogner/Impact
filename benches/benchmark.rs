@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use impact::geometry::{
     Degrees, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureStorage,
-    InstanceModelViewTransform, PerspectiveTransform, UniformSphereVoxelGenerator,
-    UpperExclusiveBounds, VoxelTree, VoxelType,
+    InstanceModelViewTransform, PerspectiveTransform, Radians, UniformSphereVoxelGenerator,
+    UpperExclusiveBounds, VoxelTree, VoxelTreeLODController, VoxelType,
 };
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector3};
 use num_traits::FloatConst;
@@ -48,6 +48,8 @@ pub fn bench_voxel_tree_construction(c: &mut Criterion) {
 }
 
 pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
+    let lod_controller = VoxelTreeLODController::new(Radians(0.0));
+
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 430, 4);
     let tree = VoxelTree::build(&generator).unwrap();
 
@@ -56,7 +58,7 @@ pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
             .as_projective(),
     );
     let view_transform = Similarity3::identity();
-    let radial_distance = 1.5 * generator.radius();
+    let radial_distance = 2.0 * generator.radius();
 
     let mut rng = rand::thread_rng();
 
@@ -85,6 +87,7 @@ pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
 
             tree.buffer_visible_voxel_model_view_transforms(
                 &mut transform_buffer,
+                &lod_controller,
                 &camera_position,
                 &transformed_view_frustum,
                 &view_transform,

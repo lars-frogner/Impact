@@ -22,7 +22,7 @@ pub struct UniformSphereVoxelGenerator<F> {
     n_voxels_across: usize,
     center: F,
     squared_radius: F,
-    instance_group_scale: u32,
+    instance_group_height: u32,
 }
 
 impl<F: Float> UniformBoxVoxelGenerator<F> {
@@ -81,15 +81,13 @@ impl<F: Float> UniformSphereVoxelGenerator<F> {
         let radius = center + F::ONE_HALF;
         let squared_radius = radius.powi(2);
 
-        let instance_group_scale = 2_u32.pow(instance_group_height);
-
         Self {
             voxel_type,
             voxel_extent,
             n_voxels_across,
             center,
             squared_radius,
-            instance_group_scale,
+            instance_group_height,
         }
     }
 
@@ -127,7 +125,7 @@ impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
         }
     }
 
-    fn instance_group_scale(&self) -> u32 {
-        self.instance_group_scale
+    fn instance_group_height(&self) -> u32 {
+        self.instance_group_height
     }
 }

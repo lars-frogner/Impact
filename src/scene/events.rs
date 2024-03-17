@@ -3,6 +3,7 @@
 use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
     physics::ReferenceFrameComp,
+    rendering::fre,
     scene::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
@@ -20,6 +21,7 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, World as ECSWorld},
 };
+use num_traits::FromPrimitive;
 use std::sync::RwLock;
 
 /// Indicates whether an event caused the render resources to go out of sync
@@ -92,10 +94,22 @@ impl Scene {
         desynchronized
     }
 
-    pub fn handle_window_resized(&self, new_size: (u32, u32)) -> RenderResourcesDesynchronized {
+    pub fn handle_window_resized(
+        &self,
+        old_size: (u32, u32),
+        new_size: (u32, u32),
+    ) -> RenderResourcesDesynchronized {
         if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
             scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_size.0, new_size.1));
         }
+
+        self.voxel_manager()
+            .write()
+            .unwrap()
+            .scale_min_angular_voxel_extent_for_lod(
+                fre::from_u32(old_size.1).unwrap() / fre::from_u32(new_size.1).unwrap(),
+            );
+
         RenderResourcesDesynchronized::Yes
     }
 

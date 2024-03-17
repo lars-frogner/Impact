@@ -47,6 +47,7 @@ impl World {
     /// Creates a new world data container.
     pub fn new(
         window: Window,
+        scene: Scene,
         renderer: RenderingSystem,
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
@@ -64,7 +65,7 @@ impl World {
             user_interface: RwLock::new(UserInterface::new(window)),
             component_registry: RwLock::new(component_registry),
             ecs_world: RwLock::new(ECSWorld::new()),
-            scene: RwLock::new(Scene::new()),
+            scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
             simulator: RwLock::new(simulator),
             motion_controller: motion_controller.map(Mutex::new),
@@ -336,10 +337,18 @@ impl World {
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
     pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
-        self.renderer().write().unwrap().resize_surface(new_size);
+        let mut renderer = self.renderer().write().unwrap();
 
-        let render_resources_desynchronized =
-            self.scene().read().unwrap().handle_window_resized(new_size);
+        let old_size = renderer.surface_dimensions();
+
+        renderer.resize_surface(new_size);
+        drop(renderer);
+
+        let render_resources_desynchronized = self
+            .scene()
+            .read()
+            .unwrap()
+            .handle_window_resized(old_size, new_size);
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()
