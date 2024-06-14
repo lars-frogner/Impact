@@ -39,9 +39,6 @@ use nalgebra::{point, vector, Point3, Vector3};
 use rand::{rngs::ThreadRng, Rng, SeedableRng};
 use std::f64::consts::PI;
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
 pub async fn run() -> Result<()> {
     init_logging()?;
 
@@ -53,35 +50,7 @@ pub async fn run() -> Result<()> {
         .run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap())
 }
 
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub async fn run_wasm() {
-    if let Err(err) = run().await {
-        log::error!("{}", err)
-    }
-}
-
 fn init_logging() -> Result<()> {
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            init_logging_web()
-        } else {
-            init_logging_native()
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn init_logging_web() -> Result<()> {
-    // Make errors display in console
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    // Send logs to console
-    console_log::init_with_level(log::Level::Warn)?;
-    Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn init_logging_native() -> Result<()> {
     env_logger::init();
     Ok(())
 }

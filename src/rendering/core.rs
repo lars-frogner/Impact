@@ -144,19 +144,10 @@ impl CoreRenderingSystem {
                     features: wgpu::Features::PUSH_CONSTANTS
                         | wgpu::Features::POLYGON_MODE_LINE
                         | wgpu::Features::DEPTH32FLOAT_STENCIL8,
-                    limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits {
-                            max_bind_groups: 7,
-                            max_push_constant_size: 128,
-                            // Use looser limits for wasm
-                            ..wgpu::Limits::downlevel_webgl2_defaults()
-                        }
-                    } else {
-                        wgpu::Limits {
-                            max_bind_groups: 7,
-                            max_push_constant_size: 128,
-                            ..wgpu::Limits::default()
-                        }
+                    limits: wgpu::Limits {
+                        max_bind_groups: 7,
+                        max_push_constant_size: 128,
+                        ..wgpu::Limits::default()
                     },
                     label: None,
                 },
