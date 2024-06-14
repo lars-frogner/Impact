@@ -125,9 +125,9 @@ impl CoreRenderingSystem {
     ) -> Result<wgpu::Adapter> {
         wgpu_instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(), // High performance if available
-                compatible_surface: Some(surface),                  // Must work with this surface
-                force_fallback_adapter: false, // Do not fallback to software rendering system
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(surface), // Must work with this surface
+                force_fallback_adapter: false,     // Do not fallback to software rendering system
             })
             .await
             .ok_or_else(|| anyhow!("Could not find compatible adapter"))
