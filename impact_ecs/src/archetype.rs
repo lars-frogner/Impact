@@ -1953,7 +1953,7 @@ mod test {
     #[test]
     #[should_panic]
     fn including_multiple_comp_arrays_with_different_counts_in_archetype_view_fails() {
-        let mut view: ArchetypeComponentView<'_> = (&BYTE).try_into().unwrap();
+        let mut view: ArchetypeComponentView<'_> = (&BYTE).into();
         view.add_or_overwrite_component_types([(&[RECT, RECT]).view(), (&POS).view()])
             .unwrap();
     }
@@ -2129,7 +2129,7 @@ mod test {
 
     #[test]
     fn overwriting_multiple_single_comp_arrays_of_same_type_in_archetype_view_works() {
-        let mut view: ArchetypeComponentView<'_> = (&BYTE).try_into().unwrap();
+        let mut view: ArchetypeComponentView<'_> = (&BYTE).into();
 
         view.add_or_overwrite_component_types([(&BYTE2).view(), (&BYTE).view()])
             .unwrap();
