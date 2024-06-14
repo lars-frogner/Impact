@@ -33,7 +33,7 @@ lazy_static! {
 }
 
 impl Assets {
-    const SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_PATH: &str =
+    const SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_PATH: &'static str =
         "assets/specular_ggx_reflectance_lookup_table.mpk";
 
     pub fn specular_ggx_reflectance_lookup_table_texture_id() -> TextureID {
