@@ -643,7 +643,6 @@ impl Shader {
     ///
     /// # Errors
     /// Returns an error if the shader file can not be found or read.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_wgsl_path(
         core_system: &CoreRenderingSystem,
         shader_path: impl AsRef<Path>,

@@ -14,17 +14,6 @@ use winit::{
     window::{Window as WinitWindow, WindowBuilder},
 };
 
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "wasm32")] {
-        use anyhow::anyhow;
-
-        const WEB_WINDOW_WIDTH: u32 = 450;
-        const WEB_WINDOW_HEIGHT: u32 = 400;
-        // HTML object that will be the parent of the canvas we render to
-        const WEB_WINDOW_CONTAINER_ID: &str = "impact-container";
-    }
-}
-
 /// Wrapper for a window.
 #[derive(Debug)]
 pub struct Window {
@@ -55,14 +44,6 @@ impl Window {
             .build(&event_loop)?;
 
         event_loop.set_control_flow(ControlFlow::Poll);
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            // For wasm we need to set the window size manually
-            // and add the window to the DOM
-            set_window_size(&window);
-            add_window_canvas_to_parent_element(&window)?;
-        }
 
         Ok((Self::wrap(window), EventLoop::wrap(event_loop)))
     }
@@ -169,25 +150,4 @@ impl<'a> EventLoopController<'a> {
     pub fn exit(&self) {
         self.0.exit();
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn set_window_size(window: &WinitWindow) {
-    // Size of rendering window must be specified here rather than through CSS
-    use winit::dpi::PhysicalSize;
-    window.set_inner_size(PhysicalSize::new(WEB_WINDOW_WIDTH, WEB_WINDOW_HEIGHT));
-}
-
-#[cfg(target_arch = "wasm32")]
-fn add_window_canvas_to_parent_element(window: &WinitWindow) -> Result<()> {
-    use winit::platform::web::WindowExtWebSys;
-    web_sys::window()
-        .and_then(|win| win.document())
-        .and_then(|doc| {
-            let canvas = web_sys::Element::from(window.canvas());
-            let container = doc.get_element_by_id(WEB_WINDOW_CONTAINER_ID)?;
-            container.append_child(&canvas).ok()?;
-            Some(())
-        })
-        .ok_or_else(|| anyhow!("Could not get window object"))
 }
