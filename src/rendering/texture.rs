@@ -24,7 +24,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     borrow::Cow, collections::HashMap, fs::File, io::BufReader, num::NonZeroU32, path::Path,
 };
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, PipelineCompilationOptions};
 
 /// Represents a data type that can be copied directly to a [`Texture`].
 pub trait TexelType: Pod {
@@ -699,7 +699,7 @@ impl Texture {
 
     fn has_filterable_format(&self) -> bool {
         if let Some(wgpu::TextureSampleType::Float { filterable }) =
-            self.texture.format().sample_type(None)
+            self.texture.format().sample_type(None, None)
         {
             filterable
         } else {
@@ -965,11 +965,13 @@ impl MipmapGenerator {
                         module: &shader,
                         entry_point: "mainVS",
                         buffers: &[],
+                        compilation_options: PipelineCompilationOptions::default(),
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: "mainFS",
                         targets: &[Some(format.into())],
+                        compilation_options: PipelineCompilationOptions::default(),
                     }),
                     primitive: wgpu::PrimitiveState {
                         topology: wgpu::PrimitiveTopology::TriangleList,
@@ -1237,7 +1239,7 @@ fn extract_texture_data<T: Pod>(
 
     let texel_size = texture
         .format()
-        .block_size(Some(aspect))
+        .block_copy_size(Some(aspect))
         .expect("Texel block size unavailable");
 
     let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {

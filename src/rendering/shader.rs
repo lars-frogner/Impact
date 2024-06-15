@@ -42,8 +42,9 @@ use naga::{
     AddressSpace, Arena, ArraySize, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant,
     EntryPoint, Expression, Function, FunctionArgument, FunctionResult, GlobalVariable, Handle,
     ImageClass, ImageDimension, ImageQuery, Interpolation, Literal, LocalVariable, Module,
-    ResourceBinding, SampleLevel, Sampling, ScalarKind, ShaderStage, Span, Statement, StructMember,
-    SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator, UniqueArena, VectorSize,
+    Override, ResourceBinding, SampleLevel, Sampling, Scalar, ScalarKind, ShaderStage, Span,
+    Statement, StructMember, SwitchCase, SwizzleComponent, Type, TypeInner, UnaryOperator,
+    UniqueArena, VectorSize,
 };
 use prepass::PrepassVertexOutputFieldIndices;
 use skybox::SkyboxVertexOutputFieldIndices;
@@ -480,6 +481,7 @@ pub struct ModuleImporter<'a, 'b> {
     const_map: HashMap<Handle<Constant>, Handle<Constant>>,
     global_map: HashMap<Handle<GlobalVariable>, Handle<GlobalVariable>>,
     const_expression_map: HashMap<Handle<Expression>, Handle<Expression>>,
+    override_map: HashMap<Handle<Override>, Handle<Override>>,
     function_map: HashMap<String, Handle<Function>>,
 }
 
@@ -507,28 +509,30 @@ const U32_WIDTH: u32 = mem::size_of::<u32>() as u32;
 
 const U32_TYPE: Type = Type {
     name: None,
-    inner: TypeInner::Scalar {
+    inner: TypeInner::Scalar(Scalar {
         kind: ScalarKind::Uint,
         width: U32_WIDTH as Bytes,
-    },
+    }),
 };
 
 const F32_WIDTH: u32 = mem::size_of::<f32>() as u32;
 
 const F32_TYPE: Type = Type {
     name: None,
-    inner: TypeInner::Scalar {
+    inner: TypeInner::Scalar(Scalar {
         kind: ScalarKind::Float,
         width: F32_WIDTH as Bytes,
-    },
+    }),
 };
 
 const VECTOR_2_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Vector {
         size: VectorSize::Bi,
-        kind: ScalarKind::Float,
-        width: F32_WIDTH as Bytes,
+        scalar: Scalar {
+            kind: ScalarKind::Float,
+            width: F32_WIDTH as Bytes,
+        },
     },
 };
 const VECTOR_2_SIZE: u32 = 2 * F32_WIDTH;
@@ -537,8 +541,10 @@ const VECTOR_3_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Vector {
         size: VectorSize::Tri,
-        kind: ScalarKind::Float,
-        width: F32_WIDTH as Bytes,
+        scalar: Scalar {
+            kind: ScalarKind::Float,
+            width: F32_WIDTH as Bytes,
+        },
     },
 };
 const VECTOR_3_SIZE: u32 = 3 * F32_WIDTH;
@@ -547,8 +553,10 @@ const VECTOR_4_TYPE: Type = Type {
     name: None,
     inner: TypeInner::Vector {
         size: VectorSize::Quad,
-        kind: ScalarKind::Float,
-        width: F32_WIDTH as Bytes,
+        scalar: Scalar {
+            kind: ScalarKind::Float,
+            width: F32_WIDTH as Bytes,
+        },
     },
 };
 const VECTOR_4_SIZE: u32 = 4 * F32_WIDTH;
@@ -558,7 +566,10 @@ const MATRIX_4X4_TYPE: Type = Type {
     inner: TypeInner::Matrix {
         columns: VectorSize::Quad,
         rows: VectorSize::Quad,
-        width: F32_WIDTH as Bytes,
+        scalar: Scalar {
+            kind: ScalarKind::Float,
+            width: F32_WIDTH as Bytes,
+        },
     },
 };
 
@@ -4440,6 +4451,7 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             const_map: HashMap::new(),
             global_map: HashMap::new(),
             const_expression_map: HashMap::new(),
+            override_map: HashMap::new(),
             function_map: HashMap::new(),
         }
     }
@@ -4533,7 +4545,6 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
 
             let new_const = Constant {
                 name: c.name.clone(),
-                r#override: c.r#override,
                 ty: self.import_type(c.ty),
                 init: self.import_const_expression(c.init),
             };
@@ -4543,6 +4554,33 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             self.const_map.insert(h_const, new_h);
             new_h
         })
+    }
+
+    fn import_override(&mut self, h_override: Handle<Override>) -> Handle<Override> {
+        self.override_map
+            .get(&h_override)
+            .copied()
+            .unwrap_or_else(|| {
+                let o = self
+                    .imported_from_module
+                    .overrides
+                    .try_get(h_override)
+                    .unwrap()
+                    .clone();
+
+                let new_override = Override {
+                    name: o.name.clone(),
+                    id: o.id,
+                    ty: self.import_type(o.ty),
+                    init: o
+                        .init
+                        .map(|const_expr| self.import_const_expression(const_expr)),
+                };
+
+                let new_h = append_to_arena(&mut self.exported_to_module.overrides, new_override);
+                self.override_map.insert(h_override, new_h);
+                new_h
+            })
     }
 
     fn import_global(&mut self, h_global: Handle<GlobalVariable>) -> Handle<GlobalVariable> {
@@ -4577,13 +4615,14 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             .unwrap_or_else(|| {
                 let const_expr = self
                     .imported_from_module
-                    .const_expressions
+                    .global_expressions
                     .try_get(h_const_expr)
                     .unwrap()
                     .clone();
 
                 let new_const_expr = match const_expr {
                     Expression::Constant(c) => Expression::Constant(self.import_const(c)),
+                    Expression::Override(o) => Expression::Override(self.import_override(o)),
                     Expression::Compose { ty, components } => Expression::Compose {
                         ty: self.import_type(ty),
                         components: components
@@ -4662,7 +4701,7 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                 };
 
                 let new_h = append_to_arena(
-                    &mut self.exported_to_module.const_expressions,
+                    &mut self.exported_to_module.global_expressions,
                     new_const_expr,
                 );
                 self.const_expression_map.insert(h_const_expr, new_h);
@@ -4804,7 +4843,11 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                     | Statement::Kill
                     | Statement::Barrier(_) => stmt.clone(),
 
-                    Statement::RayQuery { .. } | Statement::WorkGroupUniformLoad { .. } => {
+                    Statement::RayQuery { .. }
+                    | Statement::WorkGroupUniformLoad { .. }
+                    | Statement::SubgroupBallot { .. }
+                    | Statement::SubgroupCollectiveOperation { .. }
+                    | Statement::SubgroupGather { .. } => {
                         panic!("Unsupported statement")
                     }
                 }
@@ -4859,6 +4902,10 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             Expression::Constant(c) => {
                 is_external = true;
                 Expression::Constant(self.import_const(*c))
+            }
+            Expression::Override(o) => {
+                is_external = true;
+                Expression::Override(self.import_override(*o))
             }
             Expression::Compose { ty, components } => Expression::Compose {
                 ty: self.import_type(*ty),
@@ -5001,7 +5048,9 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
             Expression::ZeroValue(ty) => Expression::ZeroValue(self.import_type(*ty)),
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryProceedResult
-            | Expression::WorkGroupUniformLoadResult { .. } => {
+            | Expression::WorkGroupUniformLoadResult { .. }
+            | Expression::SubgroupBallotResult
+            | Expression::SubgroupOperationResult { .. } => {
                 panic!("Unsupported expression")
             }
         };
