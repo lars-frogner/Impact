@@ -3,6 +3,7 @@
 mod tasks;
 
 pub use tasks::SyncRenderPasses;
+use wgpu::PipelineCompilationOptions;
 
 use crate::{
     geometry::{CubemapFace, VertexAttributeSet},
@@ -2052,6 +2053,7 @@ impl RenderPassRecorder {
                 module: shader.vertex_module(),
                 entry_point: shader.vertex_entry_point_name(),
                 buffers: vertex_buffer_layouts,
+                compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: shader
                 .fragment_entry_point_name()
@@ -2059,6 +2061,7 @@ impl RenderPassRecorder {
                     module: shader.fragment_module(),
                     entry_point,
                     targets: color_target_states,
+                    compilation_options: PipelineCompilationOptions::default(),
                 }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,

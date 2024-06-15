@@ -24,7 +24,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 lazy_static = "1.4"
 log = "0.4"
-naga = { version = "0.14.0", features = ["clone", "validate", "wgsl-out"] }
+naga = { version = "0.20", features = ["wgsl-out"] }
 nalgebra = { version = "0.32", features = ["bytemuck"] }
 nohash-hasher = "0.2.0"
 num-traits = "0.2"
@@ -35,14 +35,13 @@ petgraph = { version = "0.6", default-features = false, features = [
 ply-rs = "0.1"
 pollster = "0.3"
 rand = "0.8"
-raw-window-handle = "0.5.2"
 rmp-serde = "1.1"
 roots = "0.0.8"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.8"
 tobj = "4.0"
-wgpu = { version = "0.18", features = ["naga"] }
-winit = { version = "0.29", features = ["rwh_05"] }
+wgpu = { version = "0.20", features = ["naga-ir"] }
+winit = { version = "0.30" }
 
 impact_ecs = { path = "impact_ecs" }
 impact_utils = { path = "impact_utils" }
@@ -50,12 +49,7 @@ impact_utils = { path = "impact_utils" }
 [dev-dependencies]
 criterion = "0.5.1"
 pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
-naga = { version = "0.14.0", features = [
-    "clone",
-    "validate",
-    "wgsl-in",
-    "wgsl-out",
-] }
+naga = { version = "0.20", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.4"
 
 [[bench]]

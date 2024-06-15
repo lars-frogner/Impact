@@ -1139,7 +1139,7 @@ mod test {
         assert_eq!(buffer.feature_size(), Feature::FEATURE_SIZE);
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
     }
     #[test]
     fn adding_one_feature_to_instance_feature_buffer_works() {
@@ -1162,7 +1162,7 @@ mod test {
         buffer.add_feature(&feature_2);
 
         let feature_slice = &[feature_1, feature_2];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 2);
@@ -1182,7 +1182,7 @@ mod test {
         buffer.add_feature(&feature_3);
 
         let feature_slice = &[feature_1, feature_2, feature_3];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 3);
@@ -1198,7 +1198,7 @@ mod test {
         buffer.add_feature_slice(&[feature_1, feature_2]);
 
         let feature_slice = &[feature_1, feature_2];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 2);
@@ -1217,7 +1217,7 @@ mod test {
         buffer.add_feature_slice(&[feature_3]);
 
         let feature_slice = &[feature_1, feature_2, feature_3];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 3);
@@ -1237,7 +1237,7 @@ mod test {
         buffer.add_features_from_iterator(features.iter().cloned());
 
         let feature_slice = features.as_slice();
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 3);
@@ -1273,7 +1273,7 @@ mod test {
         buffer.add_feature_from_storage(&storage, id_1);
 
         let feature_slice = &[feature_2, feature_1];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 2);
@@ -1291,7 +1291,7 @@ mod test {
         buffer.add_feature_from_storage_repeatedly(&storage, id, 3);
 
         let feature_slice = &[feature; 3];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 3);
@@ -1306,7 +1306,7 @@ mod test {
 
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
         assert_eq!(buffer.valid_features::<Feature>(), &[]);
     }
 
@@ -1321,14 +1321,14 @@ mod test {
 
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
         assert_eq!(buffer.valid_features::<Feature>(), &[]);
 
         buffer.add_feature(&feature_1);
         buffer.add_feature(&feature_2);
 
         let feature_slice = &[feature_1, feature_2];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 2);
@@ -1348,14 +1348,14 @@ mod test {
 
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
         assert_eq!(buffer.valid_features::<Feature>(), &[]);
 
         buffer.add_feature(&feature_1);
         buffer.add_feature(&feature_2);
 
         let feature_slice = &[feature_1, feature_2];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 2);
@@ -1377,7 +1377,7 @@ mod test {
 
         assert_eq!(buffer.n_valid_bytes(), 0);
         assert_eq!(buffer.n_valid_features(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
         assert_eq!(buffer.valid_features::<Feature>(), &[]);
 
         buffer.add_feature(&feature_1);
@@ -1385,7 +1385,7 @@ mod test {
         buffer.add_feature(&feature_3);
 
         let feature_slice = &[feature_1, feature_2, feature_3];
-        let feature_bytes = bytemuck::cast_slice(feature_slice);
+        let feature_bytes: &[u8] = bytemuck::cast_slice(feature_slice);
 
         assert_eq!(buffer.n_valid_bytes(), feature_bytes.len());
         assert_eq!(buffer.n_valid_features(), 3);
@@ -1415,7 +1415,7 @@ mod test {
         assert_eq!(buffer.feature_type_id(), ZeroSizedFeature::FEATURE_TYPE_ID);
         assert_eq!(buffer.feature_size(), ZeroSizedFeature::FEATURE_SIZE);
         assert_eq!(buffer.n_valid_bytes(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
     }
 
     #[test]
@@ -1425,17 +1425,17 @@ mod test {
         buffer.add_feature(&ZeroSizedFeature);
 
         assert_eq!(buffer.n_valid_bytes(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
 
         buffer.add_feature(&ZeroSizedFeature);
 
         assert_eq!(buffer.n_valid_bytes(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
 
         buffer.clear();
 
         assert_eq!(buffer.n_valid_bytes(), 0);
-        assert_eq!(buffer.valid_bytes(), &[]);
+        assert!(buffer.valid_bytes().is_empty());
     }
 
     #[test]

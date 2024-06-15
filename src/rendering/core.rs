@@ -2,8 +2,8 @@
 
 use crate::{rendering::fre, window::Window};
 use anyhow::{anyhow, Result};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::{mem, num::NonZeroU32};
+use wgpu::SurfaceTarget;
 
 /// Represents the graphics device and the basic
 /// rendering entities whose configuration should not
@@ -15,7 +15,7 @@ pub struct CoreRenderingSystem {
     /// Queue where we put commands to execute.
     queue: wgpu::Queue,
     /// Where graphics will be drawn.
-    surface: wgpu::Surface,
+    surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
 }
 
@@ -30,18 +30,17 @@ impl CoreRenderingSystem {
     /// - The width or height of the window is zero.
     /// - A compatible graphics device can not be found.
     /// - Connecting to the graphics device fails.
-    pub async fn new(window: &Window) -> Result<Self> {
+    pub fn new(window: &Window) -> Result<Self> {
         let window_size = window.window().inner_size();
-        Self::new_from_raw_window_handle(
-            window.window(),
+        pollster::block_on(Self::new_from_surface_target(
+            window.arc_window(),
             (
                 NonZeroU32::new(window_size.width)
                     .ok_or_else(|| anyhow!("Window width is zero"))?,
                 NonZeroU32::new(window_size.height)
                     .ok_or_else(|| anyhow!("Window height is zero"))?,
             ),
-        )
-        .await
+        ))
     }
 
     /// Returns the underlying [`wgpu::Device`].
@@ -55,7 +54,7 @@ impl CoreRenderingSystem {
     }
 
     /// Returns the underlying [`wgpu::Surface`].
-    pub fn surface(&self) -> &wgpu::Surface {
+    pub fn surface(&self) -> &wgpu::Surface<'static> {
         &self.surface
     }
 
@@ -87,15 +86,15 @@ impl CoreRenderingSystem {
         ]
     }
 
-    async fn new_from_raw_window_handle(
-        window: &(impl HasRawWindowHandle + HasRawDisplayHandle),
-        window_size: (NonZeroU32, NonZeroU32),
+    async fn new_from_surface_target(
+        surface_target: impl Into<SurfaceTarget<'static>>,
+        surface_size: (NonZeroU32, NonZeroU32),
     ) -> Result<Self> {
         let wgpu_instance = Self::create_wgpu_instance();
-        let surface = unsafe { wgpu_instance.create_surface(window)? };
+        let surface = wgpu_instance.create_surface(surface_target)?;
         let adapter = Self::create_adapter(&wgpu_instance, &surface).await?;
         let (device, queue) = Self::connect_to_device(&adapter).await?;
-        let surface_config = Self::create_surface_config(&surface, &adapter, window_size);
+        let surface_config = Self::create_surface_config(&surface, &adapter, surface_size);
 
         Ok(Self {
             device,
@@ -121,7 +120,7 @@ impl CoreRenderingSystem {
     /// Returns an error if a compatible graphics device can not be found.
     async fn create_adapter(
         wgpu_instance: &wgpu::Instance,
-        surface: &wgpu::Surface,
+        surface: &wgpu::Surface<'_>,
     ) -> Result<wgpu::Adapter> {
         wgpu_instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -141,12 +140,13 @@ impl CoreRenderingSystem {
         Ok(adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::PUSH_CONSTANTS
+                    required_features: wgpu::Features::PUSH_CONSTANTS
                         | wgpu::Features::POLYGON_MODE_LINE
                         | wgpu::Features::DEPTH32FLOAT_STENCIL8,
-                    limits: wgpu::Limits {
+                    required_limits: wgpu::Limits {
                         max_bind_groups: 7,
                         max_push_constant_size: 128,
+                        max_color_attachment_bytes_per_sample: 64,
                         ..wgpu::Limits::default()
                     },
                     label: None,
@@ -159,7 +159,7 @@ impl CoreRenderingSystem {
     /// Creates configuration defining how the surface will
     /// create its underlying [`wgpu::SurfaceTexture`].
     fn create_surface_config(
-        surface: &wgpu::Surface,
+        surface: &wgpu::Surface<'_>,
         adapter: &wgpu::Adapter,
         (width, height): (NonZeroU32, NonZeroU32),
     ) -> wgpu::SurfaceConfiguration {
@@ -172,6 +172,7 @@ impl CoreRenderingSystem {
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: Vec::new(),
+            desired_maximum_frame_latency: 2,
         }
     }
 }

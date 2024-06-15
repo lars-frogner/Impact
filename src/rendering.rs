@@ -106,7 +106,7 @@ pub struct ScreenCapturer {
 impl RenderingSystem {
     /// Creates a new rendering system consisting of the given core system and
     /// assets.
-    pub async fn new(core_system: CoreRenderingSystem, mut assets: Assets) -> Result<Self> {
+    pub fn new(core_system: CoreRenderingSystem, mut assets: Assets) -> Result<Self> {
         let config = RenderingConfig::default();
 
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(

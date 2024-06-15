@@ -30,8 +30,7 @@ use crate::{
         SpecularColorComp, SphereMeshComp, UncullableComp, VoxelBoxComp, VoxelSphereComp,
         VoxelTypeComp,
     },
-    window::InputHandler,
-    window::{KeyActionMap, Window},
+    window::{GameHandler, InputHandler, KeyActionMap, Window},
     world::World,
 };
 use anyhow::Result;
@@ -39,15 +38,10 @@ use nalgebra::{point, vector, Point3, Vector3};
 use rand::{rngs::ThreadRng, Rng, SeedableRng};
 use std::f64::consts::PI;
 
-pub async fn run() -> Result<()> {
+pub fn run() -> Result<()> {
     init_logging()?;
-
-    let (window, event_loop) = Window::new_window_and_event_loop()?;
-    let world = init_world(window).await?;
-    let input_handler = InputHandler::new(KeyActionMap::default());
-
-    event_loop
-        .run_game_loop(GameLoop::new(world, input_handler, GameLoopConfig::default()).unwrap())
+    let mut handler = GameHandler::new(init_game_loop);
+    handler.run()
 }
 
 fn init_logging() -> Result<()> {
@@ -55,8 +49,14 @@ fn init_logging() -> Result<()> {
     Ok(())
 }
 
-async fn init_world(window: Window) -> Result<World> {
-    let core_system = CoreRenderingSystem::new(&window).await?;
+fn init_game_loop(window: Window) -> Result<GameLoop> {
+    let world = init_world(window)?;
+    let input_handler = InputHandler::new(KeyActionMap::default());
+    GameLoop::new(world, input_handler, GameLoopConfig::default())
+}
+
+fn init_world(window: Window) -> Result<World> {
+    let core_system = CoreRenderingSystem::new(&window)?;
 
     let mut assets = Assets::new(&core_system);
 
@@ -76,7 +76,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let bricks_color_texture_id = assets.load_texture_from_path(
         &core_system,
-        "assets/Bricks059_4K-JPG/Bricks059_4K_Color.jpg",
+        "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
             addressing: TextureAddressingConfig::REPEATING,
@@ -86,7 +86,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let bricks_roughness_texture_id = assets.load_texture_from_path(
         &core_system,
-        "assets/Bricks059_4K-JPG/Bricks059_4K_Roughness.jpg",
+        "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
             addressing: TextureAddressingConfig::REPEATING,
@@ -96,7 +96,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let bricks_height_texture_id = assets.load_texture_from_path(
         &core_system,
-        "assets/Bricks059_4K-JPG/Bricks059_4K_Displacement.jpg",
+        "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
             addressing: TextureAddressingConfig::REPEATING,
@@ -106,7 +106,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let wood_floor_color_texture_id = assets.load_texture_from_path(
         &core_system,
-        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Color.jpg",
+        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
             addressing: TextureAddressingConfig::REPEATING,
@@ -116,7 +116,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let wood_floor_roughness_texture_id = assets.load_texture_from_path(
         &core_system,
-        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_Roughness.jpg",
+        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
             addressing: TextureAddressingConfig::REPEATING,
@@ -126,7 +126,7 @@ async fn init_world(window: Window) -> Result<World> {
 
     let wood_floor_normal_texture_id = assets.load_texture_from_path(
         &core_system,
-        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K_NormalDX.jpg",
+        "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
             addressing: TextureAddressingConfig::REPEATING,
@@ -135,7 +135,7 @@ async fn init_world(window: Window) -> Result<World> {
     )?;
 
     let vertical_field_of_view = Degrees(70.0);
-    let renderer = RenderingSystem::new(core_system, assets).await?;
+    let renderer = RenderingSystem::new(core_system, assets)?;
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
 

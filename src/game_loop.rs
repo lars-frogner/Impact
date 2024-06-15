@@ -5,7 +5,7 @@ use crate::{
     physics::PhysicsTag,
     rendering::RenderingTag,
     thread::ThreadPoolResult,
-    window::{EventLoopController, HandlingResult, InputHandler, WindowEvent},
+    window::{EventLoopController, HandlingResult, InputHandler, Window, WindowEvent},
     world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
@@ -69,6 +69,10 @@ impl GameLoop {
 
     pub fn world(&self) -> &World {
         self.world.as_ref()
+    }
+
+    pub fn window(&self) -> &Window {
+        self.world().window()
     }
 
     pub fn handle_window_event(
