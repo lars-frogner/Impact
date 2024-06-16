@@ -928,7 +928,6 @@ mod test {
     create_task_type!(name = Task1, deps = []);
     create_task_type!(name = Task2, deps = []);
     create_task_type!(name = DepTask1, deps = [Task1]);
-    create_task_type!(name = DepTask2, deps = [Task2]);
     create_task_type!(name = DepDepTask1, deps = [DepTask1]);
     create_task_type!(name = DepTask1Task2, deps = [Task1, Task2]);
     create_task_type!(name = DepDepTask1Task2, deps = [DepTask1, Task2]);

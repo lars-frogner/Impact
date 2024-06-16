@@ -39,10 +39,8 @@ const RECT: Rectangle = Rectangle {
 };
 
 /// These query invocations should all compile successfully.
-#[allow(dead_code)]
+#[allow(dead_code, clippy::unnecessary_mut_passed)]
 fn test_valid_query_inputs() {
-    #![allow(clippy::unnecessary_mut_passed)]
-
     let mut world = World::new();
 
     query!(world, |_byte: &Byte| {});

@@ -83,8 +83,9 @@ pub struct MaterialHandle {
     /// The ID of the material's [`MaterialSpecification`](crate::scene::MaterialSpecification).
     material_id: MaterialID,
     /// The ID of the entry for the material's per-instance material properties
-    /// in the [InstanceFeatureStorage](crate::geometry::InstanceFeatureStorage)
-    /// (may be N/A).
+    /// in the
+    /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage) (may
+    /// be N/A).
     material_property_feature_id: InstanceFeatureID,
     /// The ID of the material's
     /// [`MaterialPropertyTextureSet`](crate::scene::MaterialPropertyTextureSet)

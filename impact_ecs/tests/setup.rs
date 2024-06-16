@@ -38,10 +38,8 @@ const RECT2: Rectangle = Rectangle {
 };
 
 /// These setup invocations should all compile successfully.
-#[allow(dead_code)]
+#[allow(dead_code, clippy::unnecessary_mut_passed)]
 fn test_valid_setup_inputs() {
-    #![allow(clippy::unnecessary_mut_passed)]
-
     let mut components: ArchetypeComponentStorage = [].try_into().unwrap();
 
     setup!(components, || {});

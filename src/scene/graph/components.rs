@@ -88,7 +88,7 @@ impl SceneGraphParentNodeComp {
     }
 }
 
-impl<ID: SceneGraphNodeID + Pod> SceneGraphNodeComp<ID> {
+impl<ID: SceneGraphNodeID> SceneGraphNodeComp<ID> {
     /// Creates a new component representing a [`SceneGraph`](crate::scene::SceneGraph)
     /// node with the given ID.
     pub fn new(node_id: ID) -> Self {
