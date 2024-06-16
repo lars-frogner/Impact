@@ -698,6 +698,7 @@ impl Texture {
     }
 
     fn has_filterable_format(&self) -> bool {
+        #[allow(clippy::manual_unwrap_or_default)]
         if let Some(wgpu::TextureSampleType::Float { filterable }) =
             self.texture.format().sample_type(None, None)
         {
@@ -818,7 +819,7 @@ impl TextureFilteringConfig {
         max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Linear,
         lod_min_clamp: 0.0,
-        lod_max_clamp: std::f32::MAX,
+        lod_max_clamp: f32::MAX,
         anisotropy_clamp: 1,
     };
 
@@ -828,7 +829,7 @@ impl TextureFilteringConfig {
         max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Linear,
         lod_min_clamp: 0.0,
-        lod_max_clamp: std::f32::MAX,
+        lod_max_clamp: f32::MAX,
         anisotropy_clamp: 2,
     };
 
@@ -853,7 +854,7 @@ impl TextureFilteringConfig {
         max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Nearest,
         lod_min_clamp: 0.0,
-        lod_max_clamp: std::f32::MAX,
+        lod_max_clamp: f32::MAX,
         anisotropy_clamp: 1,
     };
 }

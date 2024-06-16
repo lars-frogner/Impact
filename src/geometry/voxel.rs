@@ -199,7 +199,7 @@ struct DirectionalObscurednessLookupTable {
     is_obscured_from_direction: [[[bool; 2]; 2]; 2],
 }
 
-/// A transform from the space of an voxel in a voxel tree to the space of the
+/// A transform from the space of a voxel in a voxel tree to the space of the
 /// whole tree.
 #[derive(Clone, Debug, PartialEq)]
 struct VoxelTransform<F: Float> {
@@ -239,7 +239,7 @@ struct VoxelIndices {
 }
 
 /// An iterator over the sequence of octants that must be followed from the root
-/// of a voxel tree to reach the voxel a given set of [`VoxelIndices`].
+/// of a voxel tree to reach the voxel at a given set of [`VoxelIndices`].
 struct OctantIterator {
     indices: VoxelIndices,
     octant_size: usize,
@@ -249,7 +249,7 @@ struct OctantIterator {
 }
 
 /// An octant in a voxel tree. The number associated with each variant is the
-/// index of the corresponding child node of a [`InternalNode`].
+/// index of the corresponding child node of an [`InternalNode`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Octant {
     BackBottomLeft = 0,

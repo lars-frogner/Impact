@@ -496,15 +496,6 @@ pub struct SourceCode {
     used_types: HashMap<String, Handle<Type>>,
 }
 
-/// Handles to functions and named types imported into a [`Module`].
-#[derive(Clone, Debug)]
-pub struct SourceCodeHandles {
-    /// Handles to imported functions, where the keys are the function names.
-    pub functions: HashMap<String, Handle<Function>>,
-    /// Handles to imported named types, where the keys are the type names.
-    pub types: HashMap<String, Handle<Type>>,
-}
-
 const U32_WIDTH: u32 = mem::size_of::<u32>() as u32;
 
 const U32_TYPE: Type = Type {
@@ -5233,7 +5224,7 @@ impl SourceCode {
             .or_insert_with(|| {
                 let original_function_handle = *self
                     .available_functions
-                    .get(&function_name.to_string())
+                    .get(function_name)
                     .unwrap_or_else(|| {
                         panic!(
                             "Requested missing function from shader library: {}",
@@ -5281,7 +5272,7 @@ impl SourceCode {
                 .or_insert_with(|| {
                     let original_type_handle = *self
                         .available_named_types
-                        .get(&type_name.to_string())
+                        .get(type_name)
                         .unwrap_or_else(|| {
                             panic!("Requested missing type from shader library: {}", type_name)
                         });
