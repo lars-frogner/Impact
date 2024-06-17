@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use impact::geometry::{
     Degrees, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureStorage,
-    InstanceModelViewTransform, PerspectiveTransform, Radians, UniformSphereVoxelGenerator,
-    UpperExclusiveBounds, VoxelTree, VoxelTreeLODController, VoxelType,
+    InstanceModelViewTransform, PerspectiveTransform, UniformSphereVoxelGenerator,
+    UpperExclusiveBounds, VoxelTree, VoxelType,
 };
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector3};
 use num_traits::FloatConst;
@@ -48,8 +48,6 @@ pub fn bench_voxel_tree_construction(c: &mut Criterion) {
 }
 
 pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
-    let lod_controller = VoxelTreeLODController::new(Radians(0.0));
-
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 430, 4);
     let tree = VoxelTree::build(&generator).unwrap();
 
@@ -85,12 +83,18 @@ pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
             );
             let transformed_view_frustum = view_frustum.transformed(&transformation);
 
-            tree.buffer_visible_voxel_model_view_transforms(
-                &mut transform_buffer,
-                &lod_controller,
-                &camera_position,
+            tree.buffer_visible_voxel_instances(
                 &transformed_view_frustum,
                 &view_transform,
+                &|voxel_position| voxel_position - camera_position,
+                &|_, _| 0,
+                &mut |storage, camera_space_axes_in_tree_space| {
+                    storage.buffer_all_transforms(
+                        &mut transform_buffer,
+                        &view_transform,
+                        camera_space_axes_in_tree_space,
+                    )
+                },
             );
 
             total_transform_buffer_len += transform_buffer.n_valid_features();
