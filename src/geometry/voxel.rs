@@ -101,17 +101,23 @@ struct ExternalNodeAuxiliaryStorage {
 
 /// Storage for voxel instance data to be passed to the GPU.
 #[derive(Clone, Debug)]
-struct VoxelInstanceStorage<F: Float> {
+pub struct VoxelInstanceStorage<F: Float> {
     voxel_types: Vec<VoxelType>,
     transforms: Vec<VoxelTransform<F>>,
+    /// Maps [`VoxelInstanceID`]s to indices in `voxel_types` and `transforms`.
     index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
 }
+
+pub type CoordinateAxes<F> = (UnitVector3<F>, UnitVector3<F>, UnitVector3<F>);
 
 /// A collection of [`VoxelInstanceStorage`]s for holding separate groups of
 /// voxel instances.
 #[derive(Clone, Debug)]
 struct GroupedVoxelInstanceStorage<F: Float> {
+    /// Each group may contain one [`VoxelInstanceStorage`] for each level of
+    /// detail that the voxel instances in the group can be rendered at.
     groups: Vec<Vec<VoxelInstanceStorage<F>>>,
+    /// Maps [`InstanceGroupID`]s to indices in `groups`.
     index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
     instance_id_count: usize,
     group_id_count: usize,
@@ -124,7 +130,12 @@ struct InternalNode<F: Float> {
     internal_children: Vec<InternalNode<F>>,
     external_children: Vec<ExternalNode>,
     octant_child_indices: [OctantChildNodeIdx; 8],
+    /// ID of the group of [`VoxelInstanceStorage`]s in the
+    /// [`GroupedVoxelInstanceStorage`] that the voxel instances for this node's
+    /// external children (and this node's instance for LOD) belong to.
     instance_group_id: InstanceGroupID,
+    /// ID of the voxel instance representing this internal node, used for
+    /// rendering when the desired LOD matches this node's height in the tree.
     voxel_instance_id_for_lod: VoxelInstanceID,
     height: u32,
     voxel_indices: VoxelIndices,
@@ -174,7 +185,7 @@ struct ExternalNodeID(usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct VoxelInstanceID(usize);
 
-/// Identifier for a [`VoxelInstanceStorage`] in a
+/// Identifier for a group of [`VoxelInstanceStorage`]s in a
 /// [`GroupedVoxelInstanceStorage`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -330,6 +341,18 @@ impl<F: Float> VoxelTreeLODController<F> {
         VoxelTreeHeight::height_with_voxel_scale(lod_voxel_scale)
     }
 
+    pub fn compute_lod_for_tree_space_displacement_and_view_transform(
+        &self,
+        voxel_tree: &VoxelTree<F>,
+        tree_space_voxel_displacement_from_camera: &Vector3<F>,
+        view_transform: &Similarity3<F>,
+    ) -> u32 {
+        self.compute_lod_at_distance(
+            voxel_tree.voxel_extent(),
+            tree_space_voxel_displacement_from_camera.norm() * view_transform.scaling(),
+        )
+    }
+
     fn compute_min_voxel_extent_at_distance(&self, distance: F) -> F {
         distance * self.min_angular_voxel_extent.radians()
     }
@@ -419,20 +442,28 @@ impl<F: Float> VoxelTree<F> {
             .map(|external_node| external_node.voxel_type)
     }
 
-    /// Determines the voxels that may be visible based on the given camera
-    /// position and view frustum and writes their model view transforms and
-    /// instance features to the given buffers. The camera position and view
-    /// frustum are assumed to be represented in the space of the voxel tree.
-    pub fn buffer_visible_voxel_model_view_transforms_and_features(
+    /// Determines the voxels that may be visible based on the given camera view
+    /// frustum and passes the objects storing their instance data to the given
+    /// `buffer_instances` closure.
+    ///
+    /// The view frustum is assumed to be represented in the space of the voxel
+    /// tree.
+    ///
+    /// The `direction_to_voxel` closure should return the direction vector from
+    /// the camera to the voxel given the voxel position (in tree space). The
+    /// vector does not have to be normalized.
+    ///
+    /// Depending on their requested level of detail, provided by the
+    /// `requested_lod` closure (it takes the voxel position and the direction
+    /// returned from `direction_to_voxel`), groups of adjacent voxels may be
+    /// represented by a single instance.
+    pub fn buffer_visible_voxel_instances(
         &self,
-        feature_id_map: &VoxelPropertyMap<InstanceFeatureID>,
-        feature_storage: &InstanceFeatureStorage,
-        transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        feature_buffer: &mut DynamicInstanceFeatureBuffer,
-        lod_controller: &VoxelTreeLODController<F>,
-        tree_space_camera_position: &Point3<F>,
         tree_space_view_frustum: &Frustum<F>,
         view_transform: &Similarity3<F>,
+        direction_to_voxel: &impl Fn(&Point3<F>) -> Vector3<F>,
+        requested_lod: &impl Fn(&Point3<F>, &Vector3<F>) -> u32,
+        buffer_instances: &mut impl FnMut(&VoxelInstanceStorage<F>, &CoordinateAxes<F>),
     ) where
         F: SubsetOf<fre>,
     {
@@ -443,32 +474,22 @@ impl<F: Float> VoxelTree<F> {
             .voxel_instances()
             .group(self.root_node().instance_group_id());
 
-        // We buffer all instances in the root group unconditionally, as
+        // We buffer all instances in the root group (external nodes at heights
+        // from the `instance_group_height` and up) unconditionally, as
         // evaluating their individual visibility creates more work than it
         // saves
-        root_voxel_instance_group.buffer_all_transforms(
-            transform_buffer,
-            view_transform,
-            &camera_space_axes_in_tree_space,
-        );
-
-        root_voxel_instance_group.buffer_all_features(
-            feature_id_map,
-            feature_storage,
-            feature_buffer,
-        );
+        buffer_instances(root_voxel_instance_group, &camera_space_axes_in_tree_space);
 
         // If we have instance groups in addition to the root group, we traverse
         // the tree and buffer all the instances in each group that may be
         // visible
         if self.properties.has_intermediate_instance_group_height() {
-            self.root_node().buffer_features_for_internal_nodes(
+            self.root_node().buffer_instances_for_internal_nodes(
                 &self.properties,
                 &mut |internal_node: &InternalNode<F>| {
                     if internal_node.has_exposed_descendants() {
-                        let displacement_from_camera =
-                            internal_node.aabb().center() - tree_space_camera_position;
-                        !internal_node.is_fully_obscured_from_direction(&displacement_from_camera)
+                        let direction = direction_to_voxel(&internal_node.aabb().center());
+                        !internal_node.is_fully_obscured_from_direction(&direction)
                             && tree_space_view_frustum
                                 .could_contain_part_of_axis_aligned_box(internal_node.aabb())
                     } else {
@@ -477,145 +498,28 @@ impl<F: Float> VoxelTree<F> {
                 },
                 &mut |internal_node: &InternalNode<F>| {
                     if internal_node.has_exposed_descendants() {
-                        let displacement_from_camera =
-                            internal_node.aabb().center() - tree_space_camera_position;
+                        let position = internal_node.aabb().center();
+                        let direction = direction_to_voxel(&position);
 
-                        if !internal_node
-                            .is_fully_obscured_from_direction(&displacement_from_camera)
+                        if !internal_node.is_fully_obscured_from_direction(&direction)
                             && tree_space_view_frustum
                                 .could_contain_part_of_axis_aligned_box(internal_node.aabb())
                         {
-                            let distance_from_camera =
-                                displacement_from_camera.norm() * view_transform.scaling();
-
-                            let lod = lod_controller
-                                .compute_lod_at_distance(self.voxel_extent(), distance_from_camera);
+                            let lod = u32::min(
+                                requested_lod(&position, &direction),
+                                internal_node.height(),
+                            );
 
                             let voxel_instance_group = self
                                 .voxel_instances()
                                 .group_at_level_of_detail(internal_node.instance_group_id(), lod);
 
-                            voxel_instance_group.buffer_all_transforms(
-                                transform_buffer,
-                                view_transform,
+                            buffer_instances(
+                                voxel_instance_group,
                                 &camera_space_axes_in_tree_space,
-                            );
-
-                            voxel_instance_group.buffer_all_features(
-                                feature_id_map,
-                                feature_storage,
-                                feature_buffer,
                             );
                         }
                     }
-                },
-            );
-        }
-    }
-
-    /// Determines the voxels that may be visible based on the given camera
-    /// position and view frustum and writes their model view transforms to the
-    /// given buffer. The camera position and view frustum are assumed to be
-    /// represented in the space of the voxel tree.
-    pub fn buffer_visible_voxel_model_view_transforms(
-        &self,
-        transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        lod_controller: &VoxelTreeLODController<F>,
-        tree_space_camera_position: &Point3<F>,
-        tree_space_view_frustum: &Frustum<F>,
-        view_transform: &Similarity3<F>,
-    ) where
-        F: SubsetOf<fre>,
-    {
-        let camera_space_axes_in_tree_space =
-            VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
-
-        let root_voxel_instance_group = self
-            .voxel_instances()
-            .group(self.root_node().instance_group_id());
-
-        root_voxel_instance_group.buffer_all_transforms(
-            transform_buffer,
-            view_transform,
-            &camera_space_axes_in_tree_space,
-        );
-
-        if self.properties.has_intermediate_instance_group_height() {
-            self.root_node().buffer_features_for_internal_nodes(
-                &self.properties,
-                &mut |internal_node: &InternalNode<F>| {
-                    if internal_node.has_exposed_descendants() {
-                        let displacement_from_camera =
-                            internal_node.aabb().center() - tree_space_camera_position;
-                        !internal_node.is_fully_obscured_from_direction(&displacement_from_camera)
-                            && tree_space_view_frustum
-                                .could_contain_part_of_axis_aligned_box(internal_node.aabb())
-                    } else {
-                        false
-                    }
-                },
-                &mut |internal_node: &InternalNode<F>| {
-                    let voxel_instance_group = self
-                        .voxel_instances()
-                        .group(internal_node.instance_group_id());
-
-                    voxel_instance_group.buffer_all_transforms(
-                        transform_buffer,
-                        view_transform,
-                        &camera_space_axes_in_tree_space,
-                    );
-                },
-            );
-        }
-    }
-
-    /// Determines the voxels that may be visible based on the given view
-    /// direction and orthographic view frustum and writes their model view
-    /// transforms to the given buffer. The view direction and frustum are
-    /// assumed to be represented in the space of the voxel tree.
-    pub fn buffer_visible_voxel_model_view_transforms_orthographic(
-        &self,
-        transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        lod_controller: &VoxelTreeLODController<F>,
-        tree_space_view_direction: &UnitVector3<F>,
-        tree_space_view_frustum: &Frustum<F>,
-        view_transform: &Similarity3<F>,
-    ) where
-        F: SubsetOf<fre>,
-    {
-        let camera_space_axes_in_tree_space =
-            VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
-
-        let root_voxel_instance_group = self
-            .voxel_instances()
-            .group(self.root_node().instance_group_id());
-
-        root_voxel_instance_group.buffer_all_transforms(
-            transform_buffer,
-            view_transform,
-            &camera_space_axes_in_tree_space,
-        );
-
-        if self.properties.has_intermediate_instance_group_height() {
-            self.root_node().buffer_features_for_internal_nodes(
-                &self.properties,
-                &mut |internal_node: &InternalNode<F>| {
-                    internal_node.has_exposed_descendants()
-                        && !internal_node
-                            .is_fully_obscured_from_direction(tree_space_view_direction)
-                        && tree_space_view_frustum
-                            .could_contain_part_of_axis_aligned_box(internal_node.aabb())
-                },
-                &mut |internal_node: &InternalNode<F>| {
-                    let voxel_instance_group = self
-                        .voxel_instances()
-                        .group(internal_node.instance_group_id());
-
-                    voxel_instance_group.buffer_all_transforms(
-                        transform_buffer,
-                        view_transform,
-                        &camera_space_axes_in_tree_space,
-                    );
                 },
             );
         }
@@ -1251,11 +1155,13 @@ impl<F: Float> VoxelInstanceStorage<F> {
         self.transforms.push(transform);
     }
 
-    fn buffer_all_transforms(
+    /// Converts each voxel transform in the storage into a model-view transform
+    /// and adds it to the given transform buffer.
+    pub fn buffer_all_transforms(
         &self,
         transform_buffer: &mut DynamicInstanceFeatureBuffer,
         view_transform: &Similarity3<F>,
-        camera_space_axes_in_tree_space: &(UnitVector3<F>, UnitVector3<F>, UnitVector3<F>),
+        camera_space_axes_in_tree_space: &CoordinateAxes<F>,
     ) where
         F: SubsetOf<fre>,
     {
@@ -1267,7 +1173,9 @@ impl<F: Float> VoxelInstanceStorage<F> {
         }));
     }
 
-    fn buffer_all_features(
+    /// Adds all voxel instance features in the storage to the given feature
+    /// buffer.
+    pub fn buffer_all_features(
         &self,
         feature_id_map: &VoxelPropertyMap<InstanceFeatureID>,
         feature_storage: &InstanceFeatureStorage,
@@ -1370,7 +1278,7 @@ impl<F: Float> InternalNode<F> {
         let mut external_children = Vec::new();
 
         // This instance group will contain the instances for all external nodes
-        // down to the `instance_group_scale`
+        // down to the `instance_group_height`
         let instance_group_id = voxel_instances.create_group();
 
         let octant_child_indices = current_indices.for_next_depth().map(|next_indices| {
@@ -1516,6 +1424,9 @@ impl<F: Float> InternalNode<F> {
         &self.directional_obscuredness
     }
 
+    /// Whether the node is fully obscured when viewed from the given direction.
+    /// The direction is from the viewer towards the node and does not have to
+    /// be normalized.
     fn is_fully_obscured_from_direction(&self, direction: &Vector3<F>) -> bool {
         self.directional_obscuredness
             .is_fully_obscured_from_direction(direction)
@@ -1670,7 +1581,8 @@ impl<F: Float> InternalNode<F> {
         let mut stack = vec![self];
 
         while let Some(internal_node) = stack.pop() {
-            let max_lod = if internal_node.height() <= tree_properties.instance_group_height()
+            let max_lod = if tree_properties.has_intermediate_instance_group_height()
+                && internal_node.height() <= tree_properties.instance_group_height()
                 && internal_lod_node_criterion(internal_node)
             {
                 internal_node.add_voxel_instance_entry_for_lod(
@@ -1737,22 +1649,22 @@ impl<F: Float> InternalNode<F> {
         }
     }
 
-    fn buffer_features_for_internal_nodes(
+    fn buffer_instances_for_internal_nodes(
         &self,
         tree_properties: &VoxelTreeProperties<F>,
-        process_child: &mut impl FnMut(&InternalNode<F>) -> bool,
-        buffer_features: &mut impl FnMut(&InternalNode<F>),
+        should_process_child: &mut impl FnMut(&InternalNode<F>) -> bool,
+        buffer_instances: &mut impl FnMut(&InternalNode<F>),
     ) {
         let mut stack = vec![self];
 
         while let Some(internal_node) = stack.pop() {
             if internal_node.height() == tree_properties.instance_group_height() + 1 {
                 for internal_child in internal_node.internal_children() {
-                    buffer_features(internal_child);
+                    buffer_instances(internal_child);
                 }
             } else {
                 for internal_child in internal_node.internal_children() {
-                    if process_child(internal_child) {
+                    if should_process_child(internal_child) {
                         stack.push(internal_child);
                     }
                 }
@@ -2043,8 +1955,9 @@ impl DirectionalObscurednessLookupTable {
         }
     }
 
-    /// Whether the voxel or group of voxels is fully obscured when from the
-    /// given direction. The direction is from the viewer towards the voxel(s).
+    /// Whether the voxel or group of voxels is fully obscured when viewed from
+    /// the given direction. The direction is from the viewer towards the
+    /// voxel(s) and does not have to be normalized.
     fn is_fully_obscured_from_direction<F: Float>(&self, direction: &Vector3<F>) -> bool {
         self.is_obscured_from_direction[usize::from(direction.x.is_negative())]
             [usize::from(direction.y.is_negative())][usize::from(direction.z.is_negative())]
@@ -2097,7 +2010,7 @@ impl<F: Float> VoxelTransform<F> {
     fn transform_into_model_view_transform(
         &self,
         transform_from_tree_to_camera_space: &Similarity3<F>,
-        camera_space_axes_in_tree_space: &(UnitVector3<F>, UnitVector3<F>, UnitVector3<F>),
+        camera_space_axes_in_tree_space: &CoordinateAxes<F>,
     ) -> InstanceModelViewTransform
     where
         F: SubsetOf<fre>,
@@ -2404,7 +2317,7 @@ where
 
         // If the current internal node is at the `instance_group_height`, we
         // need to create a new group for the instances of its external
-        // ancestors
+        // descendants
         let create_new_instance_group = height == generator.instance_group_height();
         let instance_group_id = if create_new_instance_group {
             voxel_instances.create_group_with_multiple_levels_of_detail(height)

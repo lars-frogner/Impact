@@ -577,15 +577,31 @@ impl<F: Float> SceneGraph<F> {
                         voxel_tree_node.model_id(),
                     );
 
-                voxel_tree.buffer_visible_voxel_model_view_transforms_and_features(
-                    voxel_manager.voxel_material_feature_ids(),
-                    material_feature_storage,
-                    transform_buffer,
-                    material_feature_buffer,
-                    voxel_manager.voxel_tree_lod_controller(),
-                    &camera_position_in_voxel_tree_space,
+                voxel_tree.buffer_visible_voxel_instances(
                     &view_frustum_in_voxel_tree_space,
                     root_to_camera_transform,
+                    &|voxel_position| voxel_position - camera_position_in_voxel_tree_space,
+                    &|_, displacement| {
+                        voxel_manager
+                            .voxel_tree_lod_controller()
+                            .compute_lod_for_tree_space_displacement_and_view_transform(
+                                voxel_tree,
+                                displacement,
+                                root_to_camera_transform,
+                            )
+                    },
+                    &mut |storage, camera_space_axes_in_tree_space| {
+                        storage.buffer_all_transforms(
+                            transform_buffer,
+                            root_to_camera_transform,
+                            camera_space_axes_in_tree_space,
+                        );
+                        storage.buffer_all_features(
+                            voxel_manager.voxel_material_feature_ids(),
+                            material_feature_storage,
+                            material_feature_buffer,
+                        );
+                    },
                 );
             }
         }
@@ -789,15 +805,31 @@ impl<F: Float> SceneGraph<F> {
                         voxel_tree_node.model_id(),
                     );
 
-                voxel_tree.buffer_visible_voxel_model_view_transforms_and_features(
-                    voxel_manager.voxel_material_feature_ids(),
-                    material_feature_storage,
-                    transform_buffer,
-                    material_feature_buffer,
-                    voxel_manager.voxel_tree_lod_controller(),
-                    &camera_position_in_voxel_tree_space,
+                voxel_tree.buffer_visible_voxel_instances(
                     &view_frustum_in_voxel_tree_space,
                     group_to_camera_transform,
+                    &|voxel_position| voxel_position - camera_position_in_voxel_tree_space,
+                    &|_, displacement| {
+                        voxel_manager
+                            .voxel_tree_lod_controller()
+                            .compute_lod_for_tree_space_displacement_and_view_transform(
+                                voxel_tree,
+                                displacement,
+                                group_to_camera_transform,
+                            )
+                    },
+                    &mut |storage, camera_space_axes_in_tree_space| {
+                        storage.buffer_all_transforms(
+                            transform_buffer,
+                            group_to_camera_transform,
+                            camera_space_axes_in_tree_space,
+                        );
+                        storage.buffer_all_features(
+                            voxel_manager.voxel_material_feature_ids(),
+                            material_feature_storage,
+                            material_feature_buffer,
+                        );
+                    },
                 );
             }
         }
@@ -1113,15 +1145,39 @@ impl SceneGraph<fre> {
                 let light_position_in_voxel_tree_space = camera_to_group_transform
                     .transform_point(omnidirectional_light.camera_space_position());
 
+                let camera_position_in_voxel_tree_space =
+                    camera_to_group_transform.transform_point(&Point3::origin());
+
                 let transform_buffer =
                     instance_feature_manager.transform_buffer_mut(voxel_tree_node.model_id());
 
-                voxel_tree.buffer_visible_voxel_model_view_transforms(
-                    transform_buffer,
-                    voxel_manager.voxel_tree_lod_controller(),
-                    &light_position_in_voxel_tree_space,
+                // Here, we let the cubemap face space act as "camera" space, so
+                // the "camera position" is the light position, the "view
+                // frustum" is the cubemap face frustum and the "view transform"
+                // is the transform to the cubemap face space
+                voxel_tree.buffer_visible_voxel_instances(
                     &face_frustum_in_voxel_tree_space,
                     &voxel_tree_to_cubemap_face_transform,
+                    &|voxel_position| voxel_position - light_position_in_voxel_tree_space,
+                    &|voxel_position, _| {
+                        // We use the actual camera position and view transform
+                        // rather than that of the light to determine the
+                        // requested level of detail
+                        voxel_manager
+                            .voxel_tree_lod_controller()
+                            .compute_lod_for_tree_space_displacement_and_view_transform(
+                                voxel_tree,
+                                &(voxel_position - camera_position_in_voxel_tree_space),
+                                group_to_camera_transform,
+                            )
+                    },
+                    &mut |storage, camera_space_axes_in_tree_space| {
+                        storage.buffer_all_transforms(
+                            transform_buffer,
+                            &voxel_tree_to_cubemap_face_transform,
+                            camera_space_axes_in_tree_space,
+                        );
+                    },
                 );
             }
         }
@@ -1224,6 +1280,9 @@ impl SceneGraph<fre> {
                 let cascade_frustum_in_voxel_tree_space =
                     cascade_frustum_in_light_space.transformed(&light_to_voxel_tree_transform);
 
+                let camera_position_in_voxel_tree_space =
+                    group_to_camera_transform.inverse_transform_point(&Point3::origin());
+
                 let voxel_tree = voxel_manager
                     .get_voxel_tree(voxel_tree_node.voxel_tree_id())
                     .expect("Missing voxel tree for voxel tree node in scene graph");
@@ -1231,12 +1290,32 @@ impl SceneGraph<fre> {
                 let transform_buffer =
                     instance_feature_manager.transform_buffer_mut(voxel_tree_node.model_id());
 
-                voxel_tree.buffer_visible_voxel_model_view_transforms_orthographic(
-                    transform_buffer,
-                    voxel_manager.voxel_tree_lod_controller(),
-                    &view_direction_in_voxel_tree_space,
+                // Here, we let the light space act as "camera" space, so the
+                // the "view frustum" is the cascade frustum and the "view
+                // transform" is the transform to light space
+                voxel_tree.buffer_visible_voxel_instances(
                     &cascade_frustum_in_voxel_tree_space,
                     &voxel_tree_to_light_transform,
+                    &|_| *view_direction_in_voxel_tree_space,
+                    &|voxel_position, _| {
+                        // We use the actual camera position and view transform
+                        // rather than that of the light to determine the
+                        // requested level of detail
+                        voxel_manager
+                            .voxel_tree_lod_controller()
+                            .compute_lod_for_tree_space_displacement_and_view_transform(
+                                voxel_tree,
+                                &(voxel_position - camera_position_in_voxel_tree_space),
+                                group_to_camera_transform,
+                            )
+                    },
+                    &mut |storage, camera_space_axes_in_tree_space| {
+                        storage.buffer_all_transforms(
+                            transform_buffer,
+                            &voxel_tree_to_light_transform,
+                            camera_space_axes_in_tree_space,
+                        );
+                    },
                 );
             }
         }
