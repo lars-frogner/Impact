@@ -9,9 +9,7 @@ use super::{
     UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
     VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use crate::rendering::{
-    RenderAttachmentQuantity, RenderAttachmentQuantitySet, RENDER_ATTACHMENT_BINDINGS,
-};
+use crate::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
 use naga::{Expression, Function, LocalVariable, MathFunction, Module, Statement};
 
 /// Describes the combination of models used for diffuse and specular reflection
@@ -239,7 +237,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         let position_expr =
             if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
                 let (position_texture_binding, position_sampler_binding) =
-                    RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
+                    RenderAttachmentQuantity::Position.bindings();
 
                 let position_texture = SampledTexture::declare(
                     &mut module.types,
@@ -270,7 +268,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             .contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)
         {
             let (normal_vector_texture_binding, normal_vector_sampler_binding) =
-                RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::NormalVector as usize];
+                RenderAttachmentQuantity::NormalVector.bindings();
 
             let normal_vector_texture = SampledTexture::declare(
                 &mut module.types,
@@ -314,7 +312,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 .contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
             {
                 let (texture_coord_texture_binding, texture_coord_sampler_binding) =
-                    RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::TextureCoords as usize];
+                    RenderAttachmentQuantity::TextureCoords.bindings();
 
                 let texture_coord_texture = SampledTexture::declare(
                     &mut module.types,

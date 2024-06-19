@@ -7032,7 +7032,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7081,7 +7081,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7136,7 +7136,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7192,7 +7192,7 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7241,7 +7241,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7290,7 +7290,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7339,7 +7339,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7391,7 +7391,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7447,7 +7447,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7504,7 +7504,7 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
-                | RenderAttachmentQuantitySet::COLOR,
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR,
         )
         .unwrap()
         .0;
@@ -7556,7 +7556,7 @@ mod test {
             )),
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::COLOR
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR
                 | RenderAttachmentQuantitySet::OCCLUSION,
             RenderAttachmentQuantitySet::empty(),
         )
@@ -7582,7 +7582,7 @@ mod test {
                 AmbientOcclusionShaderInput::Disabled,
             )),
             VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::COLOR,
+            RenderAttachmentQuantitySet::AMBIENT_COLOR,
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()

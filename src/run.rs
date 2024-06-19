@@ -148,7 +148,7 @@ fn init_world(window: Window) -> Result<World> {
             VoxelTreeLODController::compute_min_angular_voxel_extent(
                 window.dimensions().1,
                 vertical_field_of_view,
-                2.5,
+                3.0,
             ),
         ..SceneConfig::default()
     });

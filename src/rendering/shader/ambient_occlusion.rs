@@ -8,7 +8,7 @@ use super::{
     U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::{
-    rendering::{shader::F32_TYPE, RenderAttachmentQuantity, RENDER_ATTACHMENT_BINDINGS},
+    rendering::{shader::F32_TYPE, RenderAttachmentQuantity},
     scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 use naga::{
@@ -304,7 +304,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         });
 
         let (position_texture_binding, position_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
+            RenderAttachmentQuantity::Position.bindings();
 
         let position_texture = SampledTexture::declare(
             &mut module.types,
@@ -326,7 +326,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
 
         let (normal_vector_texture_binding, normal_vector_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::NormalVector as usize];
+            RenderAttachmentQuantity::NormalVector.bindings();
 
         let normal_vector_texture = SampledTexture::declare(
             &mut module.types,
@@ -520,7 +520,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let (position_texture_binding, position_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Position as usize];
+            RenderAttachmentQuantity::Position.bindings();
 
         let position_texture = SampledTexture::declare(
             &mut module.types,
@@ -539,7 +539,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             position_texture.generate_texture_and_sampler_expressions(fragment_function, false);
 
         let (ambient_color_texture_binding, ambient_color_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Color as usize];
+            RenderAttachmentQuantity::AmbientColor.bindings();
 
         let ambient_color_texture = SampledTexture::declare(
             &mut module.types,
@@ -558,7 +558,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
 
         let (ambient_visibility_texture_binding, ambient_visibility_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Occlusion as usize];
+            RenderAttachmentQuantity::Occlusion.bindings();
 
         let ambient_visibility_texture = SampledTexture::declare(
             &mut module.types,
@@ -621,7 +621,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let (ambient_color_texture_binding, ambient_color_sampler_binding) =
-            RENDER_ATTACHMENT_BINDINGS[RenderAttachmentQuantity::Color as usize];
+            RenderAttachmentQuantity::AmbientColor.bindings();
 
         let ambient_color_texture = SampledTexture::declare(
             &mut module.types,

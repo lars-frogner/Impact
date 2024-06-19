@@ -3,19 +3,21 @@
 use crate::rendering::CoreRenderingSystem;
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
+use num_traits::AsPrimitive;
 use std::{fmt::Display, path::Path};
 
 bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
     /// render attachment textures.
-    #[derive(Debug, Clone, Copy, Hash)]
+    #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
     pub struct RenderAttachmentQuantitySet: u8 {
-        const DEPTH = 0b00000001;
-        const POSITION = 0b00000010;
-        const NORMAL_VECTOR = 0b00000100;
-        const TEXTURE_COORDS = 0b00001000;
-        const COLOR = 0b00010000;
-        const OCCLUSION = 0b00100000;
+        const DEPTH          = 1 << 0;
+        const SURFACE        = 1 << 1;
+        const POSITION       = 1 << 2;
+        const NORMAL_VECTOR  = 1 << 3;
+        const TEXTURE_COORDS = 1 << 4;
+        const AMBIENT_COLOR  = 1 << 5;
+        const OCCLUSION      = 1 << 6;
     }
 }
 
@@ -24,69 +26,106 @@ bitflags! {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RenderAttachmentQuantity {
     Depth = 0,
-    Position = 1,
-    NormalVector = 2,
-    TextureCoords = 3,
-    Color = 4,
-    Occlusion = 5,
+    Surface = 1,
+    Position = 2,
+    NormalVector = 3,
+    TextureCoords = 4,
+    AmbientColor = 5,
+    Occlusion = 6,
 }
 
 /// Manager for textures used as render attachments.
 #[derive(Debug)]
 pub struct RenderAttachmentTextureManager {
-    quantity_textures: [Option<RenderAttachmentTexture>; N_RENDER_ATTACHMENT_QUANTITIES],
+    quantity_textures:
+        [Option<MaybeWithMultisampling<RenderAttachmentTexture>>; N_RENDER_ATTACHMENT_QUANTITIES],
     quantity_texture_bind_group_layouts:
         [Option<wgpu::BindGroupLayout>; N_RENDER_ATTACHMENT_QUANTITIES],
     quantity_texture_bind_groups: [Option<wgpu::BindGroup>; N_RENDER_ATTACHMENT_QUANTITIES],
-    available_quantities: RenderAttachmentQuantitySet,
 }
 
 /// A texture that can be used as a color attachment for rendering a specific
 /// quantity into.
 #[derive(Debug)]
 pub struct RenderAttachmentTexture {
+    quantity: RenderAttachmentQuantity,
     texture: wgpu::Texture,
     attachment_view: wgpu::TextureView,
     binding_view: wgpu::TextureView,
     sampler: wgpu::Sampler,
 }
 
+#[derive(Debug)]
+pub struct MaybeWithMultisampling<T> {
+    pub regular: T,
+    pub multisampled: Option<T>,
+}
+
 /// The total number of separate render attachment quantities.
-pub const N_RENDER_ATTACHMENT_QUANTITIES: usize = 6;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 7;
+
+/// Each individual render attachment quantity.
+///
+/// # Note
+/// This is the order expected by the shaders.
+const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    RenderAttachmentQuantity::Depth,
+    RenderAttachmentQuantity::Surface,
+    RenderAttachmentQuantity::Position,
+    RenderAttachmentQuantity::NormalVector,
+    RenderAttachmentQuantity::TextureCoords,
+    RenderAttachmentQuantity::AmbientColor,
+    RenderAttachmentQuantity::Occlusion,
+];
 
 /// The bitflag of each individual render attachment quantity.
-pub const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
+const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantitySet::DEPTH,
+    RenderAttachmentQuantitySet::SURFACE,
     RenderAttachmentQuantitySet::POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
-    RenderAttachmentQuantitySet::COLOR,
+    RenderAttachmentQuantitySet::AMBIENT_COLOR,
     RenderAttachmentQuantitySet::OCCLUSION,
 ];
 
 /// The name of each individual render attachment quantity.
-pub const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
+const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "depth",
+    "surface",
     "position",
     "normal_vector",
     "texture_coords",
-    "color",
+    "ambient_color",
     "occlusion",
 ];
 
 /// The texture format used for each render attachment quantity.
-pub const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    wgpu::TextureFormat::Depth32FloatStencil8,
-    wgpu::TextureFormat::Rgba32Float,
-    wgpu::TextureFormat::Rgba8Unorm,
-    wgpu::TextureFormat::Rg32Float,
-    wgpu::TextureFormat::Rgba8UnormSrgb,
-    wgpu::TextureFormat::R8Unorm,
+const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    wgpu::TextureFormat::Depth32FloatStencil8, // Depth
+    wgpu::TextureFormat::Rgba8UnormSrgb, // Surface (this is ignored in favor of the actual surface format)
+    wgpu::TextureFormat::Rgba32Float,    // Position
+    wgpu::TextureFormat::Rgba8Unorm,     // Normal vector
+    wgpu::TextureFormat::Rg32Float,      // Texture coordinates
+    wgpu::TextureFormat::Rgba8UnormSrgb, // Ambient color
+    wgpu::TextureFormat::R8Unorm,        // Occlusion
+];
+
+/// Whether multisampling will be used when requested for each render attachment quantity.
+const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    true, // Depth
+    true, // Surface
+    true, // Position
+    true, // Normal vector
+    true, // Texture coordinates
+    true, // Ambient color
+    true, // Occlusion
 ];
 
 /// The clear color used for each color render attachment quantity (depth is not
 /// included).
-pub const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
+const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
+    wgpu::Color::BLACK,
     wgpu::Color::BLACK,
     wgpu::Color::BLACK,
     wgpu::Color::BLACK,
@@ -96,18 +135,135 @@ pub const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUAN
 
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
-pub const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
-    [(0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1)];
+const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
+    [(0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1)];
+
+impl RenderAttachmentQuantity {
+    /// The total number of separate render attachment quantities.
+    pub const fn count() -> usize {
+        N_RENDER_ATTACHMENT_QUANTITIES
+    }
+
+    /// Each individual render attachment quantity.
+    pub const fn all() -> &'static [Self; Self::count()] {
+        &RENDER_ATTACHMENT_QUANTITIES
+    }
+
+    /// The bitflag of each individual render attachment quantity.
+    pub const fn flags() -> &'static [RenderAttachmentQuantitySet; Self::count()] {
+        &RENDER_ATTACHMENT_FLAGS
+    }
+
+    /// The name of each individual render attachment quantity.
+    pub const fn names() -> &'static [&'static str; Self::count()] {
+        &RENDER_ATTACHMENT_NAMES
+    }
+
+    /// The texture format used for the depth render attachment texture.
+    pub const fn depth_texture_format() -> wgpu::TextureFormat {
+        RENDER_ATTACHMENT_FORMATS[Self::Depth.index()]
+    }
+
+    /// The clear color used for each color render attachment quantity (the
+    /// first quantity, depth, is not included).
+    pub const fn clear_colors() -> &'static [wgpu::Color; Self::count() - 1] {
+        &RENDER_ATTACHMENT_CLEAR_COLORS
+    }
+
+    /// The texture and sampler bind group bindings used for each render attachment
+    /// quantity.
+    pub const fn all_bindings() -> &'static [(u32, u32); Self::count()] {
+        &RENDER_ATTACHMENT_BINDINGS
+    }
+
+    /// Returns the enum variant corresponding to the given integer, or [`None`]
+    /// if the integer has no corresponding enum variant.
+    pub fn from_index(number: impl AsPrimitive<usize>) -> Option<Self> {
+        RENDER_ATTACHMENT_QUANTITIES.get(number.as_()).copied()
+    }
+
+    /// The index of this render attachment quantity.
+    pub const fn index(&self) -> usize {
+        *self as usize
+    }
+
+    /// The bitflag of this render attachment quantity.
+    pub const fn flag(&self) -> RenderAttachmentQuantitySet {
+        Self::flags()[self.index()]
+    }
+
+    /// The name of this render attachment quantity.
+    pub const fn name(&self) -> &'static str {
+        Self::names()[self.index()]
+    }
+
+    /// The texture format used for this render attachment quantity.
+    pub fn texture_format(&self, core_system: &CoreRenderingSystem) -> wgpu::TextureFormat {
+        if *self == Self::Surface {
+            core_system.surface_config().format
+        } else {
+            RENDER_ATTACHMENT_FORMATS[self.index()]
+        }
+    }
+
+    /// Whether multisampling is supported for this render attachment quantity.
+    pub const fn supports_multisampling(&self) -> bool {
+        RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT[self.index()]
+    }
+
+    /// The clear color of this render attachment quantity.
+    ///
+    /// # Panics
+    /// If this quantity is depth.
+    pub fn clear_color(&self) -> wgpu::Color {
+        assert_ne!(*self, Self::Depth);
+        Self::clear_colors()[self.index() - 1]
+    }
+
+    /// The texture and sampler bind group bindings used for this render
+    /// attachment quantity.
+    pub const fn bindings(&self) -> (u32, u32) {
+        Self::all_bindings()[self.index()]
+    }
+}
+
+impl Display for RenderAttachmentQuantity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl RenderAttachmentQuantitySet {
+    /// Returns the set of render attachment quantities that support
+    /// multisampling.
+    pub fn multisampling_quantities() -> Self {
+        let mut quantities = Self::empty();
+        for quantity in RenderAttachmentQuantity::all() {
+            if quantity.supports_multisampling() {
+                quantities |= quantity.flag();
+            }
+        }
+        quantities
+    }
+
+    /// Returns the set of render attachment quantities that do not support
+    /// multisampling.
+    pub fn non_multisampling_quantities() -> Self {
+        Self::all() - Self::multisampling_quantities()
+    }
+
+    /// Returns this set without the depth quantity.
+    pub fn color_only(&self) -> Self {
+        *self - Self::DEPTH
+    }
+}
 
 impl Display for RenderAttachmentQuantitySet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{ ")?;
-        for (&attribute, name) in RENDER_ATTACHMENT_FLAGS
-            .iter()
-            .zip(RENDER_ATTACHMENT_NAMES.iter())
-        {
-            if self.contains(attribute) {
-                write!(f, "`{}` ", name)?;
+        for quantity in RenderAttachmentQuantity::all() {
+            if self.contains(quantity.flag()) {
+                write!(f, "`{}` ", quantity)?;
             }
         }
         write!(f, "}}")
@@ -116,29 +272,18 @@ impl Display for RenderAttachmentQuantitySet {
 
 impl RenderAttachmentTextureManager {
     /// Creates a new manager for render attachment textures, initializing
-    /// render attachment textures for the given set of quantities.
-    pub fn new(core_system: &CoreRenderingSystem, quantities: RenderAttachmentQuantitySet) -> Self {
+    /// render attachment textures for the given set of quantities with the
+    /// given sample count.
+    pub fn new(core_system: &CoreRenderingSystem, sample_count: u32) -> Self {
         let mut manager = Self {
-            quantity_textures: [None, None, None, None, None, None],
-            quantity_texture_bind_group_layouts: [None, None, None, None, None, None],
-            quantity_texture_bind_groups: [None, None, None, None, None, None],
-            available_quantities: RenderAttachmentQuantitySet::empty(),
+            quantity_textures: [None, None, None, None, None, None, None],
+            quantity_texture_bind_group_layouts: [None, None, None, None, None, None, None],
+            quantity_texture_bind_groups: [None, None, None, None, None, None, None],
         };
 
-        manager.recreate_render_attachment_textures(core_system, quantities);
+        manager.recreate_textures(core_system, sample_count);
 
         manager
-    }
-
-    /// Returns the set of available render attachment quantities.
-    pub fn available_quantities(&self) -> RenderAttachmentQuantitySet {
-        self.available_quantities
-    }
-
-    /// Returns the set of available render attachment quantities that can be
-    /// used as color attachments (as opposed to depth).
-    pub fn available_color_quantities(&self) -> RenderAttachmentQuantitySet {
-        self.available_quantities - RenderAttachmentQuantitySet::DEPTH
     }
 
     /// Returns the render attachment texture for the requested quantity.
@@ -148,98 +293,67 @@ impl RenderAttachmentTextureManager {
     pub fn render_attachment_texture(
         &self,
         quantity: RenderAttachmentQuantity,
-    ) -> &RenderAttachmentTexture {
-        self.quantity_textures[quantity as usize]
+    ) -> &MaybeWithMultisampling<RenderAttachmentTexture> {
+        self.quantity_textures[quantity.index()]
             .as_ref()
             .expect("Requested missing render attachment quantity")
     }
 
-    /// Returns an iterator over the render attachment texture views (the views
-    /// returned by [`RenderAttachmentTexture::attachment_view`]) for the
+    /// Returns an iterator over the render attachment textures for the
     /// requested set of quantities, in the order in which the quantities are
-    /// listed in the [`RENDER_ATTACHMENT_FLAGS`] constant.
-    ///
-    /// # Errors
-    /// Returns an error if any of the requested quantities are missing.
-    pub fn request_render_attachment_texture_views(
+    /// returned from the [`RenderAttachmentQuantity`] methods.
+    pub fn request_render_attachment_textures(
         &self,
         requested_quantities: RenderAttachmentQuantitySet,
-    ) -> Result<impl Iterator<Item = &wgpu::TextureView>> {
-        if self.available_quantities.contains(requested_quantities) {
-            Ok(RENDER_ATTACHMENT_FLAGS
-                .iter()
-                .zip(self.quantity_textures.iter())
-                .filter_map(move |(&quantity_flag, quantity_texture)| {
-                    if requested_quantities.contains(quantity_flag) {
-                        Some(quantity_texture.as_ref().unwrap().attachment_view())
-                    } else {
-                        None
-                    }
-                }))
-        } else {
-            Err(anyhow!(
-                "Render attachment texture manager missing requested quantities: {}",
-                requested_quantities.difference(self.available_quantities)
-            ))
-        }
+    ) -> impl Iterator<Item = &MaybeWithMultisampling<RenderAttachmentTexture>> {
+        RenderAttachmentQuantity::flags()
+            .iter()
+            .zip(self.quantity_textures.iter())
+            .filter_map(move |(&quantity_flag, quantity_texture)| {
+                if requested_quantities.contains(quantity_flag) {
+                    Some(quantity_texture.as_ref().unwrap())
+                } else {
+                    None
+                }
+            })
     }
 
     /// Returns an iterator over the render attachment texture bind group
     /// layouts for the requested set of quantities, in the order in which the
-    /// quantities are listed in the [`RENDER_ATTACHMENT_FLAGS`] constant.
-    ///
-    /// # Errors
-    /// Returns an error if any of the requested quantities are missing.
+    /// quantities are returned from the [`RenderAttachmentQuantity`] methods.
     pub fn request_render_attachment_texture_bind_group_layouts(
         &self,
         requested_quantities: RenderAttachmentQuantitySet,
-    ) -> Result<impl Iterator<Item = &wgpu::BindGroupLayout>> {
-        if self.available_quantities.contains(requested_quantities) {
-            Ok(RENDER_ATTACHMENT_FLAGS
-                .iter()
-                .zip(self.quantity_texture_bind_group_layouts.iter())
-                .filter_map(move |(&quantity_flag, bind_group_layout)| {
-                    if requested_quantities.contains(quantity_flag) {
-                        Some(bind_group_layout.as_ref().unwrap())
-                    } else {
-                        None
-                    }
-                }))
-        } else {
-            Err(anyhow!(
-                "Render attachment texture manager missing requested quantities: {}",
-                requested_quantities.difference(self.available_quantities)
-            ))
-        }
+    ) -> impl Iterator<Item = &wgpu::BindGroupLayout> {
+        RenderAttachmentQuantity::flags()
+            .iter()
+            .zip(self.quantity_texture_bind_group_layouts.iter())
+            .filter_map(move |(&quantity_flag, bind_group_layout)| {
+                if requested_quantities.contains(quantity_flag) {
+                    Some(bind_group_layout.as_ref().unwrap())
+                } else {
+                    None
+                }
+            })
     }
 
     /// Returns an iterator over the render attachment texture bind groups for
     /// the requested set of quantities, in the order in which the quantities
-    /// are listed in the [`RENDER_ATTACHMENT_FLAGS`] constant.
-    ///
-    /// # Errors
-    /// Returns an error if any of the requested quantities are missing.
+    /// are returned from the [`RenderAttachmentQuantity`] methods.
     pub fn request_render_attachment_texture_bind_groups(
         &self,
         requested_quantities: RenderAttachmentQuantitySet,
-    ) -> Result<impl Iterator<Item = &wgpu::BindGroup>> {
-        if self.available_quantities.contains(requested_quantities) {
-            Ok(RENDER_ATTACHMENT_FLAGS
-                .iter()
-                .zip(self.quantity_texture_bind_groups.iter())
-                .filter_map(move |(&quantity_flag, bind_group)| {
-                    if requested_quantities.contains(quantity_flag) {
-                        Some(bind_group.as_ref().unwrap())
-                    } else {
-                        None
-                    }
-                }))
-        } else {
-            Err(anyhow!(
-                "Render attachment texture manager missing requested quantities: {}",
-                requested_quantities.difference(self.available_quantities)
-            ))
-        }
+    ) -> impl Iterator<Item = &wgpu::BindGroup> {
+        RenderAttachmentQuantity::flags()
+            .iter()
+            .zip(self.quantity_texture_bind_groups.iter())
+            .filter_map(move |(&quantity_flag, bind_group)| {
+                if requested_quantities.contains(quantity_flag) {
+                    Some(bind_group.as_ref().unwrap())
+                } else {
+                    None
+                }
+            })
     }
 
     /// Saves the texture for the given render attachment quantity as a color or
@@ -256,22 +370,23 @@ impl RenderAttachmentTextureManager {
         quantity: RenderAttachmentQuantity,
         output_path: P,
     ) -> Result<()> {
-        let texture = self.quantity_textures[quantity as usize]
+        let texture = self.quantity_textures[quantity.index()]
             .as_ref()
             .ok_or_else(|| {
                 anyhow!(
                     "Tried to save image for missing render attachment quantity: {}",
-                    RENDER_ATTACHMENT_NAMES[quantity as usize]
+                    quantity
                 )
             })?;
 
-        super::save_texture_as_image_file(core_system, texture.texture(), 0, output_path)
+        super::save_texture_as_image_file(core_system, texture.regular.texture(), 0, output_path)
     }
-
     /// Recreates all render attachment textures for the current state of the
-    /// core system.
-    pub fn recreate_textures(&mut self, core_system: &CoreRenderingSystem) {
-        self.recreate_render_attachment_textures(core_system, self.available_quantities);
+    /// core system, using the given sample count.
+    pub fn recreate_textures(&mut self, core_system: &CoreRenderingSystem, sample_count: u32) {
+        for &quantity in RenderAttachmentQuantity::all() {
+            self.recreate_render_attachment_texture(core_system, quantity, sample_count);
+        }
     }
 
     /// Creates a view into the given surface texture.
@@ -283,54 +398,43 @@ impl RenderAttachmentTextureManager {
             .create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    fn recreate_render_attachment_textures(
-        &mut self,
-        core_system: &CoreRenderingSystem,
-        quantities: RenderAttachmentQuantitySet,
-    ) {
-        for (idx, &quantity_flag) in RENDER_ATTACHMENT_FLAGS.iter().enumerate() {
-            if quantities.contains(quantity_flag) {
-                self.recreate_render_attachment_texture(core_system, quantity_flag, idx);
-            }
-        }
-        self.available_quantities |= quantities;
-    }
-
     fn recreate_render_attachment_texture(
         &mut self,
         core_system: &CoreRenderingSystem,
-        quantity_flag: RenderAttachmentQuantitySet,
-        idx: usize,
+        quantity: RenderAttachmentQuantity,
+        sample_count: u32,
     ) {
+        let format = quantity.texture_format(core_system);
+
         let quantity_texture =
-            RenderAttachmentTexture::new(core_system, RENDER_ATTACHMENT_FORMATS[idx]);
+            MaybeWithMultisampling::new(core_system, quantity, format, sample_count);
 
-        let label = format!("{} render attachment", quantity_flag);
+        let label = format!("{} render attachment", quantity);
 
-        let (texture_binding, sampler_binding) = RENDER_ATTACHMENT_BINDINGS[idx];
+        let (texture_binding, sampler_binding) = quantity.bindings();
 
-        let bind_group_layout =
-            self.quantity_texture_bind_group_layouts[idx].get_or_insert_with(|| {
+        let bind_group_layout = self.quantity_texture_bind_group_layouts[quantity.index()]
+            .get_or_insert_with(|| {
                 Self::create_render_attachment_texture_bind_group_layout(
                     core_system.device(),
-                    quantity_texture.texture().format(),
+                    format,
                     texture_binding,
                     sampler_binding,
                     &label,
                 )
             });
 
-        self.quantity_texture_bind_groups[idx] =
+        self.quantity_texture_bind_groups[quantity.index()] =
             Some(Self::create_render_attachment_texture_bind_group(
                 core_system.device(),
                 texture_binding,
                 sampler_binding,
                 bind_group_layout,
-                &quantity_texture,
+                &quantity_texture.regular,
                 &label,
             ));
 
-        self.quantity_textures[idx] = Some(quantity_texture);
+        self.quantity_textures[quantity.index()] = Some(quantity_texture);
     }
 
     fn create_render_attachment_texture_bind_group_layout(
@@ -373,8 +477,14 @@ impl RenderAttachmentTextureManager {
 
 impl RenderAttachmentTexture {
     /// Creates a new render attachment texture of the same size as the
-    /// rendering surface in `core_system` and with the given texture format.
-    pub fn new(core_system: &CoreRenderingSystem, format: wgpu::TextureFormat) -> Self {
+    /// rendering surface in `core_system` and with the given texture format and
+    /// sample count.
+    pub fn new(
+        core_system: &CoreRenderingSystem,
+        quantity: RenderAttachmentQuantity,
+        format: wgpu::TextureFormat,
+        sample_count: u32,
+    ) -> Self {
         let device = core_system.device();
         let surface_config = core_system.surface_config();
 
@@ -388,6 +498,7 @@ impl RenderAttachmentTexture {
             device,
             texture_size,
             format,
+            sample_count,
             &format!("Render attachment texture (format = {:?})", format),
         );
 
@@ -407,11 +518,17 @@ impl RenderAttachmentTexture {
         let sampler = Self::create_sampler(device);
 
         Self {
+            quantity,
             texture,
             attachment_view,
             binding_view,
             sampler,
         }
+    }
+
+    /// Returns the render attachment quantity.
+    pub fn quantity(&self) -> RenderAttachmentQuantity {
+        self.quantity
     }
 
     /// Returns the render attachment texture.
@@ -495,12 +612,13 @@ impl RenderAttachmentTexture {
         device: &wgpu::Device,
         texture_size: wgpu::Extent3d,
         format: wgpu::TextureFormat,
+        sample_count: u32,
         label: &str,
     ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
             size: texture_size,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count,
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
@@ -523,24 +641,74 @@ impl RenderAttachmentTexture {
     }
 }
 
-impl RenderAttachmentQuantity {
-    /// Returns the enum variant corresponding to the given integer, or [`None`]
-    /// if the integer has no corresponding enum variant.
-    pub fn from_u8(number: u8) -> Option<Self> {
-        match number {
-            0 => Some(Self::Depth),
-            1 => Some(Self::Position),
-            2 => Some(Self::NormalVector),
-            3 => Some(Self::TextureCoords),
-            4 => Some(Self::Color),
-            5 => Some(Self::Occlusion),
-            _ => None,
-        }
+impl<T> MaybeWithMultisampling<T> {
+    pub fn multisampled_if_available(&self) -> &T {
+        self.multisampled.as_ref().unwrap_or(&self.regular)
     }
 }
 
-impl Display for RenderAttachmentQuantity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", RENDER_ATTACHMENT_NAMES[*self as usize])
+impl MaybeWithMultisampling<RenderAttachmentTexture> {
+    fn new(
+        core_system: &CoreRenderingSystem,
+        quantity: RenderAttachmentQuantity,
+        format: wgpu::TextureFormat,
+        sample_count: u32,
+    ) -> Self {
+        let regular = RenderAttachmentTexture::new(core_system, quantity, format, 1);
+
+        let multisampled = if sample_count > 1 && quantity.supports_multisampling() {
+            Some(RenderAttachmentTexture::new(
+                core_system,
+                quantity,
+                format,
+                sample_count,
+            ))
+        } else {
+            None
+        };
+
+        Self {
+            regular,
+            multisampled,
+        }
+    }
+
+    /// Returns the render attachment quantity.
+    pub fn quantity(&self) -> RenderAttachmentQuantity {
+        self.regular.quantity()
+    }
+
+    /// Returns the render attachment texture format.
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.regular.texture().format()
+    }
+
+    /// Returns the sample count for the multisampled texture, or 1 if there is
+    /// no multisampled texture.
+    pub fn multisampling_sample_count(&self) -> u32 {
+        self.multisampled
+            .as_ref()
+            .map_or(1, |texture| texture.texture().sample_count())
+    }
+
+    /// Returns the appropriate `view` and `resolve_target` for
+    /// [`wgpu::RenderPassColorAttachment`] based on whether the multisampled
+    /// texture should be resolved into the regular texture.
+    pub fn view_and_resolve_target(
+        &self,
+        should_resolve: bool,
+    ) -> (&wgpu::TextureView, Option<&wgpu::TextureView>) {
+        if let Some(multisampled) = &self.multisampled {
+            (
+                multisampled.attachment_view(),
+                if should_resolve {
+                    Some(self.regular.attachment_view())
+                } else {
+                    None
+                },
+            )
+        } else {
+            (self.regular.attachment_view(), None)
+        }
     }
 }

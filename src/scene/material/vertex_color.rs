@@ -36,10 +36,10 @@ impl VertexColorMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::SURFACE,
             None,
             Vec::new(),
-            RenderPassHints::RENDERS_TO_SURFACE,
+            RenderPassHints::empty(),
             MaterialShaderInput::VertexColor,
         );
         material_library.add_material_specification(*VERTEX_COLOR_MATERIAL_ID, specification);

@@ -142,7 +142,8 @@ impl CoreRenderingSystem {
                 &wgpu::DeviceDescriptor {
                     required_features: wgpu::Features::PUSH_CONSTANTS
                         | wgpu::Features::POLYGON_MODE_LINE
-                        | wgpu::Features::DEPTH32FLOAT_STENCIL8,
+                        | wgpu::Features::DEPTH32FLOAT_STENCIL8
+                        | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                     required_limits: wgpu::Limits {
                         max_bind_groups: 7,
                         max_push_constant_size: 128,
@@ -165,7 +166,9 @@ impl CoreRenderingSystem {
     ) -> wgpu::SurfaceConfiguration {
         let caps = surface.get_capabilities(adapter);
         wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST,
             format: caps.formats[0],
             width: u32::from(width),
             height: u32::from(height),

@@ -295,10 +295,10 @@ fn execute_material_setup(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
                 input_render_attachment_quantities,
-                RenderAttachmentQuantitySet::empty(),
+                RenderAttachmentQuantitySet::SURFACE,
                 None,
                 vec![feature_type_id],
-                RenderPassHints::RENDERS_TO_SURFACE | RenderPassHints::AFFECTED_BY_LIGHT,
+                RenderPassHints::AFFECTED_BY_LIGHT,
                 MaterialShaderInput::BlinnPhong(texture_shader_input),
             )
         });

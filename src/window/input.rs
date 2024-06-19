@@ -50,6 +50,7 @@ pub enum KeyboardInputAction {
     ToggleTriangleFill,
     ToggleShadowMapping,
     ToggleAmbientOcclusion,
+    CycleMSAA,
     IncrementSimulationSubstepCount,
     DecrementSimulationSubstepCount,
     IncreaseSimulationSpeed,
@@ -185,6 +186,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::CycleMSAA => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().cycle_msaa();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::IncrementSimulationSubstepCount => {
                         if state == &ElementState::Released {
                             world.simulator().write().unwrap().increment_n_substeps();
@@ -298,6 +305,7 @@ impl Default for KeyActionMap {
             ToggleTriangleFill => KeyF,
             ToggleShadowMapping => KeyI,
             ToggleAmbientOcclusion => KeyO,
+            CycleMSAA => KeyU,
             IncrementSimulationSubstepCount => KeyM,
             DecrementSimulationSubstepCount => KeyN,
             IncreaseSimulationSpeed => Period,
