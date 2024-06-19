@@ -29,15 +29,11 @@ pub const AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS: RenderPassHints =
 
 /// Render pass hints for the ambient occlusion application material.
 pub const AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS: RenderPassHints =
-    RenderPassHints::NO_DEPTH_PREPASS
-        .union(RenderPassHints::NO_CAMERA)
-        .union(RenderPassHints::RENDERS_TO_SURFACE);
+    RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA);
 
 /// Render pass hints for the ambient occlusion disabled material.
 pub const AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS: RenderPassHints =
-    RenderPassHints::NO_DEPTH_PREPASS
-        .union(RenderPassHints::NO_CAMERA)
-        .union(RenderPassHints::RENDERS_TO_SURFACE);
+    RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA);
 
 lazy_static! {
     /// ID of the ambient occlusion computation material in the
@@ -113,9 +109,9 @@ pub fn register_ambient_occlusion_materials(
             vertex_attribute_requirements_for_mesh,
             vertex_attribute_requirements_for_shader,
             RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::COLOR
+                | RenderAttachmentQuantitySet::AMBIENT_COLOR
                 | RenderAttachmentQuantitySet::OCCLUSION,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::SURFACE,
             None,
             Vec::new(),
             AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
@@ -128,8 +124,8 @@ pub fn register_ambient_occlusion_materials(
         MaterialSpecification::new(
             vertex_attribute_requirements_for_mesh,
             vertex_attribute_requirements_for_shader,
-            RenderAttachmentQuantitySet::COLOR,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::AMBIENT_COLOR,
+            RenderAttachmentQuantitySet::SURFACE,
             None,
             Vec::new(),
             AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,

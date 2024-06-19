@@ -56,10 +56,10 @@ pub fn add_skybox_material_component_for_entity(
                         vertex_attribute_requirements_for_mesh,
                         vertex_attribute_requirements_for_shader,
                         RenderAttachmentQuantitySet::empty(),
-                        RenderAttachmentQuantitySet::empty(),
+                        RenderAttachmentQuantitySet::SURFACE,
                         None,
                         Vec::new(),
-                        RenderPassHints::NO_DEPTH_PREPASS | RenderPassHints::RENDERS_TO_SURFACE,
+                        RenderPassHints::NO_DEPTH_PREPASS,
                         MaterialShaderInput::Skybox(texture_shader_input),
                     )
                 });

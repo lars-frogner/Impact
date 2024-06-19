@@ -64,10 +64,10 @@ impl FixedColorMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::SURFACE,
             None,
             vec![Self::FEATURE_TYPE_ID],
-            RenderPassHints::RENDERS_TO_SURFACE,
+            RenderPassHints::empty(),
             MaterialShaderInput::Fixed(None),
         );
         material_library.add_material_specification(*FIXED_COLOR_MATERIAL_ID, specification);
@@ -126,10 +126,10 @@ impl FixedTextureMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::SURFACE,
             None,
             Vec::new(),
-            RenderPassHints::RENDERS_TO_SURFACE,
+            RenderPassHints::empty(),
             Self::MATERIAL_SHADER_INPUT,
         );
         material_library.add_material_specification(*FIXED_TEXTURE_MATERIAL_ID, specification);

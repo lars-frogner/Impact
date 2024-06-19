@@ -41,8 +41,6 @@ pub use texture::{
     CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
     RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,
     Texture, TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureLookupTable,
-    RENDER_ATTACHMENT_BINDINGS, RENDER_ATTACHMENT_CLEAR_COLORS, RENDER_ATTACHMENT_FLAGS,
-    RENDER_ATTACHMENT_FORMATS,
 };
 
 use self::{render_pass::RenderPassOutcome, resource::RenderResourceManager};
@@ -90,6 +88,8 @@ pub struct RenderingConfig {
     pub shadow_mapping_enabled: bool,
     /// Whether ambient occlusion is enabled.
     pub ambient_occlusion_enabled: bool,
+    /// The number of samples to use for multisampling anti-aliasing.
+    pub multisampling_sample_count: u32,
 }
 
 /// Helper for capturing screenshots and related textures.
@@ -109,15 +109,8 @@ impl RenderingSystem {
     pub fn new(core_system: CoreRenderingSystem, mut assets: Assets) -> Result<Self> {
         let config = RenderingConfig::default();
 
-        let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
-            &core_system,
-            RenderAttachmentQuantitySet::DEPTH
-                | RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::TEXTURE_COORDS
-                | RenderAttachmentQuantitySet::COLOR
-                | RenderAttachmentQuantitySet::OCCLUSION,
-        );
+        let render_attachment_texture_manager =
+            RenderAttachmentTextureManager::new(&core_system, config.multisampling_sample_count);
 
         assets.load_default_lookup_table_textures(&core_system)?;
 
@@ -126,7 +119,7 @@ impl RenderingSystem {
             config,
             assets: RwLock::new(assets),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            render_pass_manager: RwLock::new(RenderPassManager::new(wgpu::Color::BLACK)),
+            render_pass_manager: RwLock::new(RenderPassManager::new()),
             render_attachment_texture_manager,
         })
     }
@@ -188,7 +181,7 @@ impl RenderingSystem {
     pub fn resize_surface(&mut self, new_size: (u32, u32)) {
         self.core_system.resize_surface(new_size);
         self.render_attachment_texture_manager
-            .recreate_textures(&self.core_system);
+            .recreate_textures(&self.core_system, self.config.multisampling_sample_count);
     }
 
     /// Toggles culling of triangle back faces in all render passes.
@@ -232,6 +225,14 @@ impl RenderingSystem {
         self.config.ambient_occlusion_enabled = !self.config.ambient_occlusion_enabled;
     }
 
+    pub fn cycle_msaa(&mut self) {
+        let sample_count = match self.config.multisampling_sample_count {
+            1 => 4,
+            _ => 1,
+        };
+        self.set_multisampling_sample_count(sample_count);
+    }
+
     /// Marks the render resources as being out of sync with the source data.
     pub fn declare_render_resources_desynchronized(&self) {
         self.render_resource_manager
@@ -247,8 +248,6 @@ impl RenderingSystem {
     }
 
     fn render_surface(&self) -> Result<wgpu::SurfaceTexture> {
-        let surface_texture = self.core_system.surface().get_current_texture()?;
-
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
         let mut n_recorded_passes = 0;
@@ -259,7 +258,6 @@ impl RenderingSystem {
                 let outcome = render_pass_recorder.record_render_pass(
                     &self.core_system,
                     render_resources_guard.synchronized(),
-                    &surface_texture,
                     &self.render_attachment_texture_manager,
                     &mut command_encoder,
                 )?;
@@ -268,6 +266,10 @@ impl RenderingSystem {
                 }
             }
         } // <- Lock on `self.render_resource_manager` is released here
+
+        let surface_texture = self.core_system.surface().get_current_texture()?;
+
+        self.copy_surface_attachment_to_surface(&mut command_encoder, &surface_texture);
 
         log::info!("Performing {} render passes", n_recorded_passes);
 
@@ -290,6 +292,50 @@ impl RenderingSystem {
             label: Some("Render encoder"),
         })
     }
+
+    fn set_multisampling_sample_count(&mut self, sample_count: u32) {
+        if self.config.multisampling_sample_count != sample_count {
+            log::info!("MSAA sample count changed to {}", sample_count);
+
+            self.config.multisampling_sample_count = sample_count;
+
+            self.render_attachment_texture_manager
+                .recreate_textures(&self.core_system, sample_count);
+
+            // Remove all render pass recorders so that they will be recreated with
+            // the updated configuration
+            self.render_pass_manager
+                .write()
+                .unwrap()
+                .clear_model_render_pass_recorders();
+        }
+    }
+
+    fn copy_surface_attachment_to_surface(
+        &self,
+        command_encoder: &mut wgpu::CommandEncoder,
+        surface_texture: &wgpu::SurfaceTexture,
+    ) {
+        command_encoder.copy_texture_to_texture(
+            wgpu::ImageCopyTexture {
+                texture: self
+                    .render_attachment_texture_manager
+                    .render_attachment_texture(RenderAttachmentQuantity::Surface)
+                    .regular
+                    .texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::ImageCopyTexture {
+                texture: &surface_texture.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            surface_texture.texture.size(),
+        );
+    }
 }
 
 impl Default for RenderingConfig {
@@ -301,6 +347,7 @@ impl Default for RenderingConfig {
             unidirectional_light_shadow_map_resolution: 1024,
             shadow_mapping_enabled: true,
             ambient_occlusion_enabled: true,
+            multisampling_sample_count: 1,
         }
     }
 }
@@ -399,7 +446,7 @@ impl ScreenCapturer {
             .render_attachment_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let quantity = RenderAttachmentQuantity::from_u8(
+            let quantity = RenderAttachmentQuantity::from_index(
                 self.render_attachment_quantity.load(Ordering::Acquire),
             )
             .unwrap();

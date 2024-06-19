@@ -3,7 +3,6 @@
 mod tasks;
 
 pub use tasks::SyncRenderPasses;
-use wgpu::PipelineCompilationOptions;
 
 use crate::{
     geometry::{CubemapFace, VertexAttributeSet},
@@ -14,8 +13,7 @@ use crate::{
         CascadeIdx, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
         MaterialPropertyTextureManager, MaterialRenderResourceManager, MaterialShaderInput,
         MeshShaderInput, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
-        RenderAttachmentTextureManager, RenderingConfig, Shader, RENDER_ATTACHMENT_CLEAR_COLORS,
-        RENDER_ATTACHMENT_FLAGS, RENDER_ATTACHMENT_FORMATS,
+        RenderAttachmentTextureManager, RenderingConfig, Shader,
     },
     scene::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
@@ -29,16 +27,14 @@ use crate::{
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use impact_utils::KeyIndexMapper;
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    iter,
-};
+use std::collections::{hash_map::Entry, HashMap};
+use wgpu::PipelineCompilationOptions;
 
 /// Manager and owner of render passes.
 #[derive(Debug)]
 pub struct RenderPassManager {
-    /// Pass for clearing the rendering surface and depth map.
-    clearing_pass_recorder: RenderPassRecorder,
+    /// Passes for clearing the render attachments.
+    clearing_pass_recorders: Vec<RenderPassRecorder>,
     /// Passes for filling the depth map with the depths of the models that do
     /// not depend on light sources.
     non_light_shaded_model_depth_prepasses: Vec<RenderPassRecorder>,
@@ -60,8 +56,8 @@ pub struct RenderPassManager {
 /// Holds the information describing a specific render pass.
 #[derive(Clone, Debug)]
 pub struct RenderPassSpecification {
-    /// Color that will be written to the rendering surface when clearing it.
-    clear_color: Option<wgpu::Color>,
+    /// Which non-depth render attachments to clear in this pass.
+    color_attachments_to_clear: RenderAttachmentQuantitySet,
     /// ID of the model type to render, or [`None`] if the pass does not render
     /// a model (e.g. a clearing pass).
     model_id: Option<ModelID>,
@@ -88,6 +84,9 @@ pub struct RenderPassSpecification {
 pub struct RenderPassRecorder {
     specification: RenderPassSpecification,
     vertex_attribute_requirements: VertexAttributeSet,
+    input_render_attachment_quantities: RenderAttachmentQuantitySet,
+    output_render_attachment_quantities: RenderAttachmentQuantitySet,
+    attachments_to_resolve: RenderAttachmentQuantitySet,
     pipeline: Option<wgpu::RenderPipeline>,
     disabled: bool,
 }
@@ -105,13 +104,11 @@ bitflags! {
     pub struct RenderPassHints: u8 {
         /// The appearance of the rendered material is affected by light
         /// sources.
-        const AFFECTED_BY_LIGHT = 0b00000001;
+        const AFFECTED_BY_LIGHT = 1 << 0;
         /// No depth prepass should be performed for the model.
-        const NO_DEPTH_PREPASS = 0b00000010;
-        /// The render pass renders to the surface color attachment.
-        const RENDERS_TO_SURFACE = 0b00000100;
+        const NO_DEPTH_PREPASS  = 1 << 1;
         /// The render pass does not make use of a camera.
-        const NO_CAMERA = 0b00001000;
+        const NO_CAMERA         = 1 << 2;
     }
 }
 
@@ -178,14 +175,13 @@ struct BindGroupShaderInput<'a> {
 }
 
 impl RenderPassManager {
-    /// Creates a new manager with a pass that clears the surface with the given
-    /// color.
-    pub fn new(clear_color: wgpu::Color) -> Self {
+    /// Creates a new manager with no render passes.
+    pub fn new() -> Self {
         Self {
-            clearing_pass_recorder: RenderPassRecorder::surface_clearing_pass(clear_color),
+            clearing_pass_recorders: Vec::with_capacity(2),
             non_light_shaded_model_depth_prepasses: Vec::new(),
             light_shaded_model_shading_prepasses: Vec::new(),
-            ambient_occlusion_passes: Vec::with_capacity(2),
+            ambient_occlusion_passes: Vec::with_capacity(3),
             non_light_shaded_model_shading_passes: Vec::new(),
             light_shaded_model_shading_passes: HashMap::new(),
             non_light_shaded_model_index_mapper: KeyIndexMapper::new(),
@@ -195,7 +191,8 @@ impl RenderPassManager {
 
     /// Returns an iterator over all render passes in the appropriate order.
     pub fn recorders(&self) -> impl Iterator<Item = &RenderPassRecorder> {
-        iter::once(&self.clearing_pass_recorder)
+        self.clearing_pass_recorders
+            .iter()
             .chain(self.non_light_shaded_model_depth_prepasses.iter())
             .chain(self.light_shaded_model_shading_prepasses.iter())
             .chain(self.ambient_occlusion_passes.iter())
@@ -213,10 +210,31 @@ impl RenderPassManager {
             )
     }
 
+    fn recorders_mut(&mut self) -> impl Iterator<Item = &mut RenderPassRecorder> {
+        self.clearing_pass_recorders
+            .iter_mut()
+            .chain(self.non_light_shaded_model_depth_prepasses.iter_mut())
+            .chain(self.light_shaded_model_shading_prepasses.iter_mut())
+            .chain(self.ambient_occlusion_passes.iter_mut())
+            .chain(self.non_light_shaded_model_shading_passes.iter_mut())
+            .chain(
+                self.light_shaded_model_shading_passes
+                    .values_mut()
+                    .flat_map(|passes| {
+                        passes
+                            .shadow_map_clearing_passes
+                            .iter_mut()
+                            .chain(passes.shadow_map_update_passes.iter_mut().flatten())
+                            .chain(passes.shading_passes.iter_mut())
+                    }),
+            )
+    }
+
     /// Deletes all the render passes except for the initial clearing pass.
     pub fn clear_model_render_pass_recorders(&mut self) {
         self.non_light_shaded_model_depth_prepasses.clear();
         self.light_shaded_model_shading_prepasses.clear();
+        self.ambient_occlusion_passes.clear();
         self.non_light_shaded_model_shading_passes.clear();
         self.light_shaded_model_shading_passes.clear();
         self.non_light_shaded_model_index_mapper.clear();
@@ -237,6 +255,8 @@ impl RenderPassManager {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         shader_manager: &mut ShaderManager,
     ) -> Result<()> {
+        self.sync_clearing_passes(config);
+
         let light_buffer_manager = render_resources.get_light_buffer_manager();
 
         let ambient_light_ids =
@@ -718,7 +738,103 @@ impl RenderPassManager {
             }
         }
 
+        self.update_render_attachment_resolve_flags();
+
         Ok(())
+    }
+
+    fn sync_clearing_passes(&mut self, config: &RenderingConfig) {
+        self.clearing_pass_recorders.clear();
+
+        if config.multisampling_sample_count > 1 {
+            let non_multisampling_quantities =
+                RenderAttachmentQuantitySet::non_multisampling_quantities();
+            if !non_multisampling_quantities.is_empty() {
+                self.clearing_pass_recorders
+                    .push(RenderPassRecorder::clearing_pass(
+                        non_multisampling_quantities,
+                    ));
+            }
+
+            let multisampling_quantities = RenderAttachmentQuantitySet::multisampling_quantities();
+            if !multisampling_quantities.is_empty() {
+                self.clearing_pass_recorders
+                    .push(RenderPassRecorder::clearing_pass(multisampling_quantities));
+            }
+        } else {
+            self.clearing_pass_recorders
+                .push(RenderPassRecorder::clearing_pass(
+                    RenderAttachmentQuantitySet::all(),
+                ));
+        }
+    }
+
+    fn update_render_attachment_resolve_flags(&mut self) {
+        let mut last_indices_of_output_attachments =
+            [Option::<usize>::None; RenderAttachmentQuantity::count()];
+        let mut first_indices_of_input_attachments =
+            [Option::<usize>::None; RenderAttachmentQuantity::count()];
+
+        let mut recorders = Vec::with_capacity(64);
+
+        for (idx, recorder) in self.recorders_mut().enumerate() {
+            recorder.attachments_to_resolve = RenderAttachmentQuantitySet::empty();
+
+            if !recorder.disabled() {
+                for quantity in RenderAttachmentQuantity::all() {
+                    if recorder
+                        .output_render_attachment_quantities
+                        .contains(quantity.flag())
+                    {
+                        last_indices_of_output_attachments[quantity.index()] = Some(idx);
+                    }
+
+                    if recorder
+                        .input_render_attachment_quantities
+                        .contains(quantity.flag())
+                    {
+                        let first_idx = &mut first_indices_of_input_attachments[quantity.index()];
+                        if first_idx.is_none() {
+                            *first_idx = Some(idx);
+                        }
+                    }
+                }
+            }
+
+            recorders.push(recorder);
+        }
+
+        for quantity in RenderAttachmentQuantity::all() {
+            match (
+                last_indices_of_output_attachments[quantity.index()],
+                first_indices_of_input_attachments[quantity.index()],
+            ) {
+                (Some(last_idx), Some(first_idx)) if first_idx <= last_idx => {
+                    panic!(
+                        "{} render attachment is used as input before it is last used as output \
+                        (first used as input in render pass {} ({}), \
+                        last used as output in render pass {} ({}))",
+                        quantity,
+                        first_idx,
+                        &recorders[first_idx].specification.label,
+                        last_idx,
+                        &recorders[last_idx].specification.label
+                    );
+                }
+                (Some(last_idx), _) => {
+                    // Make sure the last render pass to use this attachment as
+                    // output resolves it
+                    recorders[last_idx].attachments_to_resolve |= quantity.flag();
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+impl Default for RenderPassManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -729,20 +845,20 @@ impl RenderPassSpecification {
     const CLEAR_STENCIL_VALUE: u32 = 0;
     const REFERENCE_STENCIL_VALUE: u32 = 1;
 
-    /// Creates the specification for the render pass that will clear the
-    /// rendering surface with the given color and clear the depth map.
-    fn surface_clearing_pass(clear_color: wgpu::Color) -> Self {
+    /// Creates the specification for the render pass that will clear the given
+    /// render attachments.
+    fn clearing_pass(render_attachment_quantities_to_clear: RenderAttachmentQuantitySet) -> Self {
         Self {
-            clear_color: Some(clear_color),
-            model_id: None,
-            explicit_mesh_id: None,
-            explicit_material_id: None,
-            use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::Clear,
-            light: None,
-            shadow_map_usage: ShadowMapUsage::None,
-            hints: RenderPassHints::empty(),
-            label: "Surface clearing pass".to_string(),
+            color_attachments_to_clear: render_attachment_quantities_to_clear.color_only(),
+            depth_map_usage: if render_attachment_quantities_to_clear
+                .contains(RenderAttachmentQuantitySet::DEPTH)
+            {
+                DepthMapUsage::Clear
+            } else {
+                DepthMapUsage::None
+            },
+            label: "Clearing pass".to_string(),
+            ..Default::default()
         }
     }
 
@@ -750,16 +866,11 @@ impl RenderPassSpecification {
     /// map with the depths of the model with the given ID.
     fn depth_prepass(model_id: ModelID, hints: RenderPassHints) -> Self {
         Self {
-            clear_color: None,
             model_id: Some(model_id),
-            explicit_mesh_id: None,
-            explicit_material_id: None,
-            use_prepass_material: false,
             depth_map_usage: DepthMapUsage::Prepass,
-            light: None,
-            shadow_map_usage: ShadowMapUsage::None,
             hints,
             label: format!("Depth prepass for model {}", model_id),
+            ..Default::default()
         }
     }
 
@@ -779,16 +890,13 @@ impl RenderPassSpecification {
             format!("Shading prepass for model {}", model_id)
         };
         Self {
-            clear_color: None,
             model_id: Some(model_id),
-            explicit_mesh_id: None,
-            explicit_material_id: None,
             use_prepass_material: true,
             depth_map_usage: DepthMapUsage::use_readwrite(),
             light,
-            shadow_map_usage: ShadowMapUsage::None,
             hints,
             label,
+            ..Default::default()
         }
     }
 
@@ -809,16 +917,12 @@ impl RenderPassSpecification {
         };
 
         Self {
-            clear_color: None,
             model_id: Some(model_id),
-            explicit_mesh_id: None,
-            explicit_material_id: None,
-            use_prepass_material: false,
             depth_map_usage: DepthMapUsage::use_readonly(),
             light,
-            shadow_map_usage: ShadowMapUsage::None,
             hints,
             label,
+            ..Default::default()
         }
     }
 
@@ -830,11 +934,7 @@ impl RenderPassSpecification {
         hints: RenderPassHints,
     ) -> Self {
         Self {
-            clear_color: None,
             model_id: Some(model_id),
-            explicit_mesh_id: None,
-            explicit_material_id: None,
-            use_prepass_material: false,
             depth_map_usage: DepthMapUsage::use_readonly(),
             light: Some(light),
             shadow_map_usage: ShadowMapUsage::Use,
@@ -843,6 +943,7 @@ impl RenderPassSpecification {
                 "Shading of model {} for light {} ({:?}) with shadow map",
                 model_id, light.light_id, light.light_type
             ),
+            ..Default::default()
         }
     }
 
@@ -850,16 +951,10 @@ impl RenderPassSpecification {
     /// shadow map.
     fn shadow_map_clearing_pass(shadow_map_id: ShadowMapIdentifier) -> Self {
         Self {
-            clear_color: None,
-            model_id: None,
-            explicit_mesh_id: None,
-            explicit_material_id: None,
-            use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::None,
-            light: None,
             shadow_map_usage: ShadowMapUsage::Clear(shadow_map_id),
             hints: RenderPassHints::empty(),
             label: format!("Shadow map clearing pass ({:?})", shadow_map_id),
+            ..Default::default()
         }
     }
 
@@ -873,12 +968,7 @@ impl RenderPassSpecification {
         hints: RenderPassHints,
     ) -> Self {
         Self {
-            clear_color: None,
             model_id: Some(model_id),
-            explicit_mesh_id: None,
-            explicit_material_id: None,
-            use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::None,
             light: Some(light),
             shadow_map_usage: ShadowMapUsage::Update(shadow_map_id),
             hints,
@@ -886,51 +976,40 @@ impl RenderPassSpecification {
                 "Shadow map update for model {} and light {} ({:?})",
                 model_id, light.light_id, shadow_map_id
             ),
+            ..Default::default()
         }
     }
 
     fn ambient_occlusion_computation_pass() -> Self {
         Self {
-            clear_color: None,
-            model_id: None,
             explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
             explicit_material_id: Some(*AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID),
-            use_prepass_material: false,
             depth_map_usage: DepthMapUsage::StencilTest,
-            light: None,
-            shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS,
             label: "Ambient occlusion computation pass".to_string(),
+            ..Default::default()
         }
     }
 
     fn ambient_occlusion_application_pass() -> Self {
         Self {
-            clear_color: None,
-            model_id: None,
             explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
             explicit_material_id: Some(*AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID),
-            use_prepass_material: false,
             depth_map_usage: DepthMapUsage::StencilTest,
-            light: None,
-            shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
             label: "Ambient occlusion application pass".to_string(),
+            ..Default::default()
         }
     }
 
     fn ambient_occlusion_disabled_pass() -> Self {
         Self {
-            clear_color: None,
-            model_id: None,
             explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
             explicit_material_id: Some(*AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID),
-            use_prepass_material: false,
             depth_map_usage: DepthMapUsage::StencilTest,
-            light: None,
-            shadow_map_usage: ShadowMapUsage::None,
             hints: AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,
             label: "Ambient occlusion disabled pass".to_string(),
+            ..Default::default()
         }
     }
 
@@ -1071,7 +1150,7 @@ impl RenderPassSpecification {
         Option<&'a MeshShaderInput>,
         Vec<&'a InstanceFeatureShaderInput>,
     )> {
-        let mut layouts = Vec::with_capacity(6);
+        let mut layouts = Vec::with_capacity(8);
         let mut mesh_shader_input = None;
         let mut instance_feature_shader_inputs = Vec::with_capacity(2);
 
@@ -1139,7 +1218,7 @@ impl RenderPassSpecification {
         RenderAttachmentQuantitySet,
         RenderAttachmentQuantitySet,
     )> {
-        let mut layouts = Vec::with_capacity(5);
+        let mut layouts = Vec::with_capacity(8);
 
         let mut shader_input = BindGroupShaderInput {
             camera: None,
@@ -1197,7 +1276,7 @@ impl RenderPassSpecification {
                     render_attachment_texture_manager
                         .request_render_attachment_texture_bind_group_layouts(
                             input_render_attachment_quantities,
-                        )?,
+                        ),
                 );
             }
 
@@ -1237,7 +1316,7 @@ impl RenderPassSpecification {
                         render_attachment_texture_manager
                             .request_render_attachment_texture_bind_group_layouts(
                                 input_render_attachment_quantities,
-                            )?,
+                            ),
                     );
                 }
 
@@ -1282,7 +1361,7 @@ impl RenderPassSpecification {
         render_resources: &'a SynchronizedRenderResources,
         render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
     ) -> Result<(Vec<&'a wgpu::BindGroup>, RenderAttachmentQuantitySet)> {
-        let mut bind_groups = Vec::with_capacity(4);
+        let mut bind_groups = Vec::with_capacity(8);
 
         let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
@@ -1328,7 +1407,7 @@ impl RenderPassSpecification {
                     render_attachment_texture_manager
                         .request_render_attachment_texture_bind_groups(
                             input_render_attachment_quantities,
-                        )?,
+                        ),
                 );
             }
         } else if let Some(model_id) = self.model_id {
@@ -1363,7 +1442,7 @@ impl RenderPassSpecification {
                         render_attachment_texture_manager
                             .request_render_attachment_texture_bind_groups(
                                 input_render_attachment_quantities,
-                            )?,
+                            ),
                     );
                 }
 
@@ -1405,27 +1484,34 @@ impl RenderPassSpecification {
         }
     }
 
-    fn determine_color_blend_state(&self) -> wgpu::BlendState {
-        if !self.use_prepass_material {
-            // Since we determine contributions from each light in
-            // separate render passes, we need to add up the color
-            // contributions. We simply ignore alpha.
-            wgpu::BlendState {
-                color: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::One,
-                    dst_factor: wgpu::BlendFactor::One,
-                    operation: wgpu::BlendOperation::Add,
-                },
-                alpha: wgpu::BlendComponent::default(),
+    fn determine_color_blend_state(
+        &self,
+        quantity: RenderAttachmentQuantity,
+    ) -> Option<wgpu::BlendState> {
+        if quantity == RenderAttachmentQuantity::Surface {
+            if !self.use_prepass_material {
+                // Since we determine contributions from each light in
+                // separate render passes, we need to add up the color
+                // contributions. We simply ignore alpha.
+                Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent::default(),
+                })
+            } else {
+                Some(wgpu::BlendState::REPLACE)
             }
         } else {
-            wgpu::BlendState::REPLACE
+            None
         }
     }
 
     fn determine_color_target_states(
         &self,
-        core_system: &CoreRenderingSystem,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Vec<Option<wgpu::ColorTargetState>> {
         if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_clear_or_update() {
@@ -1433,31 +1519,18 @@ impl RenderPassSpecification {
             // only work with depths, so we don't need a color target
             Vec::new()
         } else {
-            let mut color_target_states = Vec::with_capacity(4);
-
-            if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
-                color_target_states.push(Some(wgpu::ColorTargetState {
-                    format: core_system.surface_config().format,
-                    blend: Some(self.determine_color_blend_state()),
-                    write_mask: wgpu::ColorWrites::COLOR,
-                }));
-            }
+            let mut color_target_states = Vec::with_capacity(RenderAttachmentQuantity::count());
 
             if !output_render_attachment_quantities.is_empty() {
                 color_target_states.extend(
-                    RENDER_ATTACHMENT_FLAGS
-                        .iter()
-                        .zip(RENDER_ATTACHMENT_FORMATS.iter())
-                        .filter_map(|(&quantity_flag, &format)| {
-                            if output_render_attachment_quantities.contains(quantity_flag) {
-                                Some(Some(wgpu::ColorTargetState {
-                                    format,
-                                    blend: None,
-                                    write_mask: wgpu::ColorWrites::COLOR,
-                                }))
-                            } else {
-                                None
-                            }
+                    render_attachment_texture_manager
+                        .request_render_attachment_textures(output_render_attachment_quantities)
+                        .map(|texture| {
+                            Some(wgpu::ColorTargetState {
+                                format: texture.format(),
+                                blend: self.determine_color_blend_state(texture.quantity()),
+                                write_mask: wgpu::ColorWrites::COLOR,
+                            })
                         }),
                 );
             }
@@ -1541,7 +1614,7 @@ impl RenderPassSpecification {
             };
 
             let depth_stencil_state = wgpu::DepthStencilState {
-                format: RENDER_ATTACHMENT_FORMATS[RenderAttachmentQuantity::Depth as usize],
+                format: RenderAttachmentQuantity::depth_texture_format(),
                 depth_write_enabled,
                 depth_compare,
                 stencil,
@@ -1554,64 +1627,79 @@ impl RenderPassSpecification {
         }
     }
 
+    fn determine_multisampling_sample_count(
+        &self,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        mut output_render_attachment_quantities: RenderAttachmentQuantitySet,
+    ) -> u32 {
+        if self.depth_map_usage.will_update() {
+            output_render_attachment_quantities |= RenderAttachmentQuantitySet::DEPTH;
+        }
+
+        let mut sample_count = None;
+
+        if output_render_attachment_quantities.is_empty() {
+            1
+        } else {
+            for texture in render_attachment_texture_manager
+                .request_render_attachment_textures(output_render_attachment_quantities)
+            {
+                match sample_count {
+                    Some(count) => {
+                        if count != texture.multisampling_sample_count() {
+                            panic!("found multisampling and non-multisampling output render attachments in the same render pass");
+                        }
+                    }
+                    None => {
+                        sample_count = Some(texture.multisampling_sample_count());
+                    }
+                }
+            }
+            sample_count.unwrap_or(1)
+        }
+    }
+
     fn create_color_attachments<'a, 'b: 'a>(
         &'a self,
-        surface_texture_view: &'b wgpu::TextureView,
         render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
-    ) -> Result<Vec<Option<wgpu::RenderPassColorAttachment<'_>>>> {
+        attachments_to_resolve: RenderAttachmentQuantitySet,
+    ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
         if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_clear_or_update() {
             // For pure depth prepasses and shadow map clearing or updates we
             // only work with depths, so we don't need any color attachments
-            Ok(Vec::new())
+            Vec::new()
         } else {
-            let (surface_load_operations, other_load_operations, render_attachment_quantities) =
-                if let Some(clear_color) = self.clear_color {
-                    // If we have a clear color, we clear both the surface
-                    // texture and any available render attachment textures
-                    (
-                        wgpu::LoadOp::Clear(clear_color),
-                        RENDER_ATTACHMENT_CLEAR_COLORS
-                            .iter()
-                            .map(|clear_color| wgpu::LoadOp::Clear(*clear_color))
-                            .collect(),
-                        render_attachment_texture_manager.available_color_quantities(),
-                    )
-                } else {
-                    // Otherwise, we use the surface texture as well as the
-                    // textures for all the specified quantities as render
-                    // attachments
-                    (
-                        wgpu::LoadOp::Load,
-                        vec![wgpu::LoadOp::Load; RENDER_ATTACHMENT_CLEAR_COLORS.len()],
-                        output_render_attachment_quantities,
-                    )
-                };
+            let mut color_attachments = Vec::with_capacity(RenderAttachmentQuantity::count());
 
-            let mut color_attachments = Vec::with_capacity(4);
-
-            if self.hints.contains(RenderPassHints::RENDERS_TO_SURFACE) {
-                color_attachments.push(Some(wgpu::RenderPassColorAttachment {
-                    view: surface_texture_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: surface_load_operations,
-                        store: wgpu::StoreOp::Store,
-                    },
-                }));
-            }
+            let render_attachment_quantities = if self.color_attachments_to_clear.is_empty() {
+                output_render_attachment_quantities
+            } else {
+                self.color_attachments_to_clear
+            };
 
             if !render_attachment_quantities.is_empty() {
                 color_attachments.extend(
                     render_attachment_texture_manager
-                        .request_render_attachment_texture_views(render_attachment_quantities)?
-                        .zip(other_load_operations)
-                        .map(|(texture_view, load_operation)| {
+                        .request_render_attachment_textures(render_attachment_quantities)
+                        .map(|texture| {
+                            let should_resolve =
+                                attachments_to_resolve.contains(texture.quantity().flag());
+
+                            let (view, resolve_target) =
+                                texture.view_and_resolve_target(should_resolve);
+
+                            let load = if self.color_attachments_to_clear.is_empty() {
+                                wgpu::LoadOp::Load
+                            } else {
+                                wgpu::LoadOp::Clear(texture.quantity().clear_color())
+                            };
+
                             Some(wgpu::RenderPassColorAttachment {
-                                view: texture_view,
-                                resolve_target: None,
+                                view,
+                                resolve_target,
                                 ops: wgpu::Operations {
-                                    load: load_operation,
+                                    load,
                                     store: wgpu::StoreOp::Store,
                                 },
                             })
@@ -1619,7 +1707,7 @@ impl RenderPassSpecification {
                 );
             }
 
-            Ok(color_attachments)
+            color_attachments
         }
     }
 
@@ -1652,6 +1740,7 @@ impl RenderPassSpecification {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
+                    .multisampled_if_available()
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
@@ -1666,6 +1755,7 @@ impl RenderPassSpecification {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
+                    .multisampled_if_available()
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -1678,6 +1768,23 @@ impl RenderPassSpecification {
             })
         } else {
             None
+        }
+    }
+}
+
+impl Default for RenderPassSpecification {
+    fn default() -> Self {
+        Self {
+            color_attachments_to_clear: RenderAttachmentQuantitySet::empty(),
+            model_id: None,
+            explicit_mesh_id: None,
+            explicit_material_id: None,
+            use_prepass_material: false,
+            depth_map_usage: DepthMapUsage::None,
+            light: None,
+            shadow_map_usage: ShadowMapUsage::None,
+            hints: RenderPassHints::empty(),
+            label: String::new(),
         }
     }
 }
@@ -1697,7 +1804,12 @@ impl RenderPassRecorder {
         specification: RenderPassSpecification,
         disabled: bool,
     ) -> Result<Self> {
-        let (pipeline, vertex_attribute_requirements) = if specification.model_id.is_some()
+        let (
+            pipeline,
+            vertex_attribute_requirements,
+            input_render_attachment_quantities,
+            output_render_attachment_quantities,
+        ) = if specification.model_id.is_some()
             || specification.explicit_mesh_id.is_some()
             || specification.explicit_material_id.is_some()
         {
@@ -1739,12 +1851,19 @@ impl RenderPassRecorder {
                 &format!("{} render pipeline layout", &specification.label),
             );
 
-            let color_target_states = specification
-                .determine_color_target_states(core_system, output_render_attachment_quantities);
+            let color_target_states = specification.determine_color_target_states(
+                render_attachment_texture_manager,
+                output_render_attachment_quantities,
+            );
 
             let front_face = specification.determine_front_face();
 
             let depth_stencil_state = specification.determine_depth_stencil_state();
+
+            let multisampling_sample_count = specification.determine_multisampling_sample_count(
+                render_attachment_texture_manager,
+                output_render_attachment_quantities,
+            );
 
             let pipeline = Some(Self::create_render_pipeline(
                 core_system.device(),
@@ -1754,30 +1873,49 @@ impl RenderPassRecorder {
                 &color_target_states,
                 front_face,
                 depth_stencil_state,
-                1,
+                multisampling_sample_count,
                 config,
                 &format!("{} render pipeline", &specification.label),
             ));
 
-            (pipeline, vertex_attribute_requirements)
+            (
+                pipeline,
+                vertex_attribute_requirements,
+                input_render_attachment_quantities,
+                output_render_attachment_quantities,
+            )
         } else {
             // If we don't have vertices and a material we don't need a pipeline
-            (None, VertexAttributeSet::empty())
+            (
+                None,
+                VertexAttributeSet::empty(),
+                RenderAttachmentQuantitySet::empty(),
+                RenderAttachmentQuantitySet::empty(),
+            )
         };
 
         Ok(Self {
             specification,
             vertex_attribute_requirements,
+            input_render_attachment_quantities,
+            output_render_attachment_quantities,
+            attachments_to_resolve: RenderAttachmentQuantitySet::empty(),
             pipeline,
             disabled,
         })
     }
 
-    pub fn surface_clearing_pass(clear_color: wgpu::Color) -> Self {
-        let specification = RenderPassSpecification::surface_clearing_pass(clear_color);
+    pub fn clearing_pass(
+        render_attachment_quantities_to_clear: RenderAttachmentQuantitySet,
+    ) -> Self {
+        let specification =
+            RenderPassSpecification::clearing_pass(render_attachment_quantities_to_clear);
         Self {
             specification,
             vertex_attribute_requirements: VertexAttributeSet::empty(),
+            input_render_attachment_quantities: RenderAttachmentQuantitySet::empty(),
+            output_render_attachment_quantities: RenderAttachmentQuantitySet::empty(),
+            attachments_to_resolve: RenderAttachmentQuantitySet::empty(),
             pipeline: None,
             disabled: false,
         }
@@ -1792,7 +1930,6 @@ impl RenderPassRecorder {
         &self,
         core_system: &CoreRenderingSystem,
         render_resources: &SynchronizedRenderResources,
-        surface_texture: &wgpu::SurfaceTexture,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderPassOutcome> {
@@ -1839,14 +1976,11 @@ impl RenderPassRecorder {
             None
         };
 
-        let surface_texture_view =
-            RenderAttachmentTextureManager::create_surface_texture_view(surface_texture);
-
         let color_attachments = self.specification.create_color_attachments(
-            &surface_texture_view,
             render_attachment_texture_manager,
             output_render_attachment_quantities,
-        )?;
+            self.attachments_to_resolve,
+        );
 
         let depth_stencil_attachment = self
             .specification
@@ -2109,12 +2243,12 @@ impl DepthMapUsage {
         *self == Self::StencilTest
     }
 
-    fn is_clear_or_prepass(&self) -> bool {
-        self.is_clear() || self.is_prepass()
+    fn will_update(&self) -> bool {
+        self.is_prepass() || *self == Self::Use(true)
     }
 
     fn make_writeable(&self) -> bool {
-        self.is_clear_or_prepass() || self == &Self::Use(true)
+        self.is_clear() || self.will_update()
     }
 }
 
