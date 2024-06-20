@@ -48,6 +48,9 @@ pub fn create_prepass_material(
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
 
+    // All prepass materials render to the surface, either an emissive color or
+    // a clear color to overwrite any existing emissive color from an object
+    // blocked by the new fragment
     let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::SURFACE;
 
     // These are required for ambient occlusion
@@ -160,9 +163,6 @@ pub fn create_prepass_material(
                 output_render_attachment_quantities,
                 None,
                 vec![feature_type_id],
-                // All prepass materials render to the surface, either an
-                // emissive color or a clear color to overwrite any existing
-                // emissive color from an object blocked by the new fragment
                 RenderPassHints::empty(),
                 MaterialShaderInput::Prepass(texture_shader_input),
             )

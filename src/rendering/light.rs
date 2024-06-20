@@ -1,6 +1,7 @@
 //! Management of light source data for rendering.
 
 use crate::{
+    assert_uniform_valid,
     geometry::{CollectionChange, UniformBuffer},
     rendering::{
         buffer::{self, UniformBufferable},
@@ -550,6 +551,7 @@ impl UniformBufferable for AmbientLight {
         )
     }
 }
+assert_uniform_valid!(AmbientLight);
 
 impl UniformBufferable for OmnidirectionalLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Omnidirectional light");
@@ -561,6 +563,7 @@ impl UniformBufferable for OmnidirectionalLight {
         )
     }
 }
+assert_uniform_valid!(OmnidirectionalLight);
 
 impl UniformBufferable for UnidirectionalLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Unidirectional light");
@@ -572,3 +575,4 @@ impl UniformBufferable for UnidirectionalLight {
         )
     }
 }
+assert_uniform_valid!(UnidirectionalLight);

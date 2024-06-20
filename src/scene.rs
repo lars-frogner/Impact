@@ -9,6 +9,7 @@ mod light;
 mod material;
 mod mesh;
 mod model;
+mod postprocessing;
 mod shader;
 mod systems;
 mod tasks;
@@ -35,8 +36,10 @@ pub use light::{
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
-    add_skybox_material_component_for_entity, register_ambient_occlusion_materials,
-    register_material_components, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
+    add_skybox_material_component_for_entity, create_ambient_occlusion_application_material,
+    create_ambient_occlusion_computation_material,
+    create_unoccluded_ambient_color_application_material, register_material_components,
+    setup_gaussian_blur_materials, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
     EmissiveTextureComp, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
     FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle, MaterialID,
     MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
@@ -48,10 +51,7 @@ pub use material::{
     UniformDiffuseUniformSpecularEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
     UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
-    VertexColorComp, VertexColorMaterial, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
-    AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
-    AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
-    AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+    VertexColorComp, VertexColorMaterial, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use mesh::{
     register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
@@ -59,6 +59,7 @@ pub use mesh::{
     SCREEN_FILLING_QUAD_MESH_ID,
 };
 pub use model::ModelID;
+pub use postprocessing::{AmbientOcclusionConfig, Postprocessor};
 pub use shader::{ShaderID, ShaderManager};
 pub use systems::{
     SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
@@ -90,15 +91,15 @@ pub struct Scene {
     voxel_manager: RwLock<VoxelManager<fre>>,
     scene_graph: RwLock<SceneGraph<fre>>,
     scene_camera: RwLock<Option<SceneCamera<fre>>>,
+    postprocessor: RwLock<Postprocessor>,
 }
 
 /// Global scene configuration options.
 #[derive(Clone, Debug)]
 pub struct SceneConfig {
-    pub ambient_occlusion_sample_count: u32,
-    pub ambient_occlusion_sampling_radius: fre,
     pub voxel_extent: fre,
     pub initial_min_angular_voxel_extent_for_lod: Radians<fre>,
+    pub ambient_occlusion: AmbientOcclusionConfig,
 }
 
 impl Scene {
@@ -110,11 +111,7 @@ impl Scene {
         let mut instance_feature_manager = InstanceFeatureManager::new();
 
         let mut material_library = MaterialLibrary::new();
-        material_library.register_materials(
-            &mut instance_feature_manager,
-            config.ambient_occlusion_sample_count,
-            config.ambient_occlusion_sampling_radius,
-        );
+        material_library.register_materials(&mut instance_feature_manager);
 
         let voxel_manager = VoxelManager::create(
             config.voxel_extent,
@@ -123,6 +120,8 @@ impl Scene {
             &mut material_library,
             &mut instance_feature_manager,
         );
+
+        let postprocessor = Postprocessor::new(&mut material_library, &config.ambient_occlusion);
 
         Self {
             config,
@@ -134,6 +133,7 @@ impl Scene {
             voxel_manager: RwLock::new(voxel_manager),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
+            postprocessor: RwLock::new(postprocessor),
         }
     }
 
@@ -183,6 +183,11 @@ impl Scene {
     pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<fre>>> {
         &self.scene_camera
     }
+
+    /// Returns a reference to the [`Postprocessor`], guarded by a [`RwLock`].
+    pub fn postprocessor(&self) -> &RwLock<Postprocessor> {
+        &self.postprocessor
+    }
 }
 
 impl Default for Scene {
@@ -194,10 +199,9 @@ impl Default for Scene {
 impl Default for SceneConfig {
     fn default() -> Self {
         Self {
-            ambient_occlusion_sample_count: 4,
-            ambient_occlusion_sampling_radius: 0.5,
             voxel_extent: 0.25,
             initial_min_angular_voxel_extent_for_lod: Radians(0.0),
+            ambient_occlusion: AmbientOcclusionConfig::default(),
         }
     }
 }

@@ -182,7 +182,14 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::ToggleAmbientOcclusion => {
                         if state == &ElementState::Released {
-                            world.renderer().write().unwrap().toggle_ambient_occlusion();
+                            world
+                                .scene()
+                                .read()
+                                .unwrap()
+                                .postprocessor()
+                                .write()
+                                .unwrap()
+                                .toggle_ambient_occlusion();
                         }
                         Ok(HandlingResult::Handled)
                     }

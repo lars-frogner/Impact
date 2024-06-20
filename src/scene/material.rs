@@ -11,10 +11,8 @@ mod skybox;
 mod vertex_color;
 
 pub use ambient_occlusion::{
-    register_ambient_occlusion_materials, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
-    AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
-    AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
-    AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+    create_ambient_occlusion_application_material, create_ambient_occlusion_computation_material,
+    create_unoccluded_ambient_color_application_material, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
@@ -348,12 +346,7 @@ impl MaterialLibrary {
             .insert(texture_set_id, texture_set);
     }
 
-    pub fn register_materials(
-        &mut self,
-        instance_feature_manager: &mut InstanceFeatureManager,
-        ambient_occlusion_sample_count: u32,
-        ambient_occlusion_sampling_radius: fre,
-    ) {
+    pub fn register_materials(&mut self, instance_feature_manager: &mut InstanceFeatureManager) {
         instance_feature_manager.register_feature_type::<TexturedColorMaterialFeature>();
         instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
         instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
@@ -384,12 +377,6 @@ impl MaterialLibrary {
         VertexColorMaterial::register(self);
         FixedColorMaterial::register(self, instance_feature_manager);
         FixedTextureMaterial::register(self);
-
-        register_ambient_occlusion_materials(
-            self,
-            ambient_occlusion_sample_count,
-            ambient_occlusion_sampling_radius,
-        );
     }
 }
 

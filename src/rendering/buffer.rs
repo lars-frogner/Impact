@@ -44,6 +44,26 @@ pub trait UniformBufferable: Pod {
     fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry;
 }
 
+#[macro_export]
+macro_rules! assert_uniform_valid {
+    ($uniform:ident < $( $inner:ty ),+ >) => {
+        paste::item! {
+            #[allow(non_upper_case_globals)]
+            const  [<_ $uniform _valid>]: () = const {
+                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform<$( $inner ),+>>()))
+            };
+        }
+    };
+    ($uniform:ty) => {
+        paste::item! {
+            #[allow(non_upper_case_globals)]
+            const  [<_ $uniform _valid>]: () = const {
+                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform>()))
+            };
+        }
+    };
+}
+
 /// A buffer containing bytes that can be passed to the GPU.
 #[derive(Debug)]
 pub struct RenderBuffer {

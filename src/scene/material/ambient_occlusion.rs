@@ -1,6 +1,7 @@
-//! Material for computing ambient occlusion.
+//! Materials for computing and applying ambient occlusion.
 
 use crate::{
+    assert_uniform_valid,
     geometry::VertexAttributeSet,
     num::Float,
     rendering::{
@@ -8,11 +9,10 @@ use crate::{
         AmbientOcclusionShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
         RenderPassHints, UniformBufferable,
     },
-    scene::{FixedMaterialResources, MaterialID, MaterialLibrary, MaterialSpecification},
+    scene::{FixedMaterialResources, MaterialSpecification},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, ConstStringHash64};
-use lazy_static::lazy_static;
+use impact_utils::ConstStringHash64;
 use nalgebra::Vector4;
 use rand::{
     self,
@@ -22,35 +22,6 @@ use rand::{
 /// The maximum number of samples that can be used for computing ambient
 /// occlusion.
 pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 256;
-
-/// Render pass hints for the ambient occlusion computation material.
-pub const AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS: RenderPassHints =
-    RenderPassHints::NO_DEPTH_PREPASS;
-
-/// Render pass hints for the ambient occlusion application material.
-pub const AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS: RenderPassHints =
-    RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA);
-
-/// Render pass hints for the ambient occlusion disabled material.
-pub const AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS: RenderPassHints =
-    RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA);
-
-lazy_static! {
-    /// ID of the ambient occlusion computation material in the
-    /// [`MaterialLibrary`].
-    pub static ref AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID: MaterialID =
-        MaterialID(hash64!("AmbientOcclusionComputationMaterial"));
-
-    /// ID of the ambient occlusion application material in the
-    /// [`MaterialLibrary`].
-    pub static ref AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID: MaterialID =
-        MaterialID(hash64!("AmbientOcclusionApplicationMaterial"));
-
-    /// ID of the material in the [`MaterialLibrary`] that should be used
-    /// when ambient occlusion is disabled.
-    pub static ref AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID: MaterialID =
-        MaterialID(hash64!("AmbientOcclusionDisabledMaterial"));
-}
 
 /// Uniform holding horizontal offsets for the ambient occlusion samples. Only
 /// the first `sample_count` offsets in the array will be computed. The uniform
@@ -68,70 +39,66 @@ struct AmbientOcclusionSamples {
     contrast: fre,
 }
 
-/// Adds the material specifications for ambient occlusion materials with the
-/// given parameters to the material library, overwriting any existing ambient
-/// occlusion materials.
+/// Creates a [`MaterialSpecification`] for a material that computes ambient
+/// occlusion and writes it to the occlusion attachment.
 ///
 /// # Panics
-/// - If the sample count is zero or exceeds [`MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT`].
+/// - If the sample count is zero or exceeds
+///   [`MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT`].
 /// - If the sample radius does not exceed zero.
-pub fn register_ambient_occlusion_materials(
-    material_library: &mut MaterialLibrary,
+pub fn create_ambient_occlusion_computation_material(
     sample_count: u32,
     sample_radius: fre,
-) {
-    let vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
-    let vertex_attribute_requirements_for_shader = VertexAttributeSet::empty();
-
+) -> MaterialSpecification {
     let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
 
-    material_library.add_material_specification(
-        *AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
-        MaterialSpecification::new(
-            vertex_attribute_requirements_for_mesh,
-            vertex_attribute_requirements_for_shader,
-            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::OCCLUSION,
-            Some(FixedMaterialResources::new(&sample_uniform)),
-            Vec::new(),
-            AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS,
-            MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Calculation(
-                AmbientOcclusionCalculationShaderInput {
-                    sample_uniform_binding: FixedMaterialResources::UNIFORM_BINDING,
-                },
-            )),
-        ),
-    );
+    MaterialSpecification::new(
+        VertexAttributeSet::POSITION,
+        VertexAttributeSet::empty(),
+        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+        RenderAttachmentQuantitySet::OCCLUSION,
+        Some(FixedMaterialResources::new(&sample_uniform)),
+        Vec::new(),
+        RenderPassHints::NO_DEPTH_PREPASS,
+        MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Calculation(
+            AmbientOcclusionCalculationShaderInput {
+                sample_uniform_binding: FixedMaterialResources::UNIFORM_BINDING,
+            },
+        )),
+    )
+}
 
-    material_library.add_material_specification(
-        *AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
-        MaterialSpecification::new(
-            vertex_attribute_requirements_for_mesh,
-            vertex_attribute_requirements_for_shader,
-            RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::AMBIENT_COLOR
-                | RenderAttachmentQuantitySet::OCCLUSION,
-            RenderAttachmentQuantitySet::SURFACE,
-            None,
-            Vec::new(),
-            AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
-            MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Application),
-        ),
-    );
+/// Creates a [`MaterialSpecification`] for a material that combines occlusion
+/// and ambient color from their respective attachments and adds the resulting
+/// occluded ambient color to the surface.
+pub fn create_ambient_occlusion_application_material() -> MaterialSpecification {
+    MaterialSpecification::new(
+        VertexAttributeSet::POSITION,
+        VertexAttributeSet::empty(),
+        RenderAttachmentQuantitySet::POSITION
+            | RenderAttachmentQuantitySet::AMBIENT_COLOR
+            | RenderAttachmentQuantitySet::OCCLUSION,
+        RenderAttachmentQuantitySet::SURFACE,
+        None,
+        Vec::new(),
+        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
+        MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Application),
+    )
+}
 
-    material_library.add_material_specification(
-        *AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
-        MaterialSpecification::new(
-            vertex_attribute_requirements_for_mesh,
-            vertex_attribute_requirements_for_shader,
-            RenderAttachmentQuantitySet::AMBIENT_COLOR,
-            RenderAttachmentQuantitySet::SURFACE,
-            None,
-            Vec::new(),
-            AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,
-            MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Disabled),
-        ),
-    );
+/// Creates a [`MaterialSpecification`] for a material that adds the ambient
+/// color directly from its attachment to the surface.
+pub fn create_unoccluded_ambient_color_application_material() -> MaterialSpecification {
+    MaterialSpecification::new(
+        VertexAttributeSet::POSITION,
+        VertexAttributeSet::empty(),
+        RenderAttachmentQuantitySet::AMBIENT_COLOR,
+        RenderAttachmentQuantitySet::SURFACE,
+        None,
+        Vec::new(),
+        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
+        MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::UnoccludedApplication),
+    )
 }
 
 impl AmbientOcclusionSamples {
@@ -178,3 +145,4 @@ impl UniformBufferable for AmbientOcclusionSamples {
         create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::FRAGMENT)
     }
 }
+assert_uniform_valid!(AmbientOcclusionSamples);

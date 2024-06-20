@@ -25,14 +25,16 @@ define_task!(
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             let mut render_pass_manager = renderer.render_pass_manager().write().unwrap();
             let scene = world.scene().read().unwrap();
-            let mut shader_builder = scene.shader_manager().write().unwrap();
+            let mut shader_manager = scene.shader_manager().write().unwrap();
+            let postprocessor = scene.postprocessor().read().unwrap();
 
             render_pass_manager.sync_with_render_resources(
                 renderer.core_system(),
                 renderer.config(),
                 render_resource_manager.synchronized(),
                 renderer.render_attachment_texture_manager(),
-                &mut shader_builder,
+                &mut shader_manager,
+                &postprocessor,
             )
         })
     }
