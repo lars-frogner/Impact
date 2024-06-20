@@ -23,7 +23,7 @@ use std::num::NonZeroU32;
 pub enum AmbientOcclusionShaderInput {
     Calculation(AmbientOcclusionCalculationShaderInput),
     Application,
-    Disabled,
+    UnoccludedApplication,
 }
 
 /// Input description specifying uniform bindings needed for calculating ambient
@@ -108,7 +108,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                     screen_space_texture_coord_expr,
                 );
             }
-            AmbientOcclusionShaderInput::Disabled => {
+            AmbientOcclusionShaderInput::UnoccludedApplication => {
                 Self::generate_fragment_code_for_rendering_unoccluded_ambient_color(
                     module,
                     fragment_function,

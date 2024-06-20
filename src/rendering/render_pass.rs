@@ -17,11 +17,7 @@ use crate::{
     },
     scene::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
-        ShaderManager, AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID,
-        AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID,
-        AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS, AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID,
-        AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS, MAX_SHADOW_MAP_CASCADES,
-        SCREEN_FILLING_QUAD_MESH_ID,
+        Postprocessor, ShaderManager, MAX_SHADOW_MAP_CASCADES,
     },
 };
 use anyhow::{anyhow, Result};
@@ -42,8 +38,6 @@ pub struct RenderPassManager {
     /// prepass material. This also does the job of filling the remainder of the
     /// depth map.
     light_shaded_model_shading_prepasses: Vec<RenderPassRecorder>,
-    /// Passes for computing and applying ambient occlusion.
-    ambient_occlusion_passes: Vec<RenderPassRecorder>,
     /// Passes for shading models that do not depend on light sources.
     non_light_shaded_model_shading_passes: Vec<RenderPassRecorder>,
     /// Passes for shading models that depend on light sources, including passes
@@ -51,32 +45,34 @@ pub struct RenderPassManager {
     light_shaded_model_shading_passes: HashMap<LightID, LightShadedModelShadingPasses>,
     non_light_shaded_model_index_mapper: KeyIndexMapper<ModelID>,
     light_shaded_model_index_mapper: KeyIndexMapper<ModelID>,
+    /// Passes for applying postprocessing.
+    postprocessing_passes: Vec<RenderPassRecorder>,
 }
 
 /// Holds the information describing a specific render pass.
 #[derive(Clone, Debug)]
 pub struct RenderPassSpecification {
     /// Which non-depth render attachments to clear in this pass.
-    color_attachments_to_clear: RenderAttachmentQuantitySet,
+    pub color_attachments_to_clear: RenderAttachmentQuantitySet,
     /// ID of the model type to render, or [`None`] if the pass does not render
     /// a model (e.g. a clearing pass).
-    model_id: Option<ModelID>,
+    pub model_id: Option<ModelID>,
     /// If present, use this mesh rather than a mesh associated with a model.
-    explicit_mesh_id: Option<MeshID>,
+    pub explicit_mesh_id: Option<MeshID>,
     /// If present, use this material rather than a material associated with a
     /// model.
-    explicit_material_id: Option<MaterialID>,
+    pub explicit_material_id: Option<MaterialID>,
     /// Whether to use the prepass material associated with the model's material
     /// rather than using the model's material.
-    use_prepass_material: bool,
+    pub use_prepass_material: bool,
     /// Whether and how the depth map will be used.
-    depth_map_usage: DepthMapUsage,
+    pub depth_map_usage: DepthMapUsage,
     /// Light source whose contribution is computed in this pass.
-    light: Option<LightInfo>,
+    pub light: Option<LightInfo>,
     /// Whether and how the shadow map will be used.
-    shadow_map_usage: ShadowMapUsage,
-    hints: RenderPassHints,
-    label: String,
+    pub shadow_map_usage: ShadowMapUsage,
+    pub hints: RenderPassHints,
+    pub label: String,
 }
 
 /// Recorder for a specific render pass.
@@ -88,7 +84,14 @@ pub struct RenderPassRecorder {
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
     attachments_to_resolve: RenderAttachmentQuantitySet,
     pipeline: Option<wgpu::RenderPipeline>,
-    disabled: bool,
+    state: RenderPassState,
+}
+
+/// The state of a render pass.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RenderPassState {
+    Active,
+    Disabled,
 }
 
 /// The outcome of calling [`RenderPassRecorder::record_render_pass`].
@@ -124,13 +127,13 @@ struct LightShadedModelShadingPasses {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct LightInfo {
+pub struct LightInfo {
     light_type: LightType,
     light_id: LightID,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum DepthMapUsage {
+pub enum DepthMapUsage {
     /// No depth map is used.
     None,
     /// Clear the depth map with the maximum depth (1.0).
@@ -149,7 +152,7 @@ enum DepthMapUsage {
 type WriteDepths = bool;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum ShadowMapUsage {
+pub enum ShadowMapUsage {
     /// No shadow map is used.
     None,
     /// Clear the specified shadow map with the maximum depth (1.0).
@@ -162,7 +165,7 @@ enum ShadowMapUsage {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum ShadowMapIdentifier {
+pub enum ShadowMapIdentifier {
     ForUnidirectionalLight(CascadeIdx),
     ForOmnidirectionalLight(CubemapFace),
 }
@@ -181,11 +184,11 @@ impl RenderPassManager {
             clearing_pass_recorders: Vec::with_capacity(2),
             non_light_shaded_model_depth_prepasses: Vec::new(),
             light_shaded_model_shading_prepasses: Vec::new(),
-            ambient_occlusion_passes: Vec::with_capacity(3),
             non_light_shaded_model_shading_passes: Vec::new(),
             light_shaded_model_shading_passes: HashMap::new(),
             non_light_shaded_model_index_mapper: KeyIndexMapper::new(),
             light_shaded_model_index_mapper: KeyIndexMapper::new(),
+            postprocessing_passes: Vec::new(),
         }
     }
 
@@ -195,7 +198,6 @@ impl RenderPassManager {
             .iter()
             .chain(self.non_light_shaded_model_depth_prepasses.iter())
             .chain(self.light_shaded_model_shading_prepasses.iter())
-            .chain(self.ambient_occlusion_passes.iter())
             .chain(self.non_light_shaded_model_shading_passes.iter())
             .chain(
                 self.light_shaded_model_shading_passes
@@ -208,6 +210,7 @@ impl RenderPassManager {
                             .chain(passes.shading_passes.iter())
                     }),
             )
+            .chain(self.postprocessing_passes.iter())
     }
 
     fn recorders_mut(&mut self) -> impl Iterator<Item = &mut RenderPassRecorder> {
@@ -215,7 +218,6 @@ impl RenderPassManager {
             .iter_mut()
             .chain(self.non_light_shaded_model_depth_prepasses.iter_mut())
             .chain(self.light_shaded_model_shading_prepasses.iter_mut())
-            .chain(self.ambient_occlusion_passes.iter_mut())
             .chain(self.non_light_shaded_model_shading_passes.iter_mut())
             .chain(
                 self.light_shaded_model_shading_passes
@@ -228,13 +230,14 @@ impl RenderPassManager {
                             .chain(passes.shading_passes.iter_mut())
                     }),
             )
+            .chain(self.postprocessing_passes.iter_mut())
     }
 
     /// Deletes all the render passes except for the initial clearing pass.
     pub fn clear_model_render_pass_recorders(&mut self) {
         self.non_light_shaded_model_depth_prepasses.clear();
         self.light_shaded_model_shading_prepasses.clear();
-        self.ambient_occlusion_passes.clear();
+        self.postprocessing_passes.clear();
         self.non_light_shaded_model_shading_passes.clear();
         self.light_shaded_model_shading_passes.clear();
         self.non_light_shaded_model_index_mapper.clear();
@@ -254,6 +257,7 @@ impl RenderPassManager {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         shader_manager: &mut ShaderManager,
+        postprocessor: &Postprocessor,
     ) -> Result<()> {
         self.sync_clearing_passes(config);
 
@@ -320,42 +324,6 @@ impl RenderPassManager {
                 });
         }
 
-        if self.ambient_occlusion_passes.is_empty() {
-            self.ambient_occlusion_passes.push(RenderPassRecorder::new(
-                core_system,
-                config,
-                render_resources,
-                render_attachment_texture_manager,
-                shader_manager,
-                RenderPassSpecification::ambient_occlusion_computation_pass(),
-                !config.ambient_occlusion_enabled,
-            )?);
-
-            self.ambient_occlusion_passes.push(RenderPassRecorder::new(
-                core_system,
-                config,
-                render_resources,
-                render_attachment_texture_manager,
-                shader_manager,
-                RenderPassSpecification::ambient_occlusion_application_pass(),
-                !config.ambient_occlusion_enabled,
-            )?);
-
-            self.ambient_occlusion_passes.push(RenderPassRecorder::new(
-                core_system,
-                config,
-                render_resources,
-                render_attachment_texture_manager,
-                shader_manager,
-                RenderPassSpecification::ambient_occlusion_disabled_pass(),
-                config.ambient_occlusion_enabled,
-            )?);
-        } else {
-            self.ambient_occlusion_passes[0].set_disabled(!config.ambient_occlusion_enabled);
-            self.ambient_occlusion_passes[1].set_disabled(!config.ambient_occlusion_enabled);
-            self.ambient_occlusion_passes[2].set_disabled(config.ambient_occlusion_enabled);
-        }
-
         for (&model_id, feature_buffer_managers) in all_feature_buffer_managers {
             let transform_buffer_manager = feature_buffer_managers.first().unwrap();
 
@@ -392,7 +360,7 @@ impl RenderPassManager {
                                             model_id,
                                             prepass_hints,
                                         ),
-                                        no_visible_instances,
+                                        RenderPassState::disabled_if(no_visible_instances),
                                     )?,
                                 );
                             } else {
@@ -427,7 +395,7 @@ impl RenderPassManager {
                                                 model_id,
                                                 prepass_hints,
                                             ),
-                                            no_visible_instances,
+                                            RenderPassState::disabled_if(no_visible_instances),
                                         )?,
                                     );
                                 }
@@ -443,8 +411,10 @@ impl RenderPassManager {
                                     render_attachment_texture_manager,
                                     shader_manager,
                                     RenderPassSpecification::depth_prepass(model_id, hints),
-                                    no_visible_instances
-                                        || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                    RenderPassState::disabled_if(
+                                        no_visible_instances
+                                            || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                    ),
                                 )?,
                             );
                         }
@@ -482,7 +452,7 @@ impl RenderPassManager {
                                             RenderPassSpecification::shadow_map_clearing_pass(
                                                 ShadowMapIdentifier::ForOmnidirectionalLight(face),
                                             ),
-                                            false,
+                                            RenderPassState::Active,
                                         )?);
                                     }
 
@@ -519,7 +489,10 @@ impl RenderPassManager {
                                         ShadowMapIdentifier::ForOmnidirectionalLight(face),
                                         hints,
                                     ),
-                                    !faces_have_shadow_casting_model_instances[face.as_idx_usize()],
+                                    RenderPassState::disabled_if(
+                                        !faces_have_shadow_casting_model_instances
+                                            [face.as_idx_usize()],
+                                    ),
                                 )?);
                             }
 
@@ -534,7 +507,7 @@ impl RenderPassManager {
                                 RenderPassSpecification::model_shading_pass_with_shadow_map(
                                     light, model_id, hints,
                                 ),
-                                no_visible_instances,
+                                RenderPassState::disabled_if(no_visible_instances),
                             )?);
                         }
 
@@ -572,7 +545,7 @@ impl RenderPassManager {
                                                         cascade_idx,
                                                     ),
                                                 ),
-                                                false,
+                                                RenderPassState::Active,
                                             )?);
                                         }
 
@@ -614,8 +587,10 @@ impl RenderPassManager {
                                             ),
                                             hints,
                                         ),
-                                        !cascades_have_shadow_casting_model_instances
-                                            [cascade_idx as usize],
+                                        RenderPassState::disabled_if(
+                                            !cascades_have_shadow_casting_model_instances
+                                                [cascade_idx as usize],
+                                        ),
                                     )?,
                                 );
                             }
@@ -631,7 +606,7 @@ impl RenderPassManager {
                                 RenderPassSpecification::model_shading_pass_with_shadow_map(
                                     light, model_id, hints,
                                 ),
-                                no_visible_instances,
+                                RenderPassState::disabled_if(no_visible_instances),
                             )?);
                         }
                     }
@@ -704,8 +679,10 @@ impl RenderPassManager {
                                 render_attachment_texture_manager,
                                 shader_manager,
                                 RenderPassSpecification::depth_prepass(model_id, hints),
-                                no_visible_instances
-                                    || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                RenderPassState::disabled_if(
+                                    no_visible_instances
+                                        || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                ),
                             )?);
 
                         // Create a shading pass for the new model
@@ -719,7 +696,7 @@ impl RenderPassManager {
                                 RenderPassSpecification::model_shading_pass_without_shadow_map(
                                     None, model_id, hints,
                                 ),
-                                no_visible_instances,
+                                RenderPassState::disabled_if(no_visible_instances),
                             )?);
                     }
                     // The model already has shading passes
@@ -735,6 +712,31 @@ impl RenderPassManager {
                             .set_disabled(no_visible_instances);
                     }
                 }
+            }
+        }
+
+        if self.postprocessing_passes.is_empty() {
+            for (specification, state) in postprocessor
+                .render_passes()
+                .zip(postprocessor.render_pass_states())
+            {
+                self.postprocessing_passes.push(RenderPassRecorder::new(
+                    core_system,
+                    config,
+                    render_resources,
+                    render_attachment_texture_manager,
+                    shader_manager,
+                    specification,
+                    state,
+                )?);
+            }
+        } else {
+            for (recorder, state) in self
+                .postprocessing_passes
+                .iter_mut()
+                .zip(postprocessor.render_pass_states())
+            {
+                recorder.set_state(state);
             }
         }
 
@@ -780,7 +782,7 @@ impl RenderPassManager {
         for (idx, recorder) in self.recorders_mut().enumerate() {
             recorder.attachments_to_resolve = RenderAttachmentQuantitySet::empty();
 
-            if !recorder.disabled() {
+            if !recorder.state().is_disabled() {
                 for quantity in RenderAttachmentQuantity::all() {
                     if recorder
                         .output_render_attachment_quantities
@@ -976,39 +978,6 @@ impl RenderPassSpecification {
                 "Shadow map update for model {} and light {} ({:?})",
                 model_id, light.light_id, shadow_map_id
             ),
-            ..Default::default()
-        }
-    }
-
-    fn ambient_occlusion_computation_pass() -> Self {
-        Self {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_material_id: Some(*AMBIENT_OCCLUSION_COMPUTATION_MATERIAL_ID),
-            depth_map_usage: DepthMapUsage::StencilTest,
-            hints: AMBIENT_OCCLUSION_COMPUTATION_RENDER_PASS_HINTS,
-            label: "Ambient occlusion computation pass".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn ambient_occlusion_application_pass() -> Self {
-        Self {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_material_id: Some(*AMBIENT_OCCLUSION_APPLICATION_MATERIAL_ID),
-            depth_map_usage: DepthMapUsage::StencilTest,
-            hints: AMBIENT_OCCLUSION_APPLICATION_RENDER_PASS_HINTS,
-            label: "Ambient occlusion application pass".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn ambient_occlusion_disabled_pass() -> Self {
-        Self {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_material_id: Some(*AMBIENT_OCCLUSION_DISABLED_MATERIAL_ID),
-            depth_map_usage: DepthMapUsage::StencilTest,
-            hints: AMBIENT_OCCLUSION_DISABLED_RENDER_PASS_HINTS,
-            label: "Ambient occlusion disabled pass".to_string(),
             ..Default::default()
         }
     }
@@ -1802,7 +1771,7 @@ impl RenderPassRecorder {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
-        disabled: bool,
+        state: RenderPassState,
     ) -> Result<Self> {
         let (
             pipeline,
@@ -1901,7 +1870,7 @@ impl RenderPassRecorder {
             output_render_attachment_quantities,
             attachments_to_resolve: RenderAttachmentQuantitySet::empty(),
             pipeline,
-            disabled,
+            state,
         })
     }
 
@@ -1917,7 +1886,7 @@ impl RenderPassRecorder {
             output_render_attachment_quantities: RenderAttachmentQuantitySet::empty(),
             attachments_to_resolve: RenderAttachmentQuantitySet::empty(),
             pipeline: None,
-            disabled: false,
+            state: RenderPassState::Active,
         }
     }
 
@@ -1933,7 +1902,7 @@ impl RenderPassRecorder {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderPassOutcome> {
-        if self.disabled() {
+        if self.state().is_disabled() {
             log::debug!("Skipping render pass: {}", &self.specification.label);
             return Ok(RenderPassOutcome::Skipped);
         }
@@ -2146,14 +2115,19 @@ impl RenderPassRecorder {
         Ok(RenderPassOutcome::Recorded)
     }
 
-    /// Whether the render pass should be skipped.
-    pub fn disabled(&self) -> bool {
-        self.disabled
+    /// Returns the state of the render pass.
+    pub fn state(&self) -> RenderPassState {
+        self.state
+    }
+
+    /// Sets the state of the render pass.
+    pub fn set_state(&mut self, state: RenderPassState) {
+        self.state = state;
     }
 
     /// Set whether the render pass should be skipped.
     pub fn set_disabled(&mut self, disabled: bool) {
-        self.disabled = disabled;
+        self.state = RenderPassState::disabled_if(disabled);
     }
 
     fn create_render_pipeline_layout(
@@ -2215,6 +2189,31 @@ impl RenderPassRecorder {
             multiview: None,
             label: Some(label),
         })
+    }
+}
+
+impl RenderPassState {
+    /// Returns `Active` if the given `bool` is `true`, otherwise `Disabled`.
+    pub fn active_if(active: bool) -> Self {
+        if active {
+            Self::Active
+        } else {
+            Self::Disabled
+        }
+    }
+
+    /// Returns `Disabled` if the given `bool` is `true`, otherwise `Active`.
+    pub fn disabled_if(disabled: bool) -> Self {
+        if disabled {
+            Self::Disabled
+        } else {
+            Self::Active
+        }
+    }
+
+    /// Whether the render pass is disabled.
+    pub fn is_disabled(&self) -> bool {
+        *self == Self::Disabled
     }
 }
 

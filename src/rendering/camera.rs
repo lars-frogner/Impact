@@ -1,5 +1,6 @@
 //! Management of camera data for rendering.
 
+use crate::assert_uniform_valid;
 use crate::geometry::Camera;
 use crate::rendering::{
     buffer::{self, RenderBuffer, UniformBufferable},
@@ -149,3 +150,4 @@ impl UniformBufferable for Projective3<fre> {
         )
     }
 }
+assert_uniform_valid!(Projective3<fre>);

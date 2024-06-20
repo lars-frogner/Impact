@@ -24,7 +24,10 @@ pub use buffer::{
     create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
 };
 pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
-pub use render_pass::{RenderPassHints, RenderPassManager, SyncRenderPasses};
+pub use render_pass::{
+    DepthMapUsage, RenderPassHints, RenderPassManager, RenderPassSpecification, RenderPassState,
+    SyncRenderPasses,
+};
 pub use resource::SyncRenderResources;
 pub use shader::{
     AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
@@ -86,8 +89,6 @@ pub struct RenderingConfig {
     pub unidirectional_light_shadow_map_resolution: u32,
     /// Whether shadow mapping is enabled.
     pub shadow_mapping_enabled: bool,
-    /// Whether ambient occlusion is enabled.
-    pub ambient_occlusion_enabled: bool,
     /// The number of samples to use for multisampling anti-aliasing.
     pub multisampling_sample_count: u32,
 }
@@ -220,11 +221,6 @@ impl RenderingSystem {
         self.config.shadow_mapping_enabled = !self.config.shadow_mapping_enabled;
     }
 
-    /// Toggles ambient occlusion.
-    pub fn toggle_ambient_occlusion(&mut self) {
-        self.config.ambient_occlusion_enabled = !self.config.ambient_occlusion_enabled;
-    }
-
     pub fn cycle_msaa(&mut self) {
         let sample_count = match self.config.multisampling_sample_count {
             1 => 4,
@@ -346,7 +342,6 @@ impl Default for RenderingConfig {
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
             shadow_mapping_enabled: true,
-            ambient_occlusion_enabled: true,
             multisampling_sample_count: 1,
         }
     }

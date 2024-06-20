@@ -7579,7 +7579,7 @@ mod test {
             None,
             &[],
             Some(&MaterialShaderInput::AmbientOcclusion(
-                AmbientOcclusionShaderInput::Disabled,
+                AmbientOcclusionShaderInput::UnoccludedApplication,
             )),
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::AMBIENT_COLOR,
