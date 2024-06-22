@@ -4,13 +4,10 @@ use super::{
     append_to_arena, append_unity_component_to_vec3, emit, emit_in_func, include_expr_in_func,
     include_named_expr_in_func, insert_in_arena, new_name, push_to_block, CameraProjectionVariable,
     ForLoop, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_WIDTH,
-    U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_TYPE,
+    F32_WIDTH, U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use crate::{
-    rendering::{shader::F32_TYPE, RenderAttachmentQuantity},
-    scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
-};
+use crate::{rendering::RenderAttachmentQuantity, scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT};
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle, Literal,
     LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,
@@ -401,6 +398,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             &mut module.types,
             fragment_function,
             "sample",
+            None,
             sample_count_expr,
         );
 

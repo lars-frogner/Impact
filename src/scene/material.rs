@@ -5,6 +5,7 @@ mod blinn_phong;
 mod components;
 mod features;
 mod fixed;
+mod gaussian_blur;
 mod microfacet;
 mod prepass;
 mod skybox;
@@ -37,6 +38,10 @@ pub use features::{
     UniformSpecularParallaxMappingMaterialFeature,
 };
 pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
+pub use gaussian_blur::{
+    create_gaussian_blur_material, GaussianBlurDirection, GaussianBlurSamples,
+    MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
+};
 pub use microfacet::{add_microfacet_material_component_for_entity, setup_microfacet_material};
 pub use prepass::create_prepass_material;
 pub use skybox::add_skybox_material_component_for_entity;

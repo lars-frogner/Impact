@@ -25,19 +25,20 @@ pub use buffer::{
 };
 pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
 pub use render_pass::{
-    DepthMapUsage, RenderPassHints, RenderPassManager, RenderPassSpecification, RenderPassState,
-    SyncRenderPasses,
+    DepthMapUsage, OutputAttachmentSampling, RenderPassHints, RenderPassManager,
+    RenderPassSpecification, RenderPassState, SyncRenderPasses,
 };
 pub use resource::SyncRenderResources;
 pub use shader::{
     AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
     BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput, CameraShaderInput,
     DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-    InstanceFeatureShaderInput, LightMaterialFeatureShaderInput, LightShaderInput,
-    MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel, MicrofacetTextureShaderInput,
-    ModelViewTransformShaderInput, NormalMappingShaderInput, OmnidirectionalLightShaderInput,
-    ParallaxMappingShaderInput, PrepassTextureShaderInput, Shader, ShaderGenerator,
-    SkyboxTextureShaderInput, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
+    GaussianBlurShaderInput, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput,
+    LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
+    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
+    OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput, Shader,
+    ShaderGenerator, SkyboxTextureShaderInput, SpecularMicrofacetShadingModel,
+    UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{

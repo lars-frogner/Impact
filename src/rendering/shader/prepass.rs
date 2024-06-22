@@ -294,7 +294,7 @@ impl<'a> PrepassShaderGenerator<'a> {
             None => source_code_lib.generate_function_call(
                 module,
                 fragment_function,
-                "getBaseAmbientColor",
+                "getBlackColor",
                 Vec::new(),
             ),
             Some(LightShaderGenerator::AmbientLight(ambient_light_shader_generator)) => {
@@ -461,7 +461,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                     (None, None) => source_code_lib.generate_function_call(
                         module,
                         fragment_function,
-                        "getBaseAmbientColor",
+                        "getBlackColor",
                         Vec::new(),
                     ),
                     (Some(diffuse_ambient_color), None) => diffuse_ambient_color,
@@ -489,51 +489,6 @@ impl<'a> PrepassShaderGenerator<'a> {
         };
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
-
-        // Write emissive color to the surface color attachment.
-        if let Some(emissive_color_idx) = material_input_field_indices.emissive_color {
-            let emissive_color_expr = fragment_input_struct.get_field_expr(emissive_color_idx);
-
-            let emissive_rgba_color_expr = append_unity_component_to_vec3(
-                &mut module.types,
-                fragment_function,
-                emissive_color_expr,
-            );
-
-            output_struct_builder.add_field(
-                "emissiveColor",
-                vec4_type,
-                None,
-                None,
-                VECTOR_4_SIZE,
-                emissive_rgba_color_expr,
-            );
-        // If we do not write an emissive color, we need to write a clear color
-        // in case we are obscuring an emissive object, otherwise the emissive
-        // object will shine through
-        } else {
-            let clear_color_expr = source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                "getBaseAmbientColor",
-                Vec::new(),
-            );
-
-            let clear_rgba_color_expr = append_unity_component_to_vec3(
-                &mut module.types,
-                fragment_function,
-                clear_color_expr,
-            );
-
-            output_struct_builder.add_field(
-                "clearColor",
-                vec4_type,
-                None,
-                None,
-                VECTOR_4_SIZE,
-                clear_rgba_color_expr,
-            );
-        }
 
         if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
             let position_expr = fragment_input_struct.get_field_expr(
@@ -615,6 +570,51 @@ impl<'a> PrepassShaderGenerator<'a> {
                 None,
                 VECTOR_4_SIZE,
                 ambient_rgba_color_expr,
+            );
+        }
+
+        // Write emissive color to the emissive color attachment.
+        if let Some(emissive_color_idx) = material_input_field_indices.emissive_color {
+            let emissive_color_expr = fragment_input_struct.get_field_expr(emissive_color_idx);
+
+            let emissive_rgba_color_expr = append_unity_component_to_vec3(
+                &mut module.types,
+                fragment_function,
+                emissive_color_expr,
+            );
+
+            output_struct_builder.add_field(
+                "emissiveColor",
+                vec4_type,
+                None,
+                None,
+                VECTOR_4_SIZE,
+                emissive_rgba_color_expr,
+            );
+        // If we do not write an emissive color, we need to write a clear color
+        // in case we are obscuring an emissive object, otherwise the emissive
+        // object will shine through
+        } else {
+            let clear_color_expr = source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "getBlackColor",
+                Vec::new(),
+            );
+
+            let clear_rgba_color_expr = append_unity_component_to_vec3(
+                &mut module.types,
+                fragment_function,
+                clear_color_expr,
+            );
+
+            output_struct_builder.add_field(
+                "clearColor",
+                vec4_type,
+                None,
+                None,
+                VECTOR_4_SIZE,
+                clear_rgba_color_expr,
             );
         }
 
