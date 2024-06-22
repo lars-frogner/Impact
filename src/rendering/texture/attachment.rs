@@ -10,19 +10,21 @@ bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
     /// render attachment textures.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-    pub struct RenderAttachmentQuantitySet: u8 {
-        const DEPTH          = 1 << 0;
-        const SURFACE        = 1 << 1;
-        const POSITION       = 1 << 2;
-        const NORMAL_VECTOR  = 1 << 3;
-        const TEXTURE_COORDS = 1 << 4;
-        const AMBIENT_COLOR  = 1 << 5;
-        const OCCLUSION      = 1 << 6;
+    pub struct RenderAttachmentQuantitySet: u16 {
+        const DEPTH              = 1 << 0;
+        const SURFACE            = 1 << 1;
+        const POSITION           = 1 << 2;
+        const NORMAL_VECTOR      = 1 << 3;
+        const TEXTURE_COORDS     = 1 << 4;
+        const AMBIENT_COLOR      = 1 << 5;
+        const EMISSIVE_COLOR     = 1 << 6;
+        const EMISSIVE_COLOR_AUX = 1 << 7;
+        const OCCLUSION          = 1 << 8;
     }
 }
 
 /// A quantity that can be rendered to a dedicated render attachment texture.
-#[repr(u8)]
+#[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RenderAttachmentQuantity {
     Depth = 0,
@@ -31,7 +33,9 @@ pub enum RenderAttachmentQuantity {
     NormalVector = 3,
     TextureCoords = 4,
     AmbientColor = 5,
-    Occlusion = 6,
+    EmissiveColor = 6,
+    EmissiveColorAux = 7,
+    Occlusion = 8,
 }
 
 /// Manager for textures used as render attachments.
@@ -62,7 +66,7 @@ pub struct MaybeWithMultisampling<T> {
 }
 
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 7;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 9;
 
 /// Each individual render attachment quantity.
 ///
@@ -75,6 +79,8 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
     RenderAttachmentQuantity::AmbientColor,
+    RenderAttachmentQuantity::EmissiveColor,
+    RenderAttachmentQuantity::EmissiveColorAux,
     RenderAttachmentQuantity::Occlusion,
 ];
 
@@ -86,6 +92,8 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
     RenderAttachmentQuantitySet::AMBIENT_COLOR,
+    RenderAttachmentQuantitySet::EMISSIVE_COLOR,
+    RenderAttachmentQuantitySet::EMISSIVE_COLOR_AUX,
     RenderAttachmentQuantitySet::OCCLUSION,
 ];
 
@@ -97,6 +105,8 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "normal_vector",
     "texture_coords",
     "ambient_color",
+    "emissive_color",
+    "emissive_color_aux",
     "occlusion",
 ];
 
@@ -108,6 +118,8 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
     wgpu::TextureFormat::Rgba8Unorm,     // Normal vector
     wgpu::TextureFormat::Rg32Float,      // Texture coordinates
     wgpu::TextureFormat::Rgba8UnormSrgb, // Ambient color
+    wgpu::TextureFormat::Rgba16Float,    // Emissive color
+    wgpu::TextureFormat::Rgba16Float,    // Emissive color (auxiliary)
     wgpu::TextureFormat::R8Unorm,        // Occlusion
 ];
 
@@ -119,6 +131,8 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
     true, // Normal vector
     true, // Texture coordinates
     true, // Ambient color
+    true, // Emissive color
+    true, // Emissive color (auxiliary)
     true, // Occlusion
 ];
 
@@ -130,13 +144,24 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITI
     wgpu::Color::BLACK,
     wgpu::Color::BLACK,
     wgpu::Color::BLACK,
+    wgpu::Color::BLACK,
+    wgpu::Color::BLACK,
     wgpu::Color::WHITE,
 ];
 
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
-const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
-    [(0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1), (0, 1)];
+const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] = [
+    (0, 1),
+    (0, 1),
+    (0, 1),
+    (0, 1),
+    (0, 1),
+    (0, 1),
+    (0, 1),
+    (0, 1),
+    (0, 1),
+];
 
 impl RenderAttachmentQuantity {
     /// The total number of separate render attachment quantities.
@@ -276,9 +301,11 @@ impl RenderAttachmentTextureManager {
     /// given sample count.
     pub fn new(core_system: &CoreRenderingSystem, sample_count: u32) -> Self {
         let mut manager = Self {
-            quantity_textures: [None, None, None, None, None, None, None],
-            quantity_texture_bind_group_layouts: [None, None, None, None, None, None, None],
-            quantity_texture_bind_groups: [None, None, None, None, None, None, None],
+            quantity_textures: [None, None, None, None, None, None, None, None, None],
+            quantity_texture_bind_group_layouts: [
+                None, None, None, None, None, None, None, None, None,
+            ],
+            quantity_texture_bind_groups: [None, None, None, None, None, None, None, None, None],
         };
 
         manager.recreate_textures(core_system, sample_count);
@@ -642,8 +669,12 @@ impl RenderAttachmentTexture {
 }
 
 impl<T> MaybeWithMultisampling<T> {
-    pub fn multisampled_if_available(&self) -> &T {
-        self.multisampled.as_ref().unwrap_or(&self.regular)
+    pub fn multisampled_if_available_and(&self, use_multisampling: bool) -> &T {
+        if use_multisampling {
+            self.multisampled.as_ref().unwrap_or(&self.regular)
+        } else {
+            &self.regular
+        }
     }
 }
 
@@ -693,22 +724,23 @@ impl MaybeWithMultisampling<RenderAttachmentTexture> {
 
     /// Returns the appropriate `view` and `resolve_target` for
     /// [`wgpu::RenderPassColorAttachment`] based on whether the multisampled
-    /// texture should be resolved into the regular texture.
+    /// texture should be used if available and whether it should be resolved
+    /// into the regular texture.
     pub fn view_and_resolve_target(
         &self,
+        should_be_multisampled_if_available: bool,
         should_resolve: bool,
     ) -> (&wgpu::TextureView, Option<&wgpu::TextureView>) {
-        if let Some(multisampled) = &self.multisampled {
-            (
+        match &self.multisampled {
+            Some(multisampled) if should_be_multisampled_if_available => (
                 multisampled.attachment_view(),
                 if should_resolve {
                     Some(self.regular.attachment_view())
                 } else {
                     None
                 },
-            )
-        } else {
-            (self.regular.attachment_view(), None)
+            ),
+            _ => (self.regular.attachment_view(), None),
         }
     }
 }

@@ -3,6 +3,7 @@
 mod ambient_occlusion;
 mod blinn_phong;
 mod fixed;
+mod gaussian_blur;
 mod microfacet;
 mod prepass;
 mod skybox;
@@ -11,6 +12,7 @@ mod vertex_color;
 pub use ambient_occlusion::{AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput};
 pub use blinn_phong::BlinnPhongTextureShaderInput;
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
+pub use gaussian_blur::{GaussianBlurShaderGenerator, GaussianBlurShaderInput};
 pub use microfacet::{
     DiffuseMicrofacetShadingModel, MicrofacetShadingModel, MicrofacetTextureShaderInput,
     SpecularMicrofacetShadingModel,
@@ -138,6 +140,7 @@ pub enum MaterialShaderInput {
     Prepass(PrepassTextureShaderInput),
     Skybox(SkyboxTextureShaderInput),
     AmbientOcclusion(AmbientOcclusionShaderInput),
+    GaussianBlur(GaussianBlurShaderInput),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -208,6 +211,7 @@ pub enum MaterialShaderGenerator<'a> {
     Prepass(PrepassShaderGenerator<'a>),
     Skybox(SkyboxShaderGenerator<'a>),
     AmbientOcclusion(AmbientOcclusionShaderGenerator<'a>),
+    GaussianBlur(GaussianBlurShaderGenerator<'a>),
 }
 
 bitflags! {
@@ -447,7 +451,8 @@ pub struct ForLoop {
     pub body: Block,
     continuing: Block,
     break_if: Option<Handle<Expression>>,
-    n_iterations_expr: Handle<Expression>,
+    start_expr: Handle<Expression>,
+    end_expr: Handle<Expression>,
 }
 
 /// Helper for declaring global variables for a texture
@@ -635,7 +640,8 @@ lazy_static! {
         include_str!("../../shader/normal_map.wgsl"),
         include_str!("../../shader/blinn_phong.wgsl"),
         include_str!("../../shader/microfacet.wgsl"),
-        include_str!("../../shader/ambient_occlusion.wgsl")
+        include_str!("../../shader/ambient_occlusion.wgsl"),
+        include_str!("../../shader/gaussian_blur.wgsl")
     ))
     .unwrap_or_else(|err| panic!("Error when including shader source library: {}", err));
 }
@@ -1077,6 +1083,9 @@ impl ShaderGenerator {
                     AmbientOcclusionShaderGenerator::new(input),
                 ))
             }
+            (None, None, Some(MaterialShaderInput::GaussianBlur(input))) => Some(
+                MaterialShaderGenerator::GaussianBlur(GaussianBlurShaderGenerator::new(input)),
+            ),
             input => {
                 return Err(anyhow!(
                     "Tried to build shader with invalid material: {:?}",
@@ -2098,6 +2107,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         match self {
             Self::Skybox(_) => SkyboxShaderGenerator::TRICKS,
             Self::AmbientOcclusion(_) => AmbientOcclusionShaderGenerator::TRICKS,
+            Self::GaussianBlur(_) => GaussianBlurShaderGenerator::TRICKS,
             _ => ShaderTricks::empty(),
         }
     }
@@ -2280,6 +2290,17 @@ impl<'a> MaterialShaderGenerator<'a> {
                     bind_group_idx,
                     push_constant_fragment_expressions,
                     camera_projection,
+                    fragment_input_struct,
+                    mesh_input_field_indices,
+                );
+            }
+            (Self::GaussianBlur(generator), MaterialVertexOutputFieldIndices::None) => {
+                generator.generate_fragment_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    bind_group_idx,
+                    push_constant_fragment_expressions,
                     fragment_input_struct,
                     mesh_input_field_indices,
                 );
@@ -3840,8 +3861,9 @@ impl StructBuilder {
 }
 
 impl ForLoop {
-    /// Generates code for a new for-loop with the number of iterations given by
-    /// `n_iterations_expr` and returns a new [`ForLoop`]. The loop index starts
+    /// Generates code for a new for-loop with the start index given by
+    /// `start_expr` (zero is used if `start_expr` is `None`) and end index
+    /// given by `end_expr` and returns a new [`ForLoop`]. The loop index starts
     /// at zero, and is available as the `idx_expr` field of the returned
     /// `ForLoop` struct. The main body of the loop is empty, and statements can
     /// be added to it by pushing to the `body` field of the returned `ForLoop`.
@@ -3849,14 +3871,17 @@ impl ForLoop {
         types: &mut UniqueArena<Type>,
         function: &mut Function,
         name: &str,
-        n_iterations_expr: Handle<Expression>,
+        start_expr: Option<Handle<Expression>>,
+        end_expr: Handle<Expression>,
     ) -> Self {
         let u32_type = insert_in_arena(types, U32_TYPE);
 
-        let zero_expr = append_to_arena(
-            &mut function.expressions,
-            Expression::Literal(Literal::U32(0)),
-        );
+        let start_expr = start_expr.unwrap_or_else(|| {
+            append_to_arena(
+                &mut function.expressions,
+                Expression::Literal(Literal::U32(0)),
+            )
+        });
 
         let idx_ptr_expr = append_to_arena(
             &mut function.expressions,
@@ -3865,7 +3890,7 @@ impl ForLoop {
                 LocalVariable {
                     name: Some(format!("{}Idx", name)),
                     ty: u32_type,
-                    init: Some(zero_expr),
+                    init: Some(start_expr),
                 },
             )),
         );
@@ -3924,7 +3949,7 @@ impl ForLoop {
                     Expression::Binary {
                         op: BinaryOperator::GreaterEqual,
                         left: idx_expr,
-                        right: n_iterations_expr,
+                        right: end_expr,
                     },
                 )
             },
@@ -3935,7 +3960,8 @@ impl ForLoop {
             continuing: continuing_block,
             break_if: Some(break_if_expr),
             idx_expr,
-            n_iterations_expr,
+            start_expr,
+            end_expr,
         }
     }
 
@@ -3953,15 +3979,13 @@ impl ForLoop {
             },
         );
 
-        let zero_constant_expr = append_to_arena(expressions, Expression::Literal(Literal::U32(0)));
-
         let n_iter_above_zero_expr = emit(block, expressions, |expressions| {
             append_to_arena(
                 expressions,
                 Expression::Binary {
                     op: BinaryOperator::Greater,
-                    left: self.n_iterations_expr,
-                    right: zero_constant_expr,
+                    left: self.end_expr,
+                    right: self.start_expr,
                 },
             )
         });
@@ -5485,7 +5509,9 @@ fn append_unity_component_to_vec3(
 mod test {
     #![allow(clippy::dbg_macro)]
 
-    use crate::scene::{FixedColorMaterial, FixedTextureMaterial, VertexColorMaterial};
+    use crate::scene::{
+        FixedColorMaterial, FixedTextureMaterial, GaussianBlurDirection, VertexColorMaterial,
+    };
 
     use super::*;
     use naga::{
@@ -5548,8 +5574,7 @@ mod test {
             Ok(module_info) => module_info,
             Err(err) => {
                 dbg!(module);
-                dbg!(&err);
-                eprintln!("{}", err);
+                eprintln!("{}", err.emit_to_string("test"));
                 panic!("Shader validation failed")
             }
         }
@@ -7583,6 +7608,64 @@ mod test {
             )),
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::AMBIENT_COLOR,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_horizontal_gaussian_blur_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::GaussianBlur(
+                GaussianBlurShaderInput {
+                    direction: GaussianBlurDirection::Horizontal,
+                    sample_uniform_binding: 0,
+                    input_texture_and_sampler_bindings: (0, 1),
+                },
+            )),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::SURFACE,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_vertical_gaussian_blur_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::GaussianBlur(
+                GaussianBlurShaderInput {
+                    direction: GaussianBlurDirection::Vertical,
+                    sample_uniform_binding: 0,
+                    input_texture_and_sampler_bindings: (0, 1),
+                },
+            )),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::SURFACE,
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()

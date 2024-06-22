@@ -71,6 +71,9 @@ pub struct RenderPassSpecification {
     pub light: Option<LightInfo>,
     /// Whether and how the shadow map will be used.
     pub shadow_map_usage: ShadowMapUsage,
+    /// Whether to write to the multisampled versions of the output attachment
+    /// textures when available, or only use the regular versions.
+    pub output_attachment_sampling: OutputAttachmentSampling,
     pub hints: RenderPassHints,
     pub label: String,
 }
@@ -168,6 +171,15 @@ pub enum ShadowMapUsage {
 pub enum ShadowMapIdentifier {
     ForUnidirectionalLight(CascadeIdx),
     ForOmnidirectionalLight(CubemapFace),
+}
+
+/// Whether a render pass should write to the multisampled versions of the
+/// output attachment textures when available, or only use the regular
+/// versions.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum OutputAttachmentSampling {
+    Single,
+    MultiIfAvailable,
 }
 
 #[derive(Debug)]
@@ -772,7 +784,7 @@ impl RenderPassManager {
     }
 
     fn update_render_attachment_resolve_flags(&mut self) {
-        let mut last_indices_of_output_attachments =
+        let mut last_indices_of_multisampled_output_attachments =
             [Option::<usize>::None; RenderAttachmentQuantity::count()];
         let mut first_indices_of_input_attachments =
             [Option::<usize>::None; RenderAttachmentQuantity::count()];
@@ -784,20 +796,28 @@ impl RenderPassManager {
 
             if !recorder.state().is_disabled() {
                 for quantity in RenderAttachmentQuantity::all() {
-                    if recorder
-                        .output_render_attachment_quantities
-                        .contains(quantity.flag())
-                    {
-                        last_indices_of_output_attachments[quantity.index()] = Some(idx);
-                    }
+                    if quantity.supports_multisampling() {
+                        if recorder
+                            .output_render_attachment_quantities
+                            .contains(quantity.flag())
+                            && recorder
+                                .specification
+                                .output_attachment_sampling
+                                .is_multi_if_available()
+                        {
+                            last_indices_of_multisampled_output_attachments[quantity.index()] =
+                                Some(idx);
+                        }
 
-                    if recorder
-                        .input_render_attachment_quantities
-                        .contains(quantity.flag())
-                    {
-                        let first_idx = &mut first_indices_of_input_attachments[quantity.index()];
-                        if first_idx.is_none() {
-                            *first_idx = Some(idx);
+                        if recorder
+                            .input_render_attachment_quantities
+                            .contains(quantity.flag())
+                        {
+                            let first_idx =
+                                &mut first_indices_of_input_attachments[quantity.index()];
+                            if first_idx.is_none() {
+                                *first_idx = Some(idx);
+                            }
                         }
                     }
                 }
@@ -808,14 +828,14 @@ impl RenderPassManager {
 
         for quantity in RenderAttachmentQuantity::all() {
             match (
-                last_indices_of_output_attachments[quantity.index()],
+                last_indices_of_multisampled_output_attachments[quantity.index()],
                 first_indices_of_input_attachments[quantity.index()],
             ) {
                 (Some(last_idx), Some(first_idx)) if first_idx <= last_idx => {
                     panic!(
-                        "{} render attachment is used as input before it is last used as output \
+                        "multisampled {} render attachment is used as input before it is last used as output \
                         (first used as input in render pass {} ({}), \
-                        last used as output in render pass {} ({}))",
+                        last used as multisampled output in render pass {} ({}))",
                         quantity,
                         first_idx,
                         &recorders[first_idx].specification.label,
@@ -825,7 +845,7 @@ impl RenderPassManager {
                 }
                 (Some(last_idx), _) => {
                     // Make sure the last render pass to use this attachment as
-                    // output resolves it
+                    // multisampled output resolves it
                     recorders[last_idx].attachments_to_resolve |= quantity.flag();
                 }
                 _ => {}
@@ -1601,6 +1621,10 @@ impl RenderPassSpecification {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         mut output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> u32 {
+        if self.output_attachment_sampling.is_single() {
+            return 1;
+        }
+
         if self.depth_map_usage.will_update() {
             output_render_attachment_quantities |= RenderAttachmentQuantitySet::DEPTH;
         }
@@ -1655,8 +1679,10 @@ impl RenderPassSpecification {
                             let should_resolve =
                                 attachments_to_resolve.contains(texture.quantity().flag());
 
-                            let (view, resolve_target) =
-                                texture.view_and_resolve_target(should_resolve);
+                            let (view, resolve_target) = texture.view_and_resolve_target(
+                                self.output_attachment_sampling.is_multi_if_available(),
+                                should_resolve,
+                            );
 
                             let load = if self.color_attachments_to_clear.is_empty() {
                                 wgpu::LoadOp::Load
@@ -1709,7 +1735,9 @@ impl RenderPassSpecification {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
-                    .multisampled_if_available()
+                    .multisampled_if_available_and(
+                        self.output_attachment_sampling.is_multi_if_available(),
+                    )
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
@@ -1724,7 +1752,9 @@ impl RenderPassSpecification {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
-                    .multisampled_if_available()
+                    .multisampled_if_available_and(
+                        self.output_attachment_sampling.is_multi_if_available(),
+                    )
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -1752,6 +1782,7 @@ impl Default for RenderPassSpecification {
             depth_map_usage: DepthMapUsage::None,
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
+            output_attachment_sampling: OutputAttachmentSampling::MultiIfAvailable,
             hints: RenderPassHints::empty(),
             label: String::new(),
         }
@@ -2273,5 +2304,15 @@ impl ShadowMapUsage {
             Self::Update(shadow_map_id) | Self::Clear(shadow_map_id) => Some(*shadow_map_id),
             _ => None,
         }
+    }
+}
+
+impl OutputAttachmentSampling {
+    fn is_single(&self) -> bool {
+        *self == Self::Single
+    }
+
+    fn is_multi_if_available(&self) -> bool {
+        *self == Self::MultiIfAvailable
     }
 }

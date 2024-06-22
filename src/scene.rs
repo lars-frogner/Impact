@@ -37,11 +37,11 @@ pub use light::{
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
     add_skybox_material_component_for_entity, create_ambient_occlusion_application_material,
-    create_ambient_occlusion_computation_material,
+    create_ambient_occlusion_computation_material, create_gaussian_blur_material,
     create_unoccluded_ambient_color_application_material, register_material_components,
-    setup_gaussian_blur_materials, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
-    EmissiveTextureComp, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
-    FixedTextureComp, FixedTextureMaterial, MaterialComp, MaterialHandle, MaterialID,
+    DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp,
+    FixedColorMaterial, FixedMaterialResources, FixedTextureComp, FixedTextureMaterial,
+    GaussianBlurDirection, GaussianBlurSamples, MaterialComp, MaterialHandle, MaterialID,
     MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
     MaterialSpecification, MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp,
     NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
@@ -52,6 +52,7 @@ pub use material::{
     UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
     UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
     VertexColorComp, VertexColorMaterial, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+    MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
 };
 pub use mesh::{
     register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
@@ -59,7 +60,7 @@ pub use mesh::{
     SCREEN_FILLING_QUAD_MESH_ID,
 };
 pub use model::ModelID;
-pub use postprocessing::{AmbientOcclusionConfig, Postprocessor};
+pub use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
 pub use shader::{ShaderID, ShaderManager};
 pub use systems::{
     SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
@@ -100,6 +101,7 @@ pub struct SceneConfig {
     pub voxel_extent: fre,
     pub initial_min_angular_voxel_extent_for_lod: Radians<fre>,
     pub ambient_occlusion: AmbientOcclusionConfig,
+    pub bloom: BloomConfig,
 }
 
 impl Scene {
@@ -121,7 +123,11 @@ impl Scene {
             &mut instance_feature_manager,
         );
 
-        let postprocessor = Postprocessor::new(&mut material_library, &config.ambient_occlusion);
+        let postprocessor = Postprocessor::new(
+            &mut material_library,
+            &config.ambient_occlusion,
+            &config.bloom,
+        );
 
         Self {
             config,
@@ -188,6 +194,19 @@ impl Scene {
     pub fn postprocessor(&self) -> &RwLock<Postprocessor> {
         &self.postprocessor
     }
+
+    /// Toggles ambient occlusion.
+    pub fn toggle_ambient_occlusion(&self) {
+        self.postprocessor
+            .write()
+            .unwrap()
+            .toggle_ambient_occlusion();
+    }
+
+    /// Toggles bloom.
+    pub fn toggle_bloom(&self) {
+        self.postprocessor.write().unwrap().toggle_bloom();
+    }
 }
 
 impl Default for Scene {
@@ -202,6 +221,7 @@ impl Default for SceneConfig {
             voxel_extent: 0.25,
             initial_min_angular_voxel_extent_for_lod: Radians(0.0),
             ambient_occlusion: AmbientOcclusionConfig::default(),
+            bloom: BloomConfig::default(),
         }
     }
 }

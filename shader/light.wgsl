@@ -58,7 +58,7 @@ fn computeAmbientColorForSpecularGGX(
     return ambientColor;
 }
 
-fn getBaseAmbientColor() -> vec3<f32> {
+fn getBlackColor() -> vec3<f32> {
     return vec3<f32>(0.0, 0.0, 0.0);
 }
 
@@ -177,7 +177,7 @@ fn computeOmniAreaLightQuantities(
         LDotN,
         inverseDistanceSpan,
     );
-    
+
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
 
@@ -433,7 +433,7 @@ fn computeUniAreaLightQuantities(
 fn determineCascadeIdxMax1(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     return 0;
 }
- 
+
 fn determineCascadeIdxMax2(partitionDepths: vec4<f32>, cameraFramebufferPosition: vec4<f32>) -> i32 {
     var cascadeIdx: i32;
     let depth = cameraFramebufferPosition.z;
@@ -612,7 +612,7 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
 ) -> ReflectionDotProducts {
     var dots: ReflectionDotProducts;
     dots.VDotN = VDotN;
-        
+
     let cosAngularLightRadius = inverseSqrt(1.0 + tanAngularLightRadius * tanAngularLightRadius);
 
     // R is the reflection direction
@@ -629,12 +629,12 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
     }
 
     let sinAngularLightRadius = tanAngularLightRadius * cosAngularLightRadius;
-    
+
     // T is the direction perpendicular to L pointing towards R:
     // T = (R - LDotR * L) / |R - LDotR * L|
-    
+
     let sinAngularLightRadiusOverTLength = sinAngularLightRadius * inverseSqrt(1.0 - LDotR * LDotR);
-    
+
     let newLDotNAlongT = (VDotN - LDotR * LDotN) * sinAngularLightRadiusOverTLength;
     let newLDotVAlongT = (2.0 * VDotN * VDotN - 1.0 - LDotR * LDotV) * sinAngularLightRadiusOverTLength;
 
