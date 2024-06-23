@@ -1,15 +1,16 @@
 //! Management of postprocessing.
 
 use crate::{
+    geometry::VertexAttributeSet,
     rendering::{
-        fre, DepthMapUsage, OutputAttachmentSampling, RenderAttachmentQuantity, RenderPassHints,
-        RenderPassSpecification, RenderPassState,
+        fre, DepthMapUsage, MaterialShaderInput, OutputAttachmentSampling, PassthroughShaderInput,
+        RenderAttachmentQuantity, RenderPassHints, RenderPassSpecification, RenderPassState,
     },
     scene::{
         create_ambient_occlusion_application_material,
         create_ambient_occlusion_computation_material, create_gaussian_blur_material,
-        create_unoccluded_ambient_color_application_material, GaussianBlurDirection,
-        GaussianBlurSamples, MaterialID, MaterialLibrary, SCREEN_FILLING_QUAD_MESH_ID,
+        GaussianBlurDirection, GaussianBlurSamples, MaterialID, MaterialLibrary,
+        MaterialSpecification, SCREEN_FILLING_QUAD_MESH_ID,
     },
 };
 use impact_utils::hash64;
@@ -151,12 +152,10 @@ fn setup_bloom_materials_and_render_passes(
 ) -> Vec<RenderPassSpecification> {
     let mut render_passes = Vec::with_capacity(1 + 2 * bloom_config.n_iterations);
 
-    render_passes.push(setup_gaussian_blur_material_and_render_pass(
+    render_passes.push(setup_passthrough_material_and_render_pass(
         material_library,
         RenderAttachmentQuantity::EmissiveColor,
         RenderAttachmentQuantity::Surface,
-        GaussianBlurDirection::Horizontal,
-        &GaussianBlurSamples::new(0, 0),
     ));
 
     if bloom_config.n_iterations > 0 {
@@ -230,10 +229,11 @@ fn setup_ambient_occlusion_application_material_and_render_pass(
 fn setup_unoccluded_ambient_color_application_material_and_render_pass(
     material_library: &mut MaterialLibrary,
 ) -> RenderPassSpecification {
-    let material_id = MaterialID(hash64!("UnoccludedAmbientColorApplicationMaterial"));
-    let specification = material_library
-        .material_specification_entry(material_id)
-        .or_insert_with(create_unoccluded_ambient_color_application_material);
+    let (material_id, specification) = setup_passthrough_material(
+        material_library,
+        RenderAttachmentQuantity::AmbientColor,
+        RenderAttachmentQuantity::Surface,
+    );
     define_unoccluded_ambient_color_application_pass(material_id, specification.render_pass_hints())
 }
 
@@ -318,6 +318,83 @@ fn define_gaussian_blur_pass(
         hints,
         output_attachment_sampling: OutputAttachmentSampling::Single,
         label: format!("1D Gaussian blur pass ({})", direction),
+        ..Default::default()
+    }
+}
+
+fn setup_passthrough_material_and_render_pass(
+    material_library: &mut MaterialLibrary,
+    input_render_attachment_quantity: RenderAttachmentQuantity,
+    output_render_attachment_quantity: RenderAttachmentQuantity,
+) -> RenderPassSpecification {
+    let (material_id, material_specification) = setup_passthrough_material(
+        material_library,
+        input_render_attachment_quantity,
+        output_render_attachment_quantity,
+    );
+    define_passthrough_pass(
+        material_id,
+        material_specification.render_pass_hints(),
+        input_render_attachment_quantity,
+        output_render_attachment_quantity,
+    )
+}
+
+fn setup_passthrough_material(
+    material_library: &mut MaterialLibrary,
+    input_render_attachment_quantity: RenderAttachmentQuantity,
+    output_render_attachment_quantity: RenderAttachmentQuantity,
+) -> (MaterialID, &MaterialSpecification) {
+    let material_id = MaterialID(hash64!(format!(
+        "PassthroughMaterial{{ input: {}, output: {} }}",
+        input_render_attachment_quantity, output_render_attachment_quantity,
+    )));
+    (
+        material_id,
+        material_library
+            .material_specification_entry(material_id)
+            .or_insert_with(|| {
+                create_passthrough_material(
+                    input_render_attachment_quantity,
+                    output_render_attachment_quantity,
+                )
+            }),
+    )
+}
+
+fn create_passthrough_material(
+    input_render_attachment_quantity: RenderAttachmentQuantity,
+    output_render_attachment_quantity: RenderAttachmentQuantity,
+) -> MaterialSpecification {
+    MaterialSpecification::new(
+        VertexAttributeSet::POSITION,
+        VertexAttributeSet::empty(),
+        input_render_attachment_quantity.flag(),
+        output_render_attachment_quantity.flag(),
+        None,
+        Vec::new(),
+        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
+        MaterialShaderInput::Passthrough(PassthroughShaderInput {
+            input_texture_and_sampler_bindings: input_render_attachment_quantity.bindings(),
+        }),
+    )
+}
+
+fn define_passthrough_pass(
+    material_id: MaterialID,
+    hints: RenderPassHints,
+    input_render_attachment_quantity: RenderAttachmentQuantity,
+    output_render_attachment_quantity: RenderAttachmentQuantity,
+) -> RenderPassSpecification {
+    RenderPassSpecification {
+        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+        explicit_material_id: Some(material_id),
+        hints,
+        output_attachment_sampling: OutputAttachmentSampling::Single,
+        label: format!(
+            "Passthrough pass: {} -> {}",
+            input_render_attachment_quantity, output_render_attachment_quantity
+        ),
         ..Default::default()
     }
 }
