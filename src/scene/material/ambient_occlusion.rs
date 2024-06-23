@@ -86,21 +86,6 @@ pub fn create_ambient_occlusion_application_material() -> MaterialSpecification 
     )
 }
 
-/// Creates a [`MaterialSpecification`] for a material that adds the ambient
-/// color directly from its attachment to the surface.
-pub fn create_unoccluded_ambient_color_application_material() -> MaterialSpecification {
-    MaterialSpecification::new(
-        VertexAttributeSet::POSITION,
-        VertexAttributeSet::empty(),
-        RenderAttachmentQuantitySet::AMBIENT_COLOR,
-        RenderAttachmentQuantitySet::SURFACE,
-        None,
-        Vec::new(),
-        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::UnoccludedApplication),
-    )
-}
-
 impl AmbientOcclusionSamples {
     fn new(sample_count: u32, sample_radius: fre, intensity_scale: f32, contrast: f32) -> Self {
         assert_ne!(sample_count, 0);

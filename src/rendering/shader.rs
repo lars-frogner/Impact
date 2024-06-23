@@ -5,6 +5,7 @@ mod blinn_phong;
 mod fixed;
 mod gaussian_blur;
 mod microfacet;
+mod passthrough;
 mod prepass;
 mod skybox;
 mod vertex_color;
@@ -17,6 +18,7 @@ pub use microfacet::{
     DiffuseMicrofacetShadingModel, MicrofacetShadingModel, MicrofacetTextureShaderInput,
     SpecularMicrofacetShadingModel,
 };
+pub use passthrough::{PassthroughShaderGenerator, PassthroughShaderInput};
 pub use prepass::{
     BumpMappingTextureShaderInput, NormalMappingShaderInput, ParallaxMappingShaderInput,
     PrepassShaderGenerator, PrepassTextureShaderInput,
@@ -139,6 +141,7 @@ pub enum MaterialShaderInput {
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
     Prepass(PrepassTextureShaderInput),
     Skybox(SkyboxTextureShaderInput),
+    Passthrough(PassthroughShaderInput),
     AmbientOcclusion(AmbientOcclusionShaderInput),
     GaussianBlur(GaussianBlurShaderInput),
 }
@@ -210,6 +213,7 @@ pub enum MaterialShaderGenerator<'a> {
     Microfacet(MicrofacetShaderGenerator<'a>),
     Prepass(PrepassShaderGenerator<'a>),
     Skybox(SkyboxShaderGenerator<'a>),
+    Passthrough(PassthroughShaderGenerator<'a>),
     AmbientOcclusion(AmbientOcclusionShaderGenerator<'a>),
     GaussianBlur(GaussianBlurShaderGenerator<'a>),
 }
@@ -1077,6 +1081,9 @@ impl ShaderGenerator {
             }
             (None, None, Some(MaterialShaderInput::Skybox(input))) => Some(
                 MaterialShaderGenerator::Skybox(SkyboxShaderGenerator::new(input)),
+            ),
+            (None, None, Some(MaterialShaderInput::Passthrough(input))) => Some(
+                MaterialShaderGenerator::Passthrough(PassthroughShaderGenerator::new(input)),
             ),
             (None, None, Some(MaterialShaderInput::AmbientOcclusion(input))) => {
                 Some(MaterialShaderGenerator::AmbientOcclusion(
@@ -2106,6 +2113,7 @@ impl<'a> MaterialShaderGenerator<'a> {
     pub fn tricks(&self) -> ShaderTricks {
         match self {
             Self::Skybox(_) => SkyboxShaderGenerator::TRICKS,
+            Self::Passthrough(_) => PassthroughShaderGenerator::TRICKS,
             Self::AmbientOcclusion(_) => AmbientOcclusionShaderGenerator::TRICKS,
             Self::GaussianBlur(_) => GaussianBlurShaderGenerator::TRICKS,
             _ => ShaderTricks::empty(),
@@ -2280,6 +2288,17 @@ impl<'a> MaterialShaderGenerator<'a> {
                     bind_group_idx,
                     fragment_input_struct,
                     material_input_field_indices,
+                );
+            }
+            (Self::Passthrough(generator), MaterialVertexOutputFieldIndices::None) => {
+                generator.generate_fragment_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    bind_group_idx,
+                    push_constant_fragment_expressions,
+                    fragment_input_struct,
+                    mesh_input_field_indices,
                 );
             }
             (Self::AmbientOcclusion(generator), MaterialVertexOutputFieldIndices::None) => {
@@ -7543,6 +7562,31 @@ mod test {
     }
 
     #[test]
+    fn building_passthrough_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::Passthrough(PassthroughShaderInput {
+                input_texture_and_sampler_bindings: (0, 1),
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::AMBIENT_COLOR,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
     fn building_ambient_occlusion_computation_shader_works() {
         let module = ShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
@@ -7583,31 +7627,6 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::AMBIENT_COLOR
                 | RenderAttachmentQuantitySet::OCCLUSION,
-            RenderAttachmentQuantitySet::empty(),
-        )
-        .unwrap()
-        .0;
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_ambient_occlusion_disabled_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::AmbientOcclusion(
-                AmbientOcclusionShaderInput::UnoccludedApplication,
-            )),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::AMBIENT_COLOR,
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()

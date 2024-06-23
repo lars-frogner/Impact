@@ -13,7 +13,7 @@ mod vertex_color;
 
 pub use ambient_occlusion::{
     create_ambient_occlusion_application_material, create_ambient_occlusion_computation_material,
-    create_unoccluded_ambient_color_application_material, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+    MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
