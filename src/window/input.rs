@@ -49,9 +49,12 @@ pub enum KeyboardInputAction {
     ToggleBackFaceCulling,
     ToggleTriangleFill,
     ToggleShadowMapping,
+    CycleMSAA,
     ToggleAmbientOcclusion,
     ToggleBloom,
-    CycleMSAA,
+    CycleToneMapping,
+    IncreaseExposure,
+    DecreaseExposure,
     IncrementSimulationSubstepCount,
     DecrementSimulationSubstepCount,
     IncreaseSimulationSpeed,
@@ -181,6 +184,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::CycleMSAA => {
+                        if state == &ElementState::Released {
+                            world.renderer().write().unwrap().cycle_msaa();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::ToggleAmbientOcclusion => {
                         if state == &ElementState::Released {
                             world.scene().read().unwrap().toggle_ambient_occlusion();
@@ -193,9 +202,21 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
-                    KeyboardInputAction::CycleMSAA => {
+                    KeyboardInputAction::CycleToneMapping => {
                         if state == &ElementState::Released {
-                            world.renderer().write().unwrap().cycle_msaa();
+                            world.scene().read().unwrap().cycle_tone_mapping();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::IncreaseExposure => {
+                        if state == &ElementState::Released {
+                            world.increase_exposure();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::DecreaseExposure => {
+                        if state == &ElementState::Released {
+                            world.decrease_exposure();
                         }
                         Ok(HandlingResult::Handled)
                     }
@@ -311,9 +332,12 @@ impl Default for KeyActionMap {
             ToggleBackFaceCulling => KeyB,
             ToggleTriangleFill => KeyF,
             ToggleShadowMapping => KeyI,
+            CycleMSAA => KeyY,
             ToggleAmbientOcclusion => KeyO,
             ToggleBloom => KeyU,
-            CycleMSAA => KeyY,
+            CycleToneMapping => KeyT,
+            IncreaseExposure => KeyX,
+            DecreaseExposure => KeyZ,
             IncrementSimulationSubstepCount => KeyM,
             DecrementSimulationSubstepCount => KeyN,
             IncreaseSimulationSpeed => Period,

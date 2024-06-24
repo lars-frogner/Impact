@@ -56,7 +56,7 @@ pub fn add_skybox_material_component_for_entity(
                         vertex_attribute_requirements_for_mesh,
                         vertex_attribute_requirements_for_shader,
                         RenderAttachmentQuantitySet::empty(),
-                        RenderAttachmentQuantitySet::SURFACE,
+                        RenderAttachmentQuantitySet::COLOR,
                         None,
                         Vec::new(),
                         RenderPassHints::NO_DEPTH_PREPASS,

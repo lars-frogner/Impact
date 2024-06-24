@@ -36,7 +36,7 @@ impl VertexColorMaterial {
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_MESH,
             Self::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::SURFACE,
+            RenderAttachmentQuantitySet::COLOR,
             None,
             Vec::new(),
             RenderPassHints::empty(),

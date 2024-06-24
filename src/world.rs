@@ -435,6 +435,36 @@ impl World {
         }
     }
 
+    /// Increases the exposure by a small multiplicative factor.
+    pub fn increase_exposure(&self) {
+        self.scene()
+            .read()
+            .unwrap()
+            .postprocessor()
+            .write()
+            .unwrap()
+            .increase_exposure();
+        self.renderer()
+            .read()
+            .unwrap()
+            .declare_render_resources_desynchronized();
+    }
+
+    /// Decreases the exposure by a small multiplicative factor.
+    pub fn decrease_exposure(&self) {
+        self.scene()
+            .read()
+            .unwrap()
+            .postprocessor()
+            .write()
+            .unwrap()
+            .decrease_exposure();
+        self.renderer()
+            .read()
+            .unwrap()
+            .declare_render_resources_desynchronized();
+    }
+
     /// Increases the simulation speed multiplier by the
     /// `simulation_speed_multiplier_increment_factor` specified in the
     /// simulation configuration and decrease the motion controller speed by the

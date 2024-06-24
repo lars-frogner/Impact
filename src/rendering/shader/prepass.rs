@@ -553,8 +553,8 @@ impl<'a> PrepassShaderGenerator<'a> {
             );
         }
 
-        // Write ambient color to the color render attachment (will be used when
-        // applying ambient occlusion).
+        // Write ambient color to the ambient color attachment (will be used
+        // when applying ambient occlusion).
         if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::AMBIENT_COLOR)
         {
             let ambient_rgba_color_expr = append_unity_component_to_vec3(

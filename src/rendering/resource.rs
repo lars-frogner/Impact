@@ -8,13 +8,13 @@ use crate::{
     geometry::TriangleMesh,
     rendering::{
         camera::CameraRenderBufferManager, fre, instance::InstanceFeatureRenderBufferManager,
-        light::LightRenderBufferManager, mesh::MeshRenderBufferManager, Assets,
-        CoreRenderingSystem, MaterialPropertyTextureManager, MaterialRenderResourceManager,
-        RenderingConfig,
+        light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
+        postprocessing::PostprocessingResourceManager, Assets, CoreRenderingSystem,
+        MaterialPropertyTextureManager, MaterialRenderResourceManager, RenderingConfig,
     },
     scene::{
         InstanceFeatureManager, LightStorage, MaterialID, MaterialLibrary,
-        MaterialPropertyTextureSetID, MeshID, ModelID, SceneCamera,
+        MaterialPropertyTextureSetID, MeshID, ModelID, Postprocessor, SceneCamera,
     },
 };
 use anyhow::Result;
@@ -57,6 +57,7 @@ pub struct SynchronizedRenderResources {
     material_resource_managers: Box<MaterialResourceManagerMap>,
     material_property_texture_managers: Box<MaterialPropertyTextureManagerMap>,
     instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
+    postprocessing_resource_manager: Box<PostprocessingResourceManager>,
 }
 
 /// Wrapper for render resources that are assumed to be out of sync
@@ -70,6 +71,7 @@ struct DesynchronizedRenderResources {
     material_resource_managers: Mutex<Box<MaterialResourceManagerMap>>,
     material_property_texture_managers: Mutex<Box<MaterialPropertyTextureManagerMap>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
+    postprocessing_resource_manager: Mutex<Box<PostprocessingResourceManager>>,
 }
 
 type MeshRenderBufferManagerMap = HashMap<MeshID, MeshRenderBufferManager>;
@@ -204,6 +206,11 @@ impl SynchronizedRenderResources {
     pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureRenderBufferManagerMap {
         self.instance_feature_buffer_managers.as_ref()
     }
+
+    /// Returns a reference to the postprocessing resource manager.
+    pub fn postprocessing_resource_manager(&self) -> &PostprocessingResourceManager {
+        self.postprocessing_resource_manager.as_ref()
+    }
 }
 
 impl DesynchronizedRenderResources {
@@ -215,6 +222,7 @@ impl DesynchronizedRenderResources {
             material_property_texture_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
+            postprocessing_resource_manager: Mutex::new(Box::default()),
         }
     }
 
@@ -226,6 +234,7 @@ impl DesynchronizedRenderResources {
             material_resource_managers,
             material_property_texture_managers,
             instance_feature_buffer_managers,
+            postprocessing_resource_manager,
         } = render_resources;
         Self {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
@@ -234,6 +243,7 @@ impl DesynchronizedRenderResources {
             material_resource_managers: Mutex::new(material_resource_managers),
             material_property_texture_managers: Mutex::new(material_property_texture_managers),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
+            postprocessing_resource_manager: Mutex::new(postprocessing_resource_manager),
         }
     }
 
@@ -245,6 +255,7 @@ impl DesynchronizedRenderResources {
             material_resource_managers,
             material_property_texture_managers,
             instance_feature_buffer_managers,
+            postprocessing_resource_manager,
         } = self;
         SynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
@@ -257,6 +268,7 @@ impl DesynchronizedRenderResources {
             instance_feature_buffer_managers: instance_feature_buffer_managers
                 .into_inner()
                 .unwrap(),
+            postprocessing_resource_manager: postprocessing_resource_manager.into_inner().unwrap(),
         }
     }
 
@@ -424,6 +436,13 @@ impl DesynchronizedRenderResources {
         }
         feature_render_buffer_managers
             .retain(|model_id, _| instance_feature_manager.has_model_id(*model_id));
+    }
+
+    fn sync_postprocessing_resource_manager_with_postprocessor(
+        postprocessing_resource_manager: &mut PostprocessingResourceManager,
+        postprocessor: &Postprocessor,
+    ) {
+        postprocessing_resource_manager.set_exposure(postprocessor.exposure());
     }
 
     /// Removes render resources whose source data is no longer present.

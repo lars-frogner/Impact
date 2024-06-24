@@ -8,6 +8,7 @@ mod microfacet;
 mod passthrough;
 mod prepass;
 mod skybox;
+mod tone_mapping;
 mod vertex_color;
 
 pub use ambient_occlusion::{AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput};
@@ -24,6 +25,7 @@ pub use prepass::{
     PrepassShaderGenerator, PrepassTextureShaderInput,
 };
 pub use skybox::{SkyboxShaderGenerator, SkyboxTextureShaderInput};
+pub use tone_mapping::{ToneMappingShaderGenerator, ToneMappingShaderInput};
 
 use crate::{
     geometry::{
@@ -144,6 +146,7 @@ pub enum MaterialShaderInput {
     Passthrough(PassthroughShaderInput),
     AmbientOcclusion(AmbientOcclusionShaderInput),
     GaussianBlur(GaussianBlurShaderInput),
+    ToneMapping(ToneMappingShaderInput),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -216,6 +219,7 @@ pub enum MaterialShaderGenerator<'a> {
     Passthrough(PassthroughShaderGenerator<'a>),
     AmbientOcclusion(AmbientOcclusionShaderGenerator<'a>),
     GaussianBlur(GaussianBlurShaderGenerator<'a>),
+    ToneMapping(ToneMappingShaderGenerator<'a>),
 }
 
 bitflags! {
@@ -401,6 +405,7 @@ pub struct PushConstantFieldIndices {
     inverse_window_dimensions: usize,
     light_idx: Option<usize>,
     cascade_idx: Option<usize>,
+    exposure: Option<usize>,
 }
 
 /// Expressions for accessing fields in the struct containing push constants.
@@ -409,6 +414,7 @@ pub struct PushConstantFieldExpressions {
     pub inverse_window_dimensions: Handle<Expression>,
     pub light_idx: Option<Handle<Expression>>,
     pub cascade_idx: Option<Handle<Expression>>,
+    pub exposure: Option<Handle<Expression>>,
 }
 
 /// Represents a struct passed as an argument to a shader
@@ -645,7 +651,8 @@ lazy_static! {
         include_str!("../../shader/blinn_phong.wgsl"),
         include_str!("../../shader/microfacet.wgsl"),
         include_str!("../../shader/ambient_occlusion.wgsl"),
-        include_str!("../../shader/gaussian_blur.wgsl")
+        include_str!("../../shader/gaussian_blur.wgsl"),
+        include_str!("../../shader/tone_mapping.wgsl")
     ))
     .unwrap_or_else(|err| panic!("Error when including shader source library: {}", err));
 }
@@ -821,6 +828,14 @@ impl ShaderGenerator {
                 &mut module,
                 &mut push_constant_struct,
                 material_shader_generator.is_some(),
+            );
+        }
+
+        if let Some(material_shader_input) = material_shader_input {
+            Self::add_material_push_constants(
+                material_shader_input,
+                &mut module,
+                &mut push_constant_struct,
             );
         }
 
@@ -1092,6 +1107,9 @@ impl ShaderGenerator {
             }
             (None, None, Some(MaterialShaderInput::GaussianBlur(input))) => Some(
                 MaterialShaderGenerator::GaussianBlur(GaussianBlurShaderGenerator::new(input)),
+            ),
+            (None, None, Some(MaterialShaderInput::ToneMapping(input))) => Some(
+                MaterialShaderGenerator::ToneMapping(ToneMappingShaderGenerator::new(input)),
             ),
             input => {
                 return Err(anyhow!(
@@ -1549,6 +1567,21 @@ impl ShaderGenerator {
                     None,
                     U32_WIDTH,
                 ));
+        }
+    }
+
+    fn add_material_push_constants(
+        material_shader_input: &MaterialShaderInput,
+        module: &mut Module,
+        push_constant_struct: &mut PushConstantStruct,
+    ) {
+        if matches!(material_shader_input, &MaterialShaderInput::ToneMapping(_)) {
+            let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
+            push_constant_struct.field_indices.exposure = Some(
+                push_constant_struct
+                    .builder
+                    .add_field("exposure", f32_type, None, F32_WIDTH),
+            );
         }
     }
 
@@ -2116,6 +2149,7 @@ impl<'a> MaterialShaderGenerator<'a> {
             Self::Passthrough(_) => PassthroughShaderGenerator::TRICKS,
             Self::AmbientOcclusion(_) => AmbientOcclusionShaderGenerator::TRICKS,
             Self::GaussianBlur(_) => GaussianBlurShaderGenerator::TRICKS,
+            Self::ToneMapping(_) => ToneMappingShaderGenerator::TRICKS,
             _ => ShaderTricks::empty(),
         }
     }
@@ -2314,6 +2348,17 @@ impl<'a> MaterialShaderGenerator<'a> {
                 );
             }
             (Self::GaussianBlur(generator), MaterialVertexOutputFieldIndices::None) => {
+                generator.generate_fragment_code(
+                    module,
+                    source_code_lib,
+                    fragment_function,
+                    bind_group_idx,
+                    push_constant_fragment_expressions,
+                    fragment_input_struct,
+                    mesh_input_field_indices,
+                );
+            }
+            (Self::ToneMapping(generator), MaterialVertexOutputFieldIndices::None) => {
                 generator.generate_fragment_code(
                     module,
                     source_code_lib,
@@ -3423,6 +3468,7 @@ impl PushConstantStruct {
             inverse_window_dimensions: inverse_window_dimensions_idx,
             light_idx: None,
             cascade_idx: None,
+            exposure: None,
         };
 
         Self {
@@ -3475,6 +3521,7 @@ impl PushConstantStruct {
             inverse_window_dimensions: inverse_window_dimensions_expr,
             light_idx: None,
             cascade_idx: None,
+            exposure: None,
         };
 
         if let Some(light_idx) = self.field_indices.light_idx {
@@ -3508,6 +3555,24 @@ impl PushConstantStruct {
                     function,
                     Expression::Load {
                         pointer: cascade_idx_ptr_expr,
+                    },
+                )
+            }));
+        }
+
+        if let Some(exposure) = self.field_indices.exposure {
+            field_expressions.exposure = Some(emit_in_func(function, |function| {
+                let exposure_ptr_expr = include_expr_in_func(
+                    function,
+                    Expression::AccessIndex {
+                        base: struct_ptr_expr,
+                        index: exposure as u32,
+                    },
+                );
+                include_expr_in_func(
+                    function,
+                    Expression::Load {
+                        pointer: exposure_ptr_expr,
                     },
                 )
             }));
@@ -5525,14 +5590,13 @@ fn append_unity_component_to_vec3(
 // becomes extremely slow
 #[cfg(test)]
 #[cfg(not(miri))]
+#[allow(clippy::dbg_macro)]
 mod test {
-    #![allow(clippy::dbg_macro)]
-
-    use crate::scene::{
-        FixedColorMaterial, FixedTextureMaterial, GaussianBlurDirection, VertexColorMaterial,
-    };
-
     use super::*;
+    use crate::scene::{
+        FixedColorMaterial, FixedTextureMaterial, GaussianBlurDirection, ToneMapping,
+        VertexColorMaterial,
+    };
     use naga::{
         back::wgsl::{self as wgsl_out, WriterFlags},
         front::wgsl as wgsl_in,
@@ -7655,7 +7719,7 @@ mod test {
                 },
             )),
             VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::SURFACE,
+            RenderAttachmentQuantitySet::COLOR,
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()
@@ -7684,7 +7748,85 @@ mod test {
                 },
             )),
             VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::SURFACE,
+            RenderAttachmentQuantitySet::COLOR,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_no_tone_mapping_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
+                mapping: ToneMapping::None,
+                input_texture_and_sampler_bindings: (0, 1),
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::COLOR,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_aces_tone_mapping_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
+                mapping: ToneMapping::ACES,
+                input_texture_and_sampler_bindings: (0, 1),
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::COLOR,
+            RenderAttachmentQuantitySet::empty(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_khronos_pbr_neutral_tone_mapping_shader_works() {
+        let module = ShaderGenerator::generate_shader_module(
+            None,
+            Some(&MINIMAL_MESH_INPUT),
+            None,
+            &[],
+            Some(&MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
+                mapping: ToneMapping::KhronosPBRNeutral,
+                input_texture_and_sampler_bindings: (0, 1),
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::COLOR,
             RenderAttachmentQuantitySet::empty(),
         )
         .unwrap()

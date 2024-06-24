@@ -55,7 +55,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
     /// ambient occlusion factor, which is written to a dedicated render
     /// attachment. In the application stage, the render attachment textures for
     /// ambient color and occlusion factor are taken as input. The ambient color
-    /// is weighted with an averaged occlusion factor and written to the surface
+    /// is weighted with an averaged occlusion factor and written to the ambient
     /// color attachment.
     pub fn generate_fragment_code(
         &self,
