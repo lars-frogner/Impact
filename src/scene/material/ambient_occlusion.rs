@@ -78,7 +78,7 @@ pub fn create_ambient_occlusion_application_material() -> MaterialSpecification 
         RenderAttachmentQuantitySet::POSITION
             | RenderAttachmentQuantitySet::AMBIENT_COLOR
             | RenderAttachmentQuantitySet::OCCLUSION,
-        RenderAttachmentQuantitySet::SURFACE,
+        RenderAttachmentQuantitySet::COLOR,
         None,
         Vec::new(),
         RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),

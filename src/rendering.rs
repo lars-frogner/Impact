@@ -9,6 +9,7 @@ mod instance;
 mod light;
 mod material;
 mod mesh;
+mod postprocessing;
 mod render_pass;
 mod resource;
 mod shader;
@@ -25,7 +26,7 @@ pub use buffer::{
 };
 pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
 pub use render_pass::{
-    DepthMapUsage, OutputAttachmentSampling, RenderPassHints, RenderPassManager,
+    Blending, DepthMapUsage, OutputAttachmentSampling, RenderPassHints, RenderPassManager,
     RenderPassSpecification, RenderPassState, SyncRenderPasses,
 };
 pub use resource::SyncRenderResources;
@@ -38,7 +39,7 @@ pub use shader::{
     MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
     OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PassthroughShaderInput,
     PrepassTextureShaderInput, Shader, ShaderGenerator, SkyboxTextureShaderInput,
-    SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
+    SpecularMicrofacetShadingModel, ToneMappingShaderInput, UnidirectionalLightShaderInput,
 };
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
@@ -245,6 +246,11 @@ impl RenderingSystem {
     }
 
     fn render_surface(&self) -> Result<wgpu::SurfaceTexture> {
+        let surface_texture = self.core_system.surface().get_current_texture()?;
+        let surface_texture_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
 
         let mut n_recorded_passes = 0;
@@ -254,6 +260,7 @@ impl RenderingSystem {
             for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
                 let outcome = render_pass_recorder.record_render_pass(
                     &self.core_system,
+                    &surface_texture_view,
                     render_resources_guard.synchronized(),
                     &self.render_attachment_texture_manager,
                     &mut command_encoder,
@@ -263,10 +270,6 @@ impl RenderingSystem {
                 }
             }
         } // <- Lock on `self.render_resource_manager` is released here
-
-        let surface_texture = self.core_system.surface().get_current_texture()?;
-
-        self.copy_surface_attachment_to_surface(&mut command_encoder, &surface_texture);
 
         log::info!("Performing {} render passes", n_recorded_passes);
 
@@ -306,32 +309,6 @@ impl RenderingSystem {
                 .unwrap()
                 .clear_model_render_pass_recorders();
         }
-    }
-
-    fn copy_surface_attachment_to_surface(
-        &self,
-        command_encoder: &mut wgpu::CommandEncoder,
-        surface_texture: &wgpu::SurfaceTexture,
-    ) {
-        command_encoder.copy_texture_to_texture(
-            wgpu::ImageCopyTexture {
-                texture: self
-                    .render_attachment_texture_manager
-                    .render_attachment_texture(RenderAttachmentQuantity::Surface)
-                    .regular
-                    .texture(),
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::ImageCopyTexture {
-                texture: &surface_texture.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            surface_texture.texture.size(),
-        );
     }
 }
 

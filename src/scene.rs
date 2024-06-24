@@ -38,14 +38,15 @@ pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
     add_skybox_material_component_for_entity, create_ambient_occlusion_application_material,
     create_ambient_occlusion_computation_material, create_gaussian_blur_material,
-    register_material_components, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
-    EmissiveTextureComp, FixedColorComp, FixedColorMaterial, FixedMaterialResources,
-    FixedTextureComp, FixedTextureMaterial, GaussianBlurDirection, GaussianBlurSamples,
-    MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-    MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
-    MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RGBColor, RoughnessComp,
-    RoughnessTextureComp, SkyboxComp, SpecularColorComp, SpecularTextureComp,
-    TexturedColorEmissiveMaterialFeature, TexturedColorParallaxMappingEmissiveMaterialFeature,
+    create_tone_mapping_material, register_material_components, DiffuseColorComp,
+    DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp, FixedColorMaterial,
+    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, GaussianBlurDirection,
+    GaussianBlurSamples, MaterialComp, MaterialHandle, MaterialID, MaterialLibrary,
+    MaterialPropertyTextureSet, MaterialPropertyTextureSetID, MaterialSpecification,
+    MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
+    ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularColorComp,
+    SpecularTextureComp, TexturedColorEmissiveMaterialFeature,
+    TexturedColorParallaxMappingEmissiveMaterialFeature, ToneMapping,
     UniformDiffuseEmissiveMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
@@ -101,6 +102,8 @@ pub struct SceneConfig {
     pub initial_min_angular_voxel_extent_for_lod: Radians<fre>,
     pub ambient_occlusion: AmbientOcclusionConfig,
     pub bloom: BloomConfig,
+    pub tone_mapping: ToneMapping,
+    pub initial_exposure: fre,
 }
 
 impl Scene {
@@ -126,6 +129,8 @@ impl Scene {
             &mut material_library,
             &config.ambient_occlusion,
             &config.bloom,
+            config.tone_mapping,
+            config.initial_exposure,
         );
 
         Self {
@@ -206,6 +211,11 @@ impl Scene {
     pub fn toggle_bloom(&self) {
         self.postprocessor.write().unwrap().toggle_bloom();
     }
+
+    /// Cycle tone mapping.
+    pub fn cycle_tone_mapping(&self) {
+        self.postprocessor.write().unwrap().cycle_tone_mapping();
+    }
 }
 
 impl Default for Scene {
@@ -221,6 +231,8 @@ impl Default for SceneConfig {
             initial_min_angular_voxel_extent_for_lod: Radians(0.0),
             ambient_occlusion: AmbientOcclusionConfig::default(),
             bloom: BloomConfig::default(),
+            tone_mapping: ToneMapping::default(),
+            initial_exposure: 1.0,
         }
     }
 }

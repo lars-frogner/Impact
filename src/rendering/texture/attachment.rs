@@ -1,6 +1,6 @@
 //! Textures used as render attachments.
 
-use crate::rendering::CoreRenderingSystem;
+use crate::rendering::{Blending, CoreRenderingSystem};
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
@@ -12,7 +12,7 @@ bitflags! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
     pub struct RenderAttachmentQuantitySet: u16 {
         const DEPTH              = 1 << 0;
-        const SURFACE            = 1 << 1;
+        const COLOR              = 1 << 1;
         const POSITION           = 1 << 2;
         const NORMAL_VECTOR      = 1 << 3;
         const TEXTURE_COORDS     = 1 << 4;
@@ -25,10 +25,10 @@ bitflags! {
 
 /// A quantity that can be rendered to a dedicated render attachment texture.
 #[repr(u16)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RenderAttachmentQuantity {
     Depth = 0,
-    Surface = 1,
+    Color = 1,
     Position = 2,
     NormalVector = 3,
     TextureCoords = 4,
@@ -74,7 +74,7 @@ const N_RENDER_ATTACHMENT_QUANTITIES: usize = 9;
 /// This is the order expected by the shaders.
 const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantity::Depth,
-    RenderAttachmentQuantity::Surface,
+    RenderAttachmentQuantity::Color,
     RenderAttachmentQuantity::Position,
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
@@ -87,7 +87,7 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
 /// The bitflag of each individual render attachment quantity.
 const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantitySet::DEPTH,
-    RenderAttachmentQuantitySet::SURFACE,
+    RenderAttachmentQuantitySet::COLOR,
     RenderAttachmentQuantitySet::POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
@@ -100,7 +100,7 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
 /// The name of each individual render attachment quantity.
 const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "depth",
-    "surface",
+    "color",
     "position",
     "normal_vector",
     "texture_coords",
@@ -113,20 +113,20 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
 /// The texture format used for each render attachment quantity.
 const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
     wgpu::TextureFormat::Depth32FloatStencil8, // Depth
-    wgpu::TextureFormat::Rgba8UnormSrgb, // Surface (this is ignored in favor of the actual surface format)
-    wgpu::TextureFormat::Rgba32Float,    // Position
-    wgpu::TextureFormat::Rgba8Unorm,     // Normal vector
-    wgpu::TextureFormat::Rg32Float,      // Texture coordinates
-    wgpu::TextureFormat::Rgba8UnormSrgb, // Ambient color
-    wgpu::TextureFormat::Rgba16Float,    // Emissive color
-    wgpu::TextureFormat::Rgba16Float,    // Emissive color (auxiliary)
-    wgpu::TextureFormat::R8Unorm,        // Occlusion
+    wgpu::TextureFormat::Rgba16Float,          // Color
+    wgpu::TextureFormat::Rgba32Float,          // Position
+    wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
+    wgpu::TextureFormat::Rg32Float,            // Texture coordinates
+    wgpu::TextureFormat::Rgba16Float,          // Ambient color
+    wgpu::TextureFormat::Rgba16Float,          // Emissive color
+    wgpu::TextureFormat::Rgba16Float,          // Emissive color (auxiliary)
+    wgpu::TextureFormat::R8Unorm,              // Occlusion
 ];
 
 /// Whether multisampling will be used when requested for each render attachment quantity.
 const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     true, // Depth
-    true, // Surface
+    true, // Color
     true, // Position
     true, // Normal vector
     true, // Texture coordinates
@@ -139,14 +139,29 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
 /// The clear color used for each color render attachment quantity (depth is not
 /// included).
 const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
-    wgpu::Color::BLACK,
-    wgpu::Color::BLACK,
-    wgpu::Color::BLACK,
-    wgpu::Color::BLACK,
-    wgpu::Color::BLACK,
-    wgpu::Color::BLACK,
-    wgpu::Color::BLACK,
-    wgpu::Color::WHITE,
+    wgpu::Color::BLACK, // Color
+    wgpu::Color::BLACK, // Position
+    wgpu::Color::BLACK, // Normal vector
+    wgpu::Color::BLACK, // Texture coordinates
+    wgpu::Color::BLACK, // Ambient color
+    wgpu::Color::BLACK, // Emissive color
+    wgpu::Color::BLACK, // Emissive color (auxiliary)
+    wgpu::Color::WHITE, // Occlusion
+];
+
+/// The blending mode used for each color render attachment quantity (depth is not
+/// included).
+const RENDER_ATTACHMENT_BLENDING_MODES: [Blending; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
+    // Since we determine contributions from each light in separate render
+    // passes, we need to add up the color contributions.
+    Blending::Additive, // Color
+    Blending::Replace,  // Position
+    Blending::Replace,  // Normal vector
+    Blending::Replace,  // Texture coordinates
+    Blending::Replace,  // Ambient color
+    Blending::Replace,  // Emissive color
+    Blending::Replace,  // Emissive color (auxiliary)
+    Blending::Replace,  // Occlusion
 ];
 
 /// The texture and sampler bind group bindings used for each render attachment
@@ -184,6 +199,11 @@ impl RenderAttachmentQuantity {
         &RENDER_ATTACHMENT_NAMES
     }
 
+    /// The texture format of each individual render attachment quantity.
+    pub const fn texture_formats() -> &'static [wgpu::TextureFormat; Self::count()] {
+        &RENDER_ATTACHMENT_FORMATS
+    }
+
     /// The texture format used for the depth render attachment texture.
     pub const fn depth_texture_format() -> wgpu::TextureFormat {
         RENDER_ATTACHMENT_FORMATS[Self::Depth.index()]
@@ -193,6 +213,12 @@ impl RenderAttachmentQuantity {
     /// first quantity, depth, is not included).
     pub const fn clear_colors() -> &'static [wgpu::Color; Self::count() - 1] {
         &RENDER_ATTACHMENT_CLEAR_COLORS
+    }
+
+    /// The default blending mode used for each color render attachment quantity
+    /// (the first quantity, depth, is not included).
+    pub const fn blending_modes() -> &'static [Blending; Self::count() - 1] {
+        &RENDER_ATTACHMENT_BLENDING_MODES
     }
 
     /// The texture and sampler bind group bindings used for each render attachment
@@ -223,12 +249,8 @@ impl RenderAttachmentQuantity {
     }
 
     /// The texture format used for this render attachment quantity.
-    pub fn texture_format(&self, core_system: &CoreRenderingSystem) -> wgpu::TextureFormat {
-        if *self == Self::Surface {
-            core_system.surface_config().format
-        } else {
-            RENDER_ATTACHMENT_FORMATS[self.index()]
-        }
+    pub const fn texture_format(&self) -> wgpu::TextureFormat {
+        RENDER_ATTACHMENT_FORMATS[self.index()]
     }
 
     /// Whether multisampling is supported for this render attachment quantity.
@@ -243,6 +265,15 @@ impl RenderAttachmentQuantity {
     pub fn clear_color(&self) -> wgpu::Color {
         assert_ne!(*self, Self::Depth);
         Self::clear_colors()[self.index() - 1]
+    }
+
+    /// The default blending mode of this render attachment quantity.
+    ///
+    /// # Panics
+    /// If this quantity is depth.
+    pub fn blending(&self) -> Blending {
+        assert_ne!(*self, Self::Depth);
+        Self::blending_modes()[self.index() - 1]
     }
 
     /// The texture and sampler bind group bindings used for this render
@@ -416,25 +447,16 @@ impl RenderAttachmentTextureManager {
         }
     }
 
-    /// Creates a view into the given surface texture.
-    pub fn create_surface_texture_view(
-        surface_texture: &wgpu::SurfaceTexture,
-    ) -> wgpu::TextureView {
-        surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
     fn recreate_render_attachment_texture(
         &mut self,
         core_system: &CoreRenderingSystem,
         quantity: RenderAttachmentQuantity,
         sample_count: u32,
     ) {
-        let format = quantity.texture_format(core_system);
+        let texture_format = quantity.texture_format();
 
         let quantity_texture =
-            MaybeWithMultisampling::new(core_system, quantity, format, sample_count);
+            MaybeWithMultisampling::new(core_system, quantity, texture_format, sample_count);
 
         let label = format!("{} render attachment", quantity);
 
@@ -444,7 +466,7 @@ impl RenderAttachmentTextureManager {
             .get_or_insert_with(|| {
                 Self::create_render_attachment_texture_bind_group_layout(
                     core_system.device(),
-                    format,
+                    texture_format,
                     texture_binding,
                     sampler_binding,
                     &label,

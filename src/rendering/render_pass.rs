@@ -9,11 +9,12 @@ use crate::{
     rendering::{
         camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
-        resource::SynchronizedRenderResources, texture::SHADOW_MAP_FORMAT, CameraShaderInput,
-        CascadeIdx, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialPropertyTextureManager, MaterialRenderResourceManager, MaterialShaderInput,
-        MeshShaderInput, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
-        RenderAttachmentTextureManager, RenderingConfig, Shader,
+        postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
+        texture::SHADOW_MAP_FORMAT, CameraShaderInput, CascadeIdx, CoreRenderingSystem,
+        InstanceFeatureShaderInput, LightShaderInput, MaterialPropertyTextureManager,
+        MaterialRenderResourceManager, MaterialShaderInput, MeshShaderInput,
+        RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
+        RenderingConfig, Shader,
     },
     scene::{
         LightID, LightType, MaterialID, MaterialPropertyTextureSetID, MeshID, ModelID,
@@ -52,6 +53,8 @@ pub struct RenderPassManager {
 /// Holds the information describing a specific render pass.
 #[derive(Clone, Debug)]
 pub struct RenderPassSpecification {
+    /// Whether to clear the rendering surface.
+    pub clear_surface: bool,
     /// Which non-depth render attachments to clear in this pass.
     pub color_attachments_to_clear: RenderAttachmentQuantitySet,
     /// ID of the model type to render, or [`None`] if the pass does not render
@@ -74,6 +77,10 @@ pub struct RenderPassSpecification {
     /// Whether to write to the multisampled versions of the output attachment
     /// textures when available, or only use the regular versions.
     pub output_attachment_sampling: OutputAttachmentSampling,
+    /// The blending mode to use for each output attachment in this pass. When
+    /// not specified here, the default blending mode for the attachment will be
+    /// used.
+    pub blending_overrides: HashMap<RenderAttachmentQuantity, Blending>,
     pub hints: RenderPassHints,
     pub label: String,
 }
@@ -115,6 +122,10 @@ bitflags! {
         const NO_DEPTH_PREPASS  = 1 << 1;
         /// The render pass does not make use of a camera.
         const NO_CAMERA         = 1 << 2;
+        /// The render pass requires the exposure from the postprocessor.
+        const REQUIRES_EXPOSURE = 1 << 3;
+        /// The render pass writes directly to the rendering surface.
+        const WRITES_TO_SURFACE = 1 << 4;
     }
 }
 
@@ -180,6 +191,13 @@ pub enum ShadowMapIdentifier {
 pub enum OutputAttachmentSampling {
     Single,
     MultiIfAvailable,
+}
+
+/// The blending mode to use for a render pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blending {
+    Replace,
+    Additive,
 }
 
 #[derive(Debug)]
@@ -766,6 +784,7 @@ impl RenderPassManager {
             if !non_multisampling_quantities.is_empty() {
                 self.clearing_pass_recorders
                     .push(RenderPassRecorder::clearing_pass(
+                        false,
                         non_multisampling_quantities,
                     ));
             }
@@ -773,11 +792,15 @@ impl RenderPassManager {
             let multisampling_quantities = RenderAttachmentQuantitySet::multisampling_quantities();
             if !multisampling_quantities.is_empty() {
                 self.clearing_pass_recorders
-                    .push(RenderPassRecorder::clearing_pass(multisampling_quantities));
+                    .push(RenderPassRecorder::clearing_pass(
+                        false,
+                        multisampling_quantities,
+                    ));
             }
         } else {
             self.clearing_pass_recorders
                 .push(RenderPassRecorder::clearing_pass(
+                    false,
                     RenderAttachmentQuantitySet::all(),
                 ));
         }
@@ -869,8 +892,12 @@ impl RenderPassSpecification {
 
     /// Creates the specification for the render pass that will clear the given
     /// render attachments.
-    fn clearing_pass(render_attachment_quantities_to_clear: RenderAttachmentQuantitySet) -> Self {
+    fn clearing_pass(
+        clear_surface: bool,
+        render_attachment_quantities_to_clear: RenderAttachmentQuantitySet,
+    ) -> Self {
         Self {
+            clear_surface,
             color_attachments_to_clear: render_attachment_quantities_to_clear.color_only(),
             depth_map_usage: if render_attachment_quantities_to_clear
                 .contains(RenderAttachmentQuantitySet::DEPTH)
@@ -878,6 +905,11 @@ impl RenderPassSpecification {
                 DepthMapUsage::Clear
             } else {
                 DepthMapUsage::None
+            },
+            hints: if clear_surface {
+                RenderPassHints::WRITES_TO_SURFACE
+            } else {
+                RenderPassHints::empty()
             },
             label: "Clearing pass".to_string(),
             ..Default::default()
@@ -1114,6 +1146,10 @@ impl RenderPassSpecification {
             ) {
                 size += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
             }
+        }
+
+        if self.hints.contains(RenderPassHints::REQUIRES_EXPOSURE) {
+            size += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
         }
 
         wgpu::PushConstantRange {
@@ -1477,29 +1513,31 @@ impl RenderPassSpecification {
         &self,
         quantity: RenderAttachmentQuantity,
     ) -> Option<wgpu::BlendState> {
-        if quantity == RenderAttachmentQuantity::Surface {
-            if !self.use_prepass_material {
-                // Since we determine contributions from each light in
-                // separate render passes, we need to add up the color
-                // contributions. We simply ignore alpha.
+        let blending = self
+            .blending_overrides
+            .get(&quantity)
+            .copied()
+            .unwrap_or_else(|| quantity.blending());
+
+        match blending {
+            Blending::Replace => Some(wgpu::BlendState::REPLACE),
+            Blending::Additive => {
                 Some(wgpu::BlendState {
                     color: wgpu::BlendComponent {
                         src_factor: wgpu::BlendFactor::One,
                         dst_factor: wgpu::BlendFactor::One,
                         operation: wgpu::BlendOperation::Add,
                     },
+                    // We simply ignore alpha for now
                     alpha: wgpu::BlendComponent::default(),
                 })
-            } else {
-                Some(wgpu::BlendState::REPLACE)
             }
-        } else {
-            None
         }
     }
 
     fn determine_color_target_states(
         &self,
+        core_system: &CoreRenderingSystem,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Vec<Option<wgpu::ColorTargetState>> {
@@ -1522,6 +1560,14 @@ impl RenderPassSpecification {
                             })
                         }),
                 );
+            }
+
+            if self.hints.contains(RenderPassHints::WRITES_TO_SURFACE) {
+                color_target_states.push(Some(wgpu::ColorTargetState {
+                    format: core_system.surface_config().format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::COLOR,
+                }));
             }
 
             color_target_states
@@ -1654,6 +1700,7 @@ impl RenderPassSpecification {
 
     fn create_color_attachments<'a, 'b: 'a>(
         &'a self,
+        surface_texture_view: &'a wgpu::TextureView,
         render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         attachments_to_resolve: RenderAttachmentQuantitySet,
@@ -1700,6 +1747,22 @@ impl RenderPassSpecification {
                             })
                         }),
                 );
+            }
+
+            if self.hints.contains(RenderPassHints::WRITES_TO_SURFACE) {
+                let load = if self.clear_surface {
+                    wgpu::LoadOp::Load
+                } else {
+                    wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+                };
+                color_attachments.push(Some(wgpu::RenderPassColorAttachment {
+                    view: surface_texture_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }));
             }
 
             color_attachments
@@ -1774,6 +1837,7 @@ impl RenderPassSpecification {
 impl Default for RenderPassSpecification {
     fn default() -> Self {
         Self {
+            clear_surface: false,
             color_attachments_to_clear: RenderAttachmentQuantitySet::empty(),
             model_id: None,
             explicit_mesh_id: None,
@@ -1783,6 +1847,7 @@ impl Default for RenderPassSpecification {
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
             output_attachment_sampling: OutputAttachmentSampling::MultiIfAvailable,
+            blending_overrides: HashMap::new(),
             hints: RenderPassHints::empty(),
             label: String::new(),
         }
@@ -1852,6 +1917,7 @@ impl RenderPassRecorder {
             );
 
             let color_target_states = specification.determine_color_target_states(
+                core_system,
                 render_attachment_texture_manager,
                 output_render_attachment_quantities,
             );
@@ -1906,10 +1972,13 @@ impl RenderPassRecorder {
     }
 
     pub fn clearing_pass(
+        clear_surface: bool,
         render_attachment_quantities_to_clear: RenderAttachmentQuantitySet,
     ) -> Self {
-        let specification =
-            RenderPassSpecification::clearing_pass(render_attachment_quantities_to_clear);
+        let specification = RenderPassSpecification::clearing_pass(
+            clear_surface,
+            render_attachment_quantities_to_clear,
+        );
         Self {
             specification,
             vertex_attribute_requirements: VertexAttributeSet::empty(),
@@ -1929,6 +1998,7 @@ impl RenderPassRecorder {
     pub fn record_render_pass(
         &self,
         core_system: &CoreRenderingSystem,
+        surface_texture_view: &wgpu::TextureView,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -1977,6 +2047,7 @@ impl RenderPassRecorder {
         };
 
         let color_attachments = self.specification.create_color_attachments(
+            surface_texture_view,
             render_attachment_texture_manager,
             output_render_attachment_quantities,
             self.attachments_to_resolve,
@@ -2032,7 +2103,6 @@ impl RenderPassRecorder {
                 push_constant_offset += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
             }
 
-            #[allow(unused_assignments)]
             if let ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(
                 cascade_idx,
             )) = self.specification.shadow_map_usage
@@ -2045,6 +2115,25 @@ impl RenderPassRecorder {
                     bytemuck::bytes_of(&cascade_idx),
                 );
                 push_constant_offset += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
+            }
+
+            #[allow(unused_assignments)]
+            if self
+                .specification
+                .hints
+                .contains(RenderPassHints::REQUIRES_EXPOSURE)
+            {
+                // Write the exposure value to the appropriate push constant range
+                render_pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    push_constant_offset,
+                    bytemuck::bytes_of(
+                        &render_resources
+                            .postprocessing_resource_manager()
+                            .exposure(),
+                    ),
+                );
+                push_constant_offset += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
             }
 
             for (index, &bind_group) in bind_groups.iter().enumerate() {

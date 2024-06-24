@@ -1,7 +1,5 @@
 //! Material for applying a Gaussian blur.
 
-use std::fmt::Display;
-
 use crate::{
     assert_uniform_valid,
     geometry::VertexAttributeSet,
@@ -14,6 +12,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;
 use nalgebra::Vector4;
+use std::fmt::Display;
 
 /// The maximum number of unique Gaussian weights that can be passed to the GPU
 /// for computing Gaussian blur. The actual number of samples that will be

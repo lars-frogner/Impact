@@ -295,7 +295,7 @@ fn execute_material_setup(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
                 input_render_attachment_quantities,
-                RenderAttachmentQuantitySet::SURFACE,
+                RenderAttachmentQuantitySet::COLOR,
                 None,
                 vec![feature_type_id],
                 RenderPassHints::AFFECTED_BY_LIGHT,

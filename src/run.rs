@@ -315,7 +315,7 @@ fn init_world(window: Window) -> Result<World> {
     //             50.0,
     //         ),
     //         &DiffuseTextureComp(bricks_color_texture_id),
-    //         &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
+    //         &SpecularColorComp(vector![1.0, 1.0, 1.0] * 0.02),
     //         &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
     //         &ParallaxMapComp::new(
     //             bricks_height_texture_id,
@@ -338,7 +338,7 @@ fn init_world(window: Window) -> Result<World> {
     //             50.0,
     //         ),
     //         &DiffuseTextureComp(bricks_color_texture_id),
-    //         &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
+    //         &SpecularColorComp(vector![1.0, 1.0, 1.0] * 0.02),
     //         &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
     //         &ParallaxMapComp::new(
     //             bricks_height_texture_id,
@@ -360,7 +360,7 @@ fn init_world(window: Window) -> Result<World> {
     //             50.0,
     //         ),
     //         &DiffuseTextureComp(bricks_color_texture_id),
-    //         &SpecularColorComp::in_range_of(SpecularColorComp::STONE, 100.0),
+    //         &SpecularColorComp(vector![1.0, 1.0, 1.0] * 0.02),
     //         &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
     //         &ParallaxMapComp::new(
     //             bricks_height_texture_id,
@@ -378,7 +378,7 @@ fn init_world(window: Window) -> Result<World> {
             &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
             &RadianceComp(vector![1.0, 1.0, 1.0] * 150.0),
             &DiffuseColorComp(Vector3::zeros()),
-            &EmissiveColorComp(vector![1.0, 1.0, 1.0]),
+            &EmissiveColorComp(vector![1.0, 1.0, 1.0] * 5.0),
             &OmnidirectionalComp,
             &EmissionExtentComp(0.7),
         ))
@@ -387,14 +387,14 @@ fn init_world(window: Window) -> Result<World> {
     world
         .create_entity((
             &DirectionComp(LightDirection::new_normalize(vector![0.6, -0.3, 1.0])),
-            &RadianceComp(vector![1.0, 1.0, 1.0] * 0.2),
+            &RadianceComp(vector![1.0, 1.0, 1.0] * 1.0),
             &AngularExtentComp(Degrees(2.0)),
         ))
         .unwrap();
 
     world
         .create_entity(&RadianceComp::for_uniform_irradiance(
-            &(vector![1.0, 1.0, 1.0] * 0.05),
+            &(vector![1.0, 1.0, 1.0] * 0.2),
         ))
         .unwrap();
 

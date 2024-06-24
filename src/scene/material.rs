@@ -9,6 +9,7 @@ mod gaussian_blur;
 mod microfacet;
 mod prepass;
 mod skybox;
+mod tone_mapping;
 mod vertex_color;
 
 pub use ambient_occlusion::{
@@ -45,6 +46,7 @@ pub use gaussian_blur::{
 pub use microfacet::{add_microfacet_material_component_for_entity, setup_microfacet_material};
 pub use prepass::create_prepass_material;
 pub use skybox::add_skybox_material_component_for_entity;
+pub use tone_mapping::{create_tone_mapping_material, ToneMapping};
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{
