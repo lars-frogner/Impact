@@ -376,21 +376,21 @@ fn init_world(window: Window) -> Result<World> {
             &SphereMeshComp::new(25),
             &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
             &AlbedoComp(Vector3::zeros()),
-            &EmissiveLuminanceComp(vector![1.0, 1.0, 1.0] * 5.0),
-            &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 500.0, 0.7),
+            &EmissiveLuminanceComp(vector![1.0, 1.0, 1.0] * 1e5),
+            &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
         ))
         .unwrap();
 
     world
         .create_entity(&UnidirectionalEmissionComp::new(
-            vector![1.0, 1.0, 1.0] * 2.0,
+            vector![1.0, 1.0, 1.0] * 100000.0,
             UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
             Degrees(2.0),
         ))
         .unwrap();
 
     world
-        .create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 0.15))
+        .create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))
         .unwrap();
 
     // world

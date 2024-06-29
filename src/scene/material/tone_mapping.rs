@@ -56,7 +56,6 @@ pub fn create_tone_mapping_material(
         Vec::new(),
         RenderPassHints::NO_DEPTH_PREPASS
             .union(RenderPassHints::NO_CAMERA)
-            .union(RenderPassHints::REQUIRES_EXPOSURE)
             .union(RenderPassHints::WRITES_TO_SURFACE),
         MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
             mapping,

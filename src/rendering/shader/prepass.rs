@@ -3,9 +3,9 @@
 use super::{
     append_unity_component_to_vec3, emit_in_func, include_expr_in_func, insert_in_arena,
     InputStruct, InputStructBuilder, LightMaterialFeatureShaderInput, LightShaderGenerator,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, SourceCode, TextureType,
-    F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
-    VECTOR_4_TYPE,
+    MeshVertexOutputFieldIndices, OutputStructBuilder, PushConstantFieldExpressions,
+    SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
+    VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::rendering::RenderAttachmentQuantitySet;
 use naga::{BinaryOperator, Expression, Function, Handle, Module};
@@ -263,6 +263,7 @@ impl<'a> PrepassShaderGenerator<'a> {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &PrepassVertexOutputFieldIndices,
@@ -341,8 +342,12 @@ impl<'a> PrepassShaderGenerator<'a> {
                     source_code_lib.generate_function_call(
                         module,
                         fragment_function,
-                        "computeAmbientReflectedLuminanceForLambertian",
-                        vec![albedo_expr, ambient_light_shader_generator.luminance],
+                        "computePreExposedAmbientReflectedLuminanceForLambertian",
+                        vec![
+                            albedo_expr,
+                            ambient_light_shader_generator.luminance,
+                            push_constant_fragment_expressions.exposure,
+                        ],
                     )
                 });
 
@@ -456,7 +461,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                             source_code_lib.generate_function_call(
                                 module,
                                 fragment_function,
-                                "computeAmbientReflectedLuminanceForSpecularGGX",
+                                "computePreExposedAmbientReflectedLuminanceForSpecularGGX",
                                 vec![
                                     specular_reflectance_lookup_texture_expr,
                                     specular_reflectance_lookup_sampler_expr,
@@ -465,6 +470,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                                     specular_reflectance_expr.expect("Missing specular reflectance for computing specular ambient reflected luminance"),
                                     roughness_expr,
                                     ambient_light_shader_generator.luminance,
+                                    push_constant_fragment_expressions.exposure,
                                 ],
                             )
                         },
@@ -600,10 +606,20 @@ impl<'a> PrepassShaderGenerator<'a> {
             let emissive_luminance_expr =
                 fragment_input_struct.get_field_expr(emissive_luminance_idx);
 
+            let pre_exposed_emissive_luminance_expr = source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "preExposeEmissiveLuminance",
+                vec![
+                    emissive_luminance_expr,
+                    push_constant_fragment_expressions.exposure,
+                ],
+            );
+
             let output_emissive_luminance_expr = append_unity_component_to_vec3(
                 &mut module.types,
                 fragment_function,
-                emissive_luminance_expr,
+                pre_exposed_emissive_luminance_expr,
             );
 
             output_struct_builder.add_field(

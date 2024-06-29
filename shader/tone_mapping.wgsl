@@ -1,7 +1,3 @@
-fn scaleColorWithExposure(rgbaColor: vec4<f32>, exposure: f32) -> vec4<f32> {
-    return vec4<f32>(rgbaColor.rgb * exposure, rgbaColor.a);
-}
-
 fn toneMapACES(rgbaColor: vec4<f32>) -> vec4<f32> {
     let a = 2.51;
     let b = 0.03;

@@ -59,8 +59,6 @@ impl<'a> ToneMappingShaderGenerator<'a> {
         let inverse_window_dimensions_expr =
             push_constant_fragment_expressions.inverse_window_dimensions;
 
-        let exposure_expr = push_constant_fragment_expressions.exposure.unwrap();
-
         let framebuffer_position_expr =
             fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position);
 
@@ -97,23 +95,16 @@ impl<'a> ToneMappingShaderGenerator<'a> {
             None,
         );
 
-        let exposure_scaled_color_expr = source_code_lib.generate_function_call(
-            module,
-            fragment_function,
-            "scaleColorWithExposure",
-            vec![input_color_expr, exposure_expr],
-        );
-
         let tone_mapped_color_expr = if let Some(function_name) = self.input.mapping.function_name()
         {
             source_code_lib.generate_function_call(
                 module,
                 fragment_function,
                 function_name,
-                vec![exposure_scaled_color_expr],
+                vec![input_color_expr],
             )
         } else {
-            exposure_scaled_color_expr
+            input_color_expr
         };
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");

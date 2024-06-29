@@ -89,7 +89,7 @@ pub struct UnidirectionalLightComp {
 
 impl AmbientEmissionComp {
     /// Creates a new ambient light emission component with the given
-    /// illuminance.
+    /// illuminance (in lux).
     pub fn new(illuminance: Illumninance) -> Self {
         Self { illuminance }
     }
@@ -97,7 +97,7 @@ impl AmbientEmissionComp {
 
 impl OmnidirectionalEmissionComp {
     /// Creates a new omnidirectional light emission component with the given
-    /// luminous intensity and source extent.
+    /// luminous intensity (in candela) and source extent.
     pub fn new(luminous_intensity: LuminousIntensity, source_extent: fre) -> Self {
         Self {
             luminous_intensity,
@@ -108,7 +108,8 @@ impl OmnidirectionalEmissionComp {
 
 impl UnidirectionalEmissionComp {
     /// Creates a new unidirectional light emission component with the given
-    /// perpendicular illuminance, direction, and angular source extent.
+    /// perpendicular illuminance (in lux), direction, and angular source
+    /// extent.
     pub fn new(
         perpendicular_illuminance: Illumninance,
         direction: UnitVector3<fre>,

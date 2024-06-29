@@ -8,12 +8,17 @@ struct ReflectionDotProducts {
 
 // ***** Ambient lights *****
 
-fn computeAmbientReflectedLuminanceForLambertian(albedo: vec3<f32>, ambientLuminance: vec3<f32>) -> vec3<f32> {
+fn computePreExposedAmbientReflectedLuminanceForLambertian(
+    albedo: vec3<f32>,
+    ambientLuminance: vec3<f32>,
+    exposure: f32,
+) -> vec3<f32> {
     // Same as (albedo / pi) * ambientIlluminance
-    return albedo * ambientLuminance;
+    let reflectedLuminance = albedo * ambientLuminance;
+    return exposure * reflectedLuminance;
 }
 
-fn computeAmbientReflectedLuminanceForSpecularGGX(
+fn computePreExposedAmbientReflectedLuminanceForSpecularGGX(
     specularGGXReflectanceLookupTexture: texture_2d_array<f32>,
     specularGGXReflectanceLookupSampler: sampler,
     viewDirection: vec3<f32>,
@@ -21,8 +26,9 @@ fn computeAmbientReflectedLuminanceForSpecularGGX(
     normalIncidenceSpecularReflectance: vec3<f32>,
     roughness: f32,
     ambientLuminance: vec3<f32>,
+    exposure: f32,
 ) -> vec3<f32> {
-    var reflectedLuminance: vec3<f32>;
+    var preExposedReflectedLuminance: vec3<f32>;
 
     let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
 
@@ -51,16 +57,22 @@ fn computeAmbientReflectedLuminanceForSpecularGGX(
 
         let reflectance = (1.0 - normalIncidenceSpecularReflectance) * reflectanceForZeroNormalIncidenceReflectance + normalIncidenceSpecularReflectance * reflectanceForUnityNormalIncidenceReflectance;
 
-        reflectedLuminance = reflectance * ambientLuminance;
+        preExposedReflectedLuminance = exposure * reflectance * ambientLuminance;
     } else {
-        reflectedLuminance = getBlackColor();
+        preExposedReflectedLuminance = getBlackColor();
     }
 
-    return reflectedLuminance;
+    return preExposedReflectedLuminance;
 }
 
 fn getBlackColor() -> vec3<f32> {
     return vec3<f32>(0.0, 0.0, 0.0);
+}
+
+// ***** Emissive materials *****
+
+fn preExposeEmissiveLuminance(emissiveLuminance: vec3<f32>, exposure: f32) -> vec3<f32> {
+    return exposure * emissiveLuminance;
 }
 
 // ***** Omnidirectional lights *****
@@ -90,7 +102,7 @@ fn computeShadowMapFragmentDepthOmniLight(
 }
 
 struct OmniLightQuantities {
-    incidentLuminance: vec3<f32>,
+    preExposedIncidentLuminance: vec3<f32>,
     lightSpaceFragmentDisplacement: vec3<f32>,
     normalizedDistance: f32,
     dots: ReflectionDotProducts,
@@ -105,6 +117,7 @@ fn computeOmniLightQuantities(
     fragmentPosition: vec3<f32>,
     fragmentNormal: vec3<f32>,
     viewDirection: vec3<f32>,
+    exposure: f32,
 ) -> OmniLightQuantities {
     var output: OmniLightQuantities;
 
@@ -113,7 +126,7 @@ fn computeOmniLightQuantities(
     let inverseDistance = sqrt(inverseSquaredDistance);
     let lightCenterDirection = lightCenterDisplacement * inverseDistance;
 
-    output.incidentLuminance = lightLuminousIntensity * inverseSquaredDistance;
+    output.preExposedIncidentLuminance = lightLuminousIntensity * (exposure * inverseSquaredDistance);
 
     let VDotN = dot(viewDirection, fragmentNormal);
     let LDotN = dot(lightCenterDirection, fragmentNormal);
@@ -156,6 +169,7 @@ fn computeOmniAreaLightQuantities(
     fragmentNormal: vec3<f32>,
     viewDirection: vec3<f32>,
     roughness: f32,
+    exposure: f32,
 ) -> OmniLightQuantities {
     var output: OmniLightQuantities;
 
@@ -164,7 +178,7 @@ fn computeOmniAreaLightQuantities(
     let inverseDistance = sqrt(inverseSquaredDistance);
     let lightCenterDirection = lightCenterDisplacement * inverseDistance;
 
-    output.incidentLuminance = lightLuminousIntensity * inverseSquaredDistance;
+    output.preExposedIncidentLuminance = lightLuminousIntensity * (exposure * inverseSquaredDistance);
 
     let VDotN = dot(viewDirection, fragmentNormal);
     let LDotN = dot(lightCenterDirection, fragmentNormal);
@@ -191,7 +205,7 @@ fn computeOmniAreaLightQuantities(
         LDotV,
     );
 
-    output.incidentLuminance *= computeLuminanceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness);
+    output.preExposedIncidentLuminance *= computeLuminanceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness);
 
     return output;
 }
@@ -354,7 +368,7 @@ fn applyNormalBiasUniLight(
 }
 
 struct UniLightQuantities {
-    incidentLuminance: vec3<f32>,
+    preExposedIncidentLuminance: vec3<f32>,
     lightClipSpacePosition: vec3<f32>,
     dots: ReflectionDotProducts,
 }
@@ -368,10 +382,11 @@ fn computeUniLightQuantities(
     lightSpaceNormalVector: vec3<f32>,
     fragmentNormal: vec3<f32>,
     viewDirection: vec3<f32>,
+    exposure: f32,
 ) -> UniLightQuantities {
     var output: UniLightQuantities;
 
-    output.incidentLuminance = lightPerpendicularIlluminance;
+    output.preExposedIncidentLuminance = exposure * lightPerpendicularIlluminance;
 
     let biasedLightSpacePosition = applyNormalBiasUniLight(lightSpacePosition, lightSpaceNormalVector);
     output.lightClipSpacePosition = applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
@@ -407,6 +422,7 @@ fn computeUniAreaLightQuantities(
     fragmentNormal: vec3<f32>,
     viewDirection: vec3<f32>,
     roughness: f32,
+    exposure: f32,
 ) -> UniLightQuantities {
     var output: UniLightQuantities;
 
@@ -426,7 +442,7 @@ fn computeUniAreaLightQuantities(
         LDotV,
     );
 
-    output.incidentLuminance = computeLuminanceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness) * lightPerpendicularIlluminance;
+    output.preExposedIncidentLuminance = (exposure * computeLuminanceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness)) * lightPerpendicularIlluminance;
 
     return output;
 }

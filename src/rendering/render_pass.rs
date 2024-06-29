@@ -122,10 +122,8 @@ bitflags! {
         const NO_DEPTH_PREPASS  = 1 << 1;
         /// The render pass does not make use of a camera.
         const NO_CAMERA         = 1 << 2;
-        /// The render pass requires the exposure from the postprocessor.
-        const REQUIRES_EXPOSURE = 1 << 3;
         /// The render pass writes directly to the rendering surface.
-        const WRITES_TO_SURFACE = 1 << 4;
+        const WRITES_TO_SURFACE = 1 << 3;
     }
 }
 
@@ -1137,6 +1135,8 @@ impl RenderPassSpecification {
     fn get_push_constant_range(&self) -> wgpu::PushConstantRange {
         let mut size = CoreRenderingSystem::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE;
 
+        size += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
+
         if self.light.is_some() {
             size += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
 
@@ -1146,10 +1146,6 @@ impl RenderPassSpecification {
             ) {
                 size += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
             }
-        }
-
-        if self.hints.contains(RenderPassHints::REQUIRES_EXPOSURE) {
-            size += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
         }
 
         wgpu::PushConstantRange {
@@ -2083,6 +2079,18 @@ impl RenderPassRecorder {
             push_constant_offset +=
                 CoreRenderingSystem::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE;
 
+            // Write the exposure value to the appropriate push constant range
+            render_pass.set_push_constants(
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
+                push_constant_offset,
+                bytemuck::bytes_of(
+                    &render_resources
+                        .postprocessing_resource_manager()
+                        .exposure(),
+                ),
+            );
+            push_constant_offset += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
+
             if let Some(LightInfo {
                 light_type,
                 light_id,
@@ -2103,6 +2111,7 @@ impl RenderPassRecorder {
                 push_constant_offset += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
             }
 
+            #[allow(unused_assignments)]
             if let ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(
                 cascade_idx,
             )) = self.specification.shadow_map_usage
@@ -2115,25 +2124,6 @@ impl RenderPassRecorder {
                     bytemuck::bytes_of(&cascade_idx),
                 );
                 push_constant_offset += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
-            }
-
-            #[allow(unused_assignments)]
-            if self
-                .specification
-                .hints
-                .contains(RenderPassHints::REQUIRES_EXPOSURE)
-            {
-                // Write the exposure value to the appropriate push constant range
-                render_pass.set_push_constants(
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    push_constant_offset,
-                    bytemuck::bytes_of(
-                        &render_resources
-                            .postprocessing_resource_manager()
-                            .exposure(),
-                    ),
-                );
-                push_constant_offset += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
             }
 
             for (index, &bind_group) in bind_groups.iter().enumerate() {

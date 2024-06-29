@@ -403,18 +403,18 @@ pub struct PushConstantStruct {
 #[derive(Clone, Debug)]
 pub struct PushConstantFieldIndices {
     inverse_window_dimensions: usize,
+    exposure: usize,
     light_idx: Option<usize>,
     cascade_idx: Option<usize>,
-    exposure: Option<usize>,
 }
 
 /// Expressions for accessing fields in the struct containing push constants.
 #[derive(Clone, Debug)]
 pub struct PushConstantFieldExpressions {
     pub inverse_window_dimensions: Handle<Expression>,
+    pub exposure: Handle<Expression>,
     pub light_idx: Option<Handle<Expression>>,
     pub cascade_idx: Option<Handle<Expression>>,
-    pub exposure: Option<Handle<Expression>>,
 }
 
 /// Represents a struct passed as an argument to a shader
@@ -1571,18 +1571,10 @@ impl ShaderGenerator {
     }
 
     fn add_material_push_constants(
-        material_shader_input: &MaterialShaderInput,
-        module: &mut Module,
-        push_constant_struct: &mut PushConstantStruct,
+        _material_shader_input: &MaterialShaderInput,
+        _module: &mut Module,
+        _push_constant_struct: &mut PushConstantStruct,
     ) {
-        if matches!(material_shader_input, &MaterialShaderInput::ToneMapping(_)) {
-            let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
-            push_constant_struct.field_indices.exposure = Some(
-                push_constant_struct
-                    .builder
-                    .add_field("exposure", f32_type, None, F32_WIDTH),
-            );
-        }
     }
 
     /// Creates a generator of shader code for the light type in the given
@@ -2306,6 +2298,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                     fragment_function,
                     bind_group_idx,
                     output_render_attachment_quantities,
+                    push_constant_fragment_expressions,
                     fragment_input_struct,
                     mesh_input_field_indices,
                     material_input_field_indices,
@@ -2919,6 +2912,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         framebuffer_position_expr: Handle<Expression>,
         position_expr: Handle<Expression>,
         normal_vector_expr: Handle<Expression>,
@@ -2946,6 +2940,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                     roughness_expr.expect(
                         "Missing roughness for omnidirectional area light luminance modification",
                     ),
+                    push_constant_fragment_expressions.exposure,
                 ],
             )
         } else {
@@ -2962,6 +2957,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                     position_expr,
                     normal_vector_expr,
                     view_dir_expr,
+                    push_constant_fragment_expressions.exposure,
                 ],
             )
         };
@@ -3007,7 +3003,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                 },
             );
 
-            let incident_luminance_expr = include_expr_in_func(
+            let pre_exposed_incident_luminance_expr = include_expr_in_func(
                 function,
                 Expression::AccessIndex {
                     base: light_quantities,
@@ -3015,18 +3011,18 @@ impl OmnidirectionalLightShadingShaderGenerator {
                 },
             );
 
-            let shadow_masked_incident_luminance_expr = include_expr_in_func(
+            let shadow_masked_pre_exposed_incident_luminance_expr = include_expr_in_func(
                 function,
                 Expression::Binary {
                     op: BinaryOperator::Multiply,
                     left: light_access_factor_expr,
-                    right: incident_luminance_expr,
+                    right: pre_exposed_incident_luminance_expr,
                 },
             );
 
             (
                 reflection_dot_products_expr,
-                shadow_masked_incident_luminance_expr,
+                shadow_masked_pre_exposed_incident_luminance_expr,
             )
         })
     }
@@ -3226,6 +3222,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         light_input_field_indices: &UnidirectionalLightVertexOutputFieldIndices,
+        push_constant_fragment_expressions: &PushConstantFieldExpressions,
         framebuffer_position_expr: Handle<Expression>,
         camera_space_normal_vector_expr: Handle<Expression>,
         camera_space_view_dir_expr: Handle<Expression>,
@@ -3380,6 +3377,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                     roughness_expr.expect(
                         "Missing roughness for omnidirectional area light luminance modification",
                     ),
+                    push_constant_fragment_expressions.exposure,
                 ],
             )
         } else {
@@ -3396,11 +3394,12 @@ impl UnidirectionalLightShadingShaderGenerator {
                     light_space_normal_vector_expr,
                     camera_space_normal_vector_expr,
                     camera_space_view_dir_expr,
+                    push_constant_fragment_expressions.exposure,
                 ],
             )
         };
 
-        let (incident_luminance_expr, light_clip_position_expr) =
+        let (pre_exposed_incident_luminance_expr, light_clip_position_expr) =
             emit_in_func(fragment_function, |function| {
                 (
                     include_expr_in_func(
@@ -3434,7 +3433,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                 cascade_idx_expr,
             );
 
-        let (reflection_dot_products_expr, shadow_masked_incident_luminance_expr) =
+        let (reflection_dot_products_expr, shadow_masked_pre_exposed_incident_luminance_expr) =
             emit_in_func(fragment_function, |function| {
                 (
                     include_expr_in_func(
@@ -3449,7 +3448,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                         Expression::Binary {
                             op: BinaryOperator::Multiply,
                             left: light_access_factor_expr,
-                            right: incident_luminance_expr,
+                            right: pre_exposed_incident_luminance_expr,
                         },
                     ),
                 )
@@ -3457,7 +3456,7 @@ impl UnidirectionalLightShadingShaderGenerator {
 
         (
             reflection_dot_products_expr,
-            shadow_masked_incident_luminance_expr,
+            shadow_masked_pre_exposed_incident_luminance_expr,
         )
     }
 }
@@ -3465,17 +3464,20 @@ impl UnidirectionalLightShadingShaderGenerator {
 impl PushConstantStruct {
     fn new(module: &mut Module) -> Self {
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
+        let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
 
         let mut builder = StructBuilder::new("PushConstants");
 
         let inverse_window_dimensions_idx =
             builder.add_field("inverseWindowDimensions", vec2_type, None, VECTOR_2_SIZE);
 
+        let exposure_idx = builder.add_field("exposure", f32_type, None, F32_WIDTH);
+
         let field_indices = PushConstantFieldIndices {
             inverse_window_dimensions: inverse_window_dimensions_idx,
+            exposure: exposure_idx,
             light_idx: None,
             cascade_idx: None,
-            exposure: None,
         };
 
         Self {
@@ -3524,11 +3526,27 @@ impl PushConstantStruct {
             )
         });
 
+        let exposure_expr = emit_in_func(function, |function| {
+            let exposure_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: struct_ptr_expr,
+                    index: self.field_indices.exposure as u32,
+                },
+            );
+            include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: exposure_ptr_expr,
+                },
+            )
+        });
+
         let mut field_expressions = PushConstantFieldExpressions {
             inverse_window_dimensions: inverse_window_dimensions_expr,
+            exposure: exposure_expr,
             light_idx: None,
             cascade_idx: None,
-            exposure: None,
         };
 
         if let Some(light_idx) = self.field_indices.light_idx {
@@ -3562,24 +3580,6 @@ impl PushConstantStruct {
                     function,
                     Expression::Load {
                         pointer: cascade_idx_ptr_expr,
-                    },
-                )
-            }));
-        }
-
-        if let Some(exposure) = self.field_indices.exposure {
-            field_expressions.exposure = Some(emit_in_func(function, |function| {
-                let exposure_ptr_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: struct_ptr_expr,
-                        index: exposure as u32,
-                    },
-                );
-                include_expr_in_func(
-                    function,
-                    Expression::Load {
-                        pointer: exposure_ptr_expr,
                     },
                 )
             }));
