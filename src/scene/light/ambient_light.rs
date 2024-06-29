@@ -3,16 +3,16 @@
 use crate::{
     rendering::fre,
     scene::{
-        self, AmbientLightComp, DirectionComp, Irradiance, LightStorage, OmnidirectionalComp,
-        Radiance, RadianceComp, RenderResourcesDesynchronized,
+        self, AmbientEmissionComp, AmbientLightComp, Illumninance, LightStorage, Luminance,
+        RenderResourcesDesynchronized,
     },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use std::sync::RwLock;
 
-/// A spatially uniform and isotropic radiance field, represented by an RGB
-/// incident radiance.
+/// A spatially uniform and isotropic light field, represented by an RGB
+/// incident luminance that applies to any surface affected by the light.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -20,28 +20,22 @@ use std::sync::RwLock;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct AmbientLight {
-    radiance: Radiance,
+    luminance: Luminance,
     // Padding to make size multiple of 16-bytes
     _padding: fre,
 }
 
 impl AmbientLight {
-    fn new(radiance: Radiance) -> Self {
+    fn new(luminance: Luminance) -> Self {
         Self {
-            radiance,
+            luminance,
             _padding: 0.0,
         }
     }
 
-    /// Sets the isotropic incident radiance due to the light to the given
-    /// value.
-    pub fn set_radiance(&mut self, radiance: Radiance) {
-        self.radiance = radiance;
-    }
-
-    /// Sets the uniform irradiance due to the light to the given value.
-    pub fn set_irradiance(&mut self, irradiance: &Irradiance) {
-        self.radiance = scene::compute_radiance_for_uniform_irradiance(irradiance);
+    /// Sets the uniform illuminance due to the light to the given value.
+    pub fn set_illuminance(&mut self, illuminance: Illumninance) {
+        self.luminance = scene::compute_luminance_for_uniform_illuminance(&illuminance);
     }
 
     /// Checks if the entity-to-be with the given components has the right
@@ -59,13 +53,15 @@ impl AmbientLight {
                 let mut light_storage = light_storage.write().unwrap();
             },
             components,
-            |radiance: &RadianceComp| -> AmbientLightComp {
-                let ambient_light = Self::new(radiance.0);
+            |ambient_emission: &AmbientEmissionComp| -> AmbientLightComp {
+                let ambient_light = Self::new(scene::compute_luminance_for_uniform_illuminance(
+                    &ambient_emission.illuminance,
+                ));
                 let id = light_storage.add_ambient_light(ambient_light);
 
                 AmbientLightComp { id }
             },
-            ![AmbientLightComp, OmnidirectionalComp, DirectionComp]
+            ![AmbientLightComp]
         );
     }
 

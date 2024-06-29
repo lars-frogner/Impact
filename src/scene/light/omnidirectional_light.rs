@@ -5,8 +5,8 @@ use crate::{
     physics::ReferenceFrameComp,
     rendering::fre,
     scene::{
-        EmissionExtentComp, LightStorage, OmnidirectionalComp, OmnidirectionalLightComp, Radiance,
-        RadianceComp, RenderResourcesDesynchronized, SceneCamera,
+        LightStorage, LuminousIntensity, OmnidirectionalEmissionComp, OmnidirectionalLightComp,
+        RenderResourcesDesynchronized, SceneCamera,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -16,11 +16,11 @@ use nalgebra::{
 };
 use std::sync::RwLock;
 
-/// An omnidirectional light source represented by a camera space position, an RGB
-/// radiance and an extent. The struct also includes a rotation quaternion that
-/// defines the orientation of the light's local coordinate system with respect
-/// to camera space, and a near and far distance restricting the distance range
-/// in which the light can cast shadows.
+/// An omnidirectional light source represented by a camera space position, an
+/// RGB luminous intensity and an extent. The struct also includes a rotation
+/// quaternion that defines the orientation of the light's local coordinate
+/// system with respect to camera space, and a near and far distance restricting
+/// the distance range in which the light can cast shadows.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -37,9 +37,9 @@ pub struct OmnidirectionalLight {
     camera_space_position: Point3<fre>,
     // Padding to obtain 16-byte alignment for next field
     _padding_1: fre,
-    // Radiance and emission radius are treated as a single 4-component vector
-    // in the shader
-    radiance: Radiance,
+    // Luminous intensity and emission radius are treated as a single
+    // 4-component vector in the shader
+    luminous_intensity: LuminousIntensity,
     emission_radius: fre,
     // The `near_distance` and `inverse_distance_span` fields are accessed as a
     // struct in a single field in the shader
@@ -54,12 +54,16 @@ impl OmnidirectionalLight {
     const MIN_NEAR_DISTANCE: fre = 1e-2;
     const MAX_FAR_DISTANCE: fre = fre::INFINITY;
 
-    fn new(camera_space_position: Point3<fre>, radiance: Radiance, emission_extent: f32) -> Self {
+    fn new(
+        camera_space_position: Point3<fre>,
+        luminous_intensity: LuminousIntensity,
+        emission_extent: f32,
+    ) -> Self {
         Self {
             camera_to_light_space_rotation: UnitQuaternion::identity(),
             camera_space_position,
             _padding_1: 0.0,
-            radiance,
+            luminous_intensity,
             emission_radius: 0.5 * emission_extent,
             near_distance: 0.0,
             inverse_distance_span: 0.0,
@@ -100,9 +104,14 @@ impl OmnidirectionalLight {
         self.camera_space_position = camera_space_position;
     }
 
-    /// Sets the radiance of the light to the given value.
-    pub fn set_radiance(&mut self, radiance: Radiance) {
-        self.radiance = radiance;
+    /// Sets the luminous intensity of the light to the given value.
+    pub fn set_luminous_intensity(&mut self, luminous_intensity: LuminousIntensity) {
+        self.luminous_intensity = luminous_intensity;
+    }
+
+    /// Sets the emission extent of the light to the given value.
+    pub fn set_emission_extent(&mut self, emission_extent: fre) {
+        self.emission_radius = 0.5 * emission_extent;
     }
 
     /// Updates the cubemap orientation and near and far distances to encompass
@@ -221,19 +230,17 @@ impl OmnidirectionalLight {
             },
             components,
             |frame: &ReferenceFrameComp,
-             radiance: &RadianceComp,
-             emission_extent: Option<&EmissionExtentComp>|
+             omnidirectional_emission: &OmnidirectionalEmissionComp|
              -> OmnidirectionalLightComp {
                 let omnidirectional_light = Self::new(
                     view_transform.transform_point(&frame.position.cast()),
-                    radiance.0,
-                    emission_extent.map_or(0.0, |extent| extent.0),
+                    omnidirectional_emission.luminous_intensity,
+                    fre::max(omnidirectional_emission.source_extent, 0.0),
                 );
                 let id = light_storage.add_omnidirectional_light(omnidirectional_light);
 
                 OmnidirectionalLightComp { id }
             },
-            [OmnidirectionalComp],
             ![OmnidirectionalLightComp]
         );
     }

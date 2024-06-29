@@ -69,16 +69,17 @@ pub fn create_ambient_occlusion_computation_material(
 }
 
 /// Creates a [`MaterialSpecification`] for a material that combines occlusion
-/// and ambient color from their respective attachments and adds the resulting
-/// occluded ambient color to the surface.
+/// and ambient reflected luminance from their respective attachments and adds
+/// the resulting occluded ambient reflected luminance to the luminance
+/// attachment.
 pub fn create_ambient_occlusion_application_material() -> MaterialSpecification {
     MaterialSpecification::new(
         VertexAttributeSet::POSITION,
         VertexAttributeSet::empty(),
         RenderAttachmentQuantitySet::POSITION
-            | RenderAttachmentQuantitySet::AMBIENT_COLOR
+            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
             | RenderAttachmentQuantitySet::OCCLUSION,
-        RenderAttachmentQuantitySet::COLOR,
+        RenderAttachmentQuantitySet::LUMINANCE,
         None,
         Vec::new(),
         RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),

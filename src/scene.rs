@@ -28,25 +28,25 @@ pub use graph::{
 };
 pub use instance::InstanceFeatureManager;
 pub use light::{
-    compute_radiance_for_uniform_irradiance, register_light_components, AmbientLight,
-    AmbientLightComp, AngularExtentComp, DirectionComp, EmissionExtentComp, Irradiance,
-    LightDirection, LightID, LightStorage, LightType, OmnidirectionalComp, OmnidirectionalLight,
-    OmnidirectionalLightComp, Radiance, RadianceComp, UnidirectionalLight, UnidirectionalLightComp,
+    compute_luminance_for_uniform_illuminance, register_light_components, AmbientEmissionComp,
+    AmbientLight, AmbientLightComp, Illumninance, LightID, LightStorage, LightType, Luminance,
+    LuminousIntensity, OmnidirectionalEmissionComp, OmnidirectionalLight, OmnidirectionalLightComp,
+    UnidirectionalEmissionComp, UnidirectionalLight, UnidirectionalLightComp,
     MAX_SHADOW_MAP_CASCADES,
 };
 pub use material::{
     add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
     add_skybox_material_component_for_entity, create_ambient_occlusion_application_material,
     create_ambient_occlusion_computation_material, create_gaussian_blur_material,
-    create_tone_mapping_material, register_material_components, DiffuseColorComp,
-    DiffuseTextureComp, EmissiveColorComp, EmissiveTextureComp, FixedColorComp, FixedColorMaterial,
+    create_tone_mapping_material, register_material_components, AlbedoComp, AlbedoTextureComp,
+    EmissiveLuminanceComp, EmissiveLuminanceTextureComp, FixedColorComp, FixedColorMaterial,
     FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, GaussianBlurDirection,
     GaussianBlurSamples, MaterialComp, MaterialHandle, MaterialID, MaterialLibrary,
     MaterialPropertyTextureSet, MaterialPropertyTextureSetID, MaterialSpecification,
     MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
-    ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularColorComp,
-    SpecularTextureComp, TexturedColorEmissiveMaterialFeature,
-    TexturedColorParallaxMappingEmissiveMaterialFeature, ToneMapping,
+    ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
+    SpecularReflectanceComp, SpecularReflectanceTextureComp, TexturedEmissiveMaterialFeature,
+    TexturedParallaxMappingEmissiveMaterialFeature, ToneMapping,
     UniformDiffuseEmissiveMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
@@ -62,10 +62,7 @@ pub use mesh::{
 pub use model::ModelID;
 pub use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
 pub use shader::{ShaderID, ShaderManager};
-pub use systems::{
-    SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
-    SyncSceneObjectTransforms,
-};
+pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
 pub use tasks::{
     BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,

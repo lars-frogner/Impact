@@ -14,10 +14,10 @@ use naga::{BinaryOperator, Expression, Function, Handle, Module};
 /// properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PrepassTextureShaderInput {
-    /// Bind group bindings of the diffuse color texture and its sampler.
-    pub diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
-    /// Bind group bindings of the specular color texture and its sampler.
-    pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the albedo texture and its sampler.
+    pub albedo_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the specular reflectance texture and its sampler.
+    pub specular_reflectance_texture_and_sampler_bindings: Option<(u32, u32)>,
     /// Bind group bindings of the roughness texture and its sampler.
     pub roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
     /// Bind group bindings of the lookup table texture for specular reflectance
@@ -58,9 +58,9 @@ pub struct PrepassShaderGenerator<'a> {
 /// vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct PrepassVertexOutputFieldIndices {
-    diffuse_color: Option<usize>,
-    specular_color: Option<usize>,
-    emissive_color: Option<usize>,
+    albedo: Option<usize>,
+    specular_reflectance: Option<usize>,
+    emissive_luminance: Option<usize>,
     roughness: Option<usize>,
     parallax_displacement_scale: Option<usize>,
     parallax_uv_per_distance: Option<usize>,
@@ -102,22 +102,35 @@ impl<'a> PrepassShaderGenerator<'a> {
 
         let mut has_material_property = false;
 
-        let input_diffuse_color_field_idx =
-            self.feature_input.diffuse_color_location.map(|location| {
+        let input_albedo_field_idx = self.feature_input.albedo_location.map(|location| {
+            has_material_property = true;
+            input_struct_builder.add_field("albedo", vec3_type, location, VECTOR_3_SIZE)
+        });
+
+        let input_specular_reflectance_field_idx = self
+            .feature_input
+            .specular_reflectance_location
+            .map(|location| {
                 has_material_property = true;
-                input_struct_builder.add_field("diffuseColor", vec3_type, location, VECTOR_3_SIZE)
+                input_struct_builder.add_field(
+                    "normalIncidenceSpecularReflectance",
+                    vec3_type,
+                    location,
+                    VECTOR_3_SIZE,
+                )
             });
 
-        let input_specular_color_field_idx =
-            self.feature_input.specular_color_location.map(|location| {
+        let input_emissive_luminance_field_idx = self
+            .feature_input
+            .emissive_luminance_location
+            .map(|location| {
                 has_material_property = true;
-                input_struct_builder.add_field("specularColor", vec3_type, location, VECTOR_3_SIZE)
-            });
-
-        let input_emissive_color_field_idx =
-            self.feature_input.emissive_color_location.map(|location| {
-                has_material_property = true;
-                input_struct_builder.add_field("emissiveColor", vec3_type, location, VECTOR_3_SIZE)
+                input_struct_builder.add_field(
+                    "emissiveLuminance",
+                    vec3_type,
+                    location,
+                    VECTOR_3_SIZE,
+                )
             });
 
         let input_roughness_field_idx = self.feature_input.roughness_location.map(|location| {
@@ -152,9 +165,9 @@ impl<'a> PrepassShaderGenerator<'a> {
             });
 
         let mut indices = PrepassVertexOutputFieldIndices {
-            diffuse_color: None,
-            specular_color: None,
-            emissive_color: None,
+            albedo: None,
+            specular_reflectance: None,
+            emissive_luminance: None,
             roughness: None,
             parallax_displacement_scale: None,
             parallax_uv_per_distance: None,
@@ -164,10 +177,10 @@ impl<'a> PrepassShaderGenerator<'a> {
             let input_struct =
                 input_struct_builder.generate_input_code(&mut module.types, vertex_function);
 
-            if let Some(idx) = input_diffuse_color_field_idx {
-                indices.diffuse_color = Some(
+            if let Some(idx) = input_albedo_field_idx {
+                indices.albedo = Some(
                     vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                        "diffuseColor",
+                        "albedo",
                         vec3_type,
                         VECTOR_3_SIZE,
                         input_struct.get_field_expr(idx),
@@ -175,10 +188,10 @@ impl<'a> PrepassShaderGenerator<'a> {
                 );
             }
 
-            if let Some(idx) = input_specular_color_field_idx {
-                indices.specular_color = Some(
+            if let Some(idx) = input_specular_reflectance_field_idx {
+                indices.specular_reflectance = Some(
                     vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                        "specularColor",
+                        "normalIncidenceSpecularReflectance",
                         vec3_type,
                         VECTOR_3_SIZE,
                         input_struct.get_field_expr(idx),
@@ -186,10 +199,10 @@ impl<'a> PrepassShaderGenerator<'a> {
                 );
             }
 
-            if let Some(idx) = input_emissive_color_field_idx {
-                indices.emissive_color = Some(
+            if let Some(idx) = input_emissive_luminance_field_idx {
+                indices.emissive_luminance = Some(
                     vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                        "emissiveColor",
+                        "emissiveLuminance",
                         vec3_type,
                         VECTOR_3_SIZE,
                         input_struct.get_field_expr(idx),
@@ -237,12 +250,12 @@ impl<'a> PrepassShaderGenerator<'a> {
     /// Generates the fragment shader code specific to this material by adding
     /// code representation to the given [`naga`] objects.
     ///
-    /// The ambient color is computed based on the diffuse and specular color
-    /// and the ambient radiance, and is returned from the function in an output
-    /// struct. If the prepass involves normal or parallax mapping, the code for
-    /// this is generated and the resulting quantities are included in the
-    /// output struct. If there is an emissive color, this is also returned
-    /// directly in the output struct.
+    /// The ambient reflected luminance is computed based on the albedo and
+    /// specular reflectance and the ambient illuminance, and is returned from
+    /// the function in an output struct. If the prepass involves normal or
+    /// parallax mapping, the code for this is generated and the resulting
+    /// quantities are included in the output struct. If there is an emissive
+    /// luminance, this is also returned directly in the output struct.
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
@@ -290,7 +303,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                 texture_coord_expr,
             );
 
-        let ambient_color_expr = match light_shader_generator {
+        let ambient_reflected_luminance_expr = match light_shader_generator {
             None => source_code_lib.generate_function_call(
                 module,
                 fragment_function,
@@ -298,42 +311,42 @@ impl<'a> PrepassShaderGenerator<'a> {
                 Vec::new(),
             ),
             Some(LightShaderGenerator::AmbientLight(ambient_light_shader_generator)) => {
-                let diffuse_color_expr = self
+                let albedo_expr = self
                     .texture_input
-                    .diffuse_texture_and_sampler_bindings
-                    .map(|(diffuse_texture_binding, diffuse_sampler_binding)| {
-                        let diffuse_color_texture = SampledTexture::declare(
+                    .albedo_texture_and_sampler_bindings
+                    .map(|(albedo_texture_binding, diffuse_sampler_binding)| {
+                        let albedo_texture = SampledTexture::declare(
                             &mut module.types,
                             &mut module.global_variables,
                             TextureType::Image2D,
-                            "diffuseColor",
+                            "albedo",
                             bind_group,
-                            diffuse_texture_binding,
+                            albedo_texture_binding,
                             Some(diffuse_sampler_binding),
                             None,
                         );
 
-                        diffuse_color_texture.generate_rgb_sampling_expr(
+                        albedo_texture.generate_rgb_sampling_expr(
                             fragment_function,
                             texture_coord_expr.unwrap(),
                         )
                     })
                     .or_else(|| {
                         material_input_field_indices
-                            .diffuse_color
+                            .albedo
                             .map(|idx| fragment_input_struct.get_field_expr(idx))
                     });
 
-                let diffuse_ambient_color = diffuse_color_expr.map(|diffuse_color_expr| {
+                let diffuse_ambient_reflected_luminance = albedo_expr.map(|albedo_expr| {
                     source_code_lib.generate_function_call(
                         module,
                         fragment_function,
-                        "computeAmbientColorForLambertian",
-                        vec![diffuse_color_expr, ambient_light_shader_generator.radiance],
+                        "computeAmbientReflectedLuminanceForLambertian",
+                        vec![albedo_expr, ambient_light_shader_generator.luminance],
                     )
                 });
 
-                let specular_ambient_color = self
+                let specular_ambient_reflected_luminance = self
                     .texture_input
                     .specular_reflectance_lookup_texture_and_sampler_bindings
                     .map(
@@ -358,36 +371,36 @@ impl<'a> PrepassShaderGenerator<'a> {
                             ) = specular_reflectance_lookup_texture
                                 .generate_texture_and_sampler_expressions(fragment_function, false);
 
-                            let specular_color_expr = self
+                            let specular_reflectance_expr = self
                                 .texture_input
-                                .specular_texture_and_sampler_bindings
-                                .map(|(specular_texture_binding, specular_sampler_binding)| {
-                                    let specular_color_texture = SampledTexture::declare(
+                                .specular_reflectance_texture_and_sampler_bindings
+                                .map(|(specular_reflectance_texture_binding, specular_sampler_binding)| {
+                                    let specular_reflectance_texture = SampledTexture::declare(
                                         &mut module.types,
                                         &mut module.global_variables,
                                         TextureType::Image2D,
-                                        "specularColor",
+                                        "normalIncidenceSpecularReflectance",
                                         bind_group,
-                                        specular_texture_binding,
+                                        specular_reflectance_texture_binding,
                                         Some(specular_sampler_binding),
                                         None,
                                     );
 
-                                    specular_color_texture.generate_rgb_sampling_expr(
+                                    specular_reflectance_texture.generate_rgb_sampling_expr(
                                         fragment_function,
                                         texture_coord_expr.unwrap(),
                                     )
                                 })
                                 .or_else(|| {
                                     material_input_field_indices
-                                        .specular_color
+                                        .specular_reflectance
                                         .map(|idx| fragment_input_struct.get_field_expr(idx))
                                 });
 
                             let fixed_roughness_value_expr = fragment_input_struct.get_field_expr(
                                 material_input_field_indices
                                     .roughness
-                                    .expect("Missing roughness for computing specular ambient color"),
+                                    .expect("Missing roughness for computing specular ambient reflected luminance"),
                             );
 
                             let roughness_expr = self
@@ -429,7 +442,7 @@ impl<'a> PrepassShaderGenerator<'a> {
 
                             let position_expr = fragment_input_struct.get_field_expr(
                                 mesh_input_field_indices.position.expect(
-                                    "Missing position for computing specular ambient color",
+                                    "Missing position for computing specular ambient reflected luminance",
                                 ),
                             );
 
@@ -443,41 +456,49 @@ impl<'a> PrepassShaderGenerator<'a> {
                             source_code_lib.generate_function_call(
                                 module,
                                 fragment_function,
-                                "computeAmbientColorForSpecularGGX",
+                                "computeAmbientReflectedLuminanceForSpecularGGX",
                                 vec![
                                     specular_reflectance_lookup_texture_expr,
                                     specular_reflectance_lookup_sampler_expr,
                                     view_dir_expr,
-                                    normal_vector_expr.expect("Missing normal vector for computing specular ambient color"),
-                                    specular_color_expr.expect("Missing specular color for computing specular ambient color"),
+                                    normal_vector_expr.expect("Missing normal vector for computing specular ambient reflected luminance"),
+                                    specular_reflectance_expr.expect("Missing specular reflectance for computing specular ambient reflected luminance"),
                                     roughness_expr,
-                                    ambient_light_shader_generator.radiance,
+                                    ambient_light_shader_generator.luminance,
                                 ],
                             )
                         },
                     );
 
-                match (diffuse_ambient_color, specular_ambient_color) {
+                match (
+                    diffuse_ambient_reflected_luminance,
+                    specular_ambient_reflected_luminance,
+                ) {
                     (None, None) => source_code_lib.generate_function_call(
                         module,
                         fragment_function,
                         "getBlackColor",
                         Vec::new(),
                     ),
-                    (Some(diffuse_ambient_color), None) => diffuse_ambient_color,
-                    (None, Some(specular_ambient_color)) => specular_ambient_color,
-                    (Some(diffuse_ambient_color), Some(specular_ambient_color)) => {
-                        emit_in_func(fragment_function, |function| {
-                            include_expr_in_func(
-                                function,
-                                Expression::Binary {
-                                    op: BinaryOperator::Add,
-                                    left: diffuse_ambient_color,
-                                    right: specular_ambient_color,
-                                },
-                            )
-                        })
+                    (Some(diffuse_ambient_reflected_luminance), None) => {
+                        diffuse_ambient_reflected_luminance
                     }
+                    (None, Some(specular_ambient_reflected_luminance)) => {
+                        specular_ambient_reflected_luminance
+                    }
+                    (
+                        Some(diffuse_ambient_reflected_luminance),
+                        Some(specular_ambient_reflected_luminance),
+                    ) => emit_in_func(fragment_function, |function| {
+                        include_expr_in_func(
+                            function,
+                            Expression::Binary {
+                                op: BinaryOperator::Add,
+                                left: diffuse_ambient_reflected_luminance,
+                                right: specular_ambient_reflected_luminance,
+                            },
+                        )
+                    }),
                 }
             }
             Some(invalid_shader_generator) => {
@@ -553,47 +574,49 @@ impl<'a> PrepassShaderGenerator<'a> {
             );
         }
 
-        // Write ambient color to the ambient color attachment (will be used
-        // when applying ambient occlusion).
-        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::AMBIENT_COLOR)
+        // Write ambient reflected luminance to the ambient reflected luminance
+        // attachment (will be used when applying ambient occlusion).
+        if output_render_attachment_quantities
+            .contains(RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE)
         {
-            let ambient_rgba_color_expr = append_unity_component_to_vec3(
+            let output_ambient_reflected_luminance_expr = append_unity_component_to_vec3(
                 &mut module.types,
                 fragment_function,
-                ambient_color_expr,
+                ambient_reflected_luminance_expr,
             );
 
             output_struct_builder.add_field(
-                "ambientColor",
+                "ambientReflectedLuminance",
                 vec4_type,
                 None,
                 None,
                 VECTOR_4_SIZE,
-                ambient_rgba_color_expr,
+                output_ambient_reflected_luminance_expr,
             );
         }
 
-        // Write emissive color to the emissive color attachment.
-        if let Some(emissive_color_idx) = material_input_field_indices.emissive_color {
-            let emissive_color_expr = fragment_input_struct.get_field_expr(emissive_color_idx);
+        // Write emissive luminance to the emissive luminance attachment.
+        if let Some(emissive_luminance_idx) = material_input_field_indices.emissive_luminance {
+            let emissive_luminance_expr =
+                fragment_input_struct.get_field_expr(emissive_luminance_idx);
 
-            let emissive_rgba_color_expr = append_unity_component_to_vec3(
+            let output_emissive_luminance_expr = append_unity_component_to_vec3(
                 &mut module.types,
                 fragment_function,
-                emissive_color_expr,
+                emissive_luminance_expr,
             );
 
             output_struct_builder.add_field(
-                "emissiveColor",
+                "emissiveLuminance",
                 vec4_type,
                 None,
                 None,
                 VECTOR_4_SIZE,
-                emissive_rgba_color_expr,
+                output_emissive_luminance_expr,
             );
-        // If we do not write an emissive color, we need to write a clear color
-        // in case we are obscuring an emissive object, otherwise the emissive
-        // object will shine through
+        // If we do not write an emissive luminance, we need to write a clear
+        // color in case we are obscuring an emissive object, otherwise the
+        // emissive object will shine through
         } else {
             let clear_color_expr = source_code_lib.generate_function_call(
                 module,
@@ -787,6 +810,6 @@ fn generate_normal_vector_and_texture_coord_expr(
 
 impl PrepassTextureShaderInput {
     fn is_empty(&self) -> bool {
-        self.diffuse_texture_and_sampler_bindings.is_none() && self.bump_mapping_input.is_none()
+        self.albedo_texture_and_sampler_bindings.is_none() && self.bump_mapping_input.is_none()
     }
 }

@@ -7,9 +7,8 @@ mod unidirectional_light;
 
 pub use ambient_light::AmbientLight;
 pub use components::{
-    register_light_components, AmbientLightComp, AngularExtentComp, DirectionComp,
-    EmissionExtentComp, OmnidirectionalComp, OmnidirectionalLightComp, RadianceComp,
-    UnidirectionalLightComp,
+    register_light_components, AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
+    OmnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
 };
 pub use omnidirectional_light::OmnidirectionalLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};
@@ -20,16 +19,20 @@ use crate::{
     rendering::fre,
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{UnitVector3, Vector3};
+use nalgebra::Vector3;
 
-/// The direction of a unidirectional light source.
-pub type LightDirection = UnitVector3<fre>;
+/// The luminous intensity of a light source, which is the visible power
+/// (luminous flux) emitted per unit solid angle, represented as an RGB triplet.
+pub type LuminousIntensity = Vector3<fre>;
 
-/// The RGB radiance of a light source.
-pub type Radiance = Vector3<fre>;
+/// The illuminance of surface, which is the visible power (luminous flux)
+/// received per unit area, represented as an RGB triplet.
+pub type Illumninance = Vector3<fre>;
 
-/// The RGB irradiance from a light source.
-pub type Irradiance = Vector3<fre>;
+/// A luminance, which is the visible power (luminous flux) per unit solid angle
+/// and area of light traveling in a given direction, represented as an RGB
+/// triplet.
+pub type Luminance = Vector3<fre>;
 
 /// Identifier for a light in a [`LightStorage`].
 #[repr(transparent)]
@@ -243,8 +246,8 @@ impl Default for LightStorage {
     }
 }
 
-/// Computes the isotropic radiance incident on any surface in a light field
-/// with the given uniform irradiance.
-pub fn compute_radiance_for_uniform_irradiance(irradiance: &Irradiance) -> Radiance {
-    irradiance * fre::FRAC_1_PI
+/// Computes the isotropic luminance incident on any surface in a light field
+/// with the given uniform illuminance.
+pub fn compute_luminance_for_uniform_illuminance(illuminance: &Illumninance) -> Luminance {
+    illuminance * fre::FRAC_1_PI
 }

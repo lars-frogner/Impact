@@ -9,12 +9,12 @@ use crate::{
         RenderPassHints, SpecularMicrofacetShadingModel,
     },
     scene::{
-        DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, InstanceFeatureManager,
-        MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
         MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
-        RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp, SpecularColorComp,
-        SpecularTextureComp,
+        RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp,
+        SpecularReflectanceComp, SpecularReflectanceTextureComp,
     },
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -40,8 +40,8 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: &DiffuseColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
+        |albedo: &AlbedoComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -50,9 +50,9 @@ pub fn add_microfacet_material_component_for_entity(
             setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
-                Some(diffuse_color),
+                Some(albedo),
                 None,
-                emissive_color,
+                emissive_luminance,
                 None,
                 None,
                 roughness,
@@ -66,9 +66,9 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetDiffuseReflectionComp],
         ![
             MaterialComp,
-            SpecularColorComp,
-            DiffuseTextureComp,
-            SpecularTextureComp
+            SpecularReflectanceComp,
+            AlbedoTextureComp,
+            SpecularReflectanceTextureComp
         ]
     );
 
@@ -79,8 +79,8 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: &DiffuseTextureComp,
+        |emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: &AlbedoTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -91,8 +91,8 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut instance_feature_manager,
                 None,
                 None,
-                emissive_color,
-                Some(diffuse_texture),
+                emissive_luminance,
+                Some(albedo_texture),
                 None,
                 roughness,
                 roughness_texture,
@@ -105,9 +105,9 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetDiffuseReflectionComp],
         ![
             MaterialComp,
-            SpecularColorComp,
-            DiffuseColorComp,
-            SpecularTextureComp
+            SpecularReflectanceComp,
+            AlbedoComp,
+            SpecularReflectanceTextureComp
         ]
     );
 
@@ -118,8 +118,8 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |specular_color: &SpecularColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
+        |specular_reflectance: &SpecularReflectanceComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -129,8 +129,8 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
-                Some(specular_color),
-                emissive_color,
+                Some(specular_reflectance),
+                emissive_luminance,
                 None,
                 None,
                 roughness,
@@ -144,9 +144,9 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
-            DiffuseColorComp,
-            DiffuseTextureComp,
-            SpecularTextureComp
+            AlbedoComp,
+            AlbedoTextureComp,
+            SpecularReflectanceTextureComp
         ]
     );
 
@@ -157,8 +157,8 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |emissive_color: Option<&EmissiveColorComp>,
-         specular_texture: &SpecularTextureComp,
+        |emissive_luminance: Option<&EmissiveLuminanceComp>,
+         specular_reflectance_texture: &SpecularReflectanceTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -169,9 +169,9 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut instance_feature_manager,
                 None,
                 None,
-                emissive_color,
+                emissive_luminance,
                 None,
-                Some(specular_texture),
+                Some(specular_reflectance_texture),
                 roughness,
                 roughness_texture,
                 normal_map,
@@ -183,9 +183,9 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
-            DiffuseColorComp,
-            SpecularColorComp,
-            DiffuseTextureComp
+            AlbedoComp,
+            SpecularReflectanceComp,
+            AlbedoTextureComp
         ]
     );
 
@@ -196,9 +196,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: &DiffuseColorComp,
-         specular_color: &SpecularColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
+        |albedo: &AlbedoComp,
+         specular_reflectance: &SpecularReflectanceComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -207,9 +207,9 @@ pub fn add_microfacet_material_component_for_entity(
             setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
-                Some(diffuse_color),
-                Some(specular_color),
-                emissive_color,
+                Some(albedo),
+                Some(specular_reflectance),
+                emissive_luminance,
                 None,
                 None,
                 roughness,
@@ -223,8 +223,8 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
-            DiffuseTextureComp,
-            SpecularTextureComp,
+            AlbedoTextureComp,
+            SpecularReflectanceTextureComp,
             MicrofacetDiffuseReflectionComp
         ]
     );
@@ -236,9 +236,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: &DiffuseColorComp,
-         specular_color: &SpecularColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
+        |albedo: &AlbedoComp,
+         specular_reflectance: &SpecularReflectanceComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -247,9 +247,9 @@ pub fn add_microfacet_material_component_for_entity(
             setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
-                Some(diffuse_color),
-                Some(specular_color),
-                emissive_color,
+                Some(albedo),
+                Some(specular_reflectance),
+                emissive_luminance,
                 None,
                 None,
                 roughness,
@@ -264,7 +264,11 @@ pub fn add_microfacet_material_component_for_entity(
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
         ],
-        ![MaterialComp, DiffuseTextureComp, SpecularTextureComp]
+        ![
+            MaterialComp,
+            AlbedoTextureComp,
+            SpecularReflectanceTextureComp
+        ]
     );
 
     setup!(
@@ -274,9 +278,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: &DiffuseColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
-         specular_texture: &SpecularTextureComp,
+        |albedo: &AlbedoComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         specular_reflectance_texture: &SpecularReflectanceTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -285,11 +289,11 @@ pub fn add_microfacet_material_component_for_entity(
             setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
-                Some(diffuse_color),
+                Some(albedo),
                 None,
-                emissive_color,
+                emissive_luminance,
                 None,
-                Some(specular_texture),
+                Some(specular_reflectance_texture),
                 roughness,
                 roughness_texture,
                 normal_map,
@@ -301,8 +305,8 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
-            SpecularColorComp,
-            DiffuseTextureComp,
+            SpecularReflectanceComp,
+            AlbedoTextureComp,
             MicrofacetDiffuseReflectionComp
         ]
     );
@@ -314,9 +318,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: &DiffuseColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
-         specular_texture: &SpecularTextureComp,
+        |albedo: &AlbedoComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         specular_reflectance_texture: &SpecularReflectanceTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -325,11 +329,11 @@ pub fn add_microfacet_material_component_for_entity(
             setup_microfacet_material(
                 &mut material_library,
                 &mut instance_feature_manager,
-                Some(diffuse_color),
+                Some(albedo),
                 None,
-                emissive_color,
+                emissive_luminance,
                 None,
-                Some(specular_texture),
+                Some(specular_reflectance_texture),
                 roughness,
                 roughness_texture,
                 normal_map,
@@ -342,7 +346,7 @@ pub fn add_microfacet_material_component_for_entity(
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
         ],
-        ![MaterialComp, SpecularColorComp, DiffuseTextureComp]
+        ![MaterialComp, SpecularReflectanceComp, AlbedoTextureComp]
     );
 
     setup!(
@@ -352,9 +356,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |specular_color: &SpecularColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: &DiffuseTextureComp,
+        |specular_reflectance: &SpecularReflectanceComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: &AlbedoTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -364,9 +368,9 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
-                Some(specular_color),
-                emissive_color,
-                Some(diffuse_texture),
+                Some(specular_reflectance),
+                emissive_luminance,
+                Some(albedo_texture),
                 None,
                 roughness,
                 roughness_texture,
@@ -379,8 +383,8 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
-            DiffuseColorComp,
-            SpecularTextureComp,
+            AlbedoComp,
+            SpecularReflectanceTextureComp,
             MicrofacetDiffuseReflectionComp
         ]
     );
@@ -392,9 +396,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |specular_color: &SpecularColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: &DiffuseTextureComp,
+        |specular_reflectance: &SpecularReflectanceComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: &AlbedoTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -404,9 +408,9 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
-                Some(specular_color),
-                emissive_color,
-                Some(diffuse_texture),
+                Some(specular_reflectance),
+                emissive_luminance,
+                Some(albedo_texture),
                 None,
                 roughness,
                 roughness_texture,
@@ -420,7 +424,7 @@ pub fn add_microfacet_material_component_for_entity(
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
         ],
-        ![MaterialComp, DiffuseColorComp, SpecularTextureComp]
+        ![MaterialComp, AlbedoComp, SpecularReflectanceTextureComp]
     );
 
     setup!(
@@ -430,9 +434,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: &DiffuseTextureComp,
-         specular_texture: &SpecularTextureComp,
+        |emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: &AlbedoTextureComp,
+         specular_reflectance_texture: &SpecularReflectanceTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -443,9 +447,9 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut instance_feature_manager,
                 None,
                 None,
-                emissive_color,
-                Some(diffuse_texture),
-                Some(specular_texture),
+                emissive_luminance,
+                Some(albedo_texture),
+                Some(specular_reflectance_texture),
                 roughness,
                 roughness_texture,
                 normal_map,
@@ -457,8 +461,8 @@ pub fn add_microfacet_material_component_for_entity(
         [MicrofacetSpecularReflectionComp],
         ![
             MaterialComp,
-            DiffuseColorComp,
-            SpecularColorComp,
+            AlbedoComp,
+            SpecularReflectanceComp,
             MicrofacetDiffuseReflectionComp
         ]
     );
@@ -470,9 +474,9 @@ pub fn add_microfacet_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: &DiffuseTextureComp,
-         specular_texture: &SpecularTextureComp,
+        |emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: &AlbedoTextureComp,
+         specular_reflectance_texture: &SpecularReflectanceTextureComp,
          roughness: Option<&RoughnessComp>,
          roughness_texture: Option<&RoughnessTextureComp>,
          normal_map: Option<&NormalMapComp>,
@@ -483,9 +487,9 @@ pub fn add_microfacet_material_component_for_entity(
                 &mut instance_feature_manager,
                 None,
                 None,
-                emissive_color,
-                Some(diffuse_texture),
-                Some(specular_texture),
+                emissive_luminance,
+                Some(albedo_texture),
+                Some(specular_reflectance_texture),
                 roughness,
                 roughness_texture,
                 normal_map,
@@ -498,18 +502,18 @@ pub fn add_microfacet_material_component_for_entity(
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
         ],
-        ![MaterialComp, DiffuseColorComp, SpecularColorComp]
+        ![MaterialComp, AlbedoComp, SpecularReflectanceComp]
     );
 }
 
 pub fn setup_microfacet_material(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
-    diffuse_color: Option<&DiffuseColorComp>,
-    specular_color: Option<&SpecularColorComp>,
-    emissive_color: Option<&EmissiveColorComp>,
-    diffuse_texture: Option<&DiffuseTextureComp>,
-    specular_texture: Option<&SpecularTextureComp>,
+    albedo: Option<&AlbedoComp>,
+    specular_reflectance: Option<&SpecularReflectanceComp>,
+    emissive_luminance: Option<&EmissiveLuminanceComp>,
+    albedo_texture: Option<&AlbedoTextureComp>,
+    specular_reflectance_texture: Option<&SpecularReflectanceTextureComp>,
     roughness: Option<&RoughnessComp>,
     roughness_texture: Option<&RoughnessTextureComp>,
     normal_map: Option<&NormalMapComp>,
@@ -540,9 +544,9 @@ pub fn setup_microfacet_material(
     let (feature_type_id, feature_id) = create_material_feature(
         instance_feature_manager,
         &mut material_name_parts,
-        diffuse_color,
-        specular_color,
-        emissive_color,
+        albedo,
+        specular_reflectance,
+        emissive_luminance,
         roughness_value,
         parallax_map,
     );
@@ -552,17 +556,17 @@ pub fn setup_microfacet_material(
     let mut vertex_attribute_requirements_for_mesh = vertex_attribute_requirements_for_shader;
 
     let mut texture_shader_input = MicrofacetTextureShaderInput {
-        diffuse_texture_and_sampler_bindings: None,
-        specular_texture_and_sampler_bindings: None,
+        albedo_texture_and_sampler_bindings: None,
+        specular_reflectance_texture_and_sampler_bindings: None,
         roughness_texture_and_sampler_bindings: None,
     };
 
     let mut texture_ids = Vec::with_capacity(5);
 
-    if let Some(diffuse_texture) = diffuse_texture {
+    if let Some(albedo_texture) = albedo_texture {
         assert!(
-            diffuse_color.is_none(),
-            "Tried to create microfacet material with both uniform and textured diffuse color"
+            albedo.is_none(),
+            "Tried to create microfacet material with both uniform and textured albedo"
         );
 
         material_name_parts.push("TexturedDiffuse");
@@ -570,16 +574,16 @@ pub fn setup_microfacet_material(
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
 
-        texture_shader_input.diffuse_texture_and_sampler_bindings = Some(
+        texture_shader_input.albedo_texture_and_sampler_bindings = Some(
             MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
         );
-        texture_ids.push(diffuse_texture.0);
+        texture_ids.push(albedo_texture.0);
     }
 
-    if let Some(specular_texture) = specular_texture {
+    if let Some(specular_reflectance_texture) = specular_reflectance_texture {
         assert!(
-            specular_color.is_none(),
-            "Tried to create microfacet material with both uniform and textured specular color"
+            specular_reflectance.is_none(),
+            "Tried to create microfacet material with both uniform and textured specular reflectance"
         );
 
         material_name_parts.push("TexturedSpecular");
@@ -587,10 +591,10 @@ pub fn setup_microfacet_material(
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
 
-        texture_shader_input.specular_texture_and_sampler_bindings = Some(
+        texture_shader_input.specular_reflectance_texture_and_sampler_bindings = Some(
             MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
         );
-        texture_ids.push(specular_texture.0);
+        texture_ids.push(specular_reflectance_texture.0);
     }
 
     if let Some(roughness_texture) = roughness_texture {
@@ -619,12 +623,12 @@ pub fn setup_microfacet_material(
         feature_type_id,
         feature_id,
         texture_ids.clone(),
-        texture_shader_input.diffuse_texture_and_sampler_bindings,
-        texture_shader_input.specular_texture_and_sampler_bindings,
+        texture_shader_input.albedo_texture_and_sampler_bindings,
+        texture_shader_input.specular_reflectance_texture_and_sampler_bindings,
         texture_shader_input.roughness_texture_and_sampler_bindings,
         normal_map,
         parallax_map,
-        specular_color.is_some() || specular_texture.is_some(),
+        specular_reflectance.is_some() || specular_reflectance_texture.is_some(),
     );
 
     if normal_map.is_some() || parallax_map.is_some() {
@@ -653,7 +657,7 @@ pub fn setup_microfacet_material(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
                 input_render_attachment_quantities,
-                RenderAttachmentQuantitySet::COLOR,
+                RenderAttachmentQuantitySet::LUMINANCE,
                 None,
                 vec![feature_type_id],
                 RenderPassHints::AFFECTED_BY_LIGHT,

@@ -16,11 +16,11 @@ use std::num::NonZeroU32;
 /// coordinates. The two tables are stored contiguously in memory.
 ///
 /// The first table is created with the normal incidence Fresnel reflectance
-/// `F0` (specular color) equal to `0`, the second with `F0` equal to `1`. The
-/// BRDF reflectance varies linearly between the reflectance for `F0 = 0` and
-/// `F0 = 1` so performing linear interpolation of the reflectances sampled from
-/// the same location in the two tables with `F0` as the interpolation weight
-/// gives the exact result.
+/// `F0` equal to `0`, the second with `F0` equal to `1`. The BRDF reflectance
+/// varies linearly between the reflectance for `F0 = 0` and `F0 = 1` so
+/// performing linear interpolation of the reflectances sampled from the same
+/// location in the two tables with `F0` as the interpolation weight gives the
+/// exact result.
 pub fn create_specular_ggx_reflectance_lookup_tables(
     num_v_dot_n_samples: usize,
     num_roughness_samples: usize,
@@ -125,8 +125,8 @@ fn compute_half_vector_dot_products(v_dot_n: fre, l_dot_n: fre, l_dot_v: fre) ->
 }
 
 /// Computes the Fresnel reflectance for the given normal incidence Fresnel
-/// reflectance `F0` (also referred to as specular color) and light direction
-/// cosine `l_dot_n`, using the Schlick approximation.
+/// reflectance `F0` and light direction cosine `l_dot_n`, using the Schlick
+/// approximation.
 ///
 /// # Note
 /// For a specular microfacet BRDF, the half vector `h` should be used as the

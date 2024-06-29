@@ -39,58 +39,64 @@ pub struct FixedColorComp(pub RGBColor);
 pub struct FixedTextureComp(pub TextureID);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a uniform diffuse color (reflectance).
+/// entities that have an albedo (the proportion of incident light diffusely
+/// reflected by the material).
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct DiffuseColorComp(pub RGBColor);
+pub struct AlbedoComp(pub RGBColor);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a textured diffuse color (reflectance).
+/// entities that have a textured albedo (the proportion of incident light
+/// diffusely reflected by the material).
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct DiffuseTextureComp(pub TextureID);
+pub struct AlbedoTextureComp(pub TextureID);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a uniform specular color (reflectance).
+/// entities that have a uniform specular reflectance at normal incidence (the
+/// proportion of incident light specularly reflected by the material when the
+/// light direction is perpendicular to the surface).
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SpecularColorComp(pub RGBColor);
+pub struct SpecularReflectanceComp(pub RGBColor);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a textured specular color (reflectance).
+/// entities that have a textured specular reflectance at normal incidence (the
+/// proportion of incident light specularly reflected by the material when the
+/// light direction is perpendicular to the surface).
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SpecularTextureComp(pub TextureID);
+pub struct SpecularReflectanceTextureComp(pub TextureID);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a uniform emissive color.
+/// entities that have an emissive surface with a uniform luminance.
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct EmissiveColorComp(pub RGBColor);
+pub struct EmissiveLuminanceComp(pub RGBColor);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities that have a textured emissive color.
+/// entities that have an emissive surface with a textured luminance.
 ///
 /// The purpose of this component is to aid in constructing a [`MaterialComp`]
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct EmissiveTextureComp(pub TextureID);
+pub struct EmissiveLuminanceTextureComp(pub TextureID);
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a uniform roughness affecting the reflected light.
@@ -173,7 +179,7 @@ pub struct MaterialComp {
     prepass_material_handle: MaterialHandle,
 }
 
-impl SpecularColorComp {
+impl SpecularReflectanceComp {
     pub const IRON: Self = Self(vector![0.562, 0.565, 0.578]);
     pub const COPPER: Self = Self(vector![0.955, 0.638, 0.538]);
     pub const BRASS: Self = Self(vector![0.910, 0.778, 0.423]);
@@ -199,13 +205,13 @@ impl RoughnessComp {
     /// Converts the given shininess exponent for Blinn-Phong specular
     /// reflection into a corresponding roughness.
     pub fn from_blinn_phong_shininess(shininess: fre) -> Self {
-        Self(fre::ln(8192.0 / shininess) / fre::ln(8192.0))
+        Self(fre::sqrt(2.0 / (shininess + 2.0)))
     }
 
     /// Converts the roughness into a corresponding shininess exponent for
     /// Blinn-Phong specular reflection.
     pub fn to_blinn_phong_shininess(&self) -> fre {
-        fre::powf(8192.0, 1.0 - self.0)
+        2.0 / self.0.powi(2) - 2.0
     }
 
     pub fn to_ggx_roughness(&self) -> fre {
@@ -281,12 +287,12 @@ pub fn register_material_components(registry: &mut ComponentRegistry) -> Result<
     register_setup_component!(registry, VertexColorComp)?;
     register_setup_component!(registry, FixedColorComp)?;
     register_setup_component!(registry, FixedTextureComp)?;
-    register_setup_component!(registry, DiffuseColorComp)?;
-    register_setup_component!(registry, DiffuseTextureComp)?;
-    register_setup_component!(registry, SpecularColorComp)?;
-    register_setup_component!(registry, SpecularTextureComp)?;
-    register_setup_component!(registry, EmissiveColorComp)?;
-    register_setup_component!(registry, EmissiveTextureComp)?;
+    register_setup_component!(registry, AlbedoComp)?;
+    register_setup_component!(registry, AlbedoTextureComp)?;
+    register_setup_component!(registry, SpecularReflectanceComp)?;
+    register_setup_component!(registry, SpecularReflectanceTextureComp)?;
+    register_setup_component!(registry, EmissiveLuminanceComp)?;
+    register_setup_component!(registry, EmissiveLuminanceTextureComp)?;
     register_setup_component!(registry, RoughnessComp)?;
     register_setup_component!(registry, RoughnessTextureComp)?;
     register_setup_component!(registry, MicrofacetDiffuseReflectionComp)?;

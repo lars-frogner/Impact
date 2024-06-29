@@ -54,9 +54,9 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
     /// uniform, a noise factor and the depth attachment to calculate the
     /// ambient occlusion factor, which is written to a dedicated render
     /// attachment. In the application stage, the render attachment textures for
-    /// ambient color and occlusion factor are taken as input. The ambient color
-    /// is weighted with an averaged occlusion factor and written to the ambient
-    /// color attachment.
+    /// ambient reflected luminance and occlusion factor are taken as input. The
+    /// ambient reflected luminance is weighted with an averaged occlusion
+    /// factor and written to the ambient reflected luminance attachment.
     pub fn generate_fragment_code(
         &self,
         module: &mut Module,
@@ -527,23 +527,25 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let (position_texture_expr, position_sampler_expr) =
             position_texture.generate_texture_and_sampler_expressions(fragment_function, false);
 
-        let (ambient_color_texture_binding, ambient_color_sampler_binding) =
-            RenderAttachmentQuantity::AmbientColor.bindings();
+        let (
+            ambient_reflected_luminance_texture_binding,
+            ambient_reflected_luminance_sampler_binding,
+        ) = RenderAttachmentQuantity::AmbientReflectedLuminance.bindings();
 
-        let ambient_color_texture = SampledTexture::declare(
+        let ambient_reflected_luminance_texture = SampledTexture::declare(
             &mut module.types,
             &mut module.global_variables,
             TextureType::Image2D,
-            "ambientColor",
+            "ambientReflectedLuminance",
             *bind_group_idx,
-            ambient_color_texture_binding,
-            Some(ambient_color_sampler_binding),
+            ambient_reflected_luminance_texture_binding,
+            Some(ambient_reflected_luminance_sampler_binding),
             None,
         );
 
         *bind_group_idx += 1;
 
-        let ambient_color_expr = ambient_color_texture
+        let ambient_reflected_luminance_expr = ambient_reflected_luminance_texture
             .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
 
         let (ambient_visibility_texture_binding, ambient_visibility_sampler_binding) =
@@ -566,10 +568,10 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
             ambient_visibility_texture
                 .generate_texture_and_sampler_expressions(fragment_function, false);
 
-        let occluded_ambient_color_expr = source_code_lib.generate_function_call(
+        let occluded_ambient_reflected_luminance_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
-            "computeOccludedAmbientColor",
+            "computeOccludedAmbientReflectedLuminance",
             vec![
                 position_texture_expr,
                 position_sampler_expr,
@@ -577,7 +579,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
                 ambient_visibility_sampler_expr,
                 texel_dimensions_expr,
                 screen_space_texture_coord_expr,
-                ambient_color_expr,
+                ambient_reflected_luminance_expr,
             ],
         );
 
@@ -586,7 +588,7 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let output_rgba_color_expr = append_unity_component_to_vec3(
             &mut module.types,
             fragment_function,
-            occluded_ambient_color_expr,
+            occluded_ambient_reflected_luminance_expr,
         );
 
         output_struct_builder.add_field(

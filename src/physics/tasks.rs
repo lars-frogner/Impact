@@ -6,7 +6,7 @@ use crate::{
         motion::{LogKineticEnergy, LogMomentum},
         PhysicsSimulator,
     },
-    scene::{SyncLightPositionsAndDirectionsInStorage, SyncSceneObjectTransforms},
+    scene::{SyncLightsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
@@ -25,7 +25,7 @@ define_task!(
     [pub] UpdateControlledEntities,
     depends_on = [
         SyncSceneObjectTransforms,
-        SyncLightPositionsAndDirectionsInStorage
+        SyncLightsInStorage
     ],
     execute_on = [PhysicsTag],
     |world: &World| {
@@ -42,7 +42,7 @@ define_task!(
     [pub] AdvanceSimulation,
     depends_on = [
         SyncSceneObjectTransforms,
-        SyncLightPositionsAndDirectionsInStorage,
+        SyncLightsInStorage,
         UpdateControlledEntities
     ],
     execute_on = [PhysicsTag],
