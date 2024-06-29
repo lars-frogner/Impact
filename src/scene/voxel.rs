@@ -16,9 +16,9 @@ use crate::{
     num::Float,
     rendering::{fre, DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
     scene::{
-        material::setup_microfacet_material, DiffuseColorComp, InstanceFeatureManager,
-        MaterialComp, MaterialHandle, MaterialLibrary, MeshID, MeshRepository, ModelID, RGBColor,
-        RoughnessComp, SpecularColorComp,
+        material::setup_microfacet_material, AlbedoComp, InstanceFeatureManager, MaterialComp,
+        MaterialHandle, MaterialLibrary, MeshID, MeshRepository, ModelID, RGBColor, RoughnessComp,
+        SpecularReflectanceComp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -267,8 +267,8 @@ fn setup_voxel_material(
             material_library,
             instance_feature_manager,
             vector![0.5, 0.5, 0.5],
-            Some(SpecularColorComp::in_range_of(
-                SpecularColorComp::STONE,
+            Some(SpecularReflectanceComp::in_range_of(
+                SpecularReflectanceComp::STONE,
                 0.5,
             )),
             Some(0.7),
@@ -279,13 +279,13 @@ fn setup_voxel_material(
 fn setup_microfacet_material_for_voxel(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
-    diffuse_color: RGBColor,
-    specular_color: Option<SpecularColorComp>,
+    albedo: RGBColor,
+    specular_reflectance: Option<SpecularReflectanceComp>,
     roughness: Option<f32>,
 ) -> MaterialComp {
     let roughness = roughness.map(RoughnessComp);
 
-    let specular_shading_model = if specular_color.is_some() {
+    let specular_shading_model = if specular_reflectance.is_some() {
         SpecularMicrofacetShadingModel::GGX
     } else {
         SpecularMicrofacetShadingModel::None
@@ -294,8 +294,8 @@ fn setup_microfacet_material_for_voxel(
     setup_microfacet_material(
         material_library,
         instance_feature_manager,
-        Some(&DiffuseColorComp(diffuse_color)),
-        specular_color.as_ref(),
+        Some(&AlbedoComp(albedo)),
+        specular_reflectance.as_ref(),
         None,
         None,
         None,

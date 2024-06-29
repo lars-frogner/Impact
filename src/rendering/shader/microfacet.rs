@@ -1,8 +1,7 @@
 //! Generation of shaders for microfacet materials.
 
 use super::{
-    append_to_arena, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
-    insert_in_arena, new_name, push_to_block, InputStruct, InputStructBuilder,
+    append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
     LightMaterialFeatureShaderInput, LightShaderGenerator, LightVertexOutputFieldIndices,
     MeshVertexOutputFieldIndices, OmnidirectionalLightShaderGenerator, OutputStructBuilder,
     PushConstantFieldExpressions, SampledTexture, SourceCode, TextureType,
@@ -10,7 +9,7 @@ use super::{
     VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
-use naga::{Expression, Function, LocalVariable, MathFunction, Module, Statement};
+use naga::{Function, Module};
 
 /// Describes the combination of models used for diffuse and specular reflection
 /// as part of a microfacet based reflection model.
@@ -48,10 +47,10 @@ pub enum SpecularMicrofacetShadingModel {
 /// properties.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MicrofacetTextureShaderInput {
-    /// Bind group bindings of the diffuse color texture and its sampler.
-    pub diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
-    /// Bind group bindings of the specular color texture and its sampler.
-    pub specular_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the albedo texture and its sampler.
+    pub albedo_texture_and_sampler_bindings: Option<(u32, u32)>,
+    /// Bind group bindings of the specular reflectance texture and its sampler.
+    pub specular_reflectance_texture_and_sampler_bindings: Option<(u32, u32)>,
     /// Bind group bindings of the roughness texture and its sampler.
     pub roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
 }
@@ -68,8 +67,8 @@ pub struct MicrofacetShaderGenerator<'a> {
 /// vertex shader output struct.
 #[derive(Clone, Debug)]
 pub struct MicrofacetVertexOutputFieldIndices {
-    diffuse_color: Option<usize>,
-    specular_color: Option<usize>,
+    albedo: Option<usize>,
+    specular_reflectance: Option<usize>,
     roughness: usize,
 }
 
@@ -130,14 +129,20 @@ impl<'a> MicrofacetShaderGenerator<'a> {
 
         let mut input_struct_builder = InputStructBuilder::new("MaterialProperties", "material");
 
-        let input_diffuse_color_field_idx =
-            self.feature_input.diffuse_color_location.map(|location| {
-                input_struct_builder.add_field("diffuseColor", vec3_type, location, VECTOR_3_SIZE)
-            });
+        let input_albedo_field_idx = self.feature_input.albedo_location.map(|location| {
+            input_struct_builder.add_field("albedo", vec3_type, location, VECTOR_3_SIZE)
+        });
 
-        let input_specular_color_field_idx =
-            self.feature_input.specular_color_location.map(|location| {
-                input_struct_builder.add_field("specularColor", vec3_type, location, VECTOR_3_SIZE)
+        let input_specular_reflectance_field_idx = self
+            .feature_input
+            .specular_reflectance_location
+            .map(|location| {
+                input_struct_builder.add_field(
+                    "normalIncidenceSpecularReflectance",
+                    vec3_type,
+                    location,
+                    VECTOR_3_SIZE,
+                )
             });
 
         let input_roughness_field_idx = input_struct_builder.add_field(
@@ -161,15 +166,15 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             );
 
         let mut indices = MicrofacetVertexOutputFieldIndices {
-            diffuse_color: None,
-            specular_color: None,
+            albedo: None,
+            specular_reflectance: None,
             roughness: output_roughness_field_idx,
         };
 
-        if let Some(idx) = input_diffuse_color_field_idx {
-            indices.diffuse_color = Some(
+        if let Some(idx) = input_albedo_field_idx {
+            indices.albedo = Some(
                 vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "diffuseColor",
+                    "albedo",
                     vec3_type,
                     VECTOR_3_SIZE,
                     input_struct.get_field_expr(idx),
@@ -177,10 +182,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             );
         }
 
-        if let Some(idx) = input_specular_color_field_idx {
-            indices.specular_color = Some(
+        if let Some(idx) = input_specular_reflectance_field_idx {
+            indices.specular_reflectance = Some(
                 vertex_output_struct_builder.add_field_with_perspective_interpolation(
-                    "specularColor",
+                    "normalIncidenceSpecularReflectance",
                     vec3_type,
                     VECTOR_3_SIZE,
                     input_struct.get_field_expr(idx),
@@ -218,7 +223,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
         let light_shader_generator =
             light_shader_generator.expect("Missing light for microfacet shading");
 
-        let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let screen_space_texture_coord_expr = if input_render_attachment_quantities.is_empty() {
@@ -347,51 +351,53 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             (*bind_group_idx, None)
         };
 
-        let diffuse_color_expr = self
+        let albedo_expr = self
             .texture_input
-            .diffuse_texture_and_sampler_bindings
-            .map(|(diffuse_texture_binding, diffuse_sampler_binding)| {
-                let diffuse_color_texture = SampledTexture::declare(
+            .albedo_texture_and_sampler_bindings
+            .map(|(albedo_texture_binding, diffuse_sampler_binding)| {
+                let albedo_texture = SampledTexture::declare(
                     &mut module.types,
                     &mut module.global_variables,
                     TextureType::Image2D,
-                    "diffuseColor",
+                    "albedo",
                     material_texture_bind_group,
-                    diffuse_texture_binding,
+                    albedo_texture_binding,
                     Some(diffuse_sampler_binding),
                     None,
                 );
 
-                diffuse_color_texture
+                albedo_texture
                     .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
             })
             .or_else(|| {
                 material_input_field_indices
-                    .diffuse_color
+                    .albedo
                     .map(|idx| fragment_input_struct.get_field_expr(idx))
             });
 
-        let specular_color_expr = self
+        let specular_reflectance_expr = self
             .texture_input
-            .specular_texture_and_sampler_bindings
-            .map(|(specular_texture_binding, specular_sampler_binding)| {
-                let specular_color_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image2D,
-                    "specularColor",
-                    material_texture_bind_group,
-                    specular_texture_binding,
-                    Some(specular_sampler_binding),
-                    None,
-                );
+            .specular_reflectance_texture_and_sampler_bindings
+            .map(
+                |(specular_reflectance_texture_binding, specular_sampler_binding)| {
+                    let specular_reflectance_texture = SampledTexture::declare(
+                        &mut module.types,
+                        &mut module.global_variables,
+                        TextureType::Image2D,
+                        "normalIncidenceSpecularReflectance",
+                        material_texture_bind_group,
+                        specular_reflectance_texture_binding,
+                        Some(specular_sampler_binding),
+                        None,
+                    );
 
-                specular_color_texture
-                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
-            })
+                    specular_reflectance_texture
+                        .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+                },
+            )
             .or_else(|| {
                 material_input_field_indices
-                    .specular_color
+                    .specular_reflectance
                     .map(|idx| fragment_input_struct.get_field_expr(idx))
             });
 
@@ -432,18 +438,6 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 },
             );
 
-        let color_ptr_expr = append_to_arena(
-            &mut fragment_function.expressions,
-            Expression::LocalVariable(append_to_arena(
-                &mut fragment_function.local_variables,
-                LocalVariable {
-                    name: new_name("color"),
-                    ty: vec3_type,
-                    init: None,
-                },
-            )),
-        );
-
         let view_dir_expr = source_code_lib.generate_function_call(
             module,
             fragment_function,
@@ -451,7 +445,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             vec![position_expr],
         );
 
-        let (reflection_dot_products_expr, light_radiance_expr) = match (
+        let (reflection_dot_products_expr, incident_luminance_expr) = match (
             light_shader_generator,
             light_input_field_indices,
         ) {
@@ -509,109 +503,86 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             }
         };
 
-        let light_color_expr = match (self.model, diffuse_color_expr, specular_color_expr) {
-            (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(diffuse_color_expr), None) => {
+        let reflected_luminance_expr = match (self.model, albedo_expr, specular_reflectance_expr) {
+            (&MicrofacetShadingModel::GGX_DIFFUSE_NO_SPECULAR, Some(albedo_expr), None) => {
                 source_code_lib.generate_function_call(
                     module,
                     fragment_function,
-                    "computeGGXDiffuseNoSpecularColor",
+                    "computeGGXDiffuseNoSpecularReflectedLuminance",
                     vec![
                         reflection_dot_products_expr,
-                        diffuse_color_expr,
+                        albedo_expr,
                         roughness_expr,
-                        light_radiance_expr,
-                    ],
-                )
-            }
-            (&MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR, None, Some(specular_color_expr)) => {
-                source_code_lib.generate_function_call(
-                    module,
-                    fragment_function,
-                    "computeNoDiffuseGGXSpecularColor",
-                    vec![
-                        reflection_dot_products_expr,
-                        specular_color_expr,
-                        roughness_expr,
-                        light_radiance_expr,
+                        incident_luminance_expr,
                     ],
                 )
             }
             (
-                &MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-                Some(diffuse_color_expr),
-                Some(specular_color_expr),
+                &MicrofacetShadingModel::NO_DIFFUSE_GGX_SPECULAR,
+                None,
+                Some(specular_reflectance_expr),
             ) => source_code_lib.generate_function_call(
                 module,
                 fragment_function,
-                "computeLambertianDiffuseGGXSpecularColor",
+                "computeNoDiffuseGGXSpecularReflectedLuminance",
                 vec![
                     reflection_dot_products_expr,
-                    diffuse_color_expr,
-                    specular_color_expr,
+                    specular_reflectance_expr,
                     roughness_expr,
-                    light_radiance_expr,
+                    incident_luminance_expr,
+                ],
+            ),
+            (
+                &MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                Some(albedo_expr),
+                Some(specular_reflectance_expr),
+            ) => source_code_lib.generate_function_call(
+                module,
+                fragment_function,
+                "computeLambertianDiffuseGGXSpecularReflectedLuminance",
+                vec![
+                    reflection_dot_products_expr,
+                    albedo_expr,
+                    specular_reflectance_expr,
+                    roughness_expr,
+                    incident_luminance_expr,
                 ],
             ),
             (
                 &MicrofacetShadingModel::GGX_DIFFUSE_GGX_SPECULAR,
-                Some(diffuse_color_expr),
-                Some(specular_color_expr),
+                Some(albedo_expr),
+                Some(specular_reflectance_expr),
             ) => source_code_lib.generate_function_call(
                 module,
                 fragment_function,
-                "computeGGXDiffuseGGXSpecularColor",
+                "computeGGXDiffuseGGXSpecularReflectedLuminance",
                 vec![
                     reflection_dot_products_expr,
-                    diffuse_color_expr,
-                    specular_color_expr,
+                    albedo_expr,
+                    specular_reflectance_expr,
                     roughness_expr,
-                    light_radiance_expr,
+                    incident_luminance_expr,
                 ],
             ),
-            (_, None, None) => panic!("No diffuse or specular color for microfacet shader"),
+            (_, None, None) => panic!("No albedo or specular reflectance for microfacet shader"),
             _ => panic!("Invalid combinations of microfacet shading models"),
         };
 
-        push_to_block(
-            &mut fragment_function.body,
-            Statement::Store {
-                pointer: color_ptr_expr,
-                value: light_color_expr,
-            },
+        let output_reflected_luminance_expr = append_unity_component_to_vec3(
+            &mut module.types,
+            fragment_function,
+            reflected_luminance_expr,
         );
-
-        let output_color_expr = emit_in_func(fragment_function, |function| {
-            let color_expr = include_expr_in_func(
-                function,
-                Expression::Load {
-                    pointer: color_ptr_expr,
-                },
-            );
-
-            include_expr_in_func(
-                function,
-                Expression::Math {
-                    fun: MathFunction::Saturate,
-                    arg: color_expr,
-                    arg1: None,
-                    arg2: None,
-                    arg3: None,
-                },
-            )
-        });
-
-        let output_rgba_color_expr =
-            append_unity_component_to_vec3(&mut module.types, fragment_function, output_color_expr);
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
-            "color",
+            "reflectedLuminance",
             vec4_type,
             None,
             None,
             VECTOR_4_SIZE,
-            output_rgba_color_expr,
+            output_reflected_luminance_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);
@@ -620,8 +591,10 @@ impl<'a> MicrofacetShaderGenerator<'a> {
 
 impl MicrofacetTextureShaderInput {
     fn is_empty(&self) -> bool {
-        self.diffuse_texture_and_sampler_bindings.is_none()
-            && self.specular_texture_and_sampler_bindings.is_none()
+        self.albedo_texture_and_sampler_bindings.is_none()
+            && self
+                .specular_reflectance_texture_and_sampler_bindings
+                .is_none()
             && self.roughness_texture_and_sampler_bindings.is_none()
     }
 }

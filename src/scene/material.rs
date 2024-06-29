@@ -18,17 +18,17 @@ pub use ambient_occlusion::{
 };
 pub use blinn_phong::add_blinn_phong_material_component_for_entity;
 pub use components::{
-    register_material_components, DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp,
-    EmissiveTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
+    register_material_components, AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp,
+    EmissiveLuminanceTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
     MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
-    ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularColorComp,
-    SpecularTextureComp, VertexColorComp,
+    ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
+    SpecularReflectanceTextureComp, VertexColorComp,
 };
 pub use features::{
-    create_material_feature, TexturedColorEmissiveMaterialFeature, TexturedColorMaterialFeature,
-    TexturedColorParallaxMappingEmissiveMaterialFeature,
-    TexturedColorParallaxMappingMaterialFeature, UniformDiffuseEmissiveMaterialFeature,
-    UniformDiffuseMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
+    create_material_feature, TexturedEmissiveMaterialFeature, TexturedMaterialFeature,
+    TexturedParallaxMappingEmissiveMaterialFeature, TexturedParallaxMappingMaterialFeature,
+    UniformDiffuseEmissiveMaterialFeature, UniformDiffuseMaterialFeature,
+    UniformDiffuseParallaxMappingEmissiveMaterialFeature,
     UniformDiffuseParallaxMappingMaterialFeature,
     UniformDiffuseUniformSpecularEmissiveMaterialFeature,
     UniformDiffuseUniformSpecularMaterialFeature,
@@ -354,26 +354,25 @@ impl MaterialLibrary {
     }
 
     pub fn register_materials(&mut self, instance_feature_manager: &mut InstanceFeatureManager) {
-        instance_feature_manager.register_feature_type::<TexturedColorMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedMaterialFeature>();
         instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
         instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<TexturedColorParallaxMappingMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedParallaxMappingMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
-        instance_feature_manager.register_feature_type::<TexturedColorEmissiveMaterialFeature>();
+        instance_feature_manager.register_feature_type::<TexturedEmissiveMaterialFeature>();
         instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
         instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
         instance_feature_manager
-            .register_feature_type::<TexturedColorParallaxMappingEmissiveMaterialFeature>();
+            .register_feature_type::<TexturedParallaxMappingEmissiveMaterialFeature>();
         instance_feature_manager
             .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
         instance_feature_manager

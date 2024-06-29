@@ -174,7 +174,9 @@ fn setup_ambient_occlusion_materials_and_render_passes(
     ambient_occlusion_config: &AmbientOcclusionConfig,
 ) -> Vec<RenderPassSpecification> {
     vec![
-        setup_unoccluded_ambient_color_application_material_and_render_pass(material_library),
+        setup_unoccluded_ambient_reflected_luminance_application_material_and_render_pass(
+            material_library,
+        ),
         setup_ambient_occlusion_computation_material_and_render_pass(
             material_library,
             ambient_occlusion_config.sample_count,
@@ -192,8 +194,8 @@ fn setup_bloom_materials_and_render_passes(
 
     render_passes.push(setup_passthrough_material_and_render_pass(
         material_library,
-        RenderAttachmentQuantity::EmissiveColor,
-        RenderAttachmentQuantity::Color,
+        RenderAttachmentQuantity::EmissiveLuminance,
+        RenderAttachmentQuantity::Luminance,
     ));
 
     if bloom_config.n_iterations > 0 {
@@ -204,31 +206,31 @@ fn setup_bloom_materials_and_render_passes(
         for _ in 1..bloom_config.n_iterations {
             render_passes.push(setup_gaussian_blur_material_and_render_pass(
                 material_library,
-                RenderAttachmentQuantity::EmissiveColor,
-                RenderAttachmentQuantity::EmissiveColorAux,
+                RenderAttachmentQuantity::EmissiveLuminance,
+                RenderAttachmentQuantity::EmissiveLuminanceAux,
                 GaussianBlurDirection::Horizontal,
                 &bloom_sample_uniform,
             ));
             render_passes.push(setup_gaussian_blur_material_and_render_pass(
                 material_library,
-                RenderAttachmentQuantity::EmissiveColorAux,
-                RenderAttachmentQuantity::EmissiveColor,
+                RenderAttachmentQuantity::EmissiveLuminanceAux,
+                RenderAttachmentQuantity::EmissiveLuminance,
                 GaussianBlurDirection::Vertical,
                 &bloom_sample_uniform,
             ));
         }
         render_passes.push(setup_gaussian_blur_material_and_render_pass(
             material_library,
-            RenderAttachmentQuantity::EmissiveColor,
-            RenderAttachmentQuantity::EmissiveColorAux,
+            RenderAttachmentQuantity::EmissiveLuminance,
+            RenderAttachmentQuantity::EmissiveLuminanceAux,
             GaussianBlurDirection::Horizontal,
             &bloom_sample_uniform,
         ));
-        // For the last pass, we write to the main color attachment
+        // For the last pass, we write to the luminance attachment
         render_passes.push(setup_gaussian_blur_material_and_render_pass(
             material_library,
-            RenderAttachmentQuantity::EmissiveColorAux,
-            RenderAttachmentQuantity::Color,
+            RenderAttachmentQuantity::EmissiveLuminanceAux,
+            RenderAttachmentQuantity::Luminance,
             GaussianBlurDirection::Vertical,
             &bloom_sample_uniform,
         ));
@@ -244,7 +246,7 @@ fn setup_tone_mapping_materials_and_render_passes(
         .map(|mapping| {
             setup_tone_mapping_material_and_render_pass(
                 material_library,
-                RenderAttachmentQuantity::Color,
+                RenderAttachmentQuantity::Luminance,
                 mapping,
             )
         })
@@ -336,15 +338,18 @@ fn setup_ambient_occlusion_application_material_and_render_pass(
     define_ambient_occlusion_application_pass(material_id, specification.render_pass_hints())
 }
 
-fn setup_unoccluded_ambient_color_application_material_and_render_pass(
+fn setup_unoccluded_ambient_reflected_luminance_application_material_and_render_pass(
     material_library: &mut MaterialLibrary,
 ) -> RenderPassSpecification {
     let (material_id, specification) = setup_passthrough_material(
         material_library,
-        RenderAttachmentQuantity::AmbientColor,
-        RenderAttachmentQuantity::Color,
+        RenderAttachmentQuantity::AmbientReflectedLuminance,
+        RenderAttachmentQuantity::Luminance,
     );
-    define_unoccluded_ambient_color_application_pass(material_id, specification.render_pass_hints())
+    define_unoccluded_ambient_reflected_luminance_application_pass(
+        material_id,
+        specification.render_pass_hints(),
+    )
 }
 
 fn setup_gaussian_blur_material_and_render_pass(
@@ -437,7 +442,7 @@ fn define_ambient_occlusion_application_pass(
     }
 }
 
-fn define_unoccluded_ambient_color_application_pass(
+fn define_unoccluded_ambient_reflected_luminance_application_pass(
     material_id: MaterialID,
     hints: RenderPassHints,
 ) -> RenderPassSpecification {
@@ -446,7 +451,7 @@ fn define_unoccluded_ambient_color_application_pass(
         explicit_material_id: Some(material_id),
         depth_map_usage: DepthMapUsage::StencilTest,
         hints,
-        label: "Unoccluded ambient color application pass".to_string(),
+        label: "Unoccluded ambient reflected luminance application pass".to_string(),
         ..Default::default()
     }
 }

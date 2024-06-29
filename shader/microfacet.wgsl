@@ -2,17 +2,17 @@
 // VDotN <= 0, which may happen for visible
 // fragments when using normal mapping, leading to dark artifacts
 
-fn computeNoDiffuseGGXSpecularColor(
+fn computeNoDiffuseGGXSpecularReflectedLuminance(
     dots: ReflectionDotProducts,
-    specularColor: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     roughness: f32,
-    lightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
 ) -> vec3<f32> {
     let clampedVDotN = clampToZero(dots.VDotN);
     let clampedLDotN = clampToZero(dots.LDotN);
 
     let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
-        specularColor,
+        normalIncidenceSpecularReflectance,
         clampedLDotN,
         clampedVDotN,
         dots.LDotH,
@@ -20,7 +20,7 @@ fn computeNoDiffuseGGXSpecularColor(
         roughness,
     );
 
-    return computeColorFromBRDFs(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, clampedLDotN, lightRadiance);
+    return computeReflectedLuminanceFromBRDFs(vec3<f32>(0.0, 0.0, 0.0), specularBRDFTimesPi, clampedLDotN, incidentLuminance);
 }
 
 fn computeGGXRoughnessFromSampledRoughness(sampledRoughness: f32, roughnessScale: f32) -> f32 {
@@ -29,28 +29,28 @@ fn computeGGXRoughnessFromSampledRoughness(sampledRoughness: f32, roughnessScale
     return sampledRoughness * sampledRoughness * roughnessScale;
 }
 
-fn computeLambertianDiffuseGGXSpecularColor(
+fn computeLambertianDiffuseGGXSpecularReflectedLuminance(
     dots: ReflectionDotProducts,
-    diffuseColor: vec3<f32>,
-    specularColor: vec3<f32>,
+    albedo: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     roughness: f32,
-    lightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
 ) -> vec3<f32> {
     let clampedVDotN = clampToZero(dots.VDotN);
     let clampedLDotN = clampToZero(dots.LDotN);
     
-    // The Lambertian BRDF (diffuseColor / pi) must be scaled to
+    // The Lambertian BRDF (albedo / pi) must be scaled to
     // account for some of the available light being specularly
     // reflected rather than subsurface scattered (Shirley et al.
     // 1997)
-    let diffuseBRDFTimesPi = diffuseColor * computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
-        specularColor,
+    let diffuseBRDFTimesPi = albedo * computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
+        normalIncidenceSpecularReflectance,
         clampedLDotN,
         clampedVDotN
     );
 
     let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
-        specularColor,
+        normalIncidenceSpecularReflectance,
         clampedLDotN,
         clampedVDotN,
         dots.LDotH,
@@ -58,22 +58,22 @@ fn computeLambertianDiffuseGGXSpecularColor(
         roughness,
     );
 
-    return computeColorFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLDotN, lightRadiance);
+    return computeReflectedLuminanceFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLDotN, incidentLuminance);
 }
 
-fn computeGGXDiffuseGGXSpecularColor(
+fn computeGGXDiffuseGGXSpecularReflectedLuminance(
     dots: ReflectionDotProducts,
-    diffuseColor: vec3<f32>,
-    specularColor: vec3<f32>,
+    albedo: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     roughness: f32,
-    lightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
 ) -> vec3<f32> {
     let clampedVDotN = clampToZero(dots.VDotN);
     let clampedLDotN = clampToZero(dots.LDotN);
     
     let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
-        diffuseColor,
-        specularColor,
+        albedo,
+        normalIncidenceSpecularReflectance,
         clampedLDotN,
         clampedVDotN,
         dots.LDotV,
@@ -82,7 +82,7 @@ fn computeGGXDiffuseGGXSpecularColor(
     );
 
     let specularBRDFTimesPi = computeSpecularGGXBRDFTimesPi(
-        specularColor,
+        normalIncidenceSpecularReflectance,
         clampedLDotN,
         clampedVDotN,
         dots.LDotH,
@@ -90,14 +90,14 @@ fn computeGGXDiffuseGGXSpecularColor(
         roughness,
     );
 
-    return computeColorFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLDotN, lightRadiance);
+    return computeReflectedLuminanceFromBRDFs(diffuseBRDFTimesPi, specularBRDFTimesPi, clampedLDotN, incidentLuminance);
 }
 
-fn computeGGXDiffuseNoSpecularColor(
+fn computeGGXDiffuseNoSpecularReflectedLuminance(
     dots: ReflectionDotProducts,
-    diffuseColor: vec3<f32>,
+    albedo: vec3<f32>,
     roughness: f32,
-    lightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
 ) -> vec3<f32> {
     let clampedVDotN = clampToZero(dots.VDotN);
     let clampedLDotN = clampToZero(dots.LDotN);
@@ -105,7 +105,7 @@ fn computeGGXDiffuseNoSpecularColor(
     let zero = vec3<f32>(0.0, 0.0, 0.0);
 
     let diffuseBRDFTimesPi = computeDiffuseGGXBRDFTimesPi(
-        diffuseColor,
+        albedo,
         zero,
         clampedLDotN,
         clampedVDotN,
@@ -114,7 +114,7 @@ fn computeGGXDiffuseNoSpecularColor(
         roughness,
     );
 
-    return computeColorFromBRDFs(diffuseBRDFTimesPi, zero, clampedLDotN, lightRadiance);
+    return computeReflectedLuminanceFromBRDFs(diffuseBRDFTimesPi, zero, clampedLDotN, incidentLuminance);
 }
 
 fn computeFresnelReflectanceIncidenceFactor(clampedLDotN: f32) -> f32 {
@@ -124,10 +124,10 @@ fn computeFresnelReflectanceIncidenceFactor(clampedLDotN: f32) -> f32 {
 
 // Computes Fresnel reflectance using the Schlick approximation.
 fn computeFresnelReflectance(
-    specularColor: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     clampedLDotN: f32,
 ) -> vec3<f32> {
-    return specularColor + (1.0 - specularColor) * computeFresnelReflectanceIncidenceFactor(clampedLDotN);
+    return normalIncidenceSpecularReflectance + (1.0 - normalIncidenceSpecularReflectance) * computeFresnelReflectanceIncidenceFactor(clampedLDotN);
 }
 
 // Evaluates (approximately) the Smith height-correlated masking-shadowing
@@ -152,19 +152,19 @@ fn evaluateGGXDistributionTimesPi(NDotH: f32, roughness: f32) -> f32 {
 }
 
 fn computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
-    specularColor: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     clampedLDotN: f32,
     clampedVDotN: f32,
 ) -> vec3<f32> {
-    return 1.05 * (1.0 - specularColor) * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedLDotN)) * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedVDotN));
+    return 1.05 * (1.0 - normalIncidenceSpecularReflectance) * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedLDotN)) * (1.0 - computeFresnelReflectanceIncidenceFactor(clampedVDotN));
 }
 
 // Evaluates a fit to the diffuse BRDF derived from microfacet
 // theory using the GGX normal distribution and the Smith
 // masking-shadowing function (Hammon 2017).
 fn computeDiffuseGGXBRDFTimesPi(
-    diffuseColor: vec3<f32>,
-    specularColor: vec3<f32>,
+    albedo: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     clampedLDotN: f32,
     clampedVDotN: f32,
     LDotV: f32,
@@ -172,7 +172,7 @@ fn computeDiffuseGGXBRDFTimesPi(
     roughness: f32,
 ) -> vec3<f32> {
     let diffuseBRDFSmoothComponent = computeDiffuseBRDFCorrectionFactorForGGXSpecularReflection(
-        specularColor,
+        normalIncidenceSpecularReflectance,
         clampedLDotN,
         clampedVDotN
     );
@@ -182,29 +182,30 @@ fn computeDiffuseGGXBRDFTimesPi(
 
     let diffuseBRDFMultiComponent = 0.3641 * roughness;
 
-    return f32(clampedVDotN > 0.0) * diffuseColor * ((1.0 - roughness) * diffuseBRDFSmoothComponent + roughness * diffuseBRDFRoughComponent + diffuseColor * diffuseBRDFMultiComponent);
+    return f32(clampedVDotN > 0.0) * albedo * ((1.0 - roughness) * diffuseBRDFSmoothComponent + roughness * diffuseBRDFRoughComponent + albedo * diffuseBRDFMultiComponent);
 }
 
 fn computeSpecularGGXBRDFTimesPi(
-    specularColor: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     clampedLDotN: f32,
     clampedVDotN: f32,
     LDotH: f32,
     NDotH: f32,
     roughness: f32,
 ) -> vec3<f32> {
-    return computeFresnelReflectance(specularColor, clampToZero(LDotH)) * computeScaledGGXMaskingShadowingFactor(
+    return computeFresnelReflectance(normalIncidenceSpecularReflectance, clampToZero(LDotH)) * computeScaledGGXMaskingShadowingFactor(
         clampedLDotN,
         clampedVDotN,
         roughness
     ) * evaluateGGXDistributionTimesPi(NDotH, roughness);
 }
 
-fn computeColorFromBRDFs(
+fn computeReflectedLuminanceFromBRDFs(
     diffuseBRDFTimesPi: vec3<f32>,
     specularBRDFTimesPi: vec3<f32>,
     clampedLDotN: f32,
-    lightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
 ) -> vec3<f32> {
-    return (diffuseBRDFTimesPi + specularBRDFTimesPi) * clampedLDotN * lightRadiance;
+    // The factor 0.318309886 is 1 / pi
+    return (diffuseBRDFTimesPi + specularBRDFTimesPi) * (clampedLDotN * 0.318309886) * incidentLuminance;
 }

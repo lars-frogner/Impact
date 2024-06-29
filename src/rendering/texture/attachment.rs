@@ -11,15 +11,15 @@ bitflags! {
     /// render attachment textures.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
     pub struct RenderAttachmentQuantitySet: u16 {
-        const DEPTH              = 1 << 0;
-        const COLOR              = 1 << 1;
-        const POSITION           = 1 << 2;
-        const NORMAL_VECTOR      = 1 << 3;
-        const TEXTURE_COORDS     = 1 << 4;
-        const AMBIENT_COLOR      = 1 << 5;
-        const EMISSIVE_COLOR     = 1 << 6;
-        const EMISSIVE_COLOR_AUX = 1 << 7;
-        const OCCLUSION          = 1 << 8;
+        const DEPTH                       = 1 << 0;
+        const LUMINANCE                   = 1 << 1;
+        const POSITION                    = 1 << 2;
+        const NORMAL_VECTOR               = 1 << 3;
+        const TEXTURE_COORDS              = 1 << 4;
+        const AMBIENT_REFLECTED_LUMINANCE = 1 << 5;
+        const EMISSIVE_LUMINANCE          = 1 << 6;
+        const EMISSIVE_LUMINANCE_AUX      = 1 << 7;
+        const OCCLUSION                   = 1 << 8;
     }
 }
 
@@ -28,13 +28,13 @@ bitflags! {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RenderAttachmentQuantity {
     Depth = 0,
-    Color = 1,
+    Luminance = 1,
     Position = 2,
     NormalVector = 3,
     TextureCoords = 4,
-    AmbientColor = 5,
-    EmissiveColor = 6,
-    EmissiveColorAux = 7,
+    AmbientReflectedLuminance = 5,
+    EmissiveLuminance = 6,
+    EmissiveLuminanceAux = 7,
     Occlusion = 8,
 }
 
@@ -74,78 +74,78 @@ const N_RENDER_ATTACHMENT_QUANTITIES: usize = 9;
 /// This is the order expected by the shaders.
 const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantity::Depth,
-    RenderAttachmentQuantity::Color,
+    RenderAttachmentQuantity::Luminance,
     RenderAttachmentQuantity::Position,
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
-    RenderAttachmentQuantity::AmbientColor,
-    RenderAttachmentQuantity::EmissiveColor,
-    RenderAttachmentQuantity::EmissiveColorAux,
+    RenderAttachmentQuantity::AmbientReflectedLuminance,
+    RenderAttachmentQuantity::EmissiveLuminance,
+    RenderAttachmentQuantity::EmissiveLuminanceAux,
     RenderAttachmentQuantity::Occlusion,
 ];
 
 /// The bitflag of each individual render attachment quantity.
 const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantitySet::DEPTH,
-    RenderAttachmentQuantitySet::COLOR,
+    RenderAttachmentQuantitySet::LUMINANCE,
     RenderAttachmentQuantitySet::POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
-    RenderAttachmentQuantitySet::AMBIENT_COLOR,
-    RenderAttachmentQuantitySet::EMISSIVE_COLOR,
-    RenderAttachmentQuantitySet::EMISSIVE_COLOR_AUX,
+    RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+    RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE,
+    RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE_AUX,
     RenderAttachmentQuantitySet::OCCLUSION,
 ];
 
 /// The name of each individual render attachment quantity.
 const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "depth",
-    "color",
+    "luminance",
     "position",
     "normal_vector",
     "texture_coords",
-    "ambient_color",
-    "emissive_color",
-    "emissive_color_aux",
+    "ambient_reflected_luminance",
+    "emissive_luminance",
+    "emissive_luminance_aux",
     "occlusion",
 ];
 
 /// The texture format used for each render attachment quantity.
 const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
     wgpu::TextureFormat::Depth32FloatStencil8, // Depth
-    wgpu::TextureFormat::Rgba16Float,          // Color
+    wgpu::TextureFormat::Rgba16Float,          // Luminance
     wgpu::TextureFormat::Rgba32Float,          // Position
     wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
     wgpu::TextureFormat::Rg32Float,            // Texture coordinates
-    wgpu::TextureFormat::Rgba16Float,          // Ambient color
-    wgpu::TextureFormat::Rgba16Float,          // Emissive color
-    wgpu::TextureFormat::Rgba16Float,          // Emissive color (auxiliary)
+    wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
+    wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
+    wgpu::TextureFormat::Rgba16Float,          // Emissive luminance (auxiliary)
     wgpu::TextureFormat::R8Unorm,              // Occlusion
 ];
 
 /// Whether multisampling will be used when requested for each render attachment quantity.
 const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     true, // Depth
-    true, // Color
+    true, // Luminance
     true, // Position
     true, // Normal vector
     true, // Texture coordinates
-    true, // Ambient color
-    true, // Emissive color
-    true, // Emissive color (auxiliary)
+    true, // Ambient reflected luminance
+    true, // Emissive luminance
+    true, // Emissive luminance (auxiliary)
     true, // Occlusion
 ];
 
 /// The clear color used for each color render attachment quantity (depth is not
 /// included).
 const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
-    wgpu::Color::BLACK, // Color
+    wgpu::Color::BLACK, // Luminance
     wgpu::Color::BLACK, // Position
     wgpu::Color::BLACK, // Normal vector
     wgpu::Color::BLACK, // Texture coordinates
-    wgpu::Color::BLACK, // Ambient color
-    wgpu::Color::BLACK, // Emissive color
-    wgpu::Color::BLACK, // Emissive color (auxiliary)
+    wgpu::Color::BLACK, // Ambient reflected luminance
+    wgpu::Color::BLACK, // Emissive luminance
+    wgpu::Color::BLACK, // Emissive luminance (auxiliary)
     wgpu::Color::WHITE, // Occlusion
 ];
 
@@ -154,13 +154,13 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITI
 const RENDER_ATTACHMENT_BLENDING_MODES: [Blending; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
     // Since we determine contributions from each light in separate render
     // passes, we need to add up the color contributions.
-    Blending::Additive, // Color
+    Blending::Additive, // Luminance
     Blending::Replace,  // Position
     Blending::Replace,  // Normal vector
     Blending::Replace,  // Texture coordinates
-    Blending::Replace,  // Ambient color
-    Blending::Replace,  // Emissive color
-    Blending::Replace,  // Emissive color (auxiliary)
+    Blending::Replace,  // Ambient reflected luminance
+    Blending::Replace,  // Emissive luminance
+    Blending::Replace,  // Emissive luminance (auxiliary)
     Blending::Replace,  // Occlusion
 ];
 

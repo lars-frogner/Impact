@@ -8,12 +8,12 @@ use crate::{
         RenderAttachmentQuantitySet, RenderPassHints,
     },
     scene::{
-        DiffuseColorComp, DiffuseTextureComp, EmissiveColorComp, InstanceFeatureManager,
-        MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
+        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
         MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
-        RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp, SpecularColorComp,
-        SpecularTextureComp,
+        RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp,
+        SpecularReflectanceComp, SpecularReflectanceTextureComp,
     },
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -39,10 +39,10 @@ pub fn add_blinn_phong_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: &DiffuseColorComp,
-         specular_color: Option<&SpecularColorComp>,
-         emissive_color: Option<&EmissiveColorComp>,
-         specular_texture: Option<&SpecularTextureComp>,
+        |albedo: &AlbedoComp,
+         specular_reflectance: Option<&SpecularReflectanceComp>,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         specular_reflectance_texture: Option<&SpecularReflectanceTextureComp>,
          roughness: Option<&RoughnessComp>,
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
@@ -50,11 +50,11 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                Some(diffuse_color),
-                specular_color,
-                emissive_color,
+                Some(albedo),
+                specular_reflectance,
+                emissive_luminance,
                 None,
-                specular_texture,
+                specular_reflectance_texture,
                 roughness,
                 normal_map,
                 parallax_map,
@@ -62,7 +62,7 @@ pub fn add_blinn_phong_material_component_for_entity(
         },
         ![
             MaterialComp,
-            DiffuseTextureComp,
+            AlbedoTextureComp,
             RoughnessTextureComp,
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
@@ -76,10 +76,10 @@ pub fn add_blinn_phong_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: Option<&DiffuseColorComp>,
-         specular_color: &SpecularColorComp,
-         emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: Option<&DiffuseTextureComp>,
+        |albedo: Option<&AlbedoComp>,
+         specular_reflectance: &SpecularReflectanceComp,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: Option<&AlbedoTextureComp>,
          roughness: Option<&RoughnessComp>,
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
@@ -87,10 +87,10 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                diffuse_color,
-                Some(specular_color),
-                emissive_color,
-                diffuse_texture,
+                albedo,
+                Some(specular_reflectance),
+                emissive_luminance,
+                albedo_texture,
                 None,
                 roughness,
                 normal_map,
@@ -99,7 +99,7 @@ pub fn add_blinn_phong_material_component_for_entity(
         },
         ![
             MaterialComp,
-            SpecularTextureComp,
+            SpecularReflectanceTextureComp,
             RoughnessTextureComp,
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
@@ -113,10 +113,10 @@ pub fn add_blinn_phong_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |specular_color: Option<&SpecularColorComp>,
-         emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: &DiffuseTextureComp,
-         specular_texture: Option<&SpecularTextureComp>,
+        |specular_reflectance: Option<&SpecularReflectanceComp>,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: &AlbedoTextureComp,
+         specular_reflectance_texture: Option<&SpecularReflectanceTextureComp>,
          roughness: Option<&RoughnessComp>,
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
@@ -125,10 +125,10 @@ pub fn add_blinn_phong_material_component_for_entity(
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
-                specular_color,
-                emissive_color,
-                Some(diffuse_texture),
-                specular_texture,
+                specular_reflectance,
+                emissive_luminance,
+                Some(albedo_texture),
+                specular_reflectance_texture,
                 roughness,
                 normal_map,
                 parallax_map,
@@ -136,7 +136,7 @@ pub fn add_blinn_phong_material_component_for_entity(
         },
         ![
             MaterialComp,
-            DiffuseColorComp,
+            AlbedoComp,
             RoughnessTextureComp,
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
@@ -150,10 +150,10 @@ pub fn add_blinn_phong_material_component_for_entity(
             let mut instance_feature_manager = instance_feature_manager.write().unwrap();
         },
         components,
-        |diffuse_color: Option<&DiffuseColorComp>,
-         emissive_color: Option<&EmissiveColorComp>,
-         diffuse_texture: Option<&DiffuseTextureComp>,
-         specular_texture: &SpecularTextureComp,
+        |albedo: Option<&AlbedoComp>,
+         emissive_luminance: Option<&EmissiveLuminanceComp>,
+         albedo_texture: Option<&AlbedoTextureComp>,
+         specular_reflectance_texture: &SpecularReflectanceTextureComp,
          roughness: Option<&RoughnessComp>,
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
@@ -161,11 +161,11 @@ pub fn add_blinn_phong_material_component_for_entity(
             execute_material_setup(
                 &mut material_library,
                 &mut instance_feature_manager,
-                diffuse_color,
+                albedo,
                 None,
-                emissive_color,
-                diffuse_texture,
-                Some(specular_texture),
+                emissive_luminance,
+                albedo_texture,
+                Some(specular_reflectance_texture),
                 roughness,
                 normal_map,
                 parallax_map,
@@ -173,7 +173,7 @@ pub fn add_blinn_phong_material_component_for_entity(
         },
         ![
             MaterialComp,
-            SpecularColorComp,
+            SpecularReflectanceComp,
             RoughnessTextureComp,
             MicrofacetDiffuseReflectionComp,
             MicrofacetSpecularReflectionComp
@@ -184,11 +184,11 @@ pub fn add_blinn_phong_material_component_for_entity(
 fn execute_material_setup(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
-    diffuse_color: Option<&DiffuseColorComp>,
-    specular_color: Option<&SpecularColorComp>,
-    emissive_color: Option<&EmissiveColorComp>,
-    diffuse_texture: Option<&DiffuseTextureComp>,
-    specular_texture: Option<&SpecularTextureComp>,
+    albedo: Option<&AlbedoComp>,
+    specular_reflectance: Option<&SpecularReflectanceComp>,
+    emissive_luminance: Option<&EmissiveLuminanceComp>,
+    albedo_texture: Option<&AlbedoTextureComp>,
+    specular_reflectance_texture: Option<&SpecularReflectanceTextureComp>,
     roughness: Option<&RoughnessComp>,
     normal_map: Option<&NormalMapComp>,
     parallax_map: Option<&ParallaxMapComp>,
@@ -200,9 +200,9 @@ fn execute_material_setup(
     let (feature_type_id, feature_id) = create_material_feature(
         instance_feature_manager,
         &mut material_name_parts,
-        diffuse_color,
-        specular_color,
-        emissive_color,
+        albedo,
+        specular_reflectance,
+        emissive_luminance,
         shininess,
         parallax_map,
     );
@@ -212,16 +212,16 @@ fn execute_material_setup(
     let mut vertex_attribute_requirements_for_mesh = vertex_attribute_requirements_for_shader;
 
     let mut texture_shader_input = BlinnPhongTextureShaderInput {
-        diffuse_texture_and_sampler_bindings: None,
-        specular_texture_and_sampler_bindings: None,
+        albedo_texture_and_sampler_bindings: None,
+        specular_reflectance_texture_and_sampler_bindings: None,
     };
 
     let mut texture_ids = Vec::with_capacity(4);
 
-    if let Some(diffuse_texture) = diffuse_texture {
+    if let Some(albedo_texture) = albedo_texture {
         assert!(
-            diffuse_color.is_none(),
-            "Tried to create Blinn-Phong material with both uniform and textured diffuse color"
+            albedo.is_none(),
+            "Tried to create Blinn-Phong material with both uniform and textured albedo"
         );
 
         material_name_parts.push("TexturedDiffuse");
@@ -229,16 +229,16 @@ fn execute_material_setup(
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
 
-        texture_shader_input.diffuse_texture_and_sampler_bindings = Some(
+        texture_shader_input.albedo_texture_and_sampler_bindings = Some(
             MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
         );
-        texture_ids.push(diffuse_texture.0);
+        texture_ids.push(albedo_texture.0);
     }
 
-    if let Some(specular_texture) = specular_texture {
+    if let Some(specular_reflectance_texture) = specular_reflectance_texture {
         assert!(
-            specular_color.is_none(),
-            "Tried to create Blinn-Phong material with both uniform and textured specular color"
+            specular_reflectance.is_none(),
+            "Tried to create Blinn-Phong material with both uniform and textured specular reflectance"
         );
 
         material_name_parts.push("TexturedSpecular");
@@ -246,10 +246,10 @@ fn execute_material_setup(
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
 
-        texture_shader_input.specular_texture_and_sampler_bindings = Some(
+        texture_shader_input.specular_reflectance_texture_and_sampler_bindings = Some(
             MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
         );
-        texture_ids.push(specular_texture.0);
+        texture_ids.push(specular_reflectance_texture.0);
     }
 
     let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
@@ -261,8 +261,8 @@ fn execute_material_setup(
         feature_type_id,
         feature_id,
         texture_ids.clone(),
-        texture_shader_input.diffuse_texture_and_sampler_bindings,
-        texture_shader_input.specular_texture_and_sampler_bindings,
+        texture_shader_input.albedo_texture_and_sampler_bindings,
+        texture_shader_input.specular_reflectance_texture_and_sampler_bindings,
         None,
         normal_map,
         parallax_map,
@@ -295,7 +295,7 @@ fn execute_material_setup(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
                 input_render_attachment_quantities,
-                RenderAttachmentQuantitySet::COLOR,
+                RenderAttachmentQuantitySet::LUMINANCE,
                 None,
                 vec![feature_type_id],
                 RenderPassHints::AFFECTED_BY_LIGHT,

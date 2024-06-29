@@ -27,8 +27,8 @@ log = "0.4"
 naga = { version = "0.20", features = ["wgsl-out"] }
 nalgebra = { version = "0.32", features = ["bytemuck"] }
 nohash-hasher = "0.2.0"
-num-traits = "0.2"
 num-derive = "0.4"
+num-traits = "0.2"
 paste = "1.0"
 petgraph = { version = "0.6", default-features = false, features = [
     "graphmap",

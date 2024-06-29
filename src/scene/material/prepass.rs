@@ -38,8 +38,8 @@ pub fn create_prepass_material(
     feature_type_id: InstanceFeatureTypeID,
     feature_id: InstanceFeatureID,
     mut texture_ids: Vec<TextureID>,
-    diffuse_texture_and_sampler_bindings: Option<(u32, u32)>,
-    specular_texture_and_sampler_bindings: Option<(u32, u32)>,
+    albedo_texture_and_sampler_bindings: Option<(u32, u32)>,
+    specular_reflectance_texture_and_sampler_bindings: Option<(u32, u32)>,
     roughness_texture_and_sampler_bindings: Option<(u32, u32)>,
     normal_map: Option<&NormalMapComp>,
     parallax_map: Option<&ParallaxMapComp>,
@@ -48,15 +48,15 @@ pub fn create_prepass_material(
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
 
-    // All prepass materials render to the emissive color attachment, either
-    // an actual emissive color or a clear color to overwrite any existing
-    // emissive color from an object blocked by the new fragment
-    let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::EMISSIVE_COLOR;
+    // All prepass materials render to the emissive luminance attachment, either
+    // an actual emissive luminance or a clear color to overwrite any existing
+    // emissive luminance from an object blocked by the new fragment
+    let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE;
 
     // These are required for ambient occlusion
     output_render_attachment_quantities |= RenderAttachmentQuantitySet::POSITION
         | RenderAttachmentQuantitySet::NORMAL_VECTOR
-        | RenderAttachmentQuantitySet::AMBIENT_COLOR;
+        | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE;
 
     *input_render_attachment_quantities_for_main_material |=
         RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR;
@@ -67,8 +67,8 @@ pub fn create_prepass_material(
     }
 
     let mut texture_shader_input = PrepassTextureShaderInput {
-        diffuse_texture_and_sampler_bindings,
-        specular_texture_and_sampler_bindings,
+        albedo_texture_and_sampler_bindings,
+        specular_reflectance_texture_and_sampler_bindings,
         roughness_texture_and_sampler_bindings,
         specular_reflectance_lookup_texture_and_sampler_bindings: None,
         bump_mapping_input: None,

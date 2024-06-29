@@ -8,20 +8,21 @@ struct ReflectionDotProducts {
 
 // ***** Ambient lights *****
 
-fn computeAmbientColorForLambertian(diffuseColor: vec3<f32>, ambientRadiance: vec3<f32>) -> vec3<f32> {
-    return diffuseColor * ambientRadiance;
+fn computeAmbientReflectedLuminanceForLambertian(albedo: vec3<f32>, ambientLuminance: vec3<f32>) -> vec3<f32> {
+    // Same as (albedo / pi) * ambientIlluminance
+    return albedo * ambientLuminance;
 }
 
-fn computeAmbientColorForSpecularGGX(
+fn computeAmbientReflectedLuminanceForSpecularGGX(
     specularGGXReflectanceLookupTexture: texture_2d_array<f32>,
     specularGGXReflectanceLookupSampler: sampler,
     viewDirection: vec3<f32>,
     normalVector: vec3<f32>,
-    specularColor: vec3<f32>,
+    normalIncidenceSpecularReflectance: vec3<f32>,
     roughness: f32,
-    ambientRadiance: vec3<f32>,
+    ambientLuminance: vec3<f32>,
 ) -> vec3<f32> {
-    var ambientColor: vec3<f32>;
+    var reflectedLuminance: vec3<f32>;
 
     let viewDirectionDotNormalVector = dot(viewDirection, normalVector);
 
@@ -32,7 +33,7 @@ fn computeAmbientColorForSpecularGGX(
 
         let textureCoords = vec2<f32>(viewDirectionDotNormalVector, roughness);
 
-        let reflectanceForSpecularColorZero = textureSampleLevel(
+        let reflectanceForZeroNormalIncidenceReflectance = textureSampleLevel(
             specularGGXReflectanceLookupTexture,
             specularGGXReflectanceLookupSampler,
             textureCoords,
@@ -40,7 +41,7 @@ fn computeAmbientColorForSpecularGGX(
             mipLevel
         ).r;
 
-        let reflectanceForSpecularColorOne = textureSampleLevel(
+        let reflectanceForUnityNormalIncidenceReflectance = textureSampleLevel(
             specularGGXReflectanceLookupTexture,
             specularGGXReflectanceLookupSampler,
             textureCoords,
@@ -48,14 +49,14 @@ fn computeAmbientColorForSpecularGGX(
             mipLevel
         ).r;
 
-        let reflectance = (1.0 - specularColor) * reflectanceForSpecularColorZero + specularColor * reflectanceForSpecularColorOne;
+        let reflectance = (1.0 - normalIncidenceSpecularReflectance) * reflectanceForZeroNormalIncidenceReflectance + normalIncidenceSpecularReflectance * reflectanceForUnityNormalIncidenceReflectance;
 
-        ambientColor = reflectance * ambientRadiance;
+        reflectedLuminance = reflectance * ambientLuminance;
     } else {
-        ambientColor = vec3<f32>(0.0, 0.0, 0.0);
+        reflectedLuminance = getBlackColor();
     }
 
-    return ambientColor;
+    return reflectedLuminance;
 }
 
 fn getBlackColor() -> vec3<f32> {
@@ -89,7 +90,7 @@ fn computeShadowMapFragmentDepthOmniLight(
 }
 
 struct OmniLightQuantities {
-    attenuatedLightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
     lightSpaceFragmentDisplacement: vec3<f32>,
     normalizedDistance: f32,
     dots: ReflectionDotProducts,
@@ -97,7 +98,7 @@ struct OmniLightQuantities {
 
 fn computeOmniLightQuantities(
     lightPosition: vec3<f32>,
-    lightRadiance: vec3<f32>,
+    lightLuminousIntensity: vec3<f32>,
     cameraToLightSpaceRotationQuaternion: vec4<f32>,
     nearDistance: f32,
     inverseDistanceSpan: f32,
@@ -112,7 +113,7 @@ fn computeOmniLightQuantities(
     let inverseDistance = sqrt(inverseSquaredDistance);
     let lightCenterDirection = lightCenterDisplacement * inverseDistance;
 
-    output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
+    output.incidentLuminance = lightLuminousIntensity * inverseSquaredDistance;
 
     let VDotN = dot(viewDirection, fragmentNormal);
     let LDotN = dot(lightCenterDirection, fragmentNormal);
@@ -146,7 +147,7 @@ fn computeOmniLightQuantities(
 
 fn computeOmniAreaLightQuantities(
     lightPosition: vec3<f32>,
-    lightRadiance: vec3<f32>,
+    lightLuminousIntensity: vec3<f32>,
     lightRadius: f32,
     cameraToLightSpaceRotationQuaternion: vec4<f32>,
     nearDistance: f32,
@@ -163,7 +164,7 @@ fn computeOmniAreaLightQuantities(
     let inverseDistance = sqrt(inverseSquaredDistance);
     let lightCenterDirection = lightCenterDisplacement * inverseDistance;
 
-    output.attenuatedLightRadiance = lightRadiance * inverseSquaredDistance;
+    output.incidentLuminance = lightLuminousIntensity * inverseSquaredDistance;
 
     let VDotN = dot(viewDirection, fragmentNormal);
     let LDotN = dot(lightCenterDirection, fragmentNormal);
@@ -190,7 +191,7 @@ fn computeOmniAreaLightQuantities(
         LDotV,
     );
 
-    output.attenuatedLightRadiance *= computeRadianceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness);
+    output.incidentLuminance *= computeLuminanceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness);
 
     return output;
 }
@@ -353,14 +354,14 @@ fn applyNormalBiasUniLight(
 }
 
 struct UniLightQuantities {
-    modifiedLightRadiance: vec3<f32>,
+    incidentLuminance: vec3<f32>,
     lightClipSpacePosition: vec3<f32>,
     dots: ReflectionDotProducts,
 }
 
 fn computeUniLightQuantities(
     directionOfLight: vec3<f32>,
-    lightRadiance: vec3<f32>,
+    lightPerpendicularIlluminance: vec3<f32>,
     orthographicTranslation: vec3<f32>,
     orthographicScaling: vec3<f32>,
     lightSpacePosition: vec3<f32>,
@@ -370,7 +371,7 @@ fn computeUniLightQuantities(
 ) -> UniLightQuantities {
     var output: UniLightQuantities;
 
-    output.modifiedLightRadiance = lightRadiance;
+    output.incidentLuminance = lightPerpendicularIlluminance;
 
     let biasedLightSpacePosition = applyNormalBiasUniLight(lightSpacePosition, lightSpaceNormalVector);
     output.lightClipSpacePosition = applyOrthographicProjectionToPosition(orthographicTranslation, orthographicScaling, biasedLightSpacePosition);
@@ -397,7 +398,7 @@ fn computeUniLightQuantities(
 
 fn computeUniAreaLightQuantities(
     directionOfLight: vec3<f32>,
-    lightRadiance: vec3<f32>,
+    lightPerpendicularIlluminance: vec3<f32>,
     tanAngularLightRadius: f32,
     orthographicTranslation: vec3<f32>,
     orthographicScaling: vec3<f32>,
@@ -425,7 +426,7 @@ fn computeUniAreaLightQuantities(
         LDotV,
     );
 
-    output.modifiedLightRadiance = computeRadianceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness) * lightRadiance;
+    output.incidentLuminance = computeLuminanceScalingFactorForSphericalAreaLight(tanAngularLightRadius, roughness) * lightPerpendicularIlluminance;
 
     return output;
 }
@@ -653,7 +654,7 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
     return dots;
 }
 
-fn computeRadianceScalingFactorForSphericalAreaLight(
+fn computeLuminanceScalingFactorForSphericalAreaLight(
     tanAngularLightRadius: f32,
     roughness: f32,
 ) -> f32 {

@@ -78,14 +78,14 @@ fn computeAmbientVisibility(sampleNormalization: f32, contrast: f32, summedSampl
     return pow(max(0.0, 1.0 - sampleNormalization * summedSampleValues), contrast);
 }
 
-fn computeOccludedAmbientColor(
+fn computeOccludedAmbientReflectedLuminance(
     positionTexture: texture_2d<f32>,
     positionSampler: sampler,
     occlusionTexture: texture_2d<f32>,
     occlusionSampler: sampler,
     texelDimensions: vec2<f32>,
     centerTextureCoords: vec2<f32>,
-    ambientColor: vec3<f32>,
+    ambientReflectedLuminance: vec3<f32>,
 ) -> vec3<f32> {
     // This should be odd so that the center is included
     let sqrtTotalSampleCount = 5u;
@@ -117,5 +117,5 @@ fn computeOccludedAmbientColor(
 
     let occlusion = summedOcclusion / f32(acceptedSampleCount);
 
-    return occlusion * ambientColor;
+    return occlusion * ambientReflectedLuminance;
 }

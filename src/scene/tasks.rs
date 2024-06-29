@@ -4,10 +4,7 @@ use super::Scene;
 use crate::{
     define_task,
     rendering::RenderingTag,
-    scene::systems::{
-        SyncLightPositionsAndDirectionsInStorage, SyncLightRadiancesInStorage,
-        SyncSceneObjectTransforms,
-    },
+    scene::systems::{SyncLightsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
@@ -130,7 +127,7 @@ define_task!(
     /// their model to cubemap face space transforms for shadow mapping.
     [pub] BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
-        SyncLightPositionsAndDirectionsInStorage,
+        SyncLightsInStorage,
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
@@ -172,7 +169,7 @@ define_task!(
     /// their model to light transforms for shadow mapping.
     [pub] BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
-        SyncLightPositionsAndDirectionsInStorage,
+        SyncLightsInStorage,
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
@@ -215,8 +212,7 @@ impl Scene {
         task_scheduler.register_task(SyncSceneCameraViewTransform)?;
         task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
         task_scheduler.register_task(BufferVisibleModelInstances)?;
-        task_scheduler.register_task(SyncLightPositionsAndDirectionsInStorage)?;
-        task_scheduler.register_task(SyncLightRadiancesInStorage)?;
+        task_scheduler.register_task(SyncLightsInStorage)?;
         task_scheduler
             .register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;
         task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)

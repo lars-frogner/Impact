@@ -7,8 +7,8 @@ use crate::{
     },
     rendering::{fre, ColorSpace, RenderingSystem, TextureAddressingConfig, TextureConfig},
     scene::{
-        DiffuseColorComp, DiffuseTextureComp, MeshComp, MeshID, MeshRepository, NormalMapComp,
-        RGBColor, RoughnessComp, SpecularColorComp, SpecularTextureComp, VertexColorComp,
+        AlbedoComp, AlbedoTextureComp, MeshComp, MeshID, MeshRepository, NormalMapComp, RGBColor,
+        RoughnessComp, SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,
     },
 };
 use anyhow::{bail, Result};
@@ -319,13 +319,13 @@ fn create_material_components_from_tobj_material(
 
     let mut components = Vec::with_capacity(4);
 
-    if let Some(diffuse_texture_path) = &material.diffuse_texture {
+    if let Some(albedo_texture_path) = &material.diffuse_texture {
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
-        let diffuse_texture_id = assets.load_texture_from_path(
+        let albedo_texture_id = assets.load_texture_from_path(
             renderer.core_system(),
-            diffuse_texture_path,
+            albedo_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 addressing: TextureAddressingConfig::REPEATING,
@@ -334,23 +334,21 @@ fn create_material_components_from_tobj_material(
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
-            &DiffuseTextureComp(diffuse_texture_id),
+            &AlbedoTextureComp(albedo_texture_id),
         ));
     } else {
-        components.push(ComponentStorage::from_single_instance_view(
-            &DiffuseColorComp(RGBColor::from_row_slice(
-                &material.diffuse.unwrap_or([0.0; 3]),
-            )),
-        ));
+        components.push(ComponentStorage::from_single_instance_view(&AlbedoComp(
+            RGBColor::from_row_slice(&material.diffuse.unwrap_or([0.0; 3])),
+        )));
     }
 
-    if let Some(specular_texture_path) = &material.specular_texture {
+    if let Some(specular_reflectance_path) = &material.specular_texture {
         let renderer = renderer.read().unwrap();
         let mut assets = renderer.assets().write().unwrap();
 
-        let specular_texture_id = assets.load_texture_from_path(
+        let specular_reflectance_id = assets.load_texture_from_path(
             renderer.core_system(),
-            specular_texture_path,
+            specular_reflectance_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
                 addressing: TextureAddressingConfig::REPEATING,
@@ -359,11 +357,11 @@ fn create_material_components_from_tobj_material(
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
-            &SpecularTextureComp(specular_texture_id),
+            &SpecularReflectanceTextureComp(specular_reflectance_id),
         ));
     } else {
         components.push(ComponentStorage::from_single_instance_view(
-            &SpecularColorComp(RGBColor::from_row_slice(
+            &SpecularReflectanceComp(RGBColor::from_row_slice(
                 &material.specular.unwrap_or([0.0; 3]),
             )),
         ));
