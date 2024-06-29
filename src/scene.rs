@@ -229,7 +229,7 @@ impl Default for SceneConfig {
             ambient_occlusion: AmbientOcclusionConfig::default(),
             bloom: BloomConfig::default(),
             tone_mapping: ToneMapping::default(),
-            initial_exposure: 1.0,
+            initial_exposure: 1e-4,
         }
     }
 }
