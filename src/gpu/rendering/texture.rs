@@ -10,7 +10,7 @@ pub use shadow_map::{
     CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,
 };
 
-use crate::{gpu::GraphicsDevice, scene};
+use crate::{gpu::GraphicsDevice, io};
 use anyhow::{anyhow, bail, Result};
 use bytemuck::Pod;
 use image::{
@@ -911,7 +911,7 @@ impl<T: TexelType + Serialize + DeserializeOwned> TextureLookupTable<T> {
     pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
         let mut byte_buffer = Vec::new();
         self.serialize(&mut Serializer::new(&mut byte_buffer))?;
-        scene::io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
+        io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
         Ok(())
     }
 
