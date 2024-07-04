@@ -7,7 +7,7 @@ use super::{
     SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
     VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use crate::rendering::RenderAttachmentQuantitySet;
+use crate::gpu::rendering::RenderAttachmentQuantitySet;
 use naga::{BinaryOperator, Expression, Function, Handle, Module};
 
 /// Input description specifying the bindings of textures for prepass material

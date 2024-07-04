@@ -51,9 +51,12 @@ pub use vertex_color::VertexColorMaterial;
 
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
-    rendering::{
-        fre, Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet,
-        RenderPassHints, SingleUniformRenderBuffer, StorageRenderBuffer, TextureID,
+    gpu::{
+        rendering::{
+            fre, Assets, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
+            SingleUniformRenderBuffer, StorageRenderBuffer, TextureID,
+        },
+        GraphicsDevice,
     },
     scene::InstanceFeatureManager,
 };
@@ -226,7 +229,7 @@ impl MaterialSpecificResourceGroup {
     /// the concatenated list of resources: `single_uniform_resources +
     /// storage_resources`.
     pub fn new(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
         storage_buffers: &[&StorageRenderBuffer],
         label: &str,
@@ -249,16 +252,21 @@ impl MaterialSpecificResourceGroup {
             binding += 1;
         }
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &bind_group_layout_entries,
-            label: Some(&format!("{} bind group layout", label)),
-        });
+        let bind_group_layout =
+            graphics_device
+                .device()
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &bind_group_layout_entries,
+                    label: Some(&format!("{} bind group layout", label)),
+                });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &bind_group_entries,
-            label: Some(&format!("{} bind group", label)),
-        });
+        let bind_group = graphics_device
+            .device()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &bind_group_entries,
+                label: Some(&format!("{} bind group", label)),
+            });
 
         Self {
             _single_uniform_buffers: single_uniform_buffers,
@@ -285,13 +293,13 @@ impl MaterialPropertyTextureGroup {
     /// # Panics
     /// If the given list of texture IDs is empty.
     pub fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         assets: &Assets,
         texture_ids: Vec<TextureID>,
         label: String,
     ) -> Result<Self> {
         let (bind_group_layout, bind_group) = Self::create_texture_bind_group_and_layout(
-            core_system.device(),
+            graphics_device.device(),
             assets,
             &texture_ids,
             &label,

@@ -1,7 +1,7 @@
 //! Ambient light sources.
 
 use crate::{
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{
         self, AmbientEmissionComp, AmbientLightComp, Illumninance, LightStorage, Luminance,
         RenderResourcesDesynchronized,

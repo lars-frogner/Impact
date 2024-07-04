@@ -1,6 +1,6 @@
 //! Management of resources for GPU computation.
 
-use crate::rendering::{
+use crate::gpu::rendering::{
     ComputeShaderInput, RenderAttachmentQuantitySet, SingleUniformRenderBuffer, StorageRenderBuffer,
 };
 use impact_utils::stringhash64_newtype;

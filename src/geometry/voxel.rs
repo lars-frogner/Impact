@@ -9,8 +9,8 @@ use crate::{
         Angle, AxisAlignedBox, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureID,
         InstanceFeatureStorage, InstanceModelViewTransform, Radians, Sphere,
     },
+    gpu::rendering::fre,
     num::Float,
-    rendering::fre,
 };
 use approx::AbsDiffEq;
 use impact_utils::KeyIndexMapper;
@@ -19,7 +19,7 @@ use nohash_hasher::BuildNoHashHasher;
 use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
 use simba::scalar::{SubsetOf, SupersetOf};
-use std::array;
+use std::{array, num::NonZeroU32};
 
 /// A type identifier that determines all the properties of a voxel.
 #[repr(u8)]
@@ -299,12 +299,12 @@ impl<F: Float> VoxelTreeLODController<F> {
     /// vertical window dimension (in number of pixels), vertical field of view
     /// and minimum number of pixels per voxel.
     pub fn compute_min_angular_voxel_extent<A: Angle<F>>(
-        vertical_window_dimension: u32,
+        vertical_window_dimension: NonZeroU32,
         vertical_field_of_view: A,
         min_pixels_per_voxel: F,
     ) -> Radians<F> {
-        let angular_pixel_extent =
-            vertical_field_of_view.as_radians() / F::from_u32(vertical_window_dimension).unwrap();
+        let angular_pixel_extent = vertical_field_of_view.as_radians()
+            / F::from_u32(vertical_window_dimension.into()).unwrap();
 
         let min_angular_voxel_extent = angular_pixel_extent * min_pixels_per_voxel;
 

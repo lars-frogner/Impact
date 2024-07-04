@@ -3,7 +3,7 @@
 use crate::{
     components::ComponentRegistry,
     geometry::Degrees,
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{Illumninance, LightID, LuminousIntensity},
 };
 use anyhow::Result;

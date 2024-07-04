@@ -1,6 +1,9 @@
 //! Management of storage buffers for GPU computation or rendering.
 
-use crate::rendering::buffer::{self, RenderBuffer};
+use crate::gpu::{
+    rendering::buffer::{self, RenderBuffer},
+    GraphicsDevice,
+};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::stringhash64_newtype;
 use std::{
@@ -40,7 +43,11 @@ impl StorageRenderBuffer {
     /// # Panics
     /// - If the given slice is empty.
     /// - If `T` is a zero-sized type.
-    pub fn new_read_only<T>(device: &wgpu::Device, values: &[T], label: Cow<'static, str>) -> Self
+    pub fn new_read_only<T>(
+        graphics_device: &GraphicsDevice,
+        values: &[T],
+        label: Cow<'static, str>,
+    ) -> Self
     where
         T: Zeroable + Pod,
     {
@@ -55,7 +62,7 @@ impl StorageRenderBuffer {
         );
 
         let storage_buffer =
-            RenderBuffer::new_storage_buffer(device, bytemuck::cast_slice(values), label);
+            RenderBuffer::new_storage_buffer(graphics_device, bytemuck::cast_slice(values), label);
 
         Self {
             storage_buffer,
@@ -73,11 +80,15 @@ impl StorageRenderBuffer {
     ///
     /// # Panics
     /// If the given number of bytes is zero.
-    pub fn new_read_write(device: &wgpu::Device, n_bytes: usize, label: Cow<'static, str>) -> Self {
+    pub fn new_read_write(
+        graphics_device: &GraphicsDevice,
+        n_bytes: usize,
+        label: Cow<'static, str>,
+    ) -> Self {
         assert_ne!(n_bytes, 0, "Tried to create empty storage buffer");
 
         let storage_buffer =
-            RenderBuffer::new_storage_buffer(device, vec![0; n_bytes].as_slice(), label);
+            RenderBuffer::new_storage_buffer(graphics_device, vec![0; n_bytes].as_slice(), label);
 
         Self {
             storage_buffer,
@@ -97,16 +108,23 @@ impl StorageRenderBuffer {
     /// # Panics
     /// If the given number of bytes is zero.
     pub fn new_read_write_with_result_on_cpu(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         n_bytes: usize,
         label: Cow<'static, str>,
     ) -> Self {
         assert_ne!(n_bytes, 0, "Tried to create empty storage buffer");
 
-        let storage_buffer =
-            RenderBuffer::new_storage_buffer(device, vec![0; n_bytes].as_slice(), label.clone());
+        let storage_buffer = RenderBuffer::new_storage_buffer(
+            graphics_device,
+            vec![0; n_bytes].as_slice(),
+            label.clone(),
+        );
 
-        let result_buffer = Some(RenderBuffer::new_result_buffer(device, n_bytes, label));
+        let result_buffer = Some(RenderBuffer::new_result_buffer(
+            graphics_device,
+            n_bytes,
+            label,
+        ));
 
         Self {
             storage_buffer,

@@ -3,10 +3,13 @@
 use super::NormalMapComp;
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
-    rendering::{
-        Assets, BumpMappingTextureShaderInput, CoreRenderingSystem, MaterialShaderInput,
-        NormalMappingShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
-        RenderAttachmentQuantitySet, RenderPassHints, TextureID,
+    gpu::{
+        rendering::{
+            Assets, BumpMappingTextureShaderInput, MaterialShaderInput, NormalMappingShaderInput,
+            ParallaxMappingShaderInput, PrepassTextureShaderInput, RenderAttachmentQuantitySet,
+            RenderPassHints, TextureID,
+        },
+        GraphicsDevice,
     },
     scene::{
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
@@ -14,7 +17,6 @@ use crate::{
     },
 };
 use impact_utils::hash64;
-use std::sync::RwLock;
 
 /// Creates a prepass material based on the given information about the main
 /// material. The given set of render attachment quantities that the prepass
@@ -33,8 +35,8 @@ use std::sync::RwLock;
 /// # Panics
 /// If both a normal map and a parallax map component is provided.
 pub fn create_prepass_material(
-    core_system: &CoreRenderingSystem,
-    assets: &RwLock<Assets>,
+    graphics_device: &GraphicsDevice,
+    assets: &Assets,
     material_library: &mut MaterialLibrary,
     input_render_attachment_quantities_for_main_material: &mut RenderAttachmentQuantitySet,
     mut material_name_parts: Vec<&str>,
@@ -180,8 +182,8 @@ pub fn create_prepass_material(
             .material_property_texture_group_entry(texture_group_id)
             .or_insert_with(|| {
                 MaterialPropertyTextureGroup::new(
-                    core_system,
-                    &assets.read().unwrap(),
+                    graphics_device,
+                    assets,
                     texture_ids,
                     texture_group_id.to_string(),
                 )

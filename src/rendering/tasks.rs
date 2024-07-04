@@ -1,7 +1,9 @@
 //! Tasks for rendering.
 
 use crate::{
-    rendering::{RenderCommandManager, RenderResourceManager, RenderingSystem, SyncRenderCommands},
+    gpu::rendering::{
+        RenderCommandManager, RenderResourceManager, RenderingSystem, SyncRenderCommands,
+    },
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
@@ -18,8 +20,7 @@ define_execution_tag!(
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) executes the
-    /// [`RenderingSystem::render`](crate::rendering::RenderingSystem::render)
-    /// method.
+    /// [`RenderingSystem::render`] method.
     [pub] Render,
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],

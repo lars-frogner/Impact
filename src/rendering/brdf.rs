@@ -4,7 +4,7 @@
 
 use crate::{
     num::Float,
-    rendering::{fre, DepthOrArrayLayers, TextureLookupTable},
+    gpu::rendering::{fre, DepthOrArrayLayers, TextureLookupTable},
 };
 use std::num::NonZeroU32;
 

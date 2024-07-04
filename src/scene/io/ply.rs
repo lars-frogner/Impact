@@ -5,7 +5,7 @@ use crate::{
         TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
         VertexTextureCoords,
     },
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{MeshComp, MeshID, MeshRepository},
 };
 use anyhow::{bail, Result};
@@ -16,7 +16,7 @@ use ply_rs::{
     parser::Parser,
     ply::{Property, PropertyAccess},
 };
-use std::{fmt::Debug, fs::File, io::BufReader, path::Path, sync::RwLock};
+use std::{fmt::Debug, fs::File, io::BufReader, path::Path};
 
 #[derive(Clone, Debug)]
 struct PlyVertex {
@@ -37,7 +37,7 @@ struct PlyTriangleVertexIndices([u32; 3]);
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file<P>(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    mesh_repository: &mut MeshRepository<fre>,
     ply_file_path: P,
 ) -> Result<MeshComp>
 where
@@ -47,13 +47,10 @@ where
 
     let mesh_id = MeshID(hash64!(ply_file_path.to_string_lossy()));
 
-    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+    if !mesh_repository.has_mesh(mesh_id) {
         let mesh = read_mesh_from_ply_file(ply_file_path)?;
 
-        mesh_repository
-            .write()
-            .unwrap()
-            .add_mesh_unless_present(mesh_id, mesh);
+        mesh_repository.add_mesh_unless_present(mesh_id, mesh);
     }
 
     Ok(MeshComp { id: mesh_id })
@@ -70,7 +67,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_ply_file_with_projection<P>(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    mesh_repository: &mut MeshRepository<fre>,
     ply_file_path: P,
     projection: &impl TextureProjection<fre>,
 ) -> Result<MeshComp>
@@ -85,15 +82,12 @@ where
         projection.identifier()
     )));
 
-    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+    if !mesh_repository.has_mesh(mesh_id) {
         let mut mesh = read_mesh_from_ply_file(ply_file_path)?;
 
         mesh.generate_texture_coords(projection);
 
-        mesh_repository
-            .write()
-            .unwrap()
-            .add_mesh_unless_present(mesh_id, mesh);
+        mesh_repository.add_mesh_unless_present(mesh_id, mesh);
     }
 
     Ok(MeshComp { id: mesh_id })

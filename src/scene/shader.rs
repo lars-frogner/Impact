@@ -2,10 +2,13 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{
-        CameraShaderInput, ComputeShaderGenerator, ComputeShaderInput, CoreRenderingSystem,
-        InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
-        RenderAttachmentQuantitySet, RenderShaderGenerator, Shader,
+    gpu::{
+        rendering::{
+            CameraShaderInput, ComputeShaderGenerator, ComputeShaderInput,
+            InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
+            RenderAttachmentQuantitySet, RenderShaderGenerator, Shader,
+        },
+        GraphicsDevice,
     },
 };
 use anyhow::Result;
@@ -50,7 +53,7 @@ impl ShaderManager {
     /// See [`ShaderGenerator::generate_rendering_shader_module`].
     pub fn obtain_rendering_shader(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
         light_shader_input: Option<&LightShaderInput>,
@@ -85,7 +88,7 @@ impl ShaderManager {
                     output_render_attachment_quantities,
                 )?;
                 Ok(entry.insert(Shader::from_naga_module(
-                    core_system,
+                    graphics_device,
                     module,
                     entry_point_names,
                     format!("Generated rendering shader (hash {})", shader_id.0).as_str(),
@@ -104,7 +107,7 @@ impl ShaderManager {
     /// See [`ShaderGenerator::generate_shader_module`].
     pub fn obtain_compute_shader(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         shader_input: &ComputeShaderInput,
     ) -> Result<&Shader> {
         let shader_id = ShaderID::from_compute_input(shader_input);
@@ -115,7 +118,7 @@ impl ShaderManager {
                 let (module, entry_point_names) =
                     ComputeShaderGenerator::generate_shader_module(shader_input)?;
                 Ok(entry.insert(Shader::from_naga_module(
-                    core_system,
+                    graphics_device,
                     module,
                     entry_point_names,
                     format!("Generated compute shader (hash {})", shader_id.0).as_str(),

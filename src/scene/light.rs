@@ -16,7 +16,7 @@ pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};
 use crate::{
     geometry::{InstanceFeatureBufferRangeID, UniformBuffer},
     num::Float,
-    rendering::fre,
+    gpu::rendering::fre,
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;

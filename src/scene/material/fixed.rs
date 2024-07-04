@@ -3,12 +3,15 @@
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
     geometry::{InstanceFeature, VertexAttributeSet},
-    impl_InstanceFeature,
-    rendering::{
-        Assets, CoreRenderingSystem, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-        InstanceFeatureShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
-        RenderPassHints,
+    gpu::{
+        rendering::{
+            Assets, FixedColorFeatureShaderInput, FixedTextureShaderInput,
+            InstanceFeatureShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
+            RenderPassHints,
+        },
+        GraphicsDevice,
     },
+    impl_InstanceFeature,
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
         MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
@@ -140,8 +143,8 @@ impl FixedTextureMaterial {
     /// texture set to the material library if not present and adds the
     /// appropriate material component to the entity.
     pub fn add_material_component_for_entity(
-        core_system: &CoreRenderingSystem,
-        assets: &RwLock<Assets>,
+        graphics_device: &GraphicsDevice,
+        assets: &Assets,
         material_library: &RwLock<MaterialLibrary>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
@@ -163,8 +166,8 @@ impl FixedTextureMaterial {
                     .material_property_texture_group_entry(texture_group_id)
                     .or_insert_with(|| {
                         MaterialPropertyTextureGroup::new(
-                            core_system,
-                            &assets.read().unwrap(),
+                            graphics_device,
+                            assets,
                             texture_ids,
                             texture_group_id.to_string(),
                         )

@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to meshes.
 
 use super::MeshID;
-use crate::{components::ComponentRegistry, geometry::FrontFaceSide, rendering::fre};
+use crate::{components::ComponentRegistry, geometry::FrontFaceSide, gpu::rendering::fre};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;

@@ -3,7 +3,7 @@
 use super::RenderCommandManager;
 use crate::{
     define_task,
-    rendering::{RenderingTag, SyncRenderResources},
+    gpu::rendering::{RenderingTag, SyncRenderResources},
     world::{World, WorldTaskScheduler},
 };
 use anyhow::Result;
@@ -31,8 +31,9 @@ define_task!(
             let postprocessor = scene.postprocessor().read().unwrap();
 
             render_command_manager.sync_with_render_resources(
-                renderer.core_system(),
                 renderer.config(),
+                renderer.graphics_device(),
+                renderer.rendering_surface(),
                 &material_library,
                 render_resource_manager.synchronized(),
                 renderer.render_attachment_texture_manager(),

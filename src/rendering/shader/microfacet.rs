@@ -8,7 +8,7 @@ use super::{
     UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
     VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use crate::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
+use crate::gpu::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
 use naga::{Function, Module};
 
 /// Describes the combination of models used for diffuse and specular reflection

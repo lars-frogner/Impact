@@ -13,11 +13,11 @@ use crate::{
         UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree, VoxelTreeLODController,
         VoxelType,
     },
-    num::Float,
-    rendering::{
-        fre, Assets, CoreRenderingSystem, DiffuseMicrofacetShadingModel,
-        SpecularMicrofacetShadingModel,
+    gpu::{
+        rendering::{fre, Assets, DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
+        GraphicsDevice,
     },
+    num::Float,
     scene::{
         material::setup_microfacet_material, AlbedoComp, InstanceFeatureManager, MaterialComp,
         MaterialHandle, MaterialLibrary, MeshID, MeshRepository, ModelID, RGBColor, RoughnessComp,
@@ -147,8 +147,8 @@ impl VoxelManager<fre> {
     pub fn create(
         voxel_extent: fre,
         initial_min_angular_voxel_extent_for_lod: Radians<fre>,
-        core_system: &CoreRenderingSystem,
-        assets: &RwLock<Assets>,
+        graphics_device: &GraphicsDevice,
+        assets: &Assets,
         mesh_repository: &mut MeshRepository<fre>,
         material_library: &mut MaterialLibrary,
         instance_feature_manager: &mut InstanceFeatureManager,
@@ -166,7 +166,7 @@ impl VoxelManager<fre> {
         let voxel_appearances = VoxelType::all().map(|voxel_type| {
             let material = setup_voxel_material(
                 voxel_type,
-                core_system,
+                graphics_device,
                 assets,
                 material_library,
                 instance_feature_manager,
@@ -269,14 +269,14 @@ impl VoxelManager<fre> {
 
 fn setup_voxel_material(
     voxel_type: VoxelType,
-    core_system: &CoreRenderingSystem,
-    assets: &RwLock<Assets>,
+    graphics_device: &GraphicsDevice,
+    assets: &Assets,
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
 ) -> MaterialComp {
     match voxel_type {
         VoxelType::Default => setup_microfacet_material_for_voxel(
-            core_system,
+            graphics_device,
             assets,
             material_library,
             instance_feature_manager,
@@ -291,8 +291,8 @@ fn setup_voxel_material(
 }
 
 fn setup_microfacet_material_for_voxel(
-    core_system: &CoreRenderingSystem,
-    assets: &RwLock<Assets>,
+    graphics_device: &GraphicsDevice,
+    assets: &Assets,
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     albedo: RGBColor,
@@ -308,7 +308,7 @@ fn setup_microfacet_material_for_voxel(
     };
 
     setup_microfacet_material(
-        core_system,
+        graphics_device,
         assets,
         material_library,
         instance_feature_manager,

@@ -2,9 +2,9 @@
 
 use crate::{
     geometry::{CollectionChange, UniformBuffer},
-    rendering::{
-        buffer::{self, Count, CountedRenderBuffer, RenderBuffer, UniformBufferable},
-        CoreRenderingSystem,
+    gpu::{
+        rendering::buffer::{self, Count, CountedRenderBuffer, RenderBuffer, UniformBufferable},
+        GraphicsDevice,
     },
 };
 use impact_utils::ConstStringHash64;
@@ -40,7 +40,7 @@ impl SingleUniformRenderBuffer {
     /// # Panics
     /// If the size of the uniform is zero.
     pub fn for_uniform<U>(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         uniform: &U,
         visibility: wgpu::ShaderStages,
         label: Cow<'static, str>,
@@ -55,7 +55,7 @@ impl SingleUniformRenderBuffer {
         );
 
         let render_buffer = RenderBuffer::new_buffer_for_single_uniform_bytes(
-            device,
+            graphics_device,
             bytemuck::bytes_of(uniform),
             label,
         );
@@ -87,7 +87,7 @@ impl MultiUniformRenderBuffer {
     /// Creates a new uniform render buffer initialized from the given uniform
     /// buffer.
     pub fn for_uniform_buffer<ID, U>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<ID, U>,
         visibility: wgpu::ShaderStages,
     ) -> Self
@@ -98,7 +98,7 @@ impl MultiUniformRenderBuffer {
         let uniform_type_id = U::ID;
 
         let render_buffer = CountedRenderBuffer::new_uniform_buffer(
-            core_system,
+            graphics_device,
             uniform_buffer.raw_buffer(),
             uniform_buffer.n_valid_uniforms(),
             Cow::Borrowed(uniform_type_id.string()),
@@ -156,7 +156,7 @@ impl MultiUniformRenderBuffer {
     /// render buffer.
     pub fn transfer_uniforms_to_render_buffer<ID, U>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<ID, U>,
     ) -> UniformTransferResult
     where
@@ -181,7 +181,7 @@ impl MultiUniformRenderBuffer {
                 // we create a new one that is large enough for all the uniforms (also the ones
                 // not currently valid)
                 self.render_buffer = CountedRenderBuffer::new_uniform_buffer(
-                    core_system,
+                    graphics_device,
                     uniform_buffer.raw_buffer(),
                     n_valid_uniforms,
                     self.render_buffer.label().clone(),
@@ -198,7 +198,7 @@ impl MultiUniformRenderBuffer {
                 };
 
                 self.render_buffer.update_valid_bytes(
-                    core_system,
+                    graphics_device,
                     bytemuck::cast_slice(valid_uniforms),
                     new_count,
                 );

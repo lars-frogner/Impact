@@ -5,7 +5,7 @@ use crate::{
         Angle, AxisAlignedBox, Degrees, Frustum, OrthographicTransform, Sphere,
         UpperExclusiveBounds,
     },
-    rendering::{fre, CascadeIdx},
+    gpu::rendering::{fre, CascadeIdx},
     scene::{
         Illumninance, LightStorage, RenderResourcesDesynchronized, SceneCamera,
         UnidirectionalEmissionComp, UnidirectionalLightComp,

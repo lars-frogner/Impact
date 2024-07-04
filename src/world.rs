@@ -4,8 +4,12 @@ use crate::{
     components::{ComponentCategory, ComponentRegistry},
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
+    gpu::{
+        rendering::{fre, RenderingSystem, ScreenCapturer},
+        GraphicsDevice,
+    },
     physics::{self, PhysicsSimulator, SteppingScheme},
-    rendering::{fre, RenderingSystem, ScreenCapturer},
+    rendering::Assets,
     scene::{self, io, MeshComp, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
@@ -20,7 +24,7 @@ use impact_ecs::{
 };
 use std::{
     fmt::Debug,
-    num::NonZeroUsize,
+    num::{NonZeroU32, NonZeroUsize},
     path::Path,
     sync::{Arc, Mutex, RwLock},
 };
@@ -30,11 +34,13 @@ use std::{
 #[derive(Debug)]
 pub struct World {
     window: Arc<Window>,
+    graphics_device: Arc<GraphicsDevice>,
     user_interface: RwLock<UserInterface>,
     component_registry: RwLock<ComponentRegistry>,
     ecs_world: RwLock<ECSWorld>,
-    scene: RwLock<Scene>,
     renderer: RwLock<RenderingSystem>,
+    assets: RwLock<Assets>,
+    scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
@@ -46,15 +52,15 @@ pub type WorldTaskScheduler = TaskScheduler<World>;
 impl World {
     /// Creates a new world data container.
     pub fn new(
-        window: Window,
-        scene: Scene,
+        window: Arc<Window>,
+        graphics_device: Arc<GraphicsDevice>,
         renderer: RenderingSystem,
+        assets: Assets,
+        scene: Scene,
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
         orientation_controller: Option<Box<dyn OrientationController>>,
     ) -> Self {
-        let window = Arc::new(window);
-
         let mut component_registry = ComponentRegistry::new();
         if let Err(err) = Self::register_all_components(&mut component_registry) {
             panic!("Failed to register components: {}", err);
@@ -62,15 +68,17 @@ impl World {
 
         Self {
             window: Arc::clone(&window),
+            graphics_device,
             user_interface: RwLock::new(UserInterface::new(window)),
             component_registry: RwLock::new(component_registry),
             ecs_world: RwLock::new(ECSWorld::new()),
-            scene: RwLock::new(scene),
             renderer: RwLock::new(renderer),
+            assets: RwLock::new(assets),
+            scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
-            screen_capturer: ScreenCapturer::new(2048),
+            screen_capturer: ScreenCapturer::new(NonZeroU32::new(2048).unwrap()),
         }
     }
 
@@ -79,8 +87,12 @@ impl World {
         self.window.as_ref()
     }
 
-    /// Returns a reference to the [`UserInterface`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`GraphicsDevice`].
+    pub fn graphics_device(&self) -> &GraphicsDevice {
+        &self.graphics_device
+    }
+
+    /// Returns a reference to the [`UserInterface`], guarded by a [`RwLock`].
     pub fn user_interface(&self) -> &RwLock<UserInterface> {
         &self.user_interface
     }
@@ -91,26 +103,29 @@ impl World {
         &self.component_registry
     }
 
-    /// Returns a reference to the ECS [`World`](impact_ecs::world::World), guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the ECS [`World`](impact_ecs::world::World),
+    /// guarded by a [`RwLock`].
     pub fn ecs_world(&self) -> &RwLock<ECSWorld> {
         &self.ecs_world
     }
 
-    /// Returns a reference to the [`Scene`], guarded
-    /// by a [`RwLock`].
-    pub fn scene(&self) -> &RwLock<Scene> {
-        &self.scene
-    }
-
-    /// Returns a reference to the [`RenderingSystem`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
     pub fn renderer(&self) -> &RwLock<RenderingSystem> {
         &self.renderer
     }
 
-    /// Returns a reference to the [`PhysicsSimulator`], guarded
-    /// by a [`RwLock`].
+    /// Returns a reference to the [`Assets`], guarded by a [`RwLock`].
+    pub fn assets(&self) -> &RwLock<Assets> {
+        &self.assets
+    }
+
+    /// Returns a reference to the [`Scene`], guarded by a [`RwLock`].
+    pub fn scene(&self) -> &RwLock<Scene> {
+        &self.scene
+    }
+
+    /// Returns a reference to the [`PhysicsSimulator`], guarded by a
+    /// [`RwLock`].
     pub fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
     }
@@ -154,9 +169,13 @@ impl World {
     where
         P: AsRef<Path> + Debug,
     {
+        let mut assets = self.assets.write().unwrap();
+        let scene = self.scene.read().unwrap();
+        let mut mesh_repository = scene.mesh_repository().write().unwrap();
         io::load_models_from_obj_file(
-            &self.renderer,
-            self.scene.read().unwrap().mesh_repository(),
+            self.graphics_device(),
+            &mut assets,
+            &mut mesh_repository,
             obj_file_path,
         )
     }
@@ -174,7 +193,9 @@ impl World {
     where
         P: AsRef<Path> + Debug,
     {
-        io::load_mesh_from_obj_file(self.scene.read().unwrap().mesh_repository(), obj_file_path)
+        let scene = self.scene.read().unwrap();
+        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        io::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
     }
 
     /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
@@ -195,11 +216,9 @@ impl World {
     where
         P: AsRef<Path> + Debug,
     {
-        io::load_mesh_from_obj_file_with_projection(
-            self.scene.read().unwrap().mesh_repository(),
-            obj_file_path,
-            projection,
-        )
+        let scene = self.scene.read().unwrap();
+        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        io::load_mesh_from_obj_file_with_projection(&mut mesh_repository, obj_file_path, projection)
     }
 
     /// Reads the PLY (Polygon File Format, also called Stanford Triangle
@@ -215,7 +234,9 @@ impl World {
     where
         P: AsRef<Path> + Debug,
     {
-        io::load_mesh_from_ply_file(self.scene.read().unwrap().mesh_repository(), ply_file_path)
+        let scene = self.scene.read().unwrap();
+        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        io::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
     }
 
     /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
@@ -236,11 +257,9 @@ impl World {
     where
         P: AsRef<Path> + Debug,
     {
-        io::load_mesh_from_ply_file_with_projection(
-            self.scene.read().unwrap().mesh_repository(),
-            ply_file_path,
-            projection,
-        )
+        let scene = self.scene.read().unwrap();
+        let mut mesh_repository = scene.mesh_repository().write().unwrap();
+        io::load_mesh_from_ply_file_with_projection(&mut mesh_repository, ply_file_path, projection)
     }
 
     pub fn create_entity<A, E>(
@@ -270,10 +289,10 @@ impl World {
         let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
 
         {
-            let renderer = self.renderer().read().unwrap();
+            let assets = self.assets().read().unwrap();
             self.scene().read().unwrap().handle_entity_created(
-                renderer.core_system(),
-                renderer.assets(),
+                self.graphics_device(),
+                &assets,
                 &mut components,
                 &mut render_resources_desynchronized,
             )?;
@@ -341,19 +360,19 @@ impl World {
 
     /// Sets a new size for the rendering surface and updates
     /// the aspect ratio of all cameras.
-    pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
+    pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
         let mut renderer = self.renderer().write().unwrap();
 
-        let old_size = renderer.surface_dimensions();
+        let (old_width, old_height) = renderer.rendering_surface().surface_dimensions();
 
-        renderer.resize_surface(new_size);
+        renderer.resize_rendering_surface(new_width, new_height);
         drop(renderer);
 
         let render_resources_desynchronized = self
             .scene()
             .read()
             .unwrap()
-            .handle_window_resized(old_size, new_size);
+            .handle_window_resized(old_width, old_height, new_width, new_height);
 
         if render_resources_desynchronized.is_yes() {
             self.renderer()

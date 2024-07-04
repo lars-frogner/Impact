@@ -6,8 +6,8 @@ pub use input::{HandlingResult, InputHandler, KeyActionMap, MouseInputHandler};
 pub use winit::event::WindowEvent;
 
 use crate::game_loop::GameLoop;
-use anyhow::Result;
-use std::sync::Arc;
+use anyhow::{anyhow, Result};
+use std::{num::NonZeroU32, sync::Arc};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -33,8 +33,8 @@ pub struct Window {
 pub struct EventLoopController<'a>(&'a ActiveEventLoop);
 
 /// Calculates the ratio of width to height.
-pub fn calculate_aspect_ratio(width: u32, height: u32) -> f32 {
-    width as f32 / height as f32
+pub fn calculate_aspect_ratio(width: NonZeroU32, height: NonZeroU32) -> f32 {
+    u32::from(width) as f32 / u32::from(height) as f32
 }
 
 impl GameHandler {
@@ -63,11 +63,14 @@ impl ApplicationHandler for GameHandler {
             game_loop.window().request_redraw();
             return;
         }
-        match event_loop.create_window(
-            WindowAttributes::default().with_inner_size(PhysicalSize::new(1600, 1200)),
-        ) {
+        match event_loop
+            .create_window(
+                WindowAttributes::default().with_inner_size(PhysicalSize::new(1600, 1200)),
+            )
+            .map_err(|error| error.into())
+            .and_then(Window::wrap)
+        {
             Ok(window) => {
-                let window = Window::wrap(window);
                 window.request_redraw();
 
                 match (self.create_game_loop)(window) {
@@ -117,7 +120,15 @@ impl ApplicationHandler for GameHandler {
                     WindowEvent::CloseRequested => event_loop_controller.exit(),
                     // Resize rendering surface when window is resized
                     WindowEvent::Resized(new_size) => {
-                        game_loop.resize_rendering_surface((new_size.width, new_size.height));
+                        if new_size.width == 0 || new_size.height == 0 {
+                            log::error!("Tried resizing window to zero size");
+                            event_loop_controller.exit();
+                        } else {
+                            game_loop.resize_rendering_surface(
+                                NonZeroU32::new(new_size.width).unwrap(),
+                                NonZeroU32::new(new_size.height).unwrap(),
+                            );
+                        }
                     }
                     _ => {}
                 }
@@ -167,9 +178,12 @@ impl Window {
 
     /// Returns a tuple (width, height) with the extents of the
     /// window in number of pixels.
-    pub fn dimensions(&self) -> (u32, u32) {
-        let window_size = self.window().inner_size();
-        (window_size.width, window_size.height)
+    pub fn dimensions(&self) -> (NonZeroU32, NonZeroU32) {
+        let window_size = self.window.inner_size();
+        (
+            NonZeroU32::new(window_size.width).unwrap(),
+            NonZeroU32::new(window_size.height).unwrap(),
+        )
     }
 
     /// Returns the ratio of width to height of the window.
@@ -189,9 +203,14 @@ impl Window {
         self.window.request_redraw();
     }
 
-    fn wrap(window: WinitWindow) -> Self {
-        Self {
-            window: Arc::new(window),
+    fn wrap(window: WinitWindow) -> Result<Self> {
+        let window_size = window.inner_size();
+        if window_size.width == 0 || window_size.height == 0 {
+            Err(anyhow!("degenerate window dimensions"))
+        } else {
+            Ok(Self {
+                window: Arc::new(window),
+            })
         }
     }
 }

@@ -2,8 +2,8 @@
 
 use crate::{
     define_execution_tag_set,
+    gpu::rendering::RenderingTag,
     physics::PhysicsTag,
-    rendering::RenderingTag,
     thread::ThreadPoolResult,
     window::{EventLoopController, HandlingResult, InputHandler, Window, WindowEvent},
     world::{World, WorldTaskScheduler},
@@ -93,8 +93,8 @@ impl GameLoop {
             .handle_device_event(&self.world, event_loop_controller, event)
     }
 
-    pub fn resize_rendering_surface(&self, new_size: (u32, u32)) {
-        self.world.resize_rendering_surface(new_size);
+    pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
+        self.world.resize_rendering_surface(new_width, new_height);
     }
 
     pub fn perform_iteration(

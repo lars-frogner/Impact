@@ -3,7 +3,7 @@
 use super::Scene;
 use crate::{
     define_task,
-    rendering::RenderingTag,
+    gpu::rendering::RenderingTag,
     scene::systems::{SyncLightsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,

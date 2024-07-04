@@ -6,9 +6,12 @@ use crate::{
         VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords,
         N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS,
     },
-    rendering::{
-        buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
-        fre, CoreRenderingSystem, MeshShaderInput,
+    gpu::{
+        rendering::{
+            buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
+            fre, MeshShaderInput,
+        },
+        GraphicsDevice,
     },
     scene::MeshID,
 };
@@ -34,7 +37,7 @@ impl MeshRenderBufferManager {
     /// Creates a new manager with render buffers initialized
     /// from the given mesh.
     pub fn for_mesh(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mesh_id: MeshID,
         mesh: &TriangleMesh<fre>,
     ) -> Self {
@@ -52,10 +55,11 @@ impl MeshRenderBufferManager {
 
         let indices = mesh.indices();
         let n_indices = indices.len();
-        let (index_format, index_buffer) = Self::create_index_buffer(core_system, mesh_id, indices);
+        let (index_format, index_buffer) =
+            Self::create_index_buffer(graphics_device, mesh_id, indices);
 
         Self::add_vertex_attribute_if_available(
-            core_system,
+            graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
@@ -64,7 +68,7 @@ impl MeshRenderBufferManager {
             mesh.positions(),
         );
         Self::add_vertex_attribute_if_available(
-            core_system,
+            graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
@@ -73,7 +77,7 @@ impl MeshRenderBufferManager {
             mesh.colors(),
         );
         Self::add_vertex_attribute_if_available(
-            core_system,
+            graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
@@ -82,7 +86,7 @@ impl MeshRenderBufferManager {
             mesh.normal_vectors(),
         );
         Self::add_vertex_attribute_if_available(
-            core_system,
+            graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
@@ -91,7 +95,7 @@ impl MeshRenderBufferManager {
             mesh.texture_coords(),
         );
         Self::add_vertex_attribute_if_available(
-            core_system,
+            graphics_device,
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
@@ -113,26 +117,26 @@ impl MeshRenderBufferManager {
     }
 
     /// Ensures that the render buffers are in sync with the given mesh.
-    pub fn sync_with_mesh(&mut self, core_system: &CoreRenderingSystem, mesh: &TriangleMesh<fre>) {
-        self.sync_vertex_buffer(core_system, mesh.positions(), mesh.position_change());
-        self.sync_vertex_buffer(core_system, mesh.colors(), mesh.color_change());
+    pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<fre>) {
+        self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
+        self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
         self.sync_vertex_buffer(
-            core_system,
+            graphics_device,
             mesh.normal_vectors(),
             mesh.normal_vector_change(),
         );
         self.sync_vertex_buffer(
-            core_system,
+            graphics_device,
             mesh.texture_coords(),
             mesh.texture_coord_change(),
         );
         self.sync_vertex_buffer(
-            core_system,
+            graphics_device,
             mesh.tangent_space_quaternions(),
             mesh.tangent_space_quaternion_change(),
         );
 
-        self.sync_index_buffer(core_system, mesh.indices(), mesh.index_change());
+        self.sync_index_buffer(graphics_device, mesh.indices(), mesh.index_change());
 
         mesh.reset_change_tracking();
     }
@@ -242,7 +246,7 @@ impl MeshRenderBufferManager {
     }
 
     fn add_vertex_attribute_if_available<V>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         available_attributes: &mut VertexAttributeSet,
         vertex_buffers: &mut [Option<RenderBuffer>; N_VERTEX_ATTRIBUTES],
         vertex_buffer_layouts: &mut [Option<wgpu::VertexBufferLayout<'static>>;
@@ -257,7 +261,7 @@ impl MeshRenderBufferManager {
             *available_attributes |= V::FLAG;
 
             vertex_buffers[V::GLOBAL_INDEX] = Some(RenderBuffer::new_full_vertex_buffer(
-                core_system,
+                graphics_device,
                 data,
                 Cow::Owned(format!("{} {}", mesh_id, V::NAME)),
             ));
@@ -279,7 +283,7 @@ impl MeshRenderBufferManager {
     }
 
     fn create_index_buffer<I>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mesh_id: MeshID,
         indices: &[I],
     ) -> (wgpu::IndexFormat, RenderBuffer)
@@ -289,7 +293,7 @@ impl MeshRenderBufferManager {
         (
             I::INDEX_FORMAT,
             RenderBuffer::new_full_index_buffer(
-                core_system,
+                graphics_device,
                 indices,
                 Cow::Owned(format!("{} index", mesh_id)),
             ),
@@ -298,7 +302,7 @@ impl MeshRenderBufferManager {
 
     fn sync_vertex_buffer<V>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         data: &[V],
         attribute_change: CollectionChange,
     ) where
@@ -317,17 +321,17 @@ impl MeshRenderBufferManager {
                         // If the new number of vertices exceeds the size of the existing buffer,
                         // we create a new one that is large enough
                         *vertex_buffer = RenderBuffer::new_full_vertex_buffer(
-                            core_system,
+                            graphics_device,
                             data,
                             vertex_buffer.label().clone(),
                         );
                     } else {
-                        vertex_buffer.update_valid_bytes(core_system, vertex_bytes);
+                        vertex_buffer.update_valid_bytes(graphics_device, vertex_bytes);
                     }
                 }
             } else {
                 Self::add_vertex_attribute_if_available(
-                    core_system,
+                    graphics_device,
                     &mut self.available_attributes,
                     &mut self.vertex_buffers,
                     &mut self.vertex_buffer_layouts,
@@ -341,7 +345,7 @@ impl MeshRenderBufferManager {
 
     fn sync_index_buffer<I>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         indices: &[I],
         index_change: CollectionChange,
     ) where
@@ -354,13 +358,13 @@ impl MeshRenderBufferManager {
                 // If the new number of indices exceeds the size of the existing buffer,
                 // we create a new one that is large enough
                 self.index_buffer = RenderBuffer::new_full_index_buffer(
-                    core_system,
+                    graphics_device,
                     indices,
                     self.index_buffer.label().clone(),
                 );
             } else {
                 self.index_buffer
-                    .update_valid_bytes(core_system, index_bytes);
+                    .update_valid_bytes(graphics_device, index_bytes);
             }
 
             self.n_indices = indices.len();

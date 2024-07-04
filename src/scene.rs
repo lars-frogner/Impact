@@ -76,7 +76,8 @@ pub use voxel::{
 
 use crate::{
     geometry::Radians,
-    rendering::{fre, RenderingSystem},
+    gpu::{rendering::fre, GraphicsDevice},
+    rendering::Assets,
 };
 use std::sync::RwLock;
 
@@ -108,7 +109,7 @@ pub struct SceneConfig {
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new(config: SceneConfig, renderer: &RenderingSystem) -> Self {
+    pub fn new(config: SceneConfig, graphics_device: &GraphicsDevice, assets: &Assets) -> Self {
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
 
@@ -120,15 +121,15 @@ impl Scene {
         let voxel_manager = VoxelManager::create(
             config.voxel_extent,
             config.initial_min_angular_voxel_extent_for_lod,
-            renderer.core_system(),
-            renderer.assets(),
+            graphics_device,
+            assets,
             &mut mesh_repository,
             &mut material_library,
             &mut instance_feature_manager,
         );
 
         let postprocessor = Postprocessor::new(
-            renderer.core_system().device(),
+            graphics_device,
             &mut material_library,
             &config.ambient_occlusion,
             &config.bloom,

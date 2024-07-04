@@ -5,7 +5,11 @@ use crate::{
         TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
         VertexTextureCoords,
     },
-    rendering::{fre, ColorSpace, RenderingSystem, TextureAddressingConfig, TextureConfig},
+    gpu::{
+        rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
+        GraphicsDevice,
+    },
+    rendering::Assets,
     scene::{
         AlbedoComp, AlbedoTextureComp, MeshComp, MeshID, MeshRepository, NormalMapComp, RGBColor,
         RoughnessComp, SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,
@@ -22,7 +26,6 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
     path::Path,
-    sync::RwLock,
 };
 use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
 
@@ -38,8 +41,9 @@ use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
 /// Returns an error if any of the involved OBJ, MTL or texture files can not be
 /// found or loaded.
 pub fn load_models_from_obj_file<P>(
-    renderer: &RwLock<RenderingSystem>,
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    graphics_device: &GraphicsDevice,
+    assets: &mut Assets,
+    mesh_repository: &mut MeshRepository<fre>,
     obj_file_path: P,
 ) -> Result<Vec<SingleInstance<ArchetypeComponentStorage>>>
 where
@@ -64,13 +68,10 @@ where
             &model.name, &obj_file_path_string
         )));
 
-        if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+        if !mesh_repository.has_mesh(mesh_id) {
             let mesh = create_mesh_from_tobj_mesh(model.mesh);
 
-            mesh_repository
-                .write()
-                .unwrap()
-                .add_mesh_unless_present(mesh_id, mesh);
+            mesh_repository.add_mesh_unless_present(mesh_id, mesh);
         }
 
         let mesh_component = ComponentStorage::from_single_instance_view(&MeshComp { id: mesh_id });
@@ -79,7 +80,8 @@ where
             let material_components = match material_components.entry(material_idx) {
                 Entry::Vacant(entry) => entry
                     .insert(create_material_components_from_tobj_material(
-                        renderer,
+                        graphics_device,
+                        assets,
                         &obj_file_path_string,
                         &materials[material_idx],
                     )?)
@@ -125,7 +127,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file<P>(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    mesh_repository: &mut MeshRepository<fre>,
     obj_file_path: P,
 ) -> Result<MeshComp>
 where
@@ -142,17 +144,14 @@ where
 
     let mesh_id = MeshID(hash64!(obj_file_path_string));
 
-    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+    if !mesh_repository.has_mesh(mesh_id) {
         let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
 
         for model in models {
             mesh.merge_with(&create_mesh_from_tobj_mesh(model.mesh));
         }
 
-        mesh_repository
-            .write()
-            .unwrap()
-            .add_mesh_unless_present(mesh_id, mesh);
+        mesh_repository.add_mesh_unless_present(mesh_id, mesh);
     }
 
     Ok(MeshComp { id: mesh_id })
@@ -169,7 +168,7 @@ where
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
 pub fn load_mesh_from_obj_file_with_projection<P>(
-    mesh_repository: &RwLock<MeshRepository<fre>>,
+    mesh_repository: &mut MeshRepository<fre>,
     obj_file_path: P,
     projection: &impl TextureProjection<fre>,
 ) -> Result<MeshComp>
@@ -191,7 +190,7 @@ where
         projection.identifier()
     )));
 
-    if !mesh_repository.read().unwrap().has_mesh(mesh_id) {
+    if !mesh_repository.has_mesh(mesh_id) {
         let mut mesh = create_mesh_from_tobj_mesh(models.pop().unwrap().mesh);
 
         for model in models {
@@ -200,10 +199,7 @@ where
 
         mesh.generate_texture_coords(projection);
 
-        mesh_repository
-            .write()
-            .unwrap()
-            .add_mesh_unless_present(mesh_id, mesh);
+        mesh_repository.add_mesh_unless_present(mesh_id, mesh);
     }
 
     Ok(MeshComp { id: mesh_id })
@@ -261,7 +257,8 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
 }
 
 fn create_material_components_from_tobj_material(
-    renderer: &RwLock<RenderingSystem>,
+    graphics_device: &GraphicsDevice,
+    assets: &mut Assets,
     obj_file_path: impl AsRef<str>,
     material: &ObjMaterial,
 ) -> Result<Vec<SingleInstance<ComponentStorage>>> {
@@ -320,11 +317,8 @@ fn create_material_components_from_tobj_material(
     let mut components = Vec::with_capacity(4);
 
     if let Some(albedo_texture_path) = &material.diffuse_texture {
-        let renderer = renderer.read().unwrap();
-        let mut assets = renderer.assets().write().unwrap();
-
         let albedo_texture_id = assets.load_texture_from_path(
-            renderer.core_system(),
+            graphics_device,
             albedo_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
@@ -343,11 +337,8 @@ fn create_material_components_from_tobj_material(
     }
 
     if let Some(specular_reflectance_path) = &material.specular_texture {
-        let renderer = renderer.read().unwrap();
-        let mut assets = renderer.assets().write().unwrap();
-
         let specular_reflectance_id = assets.load_texture_from_path(
-            renderer.core_system(),
+            graphics_device,
             specular_reflectance_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
@@ -368,11 +359,8 @@ fn create_material_components_from_tobj_material(
     }
 
     if let Some(normal_texture_path) = &material.normal_texture {
-        let renderer = renderer.read().unwrap();
-        let mut assets = renderer.assets().write().unwrap();
-
         let normal_texture_id = assets.load_texture_from_path(
-            renderer.core_system(),
+            graphics_device,
             normal_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Linear,

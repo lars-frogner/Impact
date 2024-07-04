@@ -3,10 +3,13 @@
 use crate::{
     assert_uniform_valid,
     geometry::VertexAttributeSet,
-    rendering::{
-        create_uniform_buffer_bind_group_layout_entry, fre, GaussianBlurShaderInput,
-        MaterialShaderInput, RenderAttachmentQuantity, RenderPassHints, SingleUniformRenderBuffer,
-        UniformBufferable,
+    gpu::{
+        rendering::{
+            create_uniform_buffer_bind_group_layout_entry, fre, GaussianBlurShaderInput,
+            MaterialShaderInput, RenderAttachmentQuantity, RenderPassHints,
+            SingleUniformRenderBuffer, UniformBufferable,
+        },
+        GraphicsDevice,
     },
     scene::{MaterialSpecificResourceGroup, MaterialSpecification},
 };
@@ -153,20 +156,20 @@ impl Display for GaussianBlurDirection {
 /// Gaussian blur in the given direction to the input attachment and writes the
 /// result to the output attachment.
 pub fn create_gaussian_blur_material(
-    device: &wgpu::Device,
+    graphics_device: &GraphicsDevice,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     direction: GaussianBlurDirection,
     sample_uniform: &GaussianBlurSamples,
 ) -> MaterialSpecification {
     let sample_uniform_buffer = SingleUniformRenderBuffer::for_uniform(
-        device,
+        graphics_device,
         sample_uniform,
         wgpu::ShaderStages::FRAGMENT,
         Cow::Borrowed("Gaussian blur samples"),
     );
     let material_specific_resources = MaterialSpecificResourceGroup::new(
-        device,
+        graphics_device,
         vec![sample_uniform_buffer],
         &[],
         "Gaussian blur samples",

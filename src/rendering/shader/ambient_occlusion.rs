@@ -7,7 +7,7 @@ use super::{
     PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_TYPE,
     F32_WIDTH, U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
-use crate::{rendering::RenderAttachmentQuantity, scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT};
+use crate::{gpu::rendering::RenderAttachmentQuantity, scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT};
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle, Literal,
     LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,

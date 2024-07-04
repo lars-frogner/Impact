@@ -3,10 +3,13 @@
 use super::{create_material_feature, create_prepass_material};
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{
-        Assets, CoreRenderingSystem, DiffuseMicrofacetShadingModel, MaterialShaderInput,
-        MicrofacetShadingModel, MicrofacetTextureShaderInput, RenderAttachmentQuantitySet,
-        RenderPassHints, SpecularMicrofacetShadingModel,
+    gpu::{
+        rendering::{
+            Assets, DiffuseMicrofacetShadingModel, MaterialShaderInput, MicrofacetShadingModel,
+            MicrofacetTextureShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
+            SpecularMicrofacetShadingModel,
+        },
+        GraphicsDevice,
     },
     scene::{
         AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
@@ -28,8 +31,8 @@ use std::sync::RwLock;
 /// registers the material in the instance feature manager and adds the
 /// appropriate material component to the entity.
 pub fn add_microfacet_material_component_for_entity(
-    core_system: &CoreRenderingSystem,
-    assets: &RwLock<Assets>,
+    graphics_device: &GraphicsDevice,
+    assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     components: &mut ArchetypeComponentStorage,
@@ -50,7 +53,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -91,7 +94,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -132,7 +135,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -173,7 +176,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -215,7 +218,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -257,7 +260,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -301,7 +304,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -343,7 +346,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -383,7 +386,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -425,7 +428,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -465,7 +468,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -507,7 +510,7 @@ pub fn add_microfacet_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             setup_microfacet_material(
-                core_system,
+                graphics_device,
                 assets,
                 &mut material_library,
                 &mut instance_feature_manager,
@@ -533,8 +536,8 @@ pub fn add_microfacet_material_component_for_entity(
 }
 
 pub fn setup_microfacet_material(
-    core_system: &CoreRenderingSystem,
-    assets: &RwLock<Assets>,
+    graphics_device: &GraphicsDevice,
+    assets: &Assets,
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     albedo: Option<&AlbedoComp>,
@@ -642,7 +645,7 @@ pub fn setup_microfacet_material(
     let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
     let prepass_material_handle = create_prepass_material(
-        core_system,
+        graphics_device,
         assets,
         material_library,
         &mut input_render_attachment_quantities,
@@ -706,8 +709,8 @@ pub fn setup_microfacet_material(
             .material_property_texture_group_entry(texture_group_id)
             .or_insert_with(|| {
                 MaterialPropertyTextureGroup::new(
-                    core_system,
-                    &assets.read().unwrap(),
+                    graphics_device,
+                    assets,
                     texture_ids,
                     texture_group_id.to_string(),
                 )

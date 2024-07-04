@@ -1,6 +1,6 @@
 //! Data buffers for rendering.
 
-use crate::rendering::CoreRenderingSystem;
+use crate::gpu::GraphicsDevice;
 use bytemuck::Pod;
 use impact_utils::{Alignment, ConstStringHash64};
 use std::{
@@ -112,7 +112,7 @@ impl RenderBuffer {
     /// - If `n_valid_vertices` exceeds the number of items in the `vertices`
     ///   slice.
     pub fn new_vertex_buffer<V>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         vertices: &[V],
         n_valid_vertices: usize,
         label: Cow<'static, str>,
@@ -124,7 +124,7 @@ impl RenderBuffer {
 
         let bytes = bytemuck::cast_slice(vertices);
 
-        Self::new_vertex_buffer_with_bytes(core_system, bytes, n_valid_bytes, label)
+        Self::new_vertex_buffer_with_bytes(graphics_device, bytes, n_valid_bytes, label)
     }
 
     /// Creates a vertex render buffer initialized with the given vertex
@@ -133,14 +133,14 @@ impl RenderBuffer {
     /// # Panics
     /// If `vertices` is empty.
     pub fn new_full_vertex_buffer<V>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         vertices: &[V],
         label: Cow<'static, str>,
     ) -> Self
     where
         V: VertexBufferable,
     {
-        Self::new_vertex_buffer(core_system, vertices, vertices.len(), label)
+        Self::new_vertex_buffer(graphics_device, vertices, vertices.len(), label)
     }
 
     /// Creates a vertex render buffer initialized with the given bytes
@@ -151,7 +151,7 @@ impl RenderBuffer {
     /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
     pub fn new_vertex_buffer_with_bytes(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         bytes: &[u8],
         n_valid_bytes: usize,
         label: Cow<'static, str>,
@@ -161,7 +161,7 @@ impl RenderBuffer {
             "Tried to create empty vertex render buffer"
         );
         Self::new(
-            core_system.device(),
+            graphics_device,
             RenderBufferType::Vertex,
             bytes,
             n_valid_bytes,
@@ -177,7 +177,7 @@ impl RenderBuffer {
     /// - If `n_valid_indices` exceeds the number of items in the `indices`
     ///   slice.
     pub fn new_index_buffer<I>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         indices: &[I],
         n_valid_indices: usize,
         label: Cow<'static, str>,
@@ -195,7 +195,7 @@ impl RenderBuffer {
         let bytes = bytemuck::cast_slice(indices);
 
         Self::new(
-            core_system.device(),
+            graphics_device,
             RenderBufferType::Index,
             bytes,
             n_valid_bytes,
@@ -209,14 +209,14 @@ impl RenderBuffer {
     /// # Panics
     /// If `indices` is empty.
     pub fn new_full_index_buffer<I>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         indices: &[I],
         label: Cow<'static, str>,
     ) -> Self
     where
         I: IndexBufferable,
     {
-        Self::new_index_buffer(core_system, indices, indices.len(), label)
+        Self::new_index_buffer(graphics_device, indices, indices.len(), label)
     }
 
     /// Creates a uniform render buffer initialized with the given uniform data,
@@ -229,7 +229,7 @@ impl RenderBuffer {
     /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
     ///   slice.
     pub fn new_uniform_buffer<U>(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         uniforms: &[U],
         n_valid_uniforms: usize,
         label: Cow<'static, str>,
@@ -253,7 +253,7 @@ impl RenderBuffer {
         let bytes = bytemuck::cast_slice(uniforms);
 
         Self::new(
-            device,
+            graphics_device,
             RenderBufferType::Uniform,
             bytes,
             n_valid_bytes,
@@ -269,14 +269,14 @@ impl RenderBuffer {
     /// - If the size of a single uniform is not a multiple of 16
     ///   (the minimum required uniform alignment).
     pub fn new_full_uniform_buffer<U>(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         uniforms: &[U],
         label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
     {
-        Self::new_uniform_buffer(device, uniforms, uniforms.len(), label)
+        Self::new_uniform_buffer(graphics_device, uniforms, uniforms.len(), label)
     }
 
     /// Creates a render buffer containing the data of the given uniform.
@@ -285,14 +285,18 @@ impl RenderBuffer {
     /// If the size of the uniform is not a multiple of 16 (the minimum
     /// required uniform alignment).
     pub fn new_buffer_for_single_uniform<U>(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         uniform: &U,
         label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
     {
-        Self::new_buffer_for_single_uniform_bytes(device, bytemuck::bytes_of(uniform), label)
+        Self::new_buffer_for_single_uniform_bytes(
+            graphics_device,
+            bytemuck::bytes_of(uniform),
+            label,
+        )
     }
 
     /// Creates a render buffer containing the given bytes representing a single
@@ -302,7 +306,7 @@ impl RenderBuffer {
     /// If the size of the uniform is not a multiple of 16 (the minimum required
     /// uniform alignment).
     pub fn new_buffer_for_single_uniform_bytes(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         uniform_bytes: &[u8],
         label: Cow<'static, str>,
     ) -> Self {
@@ -317,7 +321,7 @@ impl RenderBuffer {
         );
 
         Self::new(
-            device,
+            graphics_device,
             RenderBufferType::Uniform,
             uniform_bytes,
             uniform_bytes.len(),
@@ -330,11 +334,17 @@ impl RenderBuffer {
     /// # Panics
     /// - If `bytes` is empty.
     pub fn new_storage_buffer(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         bytes: &[u8],
         label: Cow<'static, str>,
     ) -> Self {
-        Self::new(device, RenderBufferType::Storage, bytes, bytes.len(), label)
+        Self::new(
+            graphics_device,
+            RenderBufferType::Storage,
+            bytes,
+            bytes.len(),
+            label,
+        )
     }
 
     /// Creates a result render buffer with the given size in bytes.
@@ -346,12 +356,12 @@ impl RenderBuffer {
     /// # Panics
     /// - If `buffer_size` is zero.
     pub fn new_result_buffer(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         buffer_size: usize,
         label: Cow<'static, str>,
     ) -> Self {
         Self::new_uninitialized(
-            device,
+            graphics_device,
             RenderBufferType::Result,
             buffer_size,
             buffer_size,
@@ -369,7 +379,7 @@ impl RenderBuffer {
     /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
     fn new(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         buffer_type: RenderBufferType,
         bytes: &[u8],
         n_valid_bytes: usize,
@@ -381,8 +391,12 @@ impl RenderBuffer {
         assert!(n_valid_bytes <= buffer_size);
 
         let buffer_label = format!("{} {} render buffer", label, &buffer_type);
-        let buffer =
-            Self::create_initialized_buffer_of_type(device, buffer_type, bytes, &buffer_label);
+        let buffer = Self::create_initialized_buffer_of_type(
+            graphics_device.device(),
+            buffer_type,
+            bytes,
+            &buffer_label,
+        );
 
         Self {
             buffer,
@@ -399,7 +413,7 @@ impl RenderBuffer {
     /// - If `buffer_size` is zero.
     /// - If `n_valid_bytes` exceeds `buffer_size`.
     fn new_uninitialized(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         buffer_type: RenderBufferType,
         buffer_size: usize,
         n_valid_bytes: usize,
@@ -410,7 +424,7 @@ impl RenderBuffer {
 
         let buffer_label = format!("{} {} render buffer", label, &buffer_type);
         let buffer = Self::create_uninitialized_buffer(
-            device,
+            graphics_device.device(),
             buffer_size as u64,
             buffer_type.usage(),
             &buffer_label,
@@ -461,12 +475,12 @@ impl RenderBuffer {
     /// # Panics
     /// If the slice of updated bytes exceeds the total size of the
     /// buffer.
-    pub fn update_valid_bytes(&self, core_system: &CoreRenderingSystem, updated_bytes: &[u8]) {
+    pub fn update_valid_bytes(&self, graphics_device: &GraphicsDevice, updated_bytes: &[u8]) {
         self.n_valid_bytes
             .store(updated_bytes.len(), Ordering::Release);
 
         queue_write_to_buffer(
-            core_system.queue(),
+            graphics_device.queue(),
             self.buffer(),
             0,
             updated_bytes,
@@ -481,9 +495,9 @@ impl RenderBuffer {
     /// # Panics
     /// If the slice of updated bytes does not match the total size of
     /// the buffer.
-    pub fn update_all_bytes(&self, core_system: &CoreRenderingSystem, updated_bytes: &[u8]) {
+    pub fn update_all_bytes(&self, graphics_device: &GraphicsDevice, updated_bytes: &[u8]) {
         assert_eq!(updated_bytes.len(), self.buffer_size());
-        self.update_valid_bytes(core_system, updated_bytes);
+        self.update_valid_bytes(graphics_device, updated_bytes);
     }
 
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
@@ -549,7 +563,7 @@ impl CountedRenderBuffer {
     /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
     ///   slice.
     pub fn new_uniform_buffer<U>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         uniforms: &[U],
         n_valid_uniforms: usize,
         label: Cow<'static, str>,
@@ -579,7 +593,7 @@ impl CountedRenderBuffer {
         let bytes = bytemuck::cast_slice(uniforms);
 
         Self::new(
-            core_system,
+            graphics_device,
             RenderBufferType::Uniform,
             count,
             bytes,
@@ -602,7 +616,7 @@ impl CountedRenderBuffer {
     /// - If `n_valid_bytes` exceeds the combined size of the padded count and the
     ///   `bytes` slice.
     fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         buffer_type: RenderBufferType,
         count: Count,
         bytes: &[u8],
@@ -621,7 +635,7 @@ impl CountedRenderBuffer {
 
         let buffer_label = format!("{} {} render buffer", label, &buffer_type);
         let buffer = Self::create_initialized_counted_buffer_of_type(
-            core_system.device(),
+            graphics_device.device(),
             buffer_type,
             count,
             bytes,
@@ -672,7 +686,7 @@ impl CountedRenderBuffer {
     /// exceeds the total size of the buffer.
     pub fn update_valid_bytes(
         &self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         updated_bytes: &[u8],
         new_count: Option<Count>,
     ) {
@@ -682,7 +696,7 @@ impl CountedRenderBuffer {
         );
 
         Self::queue_writes_to_counted_buffer(
-            core_system.queue(),
+            graphics_device.queue(),
             self.buffer(),
             new_count,
             updated_bytes,
