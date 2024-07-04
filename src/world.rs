@@ -8,8 +8,9 @@ use crate::{
         rendering::{fre, Assets, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
+    io,
     physics::{self, PhysicsSimulator, SteppingScheme},
-    scene::{self, io, MeshComp, RenderResourcesDesynchronized, Scene},
+    scene::{self, MeshComp, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
@@ -171,7 +172,7 @@ impl World {
         let mut assets = self.assets.write().unwrap();
         let scene = self.scene.read().unwrap();
         let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::load_models_from_obj_file(
+        io::obj::load_models_from_obj_file(
             self.graphics_device(),
             &mut assets,
             &mut mesh_repository,
@@ -194,7 +195,7 @@ impl World {
     {
         let scene = self.scene.read().unwrap();
         let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
+        io::obj::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
     }
 
     /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
@@ -217,7 +218,11 @@ impl World {
     {
         let scene = self.scene.read().unwrap();
         let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::load_mesh_from_obj_file_with_projection(&mut mesh_repository, obj_file_path, projection)
+        io::obj::load_mesh_from_obj_file_with_projection(
+            &mut mesh_repository,
+            obj_file_path,
+            projection,
+        )
     }
 
     /// Reads the PLY (Polygon File Format, also called Stanford Triangle
@@ -235,7 +240,7 @@ impl World {
     {
         let scene = self.scene.read().unwrap();
         let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
+        io::ply::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
     }
 
     /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
@@ -258,7 +263,11 @@ impl World {
     {
         let scene = self.scene.read().unwrap();
         let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::load_mesh_from_ply_file_with_projection(&mut mesh_repository, ply_file_path, projection)
+        io::ply::load_mesh_from_ply_file_with_projection(
+            &mut mesh_repository,
+            ply_file_path,
+            projection,
+        )
     }
 
     pub fn create_entity<A, E>(

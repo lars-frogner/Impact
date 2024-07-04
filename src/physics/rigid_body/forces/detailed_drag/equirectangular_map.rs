@@ -2,9 +2,9 @@
 
 use crate::{
     geometry::{Angle, Radians},
+    io,
     num::Float,
     physics::fph,
-    scene::io::util as io_util,
 };
 use anyhow::Result;
 use rmp_serde::{from_read, Serializer as RmpSerializer};
@@ -205,7 +205,7 @@ impl<D: Serialize + DeserializeOwned> EquirectangularMap<D> {
     pub fn save_to_file(&self, output_file_path: impl AsRef<Path>) -> Result<()> {
         let mut byte_buffer = Vec::new();
         self.serialize(&mut RmpSerializer::new(&mut byte_buffer))?;
-        io_util::save_data_as_binary(output_file_path, &byte_buffer)?;
+        io::util::save_data_as_binary(output_file_path, &byte_buffer)?;
         Ok(())
     }
 
