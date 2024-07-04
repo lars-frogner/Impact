@@ -660,14 +660,14 @@ const DEPTH_TEXTURE_ARRAY_TYPE: Type = Type {
 
 lazy_static! {
     pub static ref SHADER_SOURCE_LIB: SourceCode = SourceCode::from_wgsl_source(concat!(
-        include_str!("../../shader/util.wgsl"),
-        include_str!("../../shader/light.wgsl"),
-        include_str!("../../shader/normal_map.wgsl"),
-        include_str!("../../shader/blinn_phong.wgsl"),
-        include_str!("../../shader/microfacet.wgsl"),
-        include_str!("../../shader/ambient_occlusion.wgsl"),
-        include_str!("../../shader/gaussian_blur.wgsl"),
-        include_str!("../../shader/tone_mapping.wgsl")
+        include_str!("../../../shader/util.wgsl"),
+        include_str!("../../../shader/light.wgsl"),
+        include_str!("../../../shader/normal_map.wgsl"),
+        include_str!("../../../shader/blinn_phong.wgsl"),
+        include_str!("../../../shader/microfacet.wgsl"),
+        include_str!("../../../shader/ambient_occlusion.wgsl"),
+        include_str!("../../../shader/gaussian_blur.wgsl"),
+        include_str!("../../../shader/tone_mapping.wgsl")
     ))
     .unwrap_or_else(|err| panic!("Error when including shader source library: {}", err));
 }

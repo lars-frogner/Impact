@@ -939,7 +939,7 @@ impl MipmapGenerator {
     pub fn new(device: &wgpu::Device) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../../shader/mipmap.wgsl"
+                "../../../shader/mipmap.wgsl"
             ))),
             label: Some("Mipmap shader"),
         });

@@ -6,10 +6,9 @@ use crate::{
         VertexTextureCoords,
     },
     gpu::{
-        rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
+        rendering::{fre, Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
         GraphicsDevice,
     },
-    rendering::Assets,
     scene::{
         AlbedoComp, AlbedoTextureComp, MeshComp, MeshID, MeshRepository, NormalMapComp, RGBColor,
         RoughnessComp, SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,

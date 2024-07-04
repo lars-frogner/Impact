@@ -1,7 +1,5 @@
 mod device;
-
-// pub mod rendering;
-pub use crate::rendering;
+pub mod rendering;
 
 pub use device::GraphicsDevice;
 

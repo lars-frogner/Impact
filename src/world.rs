@@ -5,11 +5,10 @@ use crate::{
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
     gpu::{
-        rendering::{fre, RenderingSystem, ScreenCapturer},
+        rendering::{fre, Assets, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
     physics::{self, PhysicsSimulator, SteppingScheme},
-    rendering::Assets,
     scene::{self, io, MeshComp, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,

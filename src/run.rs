@@ -13,7 +13,9 @@ use crate::{
     geometry::{FrontFaceSide, VoxelTreeLODController, VoxelType},
     gpu::{
         self,
-        rendering::{fre, Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
+        rendering::{
+            fre, Assets, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig,
+        },
     },
     num::Float,
     physics::{
@@ -23,7 +25,6 @@ use crate::{
         Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
-    rendering::RenderingConfig,
     scene::{
         AlbedoComp, AlbedoTextureComp, AmbientEmissionComp, BoxMeshComp, ConeMeshComp,
         CylinderMeshComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
