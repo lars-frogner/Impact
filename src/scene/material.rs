@@ -52,17 +52,18 @@ pub use vertex_color::VertexColorMaterial;
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     rendering::{
-        fre, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints, TextureID,
-        UniformBufferable,
+        fre, Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet,
+        RenderPassHints, SingleUniformRenderBuffer, StorageRenderBuffer, TextureID,
     },
     scene::InstanceFeatureManager,
 };
+use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, stringhash64_newtype, AlignedByteVec, Alignment, Hash64, StringHash64};
+use impact_utils::{hash64, stringhash64_newtype, Hash64, StringHash64};
 use nalgebra::Vector3;
 use std::{
     collections::{hash_map::Entry, HashMap},
-    fmt, mem,
+    fmt,
 };
 
 /// A color with RGB components.
@@ -75,9 +76,9 @@ stringhash64_newtype!(
 );
 
 stringhash64_newtype!(
-    /// Identifier for sets of textures used for material properties.
-    /// Wraps a [`StringHash64`](impact_utils::StringHash64).
-    [pub] MaterialPropertyTextureSetID
+    /// Identifier for group of textures used for material properties. Wraps a
+    /// [`StringHash64`](impact_utils::StringHash64).
+    [pub] MaterialPropertyTextureGroupID
 );
 
 /// A handle for a material, containing the IDs for the pieces of data holding
@@ -85,68 +86,72 @@ stringhash64_newtype!(
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct MaterialHandle {
-    /// The ID of the material's [`MaterialSpecification`](crate::scene::MaterialSpecification).
+    /// The ID of the material's [`MaterialSpecification`].
     material_id: MaterialID,
     /// The ID of the entry for the material's per-instance material properties
     /// in the
     /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage) (may
     /// be N/A).
     material_property_feature_id: InstanceFeatureID,
-    /// The ID of the material's
-    /// [`MaterialPropertyTextureSet`](crate::scene::MaterialPropertyTextureSet)
-    /// (may represent an empty set).
-    material_property_texture_set_id: MaterialPropertyTextureSetID,
+    /// The ID of the material's [`MaterialPropertyTextureGroup`] (may represent
+    /// an empty group).
+    material_property_texture_group_id: MaterialPropertyTextureGroupID,
 }
 
 /// A material description specifying a material's set of required vertex
-/// attributes, untextured per-material properties (as instance features),
-/// associated render attachments, shader input and optionally fixed material
-/// resources.
-#[derive(Clone, Debug)]
+/// attributes, associated render attachments, material-specific resources,
+/// untextured per-material properties (as instance features), render pass hints
+/// and shader input.
+#[derive(Debug)]
 pub struct MaterialSpecification {
     vertex_attribute_requirements_for_mesh: VertexAttributeSet,
     vertex_attribute_requirements_for_shader: VertexAttributeSet,
     input_render_attachment_quantities: RenderAttachmentQuantitySet,
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
-    fixed_resources: Option<FixedMaterialResources>,
+    material_specific_resources: Option<MaterialSpecificResourceGroup>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     render_pass_hints: RenderPassHints,
     shader_input: MaterialShaderInput,
 }
 
-/// Container for rendering resources for a specific material type that are the
-/// same for all uses of the material.
-#[derive(Clone, Debug)]
-pub struct FixedMaterialResources {
-    uniform_bytes: AlignedByteVec,
-    uniform_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
+/// A group of render resources for a material type that are the same for all
+/// uses of the material.
+#[derive(Debug)]
+pub struct MaterialSpecificResourceGroup {
+    _single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
-/// Specifies a set of textures used for textured material properties.
-#[derive(Clone, Debug)]
-pub struct MaterialPropertyTextureSet {
+/// A group of textures used for textured material properties.
+#[derive(Debug)]
+pub struct MaterialPropertyTextureGroup {
     texture_ids: Vec<TextureID>,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
-/// Container for material specifications and material property texture sets.
-#[derive(Clone, Debug, Default)]
+/// Container for material specifications and material property texture groups.
+#[derive(Debug, Default)]
 pub struct MaterialLibrary {
     material_specifications: HashMap<MaterialID, MaterialSpecification>,
-    material_property_texture_sets:
-        HashMap<MaterialPropertyTextureSetID, MaterialPropertyTextureSet>,
+    material_property_texture_groups:
+        HashMap<MaterialPropertyTextureGroupID, MaterialPropertyTextureGroup>,
 }
 
 const MATERIAL_VERTEX_BINDING_START: u32 = 20;
 
 impl MaterialSpecification {
-    /// Creates a new material specification with the given fixed resources and
-    /// untextured material property types.
+    /// Creates a new material specification with the given vertex attribute
+    /// requirements, input and output render attachment quantities,
+    /// material-specific resources, untextured material property types, render
+    /// pass hints and shader input.
     pub fn new(
         vertex_attribute_requirements_for_mesh: VertexAttributeSet,
         vertex_attribute_requirements_for_shader: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
-        fixed_resources: Option<FixedMaterialResources>,
+        material_specific_resources: Option<MaterialSpecificResourceGroup>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
         render_pass_hints: RenderPassHints,
         shader_input: MaterialShaderInput,
@@ -156,7 +161,7 @@ impl MaterialSpecification {
             vertex_attribute_requirements_for_shader,
             input_render_attachment_quantities,
             output_render_attachment_quantities,
-            fixed_resources,
+            material_specific_resources,
             instance_feature_type_ids,
             render_pass_hints,
             shader_input,
@@ -189,10 +194,11 @@ impl MaterialSpecification {
         self.output_render_attachment_quantities
     }
 
-    /// Returns a reference to the [`FixedMaterialResources`] of the material,
-    /// or [`None`] if the material has no fixed resources.
-    pub fn fixed_resources(&self) -> Option<&FixedMaterialResources> {
-        self.fixed_resources.as_ref()
+    /// Returns a reference to the [`MaterialSpecificResourceGroup`] of the
+    /// material, or [`None`] if the material has no material-specific
+    /// resources.
+    pub fn material_specific_resources(&self) -> Option<&MaterialSpecificResourceGroup> {
+        self.material_specific_resources.as_ref()
     }
 
     /// Returns the IDs of the material property types used
@@ -211,63 +217,156 @@ impl MaterialSpecification {
         &self.shader_input
     }
 }
+impl MaterialSpecificResourceGroup {
+    /// Gathers the given sets of uniform and storage buffers into a group of
+    /// material-specific resources used for all instances of a material.
+    ///
+    /// The resources will be gathered in a single bind group, and the binding
+    /// for each resource will correspond to what its index would have been in
+    /// the concatenated list of resources: `single_uniform_resources +
+    /// storage_resources`.
+    pub fn new(
+        device: &wgpu::Device,
+        single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
+        storage_buffers: &[&StorageRenderBuffer],
+        label: &str,
+    ) -> Self {
+        let n_entries = single_uniform_buffers.len() + storage_buffers.len();
+        let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
+        let mut bind_group_entries = Vec::with_capacity(n_entries);
+        let mut binding = 0;
 
-impl FixedMaterialResources {
-    /// Binding index for the uniform buffer with fixed material data.
-    pub const UNIFORM_BINDING: u32 = 0;
+        for buffer in &single_uniform_buffers {
+            bind_group_layout_entries.push(buffer.create_bind_group_layout_entry(binding));
+            bind_group_entries.push(buffer.create_bind_group_entry(binding));
+            binding += 1;
+        }
 
-    /// Creates a new container for fixed material resources holding the given
-    /// piece of uniform bufferable data.
-    pub fn new<U>(resource_uniform: &U) -> Self
-    where
-        U: UniformBufferable,
-    {
-        assert_ne!(
-            mem::size_of::<U>(),
-            0,
-            "Tried to create fixed material resources from zero-sized uniform"
-        );
+        for buffer in storage_buffers {
+            bind_group_layout_entries
+                .push(buffer.create_bind_group_layout_entry(binding, wgpu::ShaderStages::COMPUTE));
+            bind_group_entries.push(buffer.create_bind_group_entry(binding));
+            binding += 1;
+        }
 
-        let uniform_data = AlignedByteVec::copied_from_slice(
-            Alignment::of::<U>(),
-            bytemuck::bytes_of(resource_uniform),
-        );
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &bind_group_layout_entries,
+            label: Some(&format!("{} bind group layout", label)),
+        });
 
-        let uniform_bind_group_layout_entry =
-            U::create_bind_group_layout_entry(Self::UNIFORM_BINDING);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &bind_group_entries,
+            label: Some(&format!("{} bind group", label)),
+        });
 
         Self {
-            uniform_bytes: uniform_data,
-            uniform_bind_group_layout_entry,
+            _single_uniform_buffers: single_uniform_buffers,
+            bind_group_layout,
+            bind_group,
         }
     }
 
-    /// Returns a byte view of the piece of fixed material data that will reside
-    /// in a uniform buffer.
-    pub fn uniform_bytes(&self) -> &[u8] {
-        &self.uniform_bytes
+    /// Returns a reference to the bind group layout for the compute resources.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
     }
 
-    /// Returns the bind group layout entry for the fixed material uniform data.
-    pub fn uniform_bind_group_layout_entry(&self) -> &wgpu::BindGroupLayoutEntry {
-        &self.uniform_bind_group_layout_entry
+    /// Returns a reference to the bind group for the compute resources.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 }
 
-impl MaterialPropertyTextureSet {
-    /// Creates a new material property texture set for the textures with the
-    /// given IDs.
+impl MaterialPropertyTextureGroup {
+    /// Creates a new group of material property textures comprising the
+    /// textures with the given IDs.
     ///
     /// # Panics
     /// If the given list of texture IDs is empty.
-    pub fn new(texture_ids: Vec<TextureID>) -> Self {
-        assert!(!texture_ids.is_empty());
-        Self { texture_ids }
+    pub fn new(
+        core_system: &CoreRenderingSystem,
+        assets: &Assets,
+        texture_ids: Vec<TextureID>,
+        label: String,
+    ) -> Result<Self> {
+        let (bind_group_layout, bind_group) = Self::create_texture_bind_group_and_layout(
+            core_system.device(),
+            assets,
+            &texture_ids,
+            &label,
+        )?;
+
+        Ok(Self {
+            texture_ids,
+            bind_group_layout,
+            bind_group,
+        })
     }
 
-    /// Returns the IDs of the textures in the texture set.
+    /// Returns the binding that will be used for the texture at the given index
+    /// and its sampler in the bind group.
+    pub const fn get_texture_and_sampler_bindings(texture_idx: usize) -> (u32, u32) {
+        let texture_binding = (2 * texture_idx) as u32;
+        let sampler_binding = texture_binding + 1;
+        (texture_binding, sampler_binding)
+    }
+
+    /// Returns the IDs of the managed material property textures.
     pub fn texture_ids(&self) -> &[TextureID] {
         &self.texture_ids
+    }
+
+    /// Returns a reference to the bind group layout for the group of textures.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
+    }
+
+    /// Returns a reference to the bind group for the group of textures.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
+    }
+
+    fn create_texture_bind_group_and_layout(
+        device: &wgpu::Device,
+        assets: &Assets,
+        texture_ids: &[TextureID],
+        label: &str,
+    ) -> Result<(wgpu::BindGroupLayout, wgpu::BindGroup)> {
+        let n_entries = 2 * texture_ids.len();
+
+        let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
+        let mut bind_group_entries = Vec::with_capacity(n_entries);
+
+        for (idx, texture_id) in texture_ids.iter().enumerate() {
+            let texture = assets
+                .textures
+                .get(texture_id)
+                .ok_or_else(|| anyhow!("Texture {} missing from assets", texture_id))?;
+
+            let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
+
+            bind_group_layout_entries
+                .push(texture.create_texture_bind_group_layout_entry(texture_binding));
+            bind_group_layout_entries
+                .push(texture.create_sampler_bind_group_layout_entry(sampler_binding));
+
+            bind_group_entries.push(texture.create_texture_bind_group_entry(texture_binding));
+            bind_group_entries.push(texture.create_sampler_bind_group_entry(sampler_binding));
+        }
+
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &bind_group_layout_entries,
+            label: Some(&format!("{} bind group layout", label)),
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &bind_group_entries,
+            label: Some(&format!("{} bind group", label)),
+        });
+
+        Ok((bind_group_layout, bind_group))
     }
 }
 
@@ -276,7 +375,7 @@ impl MaterialLibrary {
     pub fn new() -> Self {
         Self {
             material_specifications: HashMap::new(),
-            material_property_texture_sets: HashMap::new(),
+            material_property_texture_groups: HashMap::new(),
         }
     }
 
@@ -287,11 +386,11 @@ impl MaterialLibrary {
     }
 
     /// Returns a reference to the [`HashMap`] storing all
-    /// [`MaterialPropertyTextureSet`]s.
-    pub fn material_property_texture_sets(
+    /// [`MaterialPropertyTextureGroup`]s.
+    pub fn material_property_texture_groups(
         &self,
-    ) -> &HashMap<MaterialPropertyTextureSetID, MaterialPropertyTextureSet> {
-        &self.material_property_texture_sets
+    ) -> &HashMap<MaterialPropertyTextureGroupID, MaterialPropertyTextureGroup> {
+        &self.material_property_texture_groups
     }
 
     /// Returns the specification of the material with the given ID, or [`None`]
@@ -303,13 +402,13 @@ impl MaterialLibrary {
         self.material_specifications.get(&material_id)
     }
 
-    /// Returns the material property texture set with the given ID, or [`None`]
-    /// if the texture set does not exist.
-    pub fn get_material_property_texture_set(
+    /// Returns the material property texture group with the given ID, or
+    /// [`None`] if the texture group does not exist.
+    pub fn get_material_property_texture_group(
         &self,
-        texture_set_id: MaterialPropertyTextureSetID,
-    ) -> Option<&MaterialPropertyTextureSet> {
-        self.material_property_texture_sets.get(&texture_set_id)
+        texture_group_id: MaterialPropertyTextureGroupID,
+    ) -> Option<&MaterialPropertyTextureGroup> {
+        self.material_property_texture_groups.get(&texture_group_id)
     }
 
     /// Returns a hashmap entry for the specification of the material with the
@@ -321,13 +420,14 @@ impl MaterialLibrary {
         self.material_specifications.entry(material_id)
     }
 
-    /// Returns a hashmap entry for the material property texture set with the
+    /// Returns a hashmap entry for the material property texture group with the
     /// given ID.
-    pub fn material_property_texture_set_entry(
+    pub fn material_property_texture_group_entry(
         &mut self,
-        texture_set_id: MaterialPropertyTextureSetID,
-    ) -> Entry<'_, MaterialPropertyTextureSetID, MaterialPropertyTextureSet> {
-        self.material_property_texture_sets.entry(texture_set_id)
+        texture_group_id: MaterialPropertyTextureGroupID,
+    ) -> Entry<'_, MaterialPropertyTextureGroupID, MaterialPropertyTextureGroup> {
+        self.material_property_texture_groups
+            .entry(texture_group_id)
     }
 
     /// Includes the given material specification in the library under the given
@@ -341,16 +441,16 @@ impl MaterialLibrary {
             .insert(material_id, material_spec);
     }
 
-    /// Includes the given material property texture set in the library under
-    /// the given ID. If a texture set with the same ID exists, it will be
+    /// Includes the given material property texture group in the library under
+    /// the given ID. If a texture group with the same ID exists, it will be
     /// overwritten.
-    pub fn add_material_property_texture_set(
+    pub fn add_material_property_texture_group(
         &mut self,
-        texture_set_id: MaterialPropertyTextureSetID,
-        texture_set: MaterialPropertyTextureSet,
+        texture_group_id: MaterialPropertyTextureGroupID,
+        texture_group: MaterialPropertyTextureGroup,
     ) {
-        self.material_property_texture_sets
-            .insert(texture_set_id, texture_set);
+        self.material_property_texture_groups
+            .insert(texture_group_id, texture_group);
     }
 
     pub fn register_materials(&mut self, instance_feature_manager: &mut InstanceFeatureManager) {
@@ -398,9 +498,9 @@ impl MaterialID {
     }
 }
 
-impl MaterialPropertyTextureSetID {
-    /// Generates a material property texture set ID that will always be the same
-    /// for a specific ordered set of texture IDs.
+impl MaterialPropertyTextureGroupID {
+    /// Generates a material property texture group ID that will always be the
+    /// same for a specific ordered group of texture IDs.
     pub fn from_texture_ids(texture_ids: &[TextureID]) -> Self {
         Self(hash64!(format!(
             "{}",
@@ -412,12 +512,12 @@ impl MaterialPropertyTextureSetID {
         )))
     }
 
-    /// Creates an ID representing an empty texture set.
+    /// Creates an ID representing an empty texture group.
     pub fn empty() -> Self {
         Self(StringHash64::zeroed())
     }
 
-    /// Returns `true` if this ID represents an empty texture set.
+    /// Returns `true` if this ID represents an empty texture group.
     pub fn is_empty(&self) -> bool {
         self.0 == StringHash64::zeroed()
     }
@@ -430,16 +530,16 @@ impl MaterialHandle {
     pub fn new(
         material_id: MaterialID,
         material_property_feature_id: Option<InstanceFeatureID>,
-        material_property_texture_set_id: Option<MaterialPropertyTextureSetID>,
+        material_property_texture_group_id: Option<MaterialPropertyTextureGroupID>,
     ) -> Self {
         let material_property_feature_id =
             material_property_feature_id.unwrap_or_else(InstanceFeatureID::not_applicable);
-        let material_property_texture_set_id =
-            material_property_texture_set_id.unwrap_or_else(MaterialPropertyTextureSetID::empty);
+        let material_property_texture_group_id = material_property_texture_group_id
+            .unwrap_or_else(MaterialPropertyTextureGroupID::empty);
         Self {
             material_id,
             material_property_feature_id,
-            material_property_texture_set_id,
+            material_property_texture_group_id,
         }
     }
 
@@ -448,7 +548,7 @@ impl MaterialHandle {
         Self {
             material_id: MaterialID::not_applicable(),
             material_property_feature_id: InstanceFeatureID::not_applicable(),
-            material_property_texture_set_id: MaterialPropertyTextureSetID::empty(),
+            material_property_texture_group_id: MaterialPropertyTextureGroupID::empty(),
         }
     }
 
@@ -473,13 +573,13 @@ impl MaterialHandle {
         }
     }
 
-    /// Returns the ID of the material property texture set, or [`None`] if no
+    /// Returns the ID of the material property texture group, or [`None`] if no
     /// material properties are textured.
-    pub fn material_property_texture_set_id(&self) -> Option<MaterialPropertyTextureSetID> {
-        if self.material_property_texture_set_id.is_empty() {
+    pub fn material_property_texture_group_id(&self) -> Option<MaterialPropertyTextureGroupID> {
+        if self.material_property_texture_group_id.is_empty() {
             None
         } else {
-            Some(self.material_property_texture_set_id)
+            Some(self.material_property_texture_group_id)
         }
     }
 
@@ -487,10 +587,10 @@ impl MaterialHandle {
     pub fn compute_hash(&self) -> Hash64 {
         let mut hash = self.material_id.0.hash();
 
-        if !self.material_property_texture_set_id.is_empty() {
+        if !self.material_property_texture_group_id.is_empty() {
             hash = impact_utils::compute_hash_64_of_two_hash_64(
                 hash,
-                self.material_property_texture_set_id.0.hash(),
+                self.material_property_texture_group_id.0.hash(),
             );
         }
 
@@ -508,10 +608,10 @@ impl fmt::Display for MaterialHandle {
             } else {
                 self.material_id.to_string()
             },
-            if self.material_property_texture_set_id.is_empty() {
+            if self.material_property_texture_group_id.is_empty() {
                 String::new()
             } else {
-                format!(", textures: {}", self.material_property_texture_set_id)
+                format!(", textures: {}", self.material_property_texture_group_id)
             },
         )
     }

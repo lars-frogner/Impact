@@ -11,12 +11,10 @@ use std::{
 
 /// A buffer for uniforms.
 ///
-/// The buffer is grown on demand, but never shrunk.
-/// Instead, a counter keeps track of the position
-/// of the last valid uniform in the buffer, and the
-/// counter is reset to zero when the buffer is cleared.
-/// This allows the it to be filled and emptied
-/// repeatedly without unneccesary allocations.
+/// The buffer is grown on demand, but never shrunk. Instead, a counter keeps
+/// track of the position of the last valid uniform in the buffer, and the
+/// counter is reset to zero when the buffer is cleared. This allows it to be
+/// filled and emptied repeatedly without unneccesary allocations.
 #[derive(Debug)]
 pub struct UniformBuffer<ID, U> {
     raw_buffer: Vec<U>,

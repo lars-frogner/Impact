@@ -5,14 +5,15 @@ use crate::{
     geometry::VertexAttributeSet,
     rendering::{
         create_uniform_buffer_bind_group_layout_entry, fre, GaussianBlurShaderInput,
-        MaterialShaderInput, RenderAttachmentQuantity, RenderPassHints, UniformBufferable,
+        MaterialShaderInput, RenderAttachmentQuantity, RenderPassHints, SingleUniformRenderBuffer,
+        UniformBufferable,
     },
-    scene::{FixedMaterialResources, MaterialSpecification},
+    scene::{MaterialSpecificResourceGroup, MaterialSpecification},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;
 use nalgebra::Vector4;
-use std::fmt::Display;
+use std::{borrow::Cow, fmt::Display};
 
 /// The maximum number of unique Gaussian weights that can be passed to the GPU
 /// for computing Gaussian blur. The actual number of samples that will be
@@ -152,32 +153,51 @@ impl Display for GaussianBlurDirection {
 /// Gaussian blur in the given direction to the input attachment and writes the
 /// result to the output attachment.
 pub fn create_gaussian_blur_material(
+    device: &wgpu::Device,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     direction: GaussianBlurDirection,
     sample_uniform: &GaussianBlurSamples,
 ) -> MaterialSpecification {
+    let sample_uniform_buffer = SingleUniformRenderBuffer::for_uniform(
+        device,
+        sample_uniform,
+        wgpu::ShaderStages::FRAGMENT,
+        Cow::Borrowed("Gaussian blur samples"),
+    );
+    let material_specific_resources = MaterialSpecificResourceGroup::new(
+        device,
+        vec![sample_uniform_buffer],
+        &[],
+        "Gaussian blur samples",
+    );
+
+    let shader_input = MaterialShaderInput::GaussianBlur(GaussianBlurShaderInput {
+        direction,
+        sample_uniform_binding: 0,
+        input_texture_and_sampler_bindings: input_render_attachment_quantity.bindings(),
+    });
+
     MaterialSpecification::new(
         VertexAttributeSet::POSITION,
         VertexAttributeSet::empty(),
         input_render_attachment_quantity.flag(),
         output_render_attachment_quantity.flag(),
-        Some(FixedMaterialResources::new(sample_uniform)),
+        Some(material_specific_resources),
         Vec::new(),
         RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        MaterialShaderInput::GaussianBlur(GaussianBlurShaderInput {
-            direction,
-            sample_uniform_binding: FixedMaterialResources::UNIFORM_BINDING,
-            input_texture_and_sampler_bindings: input_render_attachment_quantity.bindings(),
-        }),
+        shader_input,
     )
 }
 
 impl UniformBufferable for GaussianBlurSamples {
     const ID: ConstStringHash64 = ConstStringHash64::new("Gaussian blur samples");
 
-    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::FRAGMENT)
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(GaussianBlurSamples);

@@ -4,16 +4,17 @@ use super::NormalMapComp;
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     rendering::{
-        Assets, BumpMappingTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
+        Assets, BumpMappingTextureShaderInput, CoreRenderingSystem, MaterialShaderInput,
         NormalMappingShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
         RenderAttachmentQuantitySet, RenderPassHints, TextureID,
     },
     scene::{
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-        MaterialPropertyTextureSetID, MaterialSpecification, ParallaxMapComp,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+        MaterialPropertyTextureGroupID, MaterialSpecification, ParallaxMapComp,
     },
 };
 use impact_utils::hash64;
+use std::sync::RwLock;
 
 /// Creates a prepass material based on the given information about the main
 /// material. The given set of render attachment quantities that the prepass
@@ -32,6 +33,8 @@ use impact_utils::hash64;
 /// # Panics
 /// If both a normal map and a parallax map component is provided.
 pub fn create_prepass_material(
+    core_system: &CoreRenderingSystem,
+    assets: &RwLock<Assets>,
     material_library: &mut MaterialLibrary,
     input_render_attachment_quantities_for_main_material: &mut RenderAttachmentQuantitySet,
     mut material_name_parts: Vec<&str>,
@@ -96,7 +99,7 @@ pub fn create_prepass_material(
         texture_shader_input.bump_mapping_input = Some(
             BumpMappingTextureShaderInput::NormalMapping(NormalMappingShaderInput {
                 normal_map_texture_and_sampler_bindings:
-                    MaterialPropertyTextureManager::get_texture_and_sampler_bindings(
+                    MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(
                         texture_ids.len(),
                     ),
             }),
@@ -121,7 +124,7 @@ pub fn create_prepass_material(
         texture_shader_input.bump_mapping_input = Some(
             BumpMappingTextureShaderInput::ParallaxMapping(ParallaxMappingShaderInput {
                 height_map_texture_and_sampler_bindings:
-                    MaterialPropertyTextureManager::get_texture_and_sampler_bindings(
+                    MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(
                         texture_ids.len(),
                     ),
             }),
@@ -140,9 +143,8 @@ pub fn create_prepass_material(
         vertex_attribute_requirements_for_shader |=
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR;
 
-        texture_shader_input.specular_reflectance_lookup_texture_and_sampler_bindings = Some(
-            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
-        );
+        texture_shader_input.specular_reflectance_lookup_texture_and_sampler_bindings =
+            Some(MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()));
 
         texture_ids.push(Assets::specular_ggx_reflectance_lookup_table_texture_id());
     }
@@ -168,18 +170,26 @@ pub fn create_prepass_material(
             )
         });
 
-    let texture_set_id = if texture_ids.is_empty() {
+    let texture_group_id = if texture_ids.is_empty() {
         None
     } else {
-        let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
+        let texture_group_id = MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
 
         // Add a new texture set if none with the same textures already exist
         material_library
-            .material_property_texture_set_entry(texture_set_id)
-            .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
+            .material_property_texture_group_entry(texture_group_id)
+            .or_insert_with(|| {
+                MaterialPropertyTextureGroup::new(
+                    core_system,
+                    &assets.read().unwrap(),
+                    texture_ids,
+                    texture_group_id.to_string(),
+                )
+                .expect("Missing textures from assets")
+            });
 
-        Some(texture_set_id)
+        Some(texture_group_id)
     };
 
-    MaterialHandle::new(material_id, Some(feature_id), texture_set_id)
+    MaterialHandle::new(material_id, Some(feature_id), texture_group_id)
 }

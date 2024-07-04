@@ -3,8 +3,9 @@
 use crate::{
     geometry::VertexAttributeSet,
     rendering::{
-        CameraShaderInput, CoreRenderingSystem, InstanceFeatureShaderInput, LightShaderInput,
-        MaterialShaderInput, MeshShaderInput, RenderAttachmentQuantitySet, Shader, ShaderGenerator,
+        CameraShaderInput, ComputeShaderGenerator, ComputeShaderInput, CoreRenderingSystem,
+        InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
+        RenderAttachmentQuantitySet, RenderShaderGenerator, Shader,
     },
 };
 use anyhow::Result;
@@ -24,26 +25,30 @@ pub struct ShaderID(u64);
 
 #[derive(Debug)]
 pub struct ShaderManager {
-    /// Shader programs.
-    pub shaders: HashMap<ShaderID, Shader>,
+    /// Rendering shader programs.
+    pub rendering_shaders: HashMap<ShaderID, Shader>,
+    /// Compute shader programs.
+    pub compute_shaders: HashMap<ShaderID, Shader>,
 }
 
 impl ShaderManager {
     /// Creates a new empty shader library.
     pub fn new() -> Self {
         Self {
-            shaders: HashMap::new(),
+            rendering_shaders: HashMap::new(),
+            compute_shaders: HashMap::new(),
         }
     }
 
-    /// Obtains the appropriate [`Shader`] for the given set of shader inputs.
+    /// Obtains the appropriate rendering [`Shader`] for the given set of shader
+    /// inputs.
     ///
     /// If a shader for the given inputs already exists, it is returned,
     /// otherwise a new shader is generated, compiled and cached.
     ///
     /// # Errors
-    /// See [`ShaderGenerator::generate_shader_module`].
-    pub fn obtain_shader(
+    /// See [`ShaderGenerator::generate_rendering_shader_module`].
+    pub fn obtain_rendering_shader(
         &mut self,
         core_system: &CoreRenderingSystem,
         camera_shader_input: Option<&CameraShaderInput>,
@@ -55,7 +60,7 @@ impl ShaderManager {
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Result<&Shader> {
-        let shader_id = ShaderID::from_input(
+        let shader_id = ShaderID::from_rendering_input(
             camera_shader_input,
             mesh_shader_input,
             light_shader_input,
@@ -66,10 +71,10 @@ impl ShaderManager {
             output_render_attachment_quantities,
         );
 
-        match self.shaders.entry(shader_id) {
+        match self.rendering_shaders.entry(shader_id) {
             Entry::Occupied(entry) => Ok(entry.into_mut()),
             Entry::Vacant(entry) => {
-                let (module, entry_point_names) = ShaderGenerator::generate_shader_module(
+                let (module, entry_point_names) = RenderShaderGenerator::generate_shader_module(
                     camera_shader_input,
                     mesh_shader_input,
                     light_shader_input,
@@ -83,7 +88,37 @@ impl ShaderManager {
                     core_system,
                     module,
                     entry_point_names,
-                    format!("Generated shader (hash {})", shader_id.0).as_str(),
+                    format!("Generated rendering shader (hash {})", shader_id.0).as_str(),
+                )))
+            }
+        }
+    }
+
+    /// Obtains the appropriate compute [`Shader`] for the given set of shader
+    /// inputs.
+    ///
+    /// If a shader for the given inputs already exists, it is returned,
+    /// otherwise a new shader is generated, compiled and cached.
+    ///
+    /// # Errors
+    /// See [`ShaderGenerator::generate_shader_module`].
+    pub fn obtain_compute_shader(
+        &mut self,
+        core_system: &CoreRenderingSystem,
+        shader_input: &ComputeShaderInput,
+    ) -> Result<&Shader> {
+        let shader_id = ShaderID::from_compute_input(shader_input);
+
+        match self.compute_shaders.entry(shader_id) {
+            Entry::Occupied(entry) => Ok(entry.into_mut()),
+            Entry::Vacant(entry) => {
+                let (module, entry_point_names) =
+                    ComputeShaderGenerator::generate_shader_module(shader_input)?;
+                Ok(entry.insert(Shader::from_naga_module(
+                    core_system,
+                    module,
+                    entry_point_names,
+                    format!("Generated compute shader (hash {})", shader_id.0).as_str(),
                 )))
             }
         }
@@ -97,7 +132,7 @@ impl Default for ShaderManager {
 }
 
 impl ShaderID {
-    fn from_input(
+    fn from_rendering_input(
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
         light_shader_input: Option<&LightShaderInput>,
@@ -108,6 +143,7 @@ impl ShaderID {
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
     ) -> Self {
         let mut hasher = DefaultHasher::new();
+        "rendering".hash(&mut hasher);
         camera_shader_input.hash(&mut hasher);
         mesh_shader_input.hash(&mut hasher);
         light_shader_input.hash(&mut hasher);
@@ -116,6 +152,13 @@ impl ShaderID {
         vertex_attribute_requirements.hash(&mut hasher);
         input_render_attachment_quantities.hash(&mut hasher);
         output_render_attachment_quantities.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+
+    fn from_compute_input(shader_input: &ComputeShaderInput) -> Self {
+        let mut hasher = DefaultHasher::new();
+        "compute".hash(&mut hasher);
+        shader_input.hash(&mut hasher);
         Self(hasher.finish())
     }
 }

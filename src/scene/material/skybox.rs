@@ -3,12 +3,12 @@
 use crate::{
     geometry::VertexAttributeSet,
     rendering::{
-        MaterialPropertyTextureManager, MaterialShaderInput, RenderAttachmentQuantitySet,
+        Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet,
         RenderPassHints, SkyboxTextureShaderInput,
     },
     scene::{
         material::SkyboxComp, MaterialComp, MaterialHandle, MaterialID, MaterialLibrary,
-        MaterialPropertyTextureSet, MaterialPropertyTextureSetID, MaterialSpecification,
+        MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialSpecification,
         RenderResourcesDesynchronized,
     },
 };
@@ -27,6 +27,8 @@ lazy_static! {
 /// texture set to the material library if not already present and adds the
 /// appropriate material component to the entity.
 pub fn add_skybox_material_component_for_entity(
+    core_system: &CoreRenderingSystem,
+    assets: &RwLock<Assets>,
     material_library: &RwLock<MaterialLibrary>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -43,7 +45,7 @@ pub fn add_skybox_material_component_for_entity(
 
             let texture_shader_input = SkyboxTextureShaderInput {
                 skybox_cubemap_texture_and_sampler_bindings:
-                    MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
+                    MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(0),
             };
 
             let texture_ids = vec![skybox.0];
@@ -64,15 +66,23 @@ pub fn add_skybox_material_component_for_entity(
                     )
                 });
 
-            let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
+            let texture_group_id = MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
 
             // Add a new texture set if none with the same textures already exist
             material_library
-                .material_property_texture_set_entry(texture_set_id)
-                .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
+                .material_property_texture_group_entry(texture_group_id)
+                .or_insert_with(|| {
+                    MaterialPropertyTextureGroup::new(
+                        core_system,
+                        &assets.read().unwrap(),
+                        texture_ids,
+                        texture_group_id.to_string(),
+                    )
+                    .expect("Missing textures from assets")
+                });
 
             MaterialComp::new(
-                MaterialHandle::new(*SKYBOX_MATERIAL_ID, None, Some(texture_set_id)),
+                MaterialHandle::new(*SKYBOX_MATERIAL_ID, None, Some(texture_group_id)),
                 None,
             )
         },
