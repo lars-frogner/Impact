@@ -3,7 +3,7 @@
 use crate::{
     geometry::{AxisAlignedBox, CubeMapper, CubemapFace, Frustum, Sphere},
     physics::ReferenceFrameComp,
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{
         LightStorage, LuminousIntensity, OmnidirectionalEmissionComp, OmnidirectionalLightComp,
         RenderResourcesDesynchronized, SceneCamera,

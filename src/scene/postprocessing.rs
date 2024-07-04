@@ -2,10 +2,13 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{
-        fre, DepthMapUsage, MaterialShaderInput, OutputAttachmentSampling, PassthroughShaderInput,
-        RenderAttachmentQuantity, RenderCommandSpecification, RenderCommandState, RenderPassHints,
-        RenderPassSpecification,
+    gpu::{
+        rendering::{
+            fre, DepthMapUsage, MaterialShaderInput, OutputAttachmentSampling,
+            PassthroughShaderInput, RenderAttachmentQuantity, RenderCommandSpecification,
+            RenderCommandState, RenderPassHints, RenderPassSpecification,
+        },
+        GraphicsDevice,
     },
     scene::{
         create_ambient_occlusion_application_material,
@@ -59,7 +62,7 @@ impl Postprocessor {
     /// Creates a new postprocessor along with the associated materials and
     /// render commands according to the given configuration.
     pub fn new(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         material_library: &mut MaterialLibrary,
         ambient_occlusion_config: &AmbientOcclusionConfig,
         bloom_config: &BloomConfig,
@@ -67,13 +70,16 @@ impl Postprocessor {
         exposure: fre,
     ) -> Self {
         let ambient_occlusion_commands = setup_ambient_occlusion_materials_and_render_commands(
-            device,
+            graphics_device,
             material_library,
             ambient_occlusion_config,
         );
 
-        let bloom_commands =
-            setup_bloom_materials_and_render_commands(device, material_library, bloom_config);
+        let bloom_commands = setup_bloom_materials_and_render_commands(
+            graphics_device,
+            material_library,
+            bloom_config,
+        );
 
         let tone_mapping_commands =
             setup_tone_mapping_materials_and_render_commands(material_library);
@@ -175,7 +181,7 @@ impl Default for BloomConfig {
 }
 
 fn setup_ambient_occlusion_materials_and_render_commands(
-    device: &wgpu::Device,
+    graphics_device: &GraphicsDevice,
     material_library: &mut MaterialLibrary,
     ambient_occlusion_config: &AmbientOcclusionConfig,
 ) -> Vec<RenderCommandSpecification> {
@@ -184,7 +190,7 @@ fn setup_ambient_occlusion_materials_and_render_commands(
             material_library,
         ),
         setup_ambient_occlusion_computation_material_and_render_pass(
-            device,
+            graphics_device,
             material_library,
             ambient_occlusion_config.sample_count,
             ambient_occlusion_config.sample_radius,
@@ -194,7 +200,7 @@ fn setup_ambient_occlusion_materials_and_render_commands(
 }
 
 fn setup_bloom_materials_and_render_commands(
-    device: &wgpu::Device,
+    graphics_device: &GraphicsDevice,
     material_library: &mut MaterialLibrary,
     bloom_config: &BloomConfig,
 ) -> Vec<RenderCommandSpecification> {
@@ -213,7 +219,7 @@ fn setup_bloom_materials_and_render_commands(
         );
         for _ in 1..bloom_config.n_iterations {
             render_passes.push(setup_gaussian_blur_material_and_render_pass(
-                device,
+                graphics_device,
                 material_library,
                 RenderAttachmentQuantity::EmissiveLuminance,
                 RenderAttachmentQuantity::EmissiveLuminanceAux,
@@ -221,7 +227,7 @@ fn setup_bloom_materials_and_render_commands(
                 &bloom_sample_uniform,
             ));
             render_passes.push(setup_gaussian_blur_material_and_render_pass(
-                device,
+                graphics_device,
                 material_library,
                 RenderAttachmentQuantity::EmissiveLuminanceAux,
                 RenderAttachmentQuantity::EmissiveLuminance,
@@ -230,7 +236,7 @@ fn setup_bloom_materials_and_render_commands(
             ));
         }
         render_passes.push(setup_gaussian_blur_material_and_render_pass(
-            device,
+            graphics_device,
             material_library,
             RenderAttachmentQuantity::EmissiveLuminance,
             RenderAttachmentQuantity::EmissiveLuminanceAux,
@@ -239,7 +245,7 @@ fn setup_bloom_materials_and_render_commands(
         ));
         // For the last pass, we write to the luminance attachment
         render_passes.push(setup_gaussian_blur_material_and_render_pass(
-            device,
+            graphics_device,
             material_library,
             RenderAttachmentQuantity::EmissiveLuminanceAux,
             RenderAttachmentQuantity::Luminance,
@@ -324,7 +330,7 @@ fn create_passthrough_material(
 }
 
 fn setup_ambient_occlusion_computation_material_and_render_pass(
-    device: &wgpu::Device,
+    graphics_device: &GraphicsDevice,
     material_library: &mut MaterialLibrary,
     sample_count: u32,
     sample_radius: fre,
@@ -336,7 +342,11 @@ fn setup_ambient_occlusion_computation_material_and_render_pass(
     let specification = material_library
         .material_specification_entry(material_id)
         .or_insert_with(|| {
-            create_ambient_occlusion_computation_material(device, sample_count, sample_radius)
+            create_ambient_occlusion_computation_material(
+                graphics_device,
+                sample_count,
+                sample_radius,
+            )
         });
     define_ambient_occlusion_computation_pass(material_id, specification.render_pass_hints())
 }
@@ -366,7 +376,7 @@ fn setup_unoccluded_ambient_reflected_luminance_application_material_and_render_
 }
 
 fn setup_gaussian_blur_material_and_render_pass(
-    device: &wgpu::Device,
+    graphics_device: &GraphicsDevice,
     material_library: &mut MaterialLibrary,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
@@ -385,7 +395,7 @@ fn setup_gaussian_blur_material_and_render_pass(
         .material_specification_entry(material_id)
         .or_insert_with(|| {
             create_gaussian_blur_material(
-                device,
+                graphics_device,
                 input_render_attachment_quantity,
                 output_render_attachment_quantity,
                 direction,

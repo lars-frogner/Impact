@@ -2,7 +2,7 @@
 
 use crate::{
     components::ComponentRegistry,
-    rendering::{fre, TextureID},
+    gpu::rendering::{fre, TextureID},
     scene::{MaterialHandle, RGBColor},
 };
 use anyhow::Result;

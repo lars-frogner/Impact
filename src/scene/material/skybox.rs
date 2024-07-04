@@ -2,9 +2,12 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{
-        Assets, CoreRenderingSystem, MaterialShaderInput, RenderAttachmentQuantitySet,
-        RenderPassHints, SkyboxTextureShaderInput,
+    gpu::{
+        rendering::{
+            Assets, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
+            SkyboxTextureShaderInput,
+        },
+        GraphicsDevice,
     },
     scene::{
         material::SkyboxComp, MaterialComp, MaterialHandle, MaterialID, MaterialLibrary,
@@ -27,8 +30,8 @@ lazy_static! {
 /// texture set to the material library if not already present and adds the
 /// appropriate material component to the entity.
 pub fn add_skybox_material_component_for_entity(
-    core_system: &CoreRenderingSystem,
-    assets: &RwLock<Assets>,
+    graphics_device: &GraphicsDevice,
+    assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -73,8 +76,8 @@ pub fn add_skybox_material_component_for_entity(
                 .material_property_texture_group_entry(texture_group_id)
                 .or_insert_with(|| {
                     MaterialPropertyTextureGroup::new(
-                        core_system,
-                        &assets.read().unwrap(),
+                        graphics_device,
+                        assets,
                         texture_ids,
                         texture_group_id.to_string(),
                     )

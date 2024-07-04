@@ -10,7 +10,7 @@ pub use shadow_map::{
     CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,
 };
 
-use crate::{rendering::CoreRenderingSystem, scene};
+use crate::{gpu::GraphicsDevice, scene};
 use anyhow::{anyhow, bail, Result};
 use bytemuck::Pod;
 use image::{
@@ -179,7 +179,7 @@ impl Texture {
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_path(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mipmap_generator: &MipmapGenerator,
         image_path: impl AsRef<Path>,
         config: TextureConfig,
@@ -187,7 +187,7 @@ impl Texture {
         let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
         Self::from_image(
-            core_system,
+            graphics_device,
             mipmap_generator,
             image,
             config,
@@ -209,14 +209,14 @@ impl Texture {
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_bytes(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mipmap_generator: &MipmapGenerator,
         byte_buffer: &[u8],
         config: TextureConfig,
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(core_system, mipmap_generator, image, config, label)
+        Self::from_image(graphics_device, mipmap_generator, image, config, label)
     }
 
     /// Creates a texture for the given loaded image, using the given
@@ -231,7 +231,7 @@ impl Texture {
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_image(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mipmap_generator: &MipmapGenerator,
         image: DynamicImage,
         config: TextureConfig,
@@ -244,7 +244,7 @@ impl Texture {
 
         if image.color().has_color() {
             Self::new(
-                core_system,
+                graphics_device,
                 Some(mipmap_generator),
                 &image.into_rgba8(),
                 width,
@@ -264,7 +264,7 @@ impl Texture {
                 );
             }
             Self::new(
-                core_system,
+                graphics_device,
                 Some(mipmap_generator),
                 &image.into_luma8(),
                 width,
@@ -292,7 +292,7 @@ impl Texture {
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_cubemap_image_paths<P: AsRef<Path>>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         right_image_path: P,
         left_image_path: P,
         top_image_path: P,
@@ -326,7 +326,7 @@ impl Texture {
         );
 
         Self::from_cubemap_images(
-            core_system,
+            graphics_device,
             right_image,
             left_image,
             top_image,
@@ -351,7 +351,7 @@ impl Texture {
     /// - The image is grayscale and the color space in the configuration is not
     ///   linear.
     pub fn from_cubemap_images(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         right_image: DynamicImage,
         left_image: DynamicImage,
         top_image: DynamicImage,
@@ -427,7 +427,7 @@ impl Texture {
         };
 
         Self::new(
-            core_system,
+            graphics_device,
             None,
             &byte_buffer,
             width,
@@ -449,7 +449,7 @@ impl Texture {
     /// multiple of 256 bytes (`wgpu` requires that rows are a multiple of 256
     /// bytes for for copying data between buffers and textures).
     pub fn from_lookup_table<T: TexelType>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         table: &TextureLookupTable<T>,
         label: &str,
     ) -> Result<Self> {
@@ -462,7 +462,7 @@ impl Texture {
         };
 
         Self::new(
-            core_system,
+            graphics_device,
             None,
             byte_buffer,
             table.width,
@@ -488,7 +488,7 @@ impl Texture {
     ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
     ///   data between buffers and textures).
     fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mipmap_generator: Option<&MipmapGenerator>,
         byte_buffer: &[u8],
         width: NonZeroU32,
@@ -549,8 +549,8 @@ impl Texture {
                 (wgpu::TextureDimension::D3, wgpu::TextureViewDimension::D3)
             };
 
-        let device = core_system.device();
-        let queue = core_system.queue();
+        let device = graphics_device.device();
+        let queue = graphics_device.queue();
 
         let format = texel_description.texture_format();
 
@@ -1081,7 +1081,7 @@ impl MipmapGenerator {
 /// # Errors
 /// Returns an error if the format of the given texture is not supported.
 pub fn save_texture_as_image_file<P: AsRef<Path>>(
-    core_system: &CoreRenderingSystem,
+    graphics_device: &GraphicsDevice,
     texture: &wgpu::Texture,
     texture_array_idx: u32,
     output_path: P,
@@ -1117,8 +1117,8 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
         | wgpu::TextureFormat::Bgra8UnormSrgb
         | wgpu::TextureFormat::R8Unorm => {
             let mut data = extract_texture_data::<u8>(
-                core_system.device(),
-                core_system.queue(),
+                graphics_device.device(),
+                graphics_device.queue(),
                 texture,
                 texture_array_idx,
             );
@@ -1168,8 +1168,8 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
         | wgpu::TextureFormat::Depth32FloatStencil8
         | wgpu::TextureFormat::Rgba32Float => {
             let mut data = extract_texture_data::<f32>(
-                core_system.device(),
-                core_system.queue(),
+                graphics_device.device(),
+                graphics_device.queue(),
                 texture,
                 texture_array_idx,
             );

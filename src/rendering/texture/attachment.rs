@@ -1,6 +1,9 @@
 //! Textures used as render attachments.
 
-use crate::rendering::{Blending, CoreRenderingSystem};
+use crate::{
+    gpu::{rendering::Blending, GraphicsDevice},
+    rendering::RenderingSurface,
+};
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
@@ -330,7 +333,11 @@ impl RenderAttachmentTextureManager {
     /// Creates a new manager for render attachment textures, initializing
     /// render attachment textures for the given set of quantities with the
     /// given sample count.
-    pub fn new(core_system: &CoreRenderingSystem, sample_count: u32) -> Self {
+    pub fn new(
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
+        sample_count: u32,
+    ) -> Self {
         let mut manager = Self {
             quantity_textures: [None, None, None, None, None, None, None, None, None],
             quantity_texture_bind_group_layouts: [
@@ -339,7 +346,7 @@ impl RenderAttachmentTextureManager {
             quantity_texture_bind_groups: [None, None, None, None, None, None, None, None, None],
         };
 
-        manager.recreate_textures(core_system, sample_count);
+        manager.recreate_textures(graphics_device, rendering_surface, sample_count);
 
         manager
     }
@@ -424,7 +431,7 @@ impl RenderAttachmentTextureManager {
     /// - The format of the given texture is not supported.
     pub fn save_render_attachment_texture_as_image_file<P: AsRef<Path>>(
         &self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         quantity: RenderAttachmentQuantity,
         output_path: P,
     ) -> Result<()> {
@@ -437,26 +444,47 @@ impl RenderAttachmentTextureManager {
                 )
             })?;
 
-        super::save_texture_as_image_file(core_system, texture.regular.texture(), 0, output_path)
+        super::save_texture_as_image_file(
+            graphics_device,
+            texture.regular.texture(),
+            0,
+            output_path,
+        )
     }
     /// Recreates all render attachment textures for the current state of the
     /// core system, using the given sample count.
-    pub fn recreate_textures(&mut self, core_system: &CoreRenderingSystem, sample_count: u32) {
+    pub fn recreate_textures(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
+        sample_count: u32,
+    ) {
         for &quantity in RenderAttachmentQuantity::all() {
-            self.recreate_render_attachment_texture(core_system, quantity, sample_count);
+            self.recreate_render_attachment_texture(
+                graphics_device,
+                rendering_surface,
+                quantity,
+                sample_count,
+            );
         }
     }
 
     fn recreate_render_attachment_texture(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
         quantity: RenderAttachmentQuantity,
         sample_count: u32,
     ) {
         let texture_format = quantity.texture_format();
 
-        let quantity_texture =
-            MaybeWithMultisampling::new(core_system, quantity, texture_format, sample_count);
+        let quantity_texture = MaybeWithMultisampling::new(
+            graphics_device,
+            rendering_surface,
+            quantity,
+            texture_format,
+            sample_count,
+        );
 
         let label = format!("{} render attachment", quantity);
 
@@ -465,7 +493,7 @@ impl RenderAttachmentTextureManager {
         let bind_group_layout = self.quantity_texture_bind_group_layouts[quantity.index()]
             .get_or_insert_with(|| {
                 Self::create_render_attachment_texture_bind_group_layout(
-                    core_system.device(),
+                    graphics_device.device(),
                     texture_format,
                     texture_binding,
                     sampler_binding,
@@ -475,7 +503,7 @@ impl RenderAttachmentTextureManager {
 
         self.quantity_texture_bind_groups[quantity.index()] =
             Some(Self::create_render_attachment_texture_bind_group(
-                core_system.device(),
+                graphics_device.device(),
                 texture_binding,
                 sampler_binding,
                 bind_group_layout,
@@ -525,21 +553,21 @@ impl RenderAttachmentTextureManager {
 }
 
 impl RenderAttachmentTexture {
-    /// Creates a new render attachment texture of the same size as the
-    /// rendering surface in `core_system` and with the given texture format and
-    /// sample count.
+    /// Creates a new render attachment texture of the same size as the given
+    /// rendering surface and with the given texture format and sample count.
     pub fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
         quantity: RenderAttachmentQuantity,
         format: wgpu::TextureFormat,
         sample_count: u32,
     ) -> Self {
-        let device = core_system.device();
-        let surface_config = core_system.surface_config();
+        let device = graphics_device.device();
+        let (width, height) = rendering_surface.surface_dimensions();
 
         let texture_size = wgpu::Extent3d {
-            width: surface_config.width,
-            height: surface_config.height,
+            width: width.into(),
+            height: height.into(),
             depth_or_array_layers: 1,
         };
 
@@ -702,16 +730,19 @@ impl<T> MaybeWithMultisampling<T> {
 
 impl MaybeWithMultisampling<RenderAttachmentTexture> {
     fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
         quantity: RenderAttachmentQuantity,
         format: wgpu::TextureFormat,
         sample_count: u32,
     ) -> Self {
-        let regular = RenderAttachmentTexture::new(core_system, quantity, format, 1);
+        let regular =
+            RenderAttachmentTexture::new(graphics_device, rendering_surface, quantity, format, 1);
 
         let multisampled = if sample_count > 1 && quantity.supports_multisampling() {
             Some(RenderAttachmentTexture::new(
-                core_system,
+                graphics_device,
+                rendering_surface,
                 quantity,
                 format,
                 sample_count,

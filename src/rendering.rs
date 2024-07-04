@@ -5,7 +5,6 @@ mod brdf;
 mod buffer;
 mod camera;
 mod compute;
-mod core;
 mod instance;
 mod light;
 mod mesh;
@@ -14,11 +13,11 @@ mod render_command;
 mod resource;
 mod shader;
 mod storage;
+mod surface;
 mod tasks;
 mod texture;
 mod uniform;
 
-pub use self::core::CoreRenderingSystem;
 pub use assets::{Assets, TextureID};
 pub use brdf::create_specular_ggx_reflectance_lookup_tables;
 pub use buffer::{
@@ -48,6 +47,7 @@ pub use shader::{
     ToneMappingShaderInput, UnidirectionalLightShaderInput,
 };
 pub use storage::{StorageBufferID, StorageRenderBuffer, StorageRenderBufferManager};
+pub use surface::RenderingSurface;
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
     CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
@@ -59,30 +59,34 @@ pub use uniform::SingleUniformRenderBuffer;
 use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager};
 use crate::{
     geometry::CubemapFace,
+    gpu::GraphicsDevice,
     scene::{MaterialLibrary, Scene, MAX_SHADOW_MAP_CASCADES},
     window::EventLoopController,
 };
 use anyhow::{Error, Result};
 use chrono::Utc;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU8, Ordering},
-    RwLock,
+use std::{
+    num::NonZeroU32,
+    sync::{
+        atomic::{AtomicBool, AtomicU8, Ordering},
+        Arc, RwLock,
+    },
 };
 
 /// Floating point type used for rendering.
 ///
 /// # Note
-/// Changing this would also require additional
-/// code changes where the type is hardcoded.
+/// Changing this would also require additional code changes where the type is
+/// hardcoded.
 #[allow(non_camel_case_types)]
 pub type fre = f32;
 
-/// Container for all data and logic required for rendering.
+/// Container for data and systems required for rendering.
 #[derive(Debug)]
 pub struct RenderingSystem {
-    core_system: CoreRenderingSystem,
     config: RenderingConfig,
-    assets: RwLock<Assets>,
+    graphics_device: Arc<GraphicsDevice>,
+    rendering_surface: RenderingSurface,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_command_manager: RwLock<RenderCommandManager>,
     render_attachment_texture_manager: RenderAttachmentTextureManager,
@@ -111,7 +115,7 @@ pub struct RenderingConfig {
 /// Helper for capturing screenshots and related textures.
 #[derive(Debug)]
 pub struct ScreenCapturer {
-    screenshot_width: u32,
+    screenshot_width: NonZeroU32,
     screenshot_save_requested: AtomicBool,
     render_attachment_save_requested: AtomicBool,
     render_attachment_quantity: AtomicU8,
@@ -120,20 +124,23 @@ pub struct ScreenCapturer {
 }
 
 impl RenderingSystem {
-    /// Creates a new rendering system consisting of the given core system and
-    /// assets.
-    pub fn new(core_system: CoreRenderingSystem, mut assets: Assets) -> Result<Self> {
-        let config = RenderingConfig::default();
-
-        let render_attachment_texture_manager =
-            RenderAttachmentTextureManager::new(&core_system, config.multisampling_sample_count);
-
-        assets.load_default_lookup_table_textures(&core_system)?;
+    /// Creates a new rendering system using the given configuration, graphics
+    /// device and rendering surface.
+    pub fn new(
+        config: RenderingConfig,
+        graphics_device: Arc<GraphicsDevice>,
+        rendering_surface: RenderingSurface,
+    ) -> Result<Self> {
+        let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
+            &graphics_device,
+            &rendering_surface,
+            config.multisampling_sample_count,
+        );
 
         Ok(Self {
-            core_system,
             config,
-            assets: RwLock::new(assets),
+            graphics_device,
+            rendering_surface,
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(RenderCommandManager::new()),
             render_attachment_texture_manager,
@@ -141,19 +148,19 @@ impl RenderingSystem {
         })
     }
 
-    /// Returns a reference to the core rendering system.
-    pub fn core_system(&self) -> &CoreRenderingSystem {
-        &self.core_system
-    }
-
     /// Returns a reference to the global rendering configuration.
     pub fn config(&self) -> &RenderingConfig {
         &self.config
     }
 
-    /// Returns a reference to the rendering assets, guarded by a [`RwLock`].
-    pub fn assets(&self) -> &RwLock<Assets> {
-        &self.assets
+    /// Returns a reference to the graphics device used for rendering.
+    pub fn graphics_device(&self) -> &GraphicsDevice {
+        &self.graphics_device
+    }
+
+    /// Returns a reference to the rendering surface.
+    pub fn rendering_surface(&self) -> &RenderingSurface {
+        &self.rendering_surface
     }
 
     /// Returns a reference to the [`RenderResourceManager`], guarded
@@ -179,12 +186,6 @@ impl RenderingSystem {
         &self.gpu_computation_library
     }
 
-    /// Returns the width and height of the rendering surface in pixels.
-    pub fn surface_dimensions(&self) -> (u32, u32) {
-        let surface_config = self.core_system.surface_config();
-        (surface_config.width, surface_config.height)
-    }
-
     /// Creates and presents a rendering using the current synchronized render
     /// resources.
     ///
@@ -200,11 +201,24 @@ impl RenderingSystem {
         Ok(())
     }
 
-    /// Sets a new size for the rendering surface and assocated textures.
-    pub fn resize_surface(&mut self, new_size: (u32, u32)) {
-        self.core_system.resize_surface(new_size);
-        self.render_attachment_texture_manager
-            .recreate_textures(&self.core_system, self.config.multisampling_sample_count);
+    /// Sets a new width and height for the rendering surface and any textures
+    /// that need to have the same dimensions as the surface.
+    pub fn resize_rendering_surface(&mut self, new_width: NonZeroU32, new_height: NonZeroU32) {
+        self.rendering_surface
+            .resize(&self.graphics_device, new_width, new_height);
+        self.render_attachment_texture_manager.recreate_textures(
+            &self.graphics_device,
+            &self.rendering_surface,
+            self.config.multisampling_sample_count,
+        );
+    }
+
+    /// Marks the render resources as being out of sync with the source data.
+    pub fn declare_render_resources_desynchronized(&self) {
+        self.render_resource_manager
+            .write()
+            .unwrap()
+            .declare_desynchronized();
     }
 
     /// Toggles culling of triangle back faces in all render passes.
@@ -251,27 +265,14 @@ impl RenderingSystem {
         self.set_multisampling_sample_count(sample_count);
     }
 
-    /// Marks the render resources as being out of sync with the source data.
-    pub fn declare_render_resources_desynchronized(&self) {
-        self.render_resource_manager
-            .write()
-            .unwrap()
-            .declare_desynchronized();
-    }
-
-    /// Initializes the surface for presentation using the
-    /// current surface configuration.
-    fn initialize_surface(&self) {
-        self.core_system.initialize_surface();
-    }
-
     fn render_surface(&self, material_library: &MaterialLibrary) -> Result<wgpu::SurfaceTexture> {
-        let surface_texture = self.core_system.surface().get_current_texture()?;
+        let surface_texture = self.rendering_surface.surface().get_current_texture()?;
         let surface_texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut command_encoder = Self::create_render_command_encoder(self.core_system.device());
+        let mut command_encoder =
+            Self::create_render_command_encoder(self.graphics_device.device());
 
         let mut n_recorded_passes = 0;
 
@@ -281,7 +282,7 @@ impl RenderingSystem {
 
             for render_pass_recorder in self.render_command_manager.read().unwrap().recorders() {
                 let outcome = render_pass_recorder.record(
-                    &self.core_system,
+                    &self.rendering_surface,
                     &surface_texture_view,
                     material_library,
                     render_resources_guard.synchronized(),
@@ -297,7 +298,7 @@ impl RenderingSystem {
 
         log::info!("Performing {} render passes", n_recorded_passes);
 
-        self.core_system
+        self.graphics_device
             .queue()
             .submit(std::iter::once(command_encoder.finish()));
 
@@ -306,8 +307,9 @@ impl RenderingSystem {
 
     fn handle_render_error(&self, error: Error, _event_loop_controller: &EventLoopController<'_>) {
         if let Some(wgpu::SurfaceError::Lost) = error.downcast_ref() {
-            // Recreate swap chain if lost
-            self.initialize_surface();
+            // Reconfigure surface if lost
+            self.rendering_surface
+                .configure_surface_for_device(self.graphics_device());
         }
     }
 
@@ -323,11 +325,14 @@ impl RenderingSystem {
 
             self.config.multisampling_sample_count = sample_count;
 
-            self.render_attachment_texture_manager
-                .recreate_textures(&self.core_system, sample_count);
+            self.render_attachment_texture_manager.recreate_textures(
+                &self.graphics_device,
+                &self.rendering_surface,
+                sample_count,
+            );
 
-            // Remove all render pass recorders so that they will be recreated with
-            // the updated configuration
+            // Remove all render command recorders so that they will be
+            // recreated with the updated configuration
             self.render_command_manager
                 .write()
                 .unwrap()
@@ -357,7 +362,7 @@ impl ScreenCapturer {
     /// # Panics
     /// When a screenshot is captured, a panic will occur if the width times the
     /// number of bytes per pixel is not a multiple of 256.
-    pub fn new(screenshot_width: u32) -> Self {
+    pub fn new(screenshot_width: NonZeroU32) -> Self {
         Self {
             screenshot_width,
             screenshot_save_requested: AtomicBool::new(false),
@@ -415,24 +420,25 @@ impl ScreenCapturer {
             let scene = scene.read().unwrap();
             let material_library = scene.material_library().read().unwrap();
 
-            let original_dimensions = renderer.surface_dimensions();
+            let (original_width, original_height) =
+                renderer.rendering_surface().surface_dimensions();
 
-            renderer.resize_surface((
+            renderer.resize_rendering_surface(
                 self.screenshot_width,
-                self.determine_screenshot_height(original_dimensions),
-            ));
+                self.determine_screenshot_height(original_width, original_height),
+            );
             {
                 // Re-render the surface at the screenshot resolution.
                 let surface_texture = renderer.render_surface(&material_library)?;
 
                 texture::save_texture_as_image_file(
-                    renderer.core_system(),
+                    renderer.graphics_device(),
                     &surface_texture.texture,
                     0,
                     format!("screenshot_{}.png", Utc::now().to_rfc3339()),
                 )?;
             }
-            renderer.resize_surface(original_dimensions);
+            renderer.resize_rendering_surface(original_width, original_height);
         }
         Ok(())
     }
@@ -459,12 +465,13 @@ impl ScreenCapturer {
             let scene = scene.read().unwrap();
             let material_library = scene.material_library().read().unwrap();
 
-            let original_dimensions = renderer.surface_dimensions();
+            let (original_width, original_height) =
+                renderer.rendering_surface().surface_dimensions();
 
-            renderer.resize_surface((
+            renderer.resize_rendering_surface(
                 self.screenshot_width,
-                self.determine_screenshot_height(original_dimensions),
-            ));
+                self.determine_screenshot_height(original_width, original_height),
+            );
             {
                 // Re-render the surface at the screenshot resolution.
                 renderer.render_surface(&material_library)?;
@@ -472,12 +479,12 @@ impl ScreenCapturer {
                 renderer
                     .render_attachment_texture_manager()
                     .save_render_attachment_texture_as_image_file(
-                        renderer.core_system(),
+                        renderer.graphics_device(),
                         quantity,
                         format!("{}_{}.png", quantity, Utc::now().to_rfc3339()),
                     )?;
             }
-            renderer.resize_surface(original_dimensions);
+            renderer.resize_rendering_surface(original_width, original_height);
         }
         Ok(())
     }
@@ -506,7 +513,7 @@ impl ScreenCapturer {
                     light_buffer_manager
                         .omnidirectional_light_shadow_map_texture()
                         .save_face_as_image_file(
-                            renderer.core_system(),
+                            renderer.graphics_device(),
                             face,
                             format!(
                                 "omnidirectional_light_shadow_map_{}_{:?}.png",
@@ -548,7 +555,7 @@ impl ScreenCapturer {
                     light_buffer_manager
                         .unidirectional_light_shadow_map_texture()
                         .save_cascade_as_image_file(
-                            renderer.core_system(),
+                            renderer.graphics_device(),
                             cascade_idx,
                             format!(
                                 "unidirectional_light_shadow_map_{}_{}.png",
@@ -566,8 +573,14 @@ impl ScreenCapturer {
         }
     }
 
-    fn determine_screenshot_height(&self, surface_dimensions: (u32, u32)) -> u32 {
-        let aspect_ratio = (surface_dimensions.1 as f32) / (surface_dimensions.0 as f32);
-        f32::round((self.screenshot_width as f32) * aspect_ratio) as u32
+    fn determine_screenshot_height(
+        &self,
+        surface_width: NonZeroU32,
+        surface_height: NonZeroU32,
+    ) -> NonZeroU32 {
+        let aspect_ratio = (u32::from(surface_height) as f32) / (u32::from(surface_width) as f32);
+        let screenshot_height =
+            f32::round((u32::from(self.screenshot_width) as f32) * aspect_ratio) as u32;
+        NonZeroU32::new(u32::max(1, screenshot_height)).unwrap()
     }
 }

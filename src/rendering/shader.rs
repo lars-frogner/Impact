@@ -32,7 +32,10 @@ use crate::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
         VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
-    rendering::{fre, CoreRenderingSystem, RenderAttachmentQuantitySet},
+    gpu::{
+        rendering::{fre, RenderAttachmentQuantitySet},
+        GraphicsDevice,
+    },
     scene::MAX_SHADOW_MAP_CASCADES,
 };
 use ambient_occlusion::AmbientOcclusionShaderGenerator;
@@ -675,7 +678,7 @@ impl Shader {
     /// # Errors
     /// Returns an error if the shader file can not be found or read.
     pub fn from_wgsl_path(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         shader_path: impl AsRef<Path>,
         entry_point_names: EntryPointNames,
     ) -> Result<Self> {
@@ -683,7 +686,7 @@ impl Shader {
         let label = shader_path.to_string_lossy();
         let source = fs::read_to_string(shader_path)?;
         Ok(Self::from_wgsl_source(
-            core_system,
+            graphics_device,
             &source,
             entry_point_names,
             label.as_ref(),
@@ -692,12 +695,12 @@ impl Shader {
 
     /// Creates a new shader from the given source code.
     pub fn from_wgsl_source(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         source: &str,
         entry_point_names: EntryPointNames,
         label: &str,
     ) -> Self {
-        let module = core_system
+        let module = graphics_device
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(source)),
@@ -713,7 +716,7 @@ impl Shader {
 
     /// Creates a new shader from the given [`Module`].
     pub fn from_naga_module(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         naga_module: Module,
         entry_point_names: EntryPointNames,
         label: &str,
@@ -721,7 +724,7 @@ impl Shader {
         #[cfg(debug_assertions)]
         let source_code = Self::generate_wgsl_from_naga_module(&naga_module);
 
-        let module = core_system
+        let module = graphics_device
             .device()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 source: wgpu::ShaderSource::Naga(Cow::Owned(naga_module)),

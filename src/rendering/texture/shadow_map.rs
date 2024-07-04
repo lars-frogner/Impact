@@ -1,6 +1,6 @@
 //! Textures representing shadow maps.
 
-use crate::{geometry::CubemapFace, rendering::CoreRenderingSystem};
+use crate::{geometry::CubemapFace, gpu::GraphicsDevice};
 use anyhow::Result;
 use std::path::Path;
 
@@ -39,8 +39,8 @@ pub struct CascadedShadowMapTexture {
 impl ShadowCubemapTexture {
     /// Creates a new shadow cubemap texture array using the given resolution as
     /// the width and height in texels of each cube face texture.
-    pub fn new(core_system: &CoreRenderingSystem, resolution: u32, label: &str) -> Self {
-        let device = core_system.device();
+    pub fn new(graphics_device: &GraphicsDevice, resolution: u32, label: &str) -> Self {
+        let device = graphics_device.device();
 
         let texture_size = wgpu::Extent3d {
             width: resolution,
@@ -171,12 +171,12 @@ impl ShadowCubemapTexture {
     /// file extension.
     pub fn save_face_as_image_file<P: AsRef<Path>>(
         &self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         face: CubemapFace,
         output_path: P,
     ) -> Result<()> {
         super::save_texture_as_image_file(
-            core_system,
+            graphics_device,
             &self.texture,
             face.as_idx_u32(),
             output_path,
@@ -205,14 +205,14 @@ impl CascadedShadowMapTexture {
     /// resolution as the width and height in texels of each of the `n_cascades`
     /// cascade textures.
     pub fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         resolution: u32,
         n_cascades: u32,
         label: &str,
     ) -> Self {
         assert!(n_cascades > 0);
 
-        let device = core_system.device();
+        let device = graphics_device.device();
 
         let texture_size = wgpu::Extent3d {
             width: resolution,
@@ -343,11 +343,11 @@ impl CascadedShadowMapTexture {
     /// file extension.
     pub fn save_cascade_as_image_file<P: AsRef<Path>>(
         &self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         cascade_idx: u32,
         output_path: P,
     ) -> Result<()> {
-        super::save_texture_as_image_file(core_system, &self.texture, cascade_idx, output_path)
+        super::save_texture_as_image_file(graphics_device, &self.texture, cascade_idx, output_path)
     }
 
     fn create_view(texture: &wgpu::Texture) -> wgpu::TextureView {

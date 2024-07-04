@@ -3,7 +3,7 @@
 use crate::{
     components::ComponentRegistry,
     geometry::{Angle, Bounds, Radians, UpperExclusiveBounds},
-    rendering::fre,
+    gpu::rendering::fre,
 };
 use anyhow::Result;
 use approx::assert_abs_diff_ne;

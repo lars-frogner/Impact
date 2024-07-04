@@ -6,10 +6,13 @@ pub use tasks::SyncRenderResources;
 
 use crate::{
     geometry::TriangleMesh,
-    rendering::{
-        camera::CameraRenderBufferManager, fre, instance::InstanceFeatureRenderBufferManager,
-        light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
-        postprocessing::PostprocessingResourceManager, CoreRenderingSystem, RenderingConfig,
+    gpu::{
+        rendering::{
+            camera::CameraRenderBufferManager, fre, instance::InstanceFeatureRenderBufferManager,
+            light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
+            postprocessing::PostprocessingResourceManager, RenderingConfig,
+        },
+        GraphicsDevice,
     },
     scene::{InstanceFeatureManager, LightStorage, MeshID, ModelID, Postprocessor, SceneCamera},
 };
@@ -232,17 +235,17 @@ impl DesynchronizedRenderResources {
     /// Performs any required updates for keeping the camera data in the given
     /// render buffer manager in sync with the given scene camera.
     fn sync_camera_buffer_with_scene_camera(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         camera_buffer_manager: &mut Option<CameraRenderBufferManager>,
         scene_camera: &SceneCamera<fre>,
     ) {
         if let Some(camera_buffer_manager) = camera_buffer_manager {
-            camera_buffer_manager.sync_with_camera(core_system, scene_camera.camera());
+            camera_buffer_manager.sync_with_camera(graphics_device, scene_camera.camera());
         } else {
             // We initialize the camera render buffer manager the first time this
             // method is called
             *camera_buffer_manager = Some(CameraRenderBufferManager::for_camera(
-                core_system,
+                graphics_device,
                 scene_camera.camera(),
             ));
         }
@@ -256,15 +259,17 @@ impl DesynchronizedRenderResources {
     /// exists will be removed, and missing render buffers
     /// for new source data will be created.
     fn sync_mesh_buffers_with_meshes(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         mesh_render_buffers: &mut MeshRenderBufferManagerMap,
         meshes: &HashMap<MeshID, TriangleMesh<fre>>,
     ) {
         for (&mesh_id, mesh) in meshes {
             mesh_render_buffers
                 .entry(mesh_id)
-                .and_modify(|mesh_buffers| mesh_buffers.sync_with_mesh(core_system, mesh))
-                .or_insert_with(|| MeshRenderBufferManager::for_mesh(core_system, mesh_id, mesh));
+                .and_modify(|mesh_buffers| mesh_buffers.sync_with_mesh(graphics_device, mesh))
+                .or_insert_with(|| {
+                    MeshRenderBufferManager::for_mesh(graphics_device, mesh_id, mesh)
+                });
         }
         Self::remove_unmatched_render_resources(mesh_render_buffers, meshes);
     }
@@ -272,18 +277,18 @@ impl DesynchronizedRenderResources {
     /// Performs any required updates for keeping the lights in the given render
     /// buffer manager in sync with the lights in the given light storage.
     fn sync_light_buffers_with_light_storage(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         light_buffer_manager: &mut Option<LightRenderBufferManager>,
         light_storage: &LightStorage,
         config: &RenderingConfig,
     ) {
         if let Some(light_buffer_manager) = light_buffer_manager {
-            light_buffer_manager.sync_with_light_storage(core_system, light_storage);
+            light_buffer_manager.sync_with_light_storage(graphics_device, light_storage);
         } else {
             // We initialize the light render buffer manager the first time this
             // method is called
             *light_buffer_manager = Some(LightRenderBufferManager::for_light_storage(
-                core_system,
+                graphics_device,
                 light_storage,
                 config,
             ));
@@ -298,7 +303,7 @@ impl DesynchronizedRenderResources {
     /// exists will be removed, and missing render buffers
     /// for new source data will be created.
     fn sync_instance_feature_buffers_with_manager(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         feature_render_buffer_managers: &mut InstanceFeatureRenderBufferManagerMap,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {
@@ -313,8 +318,10 @@ impl DesynchronizedRenderResources {
                         .iter_mut()
                         .zip(feature_render_buffer_managers.iter_mut())
                     {
-                        render_buffer_manager
-                            .copy_instance_features_to_render_buffer(core_system, feature_buffer);
+                        render_buffer_manager.copy_instance_features_to_render_buffer(
+                            graphics_device,
+                            feature_buffer,
+                        );
                         feature_buffer.clear();
                     }
                 }
@@ -323,7 +330,7 @@ impl DesynchronizedRenderResources {
                         .iter_mut()
                         .map(|feature_buffer| {
                             let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
-                                core_system,
+                                graphics_device,
                                 feature_buffer,
                                 Cow::Owned(model_id.to_string()),
                             );

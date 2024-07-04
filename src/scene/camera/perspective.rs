@@ -3,7 +3,7 @@
 use crate::{
     geometry::{PerspectiveCamera, UpperExclusiveBounds},
     physics::ReferenceFrameComp,
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{
         PerspectiveCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
         SceneGraphCameraNodeComp, SceneGraphParentNodeComp,

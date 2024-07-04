@@ -2,7 +2,7 @@
 
 use crate::{
     impl_InstanceFeature,
-    rendering::{fre, InstanceFeatureShaderInput, ModelViewTransformShaderInput},
+    gpu::rendering::{fre, InstanceFeatureShaderInput, ModelViewTransformShaderInput},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
@@ -900,7 +900,7 @@ macro_rules! impl_InstanceFeature {
                 impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
 
             const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-                $crate::rendering::create_vertex_buffer_layout_for_instance::<Self>(
+                $crate::gpu::rendering::create_vertex_buffer_layout_for_instance::<Self>(
                     &$vertex_attr_array,
                 );
 

@@ -9,7 +9,7 @@ pub use components::{register_camera_components, OrthographicCameraComp, Perspec
 use crate::{
     geometry::Camera,
     num::Float,
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{CameraNodeID, RenderResourcesDesynchronized, SceneGraph, SceneGraphCameraNodeComp},
 };
 use impact_ecs::world::EntityEntry;

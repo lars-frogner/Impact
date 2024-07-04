@@ -1,8 +1,11 @@
 //! Management of rendering assets.
 
-use crate::rendering::{
-    create_specular_ggx_reflectance_lookup_tables, texture::MipmapGenerator, CoreRenderingSystem,
-    TexelType, Texture, TextureConfig, TextureLookupTable,
+use crate::gpu::{
+    rendering::{
+        create_specular_ggx_reflectance_lookup_tables, texture::MipmapGenerator, TexelType,
+        Texture, TextureConfig, TextureLookupTable,
+    },
+    GraphicsDevice,
 };
 use anyhow::Result;
 use impact_utils::{hash32, stringhash32_newtype};
@@ -40,11 +43,17 @@ impl Assets {
         *SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_ID
     }
 
-    pub fn new(core_system: &CoreRenderingSystem) -> Self {
+    pub fn new(graphics_device: &GraphicsDevice) -> Self {
         Self {
             textures: HashMap::new(),
-            mipmap_generator: MipmapGenerator::new(core_system.device()),
+            mipmap_generator: MipmapGenerator::new(graphics_device.device()),
         }
+    }
+
+    pub fn new_with_default_lookup_tables(graphics_device: &GraphicsDevice) -> Result<Self> {
+        let mut assets = Self::new(graphics_device);
+        assets.load_default_lookup_table_textures(graphics_device)?;
+        Ok(assets)
     }
 
     /// Loads the image file at the given path as a [`Texture`], unless it
@@ -57,14 +66,14 @@ impl Assets {
     /// See [`Texture::from_path`].
     pub fn load_texture_from_path(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         image_path: impl AsRef<Path>,
         config: TextureConfig,
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(image_path.as_ref().to_string_lossy()));
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
             entry.insert(Texture::from_path(
-                core_system,
+                graphics_device,
                 &self.mipmap_generator,
                 image_path,
                 config,
@@ -83,7 +92,7 @@ impl Assets {
     /// See [`Texture::from_cubemap_image_paths`].
     pub fn load_cubemap_texture_from_paths<P: AsRef<Path>>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         right_image_path: P,
         left_image_path: P,
         top_image_path: P,
@@ -104,7 +113,7 @@ impl Assets {
 
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
             entry.insert(Texture::from_cubemap_image_paths(
-                core_system,
+                graphics_device,
                 right_image_path,
                 left_image_path,
                 top_image_path,
@@ -126,10 +135,10 @@ impl Assets {
     /// Additionally, see [`Texture::from_lookup_table`].
     pub fn load_default_lookup_table_textures(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
     ) -> Result<()> {
         self.load_texture_from_stored_or_computed_lookup_table(
-            core_system,
+            graphics_device,
             Self::SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_PATH,
             || create_specular_ggx_reflectance_lookup_tables(1024, 512),
         )?;
@@ -148,7 +157,7 @@ impl Assets {
     /// See [`Texture::from_lookup_table`].
     pub fn load_texture_from_generated_lookup_table<T: TexelType>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         generate_table: impl Fn() -> Result<TextureLookupTable<T>>,
         label: impl AsRef<str>,
     ) -> Result<TextureID> {
@@ -156,7 +165,7 @@ impl Assets {
         let texture_id = TextureID(hash32!(label));
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
             entry.insert(Texture::from_lookup_table(
-                core_system,
+                graphics_device,
                 &generate_table()?,
                 label,
             )?);
@@ -177,7 +186,7 @@ impl Assets {
     /// Additionally, see [`Texture::from_lookup_table`].
     pub fn load_texture_from_stored_or_computed_lookup_table<T>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         table_file_path: impl AsRef<Path>,
         compute_table: impl Fn() -> TextureLookupTable<T>,
     ) -> Result<TextureID>
@@ -187,7 +196,7 @@ impl Assets {
         let table_file_path = table_file_path.as_ref();
 
         self.load_texture_from_generated_lookup_table(
-            core_system,
+            graphics_device,
             || {
                 TextureLookupTable::<T>::read_from_file(table_file_path).or_else(|_| {
                     let table = compute_table();

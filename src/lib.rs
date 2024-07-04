@@ -88,6 +88,7 @@ pub mod components;
 pub mod control;
 pub mod game_loop;
 pub mod geometry;
+pub mod gpu;
 mod num;
 pub mod physics;
 pub mod rendering;

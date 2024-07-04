@@ -3,7 +3,7 @@
 use super::{DesynchronizedRenderResources, RenderResourceManager};
 use crate::{
     define_task,
-    rendering::RenderingTag,
+    gpu::rendering::RenderingTag,
     scene::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
@@ -65,7 +65,7 @@ define_task!(
                 if let Some(scene_camera) = world.scene().read().unwrap()
                                                  .scene_camera().read().unwrap().as_ref() {
                     DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
-                        renderer.core_system(),
+                        renderer.graphics_device(),
                         render_resource_manager
                             .desynchronized()
                             .camera_buffer_manager
@@ -91,7 +91,7 @@ define_task!(
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_mesh_buffers_with_meshes(
-                    renderer.core_system(),
+                    renderer.graphics_device(),
                     render_resource_manager
                         .desynchronized()
                         .mesh_buffer_managers
@@ -125,7 +125,7 @@ define_task!(
                 let scene = world.scene().read().unwrap();
                 let light_storage = scene.light_storage().read().unwrap();
                 DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
-                    renderer.core_system(),
+                    renderer.graphics_device(),
                     render_resource_manager
                         .desynchronized()
                         .light_buffer_manager
@@ -155,7 +155,7 @@ define_task!(
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
-                    renderer.core_system(),
+                    renderer.graphics_device(),
                     render_resource_manager
                         .desynchronized()
                         .instance_feature_buffer_managers

@@ -3,12 +3,15 @@
 use crate::{
     assert_uniform_valid,
     geometry::{CollectionChange, UniformBuffer},
-    rendering::{
-        buffer::{self, UniformBufferable},
-        texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
-        uniform::{MultiUniformRenderBuffer, UniformTransferResult},
-        AmbientLightShaderInput, CascadeIdx, CoreRenderingSystem, LightShaderInput,
-        OmnidirectionalLightShaderInput, RenderingConfig, UnidirectionalLightShaderInput,
+    gpu::{
+        rendering::{
+            buffer::{self, UniformBufferable},
+            texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
+            uniform::{MultiUniformRenderBuffer, UniformTransferResult},
+            AmbientLightShaderInput, CascadeIdx, LightShaderInput, OmnidirectionalLightShaderInput,
+            RenderingConfig, UnidirectionalLightShaderInput,
+        },
+        GraphicsDevice,
     },
     scene::{
         AmbientLight, LightID, LightStorage, LightType, OmnidirectionalLight, UnidirectionalLight,
@@ -66,50 +69,50 @@ impl LightRenderBufferManager {
     /// Creates a new manager with render buffers initialized from the given
     /// [`LightStorage`].
     pub fn for_light_storage(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         light_storage: &LightStorage,
         config: &RenderingConfig,
     ) -> Self {
         let ambient_light_render_buffer = UniformRenderBufferWithLightIDs::for_uniform_buffer(
-            core_system,
+            graphics_device,
             light_storage.ambient_light_buffer(),
             Self::VISIBILITY,
         );
         let omnidirectional_light_render_buffer =
             UniformRenderBufferWithLightIDs::for_uniform_buffer(
-                core_system,
+                graphics_device,
                 light_storage.omnidirectional_light_buffer(),
                 Self::VISIBILITY,
             );
         let unidirectional_light_render_buffer =
             UniformRenderBufferWithLightIDs::for_uniform_buffer(
-                core_system,
+                graphics_device,
                 light_storage.unidirectional_light_buffer(),
                 Self::VISIBILITY,
             );
 
         let omnidirectional_light_shadow_map_texture = ShadowCubemapTexture::new(
-            core_system,
+            graphics_device,
             config.omnidirectional_light_shadow_map_resolution,
             "Omnidirectional light shadow cubemap texture",
         );
 
         let unidirectional_light_shadow_map_texture = CascadedShadowMapTexture::new(
-            core_system,
+            graphics_device,
             config.unidirectional_light_shadow_map_resolution,
             MAX_SHADOW_MAP_CASCADES,
             "Unidirectional light cascaded shadow map texture",
         );
 
         let light_bind_group_layout = Self::create_light_bind_group_layout(
-            core_system.device(),
+            graphics_device.device(),
             &ambient_light_render_buffer,
             &omnidirectional_light_render_buffer,
             &unidirectional_light_render_buffer,
         );
 
         let light_bind_group = Self::create_light_bind_group(
-            core_system.device(),
+            graphics_device.device(),
             &ambient_light_render_buffer,
             &omnidirectional_light_render_buffer,
             &unidirectional_light_render_buffer,
@@ -117,21 +120,25 @@ impl LightRenderBufferManager {
         );
 
         let omnidirectional_light_shadow_map_bind_group_layout =
-            Self::create_omnidirectional_light_shadow_map_bind_group_layout(core_system.device());
+            Self::create_omnidirectional_light_shadow_map_bind_group_layout(
+                graphics_device.device(),
+            );
 
         let omnidirectional_light_shadow_map_bind_group =
             Self::create_omnidirectional_light_shadow_map_bind_group(
-                core_system.device(),
+                graphics_device.device(),
                 &omnidirectional_light_shadow_map_texture,
                 &omnidirectional_light_shadow_map_bind_group_layout,
             );
 
         let unidirectional_light_shadow_map_bind_group_layout =
-            Self::create_unidirectional_light_shadow_map_bind_group_layout(core_system.device());
+            Self::create_unidirectional_light_shadow_map_bind_group_layout(
+                graphics_device.device(),
+            );
 
         let unidirectional_light_shadow_map_bind_group =
             Self::create_unidirectional_light_shadow_map_bind_group(
-                core_system.device(),
+                graphics_device.device(),
                 &unidirectional_light_shadow_map_texture,
                 &unidirectional_light_shadow_map_bind_group_layout,
             );
@@ -271,24 +278,27 @@ impl LightRenderBufferManager {
     /// the shader input if any of the render buffers had to be reallocated.
     pub fn sync_with_light_storage(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         light_storage: &LightStorage,
     ) {
         let ambient_light_transfer_result = self
             .ambient_light_render_buffer
-            .transfer_uniforms_to_render_buffer(core_system, light_storage.ambient_light_buffer());
+            .transfer_uniforms_to_render_buffer(
+                graphics_device,
+                light_storage.ambient_light_buffer(),
+            );
 
         let omnidirectional_light_transfer_result = self
             .omnidirectional_light_render_buffer
             .transfer_uniforms_to_render_buffer(
-                core_system,
+                graphics_device,
                 light_storage.omnidirectional_light_buffer(),
             );
 
         let unidirectional_light_transfer_result = self
             .unidirectional_light_render_buffer
             .transfer_uniforms_to_render_buffer(
-                core_system,
+                graphics_device,
                 light_storage.unidirectional_light_buffer(),
             );
 
@@ -298,7 +308,7 @@ impl LightRenderBufferManager {
         {
             // Recreate light bind group and shader input
             self.light_bind_group = Self::create_light_bind_group(
-                core_system.device(),
+                graphics_device.device(),
                 &self.ambient_light_render_buffer,
                 &self.omnidirectional_light_render_buffer,
                 &self.unidirectional_light_render_buffer,
@@ -501,7 +511,7 @@ impl UniformRenderBufferWithLightIDs {
     /// Creates a new uniform render buffer together with a list of light IDs
     /// initialized from the given uniform buffer.
     fn for_uniform_buffer<U>(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<LightID, U>,
         visibility: wgpu::ShaderStages,
     ) -> Self
@@ -510,7 +520,7 @@ impl UniformRenderBufferWithLightIDs {
     {
         Self {
             uniform_render_buffer: MultiUniformRenderBuffer::for_uniform_buffer(
-                core_system,
+                graphics_device,
                 uniform_buffer,
                 visibility,
             ),
@@ -532,7 +542,7 @@ impl UniformRenderBufferWithLightIDs {
 
     fn transfer_uniforms_to_render_buffer<U>(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<LightID, U>,
     ) -> UniformTransferResult
     where
@@ -550,7 +560,7 @@ impl UniformRenderBufferWithLightIDs {
         }
 
         self.uniform_render_buffer
-            .transfer_uniforms_to_render_buffer(core_system, uniform_buffer)
+            .transfer_uniforms_to_render_buffer(graphics_device, uniform_buffer)
     }
 }
 

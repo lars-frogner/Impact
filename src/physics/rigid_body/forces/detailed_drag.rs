@@ -12,7 +12,7 @@ use crate::{
         fph, Direction, Position, ReferenceFrameComp, RigidBodyComp, Static, UniformMedium,
         VelocityComp,
     },
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{MeshComp, MeshID, MeshRepository},
 };
 use anyhow::{anyhow, bail, Result};

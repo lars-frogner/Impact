@@ -10,7 +10,7 @@ pub use components::{
 use crate::{
     geometry::{PlanarTextureProjection, TextureProjection, TriangleMesh, VertexAttributeSet},
     num::Float,
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{
         MaterialComp, MaterialLibrary, PlanarTextureProjectionComp, RenderResourcesDesynchronized,
     },

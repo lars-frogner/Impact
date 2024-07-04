@@ -3,12 +3,16 @@
 use crate::{
     assert_uniform_valid,
     geometry::VertexAttributeSet,
-    num::Float,
-    rendering::{
-        create_uniform_buffer_bind_group_layout_entry, fre, AmbientOcclusionCalculationShaderInput,
-        AmbientOcclusionShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
-        RenderPassHints, SingleUniformRenderBuffer, UniformBufferable,
+    gpu::{
+        rendering::{
+            create_uniform_buffer_bind_group_layout_entry, fre,
+            AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
+            MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
+            SingleUniformRenderBuffer, UniformBufferable,
+        },
+        GraphicsDevice,
     },
+    num::Float,
     scene::{MaterialSpecificResourceGroup, MaterialSpecification},
 };
 use bytemuck::{Pod, Zeroable};
@@ -48,20 +52,20 @@ struct AmbientOcclusionSamples {
 ///   [`MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT`].
 /// - If the sample radius does not exceed zero.
 pub fn create_ambient_occlusion_computation_material(
-    device: &wgpu::Device,
+    graphics_device: &GraphicsDevice,
     sample_count: u32,
     sample_radius: fre,
 ) -> MaterialSpecification {
     let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
 
     let sample_uniform_buffer = SingleUniformRenderBuffer::for_uniform(
-        device,
+        graphics_device,
         &sample_uniform,
         wgpu::ShaderStages::FRAGMENT,
         Cow::Borrowed("Ambient occlusion samples"),
     );
     let material_specific_resources = MaterialSpecificResourceGroup::new(
-        device,
+        graphics_device,
         vec![sample_uniform_buffer],
         &[],
         "Ambient occlusion samples",

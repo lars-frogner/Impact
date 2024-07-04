@@ -5,7 +5,10 @@ use crate::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,
     },
-    rendering::{buffer::RenderBuffer, CoreRenderingSystem, InstanceFeatureShaderInput},
+    gpu::{
+        rendering::{buffer::RenderBuffer, InstanceFeatureShaderInput},
+        GraphicsDevice,
+    },
 };
 use std::{borrow::Cow, ops::Range};
 
@@ -25,7 +28,7 @@ impl InstanceFeatureRenderBufferManager {
     /// Creates a new manager with a vertex render buffer initialized
     /// from the given model instance feature buffer.
     pub fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         feature_buffer: &DynamicInstanceFeatureBuffer,
         label: Cow<'static, str>,
     ) -> Self {
@@ -37,7 +40,7 @@ impl InstanceFeatureRenderBufferManager {
         );
 
         let feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
-            core_system,
+            graphics_device,
             raw_buffer,
             feature_buffer.n_valid_bytes(),
             label,
@@ -102,7 +105,7 @@ impl InstanceFeatureRenderBufferManager {
     /// render buffer.
     pub fn copy_instance_features_to_render_buffer(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         feature_buffer: &DynamicInstanceFeatureBuffer,
     ) {
         assert_eq!(feature_buffer.feature_type_id(), self.feature_type_id);
@@ -115,14 +118,14 @@ impl InstanceFeatureRenderBufferManager {
             // we create a new one that is large enough for all the features (also the ones
             // not currently valid)
             self.feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
-                core_system,
+                graphics_device,
                 bytemuck::cast_slice(feature_buffer.raw_buffer()),
                 n_valid_bytes,
                 self.feature_render_buffer.label().clone(),
             );
         } else {
             self.feature_render_buffer
-                .update_valid_bytes(core_system, valid_bytes);
+                .update_valid_bytes(graphics_device, valid_bytes);
         }
 
         self.n_features = u32::try_from(feature_buffer.n_valid_features()).unwrap();

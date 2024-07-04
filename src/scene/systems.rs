@@ -3,7 +3,7 @@
 use crate::{
     define_task,
     physics::ReferenceFrameComp,
-    rendering::RenderingTag,
+    gpu::rendering::RenderingTag,
     scene::{
         AmbientEmissionComp, AmbientLightComp, CameraNodeID, GroupNodeID, ModelInstanceNodeID,
         OmnidirectionalEmissionComp, OmnidirectionalLightComp, SceneGraphNodeComp,

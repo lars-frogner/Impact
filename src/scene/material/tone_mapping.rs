@@ -2,7 +2,7 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    rendering::{
+    gpu::rendering::{
         MaterialShaderInput, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
         RenderPassHints, ToneMappingShaderInput,
     },

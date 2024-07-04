@@ -5,7 +5,7 @@ use crate::{
         fph, InertialProperties, PhysicsSimulator, ReferenceFrameComp, RigidBody, RigidBodyComp,
         UniformRigidBodyComp, VelocityComp,
     },
-    rendering::fre,
+    gpu::rendering::fre,
     scene::{
         BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp, MeshRepository,
         SphereMeshComp,

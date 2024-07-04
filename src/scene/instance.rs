@@ -431,7 +431,7 @@ mod test {
     use super::*;
     use crate::{
         impl_InstanceFeature,
-        rendering::InstanceFeatureShaderInput,
+        gpu::rendering::InstanceFeatureShaderInput,
         scene::{MaterialHandle, MaterialID, MeshID},
     };
     use bytemuck::{Pod, Zeroable};

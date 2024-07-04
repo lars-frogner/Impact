@@ -1,6 +1,6 @@
 //! Management of postprocessing data for rendering.
 
-use crate::rendering::fre;
+use crate::gpu::rendering::fre;
 use std::mem;
 
 /// Manager of render resources for postprocessing effects.

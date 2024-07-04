@@ -2,8 +2,11 @@
 
 use crate::{
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
+    gpu::{
+        rendering::{fre, Assets},
+        GraphicsDevice,
+    },
     physics::ReferenceFrameComp,
-    rendering::{fre, Assets, CoreRenderingSystem},
     scene::{
         self, add_blinn_phong_material_component_for_entity,
         add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
@@ -22,7 +25,7 @@ use impact_ecs::{
     world::{EntityEntry, World as ECSWorld},
 };
 use num_traits::FromPrimitive;
-use std::sync::RwLock;
+use std::{num::NonZeroU32, sync::RwLock};
 
 /// Indicates whether an event caused the render resources to go out of sync
 /// with its source scene data.
@@ -50,14 +53,14 @@ impl Scene {
     /// [`add_entity_to_scene_graph`](Self::add_entity_to_scene_graph)).
     pub fn handle_entity_created(
         &self,
-        core_system: &CoreRenderingSystem,
-        assets: &RwLock<Assets>,
+        graphics_device: &GraphicsDevice,
+        assets: &Assets,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
         self.add_mesh_component_for_entity(components, desynchronized)?;
         self.add_light_component_for_entity(components, desynchronized);
-        self.add_material_component_for_entity(core_system, assets, components, desynchronized);
+        self.add_material_component_for_entity(graphics_device, assets, components, desynchronized);
 
         self.add_voxel_tree_component_for_entity(components);
 
@@ -98,18 +101,21 @@ impl Scene {
 
     pub fn handle_window_resized(
         &self,
-        old_size: (u32, u32),
-        new_size: (u32, u32),
+        _old_width: NonZeroU32,
+        old_height: NonZeroU32,
+        new_width: NonZeroU32,
+        new_height: NonZeroU32,
     ) -> RenderResourcesDesynchronized {
         if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
-            scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_size.0, new_size.1));
+            scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_width, new_height));
         }
 
         self.voxel_manager()
             .write()
             .unwrap()
             .scale_min_angular_voxel_extent_for_lod(
-                fre::from_u32(old_size.1).unwrap() / fre::from_u32(new_size.1).unwrap(),
+                fre::from_u32(old_height.into()).unwrap()
+                    / fre::from_u32(new_height.into()).unwrap(),
             );
 
         RenderResourcesDesynchronized::Yes
@@ -175,8 +181,8 @@ impl Scene {
 
     fn add_material_component_for_entity(
         &self,
-        core_system: &CoreRenderingSystem,
-        assets: &RwLock<Assets>,
+        graphics_device: &GraphicsDevice,
+        assets: &Assets,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
@@ -189,7 +195,7 @@ impl Scene {
         );
 
         FixedTextureMaterial::add_material_component_for_entity(
-            core_system,
+            graphics_device,
             assets,
             self.material_library(),
             components,
@@ -197,7 +203,7 @@ impl Scene {
         );
 
         add_blinn_phong_material_component_for_entity(
-            core_system,
+            graphics_device,
             assets,
             self.material_library(),
             self.instance_feature_manager(),
@@ -206,7 +212,7 @@ impl Scene {
         );
 
         add_microfacet_material_component_for_entity(
-            core_system,
+            graphics_device,
             assets,
             self.material_library(),
             self.instance_feature_manager(),
@@ -215,7 +221,7 @@ impl Scene {
         );
 
         add_skybox_material_component_for_entity(
-            core_system,
+            graphics_device,
             assets,
             self.material_library(),
             components,

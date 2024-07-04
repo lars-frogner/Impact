@@ -2,10 +2,11 @@
 
 use crate::assert_uniform_valid;
 use crate::geometry::Camera;
-use crate::rendering::{
+use crate::gpu::rendering::{
     buffer::{self, RenderBuffer, UniformBufferable},
-    fre, CameraShaderInput, CoreRenderingSystem,
+    fre, CameraShaderInput,
 };
+use crate::gpu::GraphicsDevice;
 use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
 use std::borrow::Cow;
@@ -28,11 +29,11 @@ impl CameraRenderBufferManager {
     /// Creates a new manager with a render buffer initialized from the
     /// projection transform of the given camera.
     pub fn for_camera(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         camera: &(impl Camera<fre> + ?Sized),
     ) -> Self {
         Self::new(
-            core_system,
+            graphics_device,
             *camera.projection_transform(),
             Cow::Borrowed("Camera"),
         )
@@ -64,11 +65,11 @@ impl CameraRenderBufferManager {
     /// of the given camera.
     pub fn sync_with_camera(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         camera: &(impl Camera<fre> + ?Sized),
     ) {
         if camera.projection_transform_changed() {
-            self.sync_render_buffer(core_system, camera.projection_transform());
+            self.sync_render_buffer(graphics_device, camera.projection_transform());
             camera.reset_projection_change_tracking();
         }
     }
@@ -76,21 +77,21 @@ impl CameraRenderBufferManager {
     /// Creates a new manager with a render buffer initialized
     /// from the given projection transform.
     fn new(
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         projection_transform: Projective3<fre>,
         label: Cow<'static, str>,
     ) -> Self {
         let transform_render_buffer = RenderBuffer::new_buffer_for_single_uniform(
-            core_system.device(),
+            graphics_device,
             &projection_transform,
             label.clone(),
         );
 
         let bind_group_layout =
-            Self::create_bind_group_layout(core_system.device(), Self::VISIBILITY, &label);
+            Self::create_bind_group_layout(graphics_device.device(), Self::VISIBILITY, &label);
 
         let bind_group = Self::create_bind_group(
-            core_system.device(),
+            graphics_device.device(),
             &transform_render_buffer,
             &bind_group_layout,
             &label,
@@ -144,11 +145,11 @@ impl CameraRenderBufferManager {
 
     fn sync_render_buffer(
         &mut self,
-        core_system: &CoreRenderingSystem,
+        graphics_device: &GraphicsDevice,
         projection_transform: &Projective3<fre>,
     ) {
         self.transform_render_buffer
-            .update_all_bytes(core_system, bytemuck::bytes_of(projection_transform));
+            .update_all_bytes(graphics_device, bytemuck::bytes_of(projection_transform));
     }
 }
 

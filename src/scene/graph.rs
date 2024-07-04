@@ -14,7 +14,7 @@ use crate::{
         InstanceModelViewTransform, OrthographicTransform, Sphere,
     },
     num::Float,
-    rendering::{fre, CascadeIdx},
+    gpu::rendering::{fre, CascadeIdx},
     scene::{
         InstanceFeatureManager, LightStorage, ModelID, OmnidirectionalLight, SceneCamera,
         UnidirectionalLight, VoxelManager, VoxelTreeID, MAX_SHADOW_MAP_CASCADES,

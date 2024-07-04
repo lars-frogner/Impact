@@ -2,7 +2,7 @@
 
 use super::{
     geometry::{Degrees, UpperExclusiveBounds},
-    rendering::{CoreRenderingSystem, RenderingSystem},
+    gpu::rendering::RenderingSystem,
 };
 use crate::{
     control::{
@@ -11,6 +11,10 @@ use crate::{
     },
     game_loop::{GameLoop, GameLoopConfig},
     geometry::{FrontFaceSide, VoxelTreeLODController, VoxelType},
+    gpu::{
+        self,
+        rendering::{fre, Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
+    },
     num::Float,
     physics::{
         fph, Acceleration, AngularVelocity, CircularTrajectoryComp,
@@ -19,7 +23,7 @@ use crate::{
         Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
-    rendering::{fre, Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
+    rendering::RenderingConfig,
     scene::{
         AlbedoComp, AlbedoTextureComp, AmbientEmissionComp, BoxMeshComp, ConeMeshComp,
         CylinderMeshComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
@@ -35,7 +39,7 @@ use crate::{
 use anyhow::Result;
 use nalgebra::{point, vector, Point3, UnitVector3, Vector3};
 use rand::{rngs::ThreadRng, Rng, SeedableRng};
-use std::f64::consts::PI;
+use std::{f64::consts::PI, sync::Arc};
 
 pub fn run() -> Result<()> {
     init_logging()?;
@@ -55,12 +59,12 @@ fn init_game_loop(window: Window) -> Result<GameLoop> {
 }
 
 fn init_world(window: Window) -> Result<World> {
-    let core_system = CoreRenderingSystem::new(&window)?;
+    let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
 
-    let mut assets = Assets::new(&core_system);
+    let mut assets = Assets::new_with_default_lookup_tables(&graphics_device)?;
 
     let skybox_texture_id = assets.load_cubemap_texture_from_paths(
-        &core_system,
+        &graphics_device,
         "assets/skybox/right.jpg",
         "assets/skybox/left.jpg",
         "assets/skybox/top.jpg",
@@ -74,7 +78,7 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let bricks_color_texture_id = assets.load_texture_from_path(
-        &core_system,
+        &graphics_device,
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
@@ -84,7 +88,7 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let bricks_roughness_texture_id = assets.load_texture_from_path(
-        &core_system,
+        &graphics_device,
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -94,7 +98,7 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let bricks_height_texture_id = assets.load_texture_from_path(
-        &core_system,
+        &graphics_device,
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -104,7 +108,7 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let wood_floor_color_texture_id = assets.load_texture_from_path(
-        &core_system,
+        &graphics_device,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
@@ -114,7 +118,7 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let wood_floor_roughness_texture_id = assets.load_texture_from_path(
-        &core_system,
+        &graphics_device,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -124,7 +128,7 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let wood_floor_normal_texture_id = assets.load_texture_from_path(
-        &core_system,
+        &graphics_device,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -134,7 +138,11 @@ fn init_world(window: Window) -> Result<World> {
     )?;
 
     let vertical_field_of_view = Degrees(70.0);
-    let renderer = RenderingSystem::new(core_system, assets)?;
+    let renderer = RenderingSystem::new(
+        RenderingConfig::default(),
+        Arc::clone(&graphics_device),
+        rendering_surface,
+    )?;
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
 
@@ -152,13 +160,16 @@ fn init_world(window: Window) -> Result<World> {
                 ),
             ..SceneConfig::default()
         },
-        &renderer,
+        &graphics_device,
+        &assets,
     );
 
     let world = World::new(
-        window,
-        scene,
+        Arc::new(window),
+        graphics_device,
         renderer,
+        assets,
+        scene,
         simulator,
         Some(Box::new(motion_controller)),
         Some(Box::new(orientation_controller)),
