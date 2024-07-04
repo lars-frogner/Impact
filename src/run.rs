@@ -142,15 +142,18 @@ fn init_world(window: Window) -> Result<World> {
     let orientation_controller =
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
-    let scene = Scene::new(SceneConfig {
-        initial_min_angular_voxel_extent_for_lod:
-            VoxelTreeLODController::compute_min_angular_voxel_extent(
-                window.dimensions().1,
-                vertical_field_of_view,
-                3.0,
-            ),
-        ..SceneConfig::default()
-    });
+    let scene = Scene::new(
+        SceneConfig {
+            initial_min_angular_voxel_extent_for_lod:
+                VoxelTreeLODController::compute_min_angular_voxel_extent(
+                    window.dimensions().1,
+                    vertical_field_of_view,
+                    3.0,
+                ),
+            ..SceneConfig::default()
+        },
+        &renderer,
+    );
 
     let world = World::new(
         window,

@@ -20,6 +20,7 @@ pub struct CameraRenderBufferManager {
 
 impl CameraRenderBufferManager {
     const BINDING: u32 = 0;
+    const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
     const SHADER_INPUT: CameraShaderInput = CameraShaderInput {
         projection_matrix_binding: Self::BINDING,
     };
@@ -80,12 +81,13 @@ impl CameraRenderBufferManager {
         label: Cow<'static, str>,
     ) -> Self {
         let transform_render_buffer = RenderBuffer::new_buffer_for_single_uniform(
-            core_system,
+            core_system.device(),
             &projection_transform,
             label.clone(),
         );
 
-        let bind_group_layout = Self::create_bind_group_layout(core_system.device(), &label);
+        let bind_group_layout =
+            Self::create_bind_group_layout(core_system.device(), Self::VISIBILITY, &label);
 
         let bind_group = Self::create_bind_group(
             core_system.device(),
@@ -101,15 +103,25 @@ impl CameraRenderBufferManager {
         }
     }
 
-    /// Creates the bind group layout entry for the camera transform
-    /// uniform, assigned to the given binding.
-    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        Projective3::create_bind_group_layout_entry(binding)
+    /// Creates the bind group layout entry for the camera transform uniform,
+    /// assigned to the given binding and with the given visibility.
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        Projective3::create_bind_group_layout_entry(binding, visibility)
     }
 
-    fn create_bind_group_layout(device: &wgpu::Device, label: &str) -> wgpu::BindGroupLayout {
+    fn create_bind_group_layout(
+        device: &wgpu::Device,
+        visibility: wgpu::ShaderStages,
+        label: &str,
+    ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[Self::create_bind_group_layout_entry(Self::BINDING)],
+            entries: &[Self::create_bind_group_layout_entry(
+                Self::BINDING,
+                visibility,
+            )],
             label: Some(&format!("{} bind group layout", label)),
         })
     }
@@ -143,11 +155,11 @@ impl CameraRenderBufferManager {
 impl UniformBufferable for Projective3<fre> {
     const ID: ConstStringHash64 = ConstStringHash64::new("Camera projection");
 
-    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_uniform_buffer_bind_group_layout_entry(
-            binding,
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-        )
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        buffer::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(Projective3<fre>);

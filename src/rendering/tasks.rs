@@ -1,7 +1,7 @@
 //! Tasks for rendering.
 
 use crate::{
-    rendering::{RenderPassManager, RenderResourceManager, RenderingSystem, SyncRenderPasses},
+    rendering::{RenderCommandManager, RenderResourceManager, RenderingSystem, SyncRenderCommands},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
@@ -21,12 +21,14 @@ define_task!(
     /// [`RenderingSystem::render`](crate::rendering::RenderingSystem::render)
     /// method.
     [pub] Render,
-    depends_on = [SyncRenderPasses],
+    depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
     |world: &World| {
         with_debug_logging!("Rendering"; {
             world.capture_screenshots()?;
-            world.renderer().read().unwrap().render()
+            let scene = world.scene().read().unwrap();
+            let material_library = scene.material_library().read().unwrap();
+            world.renderer().read().unwrap().render(&material_library)
         })
     }
 );
@@ -36,7 +38,7 @@ impl RenderingSystem {
     /// task scheduler.
     pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         RenderResourceManager::register_tasks(task_scheduler)?;
-        RenderPassManager::register_tasks(task_scheduler)?;
+        RenderCommandManager::register_tasks(task_scheduler)?;
         task_scheduler.register_task(Render)
     }
 

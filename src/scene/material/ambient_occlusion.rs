@@ -7,9 +7,9 @@ use crate::{
     rendering::{
         create_uniform_buffer_bind_group_layout_entry, fre, AmbientOcclusionCalculationShaderInput,
         AmbientOcclusionShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
-        RenderPassHints, UniformBufferable,
+        RenderPassHints, SingleUniformRenderBuffer, UniformBufferable,
     },
-    scene::{FixedMaterialResources, MaterialSpecification},
+    scene::{MaterialSpecificResourceGroup, MaterialSpecification},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;
@@ -18,6 +18,7 @@ use rand::{
     self,
     distributions::{Distribution, Uniform},
 };
+use std::borrow::Cow;
 
 /// The maximum number of samples that can be used for computing ambient
 /// occlusion.
@@ -47,24 +48,40 @@ struct AmbientOcclusionSamples {
 ///   [`MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT`].
 /// - If the sample radius does not exceed zero.
 pub fn create_ambient_occlusion_computation_material(
+    device: &wgpu::Device,
     sample_count: u32,
     sample_radius: fre,
 ) -> MaterialSpecification {
     let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
+
+    let sample_uniform_buffer = SingleUniformRenderBuffer::for_uniform(
+        device,
+        &sample_uniform,
+        wgpu::ShaderStages::FRAGMENT,
+        Cow::Borrowed("Ambient occlusion samples"),
+    );
+    let material_specific_resources = MaterialSpecificResourceGroup::new(
+        device,
+        vec![sample_uniform_buffer],
+        &[],
+        "Ambient occlusion samples",
+    );
+
+    let shader_input = MaterialShaderInput::AmbientOcclusion(
+        AmbientOcclusionShaderInput::Calculation(AmbientOcclusionCalculationShaderInput {
+            sample_uniform_binding: 0,
+        }),
+    );
 
     MaterialSpecification::new(
         VertexAttributeSet::POSITION,
         VertexAttributeSet::empty(),
         RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
         RenderAttachmentQuantitySet::OCCLUSION,
-        Some(FixedMaterialResources::new(&sample_uniform)),
+        Some(material_specific_resources),
         Vec::new(),
         RenderPassHints::NO_DEPTH_PREPASS,
-        MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Calculation(
-            AmbientOcclusionCalculationShaderInput {
-                sample_uniform_binding: FixedMaterialResources::UNIFORM_BINDING,
-            },
-        )),
+        shader_input,
     )
 }
 
@@ -127,8 +144,11 @@ impl AmbientOcclusionSamples {
 impl UniformBufferable for AmbientOcclusionSamples {
     const ID: ConstStringHash64 = ConstStringHash64::new("Ambient occlusion samples");
 
-    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        create_uniform_buffer_bind_group_layout_entry(binding, wgpu::ShaderStages::FRAGMENT)
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(AmbientOcclusionSamples);

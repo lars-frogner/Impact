@@ -40,9 +40,9 @@ pub use material::{
     create_ambient_occlusion_computation_material, create_gaussian_blur_material,
     create_tone_mapping_material, register_material_components, AlbedoComp, AlbedoTextureComp,
     EmissiveLuminanceComp, EmissiveLuminanceTextureComp, FixedColorComp, FixedColorMaterial,
-    FixedMaterialResources, FixedTextureComp, FixedTextureMaterial, GaussianBlurDirection,
-    GaussianBlurSamples, MaterialComp, MaterialHandle, MaterialID, MaterialLibrary,
-    MaterialPropertyTextureSet, MaterialPropertyTextureSetID, MaterialSpecification,
+    FixedTextureComp, FixedTextureMaterial, GaussianBlurDirection, GaussianBlurSamples,
+    MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+    MaterialPropertyTextureGroupID, MaterialSpecificResourceGroup, MaterialSpecification,
     MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
     ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
     SpecularReflectanceComp, SpecularReflectanceTextureComp, TexturedEmissiveMaterialFeature,
@@ -74,7 +74,10 @@ pub use voxel::{
     VoxelTreeID, VoxelTreeNodeComp, VoxelTypeComp,
 };
 
-use crate::{geometry::Radians, rendering::fre};
+use crate::{
+    geometry::Radians,
+    rendering::{fre, RenderingSystem},
+};
 use std::sync::RwLock;
 
 /// Container for data needed to render a scene.
@@ -105,7 +108,7 @@ pub struct SceneConfig {
 
 impl Scene {
     /// Creates a new scene data container.
-    pub fn new(config: SceneConfig) -> Self {
+    pub fn new(config: SceneConfig, renderer: &RenderingSystem) -> Self {
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
 
@@ -117,12 +120,15 @@ impl Scene {
         let voxel_manager = VoxelManager::create(
             config.voxel_extent,
             config.initial_min_angular_voxel_extent_for_lod,
+            renderer.core_system(),
+            renderer.assets(),
             &mut mesh_repository,
             &mut material_library,
             &mut instance_feature_manager,
         );
 
         let postprocessor = Postprocessor::new(
+            renderer.core_system().device(),
             &mut material_library,
             &config.ambient_occlusion,
             &config.bloom,
@@ -212,12 +218,6 @@ impl Scene {
     /// Cycle tone mapping.
     pub fn cycle_tone_mapping(&self) {
         self.postprocessor.write().unwrap().cycle_tone_mapping();
-    }
-}
-
-impl Default for Scene {
-    fn default() -> Self {
-        Self::new(SceneConfig::default())
     }
 }
 

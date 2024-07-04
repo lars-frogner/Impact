@@ -71,16 +71,20 @@ pub struct Shader {
 /// Names of the different shader entry point functions.
 #[derive(Clone, Debug)]
 pub struct EntryPointNames {
-    /// Name of the vertex entry point function.
-    pub vertex: Cow<'static, str>,
+    /// Name of the vertex entry point function, or [`None`] if there is no
+    /// vertex entry point.
+    pub vertex: Option<Cow<'static, str>>,
     /// Name of the fragment entry point function, or [`None`] if there is no
     /// fragment entry point.
     pub fragment: Option<Cow<'static, str>>,
+    /// Name of the compute entry point function, or [`None`] if there is no
+    /// compute entry point.
+    pub compute: Option<Cow<'static, str>>,
 }
 
 /// Generator for shader programs.
 #[derive(Clone, Debug)]
-pub struct ShaderGenerator;
+pub struct RenderShaderGenerator;
 
 /// Input description specifying the uniform binding of the
 /// projection matrix of the camera to use in the shader.
@@ -148,6 +152,10 @@ pub enum MaterialShaderInput {
     GaussianBlur(GaussianBlurShaderInput),
     ToneMapping(ToneMappingShaderInput),
 }
+
+/// Input description for any kind of compute shader.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ComputeShaderInput {}
 
 /// Input description specifying the vertex attribute locations of the
 /// components of the model view transform.
@@ -221,6 +229,10 @@ pub enum MaterialShaderGenerator<'a> {
     GaussianBlur(GaussianBlurShaderGenerator<'a>),
     ToneMapping(ToneMappingShaderGenerator<'a>),
 }
+
+/// Shader generator for any kind of GPU computation.
+#[derive(Clone, Debug)]
+pub struct ComputeShaderGenerator {}
 
 bitflags! {
     /// Bitflag encoding a set of "tricks" that can be made to achieve certain
@@ -724,30 +736,40 @@ impl Shader {
         }
     }
 
-    /// Returns a reference to the compiled shader module
-    /// containing the vertex stage entry point.
+    /// Returns a reference to the compiled shader module containing the vertex
+    /// stage entry point if it exists.
     pub fn vertex_module(&self) -> &wgpu::ShaderModule {
         &self.module
     }
 
-    /// Returns a reference to the compiled shader module
-    /// containing the fragment stage entry point.
+    /// Returns a reference to the compiled shader module containing the
+    /// fragment stage entry point if it exists.
     pub fn fragment_module(&self) -> &wgpu::ShaderModule {
         &self.module
     }
 
-    /// Returns the name of the vertex entry point function.
-    pub fn vertex_entry_point_name(&self) -> &str {
-        &self.entry_point_names.vertex
+    /// Returns a reference to the compiled shader module containing the compute
+    /// stage entry point if it exists.
+    pub fn compute_module(&self) -> &wgpu::ShaderModule {
+        &self.module
+    }
+
+    /// Returns the name of the vertex entry point function, or [`None`] if
+    /// there is no vertex entry point.
+    pub fn vertex_entry_point_name(&self) -> Option<&str> {
+        self.entry_point_names.vertex.as_deref()
     }
 
     /// Returns the name of the fragment entry point function, or [`None`] if
     /// there is no fragment entry point.
     pub fn fragment_entry_point_name(&self) -> Option<&str> {
-        self.entry_point_names
-            .fragment
-            .as_ref()
-            .map(|name| name.as_ref())
+        self.entry_point_names.fragment.as_deref()
+    }
+
+    /// Returns the name of the compute entry point function, or [`None`] if
+    /// there is no compute entry point.
+    pub fn compute_entry_point_name(&self) -> Option<&str> {
+        self.entry_point_names.compute.as_deref()
     }
 
     #[cfg(debug_assertions)]
@@ -783,7 +805,26 @@ impl std::fmt::Display for Shader {
     }
 }
 
-impl ShaderGenerator {
+impl ComputeShaderGenerator {
+    pub fn generate_shader_module(
+        shader_input: &ComputeShaderInput,
+    ) -> Result<(Module, EntryPointNames)> {
+        let mut module = Module::default();
+        let mut compute_function = Function::default();
+
+        todo!();
+
+        let entry_point_names = EntryPointNames {
+            vertex: None,
+            fragment: None,
+            compute: Some(Cow::Borrowed("mainCS")),
+        };
+
+        Ok((module, entry_point_names))
+    }
+}
+
+impl RenderShaderGenerator {
     /// Uses the given camera, mesh, light, model and material input
     /// descriptions to generate an appropriate shader [`Module`], containing a
     /// vertex and (optionally) a fragment entry point.
@@ -812,7 +853,10 @@ impl ShaderGenerator {
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
 
         let (model_view_transform_shader_input, material_shader_generator) =
-            Self::interpret_inputs(instance_feature_shader_inputs, material_shader_input)?;
+            Self::interpret_rendering_inputs(
+                instance_feature_shader_inputs,
+                material_shader_input,
+            )?;
 
         let mut module = Module::default();
         let mut vertex_function = Function::default();
@@ -958,8 +1002,9 @@ impl ShaderGenerator {
             );
 
             EntryPointNames {
-                vertex: Cow::Borrowed("mainVS"),
+                vertex: Some(Cow::Borrowed("mainVS")),
                 fragment: Some(Cow::Borrowed("mainFS")),
+                compute: None,
             }
         } else {
             vertex_output_struct_builder
@@ -989,13 +1034,14 @@ impl ShaderGenerator {
                 };
 
             EntryPointNames {
-                vertex: Cow::Borrowed("mainVS"),
+                vertex: Some(Cow::Borrowed("mainVS")),
                 fragment: fragment_entry_point_name,
+                compute: None,
             }
         };
 
         module.entry_points.push(EntryPoint {
-            name: entry_point_names.vertex.to_string(),
+            name: entry_point_names.vertex.as_deref().unwrap().to_string(),
             stage: ShaderStage::Vertex,
             early_depth_test: None,
             workgroup_size: [0, 0, 0],
@@ -1028,7 +1074,7 @@ impl ShaderGenerator {
     /// # Panics
     /// If `instance_feature_shader_inputs` contain multiple inputs of the same
     /// type.
-    fn interpret_inputs<'a>(
+    fn interpret_rendering_inputs<'a>(
         instance_feature_shader_inputs: &'a [&'a InstanceFeatureShaderInput],
         material_shader_input: Option<&'a MaterialShaderInput>,
     ) -> Result<(
@@ -5596,7 +5642,7 @@ fn append_unity_component_to_vec3(
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-// #[cfg(not(miri))]
+#[cfg(not(miri))]
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
@@ -5686,7 +5732,7 @@ mod test {
     #[test]
     #[should_panic]
     fn building_shader_with_no_inputs_fails() {
-        ShaderGenerator::generate_shader_module(
+        RenderShaderGenerator::generate_shader_module(
             None,
             None,
             None,
@@ -5702,7 +5748,7 @@ mod test {
     #[test]
     #[should_panic]
     fn building_shader_with_only_camera_input_fails() {
-        ShaderGenerator::generate_shader_module(
+        RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             None,
             None,
@@ -5717,7 +5763,7 @@ mod test {
 
     #[test]
     fn building_depth_prepass_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -5740,7 +5786,7 @@ mod test {
 
     #[test]
     fn building_omnidirectional_light_shadow_map_update_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
@@ -5763,7 +5809,7 @@ mod test {
 
     #[test]
     fn building_unidirectional_light_shadow_map_update_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             Some(&UNIDIRECTIONAL_LIGHT_INPUT),
@@ -5786,7 +5832,7 @@ mod test {
 
     #[test]
     fn building_vertex_color_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -5817,7 +5863,7 @@ mod test {
 
     #[test]
     fn building_fixed_color_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -5840,7 +5886,7 @@ mod test {
 
     #[test]
     fn building_fixed_texture_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -5871,7 +5917,7 @@ mod test {
 
     #[test]
     fn building_uniform_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -5917,7 +5963,7 @@ mod test {
 
     #[test]
     fn building_uniform_diffuse_specular_blinn_phong_shader_with_unidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -5963,7 +6009,7 @@ mod test {
 
     #[test]
     fn building_uniform_diffuse_blinn_phong_shader_with_omnidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6009,7 +6055,7 @@ mod test {
 
     #[test]
     fn building_uniform_diffuse_blinn_phong_shader_with_unidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6055,7 +6101,7 @@ mod test {
 
     #[test]
     fn building_uniform_specular_blinn_phong_shader_with_omnidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6101,7 +6147,7 @@ mod test {
 
     #[test]
     fn building_uniform_specular_blinn_phong_shader_with_unidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6148,7 +6194,7 @@ mod test {
     #[test]
     fn building_textured_diffuse_uniform_specular_blinn_phong_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6195,7 +6241,7 @@ mod test {
     #[test]
     fn building_textured_diffuse_uniform_specular_blinn_phong_shader_with_unidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6241,7 +6287,7 @@ mod test {
 
     #[test]
     fn building_textured_diffuse_specular_blinn_phong_shader_with_omnidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6287,7 +6333,7 @@ mod test {
 
     #[test]
     fn building_textured_diffuse_specular_blinn_phong_shader_with_unidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6334,7 +6380,7 @@ mod test {
     #[test]
     fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6383,7 +6429,7 @@ mod test {
     #[test]
     fn building_uniform_lambertian_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6432,7 +6478,7 @@ mod test {
     #[test]
     fn building_uniform_ggx_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6481,7 +6527,7 @@ mod test {
     #[test]
     fn building_uniform_ggx_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works()
     {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6529,7 +6575,7 @@ mod test {
 
     #[test]
     fn building_uniform_ggx_diffuse_microfacet_shader_with_omnidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6577,7 +6623,7 @@ mod test {
 
     #[test]
     fn building_uniform_ggx_diffuse_microfacet_shader_with_unidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6625,7 +6671,7 @@ mod test {
 
     #[test]
     fn building_uniform_ggx_specular_microfacet_shader_with_omnidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6673,7 +6719,7 @@ mod test {
 
     #[test]
     fn building_uniform_ggx_specular_microfacet_shader_with_unidirectional_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6722,7 +6768,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_uniform_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6771,7 +6817,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_uniform_ggx_specular_microfacet_shader_with_unidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6820,7 +6866,7 @@ mod test {
     #[test]
     fn building_textured_ggx_diffuse_uniform_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6869,7 +6915,7 @@ mod test {
     #[test]
     fn building_textured_ggx_diffuse_uniform_ggx_specular_microfacet_shader_with_unidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6918,7 +6964,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -6967,7 +7013,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7016,7 +7062,7 @@ mod test {
     #[test]
     fn building_textured_ggx_diffuse_ggx_specular_microfacet_shader_with_omnidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7065,7 +7111,7 @@ mod test {
     #[test]
     fn building_textured_ggx_diffuse_ggx_specular_microfacet_shader_with_unidirectional_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7113,7 +7159,7 @@ mod test {
 
     #[test]
     fn building_minimal_prepass_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7162,7 +7208,7 @@ mod test {
 
     #[test]
     fn building_prepass_shader_with_emissive_luminance_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7211,7 +7257,7 @@ mod test {
 
     #[test]
     fn building_prepass_shader_with_normal_mapping_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7266,7 +7312,7 @@ mod test {
 
     #[test]
     fn building_prepass_shader_with_parallax_mapping_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7322,7 +7368,7 @@ mod test {
 
     #[test]
     fn building_lambertian_diffuse_prepass_shader_with_ambient_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7371,7 +7417,7 @@ mod test {
 
     #[test]
     fn building_microfacet_specular_prepass_shader_with_ambient_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7420,7 +7466,7 @@ mod test {
 
     #[test]
     fn building_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7470,7 +7516,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7522,7 +7568,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_and_normal_mapping_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7578,7 +7624,7 @@ mod test {
     #[test]
     fn building_textured_lambertian_diffuse_microfacet_specular_prepass_shader_with_ambient_light_and_parallax_mapping_works(
     ) {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MeshShaderInput {
                 locations: [
@@ -7634,7 +7680,7 @@ mod test {
 
     #[test]
     fn building_passthrough_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7659,7 +7705,7 @@ mod test {
 
     #[test]
     fn building_ambient_occlusion_computation_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7686,7 +7732,7 @@ mod test {
 
     #[test]
     fn building_ambient_occlusion_application_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7713,7 +7759,7 @@ mod test {
 
     #[test]
     fn building_horizontal_gaussian_blur_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7742,7 +7788,7 @@ mod test {
 
     #[test]
     fn building_vertical_gaussian_blur_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7771,7 +7817,7 @@ mod test {
 
     #[test]
     fn building_no_tone_mapping_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7797,7 +7843,7 @@ mod test {
 
     #[test]
     fn building_aces_tone_mapping_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,
@@ -7823,7 +7869,7 @@ mod test {
 
     #[test]
     fn building_khronos_pbr_neutral_tone_mapping_shader_works() {
-        let module = ShaderGenerator::generate_shader_module(
+        let module = RenderShaderGenerator::generate_shader_module(
             None,
             Some(&MINIMAL_MESH_INPUT),
             None,

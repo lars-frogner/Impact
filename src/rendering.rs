@@ -4,15 +4,16 @@ mod assets;
 mod brdf;
 mod buffer;
 mod camera;
+mod compute;
 mod core;
 mod instance;
 mod light;
-mod material;
 mod mesh;
 mod postprocessing;
 mod render_pass;
 mod resource;
 mod shader;
+mod storage;
 mod tasks;
 mod texture;
 mod uniform;
@@ -24,32 +25,43 @@ pub use buffer::{
     create_uniform_buffer_bind_group_layout_entry, create_vertex_buffer_layout_for_instance,
     create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
 };
-pub use material::{MaterialPropertyTextureManager, MaterialRenderResourceManager};
+pub use compute::{
+    GPUComputationID, GPUComputationLibrary, GPUComputationResourceGroup,
+    GPUComputationSpecification,
+};
 pub use render_pass::{
-    Blending, DepthMapUsage, OutputAttachmentSampling, RenderPassHints, RenderPassManager,
-    RenderPassSpecification, RenderPassState, SyncRenderPasses,
+    Blending, ComputePassSpecification, DepthMapUsage, OutputAttachmentSampling,
+    RenderCommandManager, RenderCommandSpecification, RenderCommandState, RenderPassHints,
+    RenderPassSpecification, SyncRenderCommands,
 };
 pub use resource::SyncRenderResources;
 pub use shader::{
     AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
     BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput, CameraShaderInput,
-    DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-    GaussianBlurShaderInput, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput,
-    LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
-    MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
-    OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PassthroughShaderInput,
-    PrepassTextureShaderInput, Shader, ShaderGenerator, SkyboxTextureShaderInput,
-    SpecularMicrofacetShadingModel, ToneMappingShaderInput, UnidirectionalLightShaderInput,
+    ComputeShaderGenerator, ComputeShaderInput, DiffuseMicrofacetShadingModel,
+    FixedColorFeatureShaderInput, FixedTextureShaderInput, GaussianBlurShaderInput,
+    InstanceFeatureShaderInput, LightMaterialFeatureShaderInput, LightShaderInput,
+    MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel, MicrofacetTextureShaderInput,
+    ModelViewTransformShaderInput, NormalMappingShaderInput, OmnidirectionalLightShaderInput,
+    ParallaxMappingShaderInput, PassthroughShaderInput, PrepassTextureShaderInput,
+    RenderShaderGenerator, Shader, SkyboxTextureShaderInput, SpecularMicrofacetShadingModel,
+    ToneMappingShaderInput, UnidirectionalLightShaderInput,
 };
+pub use storage::{StorageBufferID, StorageRenderBuffer, StorageRenderBufferManager};
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
     CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
     RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,
     Texture, TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureLookupTable,
 };
+pub use uniform::SingleUniformRenderBuffer;
 
-use self::{render_pass::RenderPassOutcome, resource::RenderResourceManager};
-use crate::{geometry::CubemapFace, scene::MAX_SHADOW_MAP_CASCADES, window::EventLoopController};
+use self::{render_pass::RenderCommandOutcome, resource::RenderResourceManager};
+use crate::{
+    geometry::CubemapFace,
+    scene::{MaterialLibrary, Scene, MAX_SHADOW_MAP_CASCADES},
+    window::EventLoopController,
+};
 use anyhow::{Error, Result};
 use chrono::Utc;
 use std::sync::{
@@ -72,8 +84,9 @@ pub struct RenderingSystem {
     config: RenderingConfig,
     assets: RwLock<Assets>,
     render_resource_manager: RwLock<RenderResourceManager>,
-    render_pass_manager: RwLock<RenderPassManager>,
+    render_command_manager: RwLock<RenderCommandManager>,
     render_attachment_texture_manager: RenderAttachmentTextureManager,
+    gpu_computation_library: RwLock<GPUComputationLibrary>,
 }
 
 /// Global rendering configuration options.
@@ -122,8 +135,9 @@ impl RenderingSystem {
             config,
             assets: RwLock::new(assets),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            render_pass_manager: RwLock::new(RenderPassManager::new()),
+            render_command_manager: RwLock::new(RenderCommandManager::new()),
             render_attachment_texture_manager,
+            gpu_computation_library: RwLock::new(GPUComputationLibrary::new()),
         })
     }
 
@@ -148,15 +162,21 @@ impl RenderingSystem {
         &self.render_resource_manager
     }
 
-    /// Returns a reference to the [`RenderPassManager`], guarded
-    /// by a [`RwLock`].
-    pub fn render_pass_manager(&self) -> &RwLock<RenderPassManager> {
-        &self.render_pass_manager
+    /// Returns a reference to the [`RenderCommandManager`], guarded by a
+    /// [`RwLock`].
+    pub fn render_command_manager(&self) -> &RwLock<RenderCommandManager> {
+        &self.render_command_manager
     }
 
     /// Returns a reference to the [`RenderAttachmentTextureManager`].
     pub fn render_attachment_texture_manager(&self) -> &RenderAttachmentTextureManager {
         &self.render_attachment_texture_manager
+    }
+
+    /// Returns a reference to the [`GPUComputationLibrary`], guarded by a
+    /// [`RwLock`].
+    pub fn gpu_computation_library(&self) -> &RwLock<GPUComputationLibrary> {
+        &self.gpu_computation_library
     }
 
     /// Returns the width and height of the rendering surface in pixels.
@@ -172,9 +192,9 @@ impl RenderingSystem {
     /// Returns an error if:
     /// - The surface texture to render to can not be obtained.
     /// - Recording a render pass fails.
-    pub fn render(&self) -> Result<()> {
+    pub fn render(&self, material_library: &MaterialLibrary) -> Result<()> {
         with_timing_info_logging!("Rendering"; {
-            let surface_texture = self.render_surface()?;
+            let surface_texture = self.render_surface(material_library)?;
             surface_texture.present();
         });
         Ok(())
@@ -196,10 +216,10 @@ impl RenderingSystem {
         }
         // Remove all render pass recorders so that they will be recreated with
         // the updated configuration
-        self.render_pass_manager
+        self.render_command_manager
             .write()
             .unwrap()
-            .clear_model_render_pass_recorders();
+            .clear_recorders();
     }
 
     /// Toggles rendering of triangle fill in all render passes. Only triangle
@@ -212,10 +232,10 @@ impl RenderingSystem {
         }
         // Remove all render pass recorders so that they will be recreated with
         // the updated configuration
-        self.render_pass_manager
+        self.render_command_manager
             .write()
             .unwrap()
-            .clear_model_render_pass_recorders();
+            .clear_recorders();
     }
 
     /// Toggles shadow mapping.
@@ -245,7 +265,7 @@ impl RenderingSystem {
         self.core_system.initialize_surface();
     }
 
-    fn render_surface(&self) -> Result<wgpu::SurfaceTexture> {
+    fn render_surface(&self, material_library: &MaterialLibrary) -> Result<wgpu::SurfaceTexture> {
         let surface_texture = self.core_system.surface().get_current_texture()?;
         let surface_texture_view = surface_texture
             .texture
@@ -257,19 +277,23 @@ impl RenderingSystem {
 
         {
             let render_resources_guard = self.render_resource_manager.read().unwrap();
-            for render_pass_recorder in self.render_pass_manager.read().unwrap().recorders() {
-                let outcome = render_pass_recorder.record_render_pass(
+            let gpu_computation_library_guard = self.gpu_computation_library.read().unwrap();
+
+            for render_pass_recorder in self.render_command_manager.read().unwrap().recorders() {
+                let outcome = render_pass_recorder.record(
                     &self.core_system,
                     &surface_texture_view,
+                    material_library,
                     render_resources_guard.synchronized(),
                     &self.render_attachment_texture_manager,
+                    &gpu_computation_library_guard,
                     &mut command_encoder,
                 )?;
-                if outcome == RenderPassOutcome::Recorded {
+                if outcome == RenderCommandOutcome::Recorded {
                     n_recorded_passes += 1;
                 }
             }
-        } // <- Lock on `self.render_resource_manager` is released here
+        } // <- Lock guards are released here
 
         log::info!("Performing {} render passes", n_recorded_passes);
 
@@ -304,10 +328,10 @@ impl RenderingSystem {
 
             // Remove all render pass recorders so that they will be recreated with
             // the updated configuration
-            self.render_pass_manager
+            self.render_command_manager
                 .write()
                 .unwrap()
-                .clear_model_render_pass_recorders();
+                .clear_recorders();
         }
     }
 }
@@ -378,12 +402,18 @@ impl ScreenCapturer {
     /// Checks if a screenshot capture was scheduled with
     /// [`request_screenshot_save`], and if so, captures a screenshot and saves
     /// it as a timestamped PNG file in the current directory.
-    pub fn save_screenshot_if_requested(&self, renderer: &RwLock<RenderingSystem>) -> Result<()> {
+    pub fn save_screenshot_if_requested(
+        &self,
+        renderer: &RwLock<RenderingSystem>,
+        scene: &RwLock<Scene>,
+    ) -> Result<()> {
         if self
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
             let mut renderer = renderer.write().unwrap();
+            let scene = scene.read().unwrap();
+            let material_library = scene.material_library().read().unwrap();
 
             let original_dimensions = renderer.surface_dimensions();
 
@@ -393,7 +423,7 @@ impl ScreenCapturer {
             ));
             {
                 // Re-render the surface at the screenshot resolution.
-                let surface_texture = renderer.render_surface()?;
+                let surface_texture = renderer.render_surface(&material_library)?;
 
                 texture::save_texture_as_image_file(
                     renderer.core_system(),
@@ -414,6 +444,7 @@ impl ScreenCapturer {
     pub fn save_render_attachment_quantity_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
+        scene: &RwLock<Scene>,
     ) -> Result<()> {
         if self
             .render_attachment_save_requested
@@ -425,6 +456,8 @@ impl ScreenCapturer {
             .unwrap();
 
             let mut renderer = renderer.write().unwrap();
+            let scene = scene.read().unwrap();
+            let material_library = scene.material_library().read().unwrap();
 
             let original_dimensions = renderer.surface_dimensions();
 
@@ -434,7 +467,7 @@ impl ScreenCapturer {
             ));
             {
                 // Re-render the surface at the screenshot resolution.
-                renderer.render_surface()?;
+                renderer.render_surface(&material_library)?;
 
                 renderer
                     .render_attachment_texture_manager()

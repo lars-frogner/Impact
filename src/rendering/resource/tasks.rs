@@ -26,8 +26,6 @@ define_task!(
         SyncCameraRenderBuffer,
         SyncMeshRenderBuffers,
         SyncLightRenderBuffers,
-        SyncMaterialRenderResources,
-        SyncMaterialPropertyTextures,
         SyncPostprocessingResources,
         SyncInstanceFeatureBuffers
     ],
@@ -49,8 +47,6 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncCameraRenderBuffer)?;
         task_scheduler.register_task(SyncMeshRenderBuffers)?;
         task_scheduler.register_task(SyncLightRenderBuffers)?;
-        task_scheduler.register_task(SyncMaterialRenderResources)?;
-        task_scheduler.register_task(SyncMaterialPropertyTextures)?;
         task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
         task_scheduler.register_task(SyncPostprocessingResources)?;
         task_scheduler.register_task(SyncRenderResources)
@@ -141,62 +137,6 @@ define_task!(
                 );
             }
             Ok(())
-        })
-    }
-);
-
-define_task!(
-    SyncMaterialRenderResources,
-    depends_on = [],
-    execute_on = [RenderingTag],
-    |world: &World| {
-        with_debug_logging!("Synchronizing material render resources"; {
-            let renderer = world.renderer().read().unwrap();
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
-            if render_resource_manager.is_desynchronized() {
-                let scene = world.scene().read().unwrap();
-                let material_library = scene.material_library().read().unwrap();
-                DesynchronizedRenderResources::sync_material_resources_with_material_library(
-                    renderer.core_system(),
-                    render_resource_manager
-                        .desynchronized()
-                        .material_resource_managers
-                        .lock()
-                        .unwrap()
-                        .as_mut(),
-                        &material_library,
-                );
-            }
-            Ok(())
-        })
-    }
-);
-
-define_task!(
-    SyncMaterialPropertyTextures,
-    depends_on = [],
-    execute_on = [RenderingTag],
-    |world: &World| {
-        with_debug_logging!("Synchronizing material property textures"; {
-            let renderer = world.renderer().read().unwrap();
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
-            if render_resource_manager.is_desynchronized() {
-                let scene = world.scene().read().unwrap();
-                let material_library = scene.material_library().read().unwrap();
-                DesynchronizedRenderResources::sync_material_property_textures_with_material_library(
-                    renderer.core_system(),
-                    &renderer.assets().read().unwrap(),
-                    render_resource_manager
-                        .desynchronized()
-                        .material_property_texture_managers
-                        .lock()
-                        .unwrap()
-                        .as_mut(),
-                        &material_library,
-                )
-            } else {
-                Ok(())
-            }
         })
     }
 );

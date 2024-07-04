@@ -3,18 +3,26 @@
 use crate::{
     geometry::{CollectionChange, UniformBuffer},
     rendering::{
-        buffer::{Count, CountedRenderBuffer, UniformBufferable},
+        buffer::{self, Count, CountedRenderBuffer, RenderBuffer, UniformBufferable},
         CoreRenderingSystem,
     },
 };
 use impact_utils::ConstStringHash64;
 use std::{borrow::Cow, fmt::Debug, hash::Hash, mem};
 
-/// Owner and manager of a render buffer for uniforms.
+/// Render buffer for a single uniform.
 #[derive(Debug)]
-pub struct UniformRenderBufferManager {
-    uniform_render_buffer: CountedRenderBuffer,
+pub struct SingleUniformRenderBuffer {
+    render_buffer: RenderBuffer,
+    template_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
+}
+
+/// Render buffer for multiple uniforms of the same type.
+#[derive(Debug)]
+pub struct MultiUniformRenderBuffer {
+    render_buffer: CountedRenderBuffer,
     uniform_type_id: ConstStringHash64,
+    template_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
 }
 
 /// Indicates whether a new render buffer had to be created in order to hold all
@@ -26,12 +34,62 @@ pub enum UniformTransferResult {
     NothingToTransfer,
 }
 
-impl UniformRenderBufferManager {
-    /// Creates a new manager with a render buffer initialized
-    /// from the given uniform buffer.
+impl SingleUniformRenderBuffer {
+    /// Creates a new render buffer for the given uniform.
+    ///
+    /// # Panics
+    /// If the size of the uniform is zero.
+    pub fn for_uniform<U>(
+        device: &wgpu::Device,
+        uniform: &U,
+        visibility: wgpu::ShaderStages,
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        assert_ne!(
+            mem::size_of::<U>(),
+            0,
+            "Tried to create render resource from zero-sized uniform"
+        );
+
+        let render_buffer = RenderBuffer::new_buffer_for_single_uniform_bytes(
+            device,
+            bytemuck::bytes_of(uniform),
+            label,
+        );
+
+        // The binding of 0 is just a placeholder, as the actual binding will be
+        // assigned when calling [`Self::create_bind_group_layout_entry`]
+        let template_bind_group_layout_entry = U::create_bind_group_layout_entry(0, visibility);
+
+        Self {
+            render_buffer,
+            template_bind_group_layout_entry,
+        }
+    }
+
+    /// Creates a bind group layout entry for the uniform.
+    pub fn create_bind_group_layout_entry(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+        let mut bind_group_layout_entry = self.template_bind_group_layout_entry;
+        bind_group_layout_entry.binding = binding;
+        bind_group_layout_entry
+    }
+
+    /// Creates a bind group entry for the uniform.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        buffer::create_single_uniform_bind_group_entry(binding, &self.render_buffer)
+    }
+}
+
+impl MultiUniformRenderBuffer {
+    /// Creates a new uniform render buffer initialized from the given uniform
+    /// buffer.
     pub fn for_uniform_buffer<ID, U>(
         core_system: &CoreRenderingSystem,
         uniform_buffer: &UniformBuffer<ID, U>,
+        visibility: wgpu::ShaderStages,
     ) -> Self
     where
         ID: Copy + Hash + Eq + Debug,
@@ -39,15 +97,20 @@ impl UniformRenderBufferManager {
     {
         let uniform_type_id = U::ID;
 
-        let uniform_render_buffer = CountedRenderBuffer::new_uniform_buffer(
+        let render_buffer = CountedRenderBuffer::new_uniform_buffer(
             core_system,
             uniform_buffer.raw_buffer(),
             uniform_buffer.n_valid_uniforms(),
             Cow::Borrowed(uniform_type_id.string()),
         );
 
+        // The binding of 0 is just a placeholder, as the actual binding will be
+        // assigned when calling [`Self::create_bind_group_layout_entry`]
+        let template_bind_group_layout_entry = U::create_bind_group_layout_entry(0, visibility);
+
         Self {
-            uniform_render_buffer,
+            render_buffer,
+            template_bind_group_layout_entry,
             uniform_type_id,
         }
     }
@@ -55,7 +118,14 @@ impl UniformRenderBufferManager {
     /// Returns the maximum number of uniforms that can fit in the
     /// buffer.
     pub fn max_uniform_count(&self) -> usize {
-        self.uniform_render_buffer.max_item_count()
+        self.render_buffer.max_item_count()
+    }
+
+    /// Creates a bind group layout entry for the uniform buffer.
+    pub fn create_bind_group_layout_entry(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+        let mut bind_group_layout_entry = self.template_bind_group_layout_entry;
+        bind_group_layout_entry.binding = binding;
+        bind_group_layout_entry
     }
 
     /// Creates the bind group entry for the currently valid part
@@ -65,13 +135,12 @@ impl UniformRenderBufferManager {
     /// This binding will be out of date as soon as the number of
     /// valid uniforms changes.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        self.uniform_render_buffer()
-            .create_bind_group_entry(binding)
+        self.render_buffer().create_bind_group_entry(binding)
     }
 
     /// Returns the render buffer of uniforms.
-    pub fn uniform_render_buffer(&self) -> &CountedRenderBuffer {
-        &self.uniform_render_buffer
+    pub fn render_buffer(&self) -> &CountedRenderBuffer {
+        &self.render_buffer
     }
 
     /// Writes the valid uniforms in the given uniform buffer into the uniform
@@ -105,17 +174,17 @@ impl UniformRenderBufferManager {
             let n_valid_uniform_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
 
             if self
-                .uniform_render_buffer
+                .render_buffer
                 .bytes_exceed_capacity(n_valid_uniform_bytes)
             {
                 // If the number of valid uniforms exceeds the capacity of the existing buffer,
                 // we create a new one that is large enough for all the uniforms (also the ones
                 // not currently valid)
-                self.uniform_render_buffer = CountedRenderBuffer::new_uniform_buffer(
+                self.render_buffer = CountedRenderBuffer::new_uniform_buffer(
                     core_system,
                     uniform_buffer.raw_buffer(),
                     n_valid_uniforms,
-                    self.uniform_render_buffer.label().clone(),
+                    self.render_buffer.label().clone(),
                 );
 
                 UniformTransferResult::CreatedNewBuffer
@@ -128,7 +197,7 @@ impl UniformRenderBufferManager {
                     None
                 };
 
-                self.uniform_render_buffer.update_valid_bytes(
+                self.render_buffer.update_valid_bytes(
                     core_system,
                     bytemuck::cast_slice(valid_uniforms),
                     new_count,

@@ -9,15 +9,10 @@ use crate::{
     rendering::{
         camera::CameraRenderBufferManager, fre, instance::InstanceFeatureRenderBufferManager,
         light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
-        postprocessing::PostprocessingResourceManager, Assets, CoreRenderingSystem,
-        MaterialPropertyTextureManager, MaterialRenderResourceManager, RenderingConfig,
+        postprocessing::PostprocessingResourceManager, CoreRenderingSystem, RenderingConfig,
     },
-    scene::{
-        InstanceFeatureManager, LightStorage, MaterialID, MaterialLibrary,
-        MaterialPropertyTextureSetID, MeshID, ModelID, Postprocessor, SceneCamera,
-    },
+    scene::{InstanceFeatureManager, LightStorage, MeshID, ModelID, Postprocessor, SceneCamera},
 };
-use anyhow::Result;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, HashMap},
@@ -54,8 +49,6 @@ pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraRenderBufferManager>>,
     mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     light_buffer_manager: Box<Option<LightRenderBufferManager>>,
-    material_resource_managers: Box<MaterialResourceManagerMap>,
-    material_property_texture_managers: Box<MaterialPropertyTextureManagerMap>,
     instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
     postprocessing_resource_manager: Box<PostprocessingResourceManager>,
 }
@@ -68,16 +61,11 @@ struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraRenderBufferManager>>>,
     mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     light_buffer_manager: Mutex<Box<Option<LightRenderBufferManager>>>,
-    material_resource_managers: Mutex<Box<MaterialResourceManagerMap>>,
-    material_property_texture_managers: Mutex<Box<MaterialPropertyTextureManagerMap>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
     postprocessing_resource_manager: Mutex<Box<PostprocessingResourceManager>>,
 }
 
 type MeshRenderBufferManagerMap = HashMap<MeshID, MeshRenderBufferManager>;
-type MaterialResourceManagerMap = HashMap<MaterialID, MaterialRenderResourceManager>;
-type MaterialPropertyTextureManagerMap =
-    HashMap<MaterialPropertyTextureSetID, MaterialPropertyTextureManager>;
 type InstanceFeatureRenderBufferManagerMap =
     HashMap<ModelID, Vec<InstanceFeatureRenderBufferManager>>;
 
@@ -174,25 +162,6 @@ impl SynchronizedRenderResources {
         self.light_buffer_manager.as_ref().as_ref()
     }
 
-    /// Returns the render resource manager for the given material identifier
-    /// if the material exists, otherwise returns [`None`].
-    pub fn get_material_resource_manager(
-        &self,
-        material_id: MaterialID,
-    ) -> Option<&MaterialRenderResourceManager> {
-        self.material_resource_managers.get(&material_id)
-    }
-
-    /// Returns the manager of the material property texture set with the given
-    /// identifier if it exists, otherwise returns [`None`].
-    pub fn get_material_property_texture_manager(
-        &self,
-        material_property_texture_set_id: MaterialPropertyTextureSetID,
-    ) -> Option<&MaterialPropertyTextureManager> {
-        self.material_property_texture_managers
-            .get(&material_property_texture_set_id)
-    }
-
     /// Returns the instance feature render buffer managers for the given model
     /// identifier if the model exists, otherwise returns [`None`].
     pub fn get_instance_feature_buffer_managers(
@@ -218,8 +187,6 @@ impl DesynchronizedRenderResources {
         Self {
             camera_buffer_manager: Mutex::new(Box::new(None)),
             mesh_buffer_managers: Mutex::new(Box::default()),
-            material_resource_managers: Mutex::new(Box::default()),
-            material_property_texture_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
             postprocessing_resource_manager: Mutex::new(Box::default()),
@@ -231,8 +198,6 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             mesh_buffer_managers,
             light_buffer_manager,
-            material_resource_managers,
-            material_property_texture_managers,
             instance_feature_buffer_managers,
             postprocessing_resource_manager,
         } = render_resources;
@@ -240,8 +205,6 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             mesh_buffer_managers: Mutex::new(mesh_buffer_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
-            material_resource_managers: Mutex::new(material_resource_managers),
-            material_property_texture_managers: Mutex::new(material_property_texture_managers),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
             postprocessing_resource_manager: Mutex::new(postprocessing_resource_manager),
         }
@@ -252,8 +215,6 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager,
             mesh_buffer_managers,
             light_buffer_manager,
-            material_resource_managers,
-            material_property_texture_managers,
             instance_feature_buffer_managers,
             postprocessing_resource_manager,
         } = self;
@@ -261,10 +222,6 @@ impl DesynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
             mesh_buffer_managers: mesh_buffer_managers.into_inner().unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
-            material_resource_managers: material_resource_managers.into_inner().unwrap(),
-            material_property_texture_managers: material_property_texture_managers
-                .into_inner()
-                .unwrap(),
             instance_feature_buffer_managers: instance_feature_buffer_managers
                 .into_inner()
                 .unwrap(),
@@ -331,61 +288,6 @@ impl DesynchronizedRenderResources {
                 config,
             ));
         }
-    }
-
-    /// Performs any required updates for keeping the given map of material
-    /// render resource managers in sync with the material specifications in the
-    /// given material library.
-    ///
-    /// Render resources whose source data no longer exists will be removed, and
-    /// missing render resources for new source data will be created.
-    fn sync_material_resources_with_material_library(
-        core_system: &CoreRenderingSystem,
-        material_resource_managers: &mut MaterialResourceManagerMap,
-        material_library: &MaterialLibrary,
-    ) {
-        for (&material_id, material_specification) in material_library.material_specifications() {
-            if let Entry::Vacant(entry) = material_resource_managers.entry(material_id) {
-                entry.insert(MaterialRenderResourceManager::for_material_specification(
-                    core_system,
-                    material_specification,
-                    material_id.to_string(),
-                ));
-            };
-        }
-        Self::remove_unmatched_render_resources(
-            material_resource_managers,
-            material_library.material_specifications(),
-        );
-    }
-
-    /// Performs any required updates for keeping the given map of material
-    /// property texture managers in sync with the material property texture
-    /// sets in the given material library.
-    ///
-    /// Render resources whose source data no longer exists will be removed, and
-    /// missing render resources for new source data will be created.
-    fn sync_material_property_textures_with_material_library(
-        core_system: &CoreRenderingSystem,
-        assets: &Assets,
-        material_property_texture_managers: &mut MaterialPropertyTextureManagerMap,
-        material_library: &MaterialLibrary,
-    ) -> Result<()> {
-        for (&texture_set_id, texture_set) in material_library.material_property_texture_sets() {
-            if let Entry::Vacant(entry) = material_property_texture_managers.entry(texture_set_id) {
-                entry.insert(MaterialPropertyTextureManager::for_texture_set(
-                    core_system,
-                    assets,
-                    texture_set,
-                    texture_set_id.to_string(),
-                )?);
-            };
-        }
-        Self::remove_unmatched_render_resources(
-            material_property_texture_managers,
-            material_library.material_property_texture_sets(),
-        );
-        Ok(())
     }
 
     /// Performs any required updates for keeping the given map of

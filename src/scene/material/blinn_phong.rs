@@ -4,13 +4,13 @@ use super::{create_material_feature, create_prepass_material};
 use crate::{
     geometry::VertexAttributeSet,
     rendering::{
-        BlinnPhongTextureShaderInput, MaterialPropertyTextureManager, MaterialShaderInput,
+        Assets, BlinnPhongTextureShaderInput, CoreRenderingSystem, MaterialShaderInput,
         RenderAttachmentQuantitySet, RenderPassHints,
     },
     scene::{
         AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureSet,
-        MaterialPropertyTextureSetID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+        MaterialPropertyTextureGroupID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
         RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp,
         SpecularReflectanceComp, SpecularReflectanceTextureComp,
@@ -27,6 +27,8 @@ use std::sync::RwLock;
 /// registers the material in the instance feature manager and adds the
 /// appropriate material component to the entity.
 pub fn add_blinn_phong_material_component_for_entity(
+    core_system: &CoreRenderingSystem,
+    assets: &RwLock<Assets>,
     material_library: &RwLock<MaterialLibrary>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     components: &mut ArchetypeComponentStorage,
@@ -48,6 +50,8 @@ pub fn add_blinn_phong_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             execute_material_setup(
+                core_system,
+                assets,
                 &mut material_library,
                 &mut instance_feature_manager,
                 Some(albedo),
@@ -85,6 +89,8 @@ pub fn add_blinn_phong_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             execute_material_setup(
+                core_system,
+                assets,
                 &mut material_library,
                 &mut instance_feature_manager,
                 albedo,
@@ -122,6 +128,8 @@ pub fn add_blinn_phong_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             execute_material_setup(
+                core_system,
+                assets,
                 &mut material_library,
                 &mut instance_feature_manager,
                 None,
@@ -159,6 +167,8 @@ pub fn add_blinn_phong_material_component_for_entity(
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
             execute_material_setup(
+                core_system,
+                assets,
                 &mut material_library,
                 &mut instance_feature_manager,
                 albedo,
@@ -182,6 +192,8 @@ pub fn add_blinn_phong_material_component_for_entity(
 }
 
 fn execute_material_setup(
+    core_system: &CoreRenderingSystem,
+    assets: &RwLock<Assets>,
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     albedo: Option<&AlbedoComp>,
@@ -229,9 +241,8 @@ fn execute_material_setup(
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
 
-        texture_shader_input.albedo_texture_and_sampler_bindings = Some(
-            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
-        );
+        texture_shader_input.albedo_texture_and_sampler_bindings =
+            Some(MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()));
         texture_ids.push(albedo_texture.0);
     }
 
@@ -246,15 +257,16 @@ fn execute_material_setup(
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TEXTURE_COORDS;
 
-        texture_shader_input.specular_reflectance_texture_and_sampler_bindings = Some(
-            MaterialPropertyTextureManager::get_texture_and_sampler_bindings(texture_ids.len()),
-        );
+        texture_shader_input.specular_reflectance_texture_and_sampler_bindings =
+            Some(MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(texture_ids.len()));
         texture_ids.push(specular_reflectance_texture.0);
     }
 
     let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
     let prepass_material_handle = create_prepass_material(
+        core_system,
+        assets,
         material_library,
         &mut input_render_attachment_quantities,
         material_name_parts.clone(),
@@ -303,21 +315,29 @@ fn execute_material_setup(
             )
         });
 
-    let texture_set_id = if !texture_ids.is_empty() {
-        let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
+    let texture_group_id = if !texture_ids.is_empty() {
+        let texture_group_id = MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
 
         // Add a new texture set if none with the same textures already exist
         material_library
-            .material_property_texture_set_entry(texture_set_id)
-            .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids));
+            .material_property_texture_group_entry(texture_group_id)
+            .or_insert_with(|| {
+                MaterialPropertyTextureGroup::new(
+                    core_system,
+                    &assets.read().unwrap(),
+                    texture_ids,
+                    texture_group_id.to_string(),
+                )
+                .expect("Missing textures from assets")
+            });
 
-        Some(texture_set_id)
+        Some(texture_group_id)
     } else {
         None
     };
 
     MaterialComp::new(
-        MaterialHandle::new(material_id, Some(feature_id), texture_set_id),
+        MaterialHandle::new(material_id, Some(feature_id), texture_group_id),
         Some(prepass_material_handle),
     )
 }

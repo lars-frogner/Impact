@@ -5,13 +5,13 @@ use crate::{
     geometry::{InstanceFeature, VertexAttributeSet},
     impl_InstanceFeature,
     rendering::{
-        FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
-        MaterialPropertyTextureManager, MaterialShaderInput, RenderAttachmentQuantitySet,
+        Assets, CoreRenderingSystem, FixedColorFeatureShaderInput, FixedTextureShaderInput,
+        InstanceFeatureShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
         RenderPassHints,
     },
     scene::{
         FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
-        MaterialID, MaterialLibrary, MaterialPropertyTextureSet, MaterialPropertyTextureSetID,
+        MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
         MaterialSpecification, RGBColor, RenderResourcesDesynchronized,
     },
 };
@@ -117,7 +117,7 @@ impl FixedTextureMaterial {
     const MATERIAL_SHADER_INPUT: MaterialShaderInput =
         MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
             color_texture_and_sampler_bindings:
-                MaterialPropertyTextureManager::get_texture_and_sampler_bindings(0),
+                MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(0),
         }));
 
     /// Adds the material specification to the given material library.
@@ -140,6 +140,8 @@ impl FixedTextureMaterial {
     /// texture set to the material library if not present and adds the
     /// appropriate material component to the entity.
     pub fn add_material_component_for_entity(
+        core_system: &CoreRenderingSystem,
+        assets: &RwLock<Assets>,
         material_library: &RwLock<MaterialLibrary>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
@@ -151,17 +153,26 @@ impl FixedTextureMaterial {
             },
             components,
             |fixed_texture: &FixedTextureComp| -> MaterialComp {
-                let texture_ids = [fixed_texture.0];
+                let texture_ids = vec![fixed_texture.0];
 
-                let texture_set_id = MaterialPropertyTextureSetID::from_texture_ids(&texture_ids);
+                let texture_group_id =
+                    MaterialPropertyTextureGroupID::from_texture_ids(&texture_ids);
 
                 // Add a new texture set if none with the same textures already exist
                 material_library
-                    .material_property_texture_set_entry(texture_set_id)
-                    .or_insert_with(|| MaterialPropertyTextureSet::new(texture_ids.to_vec()));
+                    .material_property_texture_group_entry(texture_group_id)
+                    .or_insert_with(|| {
+                        MaterialPropertyTextureGroup::new(
+                            core_system,
+                            &assets.read().unwrap(),
+                            texture_ids,
+                            texture_group_id.to_string(),
+                        )
+                        .expect("Missing textures from assets")
+                    });
 
                 MaterialComp::new(
-                    MaterialHandle::new(*FIXED_TEXTURE_MATERIAL_ID, None, Some(texture_set_id)),
+                    MaterialHandle::new(*FIXED_TEXTURE_MATERIAL_ID, None, Some(texture_group_id)),
                     None,
                 )
             },

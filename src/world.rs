@@ -124,10 +124,10 @@ impl World {
     /// [`ScreenCapturer`].
     pub fn capture_screenshots(&self) -> Result<()> {
         self.screen_capturer
-            .save_screenshot_if_requested(self.renderer())?;
+            .save_screenshot_if_requested(self.renderer(), self.scene())?;
 
         self.screen_capturer
-            .save_render_attachment_quantity_if_requested(self.renderer())?;
+            .save_render_attachment_quantity_if_requested(self.renderer(), self.scene())?;
 
         self.screen_capturer
             .save_omnidirectional_light_shadow_map_if_requested(self.renderer())?;
@@ -269,10 +269,15 @@ impl World {
 
         let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
 
-        self.scene()
-            .read()
-            .unwrap()
-            .handle_entity_created(&mut components, &mut render_resources_desynchronized)?;
+        {
+            let renderer = self.renderer().read().unwrap();
+            self.scene().read().unwrap().handle_entity_created(
+                renderer.core_system(),
+                renderer.assets(),
+                &mut components,
+                &mut render_resources_desynchronized,
+            )?;
+        }
 
         self.simulator().read().unwrap().handle_entity_created(
             self.scene().read().unwrap().mesh_repository(),

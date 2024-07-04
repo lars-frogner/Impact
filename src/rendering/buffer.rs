@@ -39,9 +39,12 @@ pub trait UniformBufferable: Pod {
     /// ID for uniform type.
     const ID: ConstStringHash64;
 
-    /// Creates the bind group layout entry for this uniform type,
-    /// assigned to the given binding.
-    fn create_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry;
+    /// Creates the bind group layout entry for this uniform type, assigned to
+    /// the given binding and with the given visibility.
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry;
 }
 
 #[macro_export]
@@ -96,6 +99,8 @@ enum RenderBufferType {
     Vertex,
     Index,
     Uniform,
+    Storage,
+    Result,
 }
 
 impl RenderBuffer {
@@ -156,7 +161,7 @@ impl RenderBuffer {
             "Tried to create empty vertex render buffer"
         );
         Self::new(
-            core_system,
+            core_system.device(),
             RenderBufferType::Vertex,
             bytes,
             n_valid_bytes,
@@ -190,7 +195,7 @@ impl RenderBuffer {
         let bytes = bytemuck::cast_slice(indices);
 
         Self::new(
-            core_system,
+            core_system.device(),
             RenderBufferType::Index,
             bytes,
             n_valid_bytes,
@@ -224,7 +229,7 @@ impl RenderBuffer {
     /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
     ///   slice.
     pub fn new_uniform_buffer<U>(
-        core_system: &CoreRenderingSystem,
+        device: &wgpu::Device,
         uniforms: &[U],
         n_valid_uniforms: usize,
         label: Cow<'static, str>,
@@ -248,7 +253,7 @@ impl RenderBuffer {
         let bytes = bytemuck::cast_slice(uniforms);
 
         Self::new(
-            core_system,
+            device,
             RenderBufferType::Uniform,
             bytes,
             n_valid_bytes,
@@ -264,14 +269,14 @@ impl RenderBuffer {
     /// - If the size of a single uniform is not a multiple of 16
     ///   (the minimum required uniform alignment).
     pub fn new_full_uniform_buffer<U>(
-        core_system: &CoreRenderingSystem,
+        device: &wgpu::Device,
         uniforms: &[U],
         label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
     {
-        Self::new_uniform_buffer(core_system, uniforms, uniforms.len(), label)
+        Self::new_uniform_buffer(device, uniforms, uniforms.len(), label)
     }
 
     /// Creates a render buffer containing the data of the given uniform.
@@ -280,14 +285,14 @@ impl RenderBuffer {
     /// If the size of the uniform is not a multiple of 16 (the minimum
     /// required uniform alignment).
     pub fn new_buffer_for_single_uniform<U>(
-        core_system: &CoreRenderingSystem,
+        device: &wgpu::Device,
         uniform: &U,
         label: Cow<'static, str>,
     ) -> Self
     where
         U: UniformBufferable,
     {
-        Self::new_buffer_for_single_uniform_bytes(core_system, bytemuck::bytes_of(uniform), label)
+        Self::new_buffer_for_single_uniform_bytes(device, bytemuck::bytes_of(uniform), label)
     }
 
     /// Creates a render buffer containing the given bytes representing a single
@@ -297,7 +302,7 @@ impl RenderBuffer {
     /// If the size of the uniform is not a multiple of 16 (the minimum required
     /// uniform alignment).
     pub fn new_buffer_for_single_uniform_bytes(
-        core_system: &CoreRenderingSystem,
+        device: &wgpu::Device,
         uniform_bytes: &[u8],
         label: Cow<'static, str>,
     ) -> Self {
@@ -312,10 +317,44 @@ impl RenderBuffer {
         );
 
         Self::new(
-            core_system,
+            device,
             RenderBufferType::Uniform,
             uniform_bytes,
             uniform_bytes.len(),
+            label,
+        )
+    }
+
+    /// Creates a storage render buffer initialized with the given bytes.
+    ///
+    /// # Panics
+    /// - If `bytes` is empty.
+    pub fn new_storage_buffer(
+        device: &wgpu::Device,
+        bytes: &[u8],
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new(device, RenderBufferType::Storage, bytes, bytes.len(), label)
+    }
+
+    /// Creates a result render buffer with the given size in bytes.
+    ///
+    /// # Warning
+    /// The contents of the buffer are uninitialized, so the buffer should not
+    /// be mapped for reading until it has been copied to.
+    ///
+    /// # Panics
+    /// - If `buffer_size` is zero.
+    pub fn new_result_buffer(
+        device: &wgpu::Device,
+        buffer_size: usize,
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new_uninitialized(
+            device,
+            RenderBufferType::Result,
+            buffer_size,
+            buffer_size,
             label,
         )
     }
@@ -330,7 +369,7 @@ impl RenderBuffer {
     /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
     fn new(
-        core_system: &CoreRenderingSystem,
+        device: &wgpu::Device,
         buffer_type: RenderBufferType,
         bytes: &[u8],
         n_valid_bytes: usize,
@@ -342,10 +381,38 @@ impl RenderBuffer {
         assert!(n_valid_bytes <= buffer_size);
 
         let buffer_label = format!("{} {} render buffer", label, &buffer_type);
-        let buffer = Self::create_initialized_buffer_of_type(
-            core_system.device(),
-            buffer_type,
-            bytes,
+        let buffer =
+            Self::create_initialized_buffer_of_type(device, buffer_type, bytes, &buffer_label);
+
+        Self {
+            buffer,
+            buffer_size,
+            n_valid_bytes: AtomicUsize::new(n_valid_bytes),
+            label,
+        }
+    }
+
+    /// Creates an uninitialized render buffer of the given type with room for
+    /// `buffer_size` bytes.
+    ///
+    /// # Panics
+    /// - If `buffer_size` is zero.
+    /// - If `n_valid_bytes` exceeds `buffer_size`.
+    fn new_uninitialized(
+        device: &wgpu::Device,
+        buffer_type: RenderBufferType,
+        buffer_size: usize,
+        n_valid_bytes: usize,
+        label: Cow<'static, str>,
+    ) -> Self {
+        assert_ne!(buffer_size, 0, "Tried to create empty render buffer");
+        assert!(n_valid_bytes <= buffer_size);
+
+        let buffer_label = format!("{} {} render buffer", label, &buffer_type);
+        let buffer = Self::create_uninitialized_buffer(
+            device,
+            buffer_size as u64,
+            buffer_type.usage(),
             &buffer_label,
         );
 
@@ -419,6 +486,15 @@ impl RenderBuffer {
         self.update_valid_bytes(core_system, updated_bytes);
     }
 
+    /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
+    /// binding for the full render buffer.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: self.buffer().as_entire_binding(),
+        }
+    }
+
     /// Returns the underlying [`wgpu::Buffer`].
     fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
@@ -443,6 +519,20 @@ impl RenderBuffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             contents: bytes,
             usage,
+            label: Some(label),
+        })
+    }
+
+    fn create_uninitialized_buffer(
+        device: &wgpu::Device,
+        size: u64,
+        usage: wgpu::BufferUsages,
+        label: &str,
+    ) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            size,
+            usage,
+            mapped_at_creation: false,
             label: Some(label),
         })
     }
@@ -602,7 +692,7 @@ impl CountedRenderBuffer {
     }
 
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
-    /// binding for the full counted uniform buffer.
+    /// binding for the full counted render buffer.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
@@ -745,12 +835,38 @@ pub fn create_single_uniform_bind_group_entry(
     }
 }
 
+/// Creates a [`BindGroupLayoutEntry`](wgpu::BindGroupLayoutEntry) for a storage
+/// buffer, using the given binding and visibility for the bind group and
+/// whether the buffer should be read-only.
+pub const fn create_storage_buffer_bind_group_layout_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+    read_only: bool,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
 impl RenderBufferType {
     fn usage(&self) -> wgpu::BufferUsages {
         match self {
             Self::Vertex => wgpu::BufferUsages::VERTEX,
             Self::Index => wgpu::BufferUsages::INDEX,
             Self::Uniform => wgpu::BufferUsages::UNIFORM,
+            Self::Storage => {
+                wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST
+            }
+            Self::Result => wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         }
     }
 }
@@ -764,6 +880,8 @@ impl Display for RenderBufferType {
                 Self::Vertex => "vertex",
                 Self::Index => "index",
                 Self::Uniform => "uniform",
+                Self::Storage => "storage",
+                Self::Result => "result",
             }
         )
     }
