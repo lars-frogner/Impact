@@ -1,8 +1,8 @@
 //! Textures used as render attachments.
 
-use crate::{
-    gpu::{rendering::Blending, GraphicsDevice},
-    rendering::RenderingSurface,
+use crate::gpu::{
+    rendering::{Blending, RenderingSurface},
+    GraphicsDevice,
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
