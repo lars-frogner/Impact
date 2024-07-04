@@ -10,7 +10,7 @@ mod instance;
 mod light;
 mod mesh;
 mod postprocessing;
-mod render_pass;
+mod render_command;
 mod resource;
 mod shader;
 mod storage;
@@ -29,7 +29,7 @@ pub use compute::{
     GPUComputationID, GPUComputationLibrary, GPUComputationResourceGroup,
     GPUComputationSpecification,
 };
-pub use render_pass::{
+pub use render_command::{
     Blending, ComputePassSpecification, DepthMapUsage, OutputAttachmentSampling,
     RenderCommandManager, RenderCommandSpecification, RenderCommandState, RenderPassHints,
     RenderPassSpecification, SyncRenderCommands,
@@ -56,7 +56,7 @@ pub use texture::{
 };
 pub use uniform::SingleUniformRenderBuffer;
 
-use self::{render_pass::RenderCommandOutcome, resource::RenderResourceManager};
+use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager};
 use crate::{
     geometry::CubemapFace,
     scene::{MaterialLibrary, Scene, MAX_SHADOW_MAP_CASCADES},
