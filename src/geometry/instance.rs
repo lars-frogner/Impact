@@ -1,8 +1,11 @@
 //! Model instances.
 
 use crate::{
+    gpu::{
+        rendering::fre,
+        shader::{InstanceFeatureShaderInput, ModelViewTransformShaderInput},
+    },
     impl_InstanceFeature,
-    gpu::rendering::{fre, InstanceFeatureShaderInput, ModelViewTransformShaderInput},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{AlignedByteVec, Alignment, Hash64, KeyIndexMapper};

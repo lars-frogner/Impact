@@ -5,10 +5,7 @@ use crate::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,
     },
-    gpu::{
-        rendering::{buffer::RenderBuffer, InstanceFeatureShaderInput},
-        GraphicsDevice,
-    },
+    gpu::{rendering::buffer::RenderBuffer, shader::InstanceFeatureShaderInput, GraphicsDevice},
 };
 use std::{borrow::Cow, ops::Range};
 

@@ -3,10 +3,8 @@
 use crate::{
     geometry::VertexAttributeSet,
     gpu::{
-        rendering::{
-            Assets, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
-            SkyboxTextureShaderInput,
-        },
+        rendering::{Assets, RenderAttachmentQuantitySet, RenderPassHints},
+        shader::{MaterialShaderInput, SkyboxTextureShaderInput},
         GraphicsDevice,
     },
     scene::{

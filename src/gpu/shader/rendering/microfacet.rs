@@ -1,12 +1,15 @@
 //! Generation of shaders for microfacet materials.
 
 use super::{
-    append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
-    LightMaterialFeatureShaderInput, LightShaderGenerator, LightVertexOutputFieldIndices,
-    MeshVertexOutputFieldIndices, OmnidirectionalLightShaderGenerator, OutputStructBuilder,
-    PushConstantFieldExpressions, SampledTexture, SourceCode, TextureType,
-    UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
+        LightMaterialFeatureShaderInput, OutputStructBuilder, SampledTexture, SourceCode,
+        TextureType, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
+        VECTOR_4_TYPE,
+    },
+    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
+    OmnidirectionalLightShaderGenerator, PushConstantFieldExpressions,
+    UnidirectionalLightShaderGenerator,
 };
 use crate::gpu::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
 use naga::{Function, Module};
@@ -57,7 +60,7 @@ pub struct MicrofacetTextureShaderInput {
 
 /// Shader generator for a microfacet material.
 #[derive(Clone, Debug)]
-pub struct MicrofacetShaderGenerator<'a> {
+pub(super) struct MicrofacetShaderGenerator<'a> {
     model: &'a MicrofacetShadingModel,
     feature_input: &'a LightMaterialFeatureShaderInput,
     texture_input: &'a MicrofacetTextureShaderInput,
@@ -66,7 +69,7 @@ pub struct MicrofacetShaderGenerator<'a> {
 /// Indices of the fields holding the various microfacet properties in the
 /// vertex shader output struct.
 #[derive(Clone, Debug)]
-pub struct MicrofacetVertexOutputFieldIndices {
+pub(super) struct MicrofacetVertexOutputFieldIndices {
     albedo: Option<usize>,
     specular_reflectance: Option<usize>,
     roughness: usize,

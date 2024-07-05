@@ -11,7 +11,6 @@ mod mesh;
 mod postprocessing;
 mod render_command;
 mod resource;
-mod shader;
 mod storage;
 mod surface;
 mod tasks;
@@ -34,18 +33,6 @@ pub use render_command::{
     RenderPassSpecification, SyncRenderCommands,
 };
 pub use resource::SyncRenderResources;
-pub use shader::{
-    AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
-    BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput, CameraShaderInput,
-    ComputeShaderGenerator, ComputeShaderInput, DiffuseMicrofacetShadingModel,
-    FixedColorFeatureShaderInput, FixedTextureShaderInput, GaussianBlurShaderInput,
-    InstanceFeatureShaderInput, LightMaterialFeatureShaderInput, LightShaderInput,
-    MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel, MicrofacetTextureShaderInput,
-    ModelViewTransformShaderInput, NormalMappingShaderInput, OmnidirectionalLightShaderInput,
-    ParallaxMappingShaderInput, PassthroughShaderInput, PrepassTextureShaderInput,
-    RenderShaderGenerator, Shader, SkyboxTextureShaderInput, SpecularMicrofacetShadingModel,
-    ToneMappingShaderInput, UnidirectionalLightShaderInput,
-};
 pub use storage::{StorageBufferID, StorageRenderBuffer, StorageRenderBufferManager};
 pub use surface::RenderingSurface;
 pub use tasks::{Render, RenderingTag};

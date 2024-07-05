@@ -53,9 +53,10 @@ use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     gpu::{
         rendering::{
-            fre, Assets, MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
-            SingleUniformRenderBuffer, StorageRenderBuffer, TextureID,
+            fre, Assets, RenderAttachmentQuantitySet, RenderPassHints, SingleUniformRenderBuffer,
+            StorageRenderBuffer, TextureID,
         },
+        shader::MaterialShaderInput,
         GraphicsDevice,
     },
     scene::InstanceFeatureManager,

@@ -4,10 +4,11 @@ use crate::{
     geometry::VertexAttributeSet,
     gpu::{
         rendering::{
-            fre, DepthMapUsage, MaterialShaderInput, OutputAttachmentSampling,
-            PassthroughShaderInput, RenderAttachmentQuantity, RenderCommandSpecification,
-            RenderCommandState, RenderPassHints, RenderPassSpecification,
+            fre, DepthMapUsage, OutputAttachmentSampling, RenderAttachmentQuantity,
+            RenderCommandSpecification, RenderCommandState, RenderPassHints,
+            RenderPassSpecification,
         },
+        shader::{MaterialShaderInput, PassthroughShaderInput},
         GraphicsDevice,
     },
     scene::{

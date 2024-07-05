@@ -14,7 +14,8 @@ use crate::{
         VoxelType,
     },
     gpu::{
-        rendering::{fre, Assets, DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
+        rendering::{fre, Assets},
+        shader::{DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
         GraphicsDevice,
     },
     num::Float,

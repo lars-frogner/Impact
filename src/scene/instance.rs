@@ -430,8 +430,8 @@ impl InstanceFeatureManager {
 mod test {
     use super::*;
     use crate::{
+        gpu::shader::InstanceFeatureShaderInput,
         impl_InstanceFeature,
-        gpu::rendering::InstanceFeatureShaderInput,
         scene::{MaterialHandle, MaterialID, MeshID},
     };
     use bytemuck::{Pod, Zeroable};

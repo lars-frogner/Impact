@@ -2,45 +2,34 @@
 //! color to an output attachment.
 
 use super::{
-    insert_in_arena, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        insert_in_arena, InputStruct, OutputStructBuilder, SampledTexture, SourceCode, TextureType,
+        VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    MeshVertexOutputFieldIndices, PushConstantFieldExpressions, RenderShaderTricks,
 };
-use crate::scene::ToneMapping;
 use naga::{Function, Module};
 
 /// Input description specifying the bindings for the texture to pass through to
 /// the output attachment.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ToneMappingShaderInput {
-    /// The tone mapping method to use.
-    pub mapping: ToneMapping,
+pub struct PassthroughShaderInput {
     /// Bind group bindings of the input color texture and its sampler.
     pub input_texture_and_sampler_bindings: (u32, u32),
 }
 
-/// Generator for a tone mapping shader.
+/// Generator for a passthrough shader.
 #[derive(Clone, Debug)]
-pub struct ToneMappingShaderGenerator<'a> {
-    input: &'a ToneMappingShaderInput,
+pub(super) struct PassthroughShaderGenerator<'a> {
+    input: &'a PassthroughShaderInput,
 }
 
-impl ToneMapping {
-    fn function_name(&self) -> Option<&'static str> {
-        match self {
-            Self::None => None,
-            Self::ACES => Some("toneMapACES"),
-            Self::KhronosPBRNeutral => Some("toneMapKhronosPBRNeutral"),
-        }
-    }
-}
-
-impl<'a> ToneMappingShaderGenerator<'a> {
+impl<'a> PassthroughShaderGenerator<'a> {
     /// The [`ShaderTricks`] employed by the material.
-    pub const TRICKS: ShaderTricks = ShaderTricks::NO_VERTEX_PROJECTION;
+    pub const TRICKS: RenderShaderTricks = RenderShaderTricks::NO_VERTEX_PROJECTION;
 
     /// Creates a new shader generator using the given input description.
-    pub fn new(input: &'a ToneMappingShaderInput) -> Self {
+    pub fn new(input: &'a PassthroughShaderInput) -> Self {
         Self { input }
     }
 
@@ -95,18 +84,6 @@ impl<'a> ToneMappingShaderGenerator<'a> {
             None,
         );
 
-        let tone_mapped_color_expr = if let Some(function_name) = self.input.mapping.function_name()
-        {
-            source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                function_name,
-                vec![input_color_expr],
-            )
-        } else {
-            input_color_expr
-        };
-
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
         output_struct_builder.add_field(
@@ -115,7 +92,7 @@ impl<'a> ToneMappingShaderGenerator<'a> {
             None,
             None,
             VECTOR_4_SIZE,
-            tone_mapped_color_expr,
+            input_color_expr,
         );
 
         output_struct_builder.generate_output_code(&mut module.types, fragment_function);

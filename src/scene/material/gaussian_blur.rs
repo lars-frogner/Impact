@@ -5,10 +5,10 @@ use crate::{
     geometry::VertexAttributeSet,
     gpu::{
         rendering::{
-            create_uniform_buffer_bind_group_layout_entry, fre, GaussianBlurShaderInput,
-            MaterialShaderInput, RenderAttachmentQuantity, RenderPassHints,
-            SingleUniformRenderBuffer, UniformBufferable,
+            create_uniform_buffer_bind_group_layout_entry, fre, RenderAttachmentQuantity,
+            RenderPassHints, SingleUniformRenderBuffer, UniformBufferable,
         },
+        shader::{GaussianBlurShaderInput, MaterialShaderInput},
         GraphicsDevice,
     },
     scene::{MaterialSpecificResourceGroup, MaterialSpecification},

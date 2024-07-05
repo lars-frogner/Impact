@@ -1,15 +1,18 @@
 //! Generation of shaders for material using vertex colors included in the mesh.
 
 use super::{
-    append_unity_component_to_vec3, insert_in_arena, InputStruct, MeshVertexOutputFieldIndices,
-    OutputStructBuilder, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        append_unity_component_to_vec3, insert_in_arena, InputStruct, OutputStructBuilder,
+        VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    MeshVertexOutputFieldIndices,
 };
 use naga::{Function, Module};
 
 /// Shader generator for the case when vertex colors included in the mesh are
 /// used to obtain the fragment color.
 #[derive(Copy, Clone, Debug)]
-pub struct VertexColorShaderGenerator;
+pub(super) struct VertexColorShaderGenerator;
 
 impl VertexColorShaderGenerator {
     /// Generates the fragment shader code specific to this material

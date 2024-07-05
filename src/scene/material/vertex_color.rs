@@ -2,7 +2,10 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    gpu::rendering::{MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints},
+    gpu::{
+        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
+        shader::MaterialShaderInput,
+    },
     scene::{
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialSpecification,
         RenderResourcesDesynchronized, VertexColorComp,

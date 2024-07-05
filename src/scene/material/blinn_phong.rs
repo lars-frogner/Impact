@@ -4,10 +4,8 @@ use super::{create_material_feature, create_prepass_material};
 use crate::{
     geometry::VertexAttributeSet,
     gpu::{
-        rendering::{
-            Assets, BlinnPhongTextureShaderInput, MaterialShaderInput, RenderAttachmentQuantitySet,
-            RenderPassHints,
-        },
+        rendering::{Assets, RenderAttachmentQuantitySet, RenderPassHints},
+        shader::{BlinnPhongTextureShaderInput, MaterialShaderInput},
         GraphicsDevice,
     },
     scene::{

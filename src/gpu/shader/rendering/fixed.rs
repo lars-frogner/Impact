@@ -2,9 +2,12 @@
 //! or texture.
 
 use super::{
-    append_unity_component_to_vec3, insert_in_arena, new_name, InputStruct,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, SampledTexture, TextureType, VECTOR_3_SIZE,
-    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        append_unity_component_to_vec3, insert_in_arena, new_name, InputStruct,
+        OutputStructBuilder, SampledTexture, TextureType, VECTOR_3_SIZE, VECTOR_3_TYPE,
+        VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    MeshVertexOutputFieldIndices,
 };
 use naga::{Function, Interpolation, Module, Sampling};
 
@@ -30,14 +33,14 @@ pub struct FixedTextureShaderInput {
 /// Shader generator for a
 /// [`FixedColorMaterial`](crate::scene::FixedColorMaterial).
 #[derive(Clone, Debug)]
-pub struct FixedColorShaderGenerator<'a> {
+pub(super) struct FixedColorShaderGenerator<'a> {
     feature_input: &'a FixedColorFeatureShaderInput,
 }
 
 /// Shader generator for a
 /// [`FixedTextureMaterial`](crate::scene::FixedTextureMaterial).
 #[derive(Clone, Debug)]
-pub struct FixedTextureShaderGenerator<'a> {
+pub(super) struct FixedTextureShaderGenerator<'a> {
     texture_input: &'a FixedTextureShaderInput,
 }
 
@@ -45,7 +48,7 @@ pub struct FixedTextureShaderGenerator<'a> {
 /// vertex shader output struct.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
-pub struct FixedColorVertexOutputFieldIdx(usize);
+pub(super) struct FixedColorVertexOutputFieldIdx(usize);
 
 impl<'a> FixedColorShaderGenerator<'a> {
     /// Creates a new shader generator using the given input

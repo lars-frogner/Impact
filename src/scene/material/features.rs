@@ -3,8 +3,11 @@
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
     geometry::{InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID},
+    gpu::{
+        rendering::fre,
+        shader::{InstanceFeatureShaderInput, LightMaterialFeatureShaderInput},
+    },
     impl_InstanceFeature,
-    gpu::rendering::{fre, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput},
     scene::{
         AlbedoComp, EmissiveLuminanceComp, InstanceFeatureManager, ParallaxMapComp, RGBColor,
         SpecularReflectanceComp,

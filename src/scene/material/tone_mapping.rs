@@ -2,9 +2,9 @@
 
 use crate::{
     geometry::VertexAttributeSet,
-    gpu::rendering::{
-        MaterialShaderInput, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
-        RenderPassHints, ToneMappingShaderInput,
+    gpu::{
+        rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderPassHints},
+        shader::{MaterialShaderInput, ToneMappingShaderInput},
     },
     scene::MaterialSpecification,
 };

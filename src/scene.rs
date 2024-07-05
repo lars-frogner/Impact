@@ -9,7 +9,6 @@ mod material;
 mod mesh;
 mod model;
 mod postprocessing;
-mod shader;
 mod systems;
 mod tasks;
 mod texture_projection;
@@ -60,7 +59,6 @@ pub use mesh::{
 };
 pub use model::ModelID;
 pub use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
-pub use shader::{ShaderID, ShaderManager};
 pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
 pub use tasks::{
     BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
@@ -77,6 +75,7 @@ use crate::{
     geometry::Radians,
     gpu::{
         rendering::{fre, Assets},
+        shader::ShaderManager,
         GraphicsDevice,
     },
 };
