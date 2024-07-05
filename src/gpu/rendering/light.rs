@@ -8,8 +8,11 @@ use crate::{
             buffer::{self, UniformBufferable},
             texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
             uniform::{MultiUniformRenderBuffer, UniformTransferResult},
-            AmbientLightShaderInput, CascadeIdx, LightShaderInput, OmnidirectionalLightShaderInput,
-            RenderingConfig, UnidirectionalLightShaderInput,
+            CascadeIdx, RenderingConfig,
+        },
+        shader::{
+            AmbientLightShaderInput, LightShaderInput, OmnidirectionalLightShaderInput,
+            UnidirectionalLightShaderInput,
         },
         GraphicsDevice,
     },

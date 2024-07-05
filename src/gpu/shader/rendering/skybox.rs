@@ -1,8 +1,11 @@
 //! Generation of shaders for rendering skyboxes.
 
 use super::{
-    insert_in_arena, InputStruct, MeshVertexInputExpressions, OutputStructBuilder, SampledTexture,
-    ShaderTricks, TextureType, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        insert_in_arena, InputStruct, OutputStructBuilder, SampledTexture, TextureType,
+        VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    MeshVertexInputExpressions, RenderShaderTricks,
 };
 use naga::{Function, Module};
 
@@ -16,21 +19,21 @@ pub struct SkyboxTextureShaderInput {
 
 /// Generator for a skybox shader.
 #[derive(Clone, Debug)]
-pub struct SkyboxShaderGenerator<'a> {
+pub(super) struct SkyboxShaderGenerator<'a> {
     input: &'a SkyboxTextureShaderInput,
 }
 
 /// Indices of the fields holding the skybox properties in the vertex shader
 /// output struct.
 #[derive(Clone, Debug)]
-pub struct SkyboxVertexOutputFieldIndices {
+pub(super) struct SkyboxVertexOutputFieldIndices {
     model_space_position: usize,
 }
 
 impl<'a> SkyboxShaderGenerator<'a> {
     /// The [`ShaderTricks`] employed by the material.
-    pub const TRICKS: ShaderTricks =
-        ShaderTricks::FOLLOW_CAMERA.union(ShaderTricks::DRAW_AT_MAX_DEPTH);
+    pub const TRICKS: RenderShaderTricks =
+        RenderShaderTricks::FOLLOW_CAMERA.union(RenderShaderTricks::DRAW_AT_MAX_DEPTH);
 
     /// Creates a new shader generator using the given input description.
     pub fn new(input: &'a SkyboxTextureShaderInput) -> Self {

@@ -5,10 +5,12 @@ use crate::{
     geometry::VertexAttributeSet,
     gpu::{
         rendering::{
-            create_uniform_buffer_bind_group_layout_entry, fre,
+            create_uniform_buffer_bind_group_layout_entry, fre, RenderAttachmentQuantitySet,
+            RenderPassHints, SingleUniformRenderBuffer, UniformBufferable,
+        },
+        shader::{
             AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
-            MaterialShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
-            SingleUniformRenderBuffer, UniformBufferable,
+            MaterialShaderInput,
         },
         GraphicsDevice,
     },

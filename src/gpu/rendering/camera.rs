@@ -4,8 +4,9 @@ use crate::assert_uniform_valid;
 use crate::geometry::Camera;
 use crate::gpu::rendering::{
     buffer::{self, RenderBuffer, UniformBufferable},
-    fre, CameraShaderInput,
+    fre,
 };
+use crate::gpu::shader::CameraShaderInput;
 use crate::gpu::GraphicsDevice;
 use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;

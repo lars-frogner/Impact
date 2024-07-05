@@ -1,5 +1,6 @@
 mod device;
 pub mod rendering;
+pub mod shader;
 
 pub use device::GraphicsDevice;
 

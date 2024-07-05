@@ -11,18 +11,20 @@ use crate::{
             camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
             light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
             postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
-            texture::SHADOW_MAP_FORMAT, CameraShaderInput, CascadeIdx, ComputeShaderInput,
-            GPUComputationID, GPUComputationLibrary, GPUComputationSpecification,
-            InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput, MeshShaderInput,
-            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-            RenderingConfig, RenderingSurface, Shader,
+            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationID, GPUComputationLibrary,
+            GPUComputationSpecification, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+            RenderAttachmentTextureManager, RenderingConfig, RenderingSurface,
+        },
+        shader::{
+            CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,
+            MaterialShaderInput, MeshShaderInput, Shader, ShaderManager,
         },
         GraphicsDevice,
     },
     scene::{
         LightID, LightType, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
         MaterialPropertyTextureGroupID, MaterialSpecification, MeshID, ModelID, Postprocessor,
-        ShaderManager, MAX_SHADOW_MAP_CASCADES,
+        MAX_SHADOW_MAP_CASCADES,
     },
 };
 use anyhow::{anyhow, Result};

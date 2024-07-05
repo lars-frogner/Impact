@@ -9,8 +9,9 @@ use crate::{
     gpu::{
         rendering::{
             buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
-            fre, MeshShaderInput,
+            fre,
         },
+        shader::MeshShaderInput,
         GraphicsDevice,
     },
     scene::MeshID,

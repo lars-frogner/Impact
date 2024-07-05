@@ -1,11 +1,13 @@
 //! Generation of shaders for Gaussian blur.
 
 use super::{
-    append_to_arena, emit, emit_in_func, include_expr_in_func, include_named_expr_in_func,
-    insert_in_arena, new_name, push_to_block, swizzle_xy_expr, ForLoop, InputStruct,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, PushConstantFieldExpressions,
-    SampledTexture, ShaderTricks, SourceCode, TextureType, U32_TYPE, U32_WIDTH, VECTOR_4_SIZE,
-    VECTOR_4_TYPE,
+    super::{
+        append_to_arena, emit, emit_in_func, include_expr_in_func, include_named_expr_in_func,
+        insert_in_arena, new_name, push_to_block, swizzle_xy_expr, ForLoop, InputStruct,
+        OutputStructBuilder, SampledTexture, SourceCode, TextureType, U32_TYPE, U32_WIDTH,
+        VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    MeshVertexOutputFieldIndices, PushConstantFieldExpressions, RenderShaderTricks,
 };
 use crate::scene::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS};
 use naga::{
@@ -28,7 +30,7 @@ pub struct GaussianBlurShaderInput {
 
 /// Generator for a Gaussian blur shader.
 #[derive(Clone, Debug)]
-pub struct GaussianBlurShaderGenerator<'a> {
+pub(super) struct GaussianBlurShaderGenerator<'a> {
     input: &'a GaussianBlurShaderInput,
 }
 
@@ -50,7 +52,7 @@ impl GaussianBlurDirection {
 
 impl<'a> GaussianBlurShaderGenerator<'a> {
     /// The [`ShaderTricks`] employed by the material.
-    pub const TRICKS: ShaderTricks = ShaderTricks::NO_VERTEX_PROJECTION;
+    pub const TRICKS: RenderShaderTricks = RenderShaderTricks::NO_VERTEX_PROJECTION;
 
     /// Creates a new shader generator using the given input description.
     pub fn new(input: &'a GaussianBlurShaderInput) -> Self {

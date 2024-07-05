@@ -4,10 +4,10 @@ use super::{create_material_feature, create_prepass_material};
 use crate::{
     geometry::VertexAttributeSet,
     gpu::{
-        rendering::{
-            Assets, DiffuseMicrofacetShadingModel, MaterialShaderInput, MicrofacetShadingModel,
-            MicrofacetTextureShaderInput, RenderAttachmentQuantitySet, RenderPassHints,
-            SpecularMicrofacetShadingModel,
+        rendering::{Assets, RenderAttachmentQuantitySet, RenderPassHints},
+        shader::{
+            DiffuseMicrofacetShadingModel, MaterialShaderInput, MicrofacetShadingModel,
+            MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
         },
         GraphicsDevice,
     },

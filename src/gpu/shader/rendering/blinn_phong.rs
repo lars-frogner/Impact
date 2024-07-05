@@ -1,12 +1,15 @@
 //! Generation of shaders for Blinn-Phong materials.
 
 use super::{
-    append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
-    LightMaterialFeatureShaderInput, LightShaderGenerator, LightVertexOutputFieldIndices,
-    MeshVertexOutputFieldIndices, OmnidirectionalLightShaderGenerator, OutputStructBuilder,
-    PushConstantFieldExpressions, SampledTexture, SourceCode, TextureType,
-    UnidirectionalLightShaderGenerator, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        append_unity_component_to_vec3, insert_in_arena, InputStruct, InputStructBuilder,
+        LightMaterialFeatureShaderInput, OutputStructBuilder, SampledTexture, SourceCode,
+        TextureType, F32_TYPE, F32_WIDTH, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
+        VECTOR_4_TYPE,
+    },
+    LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
+    OmnidirectionalLightShaderGenerator, PushConstantFieldExpressions,
+    UnidirectionalLightShaderGenerator,
 };
 use crate::gpu::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
 use naga::{Function, Module};
@@ -24,7 +27,7 @@ pub struct BlinnPhongTextureShaderInput {
 
 /// Shader generator for a Blinn-Phong material.
 #[derive(Clone, Debug)]
-pub struct BlinnPhongShaderGenerator<'a> {
+pub(super) struct BlinnPhongShaderGenerator<'a> {
     feature_input: &'a LightMaterialFeatureShaderInput,
     texture_input: &'a BlinnPhongTextureShaderInput,
 }
@@ -32,7 +35,7 @@ pub struct BlinnPhongShaderGenerator<'a> {
 /// Indices of the fields holding the various Blinn-Phong
 /// properties in the vertex shader output struct.
 #[derive(Clone, Debug)]
-pub struct BlinnPhongVertexOutputFieldIndices {
+pub(super) struct BlinnPhongVertexOutputFieldIndices {
     albedo: Option<usize>,
     specular_reflectance: Option<usize>,
     shininess: usize,

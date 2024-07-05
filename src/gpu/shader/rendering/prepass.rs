@@ -1,11 +1,13 @@
 //! Generation of shaders executed as preparation for a main shading pass.
 
 use super::{
-    append_unity_component_to_vec3, emit_in_func, include_expr_in_func, insert_in_arena,
-    InputStruct, InputStructBuilder, LightMaterialFeatureShaderInput, LightShaderGenerator,
-    MeshVertexOutputFieldIndices, OutputStructBuilder, PushConstantFieldExpressions,
-    SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
-    VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        append_unity_component_to_vec3, emit_in_func, include_expr_in_func, insert_in_arena,
+        InputStruct, InputStructBuilder, LightMaterialFeatureShaderInput, OutputStructBuilder,
+        SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
+        VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    LightShaderGenerator, MeshVertexOutputFieldIndices, PushConstantFieldExpressions,
 };
 use crate::gpu::rendering::RenderAttachmentQuantitySet;
 use naga::{BinaryOperator, Expression, Function, Handle, Module};
@@ -49,7 +51,7 @@ pub struct ParallaxMappingShaderInput {
 
 /// Shader generator for a prepass material.
 #[derive(Clone, Debug)]
-pub struct PrepassShaderGenerator<'a> {
+pub(super) struct PrepassShaderGenerator<'a> {
     feature_input: &'a LightMaterialFeatureShaderInput,
     texture_input: &'a PrepassTextureShaderInput,
 }
@@ -57,7 +59,7 @@ pub struct PrepassShaderGenerator<'a> {
 /// Indices of the fields holding the various prepass properties in the
 /// vertex shader output struct.
 #[derive(Clone, Debug)]
-pub struct PrepassVertexOutputFieldIndices {
+pub(super) struct PrepassVertexOutputFieldIndices {
     albedo: Option<usize>,
     specular_reflectance: Option<usize>,
     emissive_luminance: Option<usize>,

@@ -1,11 +1,14 @@
 //! Generation of shaders for ambient occlusion.
 
 use super::{
-    append_to_arena, append_unity_component_to_vec3, emit, emit_in_func, include_expr_in_func,
-    include_named_expr_in_func, insert_in_arena, new_name, push_to_block, CameraProjectionVariable,
-    ForLoop, InputStruct, MeshVertexOutputFieldIndices, OutputStructBuilder,
-    PushConstantFieldExpressions, SampledTexture, ShaderTricks, SourceCode, TextureType, F32_TYPE,
-    F32_WIDTH, U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    super::{
+        append_to_arena, append_unity_component_to_vec3, emit, emit_in_func, include_expr_in_func,
+        include_named_expr_in_func, insert_in_arena, new_name, push_to_block, ForLoop, InputStruct,
+        OutputStructBuilder, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
+        U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    },
+    CameraProjectionVariable, MeshVertexOutputFieldIndices, PushConstantFieldExpressions,
+    RenderShaderTricks,
 };
 use crate::{gpu::rendering::RenderAttachmentQuantity, scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT};
 use naga::{
@@ -32,13 +35,13 @@ pub struct AmbientOcclusionCalculationShaderInput {
 
 /// Generator for an ambient occlusion shader.
 #[derive(Clone, Debug)]
-pub struct AmbientOcclusionShaderGenerator<'a> {
+pub(super) struct AmbientOcclusionShaderGenerator<'a> {
     input: &'a AmbientOcclusionShaderInput,
 }
 
 impl<'a> AmbientOcclusionShaderGenerator<'a> {
     /// The [`ShaderTricks`] employed by the material.
-    pub const TRICKS: ShaderTricks = ShaderTricks::NO_VERTEX_PROJECTION;
+    pub const TRICKS: RenderShaderTricks = RenderShaderTricks::NO_VERTEX_PROJECTION;
 
     /// Creates a new shader generator using the given input description.
     pub fn new(input: &'a AmbientOcclusionShaderInput) -> Self {
