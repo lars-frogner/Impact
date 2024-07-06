@@ -72,12 +72,9 @@ pub use voxel::{
 };
 
 use crate::{
+    assets::Assets,
     geometry::Radians,
-    gpu::{
-        rendering::{fre, Assets},
-        shader::ShaderManager,
-        GraphicsDevice,
-    },
+    gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
 };
 use std::sync::RwLock;
 

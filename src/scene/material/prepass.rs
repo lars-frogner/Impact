@@ -2,9 +2,10 @@
 
 use super::NormalMapComp;
 use crate::{
+    assets::{Assets, TextureID},
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     gpu::{
-        rendering::{Assets, RenderAttachmentQuantitySet, RenderPassHints, TextureID},
+        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
             BumpMappingTextureShaderInput, MaterialShaderInput, NormalMappingShaderInput,
             ParallaxMappingShaderInput, PrepassTextureShaderInput,

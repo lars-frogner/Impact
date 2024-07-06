@@ -50,9 +50,10 @@ pub use tone_mapping::{create_tone_mapping_material, ToneMapping};
 pub use vertex_color::VertexColorMaterial;
 
 use crate::{
+    assets::{Assets, TextureID},
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     gpu::{
-        rendering::{fre, Assets, RenderAttachmentQuantitySet, RenderPassHints, TextureID},
+        rendering::{fre, RenderAttachmentQuantitySet, RenderPassHints},
         shader::MaterialShaderInput,
         storage::StorageRenderBuffer,
         uniform::SingleUniformRenderBuffer,

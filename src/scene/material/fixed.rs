@@ -2,9 +2,10 @@
 
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
+    assets::Assets,
     geometry::{InstanceFeature, VertexAttributeSet},
     gpu::{
-        rendering::{Assets, RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
             FixedColorFeatureShaderInput, FixedTextureShaderInput, InstanceFeatureShaderInput,
             MaterialShaderInput,
