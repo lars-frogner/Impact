@@ -4,7 +4,6 @@ mod assets;
 mod brdf;
 pub(super) mod buffer;
 mod camera;
-mod compute;
 mod instance;
 mod light;
 mod mesh;
@@ -20,10 +19,6 @@ pub use brdf::create_specular_ggx_reflectance_lookup_tables;
 pub use buffer::{
     create_uniform_buffer_bind_group_layout_entry, create_vertex_buffer_layout_for_instance,
     create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
-};
-pub use compute::{
-    GPUComputationID, GPUComputationLibrary, GPUComputationResourceGroup,
-    GPUComputationSpecification,
 };
 pub use render_command::{
     Blending, ComputePassSpecification, DepthMapUsage, OutputAttachmentSampling,
@@ -42,7 +37,7 @@ pub use texture::{
 use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager};
 use crate::{
     geometry::CubemapFace,
-    gpu::GraphicsDevice,
+    gpu::{compute::GPUComputationLibrary, GraphicsDevice},
     scene::{MaterialLibrary, Scene, MAX_SHADOW_MAP_CASCADES},
     window::EventLoopController,
 };

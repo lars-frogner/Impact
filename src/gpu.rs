@@ -1,3 +1,4 @@
+pub mod compute;
 mod device;
 pub mod rendering;
 pub mod shader;
