@@ -2,7 +2,6 @@
 
 use crate::{
     assets::Assets,
-    geometry::VertexAttributeSet,
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{MaterialShaderInput, SkyboxTextureShaderInput},
@@ -12,6 +11,7 @@ use crate::{
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
         MaterialPropertyTextureGroupID, MaterialSpecification, SkyboxComp,
     },
+    mesh::VertexAttributeSet,
     scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

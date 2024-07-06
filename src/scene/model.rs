@@ -1,6 +1,6 @@
 //! Management of models.
 
-use crate::{material::MaterialHandle, scene::MeshID};
+use crate::{material::MaterialHandle, mesh::MeshID};
 use impact_utils::{self, Hash64};
 use std::{
     cmp,

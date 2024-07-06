@@ -1,12 +1,12 @@
 //! Material for applying tone mapping.
 
 use crate::{
-    geometry::VertexAttributeSet,
     gpu::{
         rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderPassHints},
         shader::{MaterialShaderInput, ToneMappingShaderInput},
     },
     material::MaterialSpecification,
+    mesh::VertexAttributeSet,
 };
 use std::fmt::Display;
 

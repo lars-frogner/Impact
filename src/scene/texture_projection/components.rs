@@ -2,7 +2,7 @@
 
 use crate::{
     components::ComponentRegistry, geometry::PlanarTextureProjection, gpu::rendering::fre,
-    scene::RectangleMeshComp,
+    mesh::RectangleMeshComp,
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};

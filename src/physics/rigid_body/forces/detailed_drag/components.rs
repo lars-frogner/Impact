@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to the detailed
 //! drag model.
 
-use crate::{physics::fph, scene::MeshID};
+use crate::{mesh::MeshID, physics::fph};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 

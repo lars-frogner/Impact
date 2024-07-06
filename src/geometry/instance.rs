@@ -903,7 +903,7 @@ macro_rules! impl_InstanceFeature {
                 impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
 
             const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-                $crate::gpu::rendering::create_vertex_buffer_layout_for_instance::<Self>(
+                $crate::mesh::buffer::create_vertex_buffer_layout_for_instance::<Self>(
                     &$vertex_attr_array,
                 );
 

@@ -1,13 +1,15 @@
 //! Management of camera data for rendering.
 
-use crate::assert_uniform_valid;
-use crate::geometry::Camera;
-use crate::gpu::rendering::{
-    buffer::{self, RenderBuffer, UniformBufferable},
-    fre,
+use crate::{
+    assert_uniform_valid,
+    geometry::Camera,
+    gpu::{
+        rendering::{buffer::RenderBuffer, fre},
+        shader::CameraShaderInput,
+        uniform::{self, UniformBufferable},
+        GraphicsDevice,
+    },
 };
-use crate::gpu::shader::CameraShaderInput;
-use crate::gpu::GraphicsDevice;
 use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
 use std::borrow::Cow;
@@ -136,7 +138,7 @@ impl CameraRenderBufferManager {
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            entries: &[buffer::create_single_uniform_bind_group_entry(
+            entries: &[uniform::create_single_uniform_bind_group_entry(
                 Self::BINDING,
                 transform_render_buffer,
             )],
@@ -161,7 +163,7 @@ impl UniformBufferable for Projective3<fre> {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(Projective3<fre>);

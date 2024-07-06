@@ -2,19 +2,19 @@
 
 use crate::{
     assets::Assets,
-    geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
+    geometry::{OrthographicCamera, PerspectiveCamera},
     gpu::{rendering::fre, GraphicsDevice},
     material::{
         self, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
         VertexColorMaterial,
     },
+    mesh::{self, MeshComp},
     physics::ReferenceFrameComp,
     scene::{
-        self, AmbientLight, MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight,
-        ParentComp, Scene, SceneGraphGroupComp, SceneGraphGroupNodeComp,
-        SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
-        UncullableComp, UnidirectionalLight, VoxelManager, VoxelTreeComp, VoxelTreeNodeComp,
-        VoxelTypeComp,
+        self, AmbientLight, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
+        SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
+        SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
+        VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
     },
     window::{self, Window},
 };
@@ -126,7 +126,7 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        TriangleMesh::add_mesh_component_for_entity(
+        mesh::entity::add_mesh_component_for_entity(
             self.mesh_repository(),
             components,
             desynchronized,
@@ -411,7 +411,7 @@ impl Scene {
     }
 
     fn generate_missing_vertex_properties_for_mesh(&self, components: &ArchetypeComponentStorage) {
-        TriangleMesh::generate_missing_vertex_properties_for_material(
+        mesh::entity::generate_missing_vertex_properties_for_material(
             self.mesh_repository(),
             &self.material_library().read().unwrap(),
             components,

@@ -2,20 +2,17 @@
 
 use crate::{
     assert_uniform_valid,
-    geometry::VertexAttributeSet,
     gpu::{
-        rendering::{
-            create_uniform_buffer_bind_group_layout_entry, fre, RenderAttachmentQuantitySet,
-            RenderPassHints, UniformBufferable,
-        },
+        rendering::{fre, RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
             AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
             MaterialShaderInput,
         },
-        uniform::SingleUniformRenderBuffer,
+        uniform::{self, SingleUniformRenderBuffer, UniformBufferable},
         GraphicsDevice,
     },
     material::{MaterialSpecificResourceGroup, MaterialSpecification},
+    mesh::VertexAttributeSet,
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};
@@ -155,7 +152,7 @@ impl UniformBufferable for AmbientOcclusionSamples {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(AmbientOcclusionSamples);

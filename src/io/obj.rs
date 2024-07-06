@@ -2,10 +2,7 @@
 
 use crate::{
     assets::Assets,
-    geometry::{
-        TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
-        VertexTextureCoords,
-    },
+    geometry::TextureProjection,
     gpu::{
         rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
         GraphicsDevice,
@@ -14,7 +11,10 @@ use crate::{
         AlbedoComp, AlbedoTextureComp, NormalMapComp, RGBColor, RoughnessComp,
         SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,
     },
-    scene::{MeshComp, MeshID, MeshRepository},
+    mesh::{
+        MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor, VertexNormalVector,
+        VertexPosition, VertexTextureCoords,
+    },
 };
 use anyhow::{bail, Result};
 use impact_ecs::{

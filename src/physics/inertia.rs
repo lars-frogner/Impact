@@ -1,7 +1,7 @@
 //! Computation and representation of inertia-related properties.
 
 use crate::{
-    geometry::TriangleMesh,
+    mesh::TriangleMesh,
     num::Float,
     physics::{fph, Position},
 };
@@ -624,7 +624,7 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::geometry::FrontFaceSide;
+    use crate::mesh::FrontFaceSide;
     use approx::abs_diff_eq;
     use nalgebra::{Similarity3, Translation3, UnitQuaternion};
     use proptest::prelude::*;

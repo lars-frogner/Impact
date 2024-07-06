@@ -36,11 +36,11 @@ use super::{
     VECTOR_4_TYPE,
 };
 use crate::{
-    geometry::{
+    gpu::rendering::{fre, RenderAttachmentQuantitySet},
+    mesh::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
         VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
-    gpu::rendering::{fre, RenderAttachmentQuantitySet},
     scene::MAX_SHADOW_MAP_CASCADES,
 };
 use ambient_occlusion::AmbientOcclusionShaderGenerator;

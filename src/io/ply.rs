@@ -1,12 +1,12 @@
 //! Input/output of mesh data in Polygon File Format.
 
 use crate::{
-    geometry::{
-        TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
-        VertexTextureCoords,
-    },
+    geometry::TextureProjection,
     gpu::rendering::fre,
-    scene::{MeshComp, MeshID, MeshRepository},
+    mesh::{
+        MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor, VertexNormalVector,
+        VertexPosition, VertexTextureCoords,
+    },
 };
 use anyhow::{bail, Result};
 use bytemuck::{Pod, Zeroable};

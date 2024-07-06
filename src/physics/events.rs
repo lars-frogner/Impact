@@ -1,14 +1,14 @@
 //! Event handling related to physics.
 
 use crate::{
+    gpu::rendering::fre,
+    mesh::{
+        BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp, MeshRepository,
+        SphereMeshComp,
+    },
     physics::{
         fph, InertialProperties, PhysicsSimulator, ReferenceFrameComp, RigidBody, RigidBodyComp,
         UniformRigidBodyComp, VelocityComp,
-    },
-    gpu::rendering::fre,
-    scene::{
-        BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp, MeshRepository,
-        SphereMeshComp,
     },
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};

@@ -6,7 +6,6 @@ mod bounds;
 mod camera;
 mod frustum;
 mod instance;
-mod mesh;
 mod oriented_box;
 mod plane;
 mod projection;
@@ -24,11 +23,6 @@ pub use instance::{
     DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeID,
     InstanceFeatureBufferRangeMap, InstanceFeatureID, InstanceFeatureStorage,
     InstanceFeatureTypeID, InstanceModelLightTransform, InstanceModelViewTransform,
-};
-pub use mesh::{
-    FrontFaceSide, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor,
-    VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords,
-    N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS, VERTEX_ATTRIBUTE_NAMES,
 };
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;

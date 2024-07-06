@@ -92,6 +92,7 @@ pub mod geometry;
 pub mod gpu;
 pub mod io;
 pub mod material;
+pub mod mesh;
 mod num;
 pub mod physics;
 pub mod run;

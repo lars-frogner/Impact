@@ -5,16 +5,15 @@ mod tasks;
 pub use tasks::SyncRenderCommands;
 
 use crate::{
-    geometry::{CubemapFace, VertexAttributeSet},
+    geometry::CubemapFace,
     gpu::{
         compute::{GPUComputationID, GPUComputationSpecification},
         rendering::{
             camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
-            light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
-            postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
-            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationLibrary,
-            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-            RenderingConfig, RenderingSurface,
+            light::LightRenderBufferManager, postprocessing::PostprocessingResourceManager,
+            resource::SynchronizedRenderResources, texture::SHADOW_MAP_FORMAT, CascadeIdx,
+            GPUComputationLibrary, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+            RenderAttachmentTextureManager, RenderingConfig, RenderingSurface,
         },
         shader::{
             CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,
@@ -26,7 +25,8 @@ use crate::{
         MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
         MaterialSpecification,
     },
-    scene::{LightID, LightType, MeshID, ModelID, Postprocessor, MAX_SHADOW_MAP_CASCADES},
+    mesh::{buffer::MeshRenderBufferManager, MeshID, VertexAttributeSet},
+    scene::{LightID, LightType, ModelID, Postprocessor, MAX_SHADOW_MAP_CASCADES},
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;

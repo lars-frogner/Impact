@@ -3,12 +3,12 @@
 use crate::{
     geometry::{CollectionChange, CollectionChangeTracker},
     gpu::{
-        rendering::buffer::{self, Count, CountedRenderBuffer, RenderBuffer, UniformBufferable},
+        rendering::buffer::{Count, CountedRenderBuffer, RenderBuffer, RenderBufferType},
         GraphicsDevice,
     },
 };
-use bytemuck::Zeroable;
-use impact_utils::{ConstStringHash64, KeyIndexMapper};
+use bytemuck::{Pod, Zeroable};
+use impact_utils::{Alignment, ConstStringHash64, KeyIndexMapper};
 use std::{
     borrow::Cow,
     fmt::Debug,
@@ -16,6 +16,19 @@ use std::{
     mem,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
+/// Represents types that can be written to a uniform buffer.
+pub trait UniformBufferable: Pod {
+    /// ID for uniform type.
+    const ID: ConstStringHash64;
+
+    /// Creates the bind group layout entry for this uniform type, assigned to
+    /// the given binding and with the given visibility.
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry;
+}
 
 /// A buffer for uniforms.
 ///
@@ -53,6 +66,26 @@ pub enum UniformTransferResult {
     CreatedNewBuffer,
     UpdatedExistingBuffer,
     NothingToTransfer,
+}
+
+#[macro_export]
+macro_rules! assert_uniform_valid {
+    ($uniform:ident < $( $inner:ty ),+ >) => {
+        paste::item! {
+            #[allow(non_upper_case_globals)]
+            const  [<_ $uniform _valid>]: () = const {
+                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform<$( $inner ),+>>()))
+            };
+        }
+    };
+    ($uniform:ty) => {
+        paste::item! {
+            #[allow(non_upper_case_globals)]
+            const  [<_ $uniform _valid>]: () = const {
+                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform>()))
+            };
+        }
+    };
 }
 
 impl<ID, U> UniformBuffer<ID, U>
@@ -270,7 +303,7 @@ impl SingleUniformRenderBuffer {
 
     /// Creates a bind group entry for the uniform.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        buffer::create_single_uniform_bind_group_entry(binding, &self.render_buffer)
+        create_single_uniform_bind_group_entry(binding, &self.render_buffer)
     }
 }
 
@@ -306,8 +339,7 @@ impl MultiUniformRenderBuffer {
         }
     }
 
-    /// Returns the maximum number of uniforms that can fit in the
-    /// buffer.
+    /// Returns the maximum number of uniforms that can fit in the buffer.
     pub fn max_uniform_count(&self) -> usize {
         self.render_buffer.max_item_count()
     }
@@ -319,12 +351,12 @@ impl MultiUniformRenderBuffer {
         bind_group_layout_entry
     }
 
-    /// Creates the bind group entry for the currently valid part
-    /// of the uniform buffer, assigned to the given binding.
+    /// Creates the bind group entry for the currently valid part of the uniform
+    /// buffer, assigned to the given binding.
     ///
     /// # Warning
-    /// This binding will be out of date as soon as the number of
-    /// valid uniforms changes.
+    /// This binding will be out of date as soon as the number of valid uniforms
+    /// changes.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         self.render_buffer().create_bind_group_entry(binding)
     }
@@ -368,9 +400,9 @@ impl MultiUniformRenderBuffer {
                 .render_buffer
                 .bytes_exceed_capacity(n_valid_uniform_bytes)
             {
-                // If the number of valid uniforms exceeds the capacity of the existing buffer,
-                // we create a new one that is large enough for all the uniforms (also the ones
-                // not currently valid)
+                // If the number of valid uniforms exceeds the capacity of the
+                // existing buffer, we create a new one that is large enough for
+                // all the uniforms (also the ones not currently valid)
                 self.render_buffer = CountedRenderBuffer::new_uniform_buffer(
                     graphics_device,
                     uniform_buffer.raw_buffer(),
@@ -380,8 +412,8 @@ impl MultiUniformRenderBuffer {
 
                 UniformTransferResult::CreatedNewBuffer
             } else {
-                // We need to update the count of valid uniforms in the render buffer if it
-                // has changed
+                // We need to update the count of valid uniforms in the render
+                // buffer if it has changed
                 let new_count = if change == CollectionChange::Count {
                     Some(Count::try_from(n_valid_uniforms).unwrap())
                 } else {
@@ -403,6 +435,200 @@ impl MultiUniformRenderBuffer {
         uniform_buffer.reset_change_tracking();
 
         result
+    }
+}
+
+impl RenderBuffer {
+    /// Creates a uniform render buffer initialized with the given uniform data,
+    /// with the first `n_valid_uniforms` considered valid data.
+    ///
+    /// # Panics
+    /// - If `uniforms` is empty.
+    /// - If the size of a single uniform is not a multiple of 16 (the minimum
+    ///   required uniform alignment).
+    /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
+    ///   slice.
+    pub fn new_uniform_buffer<U>(
+        graphics_device: &GraphicsDevice,
+        uniforms: &[U],
+        n_valid_uniforms: usize,
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        assert!(
+            Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
+            "Tried to create uniform render buffer with uniform size that \
+             causes invalid alignment (uniform buffer item stride \
+             must be a multiple of 16)"
+        );
+        assert!(
+            !uniforms.is_empty(),
+            "Tried to create empty uniform render buffer"
+        );
+
+        let n_valid_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
+
+        let bytes = bytemuck::cast_slice(uniforms);
+
+        Self::new(
+            graphics_device,
+            RenderBufferType::Uniform,
+            bytes,
+            n_valid_bytes,
+            label,
+        )
+    }
+
+    /// Creates a uniform render buffer initialized with the given uniform data.
+    ///
+    /// # Panics
+    /// - If `uniforms` is empty.
+    /// - If the size of a single uniform is not a multiple of 16 (the minimum
+    ///   required uniform alignment).
+    pub fn new_full_uniform_buffer<U>(
+        graphics_device: &GraphicsDevice,
+        uniforms: &[U],
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        Self::new_uniform_buffer(graphics_device, uniforms, uniforms.len(), label)
+    }
+
+    /// Creates a render buffer containing the data of the given uniform.
+    ///
+    /// # Panics
+    /// If the size of the uniform is not a multiple of 16 (the minimum required
+    /// uniform alignment).
+    pub fn new_buffer_for_single_uniform<U>(
+        graphics_device: &GraphicsDevice,
+        uniform: &U,
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        Self::new_buffer_for_single_uniform_bytes(
+            graphics_device,
+            bytemuck::bytes_of(uniform),
+            label,
+        )
+    }
+
+    /// Creates a render buffer containing the given bytes representing a single
+    /// uniform.
+    ///
+    /// # Panics
+    /// If the size of the uniform is not a multiple of 16 (the minimum required
+    /// uniform alignment).
+    pub fn new_buffer_for_single_uniform_bytes(
+        graphics_device: &GraphicsDevice,
+        uniform_bytes: &[u8],
+        label: Cow<'static, str>,
+    ) -> Self {
+        assert!(
+            Alignment::SIXTEEN.is_aligned(uniform_bytes.len()),
+            "Tried to create uniform render buffer with invalid uniform size \
+            (must be a multiple of 16)"
+        );
+        assert!(
+            !uniform_bytes.is_empty(),
+            "Tried to create uniform render buffer for a single zero-sized uniform"
+        );
+
+        Self::new(
+            graphics_device,
+            RenderBufferType::Uniform,
+            uniform_bytes,
+            uniform_bytes.len(),
+            label,
+        )
+    }
+}
+
+impl CountedRenderBuffer {
+    /// Creates a counted uniform render buffer initialized with the given
+    /// uniform data, with the first `n_valid_uniforms` considered valid data.
+    ///
+    /// # Panics
+    /// - If `uniforms` is empty.
+    /// - If the size of a single uniform is not a multiple of 16 (the minimum
+    ///   required uniform alignment).
+    /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
+    ///   slice.
+    pub fn new_uniform_buffer<U>(
+        graphics_device: &GraphicsDevice,
+        uniforms: &[U],
+        n_valid_uniforms: usize,
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        U: UniformBufferable,
+    {
+        // Uniforms have a minimum size of 16 bytes
+        let padded_count_size = 16;
+
+        let item_size = mem::size_of::<U>();
+
+        assert!(
+            Alignment::SIXTEEN.is_aligned(item_size),
+            "Tried to create uniform buffer with uniform size that \
+             causes invalid alignment (uniform buffer item stride \
+             must be a multiple of 16)"
+        );
+
+        let count = Count::try_from(n_valid_uniforms).unwrap();
+
+        let n_valid_bytes = Self::compute_size_including_count(
+            padded_count_size,
+            item_size.checked_mul(n_valid_uniforms).unwrap(),
+        );
+
+        let bytes = bytemuck::cast_slice(uniforms);
+
+        Self::new(
+            graphics_device,
+            RenderBufferType::Uniform,
+            count,
+            bytes,
+            padded_count_size,
+            item_size,
+            n_valid_bytes,
+            label,
+        )
+    }
+}
+
+/// Creates a [`BindGroupLayoutEntry`](wgpu::BindGroupLayoutEntry) for a uniform
+/// buffer, using the given binding and visibility for the bind group.
+pub const fn create_uniform_buffer_bind_group_layout_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
+/// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given binding
+/// for the given uniform buffer representing a single uniform.
+pub fn create_single_uniform_bind_group_entry(
+    binding: u32,
+    render_buffer: &RenderBuffer,
+) -> wgpu::BindGroupEntry<'_> {
+    wgpu::BindGroupEntry {
+        binding,
+        resource: render_buffer.buffer().as_entire_binding(),
     }
 }
 

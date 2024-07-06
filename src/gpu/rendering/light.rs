@@ -5,7 +5,6 @@ use crate::{
     geometry::CollectionChange,
     gpu::{
         rendering::{
-            buffer::{self, UniformBufferable},
             texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
             CascadeIdx, RenderingConfig,
         },
@@ -13,7 +12,9 @@ use crate::{
             AmbientLightShaderInput, LightShaderInput, OmnidirectionalLightShaderInput,
             UnidirectionalLightShaderInput,
         },
-        uniform::{MultiUniformRenderBuffer, UniformBuffer, UniformTransferResult},
+        uniform::{
+            self, MultiUniformRenderBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
+        },
         GraphicsDevice,
     },
     scene::{
@@ -574,7 +575,7 @@ impl UniformBufferable for AmbientLight {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(AmbientLight);
@@ -586,7 +587,7 @@ impl UniformBufferable for OmnidirectionalLight {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(OmnidirectionalLight);
@@ -598,7 +599,7 @@ impl UniformBufferable for UnidirectionalLight {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(UnidirectionalLight);

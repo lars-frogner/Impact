@@ -1,7 +1,6 @@
 //! Material using the colors of the mesh vertices.
 
 use crate::{
-    geometry::VertexAttributeSet,
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::MaterialShaderInput,
@@ -10,6 +9,7 @@ use crate::{
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialSpecification,
         VertexColorComp,
     },
+    mesh::VertexAttributeSet,
     scene::RenderResourcesDesynchronized,
 };
 use bytemuck::{Pod, Zeroable};
