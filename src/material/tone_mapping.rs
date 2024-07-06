@@ -6,7 +6,7 @@ use crate::{
         rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderPassHints},
         shader::{MaterialShaderInput, ToneMappingShaderInput},
     },
-    scene::MaterialSpecification,
+    material::MaterialSpecification,
 };
 use std::fmt::Display;
 

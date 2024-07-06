@@ -9,11 +9,10 @@ pub use components::{
 
 use crate::{
     geometry::{PlanarTextureProjection, TextureProjection, TriangleMesh, VertexAttributeSet},
-    num::Float,
     gpu::rendering::fre,
-    scene::{
-        MaterialComp, MaterialLibrary, PlanarTextureProjectionComp, RenderResourcesDesynchronized,
-    },
+    material::{MaterialComp, MaterialLibrary},
+    num::Float,
+    scene::{PlanarTextureProjectionComp, RenderResourcesDesynchronized},
 };
 use anyhow::{anyhow, Result};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

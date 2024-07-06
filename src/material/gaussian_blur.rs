@@ -12,7 +12,7 @@ use crate::{
         uniform::SingleUniformRenderBuffer,
         GraphicsDevice,
     },
-    scene::{MaterialSpecificResourceGroup, MaterialSpecification},
+    material::{MaterialSpecificResourceGroup, MaterialSpecification},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;

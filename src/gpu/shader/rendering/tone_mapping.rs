@@ -8,7 +8,7 @@ use super::{
     },
     MeshVertexOutputFieldIndices, PushConstantFieldExpressions, RenderShaderTricks,
 };
-use crate::scene::ToneMapping;
+use crate::material::ToneMapping;
 use naga::{Function, Module};
 
 /// Input description specifying the bindings for the texture to pass through to

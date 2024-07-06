@@ -12,7 +12,7 @@ use crate::{
         },
         GraphicsDevice,
     },
-    scene::{
+    material::{
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
         MaterialPropertyTextureGroupID, MaterialSpecification, ParallaxMapComp,
     },

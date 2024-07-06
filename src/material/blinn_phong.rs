@@ -9,14 +9,14 @@ use crate::{
         shader::{BlinnPhongTextureShaderInput, MaterialShaderInput},
         GraphicsDevice,
     },
-    scene::{
-        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
-        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
-        RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp,
+    material::{
+        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MaterialComp, MaterialHandle,
+        MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
+        MaterialSpecification, MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp,
+        NormalMapComp, ParallaxMapComp, RoughnessComp, RoughnessTextureComp,
         SpecularReflectanceComp, SpecularReflectanceTextureComp,
     },
+    scene::{InstanceFeatureManager, RenderResourcesDesynchronized},
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;

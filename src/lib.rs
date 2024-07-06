@@ -91,6 +91,7 @@ pub mod game_loop;
 pub mod geometry;
 pub mod gpu;
 pub mod io;
+pub mod material;
 mod num;
 pub mod physics;
 pub mod run;

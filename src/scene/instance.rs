@@ -5,7 +5,8 @@ use crate::{
         DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureID, InstanceFeatureStorage,
         InstanceFeatureTypeID, InstanceModelViewTransform,
     },
-    scene::{MaterialLibrary, ModelID},
+    material::MaterialLibrary,
+    scene::ModelID,
 };
 use std::{collections::HashMap, fmt::Debug};
 
@@ -432,7 +433,8 @@ mod test {
     use crate::{
         gpu::shader::InstanceFeatureShaderInput,
         impl_InstanceFeature,
-        scene::{MaterialHandle, MaterialID, MeshID},
+        material::{MaterialHandle, MaterialID},
+        scene::MeshID,
     };
     use bytemuck::{Pod, Zeroable};
     use impact_utils::hash64;

@@ -8,10 +8,10 @@ use crate::{
         shader::{InstanceFeatureShaderInput, LightMaterialFeatureShaderInput},
     },
     impl_InstanceFeature,
-    scene::{
-        AlbedoComp, EmissiveLuminanceComp, InstanceFeatureManager, ParallaxMapComp, RGBColor,
-        SpecularReflectanceComp,
+    material::{
+        AlbedoComp, EmissiveLuminanceComp, ParallaxMapComp, RGBColor, SpecularReflectanceComp,
     },
+    scene::InstanceFeatureManager,
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector2;

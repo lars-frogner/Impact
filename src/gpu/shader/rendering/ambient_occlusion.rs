@@ -10,7 +10,9 @@ use super::{
     CameraProjectionVariable, MeshVertexOutputFieldIndices, PushConstantFieldExpressions,
     RenderShaderTricks,
 };
-use crate::{gpu::rendering::RenderAttachmentQuantity, scene::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT};
+use crate::{
+    gpu::rendering::RenderAttachmentQuantity, material::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+};
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle, Literal,
     LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,

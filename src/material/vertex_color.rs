@@ -6,10 +6,11 @@ use crate::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::MaterialShaderInput,
     },
-    scene::{
+    material::{
         MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialSpecification,
-        RenderResourcesDesynchronized, VertexColorComp,
+        VertexColorComp,
     },
+    scene::RenderResourcesDesynchronized,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

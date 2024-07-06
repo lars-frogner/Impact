@@ -36,7 +36,8 @@ use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager
 use crate::{
     geometry::CubemapFace,
     gpu::{compute::GPUComputationLibrary, GraphicsDevice},
-    scene::{MaterialLibrary, Scene, MAX_SHADOW_MAP_CASCADES},
+    material::MaterialLibrary,
+    scene::{Scene, MAX_SHADOW_MAP_CASCADES},
     window::EventLoopController,
 };
 use anyhow::{Error, Result};

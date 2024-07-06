@@ -11,12 +11,11 @@ use crate::{
         shader::{MaterialShaderInput, PassthroughShaderInput},
         GraphicsDevice,
     },
-    scene::{
-        create_ambient_occlusion_application_material,
-        create_ambient_occlusion_computation_material, create_gaussian_blur_material,
-        create_tone_mapping_material, GaussianBlurDirection, GaussianBlurSamples, MaterialID,
-        MaterialLibrary, MaterialSpecification, ToneMapping, SCREEN_FILLING_QUAD_MESH_ID,
+    material::{
+        self, GaussianBlurDirection, GaussianBlurSamples, MaterialID, MaterialLibrary,
+        MaterialSpecification, ToneMapping,
     },
+    scene::SCREEN_FILLING_QUAD_MESH_ID,
 };
 use impact_utils::hash64;
 use std::iter;
@@ -343,7 +342,7 @@ fn setup_ambient_occlusion_computation_material_and_render_pass(
     let specification = material_library
         .material_specification_entry(material_id)
         .or_insert_with(|| {
-            create_ambient_occlusion_computation_material(
+            material::create_ambient_occlusion_computation_material(
                 graphics_device,
                 sample_count,
                 sample_radius,
@@ -358,7 +357,7 @@ fn setup_ambient_occlusion_application_material_and_render_pass(
     let material_id = MaterialID(hash64!("AmbientOcclusionApplicationMaterial"));
     let specification = material_library
         .material_specification_entry(material_id)
-        .or_insert_with(create_ambient_occlusion_application_material);
+        .or_insert_with(material::create_ambient_occlusion_application_material);
     define_ambient_occlusion_application_pass(material_id, specification.render_pass_hints())
 }
 
@@ -395,7 +394,7 @@ fn setup_gaussian_blur_material_and_render_pass(
     let specification = material_library
         .material_specification_entry(material_id)
         .or_insert_with(|| {
-            create_gaussian_blur_material(
+            material::create_gaussian_blur_material(
                 graphics_device,
                 input_render_attachment_quantity,
                 output_render_attachment_quantity,
@@ -417,7 +416,9 @@ fn setup_tone_mapping_material_and_render_pass(
     )));
     let specification = material_library
         .material_specification_entry(material_id)
-        .or_insert_with(|| create_tone_mapping_material(input_render_attachment_quantity, mapping));
+        .or_insert_with(|| {
+            material::create_tone_mapping_material(input_render_attachment_quantity, mapping)
+        });
     define_tone_mapping_pass(material_id, specification.render_pass_hints(), mapping)
 }
 

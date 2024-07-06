@@ -8,11 +8,11 @@ use crate::{
         shader::{MaterialShaderInput, SkyboxTextureShaderInput},
         GraphicsDevice,
     },
-    scene::{
-        material::SkyboxComp, MaterialComp, MaterialHandle, MaterialID, MaterialLibrary,
-        MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialSpecification,
-        RenderResourcesDesynchronized,
+    material::{
+        MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+        MaterialPropertyTextureGroupID, MaterialSpecification, SkyboxComp,
     },
+    scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;

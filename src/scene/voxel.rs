@@ -19,12 +19,12 @@ use crate::{
         shader::{DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
         GraphicsDevice,
     },
-    num::Float,
-    scene::{
-        material::setup_microfacet_material, AlbedoComp, InstanceFeatureManager, MaterialComp,
-        MaterialHandle, MaterialLibrary, MeshID, MeshRepository, ModelID, RGBColor, RoughnessComp,
+    material::{
+        self, AlbedoComp, MaterialComp, MaterialHandle, MaterialLibrary, RGBColor, RoughnessComp,
         SpecularReflectanceComp,
     },
+    num::Float,
+    scene::{InstanceFeatureManager, MeshID, MeshRepository, ModelID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
@@ -309,7 +309,7 @@ fn setup_microfacet_material_for_voxel(
         SpecularMicrofacetShadingModel::None
     };
 
-    setup_microfacet_material(
+    material::setup_microfacet_material(
         graphics_device,
         assets,
         material_library,

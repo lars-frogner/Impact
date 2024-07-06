@@ -5,7 +5,6 @@ mod events;
 mod graph;
 mod instance;
 mod light;
-mod material;
 mod mesh;
 mod model;
 mod postprocessing;
@@ -32,26 +31,6 @@ pub use light::{
     UnidirectionalEmissionComp, UnidirectionalLight, UnidirectionalLightComp,
     MAX_SHADOW_MAP_CASCADES,
 };
-pub use material::{
-    add_blinn_phong_material_component_for_entity, add_microfacet_material_component_for_entity,
-    add_skybox_material_component_for_entity, create_ambient_occlusion_application_material,
-    create_ambient_occlusion_computation_material, create_gaussian_blur_material,
-    create_tone_mapping_material, register_material_components, AlbedoComp, AlbedoTextureComp,
-    EmissiveLuminanceComp, EmissiveLuminanceTextureComp, FixedColorComp, FixedColorMaterial,
-    FixedTextureComp, FixedTextureMaterial, GaussianBlurDirection, GaussianBlurSamples,
-    MaterialComp, MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-    MaterialPropertyTextureGroupID, MaterialSpecificResourceGroup, MaterialSpecification,
-    MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
-    ParallaxMapComp, RGBColor, RoughnessComp, RoughnessTextureComp, SkyboxComp,
-    SpecularReflectanceComp, SpecularReflectanceTextureComp, TexturedEmissiveMaterialFeature,
-    TexturedParallaxMappingEmissiveMaterialFeature, ToneMapping,
-    UniformDiffuseEmissiveMaterialFeature, UniformDiffuseParallaxMappingEmissiveMaterialFeature,
-    UniformDiffuseUniformSpecularEmissiveMaterialFeature,
-    UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
-    UniformSpecularEmissiveMaterialFeature, UniformSpecularParallaxMappingEmissiveMaterialFeature,
-    VertexColorComp, VertexColorMaterial, MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
-    MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
-};
 pub use mesh::{
     register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
     HemisphereMeshComp, MeshComp, MeshID, MeshRepository, RectangleMeshComp, SphereMeshComp,
@@ -75,6 +54,7 @@ use crate::{
     assets::Assets,
     geometry::Radians,
     gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
+    material::{MaterialLibrary, ToneMapping},
 };
 use std::sync::RwLock;
 
