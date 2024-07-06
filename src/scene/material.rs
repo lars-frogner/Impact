@@ -52,11 +52,9 @@ pub use vertex_color::VertexColorMaterial;
 use crate::{
     geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
     gpu::{
-        rendering::{
-            fre, Assets, RenderAttachmentQuantitySet, RenderPassHints, StorageRenderBuffer,
-            TextureID,
-        },
+        rendering::{fre, Assets, RenderAttachmentQuantitySet, RenderPassHints, TextureID},
         shader::MaterialShaderInput,
+        storage::StorageRenderBuffer,
         uniform::SingleUniformRenderBuffer,
         GraphicsDevice,
     },
