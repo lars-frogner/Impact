@@ -1,31 +1,25 @@
 //! Generation of meshes representing geometrical objects.
 
-use super::TriangleMesh;
-use crate::num::Float;
+use crate::{
+    mesh::{FrontFaceSide, TriangleMesh},
+    num::Float,
+};
 use approx::{abs_diff_eq, abs_diff_ne};
 use nalgebra::{vector, UnitVector3, Vector3};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
-        $crate::geometry::VertexPosition(nalgebra::point![$x, $y, $z])
+        $crate::mesh::VertexPosition(nalgebra::point![$x, $y, $z])
     };
     ($point:expr) => {
-        $crate::geometry::VertexPosition($point)
+        $crate::mesh::VertexPosition($point)
     };
 }
 
 macro_rules! normal {
     ($normal:expr) => {
-        $crate::geometry::VertexNormalVector($normal)
+        $crate::mesh::VertexNormalVector($normal)
     };
-}
-
-/// Whether the front faces of a mesh should be oriented toward the outside or
-/// the inside.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum FrontFaceSide {
-    Outside,
-    Inside,
 }
 
 impl<F: Float> TriangleMesh<F> {

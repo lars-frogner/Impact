@@ -1,11 +1,10 @@
 //! Graphics rendering.
 
 mod brdf;
-pub(super) mod buffer;
+pub mod buffer;
 mod camera;
 mod instance;
 mod light;
-mod mesh;
 mod postprocessing;
 mod render_command;
 mod resource;
@@ -14,10 +13,6 @@ mod tasks;
 pub mod texture;
 
 pub use brdf::create_specular_ggx_reflectance_lookup_tables;
-pub use buffer::{
-    create_uniform_buffer_bind_group_layout_entry, create_vertex_buffer_layout_for_instance,
-    create_vertex_buffer_layout_for_vertex, UniformBufferable, VertexBufferable,
-};
 pub use render_command::{
     Blending, ComputePassSpecification, DepthMapUsage, OutputAttachmentSampling,
     RenderCommandManager, RenderCommandSpecification, RenderCommandState, RenderPassHints,

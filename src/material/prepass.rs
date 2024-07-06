@@ -3,7 +3,7 @@
 use super::NormalMapComp;
 use crate::{
     assets::{Assets, TextureID},
-    geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
+    geometry::{InstanceFeatureID, InstanceFeatureTypeID},
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
@@ -16,6 +16,7 @@ use crate::{
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
         MaterialPropertyTextureGroupID, MaterialSpecification, ParallaxMapComp,
     },
+    mesh::VertexAttributeSet,
 };
 use impact_utils::hash64;
 

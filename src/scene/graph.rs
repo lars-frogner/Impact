@@ -1685,7 +1685,7 @@ mod test {
     use super::*;
     use crate::{
         material::{MaterialHandle, MaterialID},
-        scene::MeshID,
+        mesh::MeshID,
     };
     use approx::assert_abs_diff_eq;
     use impact_utils::hash64;

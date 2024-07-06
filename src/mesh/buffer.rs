@@ -1,23 +1,47 @@
-//! Management of mesh data for rendering.
+//! Buffering of mesh data for rendering.
 
 use crate::{
-    geometry::{
-        CollectionChange, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor,
-        VertexNormalVector, VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords,
-        N_VERTEX_ATTRIBUTES, VERTEX_ATTRIBUTE_FLAGS,
-    },
+    geometry::CollectionChange,
     gpu::{
         rendering::{
-            buffer::{self, IndexBufferable, RenderBuffer, VertexBufferable},
+            buffer::{RenderBuffer, RenderBufferType},
             fre,
         },
         shader::MeshShaderInput,
         GraphicsDevice,
     },
-    scene::MeshID,
+    mesh::{
+        MeshID, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector,
+        VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
+        VERTEX_ATTRIBUTE_FLAGS,
+    },
 };
 use anyhow::{anyhow, Result};
-use std::borrow::Cow;
+use bytemuck::Pod;
+use std::{borrow::Cow, mem};
+
+/// Represents types that can be written to a vertex buffer.
+pub trait VertexBufferable: Pod {
+    /// The location index of the vertex attribute binding.
+    const BINDING_LOCATION: u32;
+
+    /// The layout of buffers made up of this vertex type.
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
+}
+
+/// Represents types that can be written to an index buffer.
+pub trait IndexBufferable: Pod {
+    /// The data format of the index type.
+    const INDEX_FORMAT: wgpu::IndexFormat;
+}
+
+impl IndexBufferable for u16 {
+    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
+}
+
+impl IndexBufferable for u32 {
+    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
+}
 
 /// Owner and manager of render buffers for mesh geometry.
 #[derive(Debug)]
@@ -373,11 +397,128 @@ impl MeshRenderBufferManager {
     }
 }
 
+impl RenderBuffer {
+    /// Creates a vertex render buffer initialized with the given vertex data,
+    /// with the first `n_valid_vertices` considered valid data.
+    ///
+    /// # Panics
+    /// - If `vertices` is empty.
+    /// - If `n_valid_vertices` exceeds the number of items in the `vertices`
+    ///   slice.
+    pub fn new_vertex_buffer<V>(
+        graphics_device: &GraphicsDevice,
+        vertices: &[V],
+        n_valid_vertices: usize,
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        V: VertexBufferable,
+    {
+        let n_valid_bytes = mem::size_of::<V>().checked_mul(n_valid_vertices).unwrap();
+
+        let bytes = bytemuck::cast_slice(vertices);
+
+        Self::new_vertex_buffer_with_bytes(graphics_device, bytes, n_valid_bytes, label)
+    }
+
+    /// Creates a vertex render buffer initialized with the given vertex
+    /// data.
+    ///
+    /// # Panics
+    /// If `vertices` is empty.
+    pub fn new_full_vertex_buffer<V>(
+        graphics_device: &GraphicsDevice,
+        vertices: &[V],
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        V: VertexBufferable,
+    {
+        Self::new_vertex_buffer(graphics_device, vertices, vertices.len(), label)
+    }
+
+    /// Creates a vertex render buffer initialized with the given bytes
+    /// representing vertex data, with the first `n_valid_bytes` considered
+    /// valid data.
+    ///
+    /// # Panics
+    /// - If `bytes` is empty.
+    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
+    pub fn new_vertex_buffer_with_bytes(
+        graphics_device: &GraphicsDevice,
+        bytes: &[u8],
+        n_valid_bytes: usize,
+        label: Cow<'static, str>,
+    ) -> Self {
+        assert!(
+            !bytes.is_empty(),
+            "Tried to create empty vertex render buffer"
+        );
+        Self::new(
+            graphics_device,
+            RenderBufferType::Vertex,
+            bytes,
+            n_valid_bytes,
+            label,
+        )
+    }
+
+    /// Creates an index render buffer initialized with the given index
+    /// data, with the first `n_valid_indices` considered valid data.
+    ///
+    /// # Panics
+    /// - If `indices` is empty.
+    /// - If `n_valid_indices` exceeds the number of items in the `indices`
+    ///   slice.
+    pub fn new_index_buffer<I>(
+        graphics_device: &GraphicsDevice,
+        indices: &[I],
+        n_valid_indices: usize,
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        I: IndexBufferable,
+    {
+        assert!(
+            !indices.is_empty(),
+            "Tried to create empty index render buffer"
+        );
+
+        let n_valid_bytes = mem::size_of::<I>().checked_mul(n_valid_indices).unwrap();
+
+        let bytes = bytemuck::cast_slice(indices);
+
+        Self::new(
+            graphics_device,
+            RenderBufferType::Index,
+            bytes,
+            n_valid_bytes,
+            label,
+        )
+    }
+
+    /// Creates an index render buffer initialized with the given index
+    /// data.
+    ///
+    /// # Panics
+    /// If `indices` is empty.
+    pub fn new_full_index_buffer<I>(
+        graphics_device: &GraphicsDevice,
+        indices: &[I],
+        label: Cow<'static, str>,
+    ) -> Self
+    where
+        I: IndexBufferable,
+    {
+        Self::new_index_buffer(graphics_device, indices, indices.len(), label)
+    }
+}
+
 impl VertexBufferable for VertexPosition<fre> {
     const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START;
 
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             Self::BINDING_LOCATION => Float32x3,
         ]);
 }
@@ -386,7 +527,7 @@ impl VertexBufferable for VertexColor<fre> {
     const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 1;
 
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             Self::BINDING_LOCATION => Float32x3,
         ]);
 }
@@ -395,7 +536,7 @@ impl VertexBufferable for VertexNormalVector<fre> {
     const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 2;
 
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             Self::BINDING_LOCATION => Float32x3,
         ]);
 }
@@ -404,7 +545,7 @@ impl VertexBufferable for VertexTextureCoords<fre> {
     const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 3;
 
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             Self::BINDING_LOCATION => Float32x2,
         ]);
 }
@@ -413,7 +554,33 @@ impl VertexBufferable for VertexTangentSpaceQuaternion<fre> {
     const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 4;
 
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        buffer::create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
+        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             Self::BINDING_LOCATION => Float32x4,
         ]);
+}
+
+/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
+/// vertex data of type `T`, with data layout defined by the given
+/// vertex attributes.
+pub const fn create_vertex_buffer_layout_for_vertex<T>(
+    attributes: &'static [wgpu::VertexAttribute],
+) -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes,
+    }
+}
+
+/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
+/// instance data of type `T`, with data layout defined by the given
+/// instance attributes.
+pub const fn create_vertex_buffer_layout_for_instance<T>(
+    attributes: &'static [wgpu::VertexAttribute],
+) -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes,
+    }
 }

@@ -5,7 +5,6 @@ mod events;
 mod graph;
 mod instance;
 mod light;
-mod mesh;
 mod model;
 mod postprocessing;
 mod systems;
@@ -31,11 +30,6 @@ pub use light::{
     UnidirectionalEmissionComp, UnidirectionalLight, UnidirectionalLightComp,
     MAX_SHADOW_MAP_CASCADES,
 };
-pub use mesh::{
-    register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
-    HemisphereMeshComp, MeshComp, MeshID, MeshRepository, RectangleMeshComp, SphereMeshComp,
-    SCREEN_FILLING_QUAD_MESH_ID,
-};
 pub use model::ModelID;
 pub use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
 pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
@@ -55,6 +49,7 @@ use crate::{
     geometry::Radians,
     gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
     material::{MaterialLibrary, ToneMapping},
+    mesh::MeshRepository,
 };
 use std::sync::RwLock;
 

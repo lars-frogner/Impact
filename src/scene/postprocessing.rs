@@ -1,7 +1,6 @@
 //! Management of postprocessing.
 
 use crate::{
-    geometry::VertexAttributeSet,
     gpu::{
         rendering::{
             fre, DepthMapUsage, OutputAttachmentSampling, RenderAttachmentQuantity,
@@ -15,7 +14,7 @@ use crate::{
         self, GaussianBlurDirection, GaussianBlurSamples, MaterialID, MaterialLibrary,
         MaterialSpecification, ToneMapping,
     },
-    scene::SCREEN_FILLING_QUAD_MESH_ID,
+    mesh::{VertexAttributeSet, SCREEN_FILLING_QUAD_MESH_ID},
 };
 use impact_utils::hash64;
 use std::iter;

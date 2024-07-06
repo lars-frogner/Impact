@@ -51,7 +51,7 @@ pub use vertex_color::VertexColorMaterial;
 
 use crate::{
     assets::{Assets, TextureID},
-    geometry::{InstanceFeatureID, InstanceFeatureTypeID, VertexAttributeSet},
+    geometry::{InstanceFeatureID, InstanceFeatureTypeID},
     gpu::{
         rendering::{fre, RenderAttachmentQuantitySet, RenderPassHints},
         shader::MaterialShaderInput,
@@ -59,6 +59,7 @@ use crate::{
         uniform::SingleUniformRenderBuffer,
         GraphicsDevice,
     },
+    mesh::VertexAttributeSet,
     scene::InstanceFeatureManager,
 };
 use anyhow::{anyhow, Result};

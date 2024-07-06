@@ -1,7 +1,7 @@
 //! Management of storage buffers for GPU computation or rendering.
 
 use crate::gpu::{
-    rendering::buffer::{self, RenderBuffer},
+    rendering::buffer::{RenderBuffer, RenderBufferType},
     GraphicsDevice,
 };
 use bytemuck::{Pod, Zeroable};
@@ -140,11 +140,7 @@ impl StorageRenderBuffer {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        buffer::create_storage_buffer_bind_group_layout_entry(
-            binding,
-            visibility,
-            self.is_read_only,
-        )
+        create_storage_buffer_bind_group_layout_entry(binding, visibility, self.is_read_only)
     }
 
     /// Creates a bind group entry for the full storage buffer, assigned to the
@@ -196,5 +192,67 @@ impl StorageRenderBufferManager {
 impl Default for StorageRenderBufferManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl RenderBuffer {
+    /// Creates a storage render buffer initialized with the given bytes.
+    ///
+    /// # Panics
+    /// - If `bytes` is empty.
+    pub fn new_storage_buffer(
+        graphics_device: &GraphicsDevice,
+        bytes: &[u8],
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new(
+            graphics_device,
+            RenderBufferType::Storage,
+            bytes,
+            bytes.len(),
+            label,
+        )
+    }
+
+    /// Creates a result render buffer with the given size in bytes.
+    ///
+    /// # Warning
+    /// The contents of the buffer are uninitialized, so the buffer should not
+    /// be mapped for reading until it has been copied to.
+    ///
+    /// # Panics
+    /// - If `buffer_size` is zero.
+    pub fn new_result_buffer(
+        graphics_device: &GraphicsDevice,
+        buffer_size: usize,
+        label: Cow<'static, str>,
+    ) -> Self {
+        Self::new_uninitialized(
+            graphics_device,
+            RenderBufferType::Result,
+            buffer_size,
+            buffer_size,
+            label,
+        )
+    }
+}
+
+/// Creates a [`BindGroupLayoutEntry`](wgpu::BindGroupLayoutEntry) for a storage
+/// buffer, using the given binding and visibility for the bind group and
+/// whether the buffer should be read-only.
+pub const fn create_storage_buffer_bind_group_layout_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+    read_only: bool,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
     }
 }

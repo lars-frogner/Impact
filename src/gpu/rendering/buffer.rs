@@ -1,8 +1,6 @@
 //! Data buffers for rendering.
 
 use crate::gpu::GraphicsDevice;
-use bytemuck::Pod;
-use impact_utils::{Alignment, ConstStringHash64};
 use std::{
     borrow::Cow,
     fmt::Display,
@@ -10,62 +8,6 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use wgpu::util::DeviceExt;
-
-/// Represents types that can be written to a vertex buffer.
-pub trait VertexBufferable: Pod {
-    /// The location index of the vertex attribute binding.
-    const BINDING_LOCATION: u32;
-
-    /// The layout of buffers made up of this vertex type.
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
-}
-
-/// Represents types that can be written to an index buffer.
-pub trait IndexBufferable: Pod {
-    /// The data format of the index type.
-    const INDEX_FORMAT: wgpu::IndexFormat;
-}
-
-impl IndexBufferable for u16 {
-    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint16;
-}
-
-impl IndexBufferable for u32 {
-    const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
-}
-
-/// Represents types that can be written to a uniform buffer.
-pub trait UniformBufferable: Pod {
-    /// ID for uniform type.
-    const ID: ConstStringHash64;
-
-    /// Creates the bind group layout entry for this uniform type, assigned to
-    /// the given binding and with the given visibility.
-    fn create_bind_group_layout_entry(
-        binding: u32,
-        visibility: wgpu::ShaderStages,
-    ) -> wgpu::BindGroupLayoutEntry;
-}
-
-#[macro_export]
-macro_rules! assert_uniform_valid {
-    ($uniform:ident < $( $inner:ty ),+ >) => {
-        paste::item! {
-            #[allow(non_upper_case_globals)]
-            const  [<_ $uniform _valid>]: () = const {
-                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform<$( $inner ),+>>()))
-            };
-        }
-    };
-    ($uniform:ty) => {
-        paste::item! {
-            #[allow(non_upper_case_globals)]
-            const  [<_ $uniform _valid>]: () = const {
-                assert!(impact_utils::Alignment::SIXTEEN.is_aligned(::std::mem::size_of::<$uniform>()))
-            };
-        }
-    };
-}
 
 /// A buffer containing bytes that can be passed to the GPU.
 #[derive(Debug)]
@@ -95,7 +37,7 @@ pub type Count = u32;
 
 /// The type of information contained in a render buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum RenderBufferType {
+pub enum RenderBufferType {
     Vertex,
     Index,
     Uniform,
@@ -104,271 +46,6 @@ enum RenderBufferType {
 }
 
 impl RenderBuffer {
-    /// Creates a vertex render buffer initialized with the given vertex data,
-    /// with the first `n_valid_vertices` considered valid data.
-    ///
-    /// # Panics
-    /// - If `vertices` is empty.
-    /// - If `n_valid_vertices` exceeds the number of items in the `vertices`
-    ///   slice.
-    pub fn new_vertex_buffer<V>(
-        graphics_device: &GraphicsDevice,
-        vertices: &[V],
-        n_valid_vertices: usize,
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        V: VertexBufferable,
-    {
-        let n_valid_bytes = mem::size_of::<V>().checked_mul(n_valid_vertices).unwrap();
-
-        let bytes = bytemuck::cast_slice(vertices);
-
-        Self::new_vertex_buffer_with_bytes(graphics_device, bytes, n_valid_bytes, label)
-    }
-
-    /// Creates a vertex render buffer initialized with the given vertex
-    /// data.
-    ///
-    /// # Panics
-    /// If `vertices` is empty.
-    pub fn new_full_vertex_buffer<V>(
-        graphics_device: &GraphicsDevice,
-        vertices: &[V],
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        V: VertexBufferable,
-    {
-        Self::new_vertex_buffer(graphics_device, vertices, vertices.len(), label)
-    }
-
-    /// Creates a vertex render buffer initialized with the given bytes
-    /// representing vertex data, with the first `n_valid_bytes` considered
-    /// valid data.
-    ///
-    /// # Panics
-    /// - If `bytes` is empty.
-    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
-    pub fn new_vertex_buffer_with_bytes(
-        graphics_device: &GraphicsDevice,
-        bytes: &[u8],
-        n_valid_bytes: usize,
-        label: Cow<'static, str>,
-    ) -> Self {
-        assert!(
-            !bytes.is_empty(),
-            "Tried to create empty vertex render buffer"
-        );
-        Self::new(
-            graphics_device,
-            RenderBufferType::Vertex,
-            bytes,
-            n_valid_bytes,
-            label,
-        )
-    }
-
-    /// Creates an index render buffer initialized with the given index
-    /// data, with the first `n_valid_indices` considered valid data.
-    ///
-    /// # Panics
-    /// - If `indices` is empty.
-    /// - If `n_valid_indices` exceeds the number of items in the `indices`
-    ///   slice.
-    pub fn new_index_buffer<I>(
-        graphics_device: &GraphicsDevice,
-        indices: &[I],
-        n_valid_indices: usize,
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        I: IndexBufferable,
-    {
-        assert!(
-            !indices.is_empty(),
-            "Tried to create empty index render buffer"
-        );
-
-        let n_valid_bytes = mem::size_of::<I>().checked_mul(n_valid_indices).unwrap();
-
-        let bytes = bytemuck::cast_slice(indices);
-
-        Self::new(
-            graphics_device,
-            RenderBufferType::Index,
-            bytes,
-            n_valid_bytes,
-            label,
-        )
-    }
-
-    /// Creates an index render buffer initialized with the given index
-    /// data.
-    ///
-    /// # Panics
-    /// If `indices` is empty.
-    pub fn new_full_index_buffer<I>(
-        graphics_device: &GraphicsDevice,
-        indices: &[I],
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        I: IndexBufferable,
-    {
-        Self::new_index_buffer(graphics_device, indices, indices.len(), label)
-    }
-
-    /// Creates a uniform render buffer initialized with the given uniform data,
-    /// with the first `n_valid_uniforms` considered valid data.
-    ///
-    /// # Panics
-    /// - If `uniforms` is empty.
-    /// - If the size of a single uniform is not a multiple of 16 (the minimum
-    ///   required uniform alignment).
-    /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
-    ///   slice.
-    pub fn new_uniform_buffer<U>(
-        graphics_device: &GraphicsDevice,
-        uniforms: &[U],
-        n_valid_uniforms: usize,
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        U: UniformBufferable,
-    {
-        assert!(
-            Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
-            "Tried to create uniform render buffer with uniform size that \
-             causes invalid alignment (uniform buffer item stride \
-             must be a multiple of 16)"
-        );
-        assert!(
-            !uniforms.is_empty(),
-            "Tried to create empty uniform render buffer"
-        );
-
-        let n_valid_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
-
-        let bytes = bytemuck::cast_slice(uniforms);
-
-        Self::new(
-            graphics_device,
-            RenderBufferType::Uniform,
-            bytes,
-            n_valid_bytes,
-            label,
-        )
-    }
-
-    /// Creates a uniform render buffer initialized with the given uniform
-    /// data.
-    ///
-    /// # Panics
-    /// - If `uniforms` is empty.
-    /// - If the size of a single uniform is not a multiple of 16
-    ///   (the minimum required uniform alignment).
-    pub fn new_full_uniform_buffer<U>(
-        graphics_device: &GraphicsDevice,
-        uniforms: &[U],
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        U: UniformBufferable,
-    {
-        Self::new_uniform_buffer(graphics_device, uniforms, uniforms.len(), label)
-    }
-
-    /// Creates a render buffer containing the data of the given uniform.
-    ///
-    /// # Panics
-    /// If the size of the uniform is not a multiple of 16 (the minimum
-    /// required uniform alignment).
-    pub fn new_buffer_for_single_uniform<U>(
-        graphics_device: &GraphicsDevice,
-        uniform: &U,
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        U: UniformBufferable,
-    {
-        Self::new_buffer_for_single_uniform_bytes(
-            graphics_device,
-            bytemuck::bytes_of(uniform),
-            label,
-        )
-    }
-
-    /// Creates a render buffer containing the given bytes representing a single
-    /// uniform.
-    ///
-    /// # Panics
-    /// If the size of the uniform is not a multiple of 16 (the minimum required
-    /// uniform alignment).
-    pub fn new_buffer_for_single_uniform_bytes(
-        graphics_device: &GraphicsDevice,
-        uniform_bytes: &[u8],
-        label: Cow<'static, str>,
-    ) -> Self {
-        assert!(
-            Alignment::SIXTEEN.is_aligned(uniform_bytes.len()),
-            "Tried to create uniform render buffer with invalid uniform size \
-            (must be a multiple of 16)"
-        );
-        assert!(
-            !uniform_bytes.is_empty(),
-            "Tried to create uniform render buffer for a single zero-sized uniform"
-        );
-
-        Self::new(
-            graphics_device,
-            RenderBufferType::Uniform,
-            uniform_bytes,
-            uniform_bytes.len(),
-            label,
-        )
-    }
-
-    /// Creates a storage render buffer initialized with the given bytes.
-    ///
-    /// # Panics
-    /// - If `bytes` is empty.
-    pub fn new_storage_buffer(
-        graphics_device: &GraphicsDevice,
-        bytes: &[u8],
-        label: Cow<'static, str>,
-    ) -> Self {
-        Self::new(
-            graphics_device,
-            RenderBufferType::Storage,
-            bytes,
-            bytes.len(),
-            label,
-        )
-    }
-
-    /// Creates a result render buffer with the given size in bytes.
-    ///
-    /// # Warning
-    /// The contents of the buffer are uninitialized, so the buffer should not
-    /// be mapped for reading until it has been copied to.
-    ///
-    /// # Panics
-    /// - If `buffer_size` is zero.
-    pub fn new_result_buffer(
-        graphics_device: &GraphicsDevice,
-        buffer_size: usize,
-        label: Cow<'static, str>,
-    ) -> Self {
-        Self::new_uninitialized(
-            graphics_device,
-            RenderBufferType::Result,
-            buffer_size,
-            buffer_size,
-            label,
-        )
-    }
-
     /// Creates a render buffer of the given type from the given slice of
     /// bytes. Only the first `n_valid_bytes` in the slice are considered
     /// to actually represent valid data, the rest is just buffer filling
@@ -378,7 +55,7 @@ impl RenderBuffer {
     /// # Panics
     /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
-    fn new(
+    pub fn new(
         graphics_device: &GraphicsDevice,
         buffer_type: RenderBufferType,
         bytes: &[u8],
@@ -412,7 +89,7 @@ impl RenderBuffer {
     /// # Panics
     /// - If `buffer_size` is zero.
     /// - If `n_valid_bytes` exceeds `buffer_size`.
-    fn new_uninitialized(
+    pub fn new_uninitialized(
         graphics_device: &GraphicsDevice,
         buffer_type: RenderBufferType,
         buffer_size: usize,
@@ -510,7 +187,7 @@ impl RenderBuffer {
     }
 
     /// Returns the underlying [`wgpu::Buffer`].
-    fn buffer(&self) -> &wgpu::Buffer {
+    pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
 
@@ -553,57 +230,6 @@ impl RenderBuffer {
 }
 
 impl CountedRenderBuffer {
-    /// Creates a counted uniform render buffer initialized with the given
-    /// uniform data, with the first `n_valid_uniforms` considered valid data.
-    ///
-    /// # Panics
-    /// - If `uniforms` is empty.
-    /// - If the size of a single uniform is not a multiple of 16 (the minimum
-    ///   required uniform alignment).
-    /// - If `n_valid_uniforms` exceeds the number of items in the `uniforms`
-    ///   slice.
-    pub fn new_uniform_buffer<U>(
-        graphics_device: &GraphicsDevice,
-        uniforms: &[U],
-        n_valid_uniforms: usize,
-        label: Cow<'static, str>,
-    ) -> Self
-    where
-        U: UniformBufferable,
-    {
-        // Uniforms have a minimum size of 16 bytes
-        let padded_count_size = 16;
-
-        let item_size = mem::size_of::<U>();
-
-        assert!(
-            Alignment::SIXTEEN.is_aligned(item_size),
-            "Tried to create uniform buffer with uniform size that \
-             causes invalid alignment (uniform buffer item stride \
-             must be a multiple of 16)"
-        );
-
-        let count = Count::try_from(n_valid_uniforms).unwrap();
-
-        let n_valid_bytes = Self::compute_size_including_count(
-            padded_count_size,
-            item_size.checked_mul(n_valid_uniforms).unwrap(),
-        );
-
-        let bytes = bytemuck::cast_slice(uniforms);
-
-        Self::new(
-            graphics_device,
-            RenderBufferType::Uniform,
-            count,
-            bytes,
-            padded_count_size,
-            item_size,
-            n_valid_bytes,
-            label,
-        )
-    }
-
     /// Creates a render buffer of the given type from the given slice of bytes,
     /// and embed a count at the beginning of the buffer. Only the first
     /// `n_valid_bytes` in the buffer (including the count and its padding) are
@@ -615,7 +241,7 @@ impl CountedRenderBuffer {
     /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the combined size of the padded count and the
     ///   `bytes` slice.
-    fn new(
+    pub fn new(
         graphics_device: &GraphicsDevice,
         buffer_type: RenderBufferType,
         count: Count,
@@ -715,11 +341,11 @@ impl CountedRenderBuffer {
     }
 
     /// Returns the underlying [`wgpu::Buffer`].
-    fn buffer(&self) -> &wgpu::Buffer {
+    pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
 
-    fn compute_size_including_count(padded_count_size: usize, n_bytes: usize) -> usize {
+    pub fn compute_size_including_count(padded_count_size: usize, n_bytes: usize) -> usize {
         padded_count_size.checked_add(n_bytes).unwrap()
     }
 
@@ -789,83 +415,6 @@ impl CountedRenderBuffer {
         if let Some(count) = count {
             queue_write_to_buffer(queue, buffer, 0, bytemuck::bytes_of(&count), buffer_size);
         }
-    }
-}
-
-/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
-/// vertex data of type `T`, with data layout defined by the given
-/// vertex attributes.
-pub const fn create_vertex_buffer_layout_for_vertex<T>(
-    attributes: &'static [wgpu::VertexAttribute],
-) -> wgpu::VertexBufferLayout<'static> {
-    wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes,
-    }
-}
-
-/// Creates a [`VertexBufferLayout`](wgpu::VertexBufferLayout) for
-/// instance data of type `T`, with data layout defined by the given
-/// instance attributes.
-pub const fn create_vertex_buffer_layout_for_instance<T>(
-    attributes: &'static [wgpu::VertexAttribute],
-) -> wgpu::VertexBufferLayout<'static> {
-    wgpu::VertexBufferLayout {
-        array_stride: mem::size_of::<T>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Instance,
-        attributes,
-    }
-}
-
-/// Creates a [`BindGroupLayoutEntry`](wgpu::BindGroupLayoutEntry) for
-/// a uniform buffer, using the given binding and visibility for the
-/// bind group.
-pub const fn create_uniform_buffer_bind_group_layout_entry(
-    binding: u32,
-    visibility: wgpu::ShaderStages,
-) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-/// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
-/// binding for the given uniform buffer representing a single uniform.
-pub fn create_single_uniform_bind_group_entry(
-    binding: u32,
-    render_buffer: &RenderBuffer,
-) -> wgpu::BindGroupEntry<'_> {
-    wgpu::BindGroupEntry {
-        binding,
-        resource: render_buffer.buffer().as_entire_binding(),
-    }
-}
-
-/// Creates a [`BindGroupLayoutEntry`](wgpu::BindGroupLayoutEntry) for a storage
-/// buffer, using the given binding and visibility for the bind group and
-/// whether the buffer should be read-only.
-pub const fn create_storage_buffer_bind_group_layout_entry(
-    binding: u32,
-    visibility: wgpu::ShaderStages,
-    read_only: bool,
-) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only },
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
     }
 }
 

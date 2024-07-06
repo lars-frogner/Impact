@@ -434,7 +434,7 @@ mod test {
         gpu::shader::InstanceFeatureShaderInput,
         impl_InstanceFeature,
         material::{MaterialHandle, MaterialID},
-        scene::MeshID,
+        mesh::MeshID,
     };
     use bytemuck::{Pod, Zeroable};
     use impact_utils::hash64;

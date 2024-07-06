@@ -3,7 +3,6 @@
 use super::{create_material_feature, create_prepass_material};
 use crate::{
     assets::Assets,
-    geometry::VertexAttributeSet,
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
@@ -19,6 +18,7 @@ use crate::{
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
         RoughnessTextureComp, SpecularReflectanceComp, SpecularReflectanceTextureComp,
     },
+    mesh::VertexAttributeSet,
     scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

@@ -3,7 +3,7 @@
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
     assets::Assets,
-    geometry::{InstanceFeature, VertexAttributeSet},
+    geometry::InstanceFeature,
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
@@ -18,6 +18,7 @@ use crate::{
         MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
         MaterialSpecification, RGBColor,
     },
+    mesh::VertexAttributeSet,
     scene::{InstanceFeatureManager, RenderResourcesDesynchronized},
 };
 use bytemuck::{Pod, Zeroable};

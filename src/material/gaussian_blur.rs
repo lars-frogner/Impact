@@ -2,17 +2,14 @@
 
 use crate::{
     assert_uniform_valid,
-    geometry::VertexAttributeSet,
     gpu::{
-        rendering::{
-            create_uniform_buffer_bind_group_layout_entry, fre, RenderAttachmentQuantity,
-            RenderPassHints, UniformBufferable,
-        },
+        rendering::{fre, RenderAttachmentQuantity, RenderPassHints},
         shader::{GaussianBlurShaderInput, MaterialShaderInput},
-        uniform::SingleUniformRenderBuffer,
+        uniform::{self, SingleUniformRenderBuffer, UniformBufferable},
         GraphicsDevice,
     },
     material::{MaterialSpecificResourceGroup, MaterialSpecification},
+    mesh::VertexAttributeSet,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;
@@ -201,7 +198,7 @@ impl UniformBufferable for GaussianBlurSamples {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
 assert_uniform_valid!(GaussianBlurSamples);

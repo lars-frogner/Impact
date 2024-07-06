@@ -17,8 +17,8 @@ pub use rendering::{
 };
 
 use crate::{
-    geometry::VertexAttributeSet,
     gpu::{rendering::RenderAttachmentQuantitySet, GraphicsDevice},
+    mesh::VertexAttributeSet,
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};

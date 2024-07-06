@@ -11,7 +11,7 @@ use crate::{
         SemiDirectionalMotionController,
     },
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{FrontFaceSide, VoxelTreeLODController, VoxelType},
+    geometry::{VoxelTreeLODController, VoxelType},
     gpu::{
         self,
         rendering::{fre, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig},
@@ -20,6 +20,10 @@ use crate::{
         AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
         RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
+    },
+    mesh::{
+        BoxMeshComp, ConeMeshComp, CylinderMeshComp, FrontFaceSide, RectangleMeshComp,
+        SphereMeshComp,
     },
     num::Float,
     physics::{
@@ -30,11 +34,9 @@ use crate::{
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
     scene::{
-        AmbientEmissionComp, BoxMeshComp, ConeMeshComp, CylinderMeshComp,
-        OmnidirectionalEmissionComp, ParentComp, PerspectiveCameraComp,
-        PlanarTextureProjectionComp, RectangleMeshComp, Scene, SceneConfig, SceneGraphGroupComp,
-        SphereMeshComp, UncullableComp, UnidirectionalEmissionComp, VoxelBoxComp, VoxelSphereComp,
-        VoxelTypeComp,
+        AmbientEmissionComp, OmnidirectionalEmissionComp, ParentComp, PerspectiveCameraComp,
+        PlanarTextureProjectionComp, Scene, SceneConfig, SceneGraphGroupComp, UncullableComp,
+        UnidirectionalEmissionComp, VoxelBoxComp, VoxelSphereComp, VoxelTypeComp,
     },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
     world::World,
