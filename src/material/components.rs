@@ -4,7 +4,7 @@ use crate::{
     assets::TextureID,
     components::ComponentRegistry,
     gpu::rendering::fre,
-    scene::{MaterialHandle, RGBColor},
+    material::{MaterialHandle, RGBColor},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};

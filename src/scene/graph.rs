@@ -13,8 +13,8 @@ use crate::{
         CubemapFace, Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
         InstanceModelViewTransform, OrthographicTransform, Sphere,
     },
-    num::Float,
     gpu::rendering::{fre, CascadeIdx},
+    num::Float,
     scene::{
         InstanceFeatureManager, LightStorage, ModelID, OmnidirectionalLight, SceneCamera,
         UnidirectionalLight, VoxelManager, VoxelTreeID, MAX_SHADOW_MAP_CASCADES,
@@ -1684,8 +1684,8 @@ impl_node_id_idx_traits!(CameraNodeID);
 mod test {
     use super::*;
     use crate::{
-        scene::MaterialID,
-        scene::{MaterialHandle, MeshID},
+        material::{MaterialHandle, MaterialID},
+        scene::MeshID,
     };
     use approx::assert_abs_diff_eq;
     use impact_utils::hash64;

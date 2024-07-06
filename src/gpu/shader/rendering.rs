@@ -3484,7 +3484,7 @@ impl SampledTexture {
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
-    use crate::scene::{
+    use crate::material::{
         FixedColorMaterial, FixedTextureMaterial, GaussianBlurDirection, ToneMapping,
         VertexColorMaterial,
     };

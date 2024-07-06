@@ -15,8 +15,8 @@ use crate::{
         uniform::SingleUniformRenderBuffer,
         GraphicsDevice,
     },
+    material::{MaterialSpecificResourceGroup, MaterialSpecification},
     num::Float,
-    scene::{MaterialSpecificResourceGroup, MaterialSpecification},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::ConstStringHash64;

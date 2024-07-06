@@ -12,14 +12,14 @@ use crate::{
         },
         GraphicsDevice,
     },
-    scene::{
+    material::{
         AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
         MaterialPropertyTextureGroupID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
-        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp,
-        RenderResourcesDesynchronized, RoughnessComp, RoughnessTextureComp,
-        SpecularReflectanceComp, SpecularReflectanceTextureComp,
+        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
+        RoughnessTextureComp, SpecularReflectanceComp, SpecularReflectanceTextureComp,
     },
+    scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;

@@ -13,11 +13,12 @@ use crate::{
         GraphicsDevice,
     },
     impl_InstanceFeature,
-    scene::{
-        FixedColorComp, FixedTextureComp, InstanceFeatureManager, MaterialComp, MaterialHandle,
-        MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
-        MaterialSpecification, RGBColor, RenderResourcesDesynchronized,
+    material::{
+        FixedColorComp, FixedTextureComp, MaterialComp, MaterialHandle, MaterialID,
+        MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
+        MaterialSpecification, RGBColor,
     },
+    scene::{InstanceFeatureManager, RenderResourcesDesynchronized},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

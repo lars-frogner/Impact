@@ -22,11 +22,11 @@ use crate::{
         },
         GraphicsDevice,
     },
-    scene::{
-        LightID, LightType, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecification, MeshID, ModelID, Postprocessor,
-        MAX_SHADOW_MAP_CASCADES,
+    material::{
+        MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
+        MaterialSpecification,
     },
+    scene::{LightID, LightType, MeshID, ModelID, Postprocessor, MAX_SHADOW_MAP_CASCADES},
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;

@@ -4,15 +4,17 @@ use crate::{
     assets::Assets,
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
     gpu::{rendering::fre, GraphicsDevice},
+    material::{
+        self, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
+        VertexColorMaterial,
+    },
     physics::ReferenceFrameComp,
     scene::{
-        self, add_blinn_phong_material_component_for_entity,
-        add_microfacet_material_component_for_entity, add_skybox_material_component_for_entity,
-        AmbientLight, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
-        MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
-        SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
-        SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
-        VertexColorMaterial, VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
+        self, AmbientLight, MeshComp, ModelID, ModelInstanceNodeID, OmnidirectionalLight,
+        ParentComp, Scene, SceneGraphGroupComp, SceneGraphGroupNodeComp,
+        SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+        UncullableComp, UnidirectionalLight, VoxelManager, VoxelTreeComp, VoxelTreeNodeComp,
+        VoxelTypeComp,
     },
     window::{self, Window},
 };
@@ -200,7 +202,7 @@ impl Scene {
             desynchronized,
         );
 
-        add_blinn_phong_material_component_for_entity(
+        material::add_blinn_phong_material_component_for_entity(
             graphics_device,
             assets,
             self.material_library(),
@@ -209,7 +211,7 @@ impl Scene {
             desynchronized,
         );
 
-        add_microfacet_material_component_for_entity(
+        material::add_microfacet_material_component_for_entity(
             graphics_device,
             assets,
             self.material_library(),
@@ -218,7 +220,7 @@ impl Scene {
             desynchronized,
         );
 
-        add_skybox_material_component_for_entity(
+        material::add_skybox_material_component_for_entity(
             graphics_device,
             assets,
             self.material_library(),

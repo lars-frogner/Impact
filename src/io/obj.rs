@@ -10,10 +10,11 @@ use crate::{
         rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
         GraphicsDevice,
     },
-    scene::{
-        AlbedoComp, AlbedoTextureComp, MeshComp, MeshID, MeshRepository, NormalMapComp, RGBColor,
-        RoughnessComp, SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,
+    material::{
+        AlbedoComp, AlbedoTextureComp, NormalMapComp, RGBColor, RoughnessComp,
+        SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,
     },
+    scene::{MeshComp, MeshID, MeshRepository},
 };
 use anyhow::{bail, Result};
 use impact_ecs::{
