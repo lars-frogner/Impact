@@ -11,7 +11,6 @@ mod mesh;
 mod postprocessing;
 mod render_command;
 mod resource;
-mod storage;
 mod surface;
 mod tasks;
 mod texture;
@@ -32,7 +31,6 @@ pub use render_command::{
     RenderPassSpecification, SyncRenderCommands,
 };
 pub use resource::SyncRenderResources;
-pub use storage::{StorageBufferID, StorageRenderBuffer, StorageRenderBufferManager};
 pub use surface::RenderingSurface;
 pub use tasks::{Render, RenderingTag};
 pub use texture::{
