@@ -2,7 +2,7 @@
 
 mod assets;
 mod brdf;
-mod buffer;
+pub(super) mod buffer;
 mod camera;
 mod compute;
 mod instance;
@@ -15,7 +15,6 @@ mod storage;
 mod surface;
 mod tasks;
 mod texture;
-mod uniform;
 
 pub use assets::{Assets, TextureID};
 pub use brdf::create_specular_ggx_reflectance_lookup_tables;
@@ -41,7 +40,6 @@ pub use texture::{
     RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,
     Texture, TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureLookupTable,
 };
-pub use uniform::SingleUniformRenderBuffer;
 
 use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager};
 use crate::{

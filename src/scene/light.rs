@@ -14,9 +14,9 @@ pub use omnidirectional_light::OmnidirectionalLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};
 
 use crate::{
-    geometry::{InstanceFeatureBufferRangeID, UniformBuffer},
+    geometry::InstanceFeatureBufferRangeID,
+    gpu::{rendering::fre, uniform::UniformBuffer},
     num::Float,
-    gpu::rendering::fre,
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
