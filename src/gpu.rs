@@ -1,6 +1,7 @@
 mod device;
 pub mod rendering;
 pub mod shader;
+pub mod uniform;
 
 pub use device::GraphicsDevice;
 

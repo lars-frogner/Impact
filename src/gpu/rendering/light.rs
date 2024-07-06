@@ -2,18 +2,18 @@
 
 use crate::{
     assert_uniform_valid,
-    geometry::{CollectionChange, UniformBuffer},
+    geometry::CollectionChange,
     gpu::{
         rendering::{
             buffer::{self, UniformBufferable},
             texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
-            uniform::{MultiUniformRenderBuffer, UniformTransferResult},
             CascadeIdx, RenderingConfig,
         },
         shader::{
             AmbientLightShaderInput, LightShaderInput, OmnidirectionalLightShaderInput,
             UnidirectionalLightShaderInput,
         },
+        uniform::{MultiUniformRenderBuffer, UniformBuffer, UniformTransferResult},
         GraphicsDevice,
     },
     scene::{

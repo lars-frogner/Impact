@@ -6,9 +6,10 @@ use crate::{
     gpu::{
         rendering::{
             create_uniform_buffer_bind_group_layout_entry, fre, RenderAttachmentQuantity,
-            RenderPassHints, SingleUniformRenderBuffer, UniformBufferable,
+            RenderPassHints, UniformBufferable,
         },
         shader::{GaussianBlurShaderInput, MaterialShaderInput},
+        uniform::SingleUniformRenderBuffer,
         GraphicsDevice,
     },
     scene::{MaterialSpecificResourceGroup, MaterialSpecification},

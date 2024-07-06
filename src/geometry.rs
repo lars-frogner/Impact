@@ -13,7 +13,6 @@ mod projection;
 mod sphere;
 mod texture_projection;
 mod tracking;
-mod uniform;
 mod voxel;
 
 pub use angle::{Angle, Degrees, Radians};
@@ -37,7 +36,6 @@ pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, Perspective
 pub use sphere::Sphere;
 pub use texture_projection::{PlanarTextureProjection, TextureProjection};
 pub use tracking::{CollectionChange, CollectionChangeTracker, EntityChangeTracker};
-pub use uniform::UniformBuffer;
 pub use voxel::{
     UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree,
     VoxelTreeLODController, VoxelType,
