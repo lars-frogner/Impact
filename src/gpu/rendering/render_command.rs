@@ -7,13 +7,14 @@ pub use tasks::SyncRenderCommands;
 use crate::{
     geometry::{CubemapFace, VertexAttributeSet},
     gpu::{
+        compute::{GPUComputationID, GPUComputationSpecification},
         rendering::{
             camera::CameraRenderBufferManager, instance::InstanceFeatureRenderBufferManager,
             light::LightRenderBufferManager, mesh::MeshRenderBufferManager,
             postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
-            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationID, GPUComputationLibrary,
-            GPUComputationSpecification, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
-            RenderAttachmentTextureManager, RenderingConfig, RenderingSurface,
+            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationLibrary,
+            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
+            RenderingConfig, RenderingSurface,
         },
         shader::{
             CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,
