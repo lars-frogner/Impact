@@ -1,9 +1,10 @@
 //! Material for rendering a skybox.
 
 use crate::{
+    assets::Assets,
     geometry::VertexAttributeSet,
     gpu::{
-        rendering::{Assets, RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{MaterialShaderInput, SkyboxTextureShaderInput},
         GraphicsDevice,
     },

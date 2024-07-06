@@ -1,11 +1,9 @@
 //! Event handling related to scenes.
 
 use crate::{
+    assets::Assets,
     geometry::{OrthographicCamera, PerspectiveCamera, TriangleMesh},
-    gpu::{
-        rendering::{fre, Assets},
-        GraphicsDevice,
-    },
+    gpu::{rendering::fre, GraphicsDevice},
     physics::ReferenceFrameComp,
     scene::{
         self, add_blinn_phong_material_component_for_entity,

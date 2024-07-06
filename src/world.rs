@@ -1,11 +1,12 @@
 //! Container for all data in the world.
 
 use crate::{
+    assets::Assets,
     components::{ComponentCategory, ComponentRegistry},
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     geometry::TextureProjection,
     gpu::{
-        rendering::{fre, Assets, RenderingSystem, ScreenCapturer},
+        rendering::{fre, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
     io,

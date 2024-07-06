@@ -84,6 +84,7 @@
 #[macro_use]
 mod macros;
 
+pub mod assets;
 pub mod components;
 pub mod control;
 pub mod game_loop;

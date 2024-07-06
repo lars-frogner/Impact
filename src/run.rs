@@ -5,6 +5,7 @@ use super::{
     gpu::rendering::RenderingSystem,
 };
 use crate::{
+    assets::Assets,
     control::{
         MotionControlComp, OrientationControlComp, RollFreeCameraOrientationController,
         SemiDirectionalMotionController,
@@ -13,9 +14,7 @@ use crate::{
     geometry::{FrontFaceSide, VoxelTreeLODController, VoxelType},
     gpu::{
         self,
-        rendering::{
-            fre, Assets, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig,
-        },
+        rendering::{fre, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig},
     },
     num::Float,
     physics::{

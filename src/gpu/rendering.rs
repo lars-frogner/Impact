@@ -1,6 +1,5 @@
 //! Graphics rendering.
 
-mod assets;
 mod brdf;
 pub(super) mod buffer;
 mod camera;
@@ -12,9 +11,8 @@ mod render_command;
 mod resource;
 mod surface;
 mod tasks;
-mod texture;
+pub mod texture;
 
-pub use assets::{Assets, TextureID};
 pub use brdf::create_specular_ggx_reflectance_lookup_tables;
 pub use buffer::{
     create_uniform_buffer_bind_group_layout_entry, create_vertex_buffer_layout_for_instance,

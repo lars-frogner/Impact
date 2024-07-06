@@ -8,13 +8,14 @@ pub use components::{
 };
 
 use crate::{
+    assets::Assets,
     geometry::{
         FrontFaceSide, InstanceFeatureID, Radians, TriangleMesh, UniformBoxVoxelGenerator,
         UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree, VoxelTreeLODController,
         VoxelType,
     },
     gpu::{
-        rendering::{fre, Assets},
+        rendering::fre,
         shader::{DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
         GraphicsDevice,
     },

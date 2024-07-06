@@ -1,12 +1,13 @@
 //! Input/output of mesh data in Wavefront OBJ format.
 
 use crate::{
+    assets::Assets,
     geometry::{
         TextureProjection, TriangleMesh, VertexColor, VertexNormalVector, VertexPosition,
         VertexTextureCoords,
     },
     gpu::{
-        rendering::{fre, Assets, ColorSpace, TextureAddressingConfig, TextureConfig},
+        rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
         GraphicsDevice,
     },
     scene::{
