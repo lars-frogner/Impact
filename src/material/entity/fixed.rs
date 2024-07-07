@@ -3,7 +3,6 @@
 use super::super::features::FixedColorMaterialFeature;
 use crate::{
     assets::Assets,
-    geometry::InstanceFeature,
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{FixedTextureShaderInput, MaterialShaderInput},
@@ -15,7 +14,8 @@ use crate::{
         MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
-    scene::{InstanceFeatureManager, RenderResourcesDesynchronized},
+    model::{InstanceFeature, InstanceFeatureManager},
+    scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;

@@ -14,8 +14,8 @@ pub use omnidirectional_light::OmnidirectionalLight;
 pub use unidirectional_light::{UnidirectionalLight, MAX_SHADOW_MAP_CASCADES};
 
 use crate::{
-    geometry::InstanceFeatureBufferRangeID,
     gpu::{rendering::fre, uniform::UniformBuffer},
+    model::InstanceFeatureBufferRangeID,
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};

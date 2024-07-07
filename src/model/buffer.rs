@@ -1,11 +1,11 @@
-//! Management of model instance data for rendering.
+//! Buffering of model instance data for rendering.
 
 use crate::{
-    geometry::{
+    gpu::{rendering::buffer::RenderBuffer, shader::InstanceFeatureShaderInput, GraphicsDevice},
+    model::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,
     },
-    gpu::{rendering::buffer::RenderBuffer, shader::InstanceFeatureShaderInput, GraphicsDevice},
 };
 use std::{borrow::Cow, ops::Range};
 

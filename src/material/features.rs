@@ -2,7 +2,6 @@
 
 use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
-    geometry::{InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID},
     gpu::{
         rendering::fre,
         shader::{
@@ -15,7 +14,7 @@ use crate::{
         components::{AlbedoComp, EmissiveLuminanceComp, ParallaxMapComp, SpecularReflectanceComp},
         RGBColor,
     },
-    scene::InstanceFeatureManager,
+    model::{InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID},
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector2;
