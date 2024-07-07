@@ -101,5 +101,6 @@ pub mod scene;
 pub mod scheduling;
 pub mod thread;
 pub mod ui;
+pub mod util;
 pub mod window;
 pub mod world;

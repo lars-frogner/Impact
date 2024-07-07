@@ -1,9 +1,6 @@
 //! Running an event loop.
 
-use super::{
-    geometry::{Degrees, UpperExclusiveBounds},
-    gpu::rendering::RenderingSystem,
-};
+use super::{geometry::Degrees, gpu::rendering::RenderingSystem};
 use crate::{
     assets::Assets,
     control::{
@@ -41,6 +38,7 @@ use crate::{
         SceneConfig, SceneGraphGroupComp, UncullableComp, UnidirectionalEmissionComp, VoxelBoxComp,
         VoxelSphereComp, VoxelTypeComp,
     },
+    util::bounds::UpperExclusiveBounds,
     window::{GameHandler, InputHandler, KeyActionMap, Window},
     world::World,
 };

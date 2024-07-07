@@ -7,8 +7,9 @@ pub mod generation;
 pub mod texture_projection;
 
 use crate::{
-    geometry::{AxisAlignedBox, CollectionChange, CollectionChangeTracker, Point, Sphere},
+    geometry::{AxisAlignedBox, Point, Sphere},
     num::Float,
+    util::tracking::{CollectionChange, CollectionChangeTracker},
 };
 use anyhow::{anyhow, Result};
 use approx::{abs_diff_eq, abs_diff_ne};

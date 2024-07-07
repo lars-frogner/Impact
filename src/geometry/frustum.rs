@@ -1,8 +1,9 @@
 //! Representation of frustums.
 
 use crate::{
-    geometry::{AxisAlignedBox, Bounds, Plane, Sphere, UpperExclusiveBounds},
+    geometry::{AxisAlignedBox, Plane, Sphere},
     num::Float,
+    util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use approx::AbsDiffEq;
 use nalgebra::{

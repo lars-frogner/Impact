@@ -1,11 +1,12 @@
 //! Camera types.
 
 use crate::{
-    geometry::{
-        Angle, Bounds, EntityChangeTracker, Frustum, OrthographicTransform, PerspectiveTransform,
-        Radians, UpperExclusiveBounds,
-    },
+    geometry::{Angle, Frustum, OrthographicTransform, PerspectiveTransform, Radians},
     num::Float,
+    util::{
+        bounds::{Bounds, UpperExclusiveBounds},
+        tracking::EntityChangeTracker,
+    },
 };
 use approx::assert_abs_diff_ne;
 use nalgebra::Projective3;

@@ -1,15 +1,13 @@
 //! Unidirectional light sources.
 
 use crate::{
-    geometry::{
-        Angle, AxisAlignedBox, Degrees, Frustum, OrthographicTransform, Sphere,
-        UpperExclusiveBounds,
-    },
+    geometry::{Angle, AxisAlignedBox, Degrees, Frustum, OrthographicTransform, Sphere},
     gpu::rendering::{fre, CascadeIdx},
     scene::{
         Illumninance, LightStorage, RenderResourcesDesynchronized, SceneCamera,
         UnidirectionalEmissionComp, UnidirectionalLightComp,
     },
+    util::bounds::UpperExclusiveBounds,
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};

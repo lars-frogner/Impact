@@ -1,13 +1,14 @@
 //! Management of perspective cameras.
 
 use crate::{
-    geometry::{PerspectiveCamera, UpperExclusiveBounds},
-    physics::ReferenceFrameComp,
+    geometry::PerspectiveCamera,
     gpu::rendering::fre,
+    physics::ReferenceFrameComp,
     scene::{
         PerspectiveCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
         SceneGraphCameraNodeComp, SceneGraphParentNodeComp,
     },
+    util::bounds::UpperExclusiveBounds,
     window::Window,
 };
 use anyhow::{bail, Result};

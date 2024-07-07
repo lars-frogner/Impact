@@ -2,7 +2,6 @@
 
 use crate::{
     assert_uniform_valid,
-    geometry::CollectionChange,
     gpu::{
         rendering::{
             texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
@@ -21,6 +20,7 @@ use crate::{
         AmbientLight, LightID, LightStorage, LightType, OmnidirectionalLight, UnidirectionalLight,
         MAX_SHADOW_MAP_CASCADES,
     },
+    util::tracking::CollectionChange,
 };
 use impact_utils::ConstStringHash64;
 use std::mem;
