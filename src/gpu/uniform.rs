@@ -1,11 +1,11 @@
 //! Management of uniform buffers for GPU computation or rendering.
 
 use crate::{
-    geometry::{CollectionChange, CollectionChangeTracker},
     gpu::{
         rendering::buffer::{Count, CountedRenderBuffer, RenderBuffer, RenderBufferType},
         GraphicsDevice,
     },
+    util::tracking::{CollectionChange, CollectionChangeTracker},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{Alignment, ConstStringHash64, KeyIndexMapper};

@@ -1,8 +1,9 @@
 //! Projection transformations.
 
 use crate::{
-    geometry::{Angle, AxisAlignedBox, Bounds, Frustum, Radians, UpperExclusiveBounds},
+    geometry::{Angle, AxisAlignedBox, Frustum, Radians},
     num::Float,
+    util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};

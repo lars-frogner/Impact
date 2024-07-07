@@ -1,7 +1,6 @@
 //! Buffering of mesh data for rendering.
 
 use crate::{
-    geometry::CollectionChange,
     gpu::{
         rendering::{
             buffer::{RenderBuffer, RenderBufferType},
@@ -15,6 +14,7 @@ use crate::{
         VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
         VERTEX_ATTRIBUTE_FLAGS,
     },
+    util::tracking::CollectionChange,
 };
 use anyhow::{anyhow, Result};
 use bytemuck::Pod;

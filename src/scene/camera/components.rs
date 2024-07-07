@@ -2,8 +2,9 @@
 
 use crate::{
     components::ComponentRegistry,
-    geometry::{Angle, Bounds, Radians, UpperExclusiveBounds},
+    geometry::{Angle, Radians},
     gpu::rendering::fre,
+    util::bounds::{Bounds, UpperExclusiveBounds},
 };
 use anyhow::Result;
 use approx::assert_abs_diff_ne;

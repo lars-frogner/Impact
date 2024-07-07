@@ -1,13 +1,14 @@
 //! Management of orthographic cameras.
 
 use crate::{
-    geometry::{OrthographicCamera, UpperExclusiveBounds},
-    physics::ReferenceFrameComp,
+    geometry::OrthographicCamera,
     gpu::rendering::fre,
+    physics::ReferenceFrameComp,
     scene::{
         OrthographicCameraComp, RenderResourcesDesynchronized, SceneCamera, SceneGraph,
         SceneGraphCameraNodeComp, SceneGraphParentNodeComp,
     },
+    util::bounds::UpperExclusiveBounds,
     window::Window,
 };
 use anyhow::{bail, Result};
