@@ -1,11 +1,10 @@
 //! Input/output of mesh data in Polygon File Format.
 
 use crate::{
-    geometry::TextureProjection,
     gpu::rendering::fre,
     mesh::{
-        components::MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor,
-        VertexNormalVector, VertexPosition, VertexTextureCoords,
+        components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
+        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
 };
 use anyhow::{bail, Result};

@@ -1,7 +1,6 @@
 //! Management of mesh-related components for entities.
 
 use crate::{
-    geometry::{PlanarTextureProjection, TextureProjection},
     gpu::rendering::fre,
     material::{components::MaterialComp, MaterialLibrary},
     mesh::{
@@ -9,9 +8,12 @@ use crate::{
             BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
             HemisphereMeshComp, MeshComp, RectangleMeshComp, SphereMeshComp,
         },
+        texture_projection::{
+            components::PlanarTextureProjectionComp, PlanarTextureProjection, TextureProjection,
+        },
         MeshRepository, TriangleMesh, VertexAttributeSet,
     },
-    scene::{PlanarTextureProjectionComp, RenderResourcesDesynchronized},
+    scene::RenderResourcesDesynchronized,
 };
 use anyhow::Result;
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

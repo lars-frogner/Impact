@@ -4,13 +4,12 @@ use crate::{
     assets::Assets,
     components::{ComponentCategory, ComponentRegistry},
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
-    geometry::TextureProjection,
     gpu::{
         rendering::{fre, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
     io, material,
-    mesh::{self, components::MeshComp},
+    mesh::{self, components::MeshComp, texture_projection::TextureProjection},
     physics::{self, PhysicsSimulator, SteppingScheme},
     scene::{self, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
@@ -598,7 +597,7 @@ impl World {
         scene::register_camera_components(registry)?;
         scene::register_light_components(registry)?;
         mesh::components::register_mesh_components(registry)?;
-        scene::register_texture_projection_components(registry)?;
+        mesh::texture_projection::components::register_texture_projection_components(registry)?;
         material::components::register_material_components(registry)?;
         scene::register_voxel_components(registry)
     }

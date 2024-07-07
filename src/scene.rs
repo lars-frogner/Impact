@@ -9,7 +9,6 @@ mod model;
 mod postprocessing;
 mod systems;
 mod tasks;
-mod texture_projection;
 mod voxel;
 
 pub use camera::{
@@ -38,7 +37,6 @@ pub use tasks::{
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
     SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
 };
-pub use texture_projection::{register_texture_projection_components, PlanarTextureProjectionComp};
 pub use voxel::{
     register_voxel_components, VoxelBoxComp, VoxelManager, VoxelSphereComp, VoxelTreeComp,
     VoxelTreeID, VoxelTreeNodeComp, VoxelTypeComp,

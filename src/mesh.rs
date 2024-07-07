@@ -4,11 +4,10 @@ pub mod buffer;
 pub mod components;
 pub mod entity;
 pub mod generation;
+pub mod texture_projection;
 
 use crate::{
-    geometry::{
-        AxisAlignedBox, CollectionChange, CollectionChangeTracker, Point, Sphere, TextureProjection,
-    },
+    geometry::{AxisAlignedBox, CollectionChange, CollectionChangeTracker, Point, Sphere},
     num::Float,
 };
 use anyhow::{anyhow, Result};
@@ -23,6 +22,7 @@ use std::{
     fmt::Debug,
     ops::Neg,
 };
+use texture_projection::TextureProjection;
 
 stringhash64_newtype!(
     /// Identifier for specific meshes.
