@@ -4,11 +4,8 @@ use crate::{
     assets::Assets,
     geometry::{OrthographicCamera, PerspectiveCamera},
     gpu::{rendering::fre, GraphicsDevice},
-    material::{
-        self, FixedColorMaterial, FixedTextureMaterial, MaterialComp, MaterialHandle,
-        VertexColorMaterial,
-    },
-    mesh::{self, MeshComp},
+    material::{self, components::MaterialComp, MaterialHandle},
+    mesh::{self, components::MeshComp},
     physics::ReferenceFrameComp,
     scene::{
         self, AmbientLight, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
@@ -186,44 +183,11 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        VertexColorMaterial::add_material_component_for_entity(components, desynchronized);
-
-        FixedColorMaterial::add_material_component_for_entity(
-            self.instance_feature_manager(),
-            components,
-            desynchronized,
-        );
-
-        FixedTextureMaterial::add_material_component_for_entity(
-            graphics_device,
-            assets,
-            self.material_library(),
-            components,
-            desynchronized,
-        );
-
-        material::add_blinn_phong_material_component_for_entity(
+        material::entity::add_material_component_for_entity(
             graphics_device,
             assets,
             self.material_library(),
             self.instance_feature_manager(),
-            components,
-            desynchronized,
-        );
-
-        material::add_microfacet_material_component_for_entity(
-            graphics_device,
-            assets,
-            self.material_library(),
-            self.instance_feature_manager(),
-            components,
-            desynchronized,
-        );
-
-        material::add_skybox_material_component_for_entity(
-            graphics_device,
-            assets,
-            self.material_library(),
             components,
             desynchronized,
         );

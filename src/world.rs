@@ -10,7 +10,7 @@ use crate::{
         GraphicsDevice,
     },
     io, material,
-    mesh::{self, MeshComp},
+    mesh::{self, components::MeshComp},
     physics::{self, PhysicsSimulator, SteppingScheme},
     scene::{self, RenderResourcesDesynchronized, Scene},
     scheduling::TaskScheduler,
@@ -597,9 +597,9 @@ impl World {
         scene::register_scene_graph_components(registry)?;
         scene::register_camera_components(registry)?;
         scene::register_light_components(registry)?;
-        mesh::register_mesh_components(registry)?;
+        mesh::components::register_mesh_components(registry)?;
         scene::register_texture_projection_components(registry)?;
-        material::register_material_components(registry)?;
+        material::components::register_material_components(registry)?;
         scene::register_voxel_components(registry)
     }
 

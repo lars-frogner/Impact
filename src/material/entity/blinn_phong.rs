@@ -1,6 +1,6 @@
 //! Materials using the Blinn-Phong reflection model.
 
-use super::{create_material_feature, create_prepass_material};
+use super::{super::features::create_physical_material_feature, prepass::create_prepass_material};
 use crate::{
     assets::Assets,
     gpu::{
@@ -9,11 +9,14 @@ use crate::{
         GraphicsDevice,
     },
     material::{
-        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MaterialComp, MaterialHandle,
-        MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
-        MaterialSpecification, MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp,
-        NormalMapComp, ParallaxMapComp, RoughnessComp, RoughnessTextureComp,
-        SpecularReflectanceComp, SpecularReflectanceTextureComp,
+        components::{
+            AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MaterialComp,
+            MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
+            ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SpecularReflectanceComp,
+            SpecularReflectanceTextureComp,
+        },
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+        MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
     scene::{InstanceFeatureManager, RenderResourcesDesynchronized},
@@ -51,7 +54,7 @@ pub fn add_blinn_phong_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_blinn_phong_material(
                 graphics_device,
                 assets,
                 &mut material_library,
@@ -90,7 +93,7 @@ pub fn add_blinn_phong_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_blinn_phong_material(
                 graphics_device,
                 assets,
                 &mut material_library,
@@ -129,7 +132,7 @@ pub fn add_blinn_phong_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_blinn_phong_material(
                 graphics_device,
                 assets,
                 &mut material_library,
@@ -168,7 +171,7 @@ pub fn add_blinn_phong_material_component_for_entity(
          normal_map: Option<&NormalMapComp>,
          parallax_map: Option<&ParallaxMapComp>|
          -> MaterialComp {
-            execute_material_setup(
+            setup_blinn_phong_material(
                 graphics_device,
                 assets,
                 &mut material_library,
@@ -193,7 +196,7 @@ pub fn add_blinn_phong_material_component_for_entity(
     );
 }
 
-fn execute_material_setup(
+pub fn setup_blinn_phong_material(
     graphics_device: &GraphicsDevice,
     assets: &Assets,
     material_library: &mut MaterialLibrary,
@@ -211,7 +214,7 @@ fn execute_material_setup(
 
     let shininess = roughness.map_or(1.0, |roughness| roughness.to_blinn_phong_shininess());
 
-    let (feature_type_id, feature_id) = create_material_feature(
+    let (feature_type_id, feature_id) = create_physical_material_feature(
         instance_feature_manager,
         &mut material_name_parts,
         albedo,

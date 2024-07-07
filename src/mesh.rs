@@ -1,14 +1,9 @@
 //! Triangle meshes.
 
 pub mod buffer;
-mod components;
+pub mod components;
 pub mod entity;
 pub mod generation;
-
-pub use components::{
-    register_mesh_components, BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
-    HemisphereMeshComp, MeshComp, RectangleMeshComp, SphereMeshComp,
-};
 
 use crate::{
     geometry::{
@@ -213,12 +208,6 @@ impl<F: Float> MeshRepository<F> {
     pub fn add_mesh_unless_present(&mut self, mesh_id: MeshID, mesh: TriangleMesh<F>) {
         let _ = self.add_mesh(mesh_id, mesh);
     }
-}
-
-impl VertexAttributeSet {
-    pub const FOR_LIGHT_SHADING: Self = Self::POSITION.union(Self::NORMAL_VECTOR);
-    pub const FOR_TEXTURED_LIGHT_SHADING: Self =
-        Self::FOR_LIGHT_SHADING.union(Self::TEXTURE_COORDS);
 }
 
 impl<F: Float> VertexPosition<F> {

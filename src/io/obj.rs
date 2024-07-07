@@ -8,12 +8,15 @@ use crate::{
         GraphicsDevice,
     },
     material::{
-        AlbedoComp, AlbedoTextureComp, NormalMapComp, RGBColor, RoughnessComp,
-        SpecularReflectanceComp, SpecularReflectanceTextureComp, VertexColorComp,
+        components::{
+            AlbedoComp, AlbedoTextureComp, NormalMapComp, RoughnessComp, SpecularReflectanceComp,
+            SpecularReflectanceTextureComp, VertexColorComp,
+        },
+        RGBColor,
     },
     mesh::{
-        MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor, VertexNormalVector,
-        VertexPosition, VertexTextureCoords,
+        components::MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor,
+        VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
 };
 use anyhow::{bail, Result};

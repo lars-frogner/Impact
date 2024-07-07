@@ -48,7 +48,7 @@ use crate::{
     assets::Assets,
     geometry::Radians,
     gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
-    material::{MaterialLibrary, ToneMapping},
+    material::{self, special::tone_mapping::ToneMapping, MaterialLibrary},
     mesh::MeshRepository,
 };
 use std::sync::RwLock;
@@ -87,8 +87,9 @@ impl Scene {
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
 
+        material::register_material_feature_types(&mut instance_feature_manager);
+
         let mut material_library = MaterialLibrary::new();
-        material_library.register_materials(&mut instance_feature_manager);
 
         let voxel_manager = VoxelManager::create(
             config.voxel_extent,

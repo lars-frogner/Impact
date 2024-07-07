@@ -1,6 +1,5 @@
 //! Materials for use in shading prepasses.
 
-use super::NormalMapComp;
 use crate::{
     assets::{Assets, TextureID},
     geometry::{InstanceFeatureID, InstanceFeatureTypeID},
@@ -13,8 +12,9 @@ use crate::{
         GraphicsDevice,
     },
     material::{
+        components::{NormalMapComp, ParallaxMapComp},
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecification, ParallaxMapComp,
+        MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
 };

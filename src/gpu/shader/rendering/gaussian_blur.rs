@@ -9,7 +9,9 @@ use super::{
     },
     MeshVertexOutputFieldIndices, PushConstantFieldExpressions, RenderShaderTricks,
 };
-use crate::material::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS};
+use crate::material::special::gaussian_blur::{
+    GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
+};
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Literal,
     LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,

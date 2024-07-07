@@ -1,6 +1,6 @@
 //! Materials using a microfacet reflection model.
 
-use super::{create_material_feature, create_prepass_material};
+use super::{super::features::create_physical_material_feature, prepass::create_prepass_material};
 use crate::{
     assets::Assets,
     gpu::{
@@ -12,11 +12,14 @@ use crate::{
         GraphicsDevice,
     },
     material::{
-        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, InstanceFeatureManager, MaterialComp,
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecification, MicrofacetDiffuseReflectionComp,
-        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
-        RoughnessTextureComp, SpecularReflectanceComp, SpecularReflectanceTextureComp,
+        components::{
+            AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MaterialComp,
+            MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
+            ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SpecularReflectanceComp,
+            SpecularReflectanceTextureComp,
+        },
+        InstanceFeatureManager, MaterialHandle, MaterialID, MaterialLibrary,
+        MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
     scene::RenderResourcesDesynchronized,
@@ -573,7 +576,7 @@ pub fn setup_microfacet_material(
         1.0
     };
 
-    let (feature_type_id, feature_id) = create_material_feature(
+    let (feature_type_id, feature_id) = create_physical_material_feature(
         instance_feature_manager,
         &mut material_name_parts,
         albedo,
