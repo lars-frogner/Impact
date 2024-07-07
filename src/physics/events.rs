@@ -3,8 +3,11 @@
 use crate::{
     gpu::rendering::fre,
     mesh::{
-        BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp, MeshRepository,
-        SphereMeshComp,
+        components::{
+            BoxMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp, MeshComp,
+            SphereMeshComp,
+        },
+        MeshRepository,
     },
     physics::{
         fph, InertialProperties, PhysicsSimulator, ReferenceFrameComp, RigidBody, RigidBodyComp,

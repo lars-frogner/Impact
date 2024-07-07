@@ -3480,13 +3480,12 @@ impl SampledTexture {
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-#[cfg(not(miri))]
+// #[cfg(not(miri))]
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
-    use crate::material::{
-        FixedColorMaterial, FixedTextureMaterial, GaussianBlurDirection, ToneMapping,
-        VertexColorMaterial,
+    use crate::material::special::{
+        gaussian_blur::GaussianBlurDirection, tone_mapping::ToneMapping,
     };
     use naga::{
         back::wgsl::{self as wgsl_out, WriterFlags},
@@ -3684,7 +3683,7 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&MaterialShaderInput::VertexColor),
-            VertexColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            VertexAttributeSet::COLOR,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
@@ -3707,7 +3706,7 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT, &FIXED_COLOR_FEATURE_INPUT],
             Some(&MaterialShaderInput::Fixed(None)),
-            FixedColorMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )
@@ -3738,7 +3737,7 @@ mod test {
             None,
             &[&MODEL_VIEW_TRANSFORM_INPUT],
             Some(&FIXED_TEXTURE_INPUT),
-            FixedTextureMaterial::VERTEX_ATTRIBUTE_REQUIREMENTS_FOR_SHADER,
+            VertexAttributeSet::TEXTURE_COORDS,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
         )

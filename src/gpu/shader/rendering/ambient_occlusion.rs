@@ -11,7 +11,8 @@ use super::{
     RenderShaderTricks,
 };
 use crate::{
-    gpu::rendering::RenderAttachmentQuantity, material::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
+    gpu::rendering::RenderAttachmentQuantity,
+    material::special::ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle, Literal,

@@ -16,14 +16,16 @@ use crate::{
         self,
         rendering::{fre, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig},
     },
-    material::{
+    material::components::{
         AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
         RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
     },
     mesh::{
-        BoxMeshComp, ConeMeshComp, CylinderMeshComp, FrontFaceSide, RectangleMeshComp,
-        SphereMeshComp,
+        components::{
+            BoxMeshComp, ConeMeshComp, CylinderMeshComp, RectangleMeshComp, SphereMeshComp,
+        },
+        FrontFaceSide,
     },
     num::Float,
     physics::{

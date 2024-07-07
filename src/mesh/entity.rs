@@ -3,11 +3,13 @@
 use crate::{
     geometry::{PlanarTextureProjection, TextureProjection},
     gpu::rendering::fre,
-    material::{MaterialComp, MaterialLibrary},
+    material::{components::MaterialComp, MaterialLibrary},
     mesh::{
-        BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp, HemisphereMeshComp,
-        MeshComp, MeshRepository, RectangleMeshComp, SphereMeshComp, TriangleMesh,
-        VertexAttributeSet,
+        components::{
+            BoxMeshComp, CircularFrustumMeshComp, ConeMeshComp, CylinderMeshComp,
+            HemisphereMeshComp, MeshComp, RectangleMeshComp, SphereMeshComp,
+        },
+        MeshRepository, TriangleMesh, VertexAttributeSet,
     },
     scene::{PlanarTextureProjectionComp, RenderResourcesDesynchronized},
 };

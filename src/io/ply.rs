@@ -4,8 +4,8 @@ use crate::{
     geometry::TextureProjection,
     gpu::rendering::fre,
     mesh::{
-        MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor, VertexNormalVector,
-        VertexPosition, VertexTextureCoords,
+        components::MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor,
+        VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
 };
 use anyhow::{bail, Result};

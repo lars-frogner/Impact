@@ -1,53 +1,11 @@
-//! Management of materials.
+//! Materials.
 
-mod ambient_occlusion;
-mod blinn_phong;
-mod components;
+pub mod components;
+pub mod entity;
 mod features;
-mod fixed;
-mod gaussian_blur;
-mod microfacet;
-mod prepass;
-mod skybox;
-mod tone_mapping;
-mod vertex_color;
+pub mod special;
 
-pub use ambient_occlusion::{
-    create_ambient_occlusion_application_material, create_ambient_occlusion_computation_material,
-    MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
-};
-pub use blinn_phong::add_blinn_phong_material_component_for_entity;
-pub use components::{
-    register_material_components, AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp,
-    EmissiveLuminanceTextureComp, FixedColorComp, FixedTextureComp, MaterialComp,
-    MicrofacetDiffuseReflectionComp, MicrofacetSpecularReflectionComp, NormalMapComp,
-    ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
-    SpecularReflectanceTextureComp, VertexColorComp,
-};
-pub use features::{
-    create_material_feature, TexturedEmissiveMaterialFeature, TexturedMaterialFeature,
-    TexturedParallaxMappingEmissiveMaterialFeature, TexturedParallaxMappingMaterialFeature,
-    UniformDiffuseEmissiveMaterialFeature, UniformDiffuseMaterialFeature,
-    UniformDiffuseParallaxMappingEmissiveMaterialFeature,
-    UniformDiffuseParallaxMappingMaterialFeature,
-    UniformDiffuseUniformSpecularEmissiveMaterialFeature,
-    UniformDiffuseUniformSpecularMaterialFeature,
-    UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
-    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature,
-    UniformSpecularEmissiveMaterialFeature, UniformSpecularMaterialFeature,
-    UniformSpecularParallaxMappingEmissiveMaterialFeature,
-    UniformSpecularParallaxMappingMaterialFeature,
-};
-pub use fixed::{FixedColorMaterial, FixedTextureMaterial};
-pub use gaussian_blur::{
-    create_gaussian_blur_material, GaussianBlurDirection, GaussianBlurSamples,
-    MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
-};
-pub use microfacet::{add_microfacet_material_component_for_entity, setup_microfacet_material};
-pub use prepass::create_prepass_material;
-pub use skybox::add_skybox_material_component_for_entity;
-pub use tone_mapping::{create_tone_mapping_material, ToneMapping};
-pub use vertex_color::VertexColorMaterial;
+pub use features::register_material_feature_types;
 
 use crate::{
     assets::{Assets, TextureID},
@@ -462,38 +420,6 @@ impl MaterialLibrary {
         self.material_property_texture_groups
             .insert(texture_group_id, texture_group);
     }
-
-    pub fn register_materials(&mut self, instance_feature_manager: &mut InstanceFeatureManager) {
-        instance_feature_manager.register_feature_type::<TexturedMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
-        instance_feature_manager.register_feature_type::<TexturedParallaxMappingMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
-        instance_feature_manager.register_feature_type::<TexturedEmissiveMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
-        instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<TexturedParallaxMappingEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformSpecularParallaxMappingEmissiveMaterialFeature>();
-        instance_feature_manager
-            .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature>();
-
-        VertexColorMaterial::register(self);
-        FixedColorMaterial::register(self, instance_feature_manager);
-        FixedTextureMaterial::register(self);
-    }
 }
 
 impl MaterialID {
@@ -625,4 +551,10 @@ impl fmt::Display for MaterialHandle {
             },
         )
     }
+}
+
+impl VertexAttributeSet {
+    pub const FOR_LIGHT_SHADING: Self = Self::POSITION.union(Self::NORMAL_VECTOR);
+    pub const FOR_TEXTURED_LIGHT_SHADING: Self =
+        Self::FOR_LIGHT_SHADING.union(Self::TEXTURE_COORDS);
 }

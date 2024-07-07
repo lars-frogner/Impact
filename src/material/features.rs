@@ -5,18 +5,35 @@ use crate::{
     geometry::{InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID},
     gpu::{
         rendering::fre,
-        shader::{InstanceFeatureShaderInput, LightMaterialFeatureShaderInput},
+        shader::{
+            FixedColorFeatureShaderInput, InstanceFeatureShaderInput,
+            LightMaterialFeatureShaderInput,
+        },
     },
     impl_InstanceFeature,
     material::{
-        AlbedoComp, EmissiveLuminanceComp, ParallaxMapComp, RGBColor, SpecularReflectanceComp,
+        components::{AlbedoComp, EmissiveLuminanceComp, ParallaxMapComp, SpecularReflectanceComp},
+        RGBColor,
     },
     scene::InstanceFeatureManager,
 };
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector2;
 
-/// Fixed material properties for a material with no uniform reflectance.
+/// Fixed material properties for a non-physical material with a uniform color
+/// that is independent of lighting.
+///
+/// This type stores the material's per-instance data that will be sent to the
+/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
+/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct FixedColorMaterialFeature {
+    color: RGBColor,
+}
+
+/// Fixed material properties for a physical material with no uniform
+/// reflectance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -27,7 +44,7 @@ pub struct TexturedMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform albedo.
+/// Fixed material properties for a physical material with a uniform albedo.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -39,7 +56,7 @@ pub struct UniformDiffuseMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform specular
+/// Fixed material properties for a physical material with a uniform specular
 /// reflectance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
@@ -52,8 +69,8 @@ pub struct UniformSpecularMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform albedo and specular
-/// reflectance.
+/// Fixed material properties for a physical material with a uniform albedo and
+/// specular reflectance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -66,8 +83,8 @@ pub struct UniformDiffuseUniformSpecularMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with no uniform reflectance using
-/// parallax mapping.
+/// Fixed material properties for a physical material with no uniform
+/// reflectance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -80,8 +97,8 @@ pub struct TexturedParallaxMappingMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with a uniform albedo using
-/// parallax mapping.
+/// Fixed material properties for a physical material with a uniform albedo
+/// using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -95,8 +112,8 @@ pub struct UniformDiffuseParallaxMappingMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with a uniform specular reflectance
-/// using parallax mapping.
+/// Fixed material properties for a physical material with a uniform specular
+/// reflectance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -110,8 +127,8 @@ pub struct UniformSpecularParallaxMappingMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with a uniform albedo and specular
-/// reflectance using parallax mapping.
+/// Fixed material properties for a physical material with a uniform albedo and
+/// specular reflectance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -126,8 +143,8 @@ pub struct UniformDiffuseUniformSpecularParallaxMappingMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with only an emissive uniform
-/// luminance.
+/// Fixed material properties for a physical material with only an emissive
+/// uniform luminance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -139,8 +156,8 @@ pub struct TexturedEmissiveMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform albedo and emissive
-/// luminance.
+/// Fixed material properties for a physical material with a uniform albedo and
+/// emissive luminance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -153,8 +170,8 @@ pub struct UniformDiffuseEmissiveMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform specular reflectance
-/// and emissive luminance.
+/// Fixed material properties for a physical material with a uniform specular
+/// reflectance and emissive luminance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -167,8 +184,8 @@ pub struct UniformSpecularEmissiveMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform albedo, specular
-/// reflectance and emissive luminance.
+/// Fixed material properties for a physical material with a uniform albedo,
+/// specular reflectance and emissive luminance.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -182,8 +199,8 @@ pub struct UniformDiffuseUniformSpecularEmissiveMaterialFeature {
     roughness: fre,
 }
 
-/// Fixed material properties for a material with a uniform emissive luminance
-/// using parallax mapping.
+/// Fixed material properties for a physical material with a uniform emissive
+/// luminance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -197,8 +214,8 @@ pub struct TexturedParallaxMappingEmissiveMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with a uniform albedo and emissive
-/// luminance using parallax mapping.
+/// Fixed material properties for a physical material with a uniform albedo and
+/// emissive luminance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -213,8 +230,8 @@ pub struct UniformDiffuseParallaxMappingEmissiveMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with a uniform specular reflectance
-/// and emissive luminance using parallax mapping.
+/// Fixed material properties for a physical material with a uniform specular
+/// reflectance and emissive luminance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -229,8 +246,8 @@ pub struct UniformSpecularParallaxMappingEmissiveMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a material with a uniform albedo, specular
-/// reflectance and emissive luminance using parallax mapping.
+/// Fixed material properties for a physical material with a uniform albedo,
+/// specular reflectance and emissive luminance using parallax mapping.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
@@ -246,13 +263,48 @@ pub struct UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature {
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Creates the appropriate material feature for the given set of components and
-/// adds it to the instance feature manager. A tag identifying the feature type
-/// is appended to the given list of name parts.
+impl FixedColorMaterialFeature {
+    pub fn new(color: RGBColor) -> Self {
+        Self { color }
+    }
+}
+
+pub fn register_material_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {
+    instance_feature_manager.register_feature_type::<FixedColorMaterialFeature>();
+    instance_feature_manager.register_feature_type::<TexturedMaterialFeature>();
+    instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
+    instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
+    instance_feature_manager.register_feature_type::<TexturedParallaxMappingMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
+    instance_feature_manager.register_feature_type::<TexturedEmissiveMaterialFeature>();
+    instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
+    instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<TexturedParallaxMappingEmissiveMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformSpecularParallaxMappingEmissiveMaterialFeature>();
+    instance_feature_manager
+        .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature>();
+}
+
+/// Creates the appropriate physical material feature for the given set of
+/// components and adds it to the instance feature manager. A tag identifying
+/// the feature type is appended to the given list of name parts.
 ///
 /// # Returns
 /// The ID of the created feature type and the ID of the created feature.
-pub fn create_material_feature(
+pub fn create_physical_material_feature(
     instance_feature_manager: &mut InstanceFeatureManager,
     material_name_parts: &mut Vec<&str>,
     albedo: Option<&AlbedoComp>,
@@ -770,6 +822,14 @@ impl UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature {
             })
     }
 }
+
+impl_InstanceFeature!(
+    FixedColorMaterialFeature,
+    wgpu::vertex_attr_array![MATERIAL_VERTEX_BINDING_START => Float32x3],
+    InstanceFeatureShaderInput::FixedColorMaterial(FixedColorFeatureShaderInput {
+        color_location: MATERIAL_VERTEX_BINDING_START,
+    })
+);
 
 impl_InstanceFeature!(
     TexturedMaterialFeature,

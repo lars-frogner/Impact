@@ -19,8 +19,9 @@ use crate::{
         GraphicsDevice,
     },
     material::{
-        self, AlbedoComp, MaterialComp, MaterialHandle, MaterialLibrary, RGBColor, RoughnessComp,
-        SpecularReflectanceComp,
+        self,
+        components::{AlbedoComp, MaterialComp, RoughnessComp, SpecularReflectanceComp},
+        MaterialHandle, MaterialLibrary, RGBColor,
     },
     mesh::{FrontFaceSide, MeshID, MeshRepository, TriangleMesh},
     num::Float,
@@ -309,7 +310,7 @@ fn setup_microfacet_material_for_voxel(
         SpecularMicrofacetShadingModel::None
     };
 
-    material::setup_microfacet_material(
+    material::entity::microfacet::setup_microfacet_material(
         graphics_device,
         assets,
         material_library,

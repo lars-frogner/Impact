@@ -8,7 +8,7 @@ mod equirectangular_map;
 use crate::{
     geometry::{Angle, Radians},
     gpu::rendering::fre,
-    mesh::{MeshComp, MeshID, MeshRepository, TriangleMesh},
+    mesh::{components::MeshComp, MeshID, MeshRepository, TriangleMesh},
     num::Float,
     physics::{
         fph, Direction, Position, ReferenceFrameComp, RigidBodyComp, Static, UniformMedium,
