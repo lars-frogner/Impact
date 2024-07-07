@@ -30,11 +30,7 @@ pub fn add_material_component_for_entity(
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {
-    vertex_color::add_vertex_color_material_component_for_entity(
-        material_library,
-        components,
-        desynchronized,
-    );
+    vertex_color::add_vertex_color_material_component_for_entity(material_library, components);
 
     fixed::add_fixed_color_material_component_for_entity(
         material_library,
@@ -48,7 +44,6 @@ pub fn add_material_component_for_entity(
         assets,
         material_library,
         components,
-        desynchronized,
     );
 
     blinn_phong::add_blinn_phong_material_component_for_entity(
@@ -74,6 +69,5 @@ pub fn add_material_component_for_entity(
         assets,
         material_library,
         components,
-        desynchronized,
     );
 }

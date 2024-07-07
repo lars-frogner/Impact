@@ -13,7 +13,6 @@ use crate::{
         MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
-    scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
@@ -34,11 +33,9 @@ pub fn add_skybox_material_component_for_entity(
     assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,
     components: &mut ArchetypeComponentStorage,
-    desynchronized: &mut RenderResourcesDesynchronized,
 ) {
     setup!(
         {
-            desynchronized.set_yes();
             let mut material_library = material_library.write().unwrap();
         },
         components,

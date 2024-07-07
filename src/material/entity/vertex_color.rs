@@ -12,7 +12,6 @@ use crate::{
         MaterialHandle, MaterialID, MaterialLibrary, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
-    scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
@@ -28,7 +27,6 @@ lazy_static! {
 pub fn add_vertex_color_material_component_for_entity(
     material_library: &RwLock<MaterialLibrary>,
     components: &mut ArchetypeComponentStorage,
-    _desynchronized: &mut RenderResourcesDesynchronized,
 ) {
     setup!(
         {
