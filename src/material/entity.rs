@@ -8,10 +8,8 @@ pub mod skybox;
 pub mod vertex_color;
 
 use crate::{
-    assets::Assets,
-    gpu::GraphicsDevice,
-    material::MaterialLibrary,
-    scene::{InstanceFeatureManager, RenderResourcesDesynchronized},
+    assets::Assets, gpu::GraphicsDevice, material::MaterialLibrary, model::InstanceFeatureManager,
+    scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::archetype::ArchetypeComponentStorage;
 use std::sync::RwLock;

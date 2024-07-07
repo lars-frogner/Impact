@@ -9,7 +9,6 @@ pub use features::register_material_feature_types;
 
 use crate::{
     assets::{Assets, TextureID},
-    geometry::{InstanceFeatureID, InstanceFeatureTypeID},
     gpu::{
         rendering::{fre, RenderAttachmentQuantitySet, RenderPassHints},
         shader::MaterialShaderInput,
@@ -18,7 +17,7 @@ use crate::{
         GraphicsDevice,
     },
     mesh::VertexAttributeSet,
-    scene::InstanceFeatureManager,
+    model::{InstanceFeatureID, InstanceFeatureTypeID},
 };
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};

@@ -5,11 +5,12 @@ mod generation;
 pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
 
 use crate::{
-    geometry::{
-        Angle, AxisAlignedBox, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureID,
-        InstanceFeatureStorage, InstanceModelViewTransform, Radians, Sphere,
-    },
+    geometry::{Angle, AxisAlignedBox, Frustum, Radians, Sphere},
     gpu::rendering::fre,
+    model::{
+        DynamicInstanceFeatureBuffer, InstanceFeatureID, InstanceFeatureStorage,
+        InstanceModelViewTransform,
+    },
     num::Float,
 };
 use approx::AbsDiffEq;

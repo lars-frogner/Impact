@@ -3,9 +3,7 @@
 mod camera;
 mod events;
 mod graph;
-mod instance;
 mod light;
-mod model;
 mod postprocessing;
 mod systems;
 mod tasks;
@@ -21,7 +19,6 @@ pub use graph::{
     SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
     SceneGraphParentNodeComp, UncullableComp, VoxelTreeNode, VoxelTreeNodeID,
 };
-pub use instance::InstanceFeatureManager;
 pub use light::{
     compute_luminance_for_uniform_illuminance, register_light_components, AmbientEmissionComp,
     AmbientLight, AmbientLightComp, Illumninance, LightID, LightStorage, LightType, Luminance,
@@ -29,7 +26,6 @@ pub use light::{
     UnidirectionalEmissionComp, UnidirectionalLight, UnidirectionalLightComp,
     MAX_SHADOW_MAP_CASCADES,
 };
-pub use model::ModelID;
 pub use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
 pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
 pub use tasks::{
@@ -48,6 +44,7 @@ use crate::{
     gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
     material::{self, special::tone_mapping::ToneMapping, MaterialLibrary},
     mesh::MeshRepository,
+    model::InstanceFeatureManager,
 };
 use std::sync::RwLock;
 

@@ -18,10 +18,11 @@ use crate::{
             ParallaxMapComp, RoughnessComp, RoughnessTextureComp, SpecularReflectanceComp,
             SpecularReflectanceTextureComp,
         },
-        InstanceFeatureManager, MaterialHandle, MaterialID, MaterialLibrary,
-        MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialSpecification,
+        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
+        MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
+    model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

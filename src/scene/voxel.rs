@@ -10,8 +10,8 @@ pub use components::{
 use crate::{
     assets::Assets,
     geometry::{
-        InstanceFeatureID, Radians, UniformBoxVoxelGenerator, UniformSphereVoxelGenerator,
-        VoxelPropertyMap, VoxelTree, VoxelTreeLODController, VoxelType,
+        Radians, UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelPropertyMap,
+        VoxelTree, VoxelTreeLODController, VoxelType,
     },
     gpu::{
         rendering::fre,
@@ -24,8 +24,8 @@ use crate::{
         MaterialHandle, MaterialLibrary, RGBColor,
     },
     mesh::{FrontFaceSide, MeshID, MeshRepository, TriangleMesh},
+    model::{InstanceFeatureID, InstanceFeatureManager, ModelID},
     num::Float,
-    scene::{InstanceFeatureManager, ModelID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};

@@ -2,7 +2,6 @@
 
 use crate::{
     assets::{Assets, TextureID},
-    geometry::{InstanceFeatureID, InstanceFeatureTypeID},
     gpu::{
         rendering::{RenderAttachmentQuantitySet, RenderPassHints},
         shader::{
@@ -17,6 +16,7 @@ use crate::{
         MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
+    model::{InstanceFeatureID, InstanceFeatureTypeID},
 };
 use impact_utils::hash64;
 

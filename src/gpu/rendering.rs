@@ -3,7 +3,6 @@
 mod brdf;
 pub mod buffer;
 mod camera;
-mod instance;
 mod light;
 mod postprocessing;
 mod render_command;

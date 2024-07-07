@@ -9,15 +9,16 @@ pub use components::{
 };
 
 use crate::{
-    geometry::{
-        CubemapFace, Frustum, InstanceFeature, InstanceFeatureID, InstanceModelLightTransform,
-        InstanceModelViewTransform, OrthographicTransform, Sphere,
-    },
+    geometry::{CubemapFace, Frustum, OrthographicTransform, Sphere},
     gpu::rendering::{fre, CascadeIdx},
+    model::{
+        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceModelLightTransform,
+        InstanceModelViewTransform, ModelID,
+    },
     num::Float,
     scene::{
-        InstanceFeatureManager, LightStorage, ModelID, OmnidirectionalLight, SceneCamera,
-        UnidirectionalLight, VoxelManager, VoxelTreeID, MAX_SHADOW_MAP_CASCADES,
+        LightStorage, OmnidirectionalLight, SceneCamera, UnidirectionalLight, VoxelManager,
+        VoxelTreeID, MAX_SHADOW_MAP_CASCADES,
     },
 };
 use bytemuck::{Pod, Zeroable};

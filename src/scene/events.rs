@@ -6,9 +6,10 @@ use crate::{
     gpu::{rendering::fre, GraphicsDevice},
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
+    model::ModelID,
     physics::ReferenceFrameComp,
     scene::{
-        self, AmbientLight, ModelID, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
+        self, AmbientLight, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
         SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
         SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
         VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,

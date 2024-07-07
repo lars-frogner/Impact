@@ -5,7 +5,6 @@ mod axis_aligned_box;
 mod bounds;
 mod camera;
 mod frustum;
-mod instance;
 mod oriented_box;
 mod plane;
 mod projection;
@@ -18,11 +17,6 @@ pub use axis_aligned_box::AxisAlignedBox;
 pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};
 pub use camera::{Camera, OrthographicCamera, PerspectiveCamera};
 pub use frustum::Frustum;
-pub use instance::{
-    DynamicInstanceFeatureBuffer, InstanceFeature, InstanceFeatureBufferRangeID,
-    InstanceFeatureBufferRangeMap, InstanceFeatureID, InstanceFeatureStorage,
-    InstanceFeatureTypeID, InstanceModelLightTransform, InstanceModelViewTransform,
-};
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
