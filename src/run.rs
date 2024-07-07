@@ -25,6 +25,7 @@ use crate::{
         components::{
             BoxMeshComp, ConeMeshComp, CylinderMeshComp, RectangleMeshComp, SphereMeshComp,
         },
+        texture_projection::components::PlanarTextureProjectionComp,
         FrontFaceSide,
     },
     num::Float,
@@ -36,9 +37,9 @@ use crate::{
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
     scene::{
-        AmbientEmissionComp, OmnidirectionalEmissionComp, ParentComp, PerspectiveCameraComp,
-        PlanarTextureProjectionComp, Scene, SceneConfig, SceneGraphGroupComp, UncullableComp,
-        UnidirectionalEmissionComp, VoxelBoxComp, VoxelSphereComp, VoxelTypeComp,
+        AmbientEmissionComp, OmnidirectionalEmissionComp, ParentComp, PerspectiveCameraComp, Scene,
+        SceneConfig, SceneGraphGroupComp, UncullableComp, UnidirectionalEmissionComp, VoxelBoxComp,
+        VoxelSphereComp, VoxelTypeComp,
     },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
     world::World,

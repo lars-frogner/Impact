@@ -2,7 +2,6 @@
 
 use crate::{
     assets::Assets,
-    geometry::TextureProjection,
     gpu::{
         rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
         GraphicsDevice,
@@ -15,8 +14,8 @@ use crate::{
         RGBColor,
     },
     mesh::{
-        components::MeshComp, MeshID, MeshRepository, TriangleMesh, VertexColor,
-        VertexNormalVector, VertexPosition, VertexTextureCoords,
+        components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
+        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
 };
 use anyhow::{bail, Result};

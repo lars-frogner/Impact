@@ -1,8 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to texture projections.
 
 use crate::{
-    components::ComponentRegistry, geometry::PlanarTextureProjection, gpu::rendering::fre,
-    mesh::components::RectangleMeshComp,
+    components::ComponentRegistry, gpu::rendering::fre, mesh::components::RectangleMeshComp,
+    mesh::texture_projection::PlanarTextureProjection,
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};

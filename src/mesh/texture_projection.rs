@@ -1,5 +1,7 @@
 //! Texture projection.
 
+pub mod components;
+
 use crate::num::Float;
 use approx::assert_abs_diff_ne;
 use nalgebra::{vector, Point3, UnitVector3, Vector2, Vector3};
