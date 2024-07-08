@@ -5,8 +5,8 @@ use crate::{
     assets::Assets,
     camera::components::PerspectiveCameraComp,
     control::{
-        MotionControlComp, OrientationControlComp, RollFreeCameraOrientationController,
-        SemiDirectionalMotionController,
+        components::{MotionControlComp, OrientationControlComp},
+        RollFreeCameraOrientationController, SemiDirectionalMotionController,
     },
     game_loop::{GameLoop, GameLoopConfig},
     gpu::{

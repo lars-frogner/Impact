@@ -5,7 +5,7 @@ mod components;
 pub use components::SpringComp;
 
 use crate::{
-    control::{MotionControlComp, OrientationControlComp},
+    control::components::{MotionControlComp, OrientationControlComp},
     physics::{
         fph, AngularVelocity, Direction, Orientation, Position, ReferenceFrameComp, RigidBodyComp,
         Static, Velocity, VelocityComp,
