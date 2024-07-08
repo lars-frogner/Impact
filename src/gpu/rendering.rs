@@ -2,7 +2,6 @@
 
 mod brdf;
 pub mod buffer;
-mod light;
 mod postprocessing;
 mod render_command;
 mod resource;
@@ -29,8 +28,9 @@ use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager
 use crate::{
     geometry::CubemapFace,
     gpu::{compute::GPUComputationLibrary, GraphicsDevice},
+    light::MAX_SHADOW_MAP_CASCADES,
     material::MaterialLibrary,
-    scene::{Scene, MAX_SHADOW_MAP_CASCADES},
+    scene::Scene,
     window::EventLoopController,
 };
 use anyhow::{Error, Result};

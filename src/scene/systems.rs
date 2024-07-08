@@ -2,13 +2,16 @@
 
 use crate::{
     define_task,
-    physics::ReferenceFrameComp,
     gpu::rendering::RenderingTag,
+    light::components::{
+        AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
+        OmnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
+    },
+    physics::ReferenceFrameComp,
     scene::{
-        AmbientEmissionComp, AmbientLightComp, CameraNodeID, GroupNodeID, ModelInstanceNodeID,
-        OmnidirectionalEmissionComp, OmnidirectionalLightComp, SceneGraphNodeComp,
-        SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UnidirectionalEmissionComp,
-        UnidirectionalLightComp, UpdateSceneGroupToWorldTransforms, VoxelTreeNodeComp,
+        CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeComp,
+        SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
+        VoxelTreeNodeComp,
     },
     world::World,
 };
@@ -71,7 +74,7 @@ define_task!(
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the properties (position,
     /// direction, emission and extent) of every light source in the
-    /// [`LightStorage`](crate::scene::LightStorage).
+    /// [`LightStorage`](crate::light::LightStorage).
     [pub] SyncLightsInStorage,
     depends_on = [
         UpdateSceneGroupToWorldTransforms,

@@ -12,15 +12,13 @@ use crate::{
     camera::SceneCamera,
     geometry::{CubemapFace, Frustum, OrthographicTransform, Sphere},
     gpu::rendering::{fre, CascadeIdx},
+    light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
     model::{
         InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceModelLightTransform,
         InstanceModelViewTransform, ModelID,
     },
     num::Float,
-    scene::{
-        LightStorage, OmnidirectionalLight, UnidirectionalLight, VoxelManager, VoxelTreeID,
-        MAX_SHADOW_MAP_CASCADES,
-    },
+    scene::{VoxelManager, VoxelTreeID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};
