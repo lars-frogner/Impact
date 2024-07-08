@@ -32,6 +32,13 @@ use num_traits::FromPrimitive;
 use simba::scalar::{SubsetOf, SupersetOf};
 use std::{array, collections::HashMap};
 
+/// Voxel configuration options.
+#[derive(Clone, Debug)]
+pub struct VoxelConfig<F> {
+    pub voxel_extent: F,
+    pub initial_min_angular_voxel_extent_for_lod: Radians<F>,
+}
+
 /// Identifier for a [`VoxelTree`] in a [`VoxelManager`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
@@ -40,6 +47,7 @@ pub struct VoxelTreeID(u32);
 /// Manager of all [`VoxelTree`]s in a scene.
 #[derive(Debug)]
 pub struct VoxelManager<F: Float> {
+    config: VoxelConfig<F>,
     voxel_appearances: VoxelPropertyMap<VoxelAppearance>,
     voxel_material_feature_ids: VoxelPropertyMap<InstanceFeatureID>,
     voxel_tree_lod_controller: VoxelTreeLODController<F>,
@@ -148,6 +156,15 @@ lazy_static! {
     pub static ref VOXEL_MESH_ID: MeshID = MeshID(hash64!("VoxelMesh"));
 }
 
+impl<F: Float> Default for VoxelConfig<F> {
+    fn default() -> Self {
+        Self {
+            voxel_extent: F::from_f64(0.25).unwrap(),
+            initial_min_angular_voxel_extent_for_lod: Radians(F::ZERO),
+        }
+    }
+}
+
 #[cfg(test)]
 impl VoxelTreeID {
     /// Creates a dummy [`VoxelTreeID`] that will never match an actual ID
@@ -164,6 +181,11 @@ impl std::fmt::Display for VoxelTreeID {
 }
 
 impl<F: Float> VoxelManager<F> {
+    /// Returns a reference to the voxel configuration options.
+    pub fn config(&self) -> &VoxelConfig<F> {
+        &self.config
+    }
+
     /// Returns a reference to the map from voxel types to material property
     /// feature IDs.
     pub fn voxel_material_feature_ids(&self) -> &VoxelPropertyMap<InstanceFeatureID> {
@@ -230,8 +252,7 @@ impl<F: Float> VoxelManager<F> {
 
 impl VoxelManager<fre> {
     pub fn create(
-        voxel_extent: fre,
-        initial_min_angular_voxel_extent_for_lod: Radians<fre>,
+        config: VoxelConfig<fre>,
         graphics_device: &GraphicsDevice,
         assets: &Assets,
         mesh_repository: &mut MeshRepository<fre>,
@@ -241,9 +262,9 @@ impl VoxelManager<fre> {
         mesh_repository.add_mesh_unless_present(
             *VOXEL_MESH_ID,
             TriangleMesh::create_box(
-                voxel_extent,
-                voxel_extent,
-                voxel_extent,
+                config.voxel_extent,
+                config.voxel_extent,
+                config.voxel_extent,
                 FrontFaceSide::Outside,
             ),
         );
@@ -270,12 +291,14 @@ impl VoxelManager<fre> {
             .try_into()
             .unwrap();
 
+        let voxel_tree_lod_controller =
+            VoxelTreeLODController::new(config.initial_min_angular_voxel_extent_for_lod);
+
         Self {
+            config,
             voxel_appearances: VoxelPropertyMap::new(voxel_appearances),
             voxel_material_feature_ids: VoxelPropertyMap::new(voxel_material_feature_ids),
-            voxel_tree_lod_controller: VoxelTreeLODController::new(
-                initial_min_angular_voxel_extent_for_lod,
-            ),
+            voxel_tree_lod_controller,
             voxel_trees: HashMap::new(),
             voxel_tree_id_counter: 1,
         }

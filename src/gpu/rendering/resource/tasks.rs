@@ -26,7 +26,6 @@ define_task!(
         SyncCameraRenderBuffer,
         SyncMeshRenderBuffers,
         SyncLightRenderBuffers,
-        SyncPostprocessingResources,
         SyncInstanceFeatureBuffers
     ],
     execute_on = [RenderingTag],
@@ -48,7 +47,6 @@ impl RenderResourceManager {
         task_scheduler.register_task(SyncMeshRenderBuffers)?;
         task_scheduler.register_task(SyncLightRenderBuffers)?;
         task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
-        task_scheduler.register_task(SyncPostprocessingResources)?;
         task_scheduler.register_task(SyncRenderResources)
     }
 }
@@ -165,32 +163,6 @@ define_task!(
                     &mut world
                         .scene().read().unwrap()
                         .instance_feature_manager().write().unwrap(),
-                );
-            }
-            Ok(())
-        })
-    }
-);
-
-define_task!(
-    SyncPostprocessingResources,
-    depends_on = [],
-    execute_on = [RenderingTag],
-    |world: &World| {
-        with_debug_logging!("Synchronizing postprocessing render resources"; {
-            let renderer = world.renderer().read().unwrap();
-            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
-            if render_resource_manager.is_desynchronized() {
-                DesynchronizedRenderResources::sync_postprocessing_resource_manager_with_postprocessor(
-                    render_resource_manager
-                        .desynchronized()
-                        .postprocessing_resource_manager
-                        .lock()
-                        .unwrap()
-                        .as_mut(),
-                    &world
-                        .scene().read().unwrap()
-                        .postprocessor().read().unwrap(),
                 );
             }
             Ok(())

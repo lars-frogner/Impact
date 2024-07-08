@@ -192,19 +192,19 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::ToggleAmbientOcclusion => {
                         if state == &ElementState::Released {
-                            world.scene().read().unwrap().toggle_ambient_occlusion();
+                            world.renderer().read().unwrap().toggle_ambient_occlusion();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::ToggleBloom => {
                         if state == &ElementState::Released {
-                            world.scene().read().unwrap().toggle_bloom();
+                            world.renderer().read().unwrap().toggle_bloom();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::CycleToneMapping => {
                         if state == &ElementState::Released {
-                            world.scene().read().unwrap().cycle_tone_mapping();
+                            world.renderer().read().unwrap().cycle_tone_mapping();
                         }
                         Ok(HandlingResult::Handled)
                     }

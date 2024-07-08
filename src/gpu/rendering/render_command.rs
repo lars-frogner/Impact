@@ -10,7 +10,7 @@ use crate::{
     gpu::{
         compute::{GPUComputationID, GPUComputationSpecification},
         rendering::{
-            postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
+            postprocessing::Postprocessor, resource::SynchronizedRenderResources,
             texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationLibrary,
             RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
             RenderingConfig, RenderingSurface,
@@ -28,7 +28,6 @@ use crate::{
     },
     mesh::{buffer::MeshRenderBufferManager, MeshID, VertexAttributeSet},
     model::{buffer::InstanceFeatureRenderBufferManager, ModelID},
-    scene::Postprocessor,
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
@@ -1217,7 +1216,7 @@ impl RenderPassSpecification {
     fn get_push_constant_range(&self) -> wgpu::PushConstantRange {
         let mut size = RenderingSurface::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE;
 
-        size += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
+        size += Postprocessor::EXPOSURE_PUSH_CONSTANT_SIZE;
 
         if self.light.is_some() {
             size += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
@@ -2172,6 +2171,7 @@ impl RenderPassRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
         if self.state().is_disabled() {
@@ -2245,7 +2245,12 @@ impl RenderPassRecorder {
 
             render_pass.set_pipeline(pipeline);
 
-            self.set_push_constants(&mut render_pass, rendering_surface, render_resources);
+            self.set_push_constants(
+                &mut render_pass,
+                rendering_surface,
+                render_resources,
+                postprocessor,
+            );
 
             for (index, &bind_group) in bind_groups.iter().enumerate() {
                 render_pass.set_bind_group(u32::try_from(index).unwrap(), bind_group, &[]);
@@ -2366,6 +2371,7 @@ impl RenderPassRecorder {
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         render_resources: &SynchronizedRenderResources,
+        postprocessor: &Postprocessor,
     ) {
         let mut push_constant_offset = 0;
 
@@ -2380,13 +2386,9 @@ impl RenderPassRecorder {
         render_pass.set_push_constants(
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             push_constant_offset,
-            bytemuck::bytes_of(
-                &render_resources
-                    .postprocessing_resource_manager()
-                    .exposure(),
-            ),
+            bytemuck::bytes_of(&postprocessor.exposure()),
         );
-        push_constant_offset += PostprocessingResourceManager::EXPOSURE_PUSH_CONSTANT_SIZE;
+        push_constant_offset += Postprocessor::EXPOSURE_PUSH_CONSTANT_SIZE;
 
         if let Some(LightInfo {
             light_type,
@@ -2759,6 +2761,7 @@ impl RenderCommandRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        postprocessor: &Postprocessor,
         gpu_computation_library: &GPUComputationLibrary,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
@@ -2769,6 +2772,7 @@ impl RenderCommandRecorder {
                 material_library,
                 render_resources,
                 render_attachment_texture_manager,
+                postprocessor,
                 command_encoder,
             ),
             Self::ComputePass(recorder) => recorder.record_pass(

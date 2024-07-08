@@ -19,8 +19,40 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the required
-/// components for this camera type, and if so, adds a node for the camera in
-/// the given [`SceneGraph`], inserts a [`SceneCamera`] into the given
+/// components for a camera, and if so, adds a node for the camera in the
+/// given [`SceneGraph`], inserts a [`SceneCamera`] into the given
+/// `scene_camera` variable and adds a [`SceneGraphCameraNodeComp`] to the
+/// entity.
+///
+/// # Errors
+/// Returns an error if the content of `scene_camera` is not [`None`], meaning
+/// that the scene already has a camera.
+pub fn add_camera_to_scene_for_entity(
+    window: &Window,
+    scene_graph: &RwLock<SceneGraph<fre>>,
+    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    components: &mut ArchetypeComponentStorage,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) -> Result<()> {
+    add_perspective_camera_to_scene_for_entity(
+        window,
+        scene_graph,
+        scene_camera,
+        components,
+        desynchronized,
+    )?;
+    add_orthographic_camera_to_scene_for_entity(
+        window,
+        scene_graph,
+        scene_camera,
+        components,
+        desynchronized,
+    )
+}
+
+/// Checks if the entity-to-be with the given components has the required
+/// components for a perspective camera, and if so, adds a node for the camera
+/// in the given [`SceneGraph`], inserts a [`SceneCamera`] into the given
 /// `scene_camera` variable and adds a [`SceneGraphCameraNodeComp`] to the
 /// entity.
 ///
@@ -85,8 +117,8 @@ pub fn add_perspective_camera_to_scene_for_entity(
 }
 
 /// Checks if the entity-to-be with the given components has the required
-/// components for this camera type, and if so, adds a node for the camera in
-/// the given [`SceneGraph`], inserts a [`SceneCamera`] into the given
+/// components for an orthographic camera, and if so, adds a node for the camera
+/// in the given [`SceneGraph`], inserts a [`SceneCamera`] into the given
 /// `scene_camera` variable and adds a [`SceneGraphCameraNodeComp`] to the
 /// entity.
 ///
