@@ -14,6 +14,9 @@ use crate::{
         self,
         rendering::{fre, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig},
     },
+    light::components::{
+        AmbientEmissionComp, OmnidirectionalEmissionComp, UnidirectionalEmissionComp,
+    },
     material::components::{
         AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
         MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
@@ -35,8 +38,7 @@ use crate::{
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
     scene::{
-        AmbientEmissionComp, OmnidirectionalEmissionComp, ParentComp, Scene, SceneConfig,
-        SceneGraphGroupComp, UncullableComp, UnidirectionalEmissionComp, VoxelBoxComp,
+        ParentComp, Scene, SceneConfig, SceneGraphGroupComp, UncullableComp, VoxelBoxComp,
         VoxelSphereComp, VoxelTypeComp,
     },
     util::bounds::UpperExclusiveBounds,

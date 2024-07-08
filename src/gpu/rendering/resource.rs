@@ -7,15 +7,13 @@ pub use tasks::SyncRenderResources;
 use crate::{
     camera::{buffer::CameraRenderBufferManager, SceneCamera},
     gpu::{
-        rendering::{
-            fre, light::LightRenderBufferManager, postprocessing::PostprocessingResourceManager,
-            RenderingConfig,
-        },
+        rendering::{fre, postprocessing::PostprocessingResourceManager, RenderingConfig},
         GraphicsDevice,
     },
+    light::{buffer::LightRenderBufferManager, LightStorage},
     mesh::{buffer::MeshRenderBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureRenderBufferManager, InstanceFeatureManager, ModelID},
-    scene::{LightStorage, Postprocessor},
+    scene::Postprocessor,
 };
 use std::{
     borrow::Cow,

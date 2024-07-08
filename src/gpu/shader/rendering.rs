@@ -37,11 +37,11 @@ use super::{
 };
 use crate::{
     gpu::rendering::{fre, RenderAttachmentQuantitySet},
+    light::MAX_SHADOW_MAP_CASCADES,
     mesh::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
         VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
-    scene::MAX_SHADOW_MAP_CASCADES,
 };
 use ambient_occlusion::AmbientOcclusionShaderGenerator;
 use anyhow::{anyhow, Result};

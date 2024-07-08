@@ -4,15 +4,15 @@ use crate::{
     assets::Assets,
     camera,
     gpu::{rendering::fre, GraphicsDevice},
+    light,
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
     model::ModelID,
     physics::ReferenceFrameComp,
     scene::{
-        AmbientLight, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
-        SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
-        SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
-        VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
+        ModelInstanceNodeID, ParentComp, Scene, SceneGraphGroupComp, SceneGraphGroupNodeComp,
+        SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+        UncullableComp, VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
     },
     window::{self, Window},
 };
@@ -158,18 +158,18 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        AmbientLight::add_ambient_light_component_for_entity(
+        light::entity::add_ambient_light_component_for_entity(
             self.light_storage(),
             components,
             desynchronized,
         );
-        OmnidirectionalLight::add_omnidirectional_light_component_for_entity(
+        light::entity::add_omnidirectional_light_component_for_entity(
             self.scene_camera(),
             self.light_storage(),
             components,
             desynchronized,
         );
-        UnidirectionalLight::add_unidirectional_light_component_for_entity(
+        light::entity::add_unidirectional_light_component_for_entity(
             self.scene_camera(),
             self.light_storage(),
             components,
@@ -401,13 +401,17 @@ impl Scene {
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        AmbientLight::remove_light_from_storage(self.light_storage(), entity, desynchronized);
-        OmnidirectionalLight::remove_light_from_storage(
+        light::entity::remove_ambient_light_from_storage_for_entity(
             self.light_storage(),
             entity,
             desynchronized,
         );
-        UnidirectionalLight::remove_light_from_storage(
+        light::entity::remove_omnidirectional_light_from_storage_for_entity(
+            self.light_storage(),
+            entity,
+            desynchronized,
+        );
+        light::entity::remove_unidirectional_light_from_storage_for_entity(
             self.light_storage(),
             entity,
             desynchronized,

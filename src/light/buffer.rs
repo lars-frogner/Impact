@@ -1,4 +1,4 @@
-//! Management of light source data for rendering.
+//! Buffering of light source data for rendering.
 
 use crate::{
     assert_uniform_valid,
@@ -16,7 +16,7 @@ use crate::{
         },
         GraphicsDevice,
     },
-    scene::{
+    light::{
         AmbientLight, LightID, LightStorage, LightType, OmnidirectionalLight, UnidirectionalLight,
         MAX_SHADOW_MAP_CASCADES,
     },

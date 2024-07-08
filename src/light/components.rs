@@ -4,7 +4,7 @@ use crate::{
     components::ComponentRegistry,
     geometry::Degrees,
     gpu::rendering::fre,
-    scene::{Illumninance, LightID, LuminousIntensity},
+    light::{Illumninance, LightID, LuminousIntensity},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -61,29 +61,31 @@ pub struct UnidirectionalEmissionComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
-/// [`AmbientLight`](crate::scene::AmbientLight).
+/// [`AmbientLight`](crate::light::AmbientLight).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct AmbientLightComp {
-    /// The ID of the entity's [`AmbientLight`](crate::scene::AmbientLight).
+    /// The ID of the entity's [`AmbientLight`](crate::light::AmbientLight).
     pub id: LightID,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have an
-/// [`OmnidirectionalLight`](crate::scene::OmnidirectionalLight).
+/// [`OmnidirectionalLight`](crate::light::OmnidirectionalLight).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct OmnidirectionalLightComp {
-    /// The ID of the entity's [`OmnidirectionalLight`](crate::scene::OmnidirectionalLight).
+    /// The ID of the entity's
+    /// [`OmnidirectionalLight`](crate::light::OmnidirectionalLight).
     pub id: LightID,
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that
-/// have a [`UnidirectionalLight`](crate::scene::UnidirectionalLight).
+/// have a [`UnidirectionalLight`](crate::light::UnidirectionalLight).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct UnidirectionalLightComp {
-    /// The ID of the entity's [`UnidirectionalLight`](crate::scene::UnidirectionalLight).
+    /// The ID of the entity's
+    /// [`UnidirectionalLight`](crate::light::UnidirectionalLight).
     pub id: LightID,
 }
 

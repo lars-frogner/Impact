@@ -2,7 +2,6 @@
 
 mod events;
 mod graph;
-mod light;
 mod postprocessing;
 mod systems;
 mod tasks;
@@ -14,13 +13,6 @@ pub use graph::{
     NodeTransform, ParentComp, SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupComp,
     SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
     SceneGraphParentNodeComp, UncullableComp, VoxelTreeNode, VoxelTreeNodeID,
-};
-pub use light::{
-    compute_luminance_for_uniform_illuminance, register_light_components, AmbientEmissionComp,
-    AmbientLight, AmbientLightComp, Illumninance, LightID, LightStorage, LightType, Luminance,
-    LuminousIntensity, OmnidirectionalEmissionComp, OmnidirectionalLight, OmnidirectionalLightComp,
-    UnidirectionalEmissionComp, UnidirectionalLight, UnidirectionalLightComp,
-    MAX_SHADOW_MAP_CASCADES,
 };
 pub use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
 pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
@@ -39,6 +31,7 @@ use crate::{
     camera::SceneCamera,
     geometry::Radians,
     gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
+    light::LightStorage,
     material::{self, special::tone_mapping::ToneMapping, MaterialLibrary},
     mesh::MeshRepository,
     model::InstanceFeatureManager,

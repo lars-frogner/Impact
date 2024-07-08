@@ -10,10 +10,10 @@ use crate::{
     gpu::{
         compute::{GPUComputationID, GPUComputationSpecification},
         rendering::{
-            light::LightRenderBufferManager, postprocessing::PostprocessingResourceManager,
-            resource::SynchronizedRenderResources, texture::SHADOW_MAP_FORMAT, CascadeIdx,
-            GPUComputationLibrary, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
-            RenderAttachmentTextureManager, RenderingConfig, RenderingSurface,
+            postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
+            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationLibrary,
+            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
+            RenderingConfig, RenderingSurface,
         },
         shader::{
             CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,
@@ -21,13 +21,14 @@ use crate::{
         },
         GraphicsDevice,
     },
+    light::{buffer::LightRenderBufferManager, LightID, LightType, MAX_SHADOW_MAP_CASCADES},
     material::{
         MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
         MaterialSpecification,
     },
     mesh::{buffer::MeshRenderBufferManager, MeshID, VertexAttributeSet},
     model::{buffer::InstanceFeatureRenderBufferManager, ModelID},
-    scene::{LightID, LightType, Postprocessor, MAX_SHADOW_MAP_CASCADES},
+    scene::Postprocessor,
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
