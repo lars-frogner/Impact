@@ -2,14 +2,14 @@
 
 use crate::{
     assets::Assets,
-    geometry::{OrthographicCamera, PerspectiveCamera},
+    camera,
     gpu::{rendering::fre, GraphicsDevice},
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
     model::ModelID,
     physics::ReferenceFrameComp,
     scene::{
-        self, AmbientLight, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
+        AmbientLight, ModelInstanceNodeID, OmnidirectionalLight, ParentComp, Scene,
         SceneGraphGroupComp, SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp,
         SceneGraphNodeComp, SceneGraphParentNodeComp, UncullableComp, UnidirectionalLight,
         VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
@@ -137,14 +137,14 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        PerspectiveCamera::add_camera_to_scene_for_entity(
+        camera::entity::add_perspective_camera_to_scene_for_entity(
             window,
             self.scene_graph(),
             self.scene_camera(),
             components,
             desynchronized,
         )?;
-        OrthographicCamera::add_camera_to_scene_for_entity(
+        camera::entity::add_orthographic_camera_to_scene_for_entity(
             window,
             self.scene_graph(),
             self.scene_camera(),
@@ -388,7 +388,7 @@ impl Scene {
         entity: &EntityEntry<'_>,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) {
-        scene::camera::remove_camera_from_scene(
+        camera::entity::remove_camera_from_scene(
             self.scene_graph(),
             self.scene_camera(),
             entity,

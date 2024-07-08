@@ -2,7 +2,6 @@
 
 mod angle;
 mod axis_aligned_box;
-mod camera;
 mod frustum;
 mod oriented_box;
 mod plane;
@@ -12,7 +11,6 @@ mod voxel;
 
 pub use angle::{Angle, Degrees, Radians};
 pub use axis_aligned_box::AxisAlignedBox;
-pub use camera::{Camera, OrthographicCamera, PerspectiveCamera};
 pub use frustum::Frustum;
 pub use oriented_box::OrientedBox;
 pub use plane::Plane;

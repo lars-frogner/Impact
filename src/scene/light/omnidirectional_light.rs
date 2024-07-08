@@ -1,12 +1,13 @@
 //! Omnidirectional light sources.
 
 use crate::{
+    camera::SceneCamera,
     geometry::{AxisAlignedBox, CubeMapper, CubemapFace, Frustum, Sphere},
-    physics::ReferenceFrameComp,
     gpu::rendering::fre,
+    physics::ReferenceFrameComp,
     scene::{
         LightStorage, LuminousIntensity, OmnidirectionalEmissionComp, OmnidirectionalLightComp,
-        RenderResourcesDesynchronized, SceneCamera,
+        RenderResourcesDesynchronized,
     },
 };
 use bytemuck::{Pod, Zeroable};

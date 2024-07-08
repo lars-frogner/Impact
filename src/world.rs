@@ -2,6 +2,7 @@
 
 use crate::{
     assets::Assets,
+    camera,
     components::{ComponentCategory, ComponentRegistry},
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     gpu::{
@@ -594,7 +595,7 @@ impl World {
         control::register_control_components(registry)?;
         physics::register_physics_components(registry)?;
         scene::register_scene_graph_components(registry)?;
-        scene::register_camera_components(registry)?;
+        camera::components::register_camera_components(registry)?;
         scene::register_light_components(registry)?;
         mesh::components::register_mesh_components(registry)?;
         mesh::texture_projection::components::register_texture_projection_components(registry)?;

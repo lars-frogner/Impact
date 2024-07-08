@@ -1,8 +1,8 @@
-//! Management of camera data for rendering.
+//! Buffering of camera data for rendering.
 
 use crate::{
     assert_uniform_valid,
-    geometry::Camera,
+    camera::Camera,
     gpu::{
         rendering::{buffer::RenderBuffer, fre},
         shader::CameraShaderInput,
@@ -77,8 +77,8 @@ impl CameraRenderBufferManager {
         }
     }
 
-    /// Creates a new manager with a render buffer initialized
-    /// from the given projection transform.
+    /// Creates a new manager with a render buffer initialized from the given
+    /// projection transform.
     fn new(
         graphics_device: &GraphicsDevice,
         projection_transform: Projective3<fre>,

@@ -5,15 +5,15 @@ mod tasks;
 pub use tasks::SyncRenderCommands;
 
 use crate::{
+    camera::buffer::CameraRenderBufferManager,
     geometry::CubemapFace,
     gpu::{
         compute::{GPUComputationID, GPUComputationSpecification},
         rendering::{
-            camera::CameraRenderBufferManager, light::LightRenderBufferManager,
-            postprocessing::PostprocessingResourceManager, resource::SynchronizedRenderResources,
-            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationLibrary,
-            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-            RenderingConfig, RenderingSurface,
+            light::LightRenderBufferManager, postprocessing::PostprocessingResourceManager,
+            resource::SynchronizedRenderResources, texture::SHADOW_MAP_FORMAT, CascadeIdx,
+            GPUComputationLibrary, RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+            RenderAttachmentTextureManager, RenderingConfig, RenderingSurface,
         },
         shader::{
             CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,

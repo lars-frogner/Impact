@@ -3,6 +3,7 @@
 use super::{geometry::Degrees, gpu::rendering::RenderingSystem};
 use crate::{
     assets::Assets,
+    camera::components::PerspectiveCameraComp,
     control::{
         MotionControlComp, OrientationControlComp, RollFreeCameraOrientationController,
         SemiDirectionalMotionController,
@@ -34,8 +35,8 @@ use crate::{
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
     scene::{
-        AmbientEmissionComp, OmnidirectionalEmissionComp, ParentComp, PerspectiveCameraComp, Scene,
-        SceneConfig, SceneGraphGroupComp, UncullableComp, UnidirectionalEmissionComp, VoxelBoxComp,
+        AmbientEmissionComp, OmnidirectionalEmissionComp, ParentComp, Scene, SceneConfig,
+        SceneGraphGroupComp, UncullableComp, UnidirectionalEmissionComp, VoxelBoxComp,
         VoxelSphereComp, VoxelTypeComp,
     },
     util::bounds::UpperExclusiveBounds,

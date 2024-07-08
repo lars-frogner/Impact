@@ -13,11 +13,11 @@ use impact_ecs::Component;
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have a
-/// [`PerspectiveCamera`](crate::geometry::PerspectiveCamera).
+/// [`PerspectiveCamera`](crate::camera::PerspectiveCamera).
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
-/// entity and a [`SceneCamera`](crate::scene::SceneCamera) for the
+/// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
 #[repr(C)]
@@ -30,11 +30,11 @@ pub struct PerspectiveCameraComp {
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities that have an
-/// [`OrthographicCamera`](crate::geometry::OrthographicCamera).
+/// [`OrthographicCamera`](crate::camera::OrthographicCamera).
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`SceneGraphCameraNodeComp`](crate::scene::SceneGraphCameraNodeComp) for the
-/// entity and a [`SceneCamera`](crate::scene::SceneCamera) for the
+/// entity and a [`SceneCamera`](crate::camera::SceneCamera) for the
 /// [`Scene`](crate::scene::Scene). It is therefore not kept after entity
 /// creation.
 #[repr(C)]
@@ -47,7 +47,7 @@ pub struct OrthographicCameraComp {
 
 impl PerspectiveCameraComp {
     /// Creates a new component representing a
-    /// [`PerspectiveCamera`](crate::geometry::PerspectiveCamera) with the given
+    /// [`PerspectiveCamera`](crate::camera::PerspectiveCamera) with the given
     /// vertical field of view and near and far distance.
     ///
     /// # Panics
@@ -87,7 +87,7 @@ impl PerspectiveCameraComp {
 
 impl OrthographicCameraComp {
     /// Creates a new component representing an
-    /// [`OrthographicCamera`](crate::geometry::OrthographicCamera) with the given
+    /// [`OrthographicCamera`](crate::camera::OrthographicCamera) with the given
     /// vertical field of view and near and far distance.
     ///
     /// # Panics

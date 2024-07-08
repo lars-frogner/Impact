@@ -5,16 +5,17 @@ mod tasks;
 pub use tasks::SyncRenderResources;
 
 use crate::{
+    camera::{buffer::CameraRenderBufferManager, SceneCamera},
     gpu::{
         rendering::{
-            camera::CameraRenderBufferManager, fre, light::LightRenderBufferManager,
-            postprocessing::PostprocessingResourceManager, RenderingConfig,
+            fre, light::LightRenderBufferManager, postprocessing::PostprocessingResourceManager,
+            RenderingConfig,
         },
         GraphicsDevice,
     },
     mesh::{buffer::MeshRenderBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureRenderBufferManager, InstanceFeatureManager, ModelID},
-    scene::{LightStorage, Postprocessor, SceneCamera},
+    scene::{LightStorage, Postprocessor},
 };
 use std::{
     borrow::Cow,

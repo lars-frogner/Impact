@@ -1,11 +1,12 @@
 //! Unidirectional light sources.
 
 use crate::{
+    camera::SceneCamera,
     geometry::{Angle, AxisAlignedBox, Degrees, Frustum, OrthographicTransform, Sphere},
     gpu::rendering::{fre, CascadeIdx},
     scene::{
-        Illumninance, LightStorage, RenderResourcesDesynchronized, SceneCamera,
-        UnidirectionalEmissionComp, UnidirectionalLightComp,
+        Illumninance, LightStorage, RenderResourcesDesynchronized, UnidirectionalEmissionComp,
+        UnidirectionalLightComp,
     },
     util::bounds::UpperExclusiveBounds,
 };

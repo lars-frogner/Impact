@@ -1,6 +1,5 @@
 //! Scene containing data to render.
 
-mod camera;
 mod events;
 mod graph;
 mod light;
@@ -9,9 +8,6 @@ mod systems;
 mod tasks;
 mod voxel;
 
-pub use camera::{
-    register_camera_components, OrthographicCameraComp, PerspectiveCameraComp, SceneCamera,
-};
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
     register_scene_graph_components, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
@@ -40,6 +36,7 @@ pub use voxel::{
 
 use crate::{
     assets::Assets,
+    camera::SceneCamera,
     geometry::Radians,
     gpu::{rendering::fre, shader::ShaderManager, GraphicsDevice},
     material::{self, special::tone_mapping::ToneMapping, MaterialLibrary},
