@@ -1,4 +1,4 @@
-//! Management of light-related components for entities.
+//! Management of lights for entities.
 
 use crate::{
     camera::SceneCamera,
@@ -22,20 +22,20 @@ use std::sync::RwLock;
 /// components for a light source, and if so, adds the corresponding light to
 /// the light storage and adds a correspondong light component with the light's
 /// ID to the entity.
-pub fn add_light_component_for_entity(
+pub fn setup_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {
-    add_ambient_light_component_for_entity(light_storage, components, desynchronized);
-    add_omnidirectional_light_component_for_entity(
+    setup_ambient_light_for_new_entity(light_storage, components, desynchronized);
+    setup_omnidirectional_light_for_new_entity(
         scene_camera,
         light_storage,
         components,
         desynchronized,
     );
-    add_unidirectional_light_component_for_entity(
+    setup_unidirectional_light_for_new_entity(
         scene_camera,
         light_storage,
         components,
@@ -45,21 +45,21 @@ pub fn add_light_component_for_entity(
 
 /// Checks if the given entity has a light component, and if so, removes the
 /// assocated light from the given [`LightStorage`].
-pub fn remove_light_from_storage_for_entity(
+pub fn cleanup_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {
-    remove_ambient_light_from_storage_for_entity(light_storage, entity, desynchronized);
-    remove_omnidirectional_light_from_storage_for_entity(light_storage, entity, desynchronized);
-    remove_unidirectional_light_from_storage_for_entity(light_storage, entity, desynchronized);
+    cleanup_ambient_light_for_removed_entity(light_storage, entity, desynchronized);
+    cleanup_omnidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
+    cleanup_unidirectional_light_for_removed_entity(light_storage, entity, desynchronized);
 }
 
 /// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
 /// [`AmbientLight`] to the light storage and adds an [`AmbientLightComp`] with
 /// the light's ID to the entity.
-pub fn add_ambient_light_component_for_entity(
+pub fn setup_ambient_light_for_new_entity(
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -86,7 +86,7 @@ pub fn add_ambient_light_component_for_entity(
 /// components for this light source, and if so, adds the corresponding
 /// [`OmnidirectionalLight`] to the light storage and adds a
 /// [`OmnidirectionalLightComp`] with the light's ID to the entity.
-pub fn add_omnidirectional_light_component_for_entity(
+pub fn setup_omnidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -127,7 +127,7 @@ pub fn add_omnidirectional_light_component_for_entity(
 /// components for this light source, and if so, adds the corresponding
 /// [`UnidirectionalLight`] to the light storage and adds a
 /// [`UnidirectionalLightComp`] with the light's ID to the entity.
-pub fn add_unidirectional_light_component_for_entity(
+pub fn setup_unidirectional_light_for_new_entity(
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     light_storage: &RwLock<LightStorage>,
     components: &mut ArchetypeComponentStorage,
@@ -170,7 +170,7 @@ pub fn add_unidirectional_light_component_for_entity(
 
 /// Checks if the given entity has a [`AmbientLightComp`], and if so, removes
 /// the assocated [`AmbientLight`] from the given [`LightStorage`].
-pub fn remove_ambient_light_from_storage_for_entity(
+pub fn cleanup_ambient_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -188,7 +188,7 @@ pub fn remove_ambient_light_from_storage_for_entity(
 /// Checks if the given entity has a [`OmnidirectionalLightComp`], and if so,
 /// removes the assocated [`OmnidirectionalLight`] from the given
 /// [`LightStorage`].
-pub fn remove_omnidirectional_light_from_storage_for_entity(
+pub fn cleanup_omnidirectional_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -206,7 +206,7 @@ pub fn remove_omnidirectional_light_from_storage_for_entity(
 /// Checks if the given entity has a [`UnidirectionalLightComp`], and if so,
 /// removes the assocated [`UnidirectionalLight`] from the given
 /// [`LightStorage`].
-pub fn remove_unidirectional_light_from_storage_for_entity(
+pub fn cleanup_unidirectional_light_for_removed_entity(
     light_storage: &RwLock<LightStorage>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,

@@ -299,22 +299,22 @@ impl World {
 
         let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
 
-        {
-            let assets = self.assets().read().unwrap();
-            self.scene().read().unwrap().handle_entity_created(
-                self.graphics_device(),
-                &assets,
-                &mut components,
-                &mut render_resources_desynchronized,
-            )?;
-        }
-
-        self.simulator().read().unwrap().handle_entity_created(
-            self.scene().read().unwrap().mesh_repository(),
+        self.scene().read().unwrap().perform_setup_for_new_entity(
+            self.graphics_device(),
+            &self.assets().read().unwrap(),
             &mut components,
-        );
+            &mut render_resources_desynchronized,
+        )?;
 
-        self.scene().read().unwrap().add_entity_to_scene_graph(
+        self.simulator()
+            .read()
+            .unwrap()
+            .perform_setup_for_new_entity(
+                self.scene().read().unwrap().mesh_repository(),
+                &mut components,
+            );
+
+        self.scene().read().unwrap().add_new_entity_to_scene_graph(
             self.window(),
             &self.ecs_world,
             &mut components,
@@ -352,10 +352,13 @@ impl World {
         self.simulator()
             .read()
             .unwrap()
-            .handle_entity_removed(&entry);
+            .perform_cleanup_for_removed_entity(&entry);
 
-        let render_resources_desynchronized =
-            self.scene().read().unwrap().handle_entity_removed(&entry);
+        let render_resources_desynchronized = self
+            .scene()
+            .read()
+            .unwrap()
+            .perform_cleanup_for_removed_entity(&entry);
 
         drop(entry);
 
@@ -587,7 +590,7 @@ impl World {
     fn register_all_components(registry: &mut ComponentRegistry) -> Result<()> {
         control::register_control_components(registry)?;
         physics::register_physics_components(registry)?;
-        scene::register_scene_graph_components(registry)?;
+        scene::components::register_scene_graph_components(registry)?;
         camera::components::register_camera_components(registry)?;
         light::components::register_light_components(registry)?;
         mesh::components::register_mesh_components(registry)?;

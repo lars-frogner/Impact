@@ -1,4 +1,4 @@
-//! Management of material-related components for entities.
+//! Management of materials for entities.
 
 pub mod blinn_phong;
 pub mod fixed;
@@ -23,7 +23,7 @@ use std::sync::RwLock;
 /// texture set to the material library if not already present, registers the
 /// material in the instance feature manager and adds the appropriate material
 /// component to the entity.
-pub fn add_material_component_for_entity(
+pub fn setup_material_for_new_entity(
     graphics_device: &GraphicsDevice,
     assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,
@@ -31,32 +31,23 @@ pub fn add_material_component_for_entity(
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {
-    vertex_color::add_vertex_color_material_component_for_entity(material_library, components);
+    vertex_color::setup_vertex_color_material_for_new_entity(material_library, components);
 
-    fixed::add_fixed_color_material_component_for_entity(
+    fixed::setup_fixed_color_material_for_new_entity(
         material_library,
         instance_feature_manager,
         components,
         desynchronized,
     );
 
-    fixed::add_fixed_texture_material_component_for_entity(
+    fixed::setup_fixed_texture_material_for_new_entity(
         graphics_device,
         assets,
         material_library,
         components,
     );
 
-    blinn_phong::add_blinn_phong_material_component_for_entity(
-        graphics_device,
-        assets,
-        material_library,
-        instance_feature_manager,
-        components,
-        desynchronized,
-    );
-
-    microfacet::add_microfacet_material_component_for_entity(
+    blinn_phong::setup_blinn_phong_material_for_new_entity(
         graphics_device,
         assets,
         material_library,
@@ -65,7 +56,16 @@ pub fn add_material_component_for_entity(
         desynchronized,
     );
 
-    skybox::add_skybox_material_component_for_entity(
+    microfacet::setup_microfacet_material_for_new_entity(
+        graphics_device,
+        assets,
+        material_library,
+        instance_feature_manager,
+        components,
+        desynchronized,
+    );
+
+    skybox::setup_skybox_material_for_new_entity(
         graphics_device,
         assets,
         material_library,
@@ -75,7 +75,7 @@ pub fn add_material_component_for_entity(
 
 /// Checks if the given entity has a [`MaterialComp`], and if so, removes the
 /// assocated instance features from the given [`InstanceFeatureManager`].
-pub fn remove_material_features_for_entity(
+pub fn cleanup_material_for_removed_entity(
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     entity: &EntityEntry<'_>,
     desynchronized: &mut RenderResourcesDesynchronized,

@@ -225,7 +225,7 @@ impl<F: Float> DragLoadMap<F> {
 /// for obtaining an associated drag load map, and if so, loads or generates
 /// the map and adds it to the drag load map repository if not present, then
 /// adds the appropriate drag load map component to the entity.
-pub fn add_drag_load_map_component_for_entity(
+pub fn setup_drag_load_map_for_new_entity(
     mesh_repository: &RwLock<MeshRepository<fre>>,
     drag_load_map_repository: &RwLock<DragLoadMapRepository<fre>>,
     components: &mut ArchetypeComponentStorage,

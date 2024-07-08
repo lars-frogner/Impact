@@ -1,4 +1,4 @@
-//! Management of mesh-related components for entities.
+//! Management of meshes for entities.
 
 use crate::{
     gpu::rendering::fre,
@@ -23,7 +23,7 @@ use std::sync::RwLock;
 /// representing a mesh, and if so, generates the mesh and adds it to the
 /// mesh repository if not present, then adds the appropriate mesh component
 /// to the entity.
-pub fn add_mesh_component_for_entity(
+pub fn setup_mesh_for_new_entity(
     mesh_repository: &RwLock<MeshRepository<fre>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
@@ -403,7 +403,7 @@ pub fn add_mesh_component_for_entity(
 /// component and a component for a mesh that misses vertex attributes
 /// required by the material, and if so, generates the missing vertex
 /// attributes if possible.
-pub fn generate_missing_vertex_properties_for_material(
+pub fn generate_missing_vertex_properties_for_new_entity_mesh(
     mesh_repository: &RwLock<MeshRepository<fre>>,
     material_library: &MaterialLibrary,
     components: &ArchetypeComponentStorage,

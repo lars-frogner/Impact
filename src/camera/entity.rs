@@ -8,8 +8,8 @@ use crate::{
     gpu::rendering::fre,
     physics::ReferenceFrameComp,
     scene::{
-        RenderResourcesDesynchronized, SceneGraph, SceneGraphCameraNodeComp,
-        SceneGraphParentNodeComp,
+        components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
+        RenderResourcesDesynchronized, SceneGraph,
     },
     util::bounds::UpperExclusiveBounds,
     window::Window,
@@ -27,21 +27,21 @@ use std::sync::RwLock;
 /// # Errors
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
 /// that the scene already has a camera.
-pub fn add_camera_to_scene_for_entity(
+pub fn add_camera_to_scene_for_new_entity(
     window: &Window,
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) -> Result<()> {
-    add_perspective_camera_to_scene_for_entity(
+    add_perspective_camera_to_scene_for_new_entity(
         window,
         scene_graph,
         scene_camera,
         components,
         desynchronized,
     )?;
-    add_orthographic_camera_to_scene_for_entity(
+    add_orthographic_camera_to_scene_for_new_entity(
         window,
         scene_graph,
         scene_camera,
@@ -59,7 +59,7 @@ pub fn add_camera_to_scene_for_entity(
 /// # Errors
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
 /// that the scene already has a camera.
-pub fn add_perspective_camera_to_scene_for_entity(
+pub fn add_perspective_camera_to_scene_for_new_entity(
     window: &Window,
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
@@ -125,7 +125,7 @@ pub fn add_perspective_camera_to_scene_for_entity(
 /// # Errors
 /// Returns an error if the content of `scene_camera` is not [`None`], meaning
 /// that the scene already has a camera.
-pub fn add_orthographic_camera_to_scene_for_entity(
+pub fn add_orthographic_camera_to_scene_for_new_entity(
     window: &Window,
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
@@ -185,7 +185,7 @@ pub fn add_orthographic_camera_to_scene_for_entity(
 /// Checks if the given entity has a [`SceneGraphCameraNodeComp`], and if so,
 /// removes the corresponding camera node from the given [`SceneGraph`] and sets
 /// the content of `scene_camera` to [`None`].
-pub fn remove_camera_from_scene(
+pub fn remove_camera_from_scene_for_removed_entity(
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     entity: &EntityEntry<'_>,

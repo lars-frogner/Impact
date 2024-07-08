@@ -1,4 +1,4 @@
-//! Event handling related to physics.
+//! Management of scene data for entities.
 
 use crate::{
     gpu::rendering::fre,
@@ -19,34 +19,33 @@ use std::sync::RwLock;
 
 impl PhysicsSimulator {
     /// Performs any modifications to the physics simulator required to
-    /// accommodate a new entity with components represented by the given
-    /// component manager, and adds any additional components to the entity's
-    /// components.
-    pub fn handle_entity_created(
+    /// accommodate a new entity with the given components, and adds any
+    /// additional components to the entity's components.
+    pub fn perform_setup_for_new_entity(
         &self,
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
     ) {
-        Self::add_rigid_body_component_for_entity(mesh_repository, components);
+        Self::setup_rigid_body_for_new_entity(mesh_repository, components);
 
         self.rigid_body_force_manager
             .read()
             .unwrap()
-            .add_force_components_for_entity(mesh_repository, components);
+            .perform_setup_for_new_entity(mesh_repository, components);
     }
 
     /// Performs any modifications required to clean up the physics simulator
     /// when the given entity is removed.
-    pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) {
-        Self::remove_rigid_body_for_entity(entity);
+    pub fn perform_cleanup_for_removed_entity(&self, entity: &EntityEntry<'_>) {
+        Self::cleanup_rigid_body_for_removed_entity(entity);
 
         self.rigid_body_force_manager
             .read()
             .unwrap()
-            .handle_entity_removed(entity);
+            .perform_cleanup_for_removed_entity(entity);
     }
 
-    fn add_rigid_body_component_for_entity(
+    fn setup_rigid_body_for_new_entity(
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
     ) {
@@ -181,5 +180,5 @@ impl PhysicsSimulator {
         );
     }
 
-    fn remove_rigid_body_for_entity(_entity: &EntityEntry<'_>) {}
+    fn cleanup_rigid_body_for_removed_entity(_entity: &EntityEntry<'_>) {}
 }

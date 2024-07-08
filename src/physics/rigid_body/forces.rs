@@ -55,12 +55,12 @@ impl RigidBodyForceManager {
     /// Checks if the entity-to-be with the given components has the components
     /// for being affected by specific forces, and if so, performs any required
     /// setup and adds any required auxiliary components to the entity.
-    pub fn add_force_components_for_entity(
+    pub fn perform_setup_for_new_entity(
         &self,
         mesh_repository: &RwLock<MeshRepository<fre>>,
         components: &mut ArchetypeComponentStorage,
     ) {
-        detailed_drag::add_drag_load_map_component_for_entity(
+        detailed_drag::setup_drag_load_map_for_new_entity(
             mesh_repository,
             &self.drag_load_map_repository,
             components,
@@ -69,7 +69,7 @@ impl RigidBodyForceManager {
 
     /// Performs any modifications required to clean up the force manager when
     /// the given entity is removed.
-    pub fn handle_entity_removed(&self, _entity: &EntityEntry<'_>) {}
+    pub fn perform_cleanup_for_removed_entity(&self, _entity: &EntityEntry<'_>) {}
 
     /// Applies all forces of torques on entities with rigid bodies.
     pub fn apply_forces_and_torques(

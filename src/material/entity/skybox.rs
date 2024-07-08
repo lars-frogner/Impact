@@ -28,7 +28,7 @@ lazy_static! {
 /// library if not already present, adds the appropriate material property
 /// texture set to the material library if not already present and adds the
 /// appropriate material component to the entity.
-pub fn add_skybox_material_component_for_entity(
+pub fn setup_skybox_material_for_new_entity(
     graphics_device: &GraphicsDevice,
     assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,
