@@ -14,7 +14,7 @@ pub use orbit::OrbitalTrajectoryComp;
 
 use crate::{
     components::ComponentRegistry,
-    control::{MotionControlComp, OrientationControlComp},
+    control::components::{MotionControlComp, OrientationControlComp},
     physics::{fph, Position, ReferenceFrameComp, RigidBodyComp, Static, Velocity, VelocityComp},
 };
 use anyhow::Result;

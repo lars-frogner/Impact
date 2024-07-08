@@ -588,7 +588,7 @@ impl World {
 
     /// Registers all components in the given registry.
     fn register_all_components(registry: &mut ComponentRegistry) -> Result<()> {
-        control::register_control_components(registry)?;
+        control::components::register_control_components(registry)?;
         physics::register_physics_components(registry)?;
         scene::components::register_scene_graph_components(registry)?;
         camera::components::register_camera_components(registry)?;

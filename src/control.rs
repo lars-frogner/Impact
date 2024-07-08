@@ -1,10 +1,9 @@
 //! Controllers for user interaction.
 
-mod components;
+pub mod components;
 mod motion;
 mod orientation;
 
-pub use components::{register_control_components, MotionControlComp, OrientationControlComp};
 pub use motion::{MotionDirection, MotionState, SemiDirectionalMotionController};
 pub use orientation::{CameraOrientationController, RollFreeCameraOrientationController};
 
@@ -15,6 +14,7 @@ use crate::{
     },
     window::Window,
 };
+use components::{MotionControlComp, OrientationControlComp};
 use impact_ecs::{query, world::World as ECSWorld};
 
 /// Represents controllers that are used for controlling
