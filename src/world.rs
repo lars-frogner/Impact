@@ -16,6 +16,7 @@ use crate::{
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
+    voxel,
     window::{EventLoopController, Window},
 };
 use anyhow::Result;
@@ -600,7 +601,7 @@ impl World {
         mesh::components::register_mesh_components(registry)?;
         mesh::texture_projection::components::register_texture_projection_components(registry)?;
         material::components::register_material_components(registry)?;
-        scene::register_voxel_components(registry)
+        voxel::components::register_voxel_components(registry)
     }
 
     /// Registers all tasks in the given task scheduler.

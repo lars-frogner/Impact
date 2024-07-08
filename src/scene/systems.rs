@@ -11,8 +11,8 @@ use crate::{
     scene::{
         CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeComp,
         SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
-        VoxelTreeNodeComp,
     },
+    voxel::components::VoxelTreeNodeComp,
     world::World,
 };
 use impact_ecs::query;

@@ -9,7 +9,6 @@ use crate::{
         SemiDirectionalMotionController,
     },
     game_loop::{GameLoop, GameLoopConfig},
-    geometry::{VoxelTreeLODController, VoxelType},
     gpu::{
         self,
         rendering::{fre, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig},
@@ -37,11 +36,12 @@ use crate::{
         Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
-    scene::{
-        ParentComp, Scene, SceneConfig, SceneGraphGroupComp, UncullableComp, VoxelBoxComp,
-        VoxelSphereComp, VoxelTypeComp,
-    },
+    scene::{ParentComp, Scene, SceneConfig, SceneGraphGroupComp, UncullableComp},
     util::bounds::UpperExclusiveBounds,
+    voxel::{
+        components::{VoxelSphereComp, VoxelTypeComp},
+        VoxelTreeLODController, VoxelType,
+    },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
     world::World,
 };

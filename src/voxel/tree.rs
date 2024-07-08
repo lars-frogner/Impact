@@ -1,66 +1,21 @@
-//! Representation and manipulation of voxels.
+//! Voxel trees.
 
-mod generation;
-
-pub use generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator};
-
+use super::{
+    CoordinateAxes, GroupedVoxelInstanceStorage, InstanceGroupID, VoxelInstanceID,
+    VoxelInstanceStorage, VoxelTransform,
+};
 use crate::{
     geometry::{Angle, AxisAlignedBox, Frustum, Radians, Sphere},
     gpu::rendering::fre,
-    model::{
-        DynamicInstanceFeatureBuffer, InstanceFeatureID, InstanceFeatureStorage,
-        InstanceModelViewTransform,
-    },
     num::Float,
+    voxel::{VoxelFace, VoxelGenerator, VoxelType, N_VOXEL_TYPES},
 };
-use approx::AbsDiffEq;
 use impact_utils::KeyIndexMapper;
-use nalgebra::{point, vector, Point3, Similarity3, UnitVector3, Vector3};
+use nalgebra::{point, vector, Point3, Similarity3, Vector3};
 use nohash_hasher::BuildNoHashHasher;
-use num_derive::{FromPrimitive as DeriveFromPrimitive, ToPrimitive as DeriveToPrimitive};
 use num_traits::FromPrimitive;
-use simba::scalar::{SubsetOf, SupersetOf};
+use simba::scalar::SubsetOf;
 use std::{array, num::NonZeroU32};
-
-/// A type identifier that determines all the properties of a voxel.
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, DeriveToPrimitive, DeriveFromPrimitive)]
-pub enum VoxelType {
-    Default = 0,
-}
-
-/// The total number of separate [`VoxelType`]s.
-pub const N_VOXEL_TYPES: usize = 1;
-
-/// A mapping from voxel types to the corresponding values of a specific voxel
-/// property.
-#[derive(Debug)]
-pub struct VoxelPropertyMap<P> {
-    property_values: [P; N_VOXEL_TYPES],
-}
-
-/// Represents a voxel generator that provides a voxel type given the voxel
-/// indices.
-pub trait VoxelGenerator<F: Float> {
-    /// Returns the extent of single voxel.
-    fn voxel_extent(&self) -> F;
-
-    /// Returns the number of voxels along the x-, y- and z-axis of the grid,
-    /// respectively.
-    fn grid_shape(&self) -> [usize; 3];
-
-    /// Returns the voxel type at the given indices in a voxel grid, or [`None`]
-    /// if the voxel is absent or the indices are outside the bounds of the
-    /// grid.
-    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType>;
-
-    /// Returns the height above the bottom of the voxel tree below which
-    /// decisions on whether to pass voxel instances to the GPU should be made
-    /// for entire octants at once.
-    fn instance_group_height(&self) -> u32 {
-        0
-    }
-}
 
 /// Controller for determining the level of detail at which to render voxels.
 #[derive(Clone, Debug)]
@@ -98,30 +53,6 @@ struct ExternalNodeAuxiliaryStorage {
     data: Vec<ExternalNodeAuxiliaryData>,
     index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
     id_count: usize,
-}
-
-/// Storage for voxel instance data to be passed to the GPU.
-#[derive(Clone, Debug)]
-pub struct VoxelInstanceStorage<F: Float> {
-    voxel_types: Vec<VoxelType>,
-    transforms: Vec<VoxelTransform<F>>,
-    /// Maps [`VoxelInstanceID`]s to indices in `voxel_types` and `transforms`.
-    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
-}
-
-pub type CoordinateAxes<F> = (UnitVector3<F>, UnitVector3<F>, UnitVector3<F>);
-
-/// A collection of [`VoxelInstanceStorage`]s for holding separate groups of
-/// voxel instances.
-#[derive(Clone, Debug)]
-struct GroupedVoxelInstanceStorage<F: Float> {
-    /// Each group may contain one [`VoxelInstanceStorage`] for each level of
-    /// detail that the voxel instances in the group can be rendered at.
-    groups: Vec<Vec<VoxelInstanceStorage<F>>>,
-    /// Maps [`InstanceGroupID`]s to indices in `groups`.
-    index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
-    instance_id_count: usize,
-    group_id_count: usize,
 }
 
 /// An internal node in a voxel tree. It has one child for each non-empty octant
@@ -181,17 +112,6 @@ struct ExternalNode {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ExternalNodeID(usize);
 
-/// Identifier for a voxel instance in a [`VoxelInstanceStorage`].
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct VoxelInstanceID(usize);
-
-/// Identifier for a group of [`VoxelInstanceStorage`]s in a
-/// [`GroupedVoxelInstanceStorage`].
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct InstanceGroupID(usize);
-
 /// Auxiliary data for a specific [`ExternalNode`].
 #[derive(Clone, Debug)]
 struct ExternalNodeAuxiliaryData {
@@ -209,26 +129,6 @@ struct ExternalNodeAuxiliaryData {
 #[derive(Copy, Clone, Debug)]
 struct DirectionalObscurednessLookupTable {
     is_obscured_from_direction: [[[bool; 2]; 2]; 2],
-}
-
-/// A transform from the space of a voxel in a voxel tree to the space of the
-/// whole tree.
-#[derive(Clone, Debug, PartialEq)]
-struct VoxelTransform<F: Float> {
-    translation: Vector3<F>,
-    scaling: F,
-}
-
-/// One of the six faces of a voxel.
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum VoxelFace {
-    LowerX = 0,
-    UpperX = 1,
-    LowerY = 2,
-    UpperY = 3,
-    LowerZ = 4,
-    UpperZ = 5,
 }
 
 /// Indices in the voxel grid at the level of detail of a particular depth in a
@@ -272,27 +172,6 @@ enum Octant {
     FrontBottomRight = 5,
     BackTopRight = 6,
     FrontTopRight = 7,
-}
-
-impl VoxelType {
-    /// Returns an array with each voxel type in the order of their index.
-    pub fn all() -> [Self; N_VOXEL_TYPES] {
-        array::from_fn(|idx| Self::from_usize(idx).unwrap())
-    }
-}
-
-impl<P> VoxelPropertyMap<P> {
-    /// Creates a new voxel property map using the given property values, with
-    /// the value for a given voxel type residing at the numerical value of the
-    /// corresponding [`VoxelType`] enum variant.
-    pub fn new(property_values: [P; N_VOXEL_TYPES]) -> Self {
-        Self { property_values }
-    }
-
-    /// Returns a reference to the property value for the given voxel type.
-    pub fn value(&self, voxel_type: VoxelType) -> &P {
-        &self.property_values[voxel_type as usize]
-    }
 }
 
 impl<F: Float> VoxelTreeLODController<F> {
@@ -469,7 +348,7 @@ impl<F: Float> VoxelTree<F> {
         F: SubsetOf<fre>,
     {
         let camera_space_axes_in_tree_space =
-            VoxelTransform::compute_camera_space_axes_in_tree_space(view_transform);
+            VoxelTransform::compute_camera_space_axes_in_model_space(view_transform);
 
         let root_voxel_instance_group = self
             .voxel_instances()
@@ -1119,143 +998,6 @@ impl ExternalNodeAuxiliaryStorage {
         let node_id = ExternalNodeID::from_number(self.id_count);
         self.id_count += 1;
         node_id
-    }
-}
-
-impl<F: Float> VoxelInstanceStorage<F> {
-    fn new() -> Self {
-        Self {
-            voxel_types: Vec::new(),
-            transforms: Vec::new(),
-            index_map: KeyIndexMapper::default(),
-        }
-    }
-
-    fn n_instances(&self) -> usize {
-        self.index_map.len()
-    }
-
-    fn transforms(&self) -> &[VoxelTransform<F>] {
-        &self.transforms
-    }
-
-    #[cfg(test)]
-    fn transform(&self, instance_id: VoxelInstanceID) -> &VoxelTransform<F> {
-        let idx = self.index_map.idx(instance_id.0);
-        &self.transforms[idx]
-    }
-
-    fn add_instance(
-        &mut self,
-        instance_id: VoxelInstanceID,
-        voxel_type: VoxelType,
-        transform: VoxelTransform<F>,
-    ) {
-        self.index_map.push_key(instance_id.0);
-        self.voxel_types.push(voxel_type);
-        self.transforms.push(transform);
-    }
-
-    /// Converts each voxel transform in the storage into a model-view transform
-    /// and adds it to the given transform buffer.
-    pub fn buffer_all_transforms(
-        &self,
-        transform_buffer: &mut DynamicInstanceFeatureBuffer,
-        view_transform: &Similarity3<F>,
-        camera_space_axes_in_tree_space: &CoordinateAxes<F>,
-    ) where
-        F: SubsetOf<fre>,
-    {
-        transform_buffer.add_features_from_iterator(self.transforms().iter().map(|transform| {
-            transform.transform_into_model_view_transform(
-                view_transform,
-                camera_space_axes_in_tree_space,
-            )
-        }));
-    }
-
-    /// Adds all voxel instance features in the storage to the given feature
-    /// buffer.
-    pub fn buffer_all_features(
-        &self,
-        feature_id_map: &VoxelPropertyMap<InstanceFeatureID>,
-        feature_storage: &InstanceFeatureStorage,
-        feature_buffer: &mut DynamicInstanceFeatureBuffer,
-    ) {
-        let feature_id = feature_id_map.value(VoxelType::Default);
-
-        feature_buffer.add_feature_from_storage_repeatedly(
-            feature_storage,
-            *feature_id,
-            self.n_instances(),
-        );
-    }
-}
-
-impl<F: Float> GroupedVoxelInstanceStorage<F> {
-    fn new() -> Self {
-        Self {
-            groups: Vec::new(),
-            index_map: KeyIndexMapper::default(),
-            instance_id_count: 0,
-            group_id_count: 0,
-        }
-    }
-
-    #[cfg(test)]
-    fn n_groups(&self) -> usize {
-        self.index_map.len()
-    }
-
-    fn group(&self, group_id: InstanceGroupID) -> &VoxelInstanceStorage<F> {
-        self.group_at_level_of_detail(group_id, 0)
-    }
-
-    fn group_at_level_of_detail(
-        &self,
-        group_id: InstanceGroupID,
-        lod: u32,
-    ) -> &VoxelInstanceStorage<F> {
-        let idx = self.index_map.idx(group_id.0);
-        &self.groups[idx][lod as usize]
-    }
-
-    fn group_at_level_of_detail_mut(
-        &mut self,
-        group_id: InstanceGroupID,
-        lod: u32,
-    ) -> &mut VoxelInstanceStorage<F> {
-        let idx = self.index_map.idx(group_id.0);
-        &mut self.groups[idx][lod as usize]
-    }
-
-    fn create_group(&mut self) -> InstanceGroupID {
-        self.create_group_with_multiple_levels_of_detail(0)
-    }
-
-    fn create_group_with_multiple_levels_of_detail(&mut self, max_lod: u32) -> InstanceGroupID {
-        let group_id = self.create_new_instance_group_id();
-        self.index_map.push_key(group_id.0);
-        self.groups
-            .push(vec![VoxelInstanceStorage::new(); (max_lod + 1) as usize]);
-        group_id
-    }
-
-    fn remove_group(&mut self, group_id: InstanceGroupID) {
-        let idx = self.index_map.swap_remove_key(group_id.0);
-        self.groups.swap_remove(idx);
-    }
-
-    fn create_new_voxel_instance_id(&mut self) -> VoxelInstanceID {
-        let instance_id = VoxelInstanceID(self.instance_id_count);
-        self.instance_id_count += 1;
-        instance_id
-    }
-
-    fn create_new_instance_group_id(&mut self) -> InstanceGroupID {
-        let group_id = InstanceGroupID(self.group_id_count);
-        self.group_id_count += 1;
-        group_id
     }
 }
 
@@ -1973,121 +1715,6 @@ impl DirectionalObscurednessLookupTable {
                         && other.is_obscured_from_direction[i][j][k];
                 }
             }
-        }
-    }
-}
-
-impl<F: Float> VoxelTransform<F> {
-    /// Creates a new voxel transform with the given translation and scaling.
-    fn new(translation: Vector3<F>, scaling: F) -> Self {
-        Self {
-            translation,
-            scaling,
-        }
-    }
-
-    /// Creates a new identity voxel transform.
-    fn identity() -> Self {
-        Self {
-            translation: Vector3::zeros(),
-            scaling: F::ONE,
-        }
-    }
-
-    /// Returns a reference to the translational part of the voxel transform.
-    #[cfg(test)]
-    fn translation(&self) -> &Vector3<F> {
-        &self.translation
-    }
-
-    /// Returns the scaling part of the voxel transform.
-    #[cfg(test)]
-    fn scaling(&self) -> F {
-        self.scaling
-    }
-
-    /// Applies the given transform from the space of the voxel tree to camera
-    /// space, yielding the model view transform of the voxel.
-    fn transform_into_model_view_transform(
-        &self,
-        transform_from_tree_to_camera_space: &Similarity3<F>,
-        camera_space_axes_in_tree_space: &CoordinateAxes<F>,
-    ) -> InstanceModelViewTransform
-    where
-        F: SubsetOf<fre>,
-    {
-        let scaling_from_tree_to_camera_space = transform_from_tree_to_camera_space.scaling();
-        let rotation_from_tree_to_camera_space =
-            transform_from_tree_to_camera_space.isometry.rotation;
-        let translation_from_tree_to_camera_space = transform_from_tree_to_camera_space
-            .isometry
-            .translation
-            .vector;
-
-        let new_scaling = scaling_from_tree_to_camera_space * self.scaling;
-
-        let new_translation = translation_from_tree_to_camera_space
-            + vector![
-                camera_space_axes_in_tree_space.0.dot(&self.translation),
-                camera_space_axes_in_tree_space.1.dot(&self.translation),
-                camera_space_axes_in_tree_space.2.dot(&self.translation)
-            ] * scaling_from_tree_to_camera_space;
-
-        InstanceModelViewTransform {
-            rotation: rotation_from_tree_to_camera_space.cast::<fre>(),
-            translation: new_translation.cast::<fre>(),
-            scaling: fre::from_subset(&new_scaling),
-        }
-    }
-
-    fn compute_camera_space_axes_in_tree_space(
-        transform_from_tree_to_camera_space: &Similarity3<F>,
-    ) -> (UnitVector3<F>, UnitVector3<F>, UnitVector3<F>) {
-        let rotation = &transform_from_tree_to_camera_space.isometry.rotation;
-        (
-            rotation.inverse_transform_unit_vector(&Vector3::x_axis()),
-            rotation.inverse_transform_unit_vector(&Vector3::y_axis()),
-            rotation.inverse_transform_unit_vector(&Vector3::z_axis()),
-        )
-    }
-}
-
-impl<F: Float> Default for VoxelTransform<F> {
-    fn default() -> Self {
-        Self::identity()
-    }
-}
-
-impl<F> AbsDiffEq for VoxelTransform<F>
-where
-    F: Float + AbsDiffEq,
-    <F as AbsDiffEq>::Epsilon: Clone,
-{
-    type Epsilon = <F as AbsDiffEq>::Epsilon;
-
-    fn default_epsilon() -> Self::Epsilon {
-        <F as AbsDiffEq>::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Vector3::abs_diff_eq(&self.translation, &other.translation, epsilon)
-            && F::abs_diff_eq(&self.scaling, &other.scaling, epsilon)
-    }
-}
-
-impl VoxelFace {
-    const X_FACES: [Self; 2] = [Self::LowerX, Self::UpperX];
-    const Y_FACES: [Self; 2] = [Self::LowerY, Self::UpperY];
-    const Z_FACES: [Self; 2] = [Self::LowerZ, Self::UpperZ];
-
-    fn opposite_face(&self) -> Self {
-        match *self {
-            Self::LowerX => Self::UpperX,
-            Self::UpperX => Self::LowerX,
-            Self::LowerY => Self::UpperY,
-            Self::UpperY => Self::LowerY,
-            Self::LowerZ => Self::UpperZ,
-            Self::UpperZ => Self::LowerZ,
         }
     }
 }
@@ -3281,7 +2908,7 @@ mod test {
 
         let model_view_transform = voxel_transform.transform_into_model_view_transform(
             &transform_from_tree_to_camera_space,
-            &VoxelTransform::compute_camera_space_axes_in_tree_space(
+            &VoxelTransform::compute_camera_space_axes_in_model_space(
                 &transform_from_tree_to_camera_space,
             ),
         );
