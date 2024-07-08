@@ -24,7 +24,7 @@ use nalgebra::Vector2;
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct FixedColorMaterialFeature {
@@ -36,7 +36,7 @@ pub struct FixedColorMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedMaterialFeature {
@@ -47,7 +47,7 @@ pub struct TexturedMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseMaterialFeature {
@@ -60,7 +60,7 @@ pub struct UniformDiffuseMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformSpecularMaterialFeature {
@@ -73,7 +73,7 @@ pub struct UniformSpecularMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseUniformSpecularMaterialFeature {
@@ -87,7 +87,7 @@ pub struct UniformDiffuseUniformSpecularMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedParallaxMappingMaterialFeature {
@@ -101,7 +101,7 @@ pub struct TexturedParallaxMappingMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseParallaxMappingMaterialFeature {
@@ -116,7 +116,7 @@ pub struct UniformDiffuseParallaxMappingMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformSpecularParallaxMappingMaterialFeature {
@@ -131,7 +131,7 @@ pub struct UniformSpecularParallaxMappingMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseUniformSpecularParallaxMappingMaterialFeature {
@@ -147,7 +147,7 @@ pub struct UniformDiffuseUniformSpecularParallaxMappingMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedEmissiveMaterialFeature {
@@ -160,7 +160,7 @@ pub struct TexturedEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseEmissiveMaterialFeature {
@@ -174,7 +174,7 @@ pub struct UniformDiffuseEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformSpecularEmissiveMaterialFeature {
@@ -188,7 +188,7 @@ pub struct UniformSpecularEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseUniformSpecularEmissiveMaterialFeature {
@@ -203,7 +203,7 @@ pub struct UniformDiffuseUniformSpecularEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedParallaxMappingEmissiveMaterialFeature {
@@ -218,7 +218,7 @@ pub struct TexturedParallaxMappingEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseParallaxMappingEmissiveMaterialFeature {
@@ -234,7 +234,7 @@ pub struct UniformDiffuseParallaxMappingEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformSpecularParallaxMappingEmissiveMaterialFeature {
@@ -250,7 +250,7 @@ pub struct UniformSpecularParallaxMappingEmissiveMaterialFeature {
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage).
+/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature {

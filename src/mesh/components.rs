@@ -127,17 +127,17 @@ pub struct HemisphereMeshComp {
 }
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
-/// [`TriangleMesh`](crate::geometry::TriangleMesh).
+/// [`TriangleMesh`](crate::mesh::TriangleMesh).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct MeshComp {
-    /// The ID of the entity's [`TriangleMesh`](crate::geometry::TriangleMesh).
+    /// The ID of the entity's [`TriangleMesh`](crate::mesh::TriangleMesh).
     pub id: MeshID,
 }
 
 impl MeshComp {
     /// Creates a new component representing a
-    /// [`TriangleMesh`](crate::geometry::TriangleMesh) with the given ID.
+    /// [`TriangleMesh`](crate::mesh::TriangleMesh) with the given ID.
     pub fn new(mesh_id: MeshID) -> Self {
         Self { id: mesh_id }
     }
