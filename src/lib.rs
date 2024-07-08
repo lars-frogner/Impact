@@ -85,6 +85,7 @@
 mod macros;
 
 pub mod assets;
+pub mod camera;
 pub mod components;
 pub mod control;
 pub mod game_loop;

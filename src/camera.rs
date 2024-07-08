@@ -1,15 +1,20 @@
-//! Camera types.
+//! Cameras.
+
+pub mod buffer;
+pub mod components;
+pub mod entity;
 
 use crate::{
     geometry::{Angle, Frustum, OrthographicTransform, PerspectiveTransform, Radians},
     num::Float,
+    scene::CameraNodeID,
     util::{
         bounds::{Bounds, UpperExclusiveBounds},
         tracking::EntityChangeTracker,
     },
 };
 use approx::assert_abs_diff_ne;
-use nalgebra::Projective3;
+use nalgebra::{Projective3, Similarity3};
 use std::fmt::Debug;
 
 /// Represents a 3D camera.
@@ -38,6 +43,14 @@ pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
     fn reset_projection_change_tracking(&self);
 }
 
+/// Represents a [`Camera`] that has a camera node in a [`SceneGraph`].
+#[derive(Debug)]
+pub struct SceneCamera<F: Float> {
+    camera: Box<dyn Camera<F>>,
+    view_transform: Similarity3<F>,
+    scene_graph_node_id: CameraNodeID,
+}
+
 /// 3D camera using a perspective transformation.
 #[derive(Debug)]
 pub struct PerspectiveCamera<F: Float> {
@@ -57,6 +70,47 @@ pub struct OrthographicCamera<F: Float> {
     view_frustum: Frustum<F>,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
+}
+
+impl<F: Float> SceneCamera<F> {
+    /// Creates a new [`SceneCamera`] representing the given [`Camera`] in the
+    /// camera node with the given ID in the [`SceneGraph`].
+    pub fn new(camera: impl Camera<F>, scene_graph_node_id: CameraNodeID) -> Self {
+        Self {
+            camera: Box::new(camera),
+            view_transform: Similarity3::identity(),
+            scene_graph_node_id,
+        }
+    }
+
+    /// Returns a reference to the underlying [`Camera`].
+    pub fn camera(&self) -> &dyn Camera<F> {
+        self.camera.as_ref()
+    }
+
+    /// Returns a reference to the camera's view transform.
+    pub fn view_transform(&self) -> &Similarity3<F> {
+        &self.view_transform
+    }
+
+    /// Returns the ID of the [`CameraNode`](crate::scene::graph::CameraNode)
+    /// for the camera in the [`SceneGraph`](crate::scene::SceneGraph).
+    pub fn scene_graph_node_id(&self) -> CameraNodeID {
+        self.scene_graph_node_id
+    }
+
+    /// Sets the transform from world space to camera space.
+    pub fn set_view_transform(&mut self, view_transform: Similarity3<F>) {
+        self.view_transform = view_transform;
+    }
+
+    /// Sets the ratio of width to height of the camera's view plane.
+    ///
+    /// # Panics
+    /// If `aspect_ratio` is zero.
+    pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
+        self.camera.set_aspect_ratio(aspect_ratio);
+    }
 }
 
 impl<F: Float> PerspectiveCamera<F> {

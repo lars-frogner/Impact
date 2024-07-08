@@ -9,6 +9,7 @@ pub use components::{
 };
 
 use crate::{
+    camera::SceneCamera,
     geometry::{CubemapFace, Frustum, OrthographicTransform, Sphere},
     gpu::rendering::{fre, CascadeIdx},
     model::{
@@ -17,8 +18,8 @@ use crate::{
     },
     num::Float,
     scene::{
-        LightStorage, OmnidirectionalLight, SceneCamera, UnidirectionalLight, VoxelManager,
-        VoxelTreeID, MAX_SHADOW_MAP_CASCADES,
+        LightStorage, OmnidirectionalLight, UnidirectionalLight, VoxelManager, VoxelTreeID,
+        MAX_SHADOW_MAP_CASCADES,
     },
 };
 use bytemuck::{Pod, Zeroable};
