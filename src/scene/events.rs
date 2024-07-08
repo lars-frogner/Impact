@@ -12,7 +12,11 @@ use crate::{
     scene::{
         ModelInstanceNodeID, ParentComp, Scene, SceneGraphGroupComp, SceneGraphGroupNodeComp,
         SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
-        UncullableComp, VoxelManager, VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp,
+        UncullableComp,
+    },
+    voxel::{
+        self,
+        components::{VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp},
     },
     window::{self, Window},
 };
@@ -195,7 +199,7 @@ impl Scene {
     }
 
     fn add_voxel_tree_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
-        VoxelManager::add_voxel_tree_component_for_entity(
+        voxel::entity::add_voxel_tree_component_for_entity(
             &self.voxel_manager,
             components,
             self.config.voxel_extent,

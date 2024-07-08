@@ -2,8 +2,8 @@
 
 use crate::{
     components::ComponentRegistry,
-    geometry::VoxelType,
-    scene::{GroupNodeID, VoxelTreeID, VoxelTreeNodeID},
+    scene::{GroupNodeID, VoxelTreeNodeID},
+    voxel::{VoxelTreeID, VoxelType},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -59,7 +59,7 @@ pub struct VoxelSphereComp {
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities with voxels represented by a
-/// [`VoxelTree`](crate::geometry::VoxelTree).
+/// [`VoxelTree`](crate::voxel::VoxelTree).
 ///
 /// The purpose of this component is to aid in constructing a
 /// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
@@ -67,7 +67,7 @@ pub struct VoxelSphereComp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelTreeComp {
-    /// The ID of the entity's [`VoxelTree`](crate::geometry::VoxelTree).
+    /// The ID of the entity's [`VoxelTree`](crate::voxel::VoxelTree).
     pub voxel_tree_id: VoxelTreeID,
 }
 
@@ -83,7 +83,7 @@ pub struct VoxelTreeNodeComp {
     /// holding the transforms locating each voxel instance to render in the
     /// tree's reference frame.
     pub voxel_tree_node_id: VoxelTreeNodeID,
-    /// The ID of the [`VoxelTree`](crate::geometry::VoxelTree).
+    /// The ID of the [`VoxelTree`](crate::voxel::VoxelTree).
     pub voxel_tree_id: VoxelTreeID,
     _pad: [u8; 4],
 }

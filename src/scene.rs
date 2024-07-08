@@ -5,7 +5,6 @@ mod graph;
 mod postprocessing;
 mod systems;
 mod tasks;
-mod voxel;
 
 pub use events::RenderResourcesDesynchronized;
 pub use graph::{
@@ -21,10 +20,6 @@ pub use tasks::{
     BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
     SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
 };
-pub use voxel::{
-    register_voxel_components, VoxelBoxComp, VoxelManager, VoxelSphereComp, VoxelTreeComp,
-    VoxelTreeID, VoxelTreeNodeComp, VoxelTypeComp,
-};
 
 use crate::{
     assets::Assets,
@@ -35,6 +30,7 @@ use crate::{
     material::{self, special::tone_mapping::ToneMapping, MaterialLibrary},
     mesh::MeshRepository,
     model::InstanceFeatureManager,
+    voxel::VoxelManager,
 };
 use std::sync::RwLock;
 

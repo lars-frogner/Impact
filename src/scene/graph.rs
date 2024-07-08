@@ -18,7 +18,7 @@ use crate::{
         InstanceModelViewTransform, ModelID,
     },
     num::Float,
-    scene::{VoxelManager, VoxelTreeID},
+    voxel::{VoxelManager, VoxelTreeID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{GenerationalIdx, GenerationalReusingVec};

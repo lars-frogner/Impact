@@ -7,7 +7,6 @@ mod oriented_box;
 mod plane;
 mod projection;
 mod sphere;
-mod voxel;
 
 pub use angle::{Angle, Degrees, Radians};
 pub use axis_aligned_box::AxisAlignedBox;
@@ -16,10 +15,6 @@ pub use oriented_box::OrientedBox;
 pub use plane::Plane;
 pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
 pub use sphere::Sphere;
-pub use voxel::{
-    UniformBoxVoxelGenerator, UniformSphereVoxelGenerator, VoxelPropertyMap, VoxelTree,
-    VoxelTreeLODController, VoxelType,
-};
 
 use crate::num::Float;
 use nalgebra::Point3;
