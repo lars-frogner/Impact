@@ -1,8 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use impact::geometry::{
-    Degrees, DynamicInstanceFeatureBuffer, Frustum, InstanceFeatureStorage,
-    InstanceModelViewTransform, PerspectiveTransform, UniformSphereVoxelGenerator,
-    UpperExclusiveBounds, VoxelTree, VoxelType,
+use impact::{
+    geometry::{
+        Degrees, Frustum, PerspectiveTransform, UniformSphereVoxelGenerator, VoxelTree, VoxelType,
+    },
+    model::{DynamicInstanceFeatureBuffer, InstanceFeatureStorage, InstanceModelViewTransform},
+    util::bounds::UpperExclusiveBounds,
 };
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector3};
 use num_traits::FloatConst;
