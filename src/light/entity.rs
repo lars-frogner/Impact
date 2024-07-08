@@ -19,6 +19,43 @@ use nalgebra::{Similarity3, UnitVector3};
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the right
+/// components for a light source, and if so, adds the corresponding light to
+/// the light storage and adds a correspondong light component with the light's
+/// ID to the entity.
+pub fn add_light_component_for_entity(
+    scene_camera: &RwLock<Option<SceneCamera<fre>>>,
+    light_storage: &RwLock<LightStorage>,
+    components: &mut ArchetypeComponentStorage,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) {
+    add_ambient_light_component_for_entity(light_storage, components, desynchronized);
+    add_omnidirectional_light_component_for_entity(
+        scene_camera,
+        light_storage,
+        components,
+        desynchronized,
+    );
+    add_unidirectional_light_component_for_entity(
+        scene_camera,
+        light_storage,
+        components,
+        desynchronized,
+    );
+}
+
+/// Checks if the given entity has a light component, and if so, removes the
+/// assocated light from the given [`LightStorage`].
+pub fn remove_light_from_storage_for_entity(
+    light_storage: &RwLock<LightStorage>,
+    entity: &EntityEntry<'_>,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) {
+    remove_ambient_light_from_storage_for_entity(light_storage, entity, desynchronized);
+    remove_omnidirectional_light_from_storage_for_entity(light_storage, entity, desynchronized);
+    remove_unidirectional_light_from_storage_for_entity(light_storage, entity, desynchronized);
+}
+
+/// Checks if the entity-to-be with the given components has the right
 /// components for this light source, and if so, adds the corresponding
 /// [`AmbientLight`] to the light storage and adds an [`AmbientLightComp`] with
 /// the light's ID to the entity.
@@ -43,23 +80,6 @@ pub fn add_ambient_light_component_for_entity(
         },
         ![AmbientLightComp]
     );
-}
-
-/// Checks if the given entity has a [`AmbientLightComp`], and if so, removes
-/// the assocated [`AmbientLight`] from the given [`LightStorage`].
-pub fn remove_ambient_light_from_storage_for_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
-) {
-    if let Some(ambient_light) = entity.get_component::<AmbientLightComp>() {
-        let light_id = ambient_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_ambient_light(light_id);
-        desynchronized.set_yes();
-    }
 }
 
 /// Checks if the entity-to-be with the given components has the right
@@ -101,24 +121,6 @@ pub fn add_omnidirectional_light_component_for_entity(
         },
         ![OmnidirectionalLightComp]
     );
-}
-
-/// Checks if the given entity has a [`OmnidirectionalLightComp`], and if so,
-/// removes the assocated [`OmnidirectionalLight`] from the given
-/// [`LightStorage`].
-pub fn remove_omnidirectional_light_from_storage_for_entity(
-    light_storage: &RwLock<LightStorage>,
-    entity: &EntityEntry<'_>,
-    desynchronized: &mut RenderResourcesDesynchronized,
-) {
-    if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightComp>() {
-        let light_id = omnidirectional_light.access().id;
-        light_storage
-            .write()
-            .unwrap()
-            .remove_omnidirectional_light(light_id);
-        desynchronized.set_yes();
-    }
 }
 
 /// Checks if the entity-to-be with the given components has the right
@@ -164,6 +166,41 @@ pub fn add_unidirectional_light_component_for_entity(
         },
         ![UnidirectionalLightComp]
     );
+}
+
+/// Checks if the given entity has a [`AmbientLightComp`], and if so, removes
+/// the assocated [`AmbientLight`] from the given [`LightStorage`].
+pub fn remove_ambient_light_from_storage_for_entity(
+    light_storage: &RwLock<LightStorage>,
+    entity: &EntityEntry<'_>,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) {
+    if let Some(ambient_light) = entity.get_component::<AmbientLightComp>() {
+        let light_id = ambient_light.access().id;
+        light_storage
+            .write()
+            .unwrap()
+            .remove_ambient_light(light_id);
+        desynchronized.set_yes();
+    }
+}
+
+/// Checks if the given entity has a [`OmnidirectionalLightComp`], and if so,
+/// removes the assocated [`OmnidirectionalLight`] from the given
+/// [`LightStorage`].
+pub fn remove_omnidirectional_light_from_storage_for_entity(
+    light_storage: &RwLock<LightStorage>,
+    entity: &EntityEntry<'_>,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) {
+    if let Some(omnidirectional_light) = entity.get_component::<OmnidirectionalLightComp>() {
+        let light_id = omnidirectional_light.access().id;
+        light_storage
+            .write()
+            .unwrap()
+            .remove_omnidirectional_light(light_id);
+        desynchronized.set_yes();
+    }
 }
 
 /// Checks if the given entity has a [`UnidirectionalLightComp`], and if so,

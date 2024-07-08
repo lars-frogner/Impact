@@ -22,13 +22,13 @@ define_task!(
     |world: &World| {
         with_debug_logging!("Synchronizing render commands"; {
             let renderer = world.renderer().read().unwrap();
+            let mut shader_manager = renderer.shader_manager().write().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             let mut render_command_manager = renderer.render_command_manager().write().unwrap();
             let gpu_computation_library = renderer.gpu_computation_library().read().unwrap();
             let scene = world.scene().read().unwrap();
             let material_library = scene.material_library().read().unwrap();
-            let mut shader_manager = scene.shader_manager().write().unwrap();
-            let postprocessor = scene.postprocessor().read().unwrap();
+            let postprocessor = renderer.postprocessor().read().unwrap();
 
             render_command_manager.sync_with_render_resources(
                 renderer.config(),

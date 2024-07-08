@@ -60,13 +60,35 @@ impl Scene {
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        self.add_mesh_component_for_entity(components, desynchronized)?;
-        self.add_light_component_for_entity(components, desynchronized);
-        self.add_material_component_for_entity(graphics_device, assets, components, desynchronized);
+        mesh::entity::add_mesh_component_for_entity(
+            self.mesh_repository(),
+            components,
+            desynchronized,
+        )?;
 
-        self.add_voxel_tree_component_for_entity(components);
+        light::entity::add_light_component_for_entity(
+            self.scene_camera(),
+            self.light_storage(),
+            components,
+            desynchronized,
+        );
 
-        self.generate_missing_vertex_properties_for_mesh(components);
+        material::entity::add_material_component_for_entity(
+            graphics_device,
+            assets,
+            self.material_library(),
+            self.instance_feature_manager(),
+            components,
+            desynchronized,
+        );
+
+        voxel::entity::add_voxel_tree_component_for_entity(&self.voxel_manager, components);
+
+        mesh::entity::generate_missing_vertex_properties_for_material(
+            self.mesh_repository(),
+            &self.material_library().read().unwrap(),
+            components,
+        );
 
         Ok(())
     }
@@ -82,9 +104,18 @@ impl Scene {
     ) -> Result<()> {
         Self::add_parent_group_node_component_for_entity(ecs_world, components);
         self.add_group_node_component_for_entity(components);
-        self.add_camera_component_for_entity(window, components, desynchronized)?;
+
+        camera::entity::add_camera_to_scene_for_entity(
+            window,
+            self.scene_graph(),
+            self.scene_camera(),
+            components,
+            desynchronized,
+        )?;
+
         self.add_model_instance_node_component_for_entity(components);
         self.add_voxel_tree_node_component_for_entity(components);
+
         Ok(())
     }
 
@@ -94,9 +125,25 @@ impl Scene {
         let mut desynchronized = RenderResourcesDesynchronized::No;
 
         self.remove_model_instance_node_for_entity(entity, &mut desynchronized);
-        self.remove_material_features_for_entity(entity, &mut desynchronized);
-        self.remove_light_for_entity(entity, &mut desynchronized);
-        self.remove_camera_for_entity(entity, &mut desynchronized);
+
+        material::entity::remove_material_features_for_entity(
+            self.instance_feature_manager(),
+            entity,
+            &mut desynchronized,
+        );
+
+        light::entity::remove_light_from_storage_for_entity(
+            self.light_storage(),
+            entity,
+            &mut desynchronized,
+        );
+
+        camera::entity::remove_camera_from_scene(
+            self.scene_graph(),
+            self.scene_camera(),
+            entity,
+            &mut desynchronized,
+        );
 
         desynchronized
     }
@@ -121,89 +168,6 @@ impl Scene {
             );
 
         RenderResourcesDesynchronized::Yes
-    }
-
-    fn add_mesh_component_for_entity(
-        &self,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) -> Result<()> {
-        mesh::entity::add_mesh_component_for_entity(
-            self.mesh_repository(),
-            components,
-            desynchronized,
-        )
-    }
-
-    fn add_camera_component_for_entity(
-        &self,
-        window: &Window,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) -> Result<()> {
-        camera::entity::add_perspective_camera_to_scene_for_entity(
-            window,
-            self.scene_graph(),
-            self.scene_camera(),
-            components,
-            desynchronized,
-        )?;
-        camera::entity::add_orthographic_camera_to_scene_for_entity(
-            window,
-            self.scene_graph(),
-            self.scene_camera(),
-            components,
-            desynchronized,
-        )
-    }
-
-    fn add_light_component_for_entity(
-        &self,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        light::entity::add_ambient_light_component_for_entity(
-            self.light_storage(),
-            components,
-            desynchronized,
-        );
-        light::entity::add_omnidirectional_light_component_for_entity(
-            self.scene_camera(),
-            self.light_storage(),
-            components,
-            desynchronized,
-        );
-        light::entity::add_unidirectional_light_component_for_entity(
-            self.scene_camera(),
-            self.light_storage(),
-            components,
-            desynchronized,
-        );
-    }
-
-    fn add_material_component_for_entity(
-        &self,
-        graphics_device: &GraphicsDevice,
-        assets: &Assets,
-        components: &mut ArchetypeComponentStorage,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        material::entity::add_material_component_for_entity(
-            graphics_device,
-            assets,
-            self.material_library(),
-            self.instance_feature_manager(),
-            components,
-            desynchronized,
-        );
-    }
-
-    fn add_voxel_tree_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
-        voxel::entity::add_voxel_tree_component_for_entity(
-            &self.voxel_manager,
-            components,
-            self.config.voxel_extent,
-        );
     }
 
     fn add_parent_group_node_component_for_entity(
@@ -377,82 +341,6 @@ impl Scene {
             },
             ![VoxelTreeNodeComp]
         );
-    }
-
-    fn generate_missing_vertex_properties_for_mesh(&self, components: &ArchetypeComponentStorage) {
-        mesh::entity::generate_missing_vertex_properties_for_material(
-            self.mesh_repository(),
-            &self.material_library().read().unwrap(),
-            components,
-        );
-    }
-
-    fn remove_camera_for_entity(
-        &self,
-        entity: &EntityEntry<'_>,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        camera::entity::remove_camera_from_scene(
-            self.scene_graph(),
-            self.scene_camera(),
-            entity,
-            desynchronized,
-        );
-    }
-
-    fn remove_light_for_entity(
-        &self,
-        entity: &EntityEntry<'_>,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        light::entity::remove_ambient_light_from_storage_for_entity(
-            self.light_storage(),
-            entity,
-            desynchronized,
-        );
-        light::entity::remove_omnidirectional_light_from_storage_for_entity(
-            self.light_storage(),
-            entity,
-            desynchronized,
-        );
-        light::entity::remove_unidirectional_light_from_storage_for_entity(
-            self.light_storage(),
-            entity,
-            desynchronized,
-        );
-    }
-
-    fn remove_material_features_for_entity(
-        &self,
-        entity: &EntityEntry<'_>,
-        desynchronized: &mut RenderResourcesDesynchronized,
-    ) {
-        if let Some(material) = entity.get_component::<MaterialComp>() {
-            let material = material.access();
-
-            if let Some(feature_id) = material.material_handle().material_property_feature_id() {
-                self.instance_feature_manager()
-                    .write()
-                    .unwrap()
-                    .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
-                    .expect("Missing storage for material feature")
-                    .remove_feature(feature_id);
-                desynchronized.set_yes();
-            }
-
-            if let Some(feature_id) = material
-                .prepass_material_handle()
-                .and_then(MaterialHandle::material_property_feature_id)
-            {
-                self.instance_feature_manager()
-                    .write()
-                    .unwrap()
-                    .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
-                    .expect("Missing storage for prepass material feature")
-                    .remove_feature(feature_id);
-                desynchronized.set_yes();
-            }
-        }
     }
 
     fn remove_model_instance_node_for_entity(

@@ -8,10 +8,13 @@ pub mod skybox;
 pub mod vertex_color;
 
 use crate::{
-    assets::Assets, gpu::GraphicsDevice, material::MaterialLibrary, model::InstanceFeatureManager,
+    assets::Assets,
+    gpu::GraphicsDevice,
+    material::{components::MaterialComp, MaterialHandle, MaterialLibrary},
+    model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
-use impact_ecs::archetype::ArchetypeComponentStorage;
+use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 use std::sync::RwLock;
 
 /// Checks if the entity-to-be with the given components has the components for
@@ -68,4 +71,39 @@ pub fn add_material_component_for_entity(
         material_library,
         components,
     );
+}
+
+/// Checks if the given entity has a [`MaterialComp`], and if so, removes the
+/// assocated instance features from the given [`InstanceFeatureManager`].
+pub fn remove_material_features_for_entity(
+    instance_feature_manager: &RwLock<InstanceFeatureManager>,
+    entity: &EntityEntry<'_>,
+    desynchronized: &mut RenderResourcesDesynchronized,
+) {
+    if let Some(material) = entity.get_component::<MaterialComp>() {
+        let material = material.access();
+
+        if let Some(feature_id) = material.material_handle().material_property_feature_id() {
+            instance_feature_manager
+                .write()
+                .unwrap()
+                .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
+                .expect("Missing storage for material feature")
+                .remove_feature(feature_id);
+            desynchronized.set_yes();
+        }
+
+        if let Some(feature_id) = material
+            .prepass_material_handle()
+            .and_then(MaterialHandle::material_property_feature_id)
+        {
+            instance_feature_manager
+                .write()
+                .unwrap()
+                .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
+                .expect("Missing storage for prepass material feature")
+                .remove_feature(feature_id);
+            desynchronized.set_yes();
+        }
+    }
 }

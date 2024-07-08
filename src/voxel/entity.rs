@@ -14,7 +14,6 @@ use std::sync::RwLock;
 pub fn add_voxel_tree_component_for_entity(
     voxel_manager: &RwLock<VoxelManager<fre>>,
     components: &mut ArchetypeComponentStorage,
-    voxel_extent: fre,
 ) {
     setup!(
         {
@@ -24,7 +23,7 @@ pub fn add_voxel_tree_component_for_entity(
         |voxel_box: &VoxelBoxComp, voxel_type: &VoxelTypeComp| -> VoxelTreeComp {
             let generator = UniformBoxVoxelGenerator::new(
                 voxel_type.voxel_type(),
-                voxel_extent,
+                voxel_manager.config().voxel_extent,
                 voxel_box.size_x,
                 voxel_box.size_y,
                 voxel_box.size_z,
@@ -48,7 +47,7 @@ pub fn add_voxel_tree_component_for_entity(
         |voxel_sphere: &VoxelSphereComp, voxel_type: &VoxelTypeComp| -> VoxelTreeComp {
             let generator = UniformSphereVoxelGenerator::new(
                 voxel_type.voxel_type(),
-                voxel_extent,
+                voxel_manager.config().voxel_extent,
                 voxel_sphere.n_voxels_across(),
                 voxel_sphere.instance_group_height(),
             );

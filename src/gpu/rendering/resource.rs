@@ -7,13 +7,12 @@ pub use tasks::SyncRenderResources;
 use crate::{
     camera::{buffer::CameraRenderBufferManager, SceneCamera},
     gpu::{
-        rendering::{fre, postprocessing::PostprocessingResourceManager, RenderingConfig},
+        rendering::{fre, RenderingConfig},
         GraphicsDevice,
     },
     light::{buffer::LightRenderBufferManager, LightStorage},
     mesh::{buffer::MeshRenderBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureRenderBufferManager, InstanceFeatureManager, ModelID},
-    scene::Postprocessor,
 };
 use std::{
     borrow::Cow,
@@ -52,7 +51,6 @@ pub struct SynchronizedRenderResources {
     mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
     light_buffer_manager: Box<Option<LightRenderBufferManager>>,
     instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
-    postprocessing_resource_manager: Box<PostprocessingResourceManager>,
 }
 
 /// Wrapper for render resources that are assumed to be out of sync
@@ -64,7 +62,6 @@ struct DesynchronizedRenderResources {
     mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
     light_buffer_manager: Mutex<Box<Option<LightRenderBufferManager>>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
-    postprocessing_resource_manager: Mutex<Box<PostprocessingResourceManager>>,
 }
 
 type MeshRenderBufferManagerMap = HashMap<MeshID, MeshRenderBufferManager>;
@@ -177,11 +174,6 @@ impl SynchronizedRenderResources {
     pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureRenderBufferManagerMap {
         self.instance_feature_buffer_managers.as_ref()
     }
-
-    /// Returns a reference to the postprocessing resource manager.
-    pub fn postprocessing_resource_manager(&self) -> &PostprocessingResourceManager {
-        self.postprocessing_resource_manager.as_ref()
-    }
 }
 
 impl DesynchronizedRenderResources {
@@ -191,7 +183,6 @@ impl DesynchronizedRenderResources {
             mesh_buffer_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
-            postprocessing_resource_manager: Mutex::new(Box::default()),
         }
     }
 
@@ -201,14 +192,12 @@ impl DesynchronizedRenderResources {
             mesh_buffer_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
-            postprocessing_resource_manager,
         } = render_resources;
         Self {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
             mesh_buffer_managers: Mutex::new(mesh_buffer_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
-            postprocessing_resource_manager: Mutex::new(postprocessing_resource_manager),
         }
     }
 
@@ -218,7 +207,6 @@ impl DesynchronizedRenderResources {
             mesh_buffer_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
-            postprocessing_resource_manager,
         } = self;
         SynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
@@ -227,7 +215,6 @@ impl DesynchronizedRenderResources {
             instance_feature_buffer_managers: instance_feature_buffer_managers
                 .into_inner()
                 .unwrap(),
-            postprocessing_resource_manager: postprocessing_resource_manager.into_inner().unwrap(),
         }
     }
 
@@ -344,13 +331,6 @@ impl DesynchronizedRenderResources {
         }
         feature_render_buffer_managers
             .retain(|model_id, _| instance_feature_manager.has_model_id(*model_id));
-    }
-
-    fn sync_postprocessing_resource_manager_with_postprocessor(
-        postprocessing_resource_manager: &mut PostprocessingResourceManager,
-        postprocessor: &Postprocessor,
-    ) {
-        postprocessing_resource_manager.set_exposure(postprocessor.exposure());
     }
 
     /// Removes render resources whose source data is no longer present.

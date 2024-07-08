@@ -27,14 +27,15 @@ pub use texture::{
 use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager};
 use crate::{
     geometry::CubemapFace,
-    gpu::{compute::GPUComputationLibrary, GraphicsDevice},
+    gpu::{compute::GPUComputationLibrary, shader::ShaderManager, GraphicsDevice},
     light::MAX_SHADOW_MAP_CASCADES,
-    material::MaterialLibrary,
+    material::{special::tone_mapping::ToneMapping, MaterialLibrary},
     scene::Scene,
     window::EventLoopController,
 };
 use anyhow::{Error, Result};
 use chrono::Utc;
+use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
 use std::{
     num::NonZeroU32,
     sync::{
@@ -57,9 +58,11 @@ pub struct RenderingSystem {
     config: RenderingConfig,
     graphics_device: Arc<GraphicsDevice>,
     rendering_surface: RenderingSurface,
+    shader_manager: RwLock<ShaderManager>,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_command_manager: RwLock<RenderCommandManager>,
     render_attachment_texture_manager: RenderAttachmentTextureManager,
+    postprocessor: RwLock<Postprocessor>,
     gpu_computation_library: RwLock<GPUComputationLibrary>,
 }
 
@@ -80,6 +83,10 @@ pub struct RenderingConfig {
     pub shadow_mapping_enabled: bool,
     /// The number of samples to use for multisampling anti-aliasing.
     pub multisampling_sample_count: u32,
+    pub ambient_occlusion: AmbientOcclusionConfig,
+    pub bloom: BloomConfig,
+    pub tone_mapping: ToneMapping,
+    pub initial_exposure: fre,
 }
 
 /// Helper for capturing screenshots and related textures.
@@ -100,6 +107,7 @@ impl RenderingSystem {
         config: RenderingConfig,
         graphics_device: Arc<GraphicsDevice>,
         rendering_surface: RenderingSurface,
+        material_library: &mut MaterialLibrary,
     ) -> Result<Self> {
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &graphics_device,
@@ -107,13 +115,24 @@ impl RenderingSystem {
             config.multisampling_sample_count,
         );
 
+        let postprocessor = Postprocessor::new(
+            &graphics_device,
+            material_library,
+            &config.ambient_occlusion,
+            &config.bloom,
+            config.tone_mapping,
+            config.initial_exposure,
+        );
+
         Ok(Self {
             config,
             graphics_device,
             rendering_surface,
+            shader_manager: RwLock::new(ShaderManager::new()),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(RenderCommandManager::new()),
             render_attachment_texture_manager,
+            postprocessor: RwLock::new(postprocessor),
             gpu_computation_library: RwLock::new(GPUComputationLibrary::new()),
         })
     }
@@ -133,6 +152,11 @@ impl RenderingSystem {
         &self.rendering_surface
     }
 
+    /// Returns a reference to the [`ShaderManager`], guarded by a [`RwLock`].
+    pub fn shader_manager(&self) -> &RwLock<ShaderManager> {
+        &self.shader_manager
+    }
+
     /// Returns a reference to the [`RenderResourceManager`], guarded
     /// by a [`RwLock`].
     pub fn render_resource_manager(&self) -> &RwLock<RenderResourceManager> {
@@ -148,6 +172,11 @@ impl RenderingSystem {
     /// Returns a reference to the [`RenderAttachmentTextureManager`].
     pub fn render_attachment_texture_manager(&self) -> &RenderAttachmentTextureManager {
         &self.render_attachment_texture_manager
+    }
+
+    /// Returns a reference to the [`Postprocessor`], guarded by a [`RwLock`].
+    pub fn postprocessor(&self) -> &RwLock<Postprocessor> {
+        &self.postprocessor
     }
 
     /// Returns a reference to the [`GPUComputationLibrary`], guarded by a
@@ -235,6 +264,24 @@ impl RenderingSystem {
         self.set_multisampling_sample_count(sample_count);
     }
 
+    /// Toggles ambient occlusion.
+    pub fn toggle_ambient_occlusion(&self) {
+        self.postprocessor
+            .write()
+            .unwrap()
+            .toggle_ambient_occlusion();
+    }
+
+    /// Toggles bloom.
+    pub fn toggle_bloom(&self) {
+        self.postprocessor.write().unwrap().toggle_bloom();
+    }
+
+    /// Cycle tone mapping.
+    pub fn cycle_tone_mapping(&self) {
+        self.postprocessor.write().unwrap().cycle_tone_mapping();
+    }
+
     fn render_surface(&self, material_library: &MaterialLibrary) -> Result<wgpu::SurfaceTexture> {
         let surface_texture = self.rendering_surface.surface().get_current_texture()?;
         let surface_texture_view = surface_texture
@@ -248,6 +295,7 @@ impl RenderingSystem {
 
         {
             let render_resources_guard = self.render_resource_manager.read().unwrap();
+            let postprocessor = self.postprocessor.read().unwrap();
             let gpu_computation_library_guard = self.gpu_computation_library.read().unwrap();
 
             for render_pass_recorder in self.render_command_manager.read().unwrap().recorders() {
@@ -257,6 +305,7 @@ impl RenderingSystem {
                     material_library,
                     render_resources_guard.synchronized(),
                     &self.render_attachment_texture_manager,
+                    &postprocessor,
                     &gpu_computation_library_guard,
                     &mut command_encoder,
                 )?;
@@ -320,6 +369,10 @@ impl Default for RenderingConfig {
             unidirectional_light_shadow_map_resolution: 1024,
             shadow_mapping_enabled: true,
             multisampling_sample_count: 1,
+            ambient_occlusion: AmbientOcclusionConfig::default(),
+            bloom: BloomConfig::default(),
+            tone_mapping: ToneMapping::default(),
+            initial_exposure: 1e-4,
         }
     }
 }

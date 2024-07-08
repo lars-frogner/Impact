@@ -16,18 +16,23 @@ use crate::{
     light::components::{
         AmbientEmissionComp, OmnidirectionalEmissionComp, UnidirectionalEmissionComp,
     },
-    material::components::{
-        AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
-        MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
-        RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
+    material::{
+        self,
+        components::{
+            AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
+            MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
+            RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
+        },
+        MaterialLibrary,
     },
     mesh::{
         components::{
             BoxMeshComp, ConeMeshComp, CylinderMeshComp, RectangleMeshComp, SphereMeshComp,
         },
         texture_projection::components::PlanarTextureProjectionComp,
-        FrontFaceSide,
+        FrontFaceSide, MeshRepository,
     },
+    model::InstanceFeatureManager,
     num::Float,
     physics::{
         fph, Acceleration, AngularVelocity, CircularTrajectoryComp,
@@ -36,11 +41,11 @@ use crate::{
         Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
-    scene::{ParentComp, Scene, SceneConfig, SceneGraphGroupComp, UncullableComp},
+    scene::{ParentComp, Scene, SceneGraphGroupComp, UncullableComp},
     util::bounds::UpperExclusiveBounds,
     voxel::{
         components::{VoxelSphereComp, VoxelTypeComp},
-        VoxelTreeLODController, VoxelType,
+        VoxelConfig, VoxelManager, VoxelTreeLODController, VoxelType,
     },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
     world::World,
@@ -69,6 +74,8 @@ fn init_game_loop(window: Window) -> Result<GameLoop> {
 
 fn init_world(window: Window) -> Result<World> {
     let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
+
+    let vertical_field_of_view = Degrees(70.0);
 
     let mut assets = Assets::new_with_default_lookup_tables(&graphics_device)?;
 
@@ -146,11 +153,36 @@ fn init_world(window: Window) -> Result<World> {
         },
     )?;
 
-    let vertical_field_of_view = Degrees(70.0);
+    let mut mesh_repository = MeshRepository::new();
+    mesh_repository.create_default_meshes();
+
+    let mut instance_feature_manager = InstanceFeatureManager::new();
+    material::register_material_feature_types(&mut instance_feature_manager);
+
+    let mut material_library = MaterialLibrary::new();
+
+    let voxel_manager = VoxelManager::create(
+        VoxelConfig {
+            initial_min_angular_voxel_extent_for_lod:
+                VoxelTreeLODController::compute_min_angular_voxel_extent(
+                    window.dimensions().1,
+                    vertical_field_of_view,
+                    3.0,
+                ),
+            ..VoxelConfig::default()
+        },
+        &graphics_device,
+        &assets,
+        &mut mesh_repository,
+        &mut material_library,
+        &mut instance_feature_manager,
+    );
+
     let renderer = RenderingSystem::new(
         RenderingConfig::default(),
         Arc::clone(&graphics_device),
         rendering_surface,
+        &mut material_library,
     )?;
 
     let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
@@ -160,17 +192,10 @@ fn init_world(window: Window) -> Result<World> {
         RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
 
     let scene = Scene::new(
-        SceneConfig {
-            initial_min_angular_voxel_extent_for_lod:
-                VoxelTreeLODController::compute_min_angular_voxel_extent(
-                    window.dimensions().1,
-                    vertical_field_of_view,
-                    3.0,
-                ),
-            ..SceneConfig::default()
-        },
-        &graphics_device,
-        &assets,
+        mesh_repository,
+        material_library,
+        instance_feature_manager,
+        voxel_manager,
     );
 
     let world = World::new(
