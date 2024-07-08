@@ -41,7 +41,10 @@ use crate::{
         Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
         SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
     },
-    scene::{ParentComp, Scene, SceneGraphGroupComp, UncullableComp},
+    scene::{
+        components::{ParentComp, SceneGraphGroupComp, UncullableComp},
+        Scene,
+    },
     util::bounds::UpperExclusiveBounds,
     voxel::{
         components::{VoxelSphereComp, VoxelTypeComp},

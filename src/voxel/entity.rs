@@ -1,4 +1,4 @@
-//! Management of voxel-related components for entities.
+//! Management of voxels for entities.
 
 use crate::{
     gpu::rendering::fre,
@@ -11,7 +11,7 @@ use crate::{
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use std::sync::RwLock;
 
-pub fn add_voxel_tree_component_for_entity(
+pub fn setup_voxel_tree_for_new_entity(
     voxel_manager: &RwLock<VoxelManager<fre>>,
     components: &mut ArchetypeComponentStorage,
 ) {

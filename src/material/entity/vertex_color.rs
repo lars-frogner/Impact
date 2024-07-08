@@ -24,7 +24,7 @@ lazy_static! {
 /// Checks if the entity-to-be with the given components has the
 /// component for this material, and if so, adds the appropriate
 /// material component to the entity.
-pub fn add_vertex_color_material_component_for_entity(
+pub fn setup_vertex_color_material_for_new_entity(
     material_library: &RwLock<MaterialLibrary>,
     components: &mut ArchetypeComponentStorage,
 ) {

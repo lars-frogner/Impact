@@ -1,6 +1,6 @@
 //! Simulation of physics.
 
-mod events;
+mod entity;
 mod inertia;
 mod medium;
 mod motion;

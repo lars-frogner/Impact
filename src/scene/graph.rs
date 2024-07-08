@@ -1,13 +1,5 @@
 //! Scene graph implementation.
 
-mod components;
-
-pub use components::{
-    register_scene_graph_components, ParentComp, SceneGraphCameraNodeComp, SceneGraphGroupComp,
-    SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp,
-    SceneGraphParentNodeComp, UncullableComp,
-};
-
 use crate::{
     camera::SceneCamera,
     geometry::{CubemapFace, Frustum, OrthographicTransform, Sphere},

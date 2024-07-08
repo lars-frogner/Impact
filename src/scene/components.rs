@@ -1,4 +1,4 @@
-//! [`Component`](impact_ecs::component::Component)s related to scene graphs.
+//! [`Component`](impact_ecs::component::Component)s related to scenes.
 
 use crate::{
     components::ComponentRegistry,

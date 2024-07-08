@@ -9,8 +9,9 @@ use crate::{
     },
     physics::ReferenceFrameComp,
     scene::{
-        CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeComp,
-        SceneGraphParentNodeComp, SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
+        components::{SceneGraphNodeComp, SceneGraphParentNodeComp},
+        CameraNodeID, GroupNodeID, ModelInstanceNodeID, SyncSceneCameraViewTransform,
+        UpdateSceneGroupToWorldTransforms,
     },
     voxel::components::VoxelTreeNodeComp,
     world::World,

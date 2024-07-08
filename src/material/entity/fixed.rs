@@ -31,7 +31,7 @@ lazy_static! {
 /// for this material, and if so, registers the material in the given
 /// instance feature manager and adds the appropriate material component
 /// to the entity.
-pub fn add_fixed_color_material_component_for_entity(
+pub fn setup_fixed_color_material_for_new_entity(
     material_library: &RwLock<MaterialLibrary>,
     instance_feature_manager: &RwLock<InstanceFeatureManager>,
     components: &mut ArchetypeComponentStorage,
@@ -59,7 +59,7 @@ pub fn add_fixed_color_material_component_for_entity(
 /// for this material, and if so, adds the appropriate material property
 /// texture set to the material library if not present and adds the
 /// appropriate material component to the entity.
-pub fn add_fixed_texture_material_component_for_entity(
+pub fn setup_fixed_texture_material_for_new_entity(
     graphics_device: &GraphicsDevice,
     assets: &Assets,
     material_library: &RwLock<MaterialLibrary>,

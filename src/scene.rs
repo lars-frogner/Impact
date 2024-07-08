@@ -1,16 +1,14 @@
 //! Scene containing data to render.
 
-mod events;
+pub mod components;
+pub mod entity;
 mod graph;
 mod systems;
 mod tasks;
 
-pub use events::RenderResourcesDesynchronized;
 pub use graph::{
-    register_scene_graph_components, CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage,
-    NodeTransform, ParentComp, SceneGraph, SceneGraphCameraNodeComp, SceneGraphGroupComp,
-    SceneGraphGroupNodeComp, SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphNodeID,
-    SceneGraphParentNodeComp, UncullableComp, VoxelTreeNode, VoxelTreeNodeID,
+    CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph,
+    SceneGraphNodeID, VoxelTreeNode, VoxelTreeNodeID,
 };
 pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
 pub use tasks::{
@@ -21,9 +19,10 @@ pub use tasks::{
 
 use crate::{
     camera::SceneCamera, gpu::rendering::fre, light::LightStorage, material::MaterialLibrary,
-    mesh::MeshRepository, model::InstanceFeatureManager, voxel::VoxelManager,
+    mesh::MeshRepository, model::InstanceFeatureManager, voxel::VoxelManager, window,
 };
-use std::sync::RwLock;
+use num_traits::FromPrimitive;
+use std::{num::NonZeroU32, sync::RwLock};
 
 /// Container for data needed to render a scene.
 #[derive(Debug)]
@@ -35,6 +34,14 @@ pub struct Scene {
     voxel_manager: RwLock<VoxelManager<fre>>,
     scene_graph: RwLock<SceneGraph<fre>>,
     scene_camera: RwLock<Option<SceneCamera<fre>>>,
+}
+
+/// Indicates whether the render resources are out of sync with its source scene
+/// data.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RenderResourcesDesynchronized {
+    Yes,
+    No,
 }
 
 impl Scene {
@@ -91,5 +98,40 @@ impl Scene {
     /// camera has been set, guarded by a [`RwLock`].
     pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<fre>>> {
         &self.scene_camera
+    }
+
+    pub fn handle_window_resized(
+        &self,
+        _old_width: NonZeroU32,
+        old_height: NonZeroU32,
+        new_width: NonZeroU32,
+        new_height: NonZeroU32,
+    ) -> RenderResourcesDesynchronized {
+        let mut desynchronized = RenderResourcesDesynchronized::No;
+
+        if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
+            scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_width, new_height));
+            desynchronized = RenderResourcesDesynchronized::Yes;
+        }
+
+        self.voxel_manager()
+            .write()
+            .unwrap()
+            .scale_min_angular_voxel_extent_for_lod(
+                fre::from_u32(old_height.into()).unwrap()
+                    / fre::from_u32(new_height.into()).unwrap(),
+            );
+
+        desynchronized
+    }
+}
+
+impl RenderResourcesDesynchronized {
+    pub fn is_yes(&self) -> bool {
+        *self == Self::Yes
+    }
+
+    pub fn set_yes(&mut self) {
+        *self = Self::Yes;
     }
 }

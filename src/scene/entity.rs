@@ -1,24 +1,27 @@
-//! Event handling related to scenes.
+//! Management of scene data for entities.
 
 use crate::{
     assets::Assets,
     camera,
-    gpu::{rendering::fre, GraphicsDevice},
+    gpu::GraphicsDevice,
     light,
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
     model::ModelID,
     physics::ReferenceFrameComp,
     scene::{
-        ModelInstanceNodeID, ParentComp, Scene, SceneGraphGroupComp, SceneGraphGroupNodeComp,
-        SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
-        UncullableComp,
+        components::{
+            ParentComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
+            SceneGraphModelInstanceNodeComp, SceneGraphNodeComp, SceneGraphParentNodeComp,
+            UncullableComp,
+        },
+        ModelInstanceNodeID, RenderResourcesDesynchronized, Scene,
     },
     voxel::{
         self,
         components::{VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp},
     },
-    window::{self, Window},
+    window::Window,
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -26,54 +29,34 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, World as ECSWorld},
 };
-use num_traits::FromPrimitive;
-use std::{num::NonZeroU32, sync::RwLock};
-
-/// Indicates whether an event caused the render resources to go out of sync
-/// with its source scene data.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RenderResourcesDesynchronized {
-    Yes,
-    No,
-}
-
-impl RenderResourcesDesynchronized {
-    pub fn is_yes(&self) -> bool {
-        *self == Self::Yes
-    }
-
-    pub fn set_yes(&mut self) {
-        *self = Self::Yes;
-    }
-}
+use std::sync::RwLock;
 
 impl Scene {
     /// Performs any modifications to the scene required to accommodate a new
-    /// entity with components represented by the given component manager, and
-    /// adds any additional components to the entity's components (except scene
-    /// graph components, which are added by calling
-    /// [`add_entity_to_scene_graph`](Self::add_entity_to_scene_graph)).
-    pub fn handle_entity_created(
+    /// entity with the given components, and adds any additional components to
+    /// the entity's components (except scene graph components, which are added
+    /// by calling [`Self::add_new_entity_to_scene_graph`].
+    pub fn perform_setup_for_new_entity(
         &self,
         graphics_device: &GraphicsDevice,
         assets: &Assets,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        mesh::entity::add_mesh_component_for_entity(
+        mesh::entity::setup_mesh_for_new_entity(
             self.mesh_repository(),
             components,
             desynchronized,
         )?;
 
-        light::entity::add_light_component_for_entity(
+        light::entity::setup_light_for_new_entity(
             self.scene_camera(),
             self.light_storage(),
             components,
             desynchronized,
         );
 
-        material::entity::add_material_component_for_entity(
+        material::entity::setup_material_for_new_entity(
             graphics_device,
             assets,
             self.material_library(),
@@ -82,9 +65,9 @@ impl Scene {
             desynchronized,
         );
 
-        voxel::entity::add_voxel_tree_component_for_entity(&self.voxel_manager, components);
+        voxel::entity::setup_voxel_tree_for_new_entity(&self.voxel_manager, components);
 
-        mesh::entity::generate_missing_vertex_properties_for_material(
+        mesh::entity::generate_missing_vertex_properties_for_new_entity_mesh(
             self.mesh_repository(),
             &self.material_library().read().unwrap(),
             components,
@@ -93,19 +76,20 @@ impl Scene {
         Ok(())
     }
 
-    /// Adds the entity to the scene graph if required, and adds the
-    /// corresponding scene graph components to the entity.
-    pub fn add_entity_to_scene_graph(
+    /// Adds the new entity with the given components to the scene graph if
+    /// required, and adds the corresponding scene graph components to the
+    /// entity's components.
+    pub fn add_new_entity_to_scene_graph(
         &self,
         window: &Window,
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
     ) -> Result<()> {
-        Self::add_parent_group_node_component_for_entity(ecs_world, components);
-        self.add_group_node_component_for_entity(components);
+        Self::add_parent_group_node_component_for_new_entity(ecs_world, components);
+        self.add_group_node_component_for_new_entity(components);
 
-        camera::entity::add_camera_to_scene_for_entity(
+        camera::entity::add_camera_to_scene_for_new_entity(
             window,
             self.scene_graph(),
             self.scene_camera(),
@@ -113,32 +97,35 @@ impl Scene {
             desynchronized,
         )?;
 
-        self.add_model_instance_node_component_for_entity(components);
-        self.add_voxel_tree_node_component_for_entity(components);
+        self.add_model_instance_node_component_for_new_entity(components);
+        self.add_voxel_tree_node_component_for_new_entity(components);
 
         Ok(())
     }
 
     /// Performs any modifications required to clean up the scene when
     /// the given entity is removed.
-    pub fn handle_entity_removed(&self, entity: &EntityEntry<'_>) -> RenderResourcesDesynchronized {
+    pub fn perform_cleanup_for_removed_entity(
+        &self,
+        entity: &EntityEntry<'_>,
+    ) -> RenderResourcesDesynchronized {
         let mut desynchronized = RenderResourcesDesynchronized::No;
 
         self.remove_model_instance_node_for_entity(entity, &mut desynchronized);
 
-        material::entity::remove_material_features_for_entity(
+        material::entity::cleanup_material_for_removed_entity(
             self.instance_feature_manager(),
             entity,
             &mut desynchronized,
         );
 
-        light::entity::remove_light_from_storage_for_entity(
+        light::entity::cleanup_light_for_removed_entity(
             self.light_storage(),
             entity,
             &mut desynchronized,
         );
 
-        camera::entity::remove_camera_from_scene(
+        camera::entity::remove_camera_from_scene_for_removed_entity(
             self.scene_graph(),
             self.scene_camera(),
             entity,
@@ -148,29 +135,7 @@ impl Scene {
         desynchronized
     }
 
-    pub fn handle_window_resized(
-        &self,
-        _old_width: NonZeroU32,
-        old_height: NonZeroU32,
-        new_width: NonZeroU32,
-        new_height: NonZeroU32,
-    ) -> RenderResourcesDesynchronized {
-        if let Some(scene_camera) = self.scene_camera().write().unwrap().as_mut() {
-            scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_width, new_height));
-        }
-
-        self.voxel_manager()
-            .write()
-            .unwrap()
-            .scale_min_angular_voxel_extent_for_lod(
-                fre::from_u32(old_height.into()).unwrap()
-                    / fre::from_u32(new_height.into()).unwrap(),
-            );
-
-        RenderResourcesDesynchronized::Yes
-    }
-
-    fn add_parent_group_node_component_for_entity(
+    fn add_parent_group_node_component_for_new_entity(
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
     ) {
@@ -194,7 +159,7 @@ impl Scene {
         );
     }
 
-    fn add_group_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
+    fn add_group_node_component_for_new_entity(&self, components: &mut ArchetypeComponentStorage) {
         setup!(
             {
                 let mut scene_graph = self.scene_graph().write().unwrap();
@@ -220,7 +185,7 @@ impl Scene {
         );
     }
 
-    fn add_model_instance_node_component_for_entity(
+    fn add_model_instance_node_component_for_new_entity(
         &self,
         components: &mut ArchetypeComponentStorage,
     ) {
@@ -296,7 +261,10 @@ impl Scene {
         );
     }
 
-    fn add_voxel_tree_node_component_for_entity(&self, components: &mut ArchetypeComponentStorage) {
+    fn add_voxel_tree_node_component_for_new_entity(
+        &self,
+        components: &mut ArchetypeComponentStorage,
+    ) {
         setup!(
             {
                 let voxel_manager = self.voxel_manager().read().unwrap();
