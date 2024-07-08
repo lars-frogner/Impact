@@ -138,9 +138,9 @@ pub struct VoxelTreeNode<F: Float> {
     voxel_tree_bounding_sphere: Sphere<F>,
 }
 
-/// A [`SceneGraph`] leaf node representing a
-/// [`Camera`](crate::geometry::Camera). It holds at transform representing the
-/// camera's spatial relationship with its parent group.
+/// A [`SceneGraph`] leaf node representing a [`Camera`](crate::camera::Camera).
+/// It holds at transform representing the camera's spatial relationship with
+/// its parent group.
 #[derive(Clone, Debug)]
 pub struct CameraNode<F: Float> {
     parent_node_id: GroupNodeID,

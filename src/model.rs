@@ -474,8 +474,8 @@ impl InstanceFeatureManager {
     /// - If any of the feature IDs are for feature types other than the type
     ///   stored in the corresponding buffer (the order of the feature IDs has
     ///   to be the same as in the
-    ///   [`MaterialSpecification`](crate::scene::MaterialSpecification) of the
-    ///   model, which was used to initialize the buffers.
+    ///   [`MaterialSpecification`](crate::material::MaterialSpecification) of
+    ///   the model, which was used to initialize the buffers.
     pub fn buffer_instance(
         &mut self,
         model_id: ModelID,
@@ -525,7 +525,8 @@ impl InstanceFeatureManager {
     /// - If any of the feature IDs are for feature types other than the type
     ///   stored in the corresponding buffer (the order of the feature IDs has
     ///   to be the same as in the
-    ///   [`MaterialSpecification`](crate::scene::MaterialSpecification) of the
+    ///   [`MaterialSpecification`](crate::material::MaterialSpecification) of
+    ///   the
     ///   model, which was used to initialize the buffers.
     /// - If any of the [`Vec`] with feature IDs has a different length than one
     ///   or the number of transforms.

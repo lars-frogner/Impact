@@ -11,9 +11,8 @@ use super::{
 };
 use naga::{Function, Interpolation, Module, Sampling};
 
-/// Input description specifying the vertex attribute location
-/// reqired for generating a shader for a
-/// [`FixedColorMaterial`](crate::scene::FixedColorMaterial).
+/// Input description specifying the vertex attribute location reqired for
+/// generating a shader for a fixed color material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FixedColorFeatureShaderInput {
     /// Vertex attribute location for the instance feature
@@ -21,24 +20,21 @@ pub struct FixedColorFeatureShaderInput {
     pub color_location: u32,
 }
 
-/// Input description specifying the texture bindings required
-/// for generating a shader for a
-/// [`FixedTextureMaterial`](crate::scene::FixedTextureMaterial).
+/// Input description specifying the texture bindings required for generating a
+/// shader for a fixed color material.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FixedTextureShaderInput {
     /// Bind group bindings of the color texture and its sampler.
     pub color_texture_and_sampler_bindings: (u32, u32),
 }
 
-/// Shader generator for a
-/// [`FixedColorMaterial`](crate::scene::FixedColorMaterial).
+/// Shader generator for a fixed color material.
 #[derive(Clone, Debug)]
 pub(super) struct FixedColorShaderGenerator<'a> {
     feature_input: &'a FixedColorFeatureShaderInput,
 }
 
-/// Shader generator for a
-/// [`FixedTextureMaterial`](crate::scene::FixedTextureMaterial).
+/// Shader generator for a fixed color material.
 #[derive(Clone, Debug)]
 pub(super) struct FixedTextureShaderGenerator<'a> {
     texture_input: &'a FixedTextureShaderInput,

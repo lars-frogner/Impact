@@ -51,9 +51,8 @@ pub struct MaterialHandle {
     /// The ID of the material's [`MaterialSpecification`].
     material_id: MaterialID,
     /// The ID of the entry for the material's per-instance material properties
-    /// in the
-    /// [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage) (may
-    /// be N/A).
+    /// in the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage)
+    /// (may be N/A).
     material_property_feature_id: InstanceFeatureID,
     /// The ID of the material's [`MaterialPropertyTextureGroup`] (may represent
     /// an empty group).
@@ -460,7 +459,7 @@ impl MaterialPropertyTextureGroupID {
 
 impl MaterialHandle {
     /// Creates a new handle for a material with the given IDs for the
-    /// [`MaterialSpecification`](crate::scene::MaterialSpecification),
+    /// [`MaterialSpecification`](crate::material::MaterialSpecification),
     /// per-instance material data and textures (the latter two are optional) .
     pub fn new(
         material_id: MaterialID,
@@ -498,8 +497,8 @@ impl MaterialHandle {
     }
 
     /// Returns the ID of the entry for the per-instance material properties in
-    /// the [`InstanceFeatureStorage`](crate::geometry::InstanceFeatureStorage),
-    /// or [`None`] if there are no untextured per-instance material properties.
+    /// the [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage), or
+    /// [`None`] if there are no untextured per-instance material properties.
     pub fn material_property_feature_id(&self) -> Option<InstanceFeatureID> {
         if self.material_property_feature_id.is_not_applicable() {
             None
