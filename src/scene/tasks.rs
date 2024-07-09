@@ -2,11 +2,11 @@
 
 use crate::{
     define_task,
-    gpu::rendering::RenderingTag,
+    gpu::rendering::tasks::RenderingTag,
     scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
-    world::{World, WorldTaskScheduler},
+    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::{anyhow, Result};
 
@@ -250,22 +250,8 @@ define_task!(
 );
 
 impl Scene {
-    /// Registers all tasks needed for coordinate between systems
-    /// in the scene in the given task scheduler.
-    pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(SyncSceneObjectTransforms)?;
-        task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
-        task_scheduler.register_task(SyncSceneCameraViewTransform)?;
-        task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
-        task_scheduler.register_task(BufferVisibleModelInstances)?;
-        task_scheduler.register_task(SyncLightsInStorage)?;
-        task_scheduler
-            .register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;
-        task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)
-    }
-
-    /// Identifies scene-related errors that need special
-    /// handling in the given set of task errors and handles them.
+    /// Identifies scene-related errors that need special handling in the given
+    /// set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
         task_errors: &ThreadPoolTaskErrors,
@@ -276,4 +262,17 @@ impl Scene {
             event_loop_controller.exit();
         }
     }
+}
+
+/// Registers all tasks needed for coordinate between systems in the scene in
+/// the given task scheduler.
+pub fn register_scene_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    task_scheduler.register_task(SyncSceneObjectTransforms)?;
+    task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
+    task_scheduler.register_task(SyncSceneCameraViewTransform)?;
+    task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
+    task_scheduler.register_task(BufferVisibleModelInstances)?;
+    task_scheduler.register_task(SyncLightsInStorage)?;
+    task_scheduler.register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;
+    task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)
 }

@@ -1,10 +1,9 @@
 //! Tasks for synchronizing render passes.
 
-use super::RenderCommandManager;
 use crate::{
     define_task,
-    gpu::rendering::{RenderingTag, SyncRenderResources},
-    world::{World, WorldTaskScheduler},
+    gpu::rendering::{resource::tasks::SyncRenderResources, tasks::RenderingTag},
+    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
 
@@ -45,10 +44,8 @@ define_task!(
     }
 );
 
-impl RenderCommandManager {
-    /// Registers tasks for synchronizing render commands in the given task
-    /// scheduler.
-    pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(SyncRenderCommands)
-    }
+/// Registers tasks for synchronizing render commands in the given task
+/// scheduler.
+pub fn register_render_command_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    task_scheduler.register_task(SyncRenderCommands)
 }

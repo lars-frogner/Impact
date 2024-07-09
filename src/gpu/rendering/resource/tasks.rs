@@ -1,15 +1,15 @@
 //! Tasks for synchronizing render buffers.
 
-use super::{DesynchronizedRenderResources, RenderResourceManager};
+use super::DesynchronizedRenderResources;
 use crate::{
     define_task,
-    gpu::rendering::RenderingTag,
+    gpu::rendering::tasks::RenderingTag,
     scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
         SyncLightsInStorage, SyncSceneCameraViewTransform,
     },
-    world::{World, WorldTaskScheduler},
+    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
 
@@ -38,18 +38,6 @@ define_task!(
         })
     }
 );
-
-impl RenderResourceManager {
-    /// Registers tasks for synchronizing render resources
-    /// in the given task scheduler.
-    pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(SyncCameraRenderBuffer)?;
-        task_scheduler.register_task(SyncMeshRenderBuffers)?;
-        task_scheduler.register_task(SyncLightRenderBuffers)?;
-        task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
-        task_scheduler.register_task(SyncRenderResources)
-    }
-}
 
 define_task!(
     SyncCameraRenderBuffer,
@@ -169,3 +157,13 @@ define_task!(
         })
     }
 );
+
+/// Registers tasks for synchronizing render resources in the given task
+/// scheduler.
+pub fn register_render_resource_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    task_scheduler.register_task(SyncCameraRenderBuffer)?;
+    task_scheduler.register_task(SyncMeshRenderBuffers)?;
+    task_scheduler.register_task(SyncLightRenderBuffers)?;
+    task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
+    task_scheduler.register_task(SyncRenderResources)
+}

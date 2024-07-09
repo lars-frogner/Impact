@@ -1,23 +1,21 @@
 //! Graphics rendering.
 
-mod brdf;
+pub mod brdf;
 pub mod buffer;
-mod postprocessing;
-mod render_command;
-mod resource;
-mod surface;
-mod tasks;
+pub mod postprocessing;
+pub mod render_command;
+pub mod resource;
+pub mod surface;
+pub mod tasks;
 pub mod texture;
 
 pub use brdf::create_specular_ggx_reflectance_lookup_tables;
 pub use render_command::{
     Blending, ComputePassSpecification, DepthMapUsage, OutputAttachmentSampling,
     RenderCommandManager, RenderCommandSpecification, RenderCommandState, RenderPassHints,
-    RenderPassSpecification, SyncRenderCommands,
+    RenderPassSpecification,
 };
-pub use resource::SyncRenderResources;
 pub use surface::RenderingSurface;
-pub use tasks::{Render, RenderingTag};
 pub use texture::{
     CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
     RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,

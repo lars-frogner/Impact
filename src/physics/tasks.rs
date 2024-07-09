@@ -2,16 +2,15 @@
 
 use crate::{
     define_execution_tag, define_task,
-    physics::{
-        motion::tasks::{LogKineticEnergy, LogMomentum},
-        PhysicsSimulator,
-    },
+    physics::PhysicsSimulator,
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
-    world::{World, WorldTaskScheduler},
+    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
+
+use super::motion;
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s
@@ -55,17 +54,8 @@ define_task!(
 );
 
 impl PhysicsSimulator {
-    /// Registers all tasks needed for physics in the given
-    /// task scheduler.
-    pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        task_scheduler.register_task(UpdateControlledEntities)?;
-        task_scheduler.register_task(AdvanceSimulation)?;
-        task_scheduler.register_task(LogKineticEnergy)?;
-        task_scheduler.register_task(LogMomentum)
-    }
-
-    /// Identifies physics-related errors that need special
-    /// handling in the given set of task errors and handles them.
+    /// Identifies physics-related errors that need special handling in the
+    /// given set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
         task_errors: &ThreadPoolTaskErrors,
@@ -76,4 +66,11 @@ impl PhysicsSimulator {
             event_loop_controller.exit();
         }
     }
+}
+
+/// Registers all tasks needed for physics in the given task scheduler.
+pub fn register_physics_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    task_scheduler.register_task(UpdateControlledEntities)?;
+    task_scheduler.register_task(AdvanceSimulation)?;
+    motion::tasks::register_motion_tasks(task_scheduler)
 }
