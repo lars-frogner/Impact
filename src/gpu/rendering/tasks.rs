@@ -1,16 +1,16 @@
 //! Tasks for rendering.
 
 use crate::{
-    gpu::rendering::{
-        RenderCommandManager, RenderResourceManager, RenderingSystem, SyncRenderCommands,
-    },
+    gpu::rendering::{render_command::tasks::SyncRenderCommands, RenderingSystem},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
-    world::{World, WorldTaskScheduler},
+    world::{tasks::WorldTaskScheduler, World},
     {define_execution_tag, define_task},
 };
 use anyhow::Result;
+
+use super::{render_command, resource};
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s
@@ -35,16 +35,8 @@ define_task!(
 );
 
 impl RenderingSystem {
-    /// Registers all tasks needed for rendering in the given
-    /// task scheduler.
-    pub fn register_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        RenderResourceManager::register_tasks(task_scheduler)?;
-        RenderCommandManager::register_tasks(task_scheduler)?;
-        task_scheduler.register_task(Render)
-    }
-
-    /// Identifies rendering-related errors that need special
-    /// handling in the given set of task errors and handles them.
+    /// Identifies rendering-related errors that need special handling in the
+    /// given set of task errors and handles them.
     pub fn handle_task_errors(
         &self,
         task_errors: &mut ThreadPoolTaskErrors,
@@ -58,4 +50,11 @@ impl RenderingSystem {
             event_loop_controller.exit();
         }
     }
+}
+
+/// Registers all tasks needed for rendering in the given task scheduler.
+pub fn register_rendering_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    resource::tasks::register_render_resource_tasks(task_scheduler)?;
+    render_command::tasks::register_render_command_tasks(task_scheduler)?;
+    task_scheduler.register_task(Render)
 }

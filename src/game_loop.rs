@@ -2,11 +2,11 @@
 
 use crate::{
     define_execution_tag_set,
-    gpu::rendering::RenderingTag,
+    gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
     window::{EventLoopController, HandlingResult, InputHandler, Window, WindowEvent},
-    world::{World, WorldTaskScheduler},
+    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
 use std::{

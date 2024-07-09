@@ -6,8 +6,9 @@ use crate::{
         motion,
         tasks::{AdvanceSimulation, PhysicsTag},
     },
-    world::World,
+    world::{tasks::WorldTaskScheduler, World},
 };
+use anyhow::Result;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) logs the kinetic energy of each
@@ -38,3 +39,9 @@ define_task!(
         })
     }
 );
+
+/// Registers all tasks related to motion in the given task scheduler.
+pub fn register_motion_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+    task_scheduler.register_task(LogKineticEnergy)?;
+    task_scheduler.register_task(LogMomentum)
+}

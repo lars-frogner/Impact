@@ -1,8 +1,6 @@
 //! Rendering pipelines.
 
-mod tasks;
-
-pub use tasks::SyncRenderCommands;
+pub mod tasks;
 
 use crate::{
     camera::buffer::CameraRenderBufferManager,

@@ -1,8 +1,6 @@
 //! Synchronization of render buffers with geometrical data.
 
-mod tasks;
-
-pub use tasks::SyncRenderResources;
+pub mod tasks;
 
 use crate::{
     camera::{buffer::CameraRenderBufferManager, SceneCamera},

@@ -2,6 +2,7 @@
 
 pub mod components;
 pub mod entity;
+pub mod tasks;
 
 use crate::{
     assets::Assets,
@@ -19,10 +20,8 @@ use crate::{
     mesh::{components::MeshComp, texture_projection::TextureProjection},
     physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
     scene::Scene,
-    scheduling::TaskScheduler,
-    thread::ThreadPoolTaskErrors,
     ui::UserInterface,
-    window::{EventLoopController, Window},
+    window::Window,
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -30,7 +29,7 @@ use impact_ecs::{
 };
 use std::{
     fmt::Debug,
-    num::{NonZeroU32, NonZeroUsize},
+    num::NonZeroU32,
     path::Path,
     sync::{Arc, Mutex, RwLock},
 };
@@ -52,8 +51,6 @@ pub struct World {
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
     screen_capturer: ScreenCapturer,
 }
-
-pub type WorldTaskScheduler = TaskScheduler<World>;
 
 impl World {
     /// Creates a new world data container.
@@ -447,54 +444,5 @@ impl World {
             .read()
             .unwrap()
             .perform_setup_for_game_loop(self.ecs_world());
-    }
-
-    /// Creates a new task scheduler with the given number of
-    /// workers and registers all tasks in it.
-    ///
-    /// # Errors
-    /// Returns an error the registration of any of the tasks
-    /// failed.
-    pub fn create_task_scheduler(
-        self,
-        n_workers: NonZeroUsize,
-    ) -> Result<(Arc<Self>, WorldTaskScheduler)> {
-        let world = Arc::new(self);
-        let mut task_scheduler = WorldTaskScheduler::new(n_workers, Arc::clone(&world));
-
-        Self::register_all_tasks(&mut task_scheduler)?;
-
-        Ok((world, task_scheduler))
-    }
-
-    /// Identifies errors that need special handling in the given
-    /// set of task errors and handles them.
-    pub fn handle_task_errors(
-        &self,
-        task_errors: &mut ThreadPoolTaskErrors,
-        event_loop_controller: &EventLoopController<'_>,
-    ) {
-        self.simulator
-            .read()
-            .unwrap()
-            .handle_task_errors(task_errors, event_loop_controller);
-
-        self.scene
-            .read()
-            .unwrap()
-            .handle_task_errors(task_errors, event_loop_controller);
-
-        self.renderer
-            .read()
-            .unwrap()
-            .handle_task_errors(task_errors, event_loop_controller);
-    }
-
-    /// Registers all tasks in the given task scheduler.
-    fn register_all_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-        Scene::register_tasks(task_scheduler)?;
-        RenderingSystem::register_tasks(task_scheduler)?;
-        PhysicsSimulator::register_tasks(task_scheduler)?;
-        task_scheduler.complete_task_registration()
     }
 }
