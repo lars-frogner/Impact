@@ -3,7 +3,7 @@
 use crate::{
     assets::Assets,
     camera,
-    components::{ComponentCategory, ComponentRegistry},
+    component::{ComponentCategory, ComponentRegistry},
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     gpu::{
         rendering::{fre, RenderingSystem, ScreenCapturer},

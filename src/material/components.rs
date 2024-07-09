@@ -2,7 +2,7 @@
 
 use crate::{
     assets::TextureID,
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     gpu::rendering::fre,
     material::{MaterialHandle, RGBColor},
 };

@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to scenes.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     scene::{CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraphNodeID},
 };
 use anyhow::Result;

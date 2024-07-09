@@ -13,7 +13,7 @@ pub use harmonic_oscillation::HarmonicOscillatorTrajectoryComp;
 pub use orbit::OrbitalTrajectoryComp;
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     control::components::{MotionControlComp, OrientationControlComp},
     physics::{fph, Position, ReferenceFrameComp, RigidBodyComp, Static, Velocity, VelocityComp},
 };

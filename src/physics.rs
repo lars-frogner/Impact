@@ -25,7 +25,7 @@ pub use rigid_body::{
 };
 pub use tasks::{AdvanceSimulation, PhysicsTag};
 
-use crate::components::ComponentRegistry;
+use crate::component::ComponentRegistry;
 use impact_ecs::{
     query,
     world::{Entity, World as ECSWorld},

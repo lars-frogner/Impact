@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to rigid bodies.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     physics::{fph, RigidBody},
 };
 use anyhow::Result;

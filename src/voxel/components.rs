@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to voxels.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     scene::{GroupNodeID, VoxelTreeNodeID},
     voxel::{VoxelTreeID, VoxelType},
 };
