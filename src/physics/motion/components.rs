@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to motion.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     num::Float,
     physics::{fph, AngularVelocity, Orientation, Position, Velocity},
 };

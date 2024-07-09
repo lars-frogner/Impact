@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to light sources.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     geometry::Degrees,
     gpu::rendering::fre,
     light::{Illumninance, LightID, LuminousIntensity},

@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to cameras.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     geometry::{Angle, Radians},
     gpu::rendering::fre,
     util::bounds::{Bounds, UpperExclusiveBounds},

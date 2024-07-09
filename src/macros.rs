@@ -33,7 +33,7 @@ macro_rules! register_component {
         $registry.add_component(
             <$component as ::impact_ecs::component::Component>::component_id(),
             stringify!($component),
-            crate::components::ComponentCategory::Standard,
+            crate::component::ComponentCategory::Standard,
         )
     }};
 }
@@ -43,7 +43,7 @@ macro_rules! register_setup_component {
         $registry.add_component(
             <$component as ::impact_ecs::component::Component>::component_id(),
             stringify!($component),
-            crate::components::ComponentCategory::Setup,
+            crate::component::ComponentCategory::Setup,
         )
     }};
 }

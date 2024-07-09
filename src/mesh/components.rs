@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to meshes.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     gpu::rendering::fre,
     mesh::{FrontFaceSide, MeshID},
 };

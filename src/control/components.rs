@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to user control.
 
 use crate::{
-    components::ComponentRegistry,
+    component::ComponentRegistry,
     physics::{AngularVelocity, Velocity},
 };
 use anyhow::Result;

@@ -12,8 +12,7 @@ pub use spring::{Spring, SpringComp, SpringState};
 pub use uniform_gravity::UniformGravityComp;
 
 use crate::{
-    components::ComponentRegistry, gpu::rendering::fre, mesh::MeshRepository,
-    physics::UniformMedium,
+    component::ComponentRegistry, gpu::rendering::fre, mesh::MeshRepository, physics::UniformMedium,
 };
 use anyhow::Result;
 use impact_ecs::{

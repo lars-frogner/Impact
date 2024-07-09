@@ -1,7 +1,7 @@
 //! [`Component`](impact_ecs::component::Component)s related to texture projections.
 
 use crate::{
-    components::ComponentRegistry, gpu::rendering::fre, mesh::components::RectangleMeshComp,
+    component::ComponentRegistry, gpu::rendering::fre, mesh::components::RectangleMeshComp,
     mesh::texture_projection::PlanarTextureProjection,
 };
 use anyhow::Result;
