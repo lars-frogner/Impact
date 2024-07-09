@@ -10,18 +10,10 @@ pub mod tasks;
 pub mod time;
 
 use anyhow::{bail, Result};
-use impact_ecs::{
-    query,
-    world::{Entity, World as ECSWorld},
-};
+use impact_ecs::world::{Entity, World as ECSWorld};
 use medium::UniformMedium;
-use motion::{
-    analytical::AnalyticalMotionManager,
-    components::{ReferenceFrameComp, Static, VelocityComp},
-};
 use num_traits::FromPrimitive;
 use rigid_body::{
-    components::RigidBodyComp,
     forces::{RigidBodyForceConfig, RigidBodyForceManager},
     schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme},
 };
@@ -35,7 +27,6 @@ pub type fph = f64;
 #[derive(Debug)]
 pub struct PhysicsSimulator {
     config: SimulatorConfig,
-    analytical_motion_manager: RwLock<AnalyticalMotionManager>,
     rigid_body_force_manager: RwLock<RigidBodyForceManager>,
     medium: UniformMedium,
     simulation_time: fph,
@@ -83,7 +74,6 @@ impl PhysicsSimulator {
 
         Ok(Self {
             config,
-            analytical_motion_manager: RwLock::new(AnalyticalMotionManager::new()),
             rigid_body_force_manager: RwLock::new(RigidBodyForceManager::new(
                 rigid_body_force_config,
             )?),
@@ -128,12 +118,6 @@ impl PhysicsSimulator {
     /// [`decrement_simulation_speed_multiplier`](PhysicsSimulator::decrement_simulation_speed_multiplier).
     pub fn simulation_speed_multiplier_increment_factor(&self) -> fph {
         self.config.simulation_speed_multiplier_increment_factor
-    }
-
-    /// Returns a reference to the [`AnalyticalMotionManager`], guarded by a
-    /// [`RwLock`].
-    pub fn analytical_motion_manager(&self) -> &RwLock<AnalyticalMotionManager> {
-        &self.analytical_motion_manager
     }
 
     /// Returns a reference to the [`RigidBodyForceManager`], guarded by a
@@ -206,10 +190,10 @@ impl PhysicsSimulator {
 
     /// Performs any setup required before starting the game loop.
     pub fn perform_setup_for_game_loop(&self, ecs_world: &RwLock<ECSWorld>) {
-        self.analytical_motion_manager
-            .read()
-            .unwrap()
-            .apply_analytical_motion(&ecs_world.read().unwrap(), self.simulation_time);
+        motion::analytical::systems::apply_analytical_motion(
+            &ecs_world.read().unwrap(),
+            self.simulation_time,
+        );
 
         self.apply_forces_and_torques(ecs_world);
     }
@@ -239,7 +223,6 @@ impl PhysicsSimulator {
     fn advance_simulation_with_scheme<S: SchemeSubstep>(&mut self, ecs_world: &RwLock<ECSWorld>) {
         let mut entities_to_remove = Vec::new();
 
-        let analytical_motion_manager = self.analytical_motion_manager.read().unwrap();
         let rigid_body_force_manager = self.rigid_body_force_manager.read().unwrap();
         let ecs_world_readonly = ecs_world.read().unwrap();
 
@@ -247,7 +230,6 @@ impl PhysicsSimulator {
         for _ in 0..self.n_substeps() {
             Self::perform_step::<S>(
                 &ecs_world_readonly,
-                &analytical_motion_manager,
                 &rigid_body_force_manager,
                 &self.medium,
                 self.simulation_time,
@@ -269,7 +251,6 @@ impl PhysicsSimulator {
 
     fn perform_step<S: SchemeSubstep>(
         ecs_world: &ECSWorld,
-        analytical_motion_manager: &AnalyticalMotionManager,
         rigid_body_force_manager: &RigidBodyForceManager,
         medium: &UniformMedium,
         current_simulation_time: fph,
@@ -279,9 +260,9 @@ impl PhysicsSimulator {
         for scheme_substep in S::all_substeps(step_duration) {
             let new_simulation_time = scheme_substep.new_simulation_time(current_simulation_time);
 
-            analytical_motion_manager.apply_analytical_motion(ecs_world, new_simulation_time);
+            motion::analytical::systems::apply_analytical_motion(ecs_world, new_simulation_time);
 
-            Self::advance_rigid_body_motion(ecs_world, &scheme_substep);
+            rigid_body::systems::advance_rigid_body_motion(ecs_world, &scheme_substep);
 
             rigid_body_force_manager.apply_forces_and_torques(
                 ecs_world,
@@ -289,25 +270,6 @@ impl PhysicsSimulator {
                 entities_to_remove,
             );
         }
-    }
-
-    fn advance_rigid_body_motion<S: SchemeSubstep>(ecs_world: &ECSWorld, scheme_substep: &S) {
-        query!(
-            ecs_world,
-            |rigid_body: &mut RigidBodyComp,
-             frame: &mut ReferenceFrameComp,
-             velocity: &mut VelocityComp| {
-                rigid_body.0.advance_motion(
-                    scheme_substep,
-                    &mut frame.position,
-                    &mut frame.orientation,
-                    frame.scaling,
-                    &mut velocity.linear,
-                    &mut velocity.angular,
-                );
-            },
-            ![Static]
-        );
     }
 
     fn apply_forces_and_torques(&self, ecs_world: &RwLock<ECSWorld>) {

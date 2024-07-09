@@ -49,11 +49,11 @@ impl RigidBodyForceManager {
         medium: &UniformMedium,
         entities_to_remove: &mut Vec<Entity>,
     ) {
-        uniform_gravity::apply_uniform_gravity(ecs_world);
+        uniform_gravity::systems::apply_uniform_gravity(ecs_world);
 
-        spring::apply_spring_forces(ecs_world, entities_to_remove);
+        spring::systems::apply_spring_forces(ecs_world, entities_to_remove);
 
-        detailed_drag::apply_detailed_drag(
+        detailed_drag::systems::apply_detailed_drag(
             ecs_world,
             &self.drag_load_map_repository.read().unwrap(),
             medium,
@@ -63,6 +63,6 @@ impl RigidBodyForceManager {
     /// Performs actions that should be performed after completion of a
     /// simulation step.
     pub fn perform_post_simulation_step_actions(&self, ecs_world: &ECSWorld) {
-        spring::synchronize_spring_positions_and_orientations(ecs_world);
+        spring::systems::synchronize_spring_positions_and_orientations(ecs_world);
     }
 }

@@ -1,15 +1,61 @@
 //! Tasks for coordination between systems in the scene.
 
-use super::Scene;
 use crate::{
     define_task,
     gpu::rendering::RenderingTag,
-    scene::systems::{SyncLightsInStorage, SyncSceneObjectTransforms},
+    scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},
 };
 use anyhow::{anyhow, Result};
+
+define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the model transform of
+    /// each [`SceneGraph`](crate::scene::SceneGraph) node representing an
+    /// entity that also has the [`ReferenceFrameComp`] component so that the
+    /// translational, rotational and scaling parts match the origin offset,
+    /// position, orientation and scaling.
+    [pub] SyncSceneObjectTransforms,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing scene graph node transforms"; {
+            let ecs_world = world.ecs_world().read().unwrap();
+            let scene = world.scene().read().unwrap();
+            let mut scene_graph = scene.scene_graph().write().unwrap();
+            scene::systems::sync_scene_object_transforms(&ecs_world, &mut scene_graph);
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// This [`Task`](crate::scheduling::Task) updates the properties (position,
+    /// direction, emission and extent) of every light source in the
+    /// [`LightStorage`](crate::light::LightStorage).
+    [pub] SyncLightsInStorage,
+    depends_on = [
+        UpdateSceneGroupToWorldTransforms,
+        SyncSceneCameraViewTransform
+    ],
+    execute_on = [RenderingTag],
+    |world: &World| {
+        with_debug_logging!("Synchronizing lights in storage"; {
+            let scene = world.scene().read().unwrap();
+            let ecs_world = world.ecs_world().read().unwrap();
+            let scene_graph = scene.scene_graph().read().unwrap();
+            let mut light_storage = scene.light_storage().write().unwrap();
+            scene::systems::sync_lights_in_storage(
+                &ecs_world,
+                &scene_graph,
+                scene.scene_camera().read().unwrap().as_ref(),
+                &mut light_storage,
+            );
+            Ok(())
+        })
+    }
+);
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the group-to-world

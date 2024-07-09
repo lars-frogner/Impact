@@ -4,6 +4,7 @@ pub mod components;
 pub mod entity;
 pub mod forces;
 pub mod schemes;
+pub mod systems;
 
 use crate::physics::{
     fph,

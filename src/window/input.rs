@@ -1,7 +1,7 @@
 //! Input handling.
 
 use crate::{
-    control::{MotionDirection, MotionState},
+    control::motion::{MotionDirection, MotionState},
     gpu::rendering::RenderAttachmentQuantity,
     window::EventLoopController,
     world::World,

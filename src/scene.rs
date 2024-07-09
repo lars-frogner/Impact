@@ -3,18 +3,12 @@
 pub mod components;
 pub mod entity;
 mod graph;
-mod systems;
-mod tasks;
+pub mod systems;
+pub mod tasks;
 
 pub use graph::{
     CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph,
     SceneGraphNodeID, VoxelTreeNode, VoxelTreeNodeID,
-};
-pub use systems::{SyncLightsInStorage, SyncSceneObjectTransforms};
-pub use tasks::{
-    BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-    BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
-    SyncSceneCameraViewTransform, UpdateSceneGroupToWorldTransforms,
 };
 
 use crate::{
