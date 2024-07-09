@@ -1,45 +1,18 @@
 //! Rotation with a constant angular velocity.
 
-use crate::physics::{self, fph, AngularVelocity, Orientation};
-use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+pub mod components;
 
-/// [`Component`](impact_ecs::component::Component) for entities that rotate
-/// with a constant angular velocity over time.
-///
-/// For this component to have an effect, the entity also needs a
-/// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct ConstantRotationComp {
-    /// When (in simulation time) the entity should have the initial
-    /// orientation.
-    pub initial_time: fph,
-    /// The orientation of the entity at the initial time.
-    pub initial_orientation: Orientation,
-    /// The angular velocity of the entity.
-    pub angular_velocity: AngularVelocity,
-}
+use crate::physics::{
+    fph,
+    motion::{self, Orientation},
+};
+use components::ConstantRotationComp;
 
 impl ConstantRotationComp {
-    /// Creates a new component for constant rotation defined by the given
-    /// initial time and orientation and angular velocity.
-    pub fn new(
-        initial_time: fph,
-        initial_orientation: Orientation,
-        angular_velocity: AngularVelocity,
-    ) -> Self {
-        Self {
-            initial_time,
-            initial_orientation,
-            angular_velocity,
-        }
-    }
-
     /// Computes the orientation at the given time.
     pub fn compute_orientation(&self, time: fph) -> Orientation {
         let time_offset = time - self.initial_time;
-        physics::advance_orientation(
+        motion::advance_orientation(
             &self.initial_orientation,
             &self.angular_velocity,
             time_offset,
@@ -50,8 +23,9 @@ impl ConstantRotationComp {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{geometry::Radians, num::Float, physics::Direction};
+    use crate::{geometry::Radians, num::Float, physics::motion::Direction};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
+    use motion::AngularVelocity;
     use nalgebra::{vector, Vector3};
     use proptest::prelude::*;
 

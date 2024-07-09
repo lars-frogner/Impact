@@ -3,7 +3,10 @@
 use super::{MotionChanged, MotionController};
 use crate::{
     num::Float,
-    physics::{fph, Orientation, Velocity},
+    physics::{
+        fph,
+        motion::{Orientation, Velocity},
+    },
 };
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use nalgebra::vector;

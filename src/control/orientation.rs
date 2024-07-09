@@ -3,7 +3,7 @@
 use super::OrientationController;
 use crate::{
     geometry::{Angle, Radians},
-    physics::{fph, Orientation},
+    physics::{fph, motion::Orientation},
     window::Window,
 };
 use nalgebra::{UnitQuaternion, Vector3};

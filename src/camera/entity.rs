@@ -6,7 +6,7 @@ use crate::{
         OrthographicCamera, PerspectiveCamera, SceneCamera,
     },
     gpu::rendering::fre,
-    physics::ReferenceFrameComp,
+    physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
         RenderResourcesDesynchronized, SceneGraph,

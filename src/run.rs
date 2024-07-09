@@ -35,11 +35,25 @@ use crate::{
     model::InstanceFeatureManager,
     num::Float,
     physics::{
-        fph, Acceleration, AngularVelocity, CircularTrajectoryComp,
-        ConstantAccelerationTrajectoryComp, ConstantRotationComp, DetailedDragComp,
-        HarmonicOscillatorTrajectoryComp, LogsKineticEnergy, LogsMomentum, OrbitalTrajectoryComp,
-        Orientation, PhysicsSimulator, Position, ReferenceFrameComp, SimulatorConfig, Spring,
-        SpringComp, UniformGravityComp, UniformMedium, UniformRigidBodyComp, VelocityComp,
+        fph,
+        medium::UniformMedium,
+        motion::{
+            analytical::{
+                constant_rotation::components::ConstantRotationComp,
+                harmonic_oscillation::components::HarmonicOscillatorTrajectoryComp,
+            },
+            components::{LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, VelocityComp},
+            AngularVelocity, Orientation, Position,
+        },
+        rigid_body::{
+            components::UniformRigidBodyComp,
+            forces::{
+                detailed_drag::DetailedDragComp,
+                spring::{components::SpringComp, Spring},
+                uniform_gravity::components::UniformGravityComp,
+            },
+        },
+        PhysicsSimulator, SimulatorConfig,
     },
     scene::{
         components::{ParentComp, SceneGraphGroupComp, UncullableComp},

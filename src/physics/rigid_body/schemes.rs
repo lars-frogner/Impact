@@ -1,9 +1,12 @@
 //! Schemes for evolving the motion of rigid bodies over time.
 
-use super::RigidBodyAdvancedState;
+use super::{RigidBody, RigidBodyAdvancedState};
 use crate::{
     num::Float,
-    physics::{self, fph, AngularVelocity, Force, RigidBody, Torque, Velocity},
+    physics::{
+        fph,
+        motion::{self, AngularVelocity, Force, Torque, Velocity},
+    },
 };
 use std::fmt;
 
@@ -68,7 +71,7 @@ pub trait SchemeSubstep {
         let advanced_position =
             RigidBody::advance_position(rigid_body.position(), velocity, substep_duration);
 
-        let advanced_orientation = physics::advance_orientation(
+        let advanced_orientation = motion::advance_orientation(
             rigid_body.orientation(),
             angular_velocity,
             substep_duration,
@@ -210,7 +213,7 @@ impl SchemeSubstep for EulerCromerStep {
             self.step_duration,
         );
 
-        let advanced_orientation = physics::advance_orientation(
+        let advanced_orientation = motion::advance_orientation(
             rigid_body.orientation(),
             &advanced_angular_velocity,
             self.step_duration,

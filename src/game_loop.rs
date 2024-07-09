@@ -3,7 +3,7 @@
 use crate::{
     define_execution_tag_set,
     gpu::rendering::RenderingTag,
-    physics::PhysicsTag,
+    physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
     window::{EventLoopController, HandlingResult, InputHandler, Window, WindowEvent},
     world::{World, WorldTaskScheduler},

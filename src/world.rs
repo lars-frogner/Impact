@@ -1,29 +1,28 @@
 //! Container for all data in the world.
 
+pub mod components;
+pub mod entity;
+
 use crate::{
     assets::Assets,
-    camera,
-    component::{ComponentCategory, ComponentRegistry},
+    component::ComponentRegistry,
     control::{self, MotionController, MotionDirection, MotionState, OrientationController},
     gpu::{
         rendering::{fre, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
-    io, light, material,
-    mesh::{self, components::MeshComp, texture_projection::TextureProjection},
-    physics::{self, PhysicsSimulator, SteppingScheme},
-    scene::{self, RenderResourcesDesynchronized, Scene},
+    io,
+    mesh::{components::MeshComp, texture_projection::TextureProjection},
+    physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
+    scene::Scene,
     scheduling::TaskScheduler,
     thread::ThreadPoolTaskErrors,
     ui::UserInterface,
-    voxel,
     window::{EventLoopController, Window},
 };
 use anyhow::Result;
 use impact_ecs::{
-    archetype::{ArchetypeComponentStorage, ArchetypeComponents},
-    component::{ComponentArray, ComponentID, SingleInstance},
-    world::{Entity, World as ECSWorld},
+    archetype::ArchetypeComponentStorage, component::SingleInstance, world::World as ECSWorld,
 };
 use std::{
     fmt::Debug,
@@ -65,7 +64,7 @@ impl World {
         orientation_controller: Option<Box<dyn OrientationController>>,
     ) -> Self {
         let mut component_registry = ComponentRegistry::new();
-        if let Err(err) = Self::register_all_components(&mut component_registry) {
+        if let Err(err) = components::register_all_components(&mut component_registry) {
             panic!("Failed to register components: {}", err);
         }
 
@@ -271,105 +270,6 @@ impl World {
             ply_file_path,
             projection,
         )
-    }
-
-    pub fn create_entity<A, E>(
-        &self,
-        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
-    ) -> Result<Entity>
-    where
-        A: ComponentArray,
-        E: Into<anyhow::Error>,
-    {
-        Ok(self
-            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
-            .pop()
-            .unwrap())
-    }
-
-    pub fn create_entities<A, E>(
-        &self,
-        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
-    ) -> Result<Vec<Entity>>
-    where
-        A: ComponentArray,
-        E: Into<anyhow::Error>,
-    {
-        let mut components = components.try_into().map_err(E::into)?.into_storage();
-
-        let mut render_resources_desynchronized = RenderResourcesDesynchronized::No;
-
-        self.scene().read().unwrap().perform_setup_for_new_entity(
-            self.graphics_device(),
-            &self.assets().read().unwrap(),
-            &mut components,
-            &mut render_resources_desynchronized,
-        )?;
-
-        self.simulator()
-            .read()
-            .unwrap()
-            .perform_setup_for_new_entity(
-                self.scene().read().unwrap().mesh_repository(),
-                &mut components,
-            );
-
-        self.scene().read().unwrap().add_new_entity_to_scene_graph(
-            self.window(),
-            &self.ecs_world,
-            &mut components,
-            &mut render_resources_desynchronized,
-        )?;
-
-        if render_resources_desynchronized.is_yes() {
-            self.renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-        }
-
-        let (setup_component_ids, setup_component_names, standard_component_names) =
-            self.extract_component_metadata(&components);
-
-        log::info!(
-            "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
-            components.component_count(),
-            setup_component_names.join("\n    "),
-            standard_component_names.join("\n    "),
-        );
-
-        // Remove all setup components
-        components.remove_component_types_with_ids(setup_component_ids)?;
-
-        self.ecs_world.write().unwrap().create_entities(components)
-    }
-
-    pub fn remove_entity(&self, entity: &Entity) -> Result<()> {
-        let mut ecs_world = self.ecs_world.write().unwrap();
-
-        let entry = ecs_world.entity(entity);
-
-        self.simulator()
-            .read()
-            .unwrap()
-            .perform_cleanup_for_removed_entity(&entry);
-
-        let render_resources_desynchronized = self
-            .scene()
-            .read()
-            .unwrap()
-            .perform_cleanup_for_removed_entity(&entry);
-
-        drop(entry);
-
-        if render_resources_desynchronized.is_yes() {
-            self.renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
-        }
-
-        ecs_world.remove_entity(entity)
     }
 
     /// Sets a new size for the rendering surface and updates
@@ -586,54 +486,11 @@ impl World {
             .handle_task_errors(task_errors, event_loop_controller);
     }
 
-    /// Registers all components in the given registry.
-    fn register_all_components(registry: &mut ComponentRegistry) -> Result<()> {
-        control::components::register_control_components(registry)?;
-        physics::register_physics_components(registry)?;
-        scene::components::register_scene_graph_components(registry)?;
-        camera::components::register_camera_components(registry)?;
-        light::components::register_light_components(registry)?;
-        mesh::components::register_mesh_components(registry)?;
-        mesh::texture_projection::components::register_texture_projection_components(registry)?;
-        material::components::register_material_components(registry)?;
-        voxel::components::register_voxel_components(registry)
-    }
-
     /// Registers all tasks in the given task scheduler.
     fn register_all_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
         Scene::register_tasks(task_scheduler)?;
         RenderingSystem::register_tasks(task_scheduler)?;
         PhysicsSimulator::register_tasks(task_scheduler)?;
         task_scheduler.complete_task_registration()
-    }
-
-    fn extract_component_metadata(
-        &self,
-        components: &ArchetypeComponentStorage,
-    ) -> (Vec<ComponentID>, Vec<&'static str>, Vec<&'static str>) {
-        let mut setup_component_ids = Vec::with_capacity(components.n_component_types());
-        let mut setup_component_names = Vec::with_capacity(components.n_component_types());
-        let mut standard_component_names = Vec::with_capacity(components.n_component_types());
-
-        let component_registry = self.component_registry.read().unwrap();
-
-        for component_id in components.component_ids() {
-            let entry = component_registry.component_with_id(component_id);
-            match entry.category {
-                ComponentCategory::Standard => {
-                    standard_component_names.push(entry.name);
-                }
-                ComponentCategory::Setup => {
-                    setup_component_ids.push(component_id);
-                    setup_component_names.push(entry.name);
-                }
-            }
-        }
-
-        (
-            setup_component_ids,
-            setup_component_names,
-            standard_component_names,
-        )
     }
 }

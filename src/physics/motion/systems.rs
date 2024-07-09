@@ -3,8 +3,9 @@
 use crate::{
     define_task,
     physics::{
-        AdvanceSimulation, LogsKineticEnergy, LogsMomentum, PhysicsTag, ReferenceFrameComp,
-        RigidBodyComp,
+        motion::components::{LogsKineticEnergy, LogsMomentum, ReferenceFrameComp},
+        rigid_body::components::RigidBodyComp,
+        tasks::{AdvanceSimulation, PhysicsTag},
     },
     world::World,
 };

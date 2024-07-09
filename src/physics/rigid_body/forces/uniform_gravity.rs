@@ -1,10 +1,9 @@
 //! Uniform gravitational acceleration.
 
-mod components;
+pub mod components;
 
-pub use components::UniformGravityComp;
-
-use crate::physics::{RigidBodyComp, Static};
+use crate::physics::{motion::components::Static, rigid_body::components::RigidBodyComp};
+use components::UniformGravityComp;
 use impact_ecs::{query, world::World as ECSWorld};
 
 /// Applies the force corresponding to uniform gravitational acceleration to all

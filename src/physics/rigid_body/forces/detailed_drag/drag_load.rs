@@ -4,7 +4,10 @@ use crate::{
     geometry::{Angle, Radians},
     mesh::TriangleMesh,
     num::Float,
-    physics::{fph, Direction, Force, Orientation, Position, Torque},
+    physics::{
+        fph,
+        motion::{Direction, Force, Orientation, Position, Torque},
+    },
 };
 use anyhow::Result;
 use nalgebra::{vector, UnitVector3, Vector3};

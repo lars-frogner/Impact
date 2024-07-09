@@ -11,7 +11,7 @@ use crate::{
         },
         AmbientLight, LightStorage, OmnidirectionalLight, UnidirectionalLight,
     },
-    physics::ReferenceFrameComp,
+    physics::motion::components::ReferenceFrameComp,
     scene::RenderResourcesDesynchronized,
 };
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};

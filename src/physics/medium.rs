@@ -1,6 +1,6 @@
 //! Physical media objects can interact with.
 
-use crate::physics::{fph, Velocity};
+use crate::physics::{fph, motion::Velocity};
 
 /// A physical medium with the same properties and state everywhere.
 #[derive(Clone, Debug)]
