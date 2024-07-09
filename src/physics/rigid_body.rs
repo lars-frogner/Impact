@@ -1,24 +1,21 @@
 //! Rigid body simulation.
 
-mod components;
-mod forces;
-mod schemes;
-
-pub use components::{register_rigid_body_components, RigidBodyComp, UniformRigidBodyComp};
-pub use forces::{
-    register_rigid_body_force_components, DetailedDragComp, DragLoad, DragLoadMap,
-    DragLoadMapConfig, RigidBodyForceConfig, RigidBodyForceManager, Spring, SpringComp,
-    SpringState, UniformGravityComp,
-};
-pub use schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme};
+pub mod components;
+pub mod entity;
+pub mod forces;
+pub mod schemes;
 
 use crate::physics::{
-    fph, AngularMomentum, AngularVelocity, Force, InertialProperties, Momentum, Orientation,
-    Position, Torque, Velocity,
+    fph,
+    inertia::InertialProperties,
+    motion::{
+        AngularMomentum, AngularVelocity, Force, Momentum, Orientation, Position, Torque, Velocity,
+    },
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
+use schemes::SchemeSubstep;
 
 /// The maximum number of intermediate states from the substeps of a stepping
 /// scheme that can be stored in a rigid body.
@@ -471,6 +468,7 @@ mod test {
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use nalgebra::{point, vector, Vector3};
     use proptest::prelude::*;
+    use schemes::EulerCromerStep;
 
     prop_compose! {
         fn position_strategy(max_position_coord: fph)(

@@ -1,37 +1,30 @@
 //! Simulation of physics.
 
-mod entity;
-mod inertia;
-mod medium;
-mod motion;
-mod rigid_body;
-mod tasks;
-mod time;
+pub mod components;
+pub mod entity;
+pub mod inertia;
+pub mod medium;
+pub mod motion;
+pub mod rigid_body;
+pub mod tasks;
+pub mod time;
 
 use anyhow::{bail, Result};
-pub use inertia::{compute_triangle_mesh_volume, InertiaTensor, InertialProperties};
-pub use medium::UniformMedium;
-pub use motion::{
-    advance_orientation, Acceleration, AnalyticalMotionManager, AngularMomentum, AngularVelocity,
-    CircularTrajectoryComp, ConstantAccelerationTrajectoryComp, ConstantRotationComp, Direction,
-    Force, HarmonicOscillatorTrajectoryComp, LogsKineticEnergy, LogsMomentum, Momentum,
-    OrbitalTrajectoryComp, Orientation, Position, ReferenceFrameComp, Static, Torque, Velocity,
-    VelocityComp,
-};
-pub use rigid_body::{
-    DetailedDragComp, DragLoad, DragLoadMap, DragLoadMapConfig, EulerCromerStep, RigidBody,
-    RigidBodyComp, RigidBodyForceConfig, RigidBodyForceManager, RungeKutta4Substep, Spring,
-    SpringComp, SpringState, SteppingScheme, UniformGravityComp, UniformRigidBodyComp,
-};
-pub use tasks::{AdvanceSimulation, PhysicsTag};
-
-use crate::component::ComponentRegistry;
 use impact_ecs::{
     query,
     world::{Entity, World as ECSWorld},
 };
+use medium::UniformMedium;
+use motion::{
+    analytical::AnalyticalMotionManager,
+    components::{ReferenceFrameComp, Static, VelocityComp},
+};
 use num_traits::FromPrimitive;
-use rigid_body::SchemeSubstep;
+use rigid_body::{
+    components::RigidBodyComp,
+    forces::{RigidBodyForceConfig, RigidBodyForceManager},
+    schemes::{EulerCromerStep, RungeKutta4Substep, SchemeSubstep, SteppingScheme},
+};
 use std::{sync::RwLock, time::Duration};
 
 /// Floating point type used for physics simulation.
@@ -378,12 +371,4 @@ impl Default for SimulatorConfig {
             rigid_body_force_config: None,
         }
     }
-}
-
-/// Registers all physics [`Component`](impact_ecs::component::Component)s.
-pub fn register_physics_components(registry: &mut ComponentRegistry) -> Result<()> {
-    motion::register_motion_components(registry)?;
-    motion::register_analytical_motion_components(registry)?;
-    rigid_body::register_rigid_body_components(registry)?;
-    rigid_body::register_rigid_body_force_components(registry)
 }

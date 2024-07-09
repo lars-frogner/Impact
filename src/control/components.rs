@@ -2,7 +2,7 @@
 
 use crate::{
     component::ComponentRegistry,
-    physics::{AngularVelocity, Velocity},
+    physics::motion::{AngularVelocity, Velocity},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};

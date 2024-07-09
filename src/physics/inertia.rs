@@ -3,7 +3,7 @@
 use crate::{
     mesh::TriangleMesh,
     num::Float,
-    physics::{fph, Position},
+    physics::{fph, motion::Position},
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};

@@ -1,8 +1,11 @@
 //! [`Component`](impact_ecs::component::Component)s related to spring forces.
 
-use crate::physics::{Position, Spring, SpringState};
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::{world::Entity, Component};
+
+use super::{Spring, SpringState};
+use crate::{component::ComponentRegistry, physics::motion::Position};
+use anyhow::Result;
 
 /// [`Component`](impact_ecs::component::Component) for entities that have a
 /// spring connecting two other entities.
@@ -55,4 +58,10 @@ impl SpringComp {
             spring,
         )
     }
+}
+
+/// Registers all spring force
+/// [`Component`](impact_ecs::component::Component)s.
+pub fn register_spring_force_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_component!(registry, SpringComp)
 }

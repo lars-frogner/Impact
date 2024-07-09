@@ -9,8 +9,12 @@ pub use orientation::{CameraOrientationController, RollFreeCameraOrientationCont
 
 use crate::{
     physics::{
-        fph, AngularVelocity, Orientation, ReferenceFrameComp, RigidBodyComp, Velocity,
-        VelocityComp,
+        fph,
+        motion::{
+            components::{ReferenceFrameComp, VelocityComp},
+            AngularVelocity, Orientation, Velocity,
+        },
+        rigid_body::components::RigidBodyComp,
     },
     window::Window,
 };

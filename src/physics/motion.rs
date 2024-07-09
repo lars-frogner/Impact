@@ -1,18 +1,9 @@
 //! Representation and computation of motion.
 
-mod analytical;
-mod components;
+pub mod analytical;
+pub mod components;
 mod systems;
 
-pub use analytical::{
-    register_analytical_motion_components, AnalyticalMotionManager, CircularTrajectoryComp,
-    ConstantAccelerationTrajectoryComp, ConstantRotationComp, HarmonicOscillatorTrajectoryComp,
-    OrbitalTrajectoryComp,
-};
-pub use components::{
-    register_motion_components, LogsKineticEnergy, LogsMomentum, ReferenceFrameComp, Static,
-    VelocityComp,
-};
 pub use systems::{LogKineticEnergy, LogMomentum};
 
 use crate::{

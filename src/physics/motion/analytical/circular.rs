@@ -1,59 +1,19 @@
 //! Circular motion.
 
+pub mod components;
+
 use crate::{
     num::Float,
-    physics::{fph, Orientation, Position, Velocity},
+    physics::{
+        fph,
+        motion::{Position, Velocity},
+    },
 };
 use approx::abs_diff_ne;
-use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
+use components::CircularTrajectoryComp;
 use nalgebra::{point, vector};
 
-/// [`Component`](impact_ecs::component::Component) for entities that follow a
-/// circular trajectory over time with constant speed.
-///
-/// For this component to have an effect, the entity also needs a
-/// [`ReferenceFrameComp`](crate::physics::ReferenceFrameComp) and a
-/// [`VelocityComp`](crate::physics::VelocityComp).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct CircularTrajectoryComp {
-    /// When (in simulation time) the entity should be at the initial position
-    /// on the circle.
-    pub initial_time: fph,
-    /// The orientation of the orbit. The first axis of the circle's reference
-    /// frame will coincide with the direction from the center to the position
-    /// of the entity at the initial time, the second with the direction of the
-    /// velocity at the initial time and the third with the normal of the
-    /// circle's plane.
-    pub orientation: Orientation,
-    /// The position of the center of the circle.
-    pub center_position: Position,
-    /// The radius of the circle.
-    pub radius: fph,
-    /// The duration of one revolution.
-    pub period: fph,
-}
-
 impl CircularTrajectoryComp {
-    /// Creates a new component for a circular trajectory with the given
-    /// properties.
-    pub fn new(
-        initial_time: fph,
-        orientation: Orientation,
-        center_position: Position,
-        radius: fph,
-        period: fph,
-    ) -> Self {
-        Self {
-            initial_time,
-            orientation,
-            center_position,
-            radius,
-            period,
-        }
-    }
-
     /// Computes the position and velocity for the trajectory at the given time.
     ///
     /// # Panics
@@ -121,7 +81,10 @@ impl CircularTrajectoryComp {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{num::Float, physics::Direction};
+    use crate::{
+        num::Float,
+        physics::motion::{Direction, Orientation},
+    };
     use approx::abs_diff_eq;
     use nalgebra::{point, vector};
     use proptest::prelude::*;

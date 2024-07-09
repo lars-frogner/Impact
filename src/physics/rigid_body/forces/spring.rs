@@ -1,18 +1,21 @@
 //! Spring force.
 
-mod components;
-
-pub use components::SpringComp;
+pub mod components;
 
 use crate::{
     control::components::{MotionControlComp, OrientationControlComp},
     physics::{
-        fph, AngularVelocity, Direction, Orientation, Position, ReferenceFrameComp, RigidBodyComp,
-        Static, Velocity, VelocityComp,
+        fph,
+        motion::{
+            components::{ReferenceFrameComp, Static, VelocityComp},
+            AngularVelocity, Direction, Orientation, Position, Velocity,
+        },
+        rigid_body::components::RigidBodyComp,
     },
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
+use components::SpringComp;
 use impact_ecs::{
     query,
     world::{Entity, EntityEntry, World as ECSWorld},

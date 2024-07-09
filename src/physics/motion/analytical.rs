@@ -1,24 +1,29 @@
 //! Motion defined by analytical functions.
 
-mod circular;
-mod constant_acceleration;
-mod constant_rotation;
-mod harmonic_oscillation;
-mod orbit;
-
-pub use circular::CircularTrajectoryComp;
-pub use constant_acceleration::ConstantAccelerationTrajectoryComp;
-pub use constant_rotation::ConstantRotationComp;
-pub use harmonic_oscillation::HarmonicOscillatorTrajectoryComp;
-pub use orbit::OrbitalTrajectoryComp;
+pub mod circular;
+pub mod components;
+pub mod constant_acceleration;
+pub mod constant_rotation;
+pub mod harmonic_oscillation;
+pub mod orbit;
 
 use crate::{
-    component::ComponentRegistry,
     control::components::{MotionControlComp, OrientationControlComp},
-    physics::{fph, Position, ReferenceFrameComp, RigidBodyComp, Static, Velocity, VelocityComp},
+    physics::{
+        fph,
+        motion::{
+            components::{ReferenceFrameComp, Static, VelocityComp},
+            Position, Velocity,
+        },
+        rigid_body::components::RigidBodyComp,
+    },
 };
-use anyhow::Result;
+use circular::components::CircularTrajectoryComp;
+use constant_acceleration::components::ConstantAccelerationTrajectoryComp;
+use constant_rotation::components::ConstantRotationComp;
+use harmonic_oscillation::components::HarmonicOscillatorTrajectoryComp;
 use impact_ecs::{query, world::World as ECSWorld};
+use orbit::components::OrbitalTrajectoryComp;
 
 /// Manager of all systems controlling entity motion analytically.
 #[derive(Debug)]
@@ -156,14 +161,4 @@ impl Default for AnalyticalMotionManager {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Registers all analytical motion
-/// [`Component`](impact_ecs::component::Component)s.
-pub fn register_analytical_motion_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, ConstantAccelerationTrajectoryComp)?;
-    register_component!(registry, HarmonicOscillatorTrajectoryComp)?;
-    register_component!(registry, CircularTrajectoryComp)?;
-    register_component!(registry, OrbitalTrajectoryComp)?;
-    register_component!(registry, ConstantRotationComp)
 }

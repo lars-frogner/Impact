@@ -11,6 +11,8 @@ use impact_ecs::Component;
 use impact_utils::hash64;
 use std::fmt::Display;
 
+use super::texture_projection;
+
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities whose mesh is an axis-aligned horizontal rectangle centered on the
 /// origin, whose front face is on the positive y side.
@@ -329,5 +331,6 @@ pub fn register_mesh_components(registry: &mut ComponentRegistry) -> Result<()> 
     register_setup_component!(registry, CircularFrustumMeshComp)?;
     register_setup_component!(registry, SphereMeshComp)?;
     register_setup_component!(registry, HemisphereMeshComp)?;
-    register_component!(registry, MeshComp)
+    register_component!(registry, MeshComp)?;
+    texture_projection::components::register_texture_projection_components(registry)
 }

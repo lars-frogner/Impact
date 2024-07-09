@@ -1,7 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to the detailed
 //! drag model.
 
-use crate::{mesh::MeshID, physics::fph};
+use crate::{component::ComponentRegistry, mesh::MeshID, physics::fph};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_ecs::Component;
 
@@ -37,4 +38,11 @@ impl DetailedDragComp {
     pub fn new(drag_coefficient: fph) -> Self {
         Self { drag_coefficient }
     }
+}
+
+/// Registers all detailed drag force
+/// [`Component`](impact_ecs::component::Component)s.
+pub fn register_detailed_drag_force_components(registry: &mut ComponentRegistry) -> Result<()> {
+    register_setup_component!(registry, DetailedDragComp)?;
+    register_component!(registry, DragLoadMapComp)
 }

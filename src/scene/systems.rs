@@ -7,7 +7,7 @@ use crate::{
         AmbientEmissionComp, AmbientLightComp, OmnidirectionalEmissionComp,
         OmnidirectionalLightComp, UnidirectionalEmissionComp, UnidirectionalLightComp,
     },
-    physics::ReferenceFrameComp,
+    physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{SceneGraphNodeComp, SceneGraphParentNodeComp},
         CameraNodeID, GroupNodeID, ModelInstanceNodeID, SyncSceneCameraViewTransform,

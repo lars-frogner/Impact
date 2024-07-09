@@ -8,7 +8,7 @@ use crate::{
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
     model::ModelID,
-    physics::ReferenceFrameComp,
+    physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{
             ParentComp, SceneGraphGroupComp, SceneGraphGroupNodeComp,
