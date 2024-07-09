@@ -7,7 +7,8 @@ use crate::{
     physics::rigid_body::{
         components::RigidBodyComp,
         forces::detailed_drag::{
-            DetailedDragComp, DragLoadMap, DragLoadMapComp, DragLoadMapConfig,
+            components::{DetailedDragComp, DragLoadMapComp},
+            DragLoadMap, DragLoadMapConfig,
         },
     },
 };

@@ -5,29 +5,22 @@ pub mod components;
 mod drag_load;
 pub mod entity;
 mod equirectangular_map;
+pub mod systems;
+
+pub use drag_load::DragLoad;
 
 use crate::{
     geometry::{Angle, Radians},
-    gpu::rendering::fre,
     mesh::{MeshID, TriangleMesh},
     num::Float,
     physics::{
         fph,
-        motion::{
-            components::{ReferenceFrameComp, Static, VelocityComp},
-            Direction, Position,
-        },
-        rigid_body::components::RigidBodyComp,
-        UniformMedium,
+        motion::{Direction, Position},
     },
 };
 use anyhow::{anyhow, bail, Result};
-use impact_ecs::{query, world::World as ECSWorld};
 use simba::scalar::SubsetOf;
 use std::collections::{hash_map::Entry, HashMap};
-
-pub use components::{DetailedDragComp, DragLoadMapComp};
-pub use drag_load::DragLoad;
 
 use drag_load::AveragingDragLoad;
 use equirectangular_map::EquirectangularMap;
@@ -220,73 +213,6 @@ impl<F: Float> DragLoadMap<F> {
         );
 
         map
-    }
-}
-
-/// Applies the drag force and torque calculated from precomputed detailed
-/// [`DragLoad`]s to all applicable rigid bodies.
-pub fn apply_detailed_drag(
-    ecs_world: &ECSWorld,
-    drag_load_map_repository: &DragLoadMapRepository<fre>,
-    medium: &UniformMedium,
-) {
-    query!(
-        ecs_world,
-        |rigid_body: &mut RigidBodyComp,
-         frame: &ReferenceFrameComp,
-         velocity: &VelocityComp,
-         drag: &DragLoadMapComp| {
-            apply_detailed_drag_for_entity(
-                drag_load_map_repository,
-                medium,
-                rigid_body,
-                frame,
-                velocity,
-                drag,
-            );
-        },
-        ![Static]
-    );
-}
-
-fn apply_detailed_drag_for_entity(
-    drag_load_map_repository: &DragLoadMapRepository<fre>,
-    medium: &UniformMedium,
-    rigid_body: &mut RigidBodyComp,
-    frame: &ReferenceFrameComp,
-    velocity: &VelocityComp,
-    drag: &DragLoadMapComp,
-) {
-    let velocity_relative_to_medium = velocity.linear - medium.velocity;
-    let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
-
-    if squared_body_speed_relative_to_medium > 0.0 {
-        let body_space_velocity_relative_to_medium = frame
-            .orientation
-            .inverse_transform_vector(&velocity_relative_to_medium);
-
-        let body_space_direction_of_motion_relative_to_medium = Direction::new_unchecked(
-            body_space_velocity_relative_to_medium
-                / fph::sqrt(squared_body_speed_relative_to_medium),
-        );
-
-        let phi = compute_phi(&body_space_direction_of_motion_relative_to_medium);
-        let theta = compute_theta(&body_space_direction_of_motion_relative_to_medium);
-
-        let drag_load_map = drag_load_map_repository.drag_load_map(drag.mesh_id);
-
-        let drag_load = drag_load_map.value(phi, theta);
-
-        let (force, torque) = drag_load.compute_world_space_drag_force_and_torque(
-            frame.scaling,
-            medium.mass_density,
-            drag.drag_coefficient,
-            &frame.orientation,
-            squared_body_speed_relative_to_medium,
-        );
-
-        rigid_body.0.apply_force_at_center_of_mass(&force);
-        rigid_body.0.apply_torque(&torque);
     }
 }
 

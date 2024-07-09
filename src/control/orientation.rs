@@ -1,5 +1,8 @@
 //! Orientation controller implementations.
 
+pub mod components;
+pub mod systems;
+
 use super::OrientationController;
 use crate::{
     geometry::{Angle, Radians},

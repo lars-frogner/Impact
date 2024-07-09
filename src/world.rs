@@ -6,7 +6,11 @@ pub mod entity;
 use crate::{
     assets::Assets,
     component::ComponentRegistry,
-    control::{self, MotionController, MotionDirection, MotionState, OrientationController},
+    control::{
+        self,
+        motion::{MotionDirection, MotionState},
+        MotionController, OrientationController,
+    },
     gpu::{
         rendering::{fre, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
@@ -357,7 +361,7 @@ impl World {
         let time_step_duration = self.simulator.read().unwrap().scaled_time_step_duration();
 
         if let Some(orientation_controller) = &self.orientation_controller {
-            control::update_rotation_of_controlled_entities(
+            control::orientation::systems::update_rotation_of_controlled_entities(
                 &ecs_world,
                 orientation_controller.lock().unwrap().as_mut(),
                 time_step_duration,
@@ -365,7 +369,7 @@ impl World {
         }
 
         if let Some(motion_controller) = &self.motion_controller {
-            control::update_motion_of_controlled_entities(
+            control::motion::systems::update_motion_of_controlled_entities(
                 &ecs_world,
                 motion_controller.lock().unwrap().as_ref(),
                 time_step_duration,

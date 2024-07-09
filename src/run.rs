@@ -5,8 +5,8 @@ use crate::{
     assets::Assets,
     camera::components::PerspectiveCameraComp,
     control::{
-        components::{MotionControlComp, OrientationControlComp},
-        RollFreeCameraOrientationController, SemiDirectionalMotionController,
+        motion::{components::MotionControlComp, SemiDirectionalMotionController},
+        orientation::{components::OrientationControlComp, RollFreeCameraOrientationController},
     },
     game_loop::{GameLoop, GameLoopConfig},
     gpu::{
@@ -48,7 +48,7 @@ use crate::{
         rigid_body::{
             components::UniformRigidBodyComp,
             forces::{
-                detailed_drag::DetailedDragComp,
+                detailed_drag::components::DetailedDragComp,
                 spring::{components::SpringComp, Spring},
                 uniform_gravity::components::UniformGravityComp,
             },

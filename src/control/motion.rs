@@ -1,5 +1,8 @@
 //! Motion controller implementations.
 
+pub mod components;
+pub mod systems;
+
 use super::{MotionChanged, MotionController};
 use crate::{
     num::Float,

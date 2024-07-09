@@ -4,7 +4,7 @@ use super::{DesynchronizedRenderResources, RenderResourceManager};
 use crate::{
     define_task,
     gpu::rendering::RenderingTag,
-    scene::{
+    scene::tasks::{
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
         SyncLightsInStorage, SyncSceneCameraViewTransform,

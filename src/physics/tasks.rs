@@ -3,10 +3,10 @@
 use crate::{
     define_execution_tag, define_task,
     physics::{
-        motion::{LogKineticEnergy, LogMomentum},
+        motion::tasks::{LogKineticEnergy, LogMomentum},
         PhysicsSimulator,
     },
-    scene::{SyncLightsInStorage, SyncSceneObjectTransforms},
+    scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
     world::{World, WorldTaskScheduler},

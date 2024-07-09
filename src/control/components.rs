@@ -1,85 +1,11 @@
 //! [`Component`](impact_ecs::component::Component)s related to user control.
 
-use crate::{
-    component::ComponentRegistry,
-    physics::motion::{AngularVelocity, Velocity},
-};
+use super::{motion, orientation};
+use crate::component::ComponentRegistry;
 use anyhow::Result;
-use bytemuck::{Pod, Zeroable};
-use impact_ecs::Component;
-
-/// [`Component`](impact_ecs::component::Component) for entities whose motion
-/// that can be controlled by a user.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct MotionControlComp {
-    control_velocity: Velocity,
-}
-
-/// [`Component`](impact_ecs::component::Component) for entities whose
-/// orientation that can be controlled by a user.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct OrientationControlComp {
-    control_angular_velocity: AngularVelocity,
-}
-
-impl MotionControlComp {
-    /// Creates a new component for motion control.
-    pub fn new() -> Self {
-        Self {
-            control_velocity: Velocity::zeros(),
-        }
-    }
-
-    /// Takes a new world velocity due to the controller and applies it to the
-    /// given total world velocity.
-    pub fn apply_new_control_velocity(
-        &mut self,
-        new_control_velocity: Velocity,
-        velocity: &mut Velocity,
-    ) {
-        *velocity -= self.control_velocity;
-        *velocity += new_control_velocity;
-        self.control_velocity = new_control_velocity;
-    }
-}
-
-impl Default for MotionControlComp {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl OrientationControlComp {
-    /// Creates a new component for orientation control.
-    pub fn new() -> Self {
-        Self {
-            control_angular_velocity: AngularVelocity::zero(),
-        }
-    }
-
-    /// Takes a new world angular velocity due to the controller and applies it
-    /// to the given total world angular velocity.
-    pub fn apply_new_control_angular_velocity(
-        &mut self,
-        new_control_angular_velocity: AngularVelocity,
-        angular_velocity: &mut AngularVelocity,
-    ) {
-        *angular_velocity -= self.control_angular_velocity;
-        *angular_velocity += new_control_angular_velocity;
-        self.control_angular_velocity = new_control_angular_velocity;
-    }
-}
-
-impl Default for OrientationControlComp {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// Registers all control [`Component`](impact_ecs::component::Component)s.
 pub fn register_control_components(registry: &mut ComponentRegistry) -> Result<()> {
-    register_component!(registry, MotionControlComp)?;
-    register_component!(registry, OrientationControlComp)
+    motion::components::register_motion_control_components(registry)?;
+    orientation::components::register_orientation_control_components(registry)
 }
