@@ -235,6 +235,13 @@ where
         self.change_tracker.reset();
     }
 
+    /// Removes all the uniforms from the buffer.
+    pub fn remove_all_uniforms(&mut self) {
+        self.index_map.clear();
+        self.n_valid_uniforms.store(0, Ordering::SeqCst);
+        self.change_tracker.notify_count_change();
+    }
+
     fn grow_buffer(&mut self) {
         let old_buffer_length = self.raw_buffer.len();
 
@@ -766,6 +773,46 @@ mod test {
         assert_eq!(buffer.uniform(id_1), &uniform_1);
         assert_eq!(buffer.valid_uniforms(), &[uniform_1]);
         assert_eq!(buffer.valid_uniform_ids(), &[id_1]);
+    }
+
+    #[test]
+    fn removing_all_uniforms_from_empty_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        buffer.remove_all_uniforms();
+        assert_eq!(buffer.n_valid_uniforms(), 0);
+        assert!(buffer.valid_uniforms().is_empty());
+        assert!(buffer.valid_uniform_ids().is_empty());
+    }
+
+    #[test]
+    fn removing_all_uniforms_from_single_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        let id = 8;
+        buffer.add_uniform(id, ByteUniform(1));
+
+        buffer.remove_all_uniforms();
+
+        assert_eq!(buffer.n_valid_uniforms(), 0);
+        assert!(buffer.valid_uniforms().is_empty());
+        assert!(buffer.valid_uniform_ids().is_empty());
+    }
+
+    #[test]
+    fn removing_all_uniforms_from_multi_uniform_buffer_works() {
+        let mut buffer = ByteUniformBuffer::new();
+        let id_1 = 8;
+        let id_2 = 0;
+        let uniform_1 = ByteUniform(0);
+        let uniform_2 = ByteUniform(23);
+
+        buffer.add_uniform(id_1, uniform_1);
+        buffer.add_uniform(id_2, uniform_2);
+
+        buffer.remove_all_uniforms();
+
+        assert_eq!(buffer.n_valid_uniforms(), 0);
+        assert!(buffer.valid_uniforms().is_empty());
+        assert!(buffer.valid_uniform_ids().is_empty());
     }
 
     #[test]

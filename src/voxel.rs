@@ -243,6 +243,11 @@ impl<F: Float> VoxelManager<F> {
         voxel_tree_id
     }
 
+    /// Removes all voxel trees in the manager.
+    pub fn remove_all_voxel_trees(&mut self) {
+        self.voxel_trees.clear();
+    }
+
     fn create_new_voxel_tree_id(&mut self) -> VoxelTreeID {
         let voxel_tree_id = VoxelTreeID(self.voxel_tree_id_counter);
         self.voxel_tree_id_counter = self.voxel_tree_id_counter.checked_add(1).unwrap();

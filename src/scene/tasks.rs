@@ -8,7 +8,7 @@ use crate::{
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) updates the model transform of
@@ -140,25 +140,23 @@ define_task!(
     |app: &Application| {
         with_debug_logging!("Buffering visible model instances"; {
             let scene = app.scene().read().unwrap();
-            let maybe_scene_camera = scene.scene_camera().read().unwrap();
-            let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
-                anyhow!("Tried to buffer visible model instances without scene camera")
-            })?;
+            let scene_camera = scene.scene_camera().read().unwrap();
+            if let Some(scene_camera) = scene_camera.as_ref() {
+                scene.scene_graph()
+                    .read()
+                    .unwrap()
+                    .buffer_transforms_of_visible_model_instances(
+                        &mut scene.instance_feature_manager().write().unwrap(),
+                        &scene.voxel_manager().read().unwrap(),
+                        scene_camera,
+                    );
 
-            scene.scene_graph()
-                .read()
-                .unwrap()
-                .buffer_transforms_of_visible_model_instances(
-                    &mut scene.instance_feature_manager().write().unwrap(),
-                    &scene.voxel_manager().read().unwrap(),
-                    scene_camera,
-                );
-
-            app
-                .renderer()
-                .read()
-                .unwrap()
-                .declare_render_resources_desynchronized();
+                app
+                    .renderer()
+                    .read()
+                    .unwrap()
+                    .declare_render_resources_desynchronized();
+            }
 
             Ok(())
         })
@@ -181,26 +179,24 @@ define_task!(
         with_debug_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
             if app.renderer().read().unwrap().config().shadow_mapping_enabled {
                 let scene = app.scene().read().unwrap();
-                let maybe_scene_camera = scene.scene_camera().read().unwrap();
-                let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
-                    anyhow!("Tried to bound omnidirectional lights without scene camera")
-                })?;
+                let scene_camera = scene.scene_camera().read().unwrap();
+                if let Some(scene_camera) = scene_camera.as_ref() {
+                    scene.scene_graph()
+                        .read()
+                        .unwrap()
+                        .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
+                            &mut scene.light_storage().write().unwrap(),
+                            &mut scene.instance_feature_manager().write().unwrap(),
+                            &scene.voxel_manager().read().unwrap(),
+                            scene_camera,
+                        );
 
-                scene.scene_graph()
-                    .read()
-                    .unwrap()
-                    .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
-                        &mut scene.light_storage().write().unwrap(),
-                        &mut scene.instance_feature_manager().write().unwrap(),
-                        &scene.voxel_manager().read().unwrap(),
-                        scene_camera,
-                    );
-
-                app
-                    .renderer()
-                    .read()
-                    .unwrap()
-                    .declare_render_resources_desynchronized();
+                    app
+                        .renderer()
+                        .read()
+                        .unwrap()
+                        .declare_render_resources_desynchronized();
+                }
             }
             Ok(())
         })
@@ -223,26 +219,24 @@ define_task!(
         with_debug_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
             if app.renderer().read().unwrap().config().shadow_mapping_enabled {
                 let scene = app.scene().read().unwrap();
-                let maybe_scene_camera = scene.scene_camera().read().unwrap();
-                let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
-                    anyhow!("Tried to bound unidirectional lights without scene camera")
-                })?;
+                let scene_camera = scene.scene_camera().read().unwrap();
+                if let Some(scene_camera) = scene_camera.as_ref() {
+                    scene.scene_graph()
+                        .read()
+                        .unwrap()
+                        .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
+                            &mut scene.light_storage().write().unwrap(),
+                            &mut scene.instance_feature_manager().write().unwrap(),
+                            &scene.voxel_manager().read().unwrap(),
+                            scene_camera,
+                        );
 
-                scene.scene_graph()
-                    .read()
-                    .unwrap()
-                    .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
-                        &mut scene.light_storage().write().unwrap(),
-                        &mut scene.instance_feature_manager().write().unwrap(),
-                        &scene.voxel_manager().read().unwrap(),
-                        scene_camera,
-                    );
-
-                app
-                    .renderer()
-                    .read()
-                    .unwrap()
-                    .declare_render_resources_desynchronized();
+                    app
+                        .renderer()
+                        .read()
+                        .unwrap()
+                        .declare_render_resources_desynchronized();
+                }
             }
             Ok(())
         })

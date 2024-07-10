@@ -19,7 +19,7 @@ use impact_utils::{hash64, stringhash64_newtype};
 use lazy_static::lazy_static;
 use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     fmt::Debug,
     ops::Neg,
 };
@@ -31,11 +31,16 @@ stringhash64_newtype!(
     [pub] MeshID
 );
 
-/// Repository where [`TriangleMesh`]es are stored under a
-/// unique [`MeshID`].
+/// Repository where [`TriangleMesh`]es are stored under a unique [`MeshID`].
 #[derive(Debug, Default)]
 pub struct MeshRepository<F: Float> {
     meshes: HashMap<MeshID, TriangleMesh<F>>,
+}
+
+/// Record of the state of a [`MeshRepository`].
+#[derive(Clone, Debug)]
+pub struct MeshRepositoryState {
+    mesh_ids: HashSet<MeshID>,
 }
 
 lazy_static! {
@@ -167,6 +172,14 @@ impl<F: Float> MeshRepository<F> {
         );
     }
 
+    /// Records the current state of the repository and returns it as a
+    /// [`MeshRepositoryState`].
+    pub fn record_state(&self) -> MeshRepositoryState {
+        MeshRepositoryState {
+            mesh_ids: self.meshes.keys().cloned().collect(),
+        }
+    }
+
     /// Returns a reference to the [`TriangleMesh`] with the given ID, or
     /// [`None`] if the mesh is not present.
     pub fn get_mesh(&self, mesh_id: MeshID) -> Option<&TriangleMesh<F>> {
@@ -208,6 +221,12 @@ impl<F: Float> MeshRepository<F> {
     /// mesh with the same ID is already present.
     pub fn add_mesh_unless_present(&mut self, mesh_id: MeshID, mesh: TriangleMesh<F>) {
         let _ = self.add_mesh(mesh_id, mesh);
+    }
+
+    /// Removes the meshes that are not part of the given repository state.
+    pub fn reset_to_state(&mut self, state: &MeshRepositoryState) {
+        self.meshes
+            .retain(|mesh_id, _| state.mesh_ids.contains(mesh_id));
     }
 }
 

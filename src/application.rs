@@ -13,14 +13,18 @@ use crate::{
         MotionController, OrientationController,
     },
     gpu::{
-        rendering::{fre, RenderingSystem, ScreenCapturer},
+        self,
+        rendering::{fre, RenderingConfig, RenderingSystem, ScreenCapturer},
         GraphicsDevice,
     },
     io,
-    mesh::{components::MeshComp, texture_projection::TextureProjection},
+    material::{self, MaterialLibrary},
+    mesh::{components::MeshComp, texture_projection::TextureProjection, MeshRepository},
+    model::InstanceFeatureManager,
     physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
     scene::Scene,
     ui::UserInterface,
+    voxel::{VoxelConfig, VoxelManager},
     window::Window,
 };
 use anyhow::Result;
@@ -55,20 +59,53 @@ impl Application {
     /// Creates a new world data container.
     pub fn new(
         window: Arc<Window>,
-        graphics_device: Arc<GraphicsDevice>,
-        renderer: RenderingSystem,
-        assets: Assets,
-        scene: Scene,
+        rendering_config: RenderingConfig,
+        voxel_config: VoxelConfig<fre>,
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
         orientation_controller: Option<Box<dyn OrientationController>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut component_registry = ComponentRegistry::new();
         if let Err(err) = components::register_all_components(&mut component_registry) {
             panic!("Failed to register components: {}", err);
         }
 
-        Self {
+        let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
+
+        let assets = Assets::new_with_default_lookup_tables(Arc::clone(&graphics_device))?;
+
+        let mut mesh_repository = MeshRepository::new();
+        mesh_repository.create_default_meshes();
+
+        let mut instance_feature_manager = InstanceFeatureManager::new();
+        material::register_material_feature_types(&mut instance_feature_manager);
+
+        let mut material_library = MaterialLibrary::new();
+
+        let voxel_manager = VoxelManager::create(
+            voxel_config,
+            &graphics_device,
+            &assets,
+            &mut mesh_repository,
+            &mut material_library,
+            &mut instance_feature_manager,
+        );
+
+        let renderer = RenderingSystem::new(
+            rendering_config,
+            Arc::clone(&graphics_device),
+            rendering_surface,
+            &mut material_library,
+        )?;
+
+        let scene = Scene::new(
+            mesh_repository,
+            material_library,
+            instance_feature_manager,
+            voxel_manager,
+        );
+
+        Ok(Self {
             window: Arc::clone(&window),
             graphics_device,
             user_interface: RwLock::new(UserInterface::new(window)),
@@ -81,7 +118,7 @@ impl Application {
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
             screen_capturer: ScreenCapturer::new(NonZeroU32::new(2048).unwrap()),
-        }
+        })
     }
 
     /// Returns a reference to the [`Window`].
@@ -174,12 +211,7 @@ impl Application {
         let mut assets = self.assets.write().unwrap();
         let scene = self.scene.read().unwrap();
         let mut mesh_repository = scene.mesh_repository().write().unwrap();
-        io::obj::load_models_from_obj_file(
-            self.graphics_device(),
-            &mut assets,
-            &mut mesh_repository,
-            obj_file_path,
-        )
+        io::obj::load_models_from_obj_file(&mut assets, &mut mesh_repository, obj_file_path)
     }
 
     /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
@@ -443,5 +475,15 @@ impl Application {
             .read()
             .unwrap()
             .perform_setup_for_game_loop(self.ecs_world());
+    }
+
+    /// Resets the scene and ECS world to the initial empty state.
+    pub fn clear_world(&self) {
+        self.ecs_world.write().unwrap().remove_all_entities();
+        self.scene.read().unwrap().clear();
+        self.renderer
+            .read()
+            .unwrap()
+            .declare_render_resources_desynchronized();
     }
 }

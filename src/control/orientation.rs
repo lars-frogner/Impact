@@ -6,6 +6,7 @@ pub mod systems;
 use super::OrientationController;
 use crate::{
     geometry::{Angle, Radians},
+    num::Float,
     physics::{fph, motion::Orientation},
     window::Window,
 };
@@ -61,9 +62,12 @@ impl RollFreeCameraOrientationController {
     /// Creates a new orientation controller for a first-person
     /// camera with the given vertical field of view, with the
     /// given sensitivity to mouse motions.
-    pub fn new<A: Angle<f64>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
+    pub fn new<F: Float, A: Angle<F>>(vertical_field_of_view: A, sensitivity: f64) -> Self {
         Self {
-            base: CameraOrientationControllerBase::new(vertical_field_of_view, sensitivity),
+            base: CameraOrientationControllerBase::new(
+                Radians(vertical_field_of_view.radians().to_f64().unwrap()),
+                sensitivity,
+            ),
             pitch_change: Orientation::identity(),
             yaw_change: Orientation::identity(),
         }

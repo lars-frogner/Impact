@@ -48,19 +48,24 @@ define_task!(
             let renderer = app.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                if let Some(scene_camera) = app.scene().read().unwrap()
-                                                 .scene_camera().read().unwrap().as_ref() {
-                    DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
-                        renderer.graphics_device(),
-                        render_resource_manager
-                            .desynchronized()
-                            .camera_buffer_manager
-                            .lock()
+                DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
+                    renderer.graphics_device(),
+                    render_resource_manager
+                        .desynchronized()
+                        .camera_buffer_manager
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                        app
+                            .scene()
+                            .read()
                             .unwrap()
-                            .as_mut(),
-                        scene_camera,
-                    );
-                }
+                            .scene_camera()
+                            .read()
+                            .unwrap()
+                            .as_ref(),
+                );
+
             }
             Ok(())
         })

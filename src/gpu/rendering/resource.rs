@@ -220,17 +220,21 @@ impl DesynchronizedRenderResources {
     fn sync_camera_buffer_with_scene_camera(
         graphics_device: &GraphicsDevice,
         camera_buffer_manager: &mut Option<CameraGPUBufferManager>,
-        scene_camera: &SceneCamera<fre>,
+        scene_camera: Option<&SceneCamera<fre>>,
     ) {
-        if let Some(camera_buffer_manager) = camera_buffer_manager {
-            camera_buffer_manager.sync_with_camera(graphics_device, scene_camera.camera());
+        if let Some(scene_camera) = scene_camera {
+            if let Some(camera_buffer_manager) = camera_buffer_manager {
+                camera_buffer_manager.sync_with_camera(graphics_device, scene_camera.camera());
+            } else {
+                // We initialize the camera GPU buffer manager the first time this
+                // method is called
+                *camera_buffer_manager = Some(CameraGPUBufferManager::for_camera(
+                    graphics_device,
+                    scene_camera.camera(),
+                ));
+            }
         } else {
-            // We initialize the camera GPU buffer manager the first time this
-            // method is called
-            *camera_buffer_manager = Some(CameraGPUBufferManager::for_camera(
-                graphics_device,
-                scene_camera.camera(),
-            ));
+            camera_buffer_manager.take();
         }
     }
 
@@ -299,10 +303,8 @@ impl DesynchronizedRenderResources {
                         .iter_mut()
                         .zip(feature_gpu_buffer_managers.iter_mut())
                     {
-                        gpu_buffer_manager.copy_instance_features_to_gpu_buffer(
-                            graphics_device,
-                            feature_buffer,
-                        );
+                        gpu_buffer_manager
+                            .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
                         feature_buffer.clear();
                     }
                 }
