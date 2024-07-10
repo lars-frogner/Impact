@@ -1,15 +1,15 @@
-//! Management of tasks.
+//! Management of tasks in an application.
 
 use crate::{
-    gpu, physics, scene, scheduling::TaskScheduler, thread::ThreadPoolTaskErrors,
-    window::EventLoopController, world::World,
+    application::Application, gpu, physics, scene, scheduling::TaskScheduler,
+    thread::ThreadPoolTaskErrors, window::EventLoopController,
 };
 use anyhow::Result;
 use std::{num::NonZeroUsize, sync::Arc};
 
-pub type WorldTaskScheduler = TaskScheduler<World>;
+pub type AppTaskScheduler = TaskScheduler<Application>;
 
-impl World {
+impl Application {
     /// Creates a new task scheduler with the given number of workers and
     /// registers all tasks in it.
     ///
@@ -18,9 +18,9 @@ impl World {
     pub fn create_task_scheduler(
         self,
         n_workers: NonZeroUsize,
-    ) -> Result<(Arc<Self>, WorldTaskScheduler)> {
+    ) -> Result<(Arc<Self>, AppTaskScheduler)> {
         let world = Arc::new(self);
-        let mut task_scheduler = WorldTaskScheduler::new(n_workers, Arc::clone(&world));
+        let mut task_scheduler = AppTaskScheduler::new(n_workers, Arc::clone(&world));
 
         register_all_tasks(&mut task_scheduler)?;
 
@@ -52,7 +52,7 @@ impl World {
 }
 
 /// Registers all tasks in the given task scheduler.
-pub fn register_all_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+pub fn register_all_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     scene::tasks::register_scene_tasks(task_scheduler)?;
     gpu::rendering::tasks::register_rendering_tasks(task_scheduler)?;
     physics::tasks::register_physics_tasks(task_scheduler)?;

@@ -84,6 +84,7 @@
 #[macro_use]
 mod macros;
 
+pub mod application;
 pub mod assets;
 pub mod camera;
 pub mod component;
@@ -106,4 +107,3 @@ pub mod ui;
 pub mod util;
 pub mod voxel;
 pub mod window;
-pub mod world;

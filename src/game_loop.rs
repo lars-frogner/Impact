@@ -1,12 +1,12 @@
 //! Main loop driving simulation and rendering.
 
 use crate::{
+    application::{tasks::AppTaskScheduler, Application},
     define_execution_tag_set,
     gpu::rendering::tasks::RenderingTag,
     physics::tasks::PhysicsTag,
     thread::ThreadPoolResult,
     window::{EventLoopController, HandlingResult, InputHandler, Window, WindowEvent},
-    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
 use std::{
@@ -17,11 +17,11 @@ use std::{
 };
 use winit::event::DeviceEvent;
 
-/// A loop driving simulation and rendering of a [`World`].
+/// A loop driving simulation and rendering in an [`Application`].
 #[derive(Debug)]
 pub struct GameLoop {
-    world: Arc<World>,
-    task_scheduler: WorldTaskScheduler,
+    app: Arc<Application>,
+    task_scheduler: AppTaskScheduler,
     input_handler: InputHandler,
     frame_rate_tracker: FrameDurationTracker,
     start_time: Instant,
@@ -47,8 +47,12 @@ struct GenericFrameDurationTracker<const N_FRAMES: usize> {
 type FrameDurationTracker = GenericFrameDurationTracker<5>;
 
 impl GameLoop {
-    pub fn new(world: World, input_handler: InputHandler, config: GameLoopConfig) -> Result<Self> {
-        let (world, task_scheduler) = world.create_task_scheduler(config.n_worker_threads)?;
+    pub fn new(
+        app: Application,
+        input_handler: InputHandler,
+        config: GameLoopConfig,
+    ) -> Result<Self> {
+        let (world, task_scheduler) = app.create_task_scheduler(config.n_worker_threads)?;
 
         world.perform_setup_for_game_loop();
 
@@ -57,7 +61,7 @@ impl GameLoop {
         let previous_iter_end_time = start_time;
 
         Ok(Self {
-            world,
+            app: world,
             task_scheduler,
             input_handler,
             frame_rate_tracker,
@@ -67,12 +71,12 @@ impl GameLoop {
         })
     }
 
-    pub fn world(&self) -> &World {
-        self.world.as_ref()
+    pub fn app(&self) -> &Application {
+        self.app.as_ref()
     }
 
     pub fn window(&self) -> &Window {
-        self.world().window()
+        self.app().window()
     }
 
     pub fn handle_window_event(
@@ -81,7 +85,7 @@ impl GameLoop {
         event: &WindowEvent,
     ) -> Result<HandlingResult> {
         self.input_handler
-            .handle_window_event(&self.world, event_loop_controller, event)
+            .handle_window_event(&self.app, event_loop_controller, event)
     }
 
     pub fn handle_device_event(
@@ -90,18 +94,18 @@ impl GameLoop {
         event: &DeviceEvent,
     ) -> Result<HandlingResult> {
         self.input_handler
-            .handle_device_event(&self.world, event_loop_controller, event)
+            .handle_device_event(&self.app, event_loop_controller, event)
     }
 
     pub fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
-        self.world.resize_rendering_surface(new_width, new_height);
+        self.app.resize_rendering_surface(new_width, new_height);
     }
 
     pub fn perform_iteration(
         &mut self,
         event_loop_controller: &EventLoopController<'_>,
     ) -> ThreadPoolResult {
-        if self.world.is_paused() {
+        if self.app.is_paused() {
             let iter_end_time = self.wait_for_target_frame_duration();
             self.previous_iter_end_time = iter_end_time;
             return Ok(());
@@ -113,7 +117,7 @@ impl GameLoop {
         });
 
         if let Err(mut task_errors) = execution_result {
-            self.world
+            self.app
                 .handle_task_errors(&mut task_errors, event_loop_controller);
 
             // Pass any unhandled errors to caller
@@ -129,7 +133,7 @@ impl GameLoop {
 
         let smooth_frame_duration = self.frame_rate_tracker.compute_smooth_frame_duration();
 
-        self.world
+        self.app
             .simulator()
             .write()
             .unwrap()

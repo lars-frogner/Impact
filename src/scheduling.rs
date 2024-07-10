@@ -133,24 +133,22 @@ enum TaskReady {
     No,
 }
 
-/// Macro for defining a new empty type that implements the
-/// [`Task`] trait.
+/// Macro for defining a new empty type that implements the [`Task`] trait.
 ///
-/// The macro takes as input the name of the new task type,
-/// the other tasks (also defined with this macro) this task
-/// depends on, the execution tags (defined with the
-/// [`define_execution_tag`] macro) that should trigger this
-/// task, and a closure that takes a reference to some world
-/// object and executes the task on it.
+/// The macro takes as input the name of the new task type, the other tasks
+/// (also defined with this macro) this task depends on, the execution tags
+/// (defined with the [`define_execution_tag`] macro) that should trigger this
+/// task, and a closure that takes a reference to some world object and executes
+/// the task on it.
 ///
 /// # Examples
 /// ```no_run
 /// # use impact::{define_execution_tag, define_task, scheduling::TaskScheduler};
 /// # use std::{num::NonZeroUsize, sync::Arc};
 /// #
-/// # struct World;
+/// # struct Application;
 /// #
-/// # impl World {
+/// # impl Application {
 /// #     fn new() -> Self {Self}
 /// #     fn compute_forces(&self) {}
 /// #     fn update_trajectories(&self) {}
@@ -167,8 +165,8 @@ enum TaskReady {
 ///     // Include this task in executions tagged with any of these tags
 ///     execute_on = [Physics],
 ///     // Closure executing the task, modifying the input object
-///     |world: &World| {
-///         world.update_trajectories();
+///     |app: &Application| {
+///         app.update_trajectories();
 ///         // The closure must return a `Result<(), TaskError>`
 ///         Ok(())
 ///     }
@@ -179,8 +177,8 @@ enum TaskReady {
 ///     ComputeForces,
 ///     depends_on = [],
 ///     execute_on = [Physics],
-///     |world: &World| {
-///         world.compute_forces();
+///     |app: &Application| {
+///         app.compute_forces();
 ///         Ok(())
 ///     }
 /// );
@@ -188,10 +186,10 @@ enum TaskReady {
 /// // Define the tag that will trigger execution of the tasks
 /// define_execution_tag!(Physics);
 ///
-/// let world = Arc::new(World::new());
+/// let app = Arc::new(Application::new());
 /// let n_workers = NonZeroUsize::new(2).unwrap();
 ///
-/// let mut scheduler = TaskScheduler::new(n_workers, world);
+/// let mut scheduler = TaskScheduler::new(n_workers, app);
 ///
 /// // Add newly defined tasks to scheduler
 /// scheduler.register_task(ComputeForces).unwrap();
@@ -205,7 +203,7 @@ macro_rules! define_task {
         $([$pub:ident])? $name:ident,
         depends_on = [$($dep:ident),*],
         execute_on = [$($tag:ident),*],
-        |$world:ident: &$world_ty:ty| $execute:expr
+        |$app:ident: &$app_ty:ty| $execute:expr
     ) => {
         $(#[$attributes])*
         #[derive(Copy, Clone, Debug)]
@@ -221,7 +219,7 @@ macro_rules! define_task {
             const EXECUTION_TAGS: [$crate::scheduling::ExecutionTag; Self::N_EXECUTION_TAGS] = [$($tag::EXECUTION_TAG),*];
         }
 
-        impl $crate::scheduling::Task<$world_ty> for $name {
+        impl $crate::scheduling::Task<$app_ty> for $name {
             fn id(&self) -> $crate::thread::TaskID {
                 Self::TASK_ID
             }
@@ -230,7 +228,7 @@ macro_rules! define_task {
                 &Self::DEPENDENCY_IDS
             }
 
-            fn execute(&self, $world: &$world_ty) -> anyhow::Result<()> {
+            fn execute(&self, $app: &$app_ty) -> anyhow::Result<()> {
                 $execute
             }
 

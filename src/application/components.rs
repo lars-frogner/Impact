@@ -1,4 +1,5 @@
-//! Management of [`Component`](impact_ecs::component::Component)s.
+//! Management of [`Component`](impact_ecs::component::Component)s in an
+//! application.
 
 use crate::{
     camera, component::ComponentRegistry, control, light, material, mesh, physics, scene, voxel,
