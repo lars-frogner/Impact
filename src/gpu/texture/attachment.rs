@@ -2,6 +2,7 @@
 
 use crate::gpu::{
     rendering::{render_command::Blending, surface::RenderingSurface},
+    texture::Texture,
     GraphicsDevice,
 };
 use anyhow::{anyhow, Result};
@@ -56,10 +57,8 @@ pub struct RenderAttachmentTextureManager {
 #[derive(Debug)]
 pub struct RenderAttachmentTexture {
     quantity: RenderAttachmentQuantity,
-    texture: wgpu::Texture,
+    texture: Texture,
     attachment_view: wgpu::TextureView,
-    binding_view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
 }
 
 #[derive(Debug)]
@@ -446,7 +445,7 @@ impl RenderAttachmentTextureManager {
 
         super::save_texture_as_image_file(
             graphics_device,
-            texture.regular.texture(),
+            texture.regular.texture().texture(),
             0,
             output_path,
         )
@@ -494,9 +493,10 @@ impl RenderAttachmentTextureManager {
             .get_or_insert_with(|| {
                 Self::create_render_attachment_texture_bind_group_layout(
                     graphics_device.device(),
-                    texture_format,
                     texture_binding,
                     sampler_binding,
+                    &quantity_texture.regular,
+                    wgpu::ShaderStages::FRAGMENT,
                     &label,
                 )
             });
@@ -516,18 +516,20 @@ impl RenderAttachmentTextureManager {
 
     fn create_render_attachment_texture_bind_group_layout(
         device: &wgpu::Device,
-        texture_format: wgpu::TextureFormat,
         texture_binding: u32,
         sampler_binding: u32,
+        render_attachment_texture: &RenderAttachmentTexture,
+        visibility: wgpu::ShaderStages,
         label: &str,
     ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                RenderAttachmentTexture::create_texture_bind_group_layout_entry(
-                    texture_format,
-                    texture_binding,
-                ),
-                RenderAttachmentTexture::create_sampler_bind_group_layout_entry(sampler_binding),
+                render_attachment_texture
+                    .texture()
+                    .create_texture_bind_group_layout_entry(texture_binding, visibility),
+                render_attachment_texture
+                    .texture()
+                    .create_sampler_bind_group_layout_entry(sampler_binding, visibility),
             ],
             label: Some(&format!("{} bind group layout", label)),
         })
@@ -544,8 +546,12 @@ impl RenderAttachmentTextureManager {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
-                render_attachment_texture.create_texture_bind_group_entry(texture_binding),
-                render_attachment_texture.create_sampler_bind_group_entry(sampler_binding),
+                render_attachment_texture
+                    .texture()
+                    .create_texture_bind_group_entry(texture_binding),
+                render_attachment_texture
+                    .texture()
+                    .create_sampler_bind_group_entry(sampler_binding),
             ],
             label: Some(&format!("{} bind group", label)),
         })
@@ -594,12 +600,18 @@ impl RenderAttachmentTexture {
 
         let sampler = Self::create_sampler(device);
 
+        let texture = Texture::new(
+            texture,
+            binding_view,
+            sampler,
+            wgpu::SamplerBindingType::NonFiltering,
+            wgpu::TextureViewDimension::D2,
+        );
+
         Self {
             quantity,
             texture,
             attachment_view,
-            binding_view,
-            sampler,
         }
     }
 
@@ -608,9 +620,19 @@ impl RenderAttachmentTexture {
         self.quantity
     }
 
-    /// Returns the render attachment texture.
-    pub fn texture(&self) -> &wgpu::Texture {
+    /// Returns the render attachment [`Texture`].
+    pub fn texture(&self) -> &Texture {
         &self.texture
+    }
+
+    /// Returns the render attachment texture format.
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.texture.texture().format()
+    }
+
+    /// Returns the render attachment texture sample count.
+    pub fn sample_count(&self) -> u32 {
+        self.texture.texture().sample_count()
     }
 
     /// Returns a view into the texture for use as a render attachment.
@@ -620,67 +642,12 @@ impl RenderAttachmentTexture {
 
     /// Returns a view into the texture for use as a binding.
     pub fn binding_view(&self) -> &wgpu::TextureView {
-        &self.binding_view
+        self.texture.view()
     }
 
     /// Returns a sampler for the render attachment texture.
     pub fn sampler(&self) -> &wgpu::Sampler {
-        &self.sampler
-    }
-
-    /// Creates the bind group layout entry for this texture type, assigned to
-    /// the given binding.
-    pub fn create_texture_bind_group_layout_entry(
-        texture_format: wgpu::TextureFormat,
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: if texture_format.has_depth_aspect() {
-                    wgpu::TextureSampleType::Depth
-                } else {
-                    wgpu::TextureSampleType::Float { filterable: false }
-                },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        }
-    }
-
-    /// Creates the bind group layout entry for this texture's sampler type,
-    /// assigned to the given binding.
-    pub const fn create_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            // The sampler binding type must be consistent with the `filterable`
-            // field in the texture sample type.
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-            count: None,
-        }
-    }
-
-    /// Creates the bind group entry for this texture, assigned to the given
-    /// binding.
-    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::TextureView(self.binding_view()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's sampler, assigned to the
-    /// given binding.
-    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.sampler()),
-        }
+        self.texture.sampler()
     }
 
     /// Creates a new 2D [`wgpu::Texture`] with the given size and format for
@@ -764,7 +731,7 @@ impl MaybeWithMultisampling<RenderAttachmentTexture> {
 
     /// Returns the render attachment texture format.
     pub fn format(&self) -> wgpu::TextureFormat {
-        self.regular.texture().format()
+        self.regular.format()
     }
 
     /// Returns the sample count for the multisampled texture, or 1 if there is
@@ -772,7 +739,7 @@ impl MaybeWithMultisampling<RenderAttachmentTexture> {
     pub fn multisampling_sample_count(&self) -> u32 {
         self.multisampled
             .as_ref()
-            .map_or(1, |texture| texture.texture().sample_count())
+            .map_or(1, |texture| texture.sample_count())
     }
 
     /// Returns the appropriate `view` and `resolve_target` for

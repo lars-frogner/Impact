@@ -320,10 +320,14 @@ impl MaterialPropertyTextureGroup {
 
             let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
 
-            bind_group_layout_entries
-                .push(texture.create_texture_bind_group_layout_entry(texture_binding));
-            bind_group_layout_entries
-                .push(texture.create_sampler_bind_group_layout_entry(sampler_binding));
+            bind_group_layout_entries.push(texture.create_texture_bind_group_layout_entry(
+                texture_binding,
+                wgpu::ShaderStages::FRAGMENT,
+            ));
+            bind_group_layout_entries.push(texture.create_sampler_bind_group_layout_entry(
+                sampler_binding,
+                wgpu::ShaderStages::FRAGMENT,
+            ));
 
             bind_group_entries.push(texture.create_texture_bind_group_entry(texture_binding));
             bind_group_entries.push(texture.create_sampler_bind_group_entry(sampler_binding));

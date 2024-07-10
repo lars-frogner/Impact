@@ -43,6 +43,7 @@ pub struct Texture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
+    sampler_binding_type: wgpu::SamplerBindingType,
     view_dimension: wgpu::TextureViewDimension,
 }
 
@@ -75,6 +76,8 @@ pub struct TextureAddressingConfig {
 /// Configuration parameters for filtering of [`Texture`]s.
 #[derive(Clone, Debug)]
 pub struct TextureFilteringConfig {
+    /// Whether filtering will be disabled when sampling the texture.
+    pub disable_filtering: bool,
     /// How to filter the texture when it needs to be magnified.
     pub mag_filter: wgpu::FilterMode,
     /// How to filter the texture when it needs to be minified.
@@ -236,7 +239,7 @@ impl Texture {
         let depth = NonZeroU32::new(1).unwrap();
 
         if image.color().has_color() {
-            Self::new(
+            Self::create(
                 graphics_device,
                 Some(mipmap_generator),
                 &image.into_rgba8(),
@@ -256,7 +259,7 @@ impl Texture {
                     label
                 );
             }
-            Self::new(
+            Self::create(
                 graphics_device,
                 Some(mipmap_generator),
                 &image.into_luma8(),
@@ -419,7 +422,7 @@ impl Texture {
             (texel_description, byte_buffer)
         };
 
-        Self::new(
+        Self::create(
             graphics_device,
             None,
             &byte_buffer,
@@ -454,7 +457,7 @@ impl Texture {
             filtering: TextureFilteringConfig::LOOKUP,
         };
 
-        Self::new(
+        Self::create(
             graphics_device,
             None,
             byte_buffer,
@@ -480,7 +483,7 @@ impl Texture {
     /// - The row size (width times texel size) is not a multiple of 256 bytes
     ///   (`wgpu` requires that rows are a multiple of 256 bytes for for copying
     ///   data between buffers and textures).
-    fn new(
+    fn create(
         graphics_device: &GraphicsDevice,
         mipmap_generator: Option<&MipmapGenerator>,
         byte_buffer: &[u8],
@@ -612,12 +615,43 @@ impl Texture {
             config.filtering.anisotropy_clamp,
         );
 
-        Ok(Self {
+        let sampler_binding_type =
+            if !config.filtering.disable_filtering && Self::format_is_filterable(&format) {
+                wgpu::SamplerBindingType::Filtering
+            } else {
+                wgpu::SamplerBindingType::NonFiltering
+            };
+
+        Ok(Self::new(
             texture,
             view,
             sampler,
+            sampler_binding_type,
             view_dimension,
-        })
+        ))
+    }
+
+    /// Creates a new [`Texture`] comprised of the given `wgpu` texture and
+    /// sampler data.
+    pub fn new(
+        texture: wgpu::Texture,
+        view: wgpu::TextureView,
+        sampler: wgpu::Sampler,
+        sampler_binding_type: wgpu::SamplerBindingType,
+        view_dimension: wgpu::TextureViewDimension,
+    ) -> Self {
+        Self {
+            texture,
+            view,
+            sampler,
+            sampler_binding_type,
+            view_dimension,
+        }
+    }
+
+    /// Returns a reference to the underlying [`wgpu::Texture`].
+    pub fn texture(&self) -> &wgpu::Texture {
+        &self.texture
     }
 
     /// Returns a view into the texture.
@@ -635,14 +669,17 @@ impl Texture {
     pub fn create_texture_bind_group_layout_entry(
         &self,
         binding: u32,
+        visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
+            visibility,
             ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float {
-                    filterable: self.has_filterable_format(),
-                },
+                sample_type: self
+                    .texture
+                    .format()
+                    .sample_type(Some(wgpu::TextureAspect::DepthOnly), None)
+                    .unwrap(),
                 view_dimension: self.view_dimension,
                 multisampled: false,
             },
@@ -655,17 +692,12 @@ impl Texture {
     pub fn create_sampler_bind_group_layout_entry(
         &self,
         binding: u32,
+        visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            // The sampler binding type must be consistent with the `filterable`
-            // field in the texture sample type.
-            ty: wgpu::BindingType::Sampler(if self.has_filterable_format() {
-                wgpu::SamplerBindingType::Filtering
-            } else {
-                wgpu::SamplerBindingType::NonFiltering
-            }),
+            visibility,
+            ty: wgpu::BindingType::Sampler(self.sampler_binding_type),
             count: None,
         }
     }
@@ -688,10 +720,9 @@ impl Texture {
         }
     }
 
-    fn has_filterable_format(&self) -> bool {
+    fn format_is_filterable(format: &wgpu::TextureFormat) -> bool {
         #[allow(clippy::manual_unwrap_or_default)]
-        if let Some(wgpu::TextureSampleType::Float { filterable }) =
-            self.texture.format().sample_type(None, None)
+        if let Some(wgpu::TextureSampleType::Float { filterable }) = format.sample_type(None, None)
         {
             filterable
         } else {
@@ -805,6 +836,7 @@ impl Default for TextureAddressingConfig {
 
 impl TextureFilteringConfig {
     pub const BASIC: Self = Self {
+        disable_filtering: false,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
         max_mip_level_count: None,
@@ -815,6 +847,7 @@ impl TextureFilteringConfig {
     };
 
     pub const ANISOTROPIC_2X: Self = Self {
+        disable_filtering: false,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         max_mip_level_count: None,
@@ -840,6 +873,7 @@ impl TextureFilteringConfig {
     };
 
     pub const LOOKUP: Self = Self {
+        disable_filtering: true,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
         max_mip_level_count: None,
