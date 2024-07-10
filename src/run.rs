@@ -91,14 +91,38 @@ fn init_game_loop(window: Window) -> Result<GameLoop> {
 }
 
 fn init_app(window: Window) -> Result<Application> {
-    let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
+    let rendering_config = RenderingConfig::default();
 
     let vertical_field_of_view = Degrees(70.0);
 
-    let mut assets = Assets::new_with_default_lookup_tables(&graphics_device)?;
+    let voxel_config = VoxelConfig {
+        initial_min_angular_voxel_extent_for_lod:
+            VoxelTreeLODController::compute_min_angular_voxel_extent(
+                window.dimensions().1,
+                vertical_field_of_view,
+                3.0,
+            ),
+        ..VoxelConfig::default()
+    };
+
+    let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
+
+    let motion_controller = SemiDirectionalMotionController::new(8.0, true);
+    let orientation_controller =
+        RollFreeCameraOrientationController::new(vertical_field_of_view, 1.0);
+
+    let app = Application::new(
+        Arc::new(window),
+        rendering_config,
+        voxel_config,
+        simulator,
+        Some(Box::new(motion_controller)),
+        Some(Box::new(orientation_controller)),
+    )?;
+
+    let mut assets = app.assets().write().unwrap();
 
     let skybox_texture_id = assets.load_cubemap_texture_from_paths(
-        &graphics_device,
         "assets/skybox/right.jpg",
         "assets/skybox/left.jpg",
         "assets/skybox/top.jpg",
@@ -112,7 +136,6 @@ fn init_app(window: Window) -> Result<Application> {
     )?;
 
     let bricks_color_texture_id = assets.load_texture_from_path(
-        &graphics_device,
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
@@ -122,7 +145,6 @@ fn init_app(window: Window) -> Result<Application> {
     )?;
 
     let bricks_roughness_texture_id = assets.load_texture_from_path(
-        &graphics_device,
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -132,7 +154,6 @@ fn init_app(window: Window) -> Result<Application> {
     )?;
 
     let bricks_height_texture_id = assets.load_texture_from_path(
-        &graphics_device,
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -142,7 +163,6 @@ fn init_app(window: Window) -> Result<Application> {
     )?;
 
     let wood_floor_color_texture_id = assets.load_texture_from_path(
-        &graphics_device,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
@@ -152,7 +172,6 @@ fn init_app(window: Window) -> Result<Application> {
     )?;
 
     let wood_floor_roughness_texture_id = assets.load_texture_from_path(
-        &graphics_device,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -162,7 +181,6 @@ fn init_app(window: Window) -> Result<Application> {
     )?;
 
     let wood_floor_normal_texture_id = assets.load_texture_from_path(
-        &graphics_device,
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
@@ -171,61 +189,7 @@ fn init_app(window: Window) -> Result<Application> {
         },
     )?;
 
-    let mut mesh_repository = MeshRepository::new();
-    mesh_repository.create_default_meshes();
-
-    let mut instance_feature_manager = InstanceFeatureManager::new();
-    material::register_material_feature_types(&mut instance_feature_manager);
-
-    let mut material_library = MaterialLibrary::new();
-
-    let voxel_manager = VoxelManager::create(
-        VoxelConfig {
-            initial_min_angular_voxel_extent_for_lod:
-                VoxelTreeLODController::compute_min_angular_voxel_extent(
-                    window.dimensions().1,
-                    vertical_field_of_view,
-                    3.0,
-                ),
-            ..VoxelConfig::default()
-        },
-        &graphics_device,
-        &assets,
-        &mut mesh_repository,
-        &mut material_library,
-        &mut instance_feature_manager,
-    );
-
-    let renderer = RenderingSystem::new(
-        RenderingConfig::default(),
-        Arc::clone(&graphics_device),
-        rendering_surface,
-        &mut material_library,
-    )?;
-
-    let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
-
-    let motion_controller = SemiDirectionalMotionController::new(8.0, true);
-    let orientation_controller =
-        RollFreeCameraOrientationController::new(Degrees(f64::from(vertical_field_of_view.0)), 1.0);
-
-    let scene = Scene::new(
-        mesh_repository,
-        material_library,
-        instance_feature_manager,
-        voxel_manager,
-    );
-
-    let app = Application::new(
-        Arc::new(window),
-        graphics_device,
-        renderer,
-        assets,
-        scene,
-        simulator,
-        Some(Box::new(motion_controller)),
-        Some(Box::new(orientation_controller)),
-    );
+    drop(assets);
 
     app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
@@ -243,16 +207,14 @@ fn init_app(window: Window) -> Result<Application> {
         &MotionControlComp::new(),
         &OrientationControlComp::new(),
         // &UniformGravityComp::downward(9.81),
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &BoxMeshComp::SKYBOX,
         &ReferenceFrameComp::default(),
         &SkyboxComp(skybox_texture_id),
         &UncullableComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &app.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
@@ -266,8 +228,7 @@ fn init_app(window: Window) -> Result<Application> {
         &RoughnessComp(0.4),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &CylinderMeshComp::new(10.0, 0.6, 100),
@@ -275,8 +236,7 @@ fn init_app(window: Window) -> Result<Application> {
         &SpecularReflectanceComp::IRON,
         &RoughnessComp(0.5),
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &app.load_mesh_from_obj_file("assets/abstract_object.obj")?,
@@ -289,8 +249,7 @@ fn init_app(window: Window) -> Result<Application> {
         &SpecularReflectanceComp::COPPER,
         &RoughnessComp(0.35),
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &app.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
@@ -303,8 +262,7 @@ fn init_app(window: Window) -> Result<Application> {
         &AlbedoComp(vector![0.7, 0.3, 0.2]),
         &RoughnessComp(0.95),
         &MicrofacetDiffuseReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &BoxMeshComp::UNIT_CUBE,
@@ -314,8 +272,7 @@ fn init_app(window: Window) -> Result<Application> {
         &RoughnessComp(0.55),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &SphereMeshComp::new(100),
@@ -325,8 +282,7 @@ fn init_app(window: Window) -> Result<Application> {
         &RoughnessComp(0.7),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &app.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
@@ -339,8 +295,7 @@ fn init_app(window: Window) -> Result<Application> {
         &SpecularReflectanceComp::GOLD,
         &RoughnessComp(0.4),
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &RectangleMeshComp::UNIT_SQUARE,
@@ -356,8 +311,7 @@ fn init_app(window: Window) -> Result<Application> {
         &NormalMapComp(wood_floor_normal_texture_id),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &RectangleMeshComp::UNIT_SQUARE,
@@ -378,8 +332,7 @@ fn init_app(window: Window) -> Result<Application> {
         ),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &RectangleMeshComp::UNIT_SQUARE,
@@ -400,8 +353,7 @@ fn init_app(window: Window) -> Result<Application> {
         ),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &RectangleMeshComp::UNIT_SQUARE,
@@ -421,8 +373,7 @@ fn init_app(window: Window) -> Result<Application> {
         ),
         &MicrofacetDiffuseReflectionComp,
         &MicrofacetSpecularReflectionComp,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &SphereMeshComp::new(25),
@@ -430,18 +381,15 @@ fn init_app(window: Window) -> Result<Application> {
         &AlbedoComp(Vector3::zeros()),
         &EmissiveLuminanceComp(vector![1.0, 1.0, 1.0] * 1e5),
         &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity(&UnidirectionalEmissionComp::new(
         vector![1.0, 1.0, 1.0] * 100000.0,
         UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
         Degrees(2.0),
-    ))
-    .unwrap();
+    ))?;
 
-    app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))
-        .unwrap();
+    app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
 
     // world
     //     .create_entity((
@@ -449,7 +397,7 @@ fn init_app(window: Window) -> Result<Application> {
     //         &VoxelTypeComp::new(VoxelType::Default),
     //         &ReferenceFrameComp::unoriented(point![-100.0, -100.0, -4.0]),
     //     ))
-    //     .unwrap();
+    //     ?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0), 1.0, 10.0, 3.0);
     // create_free_rotation_experiment(&world, Point3::new(0.0, 7.0, 2.0), 5.0, 1e-3);
@@ -464,7 +412,7 @@ fn create_harmonic_oscillation_experiment(
     mass: fph,
     spring_constant: fph,
     amplitude: fph,
-) {
+) -> Result<()> {
     let angular_frequency = fph::sqrt(spring_constant / mass);
     let period = fph::TWO_PI / angular_frequency;
 
@@ -473,26 +421,22 @@ fn create_harmonic_oscillation_experiment(
 
     let reference_position = attachment_position + vector![-2.0, -amplitude - 0.5, 0.0];
 
-    let attachment_point_entity = app
-        .create_entity((
-            &SphereMeshComp::new(15),
-            &ReferenceFrameComp::unoriented_scaled(attachment_position, 0.2),
-            &AlbedoComp(vector![0.8, 0.1, 0.1]),
-        ))
-        .unwrap();
+    let attachment_point_entity = app.create_entity((
+        &SphereMeshComp::new(15),
+        &ReferenceFrameComp::unoriented_scaled(attachment_position, 0.2),
+        &AlbedoComp(vector![0.8, 0.1, 0.1]),
+    ))?;
 
-    let cube_body_entity = app
-        .create_entity((
-            &BoxMeshComp::UNIT_CUBE,
-            &UniformRigidBodyComp { mass_density: mass },
-            &ReferenceFrameComp::for_unoriented_rigid_body(mass_position),
-            &VelocityComp::stationary(),
-            &AlbedoComp(vector![0.1, 0.1, 0.7]),
-            &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-            &LogsKineticEnergy,
-            &LogsMomentum,
-        ))
-        .unwrap();
+    let cube_body_entity = app.create_entity((
+        &BoxMeshComp::UNIT_CUBE,
+        &UniformRigidBodyComp { mass_density: mass },
+        &ReferenceFrameComp::for_unoriented_rigid_body(mass_position),
+        &VelocityComp::stationary(),
+        &AlbedoComp(vector![0.1, 0.1, 0.7]),
+        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+        &LogsKineticEnergy,
+        &LogsMomentum,
+    ))?;
 
     app.create_entity((
         &ReferenceFrameComp::default(),
@@ -503,8 +447,7 @@ fn create_harmonic_oscillation_experiment(
             Position::origin(),
             Spring::standard(spring_constant, 0.0, amplitude + 0.5),
         ),
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &BoxMeshComp::UNIT_CUBE,
@@ -519,8 +462,9 @@ fn create_harmonic_oscillation_experiment(
         ),
         &AlbedoComp(vector![0.1, 0.7, 0.1]),
         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-    ))
-    .unwrap();
+    ))?;
+
+    Ok(())
 }
 
 fn create_free_rotation_experiment(
@@ -528,7 +472,7 @@ fn create_free_rotation_experiment(
     position: Position,
     angular_speed: fph,
     angular_velocity_perturbation_fraction: fph,
-) {
+) -> Result<()> {
     let major_axis_body_position = position + vector![5.0, 0.0, 0.0];
     let intermediate_axis_body_position = position;
     let minor_axis_body_position = position - vector![5.0, 0.0, 0.0];
@@ -550,8 +494,7 @@ fn create_free_rotation_experiment(
         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
         &LogsKineticEnergy,
         &LogsMomentum,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
@@ -568,8 +511,7 @@ fn create_free_rotation_experiment(
         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
         &LogsKineticEnergy,
         &LogsMomentum,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
@@ -586,11 +528,12 @@ fn create_free_rotation_experiment(
         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
         &LogsKineticEnergy,
         &LogsMomentum,
-    ))
-    .unwrap();
+    ))?;
+
+    Ok(())
 }
 
-fn create_drag_drop_experiment(app: &Application, position: Position) {
+fn create_drag_drop_experiment(app: &Application, position: Position) -> Result<()> {
     app.simulator()
         .write()
         .unwrap()
@@ -612,8 +555,7 @@ fn create_drag_drop_experiment(app: &Application, position: Position) {
         &DetailedDragComp::new(1.0),
         &LogsKineticEnergy,
         &LogsMomentum,
-    ))
-    .unwrap();
+    ))?;
 
     app.create_entity((
         &ConeMeshComp::new(2.0, 1.0, 100),
@@ -626,6 +568,7 @@ fn create_drag_drop_experiment(app: &Application, position: Position) {
         &AlbedoComp(vector![0.7, 0.1, 0.1]),
         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
         &UniformGravityComp::earth(),
-    ))
-    .unwrap();
+    ))?;
+
+    Ok(())
 }

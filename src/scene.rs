@@ -12,8 +12,14 @@ pub use graph::{
 };
 
 use crate::{
-    camera::SceneCamera, gpu::rendering::fre, light::LightStorage, material::MaterialLibrary,
-    mesh::MeshRepository, model::InstanceFeatureManager, voxel::VoxelManager, window,
+    camera::SceneCamera,
+    gpu::rendering::fre,
+    light::LightStorage,
+    material::{MaterialLibrary, MaterialLibraryState},
+    mesh::{MeshRepository, MeshRepositoryState},
+    model::InstanceFeatureManager,
+    voxel::VoxelManager,
+    window,
 };
 use num_traits::FromPrimitive;
 use std::{num::NonZeroU32, sync::RwLock};
@@ -22,7 +28,9 @@ use std::{num::NonZeroU32, sync::RwLock};
 #[derive(Debug)]
 pub struct Scene {
     mesh_repository: RwLock<MeshRepository<fre>>,
+    initial_mesh_repository_state: MeshRepositoryState,
     material_library: RwLock<MaterialLibrary>,
+    initial_material_library_state: MaterialLibraryState,
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
     voxel_manager: RwLock<VoxelManager<fre>>,
@@ -41,17 +49,21 @@ pub enum RenderResourcesDesynchronized {
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(
-        initial_mesh_repository: MeshRepository<fre>,
-        initial_material_library: MaterialLibrary,
-        initial_instance_feature_manager: InstanceFeatureManager,
-        initial_voxel_manager: VoxelManager<fre>,
+        mesh_repository: MeshRepository<fre>,
+        material_library: MaterialLibrary,
+        instance_feature_manager: InstanceFeatureManager,
+        voxel_manager: VoxelManager<fre>,
     ) -> Self {
+        let initial_mesh_repository_state = mesh_repository.record_state();
+        let initial_material_library_state = material_library.record_state();
         Self {
-            mesh_repository: RwLock::new(initial_mesh_repository),
-            material_library: RwLock::new(initial_material_library),
+            mesh_repository: RwLock::new(mesh_repository),
+            initial_mesh_repository_state,
+            material_library: RwLock::new(material_library),
+            initial_material_library_state,
             light_storage: RwLock::new(LightStorage::new()),
-            instance_feature_manager: RwLock::new(initial_instance_feature_manager),
-            voxel_manager: RwLock::new(initial_voxel_manager),
+            instance_feature_manager: RwLock::new(instance_feature_manager),
+            voxel_manager: RwLock::new(voxel_manager),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
         }
@@ -117,6 +129,32 @@ impl Scene {
             );
 
         desynchronized
+    }
+
+    /// Resets the scene to the initial empty state.
+    pub fn clear(&self) {
+        self.mesh_repository
+            .write()
+            .unwrap()
+            .reset_to_state(&self.initial_mesh_repository_state);
+
+        self.material_library
+            .write()
+            .unwrap()
+            .reset_to_state(&self.initial_material_library_state);
+
+        self.light_storage.write().unwrap().remove_all_lights();
+
+        self.instance_feature_manager
+            .write()
+            .unwrap()
+            .clear_storages_and_buffers();
+
+        self.voxel_manager.write().unwrap().remove_all_voxel_trees();
+
+        self.scene_graph.write().unwrap().clear_nodes();
+
+        self.scene_camera.write().unwrap().take();
     }
 }
 

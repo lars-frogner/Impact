@@ -334,6 +334,13 @@ impl LightStorage {
             .valid_uniforms_with_ids_mut()
     }
 
+    /// Removes all lights from the storage.
+    pub fn remove_all_lights(&mut self) {
+        self.ambient_light_buffer.remove_all_uniforms();
+        self.omnidirectional_light_buffer.remove_all_uniforms();
+        self.unidirectional_light_buffer.remove_all_uniforms();
+    }
+
     fn create_new_light_id(&mut self) -> LightID {
         let light_id = LightID(self.light_id_counter);
         self.light_id_counter = self.light_id_counter.checked_add(1).unwrap();

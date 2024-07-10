@@ -632,6 +632,15 @@ impl InstanceFeatureManager {
             .add_features_from_iterator(transforms);
     }
 
+    /// Clears all instance feature buffers and removes all features from the
+    /// storages.
+    pub fn clear_storages_and_buffers(&mut self) {
+        self.instance_feature_buffers.clear();
+        for storage in self.feature_storages.values_mut() {
+            storage.remove_all_features();
+        }
+    }
+
     fn register_instance_with_feature_type_ids(
         &mut self,
         model_id: ModelID,
@@ -835,6 +844,12 @@ impl InstanceFeatureStorage {
             // Remove last feature (this must be done on the raw byte `Vec`)
             self.bytes.truncate(last_feature_start);
         }
+    }
+
+    /// Removes all the features from the storage.
+    pub fn remove_all_features(&mut self) {
+        self.bytes.truncate(0);
+        self.index_map.clear();
     }
 
     fn type_descriptor(&self) -> InstanceFeatureTypeDescriptor {
@@ -2281,6 +2296,42 @@ mod test {
             let id = storage.add_feature(&feature);
             storage.remove_feature(id);
             storage.remove_feature(id);
+        }
+
+        #[test]
+        fn removing_all_features_from_empty_instance_feature_storage_works() {
+            let mut storage = InstanceFeatureStorage::new::<Feature>();
+            storage.remove_all_features();
+            assert_eq!(storage.feature_count(), 0);
+        }
+
+        #[test]
+        fn removing_all_features_from_single_instance_feature_storage_works() {
+            let mut storage = InstanceFeatureStorage::new::<Feature>();
+            let feature_1 = create_dummy_feature();
+
+            let id_1 = storage.add_feature(&feature_1);
+
+            storage.remove_all_features();
+
+            assert_eq!(storage.feature_count(), 0);
+            assert!(!storage.has_feature(id_1));
+        }
+
+        #[test]
+        fn removing_all_features_from_multi_instance_feature_storage_works() {
+            let mut storage = InstanceFeatureStorage::new::<Feature>();
+            let feature_1 = create_dummy_feature();
+            let feature_2 = InstanceModelViewTransform::identity();
+
+            let id_1 = storage.add_feature(&feature_1);
+            let id_2 = storage.add_feature(&feature_2);
+
+            storage.remove_all_features();
+
+            assert_eq!(storage.feature_count(), 0);
+            assert!(!storage.has_feature(id_1));
+            assert!(!storage.has_feature(id_2));
         }
 
         #[test]

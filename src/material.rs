@@ -25,7 +25,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, stringhash64_newtype, Hash64, StringHash64};
 use nalgebra::Vector3;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     fmt,
 };
 
@@ -99,6 +99,13 @@ pub struct MaterialLibrary {
     material_specifications: HashMap<MaterialID, MaterialSpecification>,
     material_property_texture_groups:
         HashMap<MaterialPropertyTextureGroupID, MaterialPropertyTextureGroup>,
+}
+
+/// Record of the state of a [`MaterialLibrary`].
+#[derive(Clone, Debug)]
+pub struct MaterialLibraryState {
+    material_ids: HashSet<MaterialID>,
+    material_property_texture_group_ids: HashSet<MaterialPropertyTextureGroupID>,
 }
 
 const MATERIAL_VERTEX_BINDING_START: u32 = 20;
@@ -346,6 +353,19 @@ impl MaterialLibrary {
         }
     }
 
+    /// Records the current state of the library and returns it as a
+    /// [`MaterialLibraryState`].
+    pub fn record_state(&self) -> MaterialLibraryState {
+        MaterialLibraryState {
+            material_ids: self.material_specifications.keys().cloned().collect(),
+            material_property_texture_group_ids: self
+                .material_property_texture_groups
+                .keys()
+                .cloned()
+                .collect(),
+        }
+    }
+
     /// Returns a reference to the [`HashMap`] storing all
     /// [`MaterialSpecification`]s.
     pub fn material_specifications(&self) -> &HashMap<MaterialID, MaterialSpecification> {
@@ -418,6 +438,19 @@ impl MaterialLibrary {
     ) {
         self.material_property_texture_groups
             .insert(texture_group_id, texture_group);
+    }
+
+    /// Removes the materials and material property texture groups that are not
+    /// part of the given library state.
+    pub fn reset_to_state(&mut self, state: &MaterialLibraryState) {
+        self.material_specifications
+            .retain(|material_id, _| state.material_ids.contains(material_id));
+        self.material_property_texture_groups
+            .retain(|texture_group_id, _| {
+                state
+                    .material_property_texture_group_ids
+                    .contains(texture_group_id)
+            });
     }
 }
 

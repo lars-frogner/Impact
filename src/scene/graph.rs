@@ -146,7 +146,7 @@ impl<F: Float> SceneGraph<F> {
         let voxel_tree_nodes = NodeStorage::new();
         let camera_nodes = NodeStorage::new();
 
-        let root_node_id = group_nodes.add_node(GroupNode::root(Similarity3::identity()));
+        let root_node_id = group_nodes.add_node(GroupNode::root());
 
         Self {
             root_node_id,
@@ -406,6 +406,15 @@ impl<F: Float> SceneGraph<F> {
         self.group_nodes
             .node_mut(parent_node_id)
             .remove_child_camera_node(camera_node_id);
+    }
+
+    /// Removes all descendents of the root node from the tree.
+    pub fn clear_nodes(&mut self) {
+        self.group_nodes.remove_all_nodes();
+        self.model_instance_nodes.remove_all_nodes();
+        self.voxel_tree_nodes.remove_all_nodes();
+        self.camera_nodes.remove_all_nodes();
+        self.root_node_id = self.group_nodes.add_node(GroupNode::root());
     }
 
     /// Sets the given transform as the parent-to-model transform for the
@@ -1353,6 +1362,10 @@ impl<N: SceneGraphNode> NodeStorage<N> {
     fn remove_node(&mut self, node_id: N::ID) {
         self.nodes.free_element_at_idx(node_id.idx());
     }
+
+    fn remove_all_nodes(&mut self) {
+        self.nodes.free_all_elements();
+    }
 }
 
 impl<F: Float> GroupNode<F> {
@@ -1377,8 +1390,8 @@ impl<F: Float> GroupNode<F> {
         }
     }
 
-    fn root(transform: NodeTransform<F>) -> Self {
-        Self::new(None, transform)
+    fn root() -> Self {
+        Self::new(None, NodeTransform::identity())
     }
 
     fn non_root(parent_node_id: GroupNodeID, transform: NodeTransform<F>) -> Self {

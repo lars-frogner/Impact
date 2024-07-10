@@ -5,7 +5,6 @@ use crate::{
     gpu::{
         rendering::fre,
         texture::{ColorSpace, TextureAddressingConfig, TextureConfig},
-        GraphicsDevice,
     },
     material::{
         components::{
@@ -45,7 +44,6 @@ use tobj::{Material as ObjMaterial, Mesh as ObjMesh, GPU_LOAD_OPTIONS};
 /// Returns an error if any of the involved OBJ, MTL or texture files can not be
 /// found or loaded.
 pub fn load_models_from_obj_file<P>(
-    graphics_device: &GraphicsDevice,
     assets: &mut Assets,
     mesh_repository: &mut MeshRepository<fre>,
     obj_file_path: P,
@@ -84,7 +82,6 @@ where
             let material_components = match material_components.entry(material_idx) {
                 Entry::Vacant(entry) => entry
                     .insert(create_material_components_from_tobj_material(
-                        graphics_device,
                         assets,
                         &obj_file_path_string,
                         &materials[material_idx],
@@ -261,7 +258,6 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
 }
 
 fn create_material_components_from_tobj_material(
-    graphics_device: &GraphicsDevice,
     assets: &mut Assets,
     obj_file_path: impl AsRef<str>,
     material: &ObjMaterial,
@@ -322,7 +318,6 @@ fn create_material_components_from_tobj_material(
 
     if let Some(albedo_texture_path) = &material.diffuse_texture {
         let albedo_texture_id = assets.load_texture_from_path(
-            graphics_device,
             albedo_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
@@ -342,7 +337,6 @@ fn create_material_components_from_tobj_material(
 
     if let Some(specular_reflectance_path) = &material.specular_texture {
         let specular_reflectance_id = assets.load_texture_from_path(
-            graphics_device,
             specular_reflectance_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
@@ -364,7 +358,6 @@ fn create_material_components_from_tobj_material(
 
     if let Some(normal_texture_path) = &material.normal_texture {
         let normal_texture_id = assets.load_texture_from_path(
-            graphics_device,
             normal_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Linear,

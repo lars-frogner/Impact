@@ -332,6 +332,12 @@ impl RenderCommandManager {
         shader_manager: &mut ShaderManager,
         postprocessor: &Postprocessor,
     ) -> Result<()> {
+        // We do not attempt to render anything without a camera
+        if render_resources.get_camera_buffer_manager().is_none() {
+            self.clear_recorders();
+            return Ok(());
+        }
+
         self.sync_clearing_passes(config);
 
         let light_buffer_manager = render_resources.get_light_buffer_manager();
