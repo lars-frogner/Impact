@@ -210,6 +210,14 @@ impl World {
         Ok(())
     }
 
+    /// Removes all entities and their components from the world.
+    pub fn remove_all_entities(&mut self) {
+        for table in &self.archetype_tables {
+            table.write().unwrap().remove_all_entities();
+        }
+        self.n_removed_entities += self.entity_count();
+    }
+
     /// Returns an [`EntityEntry`] that can be used to access the components
     /// of the given [`Entity`]. If the entity does not exist, [`None`] is
     /// returned.
@@ -651,6 +659,7 @@ mod test {
 
         world.remove_entity(&entity).unwrap();
         assert_eq!(world.entity_count(), 0);
+        assert!(world.get_entity(&entity).is_none());
     }
 
     #[test]
@@ -660,6 +669,34 @@ mod test {
         let entity = world.create_entity(&POS).unwrap();
         world.remove_entity(&entity).unwrap();
         world.remove_entity(&entity).unwrap();
+    }
+
+    #[test]
+    fn removing_all_entities_from_empty_world_works() {
+        let mut world = World::new();
+        world.remove_all_entities();
+        assert_eq!(world.entity_count(), 0);
+    }
+
+    #[test]
+    fn removing_all_entities_from_single_entity_world_works() {
+        let mut world = World::new();
+        let entity = world.create_entity(&POS).unwrap();
+        world.remove_all_entities();
+        assert_eq!(world.entity_count(), 0);
+        assert!(world.get_entity(&entity).is_none());
+    }
+
+    #[test]
+    fn removing_all_entities_from_multi_entity_world_works() {
+        let mut world = World::new();
+        let entities = world
+            .create_entities((&[POS, POS2], &[TEMP, TEMP2]))
+            .unwrap();
+        world.remove_all_entities();
+        assert_eq!(world.entity_count(), 0);
+        assert!(world.get_entity(&entities[0]).is_none());
+        assert!(world.get_entity(&entities[1]).is_none());
     }
 
     #[test]

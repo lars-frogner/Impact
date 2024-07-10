@@ -839,6 +839,14 @@ impl ArchetypeTable {
         )))
     }
 
+    /// Removes all entities and their data from the table.
+    pub(crate) fn remove_all_entities(&mut self) {
+        self.entity_index_mapper.clear();
+        for storage in &self.component_storages {
+            storage.write().unwrap().clear();
+        }
+    }
+
     /// Returns a reference to the component of the type specified
     /// by the `C` type parameter belonging to the entity with the
     /// given [`EntityID`]. If the entity is not present in the table
@@ -2426,5 +2434,71 @@ mod test {
             ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
         table.remove_entity(entity_0).unwrap();
         table.remove_entity(entity_0).unwrap();
+    }
+
+    #[test]
+    fn removing_all_entities_from_single_entity_table_works() {
+        let entity_0 = EntityID(0);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+
+        table.remove_all_entities();
+
+        assert!(table.is_empty());
+        assert!(!table.has_entity(entity_0));
+        assert_eq!(
+            table
+                .component_storage(Byte::component_id())
+                .read()
+                .unwrap()
+                .component_count(),
+            0
+        );
+    }
+
+    #[test]
+    fn removing_all_entities_from_multi_entity_table_works() {
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+
+        let mut table =
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
+        table.add_entities([entity_1], (&RECT, &POS).try_into().unwrap());
+
+        table.remove_all_entities();
+
+        assert!(table.is_empty());
+        assert!(!table.has_entity(entity_0));
+        assert!(!table.has_entity(entity_1));
+        assert_eq!(
+            table
+                .component_storage(Rectangle::component_id())
+                .read()
+                .unwrap()
+                .component_count(),
+            0
+        );
+        assert_eq!(
+            table
+                .component_storage(Position::component_id())
+                .read()
+                .unwrap()
+                .component_count(),
+            0
+        );
+    }
+
+    #[test]
+    fn reusing_table_after_removing_all_entities_works() {
+        let entity_0 = EntityID(0);
+        let entity_1 = EntityID(1);
+
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        table.remove_all_entities();
+
+        table.add_entities([entity_1], (&BYTE2).into());
+
+        assert!(!table.has_entity(entity_0));
+        assert!(table.has_entity(entity_1));
+        assert_eq!(table.entity(entity_1).component::<Byte>(), &BYTE2);
     }
 }

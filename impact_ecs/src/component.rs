@@ -400,6 +400,12 @@ impl ComponentStorage {
         removed_component_data
     }
 
+    /// Removes all components from the storage.
+    pub fn clear(&mut self) {
+        self.bytes.truncate(0);
+        self.component_count = 0;
+    }
+
     fn validate_component<C: Component>(&self) {
         self.validate_component_id(C::component_id());
     }
@@ -1065,5 +1071,42 @@ mod test {
         assert_eq!(storage.component_count(), 3);
         assert_eq!(storage.size(), 3 * mem::size_of::<Rectangle>());
         assert_eq!(storage.slice::<Rectangle>(), &[RECT_1, RECT_1, RECT_1]);
+    }
+
+    #[test]
+    fn clearing_empty_storage_works() {
+        let mut storage = ComponentStorage::with_capacity::<Rectangle>(10);
+        storage.clear();
+        assert_eq!(storage.component_count(), 0);
+        assert_eq!(storage.size(), 0);
+        assert_eq!(storage.slice::<Rectangle>(), &[]);
+    }
+
+    #[test]
+    fn clearing_single_component_storage_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.clear();
+        assert_eq!(storage.component_count(), 0);
+        assert_eq!(storage.size(), 0);
+        assert_eq!(storage.slice::<Rectangle>(), &[]);
+    }
+
+    #[test]
+    fn clearing_multi_component_storage_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.push(&RECT_2);
+        storage.clear();
+        assert_eq!(storage.component_count(), 0);
+        assert_eq!(storage.size(), 0);
+        assert_eq!(storage.slice::<Rectangle>(), &[]);
+    }
+
+    #[test]
+    fn reusing_cleared_storage_works() {
+        let mut storage = ComponentStorage::from_view(&RECT_1);
+        storage.clear();
+        storage.push(&RECT_2);
+        assert_eq!(storage.component_count(), 1);
+        assert_eq!(storage.slice::<Rectangle>(), &[RECT_2]);
     }
 }
