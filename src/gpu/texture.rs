@@ -1,14 +1,7 @@
 //! Textures.
 
-mod attachment;
-mod shadow_map;
-
-pub use attachment::{
-    RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-};
-pub use shadow_map::{
-    CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, SHADOW_MAP_FORMAT,
-};
+pub mod attachment;
+pub mod shadow_map;
 
 use crate::{gpu::GraphicsDevice, io};
 use anyhow::{anyhow, bail, Result};
@@ -939,7 +932,7 @@ impl MipmapGenerator {
     pub fn new(device: &wgpu::Device) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../../../shader/mipmap.wgsl"
+                "../../shader/mipmap.wgsl"
             ))),
             label: Some("Mipmap shader"),
         });

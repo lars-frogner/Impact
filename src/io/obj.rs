@@ -3,7 +3,8 @@
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::{fre, ColorSpace, TextureAddressingConfig, TextureConfig},
+        rendering::fre,
+        texture::{ColorSpace, TextureAddressingConfig, TextureConfig},
         GraphicsDevice,
     },
     material::{

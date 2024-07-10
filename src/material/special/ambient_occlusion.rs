@@ -3,11 +3,12 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
-        rendering::{fre, RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::{fre, render_command::RenderPassHints},
         shader::{
             AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
             MaterialShaderInput,
         },
+        texture::attachment::RenderAttachmentQuantitySet,
         uniform::{self, SingleUniformRenderBuffer, UniformBufferable},
         GraphicsDevice,
     },

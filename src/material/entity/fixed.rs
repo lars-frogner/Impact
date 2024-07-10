@@ -4,8 +4,9 @@ use super::super::features::FixedColorMaterialFeature;
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::render_command::RenderPassHints,
         shader::{FixedTextureShaderInput, MaterialShaderInput},
+        texture::attachment::RenderAttachmentQuantitySet,
         GraphicsDevice,
     },
     material::{

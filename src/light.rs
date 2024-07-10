@@ -8,10 +8,7 @@ use crate::{
     geometry::{
         Angle, AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrthographicTransform, Sphere,
     },
-    gpu::{
-        rendering::{fre, CascadeIdx},
-        uniform::UniformBuffer,
-    },
+    gpu::{rendering::fre, texture::shadow_map::CascadeIdx, uniform::UniformBuffer},
     model::InstanceFeatureBufferRangeID,
     num::Float,
     util::bounds::UpperExclusiveBounds,

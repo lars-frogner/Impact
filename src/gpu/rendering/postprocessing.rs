@@ -3,11 +3,14 @@
 use crate::{
     gpu::{
         rendering::{
-            fre, DepthMapUsage, OutputAttachmentSampling, RenderAttachmentQuantity,
-            RenderCommandSpecification, RenderCommandState, RenderPassHints,
-            RenderPassSpecification,
+            fre,
+            render_command::{
+                DepthMapUsage, OutputAttachmentSampling, RenderCommandSpecification,
+                RenderCommandState, RenderPassHints, RenderPassSpecification,
+            },
         },
         shader::{MaterialShaderInput, PassthroughShaderInput},
+        texture::attachment::RenderAttachmentQuantity,
         GraphicsDevice,
     },
     material::{

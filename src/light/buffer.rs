@@ -3,14 +3,12 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
-        rendering::{
-            texture::{CascadedShadowMapTexture, ShadowCubemapTexture},
-            CascadeIdx, RenderingConfig,
-        },
+        rendering::RenderingConfig,
         shader::{
             AmbientLightShaderInput, LightShaderInput, OmnidirectionalLightShaderInput,
             UnidirectionalLightShaderInput,
         },
+        texture::shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{
             self, MultiUniformRenderBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
         },

@@ -2,7 +2,7 @@
 
 use crate::{
     control::motion::{MotionDirection, MotionState},
-    gpu::rendering::RenderAttachmentQuantity,
+    gpu::texture::attachment::RenderAttachmentQuantity,
     window::EventLoopController,
     world::World,
 };

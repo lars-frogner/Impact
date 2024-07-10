@@ -36,7 +36,7 @@ use super::{
     VECTOR_4_TYPE,
 };
 use crate::{
-    gpu::rendering::{fre, RenderAttachmentQuantitySet},
+    gpu::{rendering::fre, texture::attachment::RenderAttachmentQuantitySet},
     light::MAX_SHADOW_MAP_CASCADES,
     mesh::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,

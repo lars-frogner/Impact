@@ -9,7 +9,7 @@ use super::{
     },
     LightShaderGenerator, MeshVertexOutputFieldIndices, PushConstantFieldExpressions,
 };
-use crate::gpu::rendering::RenderAttachmentQuantitySet;
+use crate::gpu::texture::attachment::RenderAttachmentQuantitySet;
 use naga::{BinaryOperator, Expression, Function, Handle, Module};
 
 /// Input description specifying the bindings of textures for prepass material

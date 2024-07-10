@@ -7,25 +7,18 @@ pub mod render_command;
 pub mod resource;
 pub mod surface;
 pub mod tasks;
-pub mod texture;
 
-pub use brdf::create_specular_ggx_reflectance_lookup_tables;
-pub use render_command::{
-    Blending, ComputePassSpecification, DepthMapUsage, OutputAttachmentSampling,
-    RenderCommandManager, RenderCommandSpecification, RenderCommandState, RenderPassHints,
-    RenderPassSpecification,
-};
-pub use surface::RenderingSurface;
-pub use texture::{
-    CascadeIdx, ColorSpace, DepthOrArrayLayers, RenderAttachmentQuantity,
-    RenderAttachmentQuantitySet, RenderAttachmentTextureManager, TexelDescription, TexelType,
-    Texture, TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureLookupTable,
-};
-
-use self::{render_command::RenderCommandOutcome, resource::RenderResourceManager};
 use crate::{
     geometry::CubemapFace,
-    gpu::{compute::GPUComputationLibrary, shader::ShaderManager, GraphicsDevice},
+    gpu::{
+        compute::GPUComputationLibrary,
+        shader::ShaderManager,
+        texture::{
+            self,
+            attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+        },
+        GraphicsDevice,
+    },
     light::MAX_SHADOW_MAP_CASCADES,
     material::{special::tone_mapping::ToneMapping, MaterialLibrary},
     scene::Scene,
@@ -34,6 +27,9 @@ use crate::{
 use anyhow::{Error, Result};
 use chrono::Utc;
 use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
+use render_command::RenderCommandManager;
+use render_command::RenderCommandOutcome;
+use resource::RenderResourceManager;
 use std::{
     num::NonZeroU32,
     sync::{
@@ -41,6 +37,7 @@ use std::{
         Arc, RwLock,
     },
 };
+use surface::RenderingSurface;
 
 /// Floating point type used for rendering.
 ///

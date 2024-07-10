@@ -11,7 +11,7 @@ use super::{
     OmnidirectionalLightShaderGenerator, PushConstantFieldExpressions,
     UnidirectionalLightShaderGenerator,
 };
-use crate::gpu::rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
+use crate::gpu::texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
 use naga::{Function, Module};
 
 /// Input description specifying the bindings of textures for Blinn-Phong

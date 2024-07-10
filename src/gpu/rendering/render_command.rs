@@ -9,13 +9,18 @@ use crate::{
         compute::{GPUComputationID, GPUComputationSpecification},
         rendering::{
             postprocessing::Postprocessor, resource::SynchronizedRenderResources,
-            texture::SHADOW_MAP_FORMAT, CascadeIdx, GPUComputationLibrary,
-            RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderAttachmentTextureManager,
-            RenderingConfig, RenderingSurface,
+            surface::RenderingSurface, GPUComputationLibrary, RenderingConfig,
         },
         shader::{
             CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,
             MaterialShaderInput, MeshShaderInput, Shader, ShaderManager,
+        },
+        texture::{
+            attachment::{
+                RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+                RenderAttachmentTextureManager,
+            },
+            shadow_map::{CascadeIdx, SHADOW_MAP_FORMAT},
         },
         GraphicsDevice,
     },

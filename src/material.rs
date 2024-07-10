@@ -10,9 +10,10 @@ pub use features::register_material_feature_types;
 use crate::{
     assets::{Assets, TextureID},
     gpu::{
-        rendering::{fre, RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::{fre, render_command::RenderPassHints},
         shader::MaterialShaderInput,
         storage::StorageRenderBuffer,
+        texture::attachment::RenderAttachmentQuantitySet,
         uniform::SingleUniformRenderBuffer,
         GraphicsDevice,
     },

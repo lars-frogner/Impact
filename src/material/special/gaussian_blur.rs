@@ -3,8 +3,9 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
-        rendering::{fre, RenderAttachmentQuantity, RenderPassHints},
+        rendering::{fre, render_command::RenderPassHints},
         shader::{GaussianBlurShaderInput, MaterialShaderInput},
+        texture::attachment::RenderAttachmentQuantity,
         uniform::{self, SingleUniformRenderBuffer, UniformBufferable},
         GraphicsDevice,
     },

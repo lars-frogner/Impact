@@ -3,7 +3,7 @@
 use crate::{
     camera::SceneCamera,
     geometry::{CubemapFace, Frustum, OrthographicTransform, Sphere},
-    gpu::rendering::{fre, CascadeIdx},
+    gpu::{rendering::fre, texture::shadow_map::CascadeIdx},
     light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
     model::{
         InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceModelLightTransform,

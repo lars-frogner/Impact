@@ -1,11 +1,9 @@
 //! Material using the colors of the mesh vertices.
 
-use std::sync::RwLock;
-
 use crate::{
     gpu::{
-        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
-        shader::MaterialShaderInput,
+        rendering::render_command::RenderPassHints, shader::MaterialShaderInput,
+        texture::attachment::RenderAttachmentQuantitySet,
     },
     material::{
         components::{MaterialComp, VertexColorComp},
@@ -16,6 +14,7 @@ use crate::{
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
+use std::sync::RwLock;
 
 lazy_static! {
     static ref VERTEX_COLOR_MATERIAL_ID: MaterialID = MaterialID(hash64!("VertexColorMaterial"));
