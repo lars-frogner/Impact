@@ -168,6 +168,12 @@ impl<T> GenerationalReusingVec<T> {
         );
         self.free_list.push_back(idx);
     }
+
+    /// Remove all elements by registering every occupied index as free.
+    pub fn free_all_elements(&mut self) {
+        self.free_list.clear();
+        self.free_list.extend(0..self.elements.len());
+    }
 }
 
 impl GenerationalIdx {
@@ -414,5 +420,43 @@ mod test {
         vec.free_element_at_idx(first_idx);
         vec.add_element(1.0);
         assert!(vec.get_element_mut(first_idx).is_none());
+    }
+
+    #[test]
+    fn freeing_all_elements_for_empty_vec_works() {
+        let mut vec = GenerationalReusingVec::<f32>::new();
+        vec.free_all_elements();
+        assert_eq!(vec.n_elements(), 0);
+    }
+
+    #[test]
+    fn freeing_all_elements_for_single_element_vec_works() {
+        let mut vec = GenerationalReusingVec::<f32>::new();
+        let first_idx = vec.add_element(0.0);
+        vec.free_all_elements();
+        assert_eq!(vec.n_elements(), 0);
+        assert!(vec.get_element(first_idx).is_none());
+    }
+
+    #[test]
+    fn freeing_all_elements_for_multi_element_vec_works() {
+        let mut vec = GenerationalReusingVec::<f32>::new();
+        let first_idx = vec.add_element(0.0);
+        let second_idx = vec.add_element(1.0);
+        vec.free_all_elements();
+        assert_eq!(vec.n_elements(), 0);
+        assert!(vec.get_element(first_idx).is_none());
+        assert!(vec.get_element(second_idx).is_none());
+    }
+
+    #[test]
+    fn reusing_vec_after_freeing_all_elements_works() {
+        let mut vec = GenerationalReusingVec::<f32>::new();
+        let idx_before_free = vec.add_element(0.0);
+        vec.free_all_elements();
+        let idx_after_free = vec.add_element(1.0);
+        assert_eq!(vec.n_elements(), 1);
+        assert!(vec.get_element(idx_before_free).is_none());
+        assert_eq!(*vec.element(idx_after_free), 1.0);
     }
 }
