@@ -1,7 +1,6 @@
 //! Graphics rendering.
 
 pub mod brdf;
-pub mod buffer;
 pub mod postprocessing;
 pub mod render_command;
 pub mod resource;

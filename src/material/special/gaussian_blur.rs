@@ -6,7 +6,7 @@ use crate::{
         rendering::{fre, render_command::RenderPassHints},
         shader::{GaussianBlurShaderInput, MaterialShaderInput},
         texture::attachment::RenderAttachmentQuantity,
-        uniform::{self, SingleUniformRenderBuffer, UniformBufferable},
+        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
     material::{MaterialSpecificResourceGroup, MaterialSpecification},
@@ -161,7 +161,7 @@ pub fn create_gaussian_blur_material(
     direction: GaussianBlurDirection,
     sample_uniform: &GaussianBlurSamples,
 ) -> MaterialSpecification {
-    let sample_uniform_buffer = SingleUniformRenderBuffer::for_uniform(
+    let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
         graphics_device,
         sample_uniform,
         wgpu::ShaderStages::FRAGMENT,

@@ -1,7 +1,7 @@
 //! Buffering of model instance data for rendering.
 
 use crate::{
-    gpu::{rendering::buffer::RenderBuffer, shader::InstanceFeatureShaderInput, GraphicsDevice},
+    gpu::{buffer::GPUBuffer, shader::InstanceFeatureShaderInput, GraphicsDevice},
     model::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,
@@ -9,11 +9,11 @@ use crate::{
 };
 use std::{borrow::Cow, ops::Range};
 
-/// Owner and manager of a vertex render buffer for model instance
+/// Owner and manager of a vertex GPU buffer for model instance
 /// features.
 #[derive(Debug)]
-pub struct InstanceFeatureRenderBufferManager {
-    feature_render_buffer: RenderBuffer,
+pub struct InstanceFeatureGPUBufferManager {
+    feature_gpu_buffer: GPUBuffer,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
     shader_input: InstanceFeatureShaderInput,
     feature_type_id: InstanceFeatureTypeID,
@@ -21,8 +21,8 @@ pub struct InstanceFeatureRenderBufferManager {
     range_map: InstanceFeatureBufferRangeMap,
 }
 
-impl InstanceFeatureRenderBufferManager {
-    /// Creates a new manager with a vertex render buffer initialized
+impl InstanceFeatureGPUBufferManager {
+    /// Creates a new manager with a vertex GPU buffer initialized
     /// from the given model instance feature buffer.
     pub fn new(
         graphics_device: &GraphicsDevice,
@@ -33,10 +33,10 @@ impl InstanceFeatureRenderBufferManager {
 
         assert!(
             !raw_buffer.is_empty(),
-            "Tried to create render buffer manager for empty instance feature buffer"
+            "Tried to create GPU buffer manager for empty instance feature buffer"
         );
 
-        let feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
+        let feature_gpu_buffer = GPUBuffer::new_vertex_buffer_with_bytes(
             graphics_device,
             raw_buffer,
             feature_buffer.n_valid_bytes(),
@@ -44,7 +44,7 @@ impl InstanceFeatureRenderBufferManager {
         );
 
         Self {
-            feature_render_buffer,
+            feature_gpu_buffer,
             vertex_buffer_layout: feature_buffer.vertex_buffer_layout().clone(),
             shader_input: feature_buffer.shader_input().clone(),
             feature_type_id: feature_buffer.feature_type_id(),
@@ -58,9 +58,9 @@ impl InstanceFeatureRenderBufferManager {
         &self.vertex_buffer_layout
     }
 
-    /// Returns the vertex render buffer of instance features.
-    pub fn vertex_render_buffer(&self) -> &RenderBuffer {
-        &self.feature_render_buffer
+    /// Returns the vertex GPU buffer of instance features.
+    pub fn vertex_gpu_buffer(&self) -> &GPUBuffer {
+        &self.feature_gpu_buffer
     }
 
     /// Returns the input required for accessing the features
@@ -69,7 +69,7 @@ impl InstanceFeatureRenderBufferManager {
         &self.shader_input
     }
 
-    /// Returns the number of features in the render buffer.
+    /// Returns the number of features in the GPU buffer.
     pub fn n_features(&self) -> u32 {
         self.n_features
     }
@@ -94,13 +94,13 @@ impl InstanceFeatureRenderBufferManager {
     }
 
     /// Writes the valid features in the given model instance feature
-    /// buffer into the instance feature render buffer (reallocating the
-    /// render buffer if required).
+    /// buffer into the instance feature GPU buffer (reallocating the
+    /// GPU buffer if required).
     ///
     /// # Panics
     /// If the given buffer stores features of a different type than the
-    /// render buffer.
-    pub fn copy_instance_features_to_render_buffer(
+    /// GPU buffer.
+    pub fn copy_instance_features_to_gpu_buffer(
         &mut self,
         graphics_device: &GraphicsDevice,
         feature_buffer: &DynamicInstanceFeatureBuffer,
@@ -110,18 +110,18 @@ impl InstanceFeatureRenderBufferManager {
         let valid_bytes = feature_buffer.valid_bytes();
         let n_valid_bytes = valid_bytes.len();
 
-        if n_valid_bytes > self.feature_render_buffer.buffer_size() {
+        if n_valid_bytes > self.feature_gpu_buffer.buffer_size() {
             // If the number of valid features exceeds the capacity of the existing buffer,
             // we create a new one that is large enough for all the features (also the ones
             // not currently valid)
-            self.feature_render_buffer = RenderBuffer::new_vertex_buffer_with_bytes(
+            self.feature_gpu_buffer = GPUBuffer::new_vertex_buffer_with_bytes(
                 graphics_device,
                 bytemuck::cast_slice(feature_buffer.raw_buffer()),
                 n_valid_bytes,
-                self.feature_render_buffer.label().clone(),
+                self.feature_gpu_buffer.label().clone(),
             );
         } else {
-            self.feature_render_buffer
+            self.feature_gpu_buffer
                 .update_valid_bytes(graphics_device, valid_bytes);
         }
 

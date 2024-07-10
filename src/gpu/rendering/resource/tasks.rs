@@ -1,4 +1,4 @@
-//! Tasks for synchronizing render buffers.
+//! Tasks for synchronizing GPU buffers.
 
 use super::DesynchronizedRenderResources;
 use crate::{
@@ -18,14 +18,14 @@ define_task!(
     /// updates for keeping the [`World`]s render resources in sync with
     /// the source data.
     ///
-    /// Render buffers whose source data no longer exists will
+    /// GPU buffers whose source data no longer exists will
     /// be removed, and missing render resources for new source
     /// data will be created.
     [pub] SyncRenderResources,
     depends_on = [
-        SyncCameraRenderBuffer,
-        SyncMeshRenderBuffers,
-        SyncLightRenderBuffers,
+        SyncCameraGPUBuffer,
+        SyncMeshGPUBuffers,
+        SyncLightGPUBuffers,
         SyncInstanceFeatureBuffers
     ],
     execute_on = [RenderingTag],
@@ -40,11 +40,11 @@ define_task!(
 );
 
 define_task!(
-    SyncCameraRenderBuffer,
+    SyncCameraGPUBuffer,
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing camera render buffer"; {
+        with_debug_logging!("Synchronizing camera GPU buffer"; {
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -68,11 +68,11 @@ define_task!(
 );
 
 define_task!(
-    SyncMeshRenderBuffers,
+    SyncMeshGPUBuffers,
     depends_on = [],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing mesh render buffers"; {
+        with_debug_logging!("Synchronizing mesh GPU buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -96,7 +96,7 @@ define_task!(
 );
 
 define_task!(
-    SyncLightRenderBuffers,
+    SyncLightGPUBuffers,
     depends_on = [
         SyncLightsInStorage,
         BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
@@ -104,7 +104,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing light render buffers"; {
+        with_debug_logging!("Synchronizing light GPU buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -136,7 +136,7 @@ define_task!(
     ],
     execute_on = [RenderingTag],
     |world: &World| {
-        with_debug_logging!("Synchronizing model instance feature render buffers"; {
+        with_debug_logging!("Synchronizing model instance feature GPU buffers"; {
             let renderer = world.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
@@ -161,9 +161,9 @@ define_task!(
 /// Registers tasks for synchronizing render resources in the given task
 /// scheduler.
 pub fn register_render_resource_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
-    task_scheduler.register_task(SyncCameraRenderBuffer)?;
-    task_scheduler.register_task(SyncMeshRenderBuffers)?;
-    task_scheduler.register_task(SyncLightRenderBuffers)?;
+    task_scheduler.register_task(SyncCameraGPUBuffer)?;
+    task_scheduler.register_task(SyncMeshGPUBuffers)?;
+    task_scheduler.register_task(SyncLightGPUBuffers)?;
     task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
     task_scheduler.register_task(SyncRenderResources)
 }

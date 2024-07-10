@@ -1,7 +1,7 @@
 //! Management of storage buffers for GPU computation or rendering.
 
 use crate::gpu::{
-    rendering::buffer::{RenderBuffer, RenderBufferType},
+    buffer::{GPUBuffer, GPUBufferType},
     GraphicsDevice,
 };
 use bytemuck::{Pod, Zeroable};
@@ -21,21 +21,21 @@ stringhash64_newtype!(
 /// Owner and manager of a storage buffer and potentially a result buffer that
 /// can be read from the CPU.
 #[derive(Debug)]
-pub struct StorageRenderBuffer {
-    storage_buffer: RenderBuffer,
+pub struct StorageGPUBuffer {
+    storage_buffer: GPUBuffer,
     /// Buffer that the storage buffer can be copied in, which can be mapped for
     /// transferring the data to the CPU.
-    _result_buffer: Option<RenderBuffer>,
+    _result_buffer: Option<GPUBuffer>,
     is_read_only: bool,
 }
 
 /// Manager of storage buffers on the GPU.
 #[derive(Debug)]
-pub struct StorageRenderBufferManager {
-    buffers: HashMap<StorageBufferID, StorageRenderBuffer>,
+pub struct StorageGPUBufferManager {
+    buffers: HashMap<StorageBufferID, StorageGPUBuffer>,
 }
 
-impl StorageRenderBuffer {
+impl StorageGPUBuffer {
     /// Creates a new read-only storage buffer containing the given values.
     ///
     /// The storage buffer can only be read from on the GPU.
@@ -62,7 +62,7 @@ impl StorageRenderBuffer {
         );
 
         let storage_buffer =
-            RenderBuffer::new_storage_buffer(graphics_device, bytemuck::cast_slice(values), label);
+            GPUBuffer::new_storage_buffer(graphics_device, bytemuck::cast_slice(values), label);
 
         Self {
             storage_buffer,
@@ -88,7 +88,7 @@ impl StorageRenderBuffer {
         assert_ne!(n_bytes, 0, "Tried to create empty storage buffer");
 
         let storage_buffer =
-            RenderBuffer::new_storage_buffer(graphics_device, vec![0; n_bytes].as_slice(), label);
+            GPUBuffer::new_storage_buffer(graphics_device, vec![0; n_bytes].as_slice(), label);
 
         Self {
             storage_buffer,
@@ -114,13 +114,13 @@ impl StorageRenderBuffer {
     ) -> Self {
         assert_ne!(n_bytes, 0, "Tried to create empty storage buffer");
 
-        let storage_buffer = RenderBuffer::new_storage_buffer(
+        let storage_buffer = GPUBuffer::new_storage_buffer(
             graphics_device,
             vec![0; n_bytes].as_slice(),
             label.clone(),
         );
 
-        let result_buffer = Some(RenderBuffer::new_result_buffer(
+        let result_buffer = Some(GPUBuffer::new_result_buffer(
             graphics_device,
             n_bytes,
             label,
@@ -150,7 +150,7 @@ impl StorageRenderBuffer {
     }
 }
 
-impl StorageRenderBufferManager {
+impl StorageGPUBufferManager {
     /// Creates a new manager with no buffers.
     pub fn new() -> Self {
         Self {
@@ -159,14 +159,14 @@ impl StorageRenderBufferManager {
     }
 
     /// Returns a reference to the [`HashMap`] storing all
-    /// [`StorageRenderBuffer`]s.
-    pub fn storage_buffers(&self) -> &HashMap<StorageBufferID, StorageRenderBuffer> {
+    /// [`StorageGPUBuffer`]s.
+    pub fn storage_buffers(&self) -> &HashMap<StorageBufferID, StorageGPUBuffer> {
         &self.buffers
     }
 
     /// Returns the storage buffer with the given ID, or [`None`] if the buffer
     /// does not exist.
-    pub fn get_storage_buffer(&self, buffer_id: StorageBufferID) -> Option<&StorageRenderBuffer> {
+    pub fn get_storage_buffer(&self, buffer_id: StorageBufferID) -> Option<&StorageGPUBuffer> {
         self.buffers.get(&buffer_id)
     }
 
@@ -174,29 +174,25 @@ impl StorageRenderBufferManager {
     pub fn storage_buffer_entry(
         &mut self,
         buffer_id: StorageBufferID,
-    ) -> Entry<'_, StorageBufferID, StorageRenderBuffer> {
+    ) -> Entry<'_, StorageBufferID, StorageGPUBuffer> {
         self.buffers.entry(buffer_id)
     }
 
     /// Adds the given storage buffers to the manager under the given ID. If a
     /// buffer with the same ID exists, it will be overwritten.
-    pub fn add_storage_buffer(
-        &mut self,
-        buffer_id: StorageBufferID,
-        resources: StorageRenderBuffer,
-    ) {
+    pub fn add_storage_buffer(&mut self, buffer_id: StorageBufferID, resources: StorageGPUBuffer) {
         self.buffers.insert(buffer_id, resources);
     }
 }
 
-impl Default for StorageRenderBufferManager {
+impl Default for StorageGPUBufferManager {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RenderBuffer {
-    /// Creates a storage render buffer initialized with the given bytes.
+impl GPUBuffer {
+    /// Creates a storage GPU buffer initialized with the given bytes.
     ///
     /// # Panics
     /// - If `bytes` is empty.
@@ -207,14 +203,14 @@ impl RenderBuffer {
     ) -> Self {
         Self::new(
             graphics_device,
-            RenderBufferType::Storage,
+            GPUBufferType::Storage,
             bytes,
             bytes.len(),
             label,
         )
     }
 
-    /// Creates a result render buffer with the given size in bytes.
+    /// Creates a result GPU buffer with the given size in bytes.
     ///
     /// # Warning
     /// The contents of the buffer are uninitialized, so the buffer should not
@@ -229,7 +225,7 @@ impl RenderBuffer {
     ) -> Self {
         Self::new_uninitialized(
             graphics_device,
-            RenderBufferType::Result,
+            GPUBufferType::Result,
             buffer_size,
             buffer_size,
             label,

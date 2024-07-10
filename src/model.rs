@@ -35,7 +35,7 @@ pub trait InstanceFeature: Pod {
     /// The memory alignment of the feature type.
     const FEATURE_ALIGNMENT: Alignment = Alignment::of::<Self>();
 
-    /// The layout of the vertex render buffer that can be used to pass the
+    /// The layout of the vertex GPU buffer that can be used to pass the
     /// feature to the GPU.
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
 
@@ -78,7 +78,7 @@ pub struct ModelID {
 /// transforms. These buffers are filled with transforms as well as feature
 /// values from the `InstanceFeatureStorage`s for all instances that are to be
 /// rendered. Their contents can then be copied directly to the corresponding
-/// render buffers, before they are cleared in preparation for the next frame.
+/// GPU buffers, before they are cleared in preparation for the next frame.
 #[derive(Debug, Default)]
 pub struct InstanceFeatureManager {
     feature_storages: HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
@@ -721,7 +721,7 @@ impl InstanceFeatureStorage {
         self.type_descriptor.size()
     }
 
-    /// Returns the layout of the vertex render buffer that can be used for the
+    /// Returns the layout of the vertex GPU buffer that can be used for the
     /// stored features.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout
@@ -877,7 +877,7 @@ impl DynamicInstanceFeatureBuffer {
     /// buffer is constructed.
     ///
     /// By having some initial space we avoid the issue of potentially
-    /// constructing empty render buffers when synchronizing this buffer with
+    /// constructing empty GPU buffers when synchronizing this buffer with
     /// the GPU.
     const INITIAL_ALLOCATED_FEATURE_COUNT: usize = 1;
 
@@ -923,7 +923,7 @@ impl DynamicInstanceFeatureBuffer {
         self.type_descriptor.size()
     }
 
-    /// Returns the layout of the vertex render buffer that can be used for the
+    /// Returns the layout of the vertex GPU buffer that can be used for the
     /// stored features.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout

@@ -4,7 +4,8 @@ use crate::{
     assert_uniform_valid,
     camera::Camera,
     gpu::{
-        rendering::{buffer::RenderBuffer, fre},
+        buffer::GPUBuffer,
+        rendering::fre,
         shader::CameraShaderInput,
         uniform::{self, UniformBufferable},
         GraphicsDevice,
@@ -14,22 +15,22 @@ use impact_utils::ConstStringHash64;
 use nalgebra::Projective3;
 use std::borrow::Cow;
 
-/// Owner and manager of a render buffer for a camera projection transformation.
+/// Owner and manager of a GPU buffer for a camera projection transformation.
 #[derive(Debug)]
-pub struct CameraRenderBufferManager {
-    transform_render_buffer: RenderBuffer,
+pub struct CameraGPUBufferManager {
+    transform_gpu_buffer: GPUBuffer,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
 
-impl CameraRenderBufferManager {
+impl CameraGPUBufferManager {
     const BINDING: u32 = 0;
     const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
     const SHADER_INPUT: CameraShaderInput = CameraShaderInput {
         projection_matrix_binding: Self::BINDING,
     };
 
-    /// Creates a new manager with a render buffer initialized from the
+    /// Creates a new manager with a GPU buffer initialized from the
     /// projection transform of the given camera.
     pub fn for_camera(
         graphics_device: &GraphicsDevice,
@@ -64,7 +65,7 @@ impl CameraRenderBufferManager {
         &Self::SHADER_INPUT
     }
 
-    /// Ensures that the render buffer is in sync with the projection transform
+    /// Ensures that the GPU buffer is in sync with the projection transform
     /// of the given camera.
     pub fn sync_with_camera(
         &mut self,
@@ -72,19 +73,19 @@ impl CameraRenderBufferManager {
         camera: &(impl Camera<fre> + ?Sized),
     ) {
         if camera.projection_transform_changed() {
-            self.sync_render_buffer(graphics_device, camera.projection_transform());
+            self.sync_gpu_buffer(graphics_device, camera.projection_transform());
             camera.reset_projection_change_tracking();
         }
     }
 
-    /// Creates a new manager with a render buffer initialized from the given
+    /// Creates a new manager with a GPU buffer initialized from the given
     /// projection transform.
     fn new(
         graphics_device: &GraphicsDevice,
         projection_transform: Projective3<fre>,
         label: Cow<'static, str>,
     ) -> Self {
-        let transform_render_buffer = RenderBuffer::new_buffer_for_single_uniform(
+        let transform_gpu_buffer = GPUBuffer::new_buffer_for_single_uniform(
             graphics_device,
             &projection_transform,
             label.clone(),
@@ -95,13 +96,13 @@ impl CameraRenderBufferManager {
 
         let bind_group = Self::create_bind_group(
             graphics_device.device(),
-            &transform_render_buffer,
+            &transform_gpu_buffer,
             &bind_group_layout,
             &label,
         );
 
         Self {
-            transform_render_buffer,
+            transform_gpu_buffer,
             bind_group_layout,
             bind_group,
         }
@@ -132,7 +133,7 @@ impl CameraRenderBufferManager {
 
     fn create_bind_group(
         device: &wgpu::Device,
-        transform_render_buffer: &RenderBuffer,
+        transform_gpu_buffer: &GPUBuffer,
         layout: &wgpu::BindGroupLayout,
         label: &str,
     ) -> wgpu::BindGroup {
@@ -140,18 +141,18 @@ impl CameraRenderBufferManager {
             layout,
             entries: &[uniform::create_single_uniform_bind_group_entry(
                 Self::BINDING,
-                transform_render_buffer,
+                transform_gpu_buffer,
             )],
             label: Some(&format!("{} bind group", label)),
         })
     }
 
-    fn sync_render_buffer(
+    fn sync_gpu_buffer(
         &mut self,
         graphics_device: &GraphicsDevice,
         projection_transform: &Projective3<fre>,
     ) {
-        self.transform_render_buffer
+        self.transform_gpu_buffer
             .update_all_bytes(graphics_device, bytemuck::bytes_of(projection_transform));
     }
 }

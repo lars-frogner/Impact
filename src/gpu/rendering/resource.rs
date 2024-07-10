@@ -1,16 +1,16 @@
-//! Synchronization of render buffers with geometrical data.
+//! Synchronization of GPU buffers with geometrical data.
 
 pub mod tasks;
 
 use crate::{
-    camera::{buffer::CameraRenderBufferManager, SceneCamera},
+    camera::{buffer::CameraGPUBufferManager, SceneCamera},
     gpu::{
         rendering::{fre, RenderingConfig},
         GraphicsDevice,
     },
-    light::{buffer::LightRenderBufferManager, LightStorage},
-    mesh::{buffer::MeshRenderBufferManager, MeshID, TriangleMesh},
-    model::{buffer::InstanceFeatureRenderBufferManager, InstanceFeatureManager, ModelID},
+    light::{buffer::LightGPUBufferManager, LightStorage},
+    mesh::{buffer::MeshGPUBufferManager, MeshID, TriangleMesh},
+    model::{buffer::InstanceFeatureGPUBufferManager, InstanceFeatureManager, ModelID},
 };
 use std::{
     borrow::Cow,
@@ -21,7 +21,7 @@ use std::{
 
 /// Manager and owner of render resources representing world data.
 ///
-/// The render buffers will at any one time be in one of two states;
+/// The GPU buffers will at any one time be in one of two states;
 /// either in sync or out of sync with the source data. When in sync,
 /// the [`synchronized`](Self::synchronized) method can be called to
 /// obtain a [`SynchronizedRenderResources`] that enables lock free read
@@ -45,10 +45,10 @@ pub struct RenderResourceManager {
 /// are assumed to be in sync with the source data.
 #[derive(Debug)]
 pub struct SynchronizedRenderResources {
-    camera_buffer_manager: Box<Option<CameraRenderBufferManager>>,
-    mesh_buffer_managers: Box<MeshRenderBufferManagerMap>,
-    light_buffer_manager: Box<Option<LightRenderBufferManager>>,
-    instance_feature_buffer_managers: Box<InstanceFeatureRenderBufferManagerMap>,
+    camera_buffer_manager: Box<Option<CameraGPUBufferManager>>,
+    mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
+    light_buffer_manager: Box<Option<LightGPUBufferManager>>,
+    instance_feature_buffer_managers: Box<InstanceFeatureGPUBufferManagerMap>,
 }
 
 /// Wrapper for render resources that are assumed to be out of sync
@@ -56,15 +56,14 @@ pub struct SynchronizedRenderResources {
 /// enabling concurrent re-synchronization of the resources.
 #[derive(Debug)]
 struct DesynchronizedRenderResources {
-    camera_buffer_manager: Mutex<Box<Option<CameraRenderBufferManager>>>,
-    mesh_buffer_managers: Mutex<Box<MeshRenderBufferManagerMap>>,
-    light_buffer_manager: Mutex<Box<Option<LightRenderBufferManager>>>,
-    instance_feature_buffer_managers: Mutex<Box<InstanceFeatureRenderBufferManagerMap>>,
+    camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
+    mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
+    light_buffer_manager: Mutex<Box<Option<LightGPUBufferManager>>>,
+    instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
 }
 
-type MeshRenderBufferManagerMap = HashMap<MeshID, MeshRenderBufferManager>;
-type InstanceFeatureRenderBufferManagerMap =
-    HashMap<ModelID, Vec<InstanceFeatureRenderBufferManager>>;
+type MeshGPUBufferManagerMap = HashMap<MeshID, MeshGPUBufferManager>;
+type InstanceFeatureGPUBufferManagerMap = HashMap<ModelID, Vec<InstanceFeatureGPUBufferManager>>;
 
 impl RenderResourceManager {
     /// Creates a new render resource manager with resources that
@@ -141,35 +140,35 @@ impl Default for RenderResourceManager {
 }
 
 impl SynchronizedRenderResources {
-    /// Returns the render buffer manager for camera data, or [`None`] if it has
+    /// Returns the GPU buffer manager for camera data, or [`None`] if it has
     /// not been created.
-    pub fn get_camera_buffer_manager(&self) -> Option<&CameraRenderBufferManager> {
+    pub fn get_camera_buffer_manager(&self) -> Option<&CameraGPUBufferManager> {
         self.camera_buffer_manager.as_ref().as_ref()
     }
 
-    /// Returns the render buffer manager for the given mesh identifier if the
+    /// Returns the GPU buffer manager for the given mesh identifier if the
     /// mesh exists, otherwise returns [`None`].
-    pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshRenderBufferManager> {
+    pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager> {
         self.mesh_buffer_managers.get(&mesh_id)
     }
 
-    /// Returns the render buffer manager for light data, or [`None`] if it has
+    /// Returns the GPU buffer manager for light data, or [`None`] if it has
     /// not been created.
-    pub fn get_light_buffer_manager(&self) -> Option<&LightRenderBufferManager> {
+    pub fn get_light_buffer_manager(&self) -> Option<&LightGPUBufferManager> {
         self.light_buffer_manager.as_ref().as_ref()
     }
 
-    /// Returns the instance feature render buffer managers for the given model
+    /// Returns the instance feature GPU buffer managers for the given model
     /// identifier if the model exists, otherwise returns [`None`].
     pub fn get_instance_feature_buffer_managers(
         &self,
         model_id: ModelID,
-    ) -> Option<&Vec<InstanceFeatureRenderBufferManager>> {
+    ) -> Option<&Vec<InstanceFeatureGPUBufferManager>> {
         self.instance_feature_buffer_managers.get(&model_id)
     }
 
-    /// Returns a reference to the map of instance feature render buffer managers.
-    pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureRenderBufferManagerMap {
+    /// Returns a reference to the map of instance feature GPU buffer managers.
+    pub fn instance_feature_buffer_managers(&self) -> &InstanceFeatureGPUBufferManagerMap {
         self.instance_feature_buffer_managers.as_ref()
     }
 }
@@ -217,18 +216,18 @@ impl DesynchronizedRenderResources {
     }
 
     /// Performs any required updates for keeping the camera data in the given
-    /// render buffer manager in sync with the given scene camera.
+    /// GPU buffer manager in sync with the given scene camera.
     fn sync_camera_buffer_with_scene_camera(
         graphics_device: &GraphicsDevice,
-        camera_buffer_manager: &mut Option<CameraRenderBufferManager>,
+        camera_buffer_manager: &mut Option<CameraGPUBufferManager>,
         scene_camera: &SceneCamera<fre>,
     ) {
         if let Some(camera_buffer_manager) = camera_buffer_manager {
             camera_buffer_manager.sync_with_camera(graphics_device, scene_camera.camera());
         } else {
-            // We initialize the camera render buffer manager the first time this
+            // We initialize the camera GPU buffer manager the first time this
             // method is called
-            *camera_buffer_manager = Some(CameraRenderBufferManager::for_camera(
+            *camera_buffer_manager = Some(CameraGPUBufferManager::for_camera(
                 graphics_device,
                 scene_camera.camera(),
             ));
@@ -236,42 +235,40 @@ impl DesynchronizedRenderResources {
     }
 
     /// Performs any required updates for keeping the given map
-    /// of mesh render buffers in sync with the given map of
+    /// of mesh GPU buffers in sync with the given map of
     /// meshes.
     ///
-    /// Render buffers whose source data no longer
-    /// exists will be removed, and missing render buffers
+    /// GPU buffers whose source data no longer
+    /// exists will be removed, and missing GPU buffers
     /// for new source data will be created.
     fn sync_mesh_buffers_with_meshes(
         graphics_device: &GraphicsDevice,
-        mesh_render_buffers: &mut MeshRenderBufferManagerMap,
+        mesh_gpu_buffers: &mut MeshGPUBufferManagerMap,
         meshes: &HashMap<MeshID, TriangleMesh<fre>>,
     ) {
         for (&mesh_id, mesh) in meshes {
-            mesh_render_buffers
+            mesh_gpu_buffers
                 .entry(mesh_id)
                 .and_modify(|mesh_buffers| mesh_buffers.sync_with_mesh(graphics_device, mesh))
-                .or_insert_with(|| {
-                    MeshRenderBufferManager::for_mesh(graphics_device, mesh_id, mesh)
-                });
+                .or_insert_with(|| MeshGPUBufferManager::for_mesh(graphics_device, mesh_id, mesh));
         }
-        Self::remove_unmatched_render_resources(mesh_render_buffers, meshes);
+        Self::remove_unmatched_render_resources(mesh_gpu_buffers, meshes);
     }
 
     /// Performs any required updates for keeping the lights in the given render
     /// buffer manager in sync with the lights in the given light storage.
     fn sync_light_buffers_with_light_storage(
         graphics_device: &GraphicsDevice,
-        light_buffer_manager: &mut Option<LightRenderBufferManager>,
+        light_buffer_manager: &mut Option<LightGPUBufferManager>,
         light_storage: &LightStorage,
         config: &RenderingConfig,
     ) {
         if let Some(light_buffer_manager) = light_buffer_manager {
             light_buffer_manager.sync_with_light_storage(graphics_device, light_storage);
         } else {
-            // We initialize the light render buffer manager the first time this
+            // We initialize the light GPU buffer manager the first time this
             // method is called
-            *light_buffer_manager = Some(LightRenderBufferManager::for_light_storage(
+            *light_buffer_manager = Some(LightGPUBufferManager::for_light_storage(
                 graphics_device,
                 light_storage,
                 config,
@@ -280,29 +277,29 @@ impl DesynchronizedRenderResources {
     }
 
     /// Performs any required updates for keeping the given map of
-    /// model instance feature render buffers in sync with the data
+    /// model instance feature GPU buffers in sync with the data
     /// of the given instance feature manager.
     ///
-    /// Render buffers whose source data no longer
-    /// exists will be removed, and missing render buffers
+    /// GPU buffers whose source data no longer
+    /// exists will be removed, and missing GPU buffers
     /// for new source data will be created.
     fn sync_instance_feature_buffers_with_manager(
         graphics_device: &GraphicsDevice,
-        feature_render_buffer_managers: &mut InstanceFeatureRenderBufferManagerMap,
+        feature_gpu_buffer_managers: &mut InstanceFeatureGPUBufferManagerMap,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {
         for (model_id, instance_feature_buffers) in
             instance_feature_manager.model_ids_and_mutable_buffers()
         {
-            match feature_render_buffer_managers.entry(model_id) {
+            match feature_gpu_buffer_managers.entry(model_id) {
                 Entry::Occupied(mut occupied_entry) => {
-                    let feature_render_buffer_managers = occupied_entry.get_mut();
+                    let feature_gpu_buffer_managers = occupied_entry.get_mut();
 
-                    for (feature_buffer, render_buffer_manager) in instance_feature_buffers
+                    for (feature_buffer, gpu_buffer_manager) in instance_feature_buffers
                         .iter_mut()
-                        .zip(feature_render_buffer_managers.iter_mut())
+                        .zip(feature_gpu_buffer_managers.iter_mut())
                     {
-                        render_buffer_manager.copy_instance_features_to_render_buffer(
+                        gpu_buffer_manager.copy_instance_features_to_gpu_buffer(
                             graphics_device,
                             feature_buffer,
                         );
@@ -310,24 +307,24 @@ impl DesynchronizedRenderResources {
                     }
                 }
                 Entry::Vacant(vacant_entry) => {
-                    let feature_render_buffer_managers = instance_feature_buffers
+                    let feature_gpu_buffer_managers = instance_feature_buffers
                         .iter_mut()
                         .map(|feature_buffer| {
-                            let render_buffer_manager = InstanceFeatureRenderBufferManager::new(
+                            let gpu_buffer_manager = InstanceFeatureGPUBufferManager::new(
                                 graphics_device,
                                 feature_buffer,
                                 Cow::Owned(model_id.to_string()),
                             );
                             feature_buffer.clear();
-                            render_buffer_manager
+                            gpu_buffer_manager
                         })
                         .collect();
 
-                    vacant_entry.insert(feature_render_buffer_managers);
+                    vacant_entry.insert(feature_gpu_buffer_managers);
                 }
             }
         }
-        feature_render_buffer_managers
+        feature_gpu_buffer_managers
             .retain(|model_id, _| instance_feature_manager.has_model_id(*model_id));
     }
 

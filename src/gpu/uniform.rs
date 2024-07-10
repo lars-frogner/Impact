@@ -2,7 +2,7 @@
 
 use crate::{
     gpu::{
-        rendering::buffer::{Count, CountedRenderBuffer, RenderBuffer, RenderBufferType},
+        buffer::{Count, CountedGPUBuffer, GPUBuffer, GPUBufferType},
         GraphicsDevice,
     },
     util::tracking::{CollectionChange, CollectionChangeTracker},
@@ -44,22 +44,22 @@ pub struct UniformBuffer<ID, U> {
     change_tracker: CollectionChangeTracker,
 }
 
-/// Render buffer for a single uniform.
+/// GPU buffer for a single uniform.
 #[derive(Debug)]
-pub struct SingleUniformRenderBuffer {
-    render_buffer: RenderBuffer,
+pub struct SingleUniformGPUBuffer {
+    gpu_buffer: GPUBuffer,
     template_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
 }
 
-/// Render buffer for multiple uniforms of the same type.
+/// GPU buffer for multiple uniforms of the same type.
 #[derive(Debug)]
-pub struct MultiUniformRenderBuffer {
-    render_buffer: CountedRenderBuffer,
+pub struct MultiUniformGPUBuffer {
+    gpu_buffer: CountedGPUBuffer,
     uniform_type_id: ConstStringHash64,
     template_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
 }
 
-/// Indicates whether a new render buffer had to be created in order to hold all
+/// Indicates whether a new GPU buffer had to be created in order to hold all
 /// the transferred uniform data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum UniformTransferResult {
@@ -258,8 +258,8 @@ where
     }
 }
 
-impl SingleUniformRenderBuffer {
-    /// Creates a new render buffer for the given uniform.
+impl SingleUniformGPUBuffer {
+    /// Creates a new GPU buffer for the given uniform.
     ///
     /// # Panics
     /// If the size of the uniform is zero.
@@ -278,7 +278,7 @@ impl SingleUniformRenderBuffer {
             "Tried to create render resource from zero-sized uniform"
         );
 
-        let render_buffer = RenderBuffer::new_buffer_for_single_uniform_bytes(
+        let gpu_buffer = GPUBuffer::new_buffer_for_single_uniform_bytes(
             graphics_device,
             bytemuck::bytes_of(uniform),
             label,
@@ -289,7 +289,7 @@ impl SingleUniformRenderBuffer {
         let template_bind_group_layout_entry = U::create_bind_group_layout_entry(0, visibility);
 
         Self {
-            render_buffer,
+            gpu_buffer,
             template_bind_group_layout_entry,
         }
     }
@@ -303,12 +303,12 @@ impl SingleUniformRenderBuffer {
 
     /// Creates a bind group entry for the uniform.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        create_single_uniform_bind_group_entry(binding, &self.render_buffer)
+        create_single_uniform_bind_group_entry(binding, &self.gpu_buffer)
     }
 }
 
-impl MultiUniformRenderBuffer {
-    /// Creates a new uniform render buffer initialized from the given uniform
+impl MultiUniformGPUBuffer {
+    /// Creates a new uniform GPU buffer initialized from the given uniform
     /// buffer.
     pub fn for_uniform_buffer<ID, U>(
         graphics_device: &GraphicsDevice,
@@ -321,7 +321,7 @@ impl MultiUniformRenderBuffer {
     {
         let uniform_type_id = U::ID;
 
-        let render_buffer = CountedRenderBuffer::new_uniform_buffer(
+        let gpu_buffer = CountedGPUBuffer::new_uniform_buffer(
             graphics_device,
             uniform_buffer.raw_buffer(),
             uniform_buffer.n_valid_uniforms(),
@@ -333,7 +333,7 @@ impl MultiUniformRenderBuffer {
         let template_bind_group_layout_entry = U::create_bind_group_layout_entry(0, visibility);
 
         Self {
-            render_buffer,
+            gpu_buffer,
             template_bind_group_layout_entry,
             uniform_type_id,
         }
@@ -341,7 +341,7 @@ impl MultiUniformRenderBuffer {
 
     /// Returns the maximum number of uniforms that can fit in the buffer.
     pub fn max_uniform_count(&self) -> usize {
-        self.render_buffer.max_item_count()
+        self.gpu_buffer.max_item_count()
     }
 
     /// Creates a bind group layout entry for the uniform buffer.
@@ -358,26 +358,26 @@ impl MultiUniformRenderBuffer {
     /// This binding will be out of date as soon as the number of valid uniforms
     /// changes.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        self.render_buffer().create_bind_group_entry(binding)
+        self.gpu_buffer().create_bind_group_entry(binding)
     }
 
-    /// Returns the render buffer of uniforms.
-    pub fn render_buffer(&self) -> &CountedRenderBuffer {
-        &self.render_buffer
+    /// Returns the GPU buffer of uniforms.
+    pub fn gpu_buffer(&self) -> &CountedGPUBuffer {
+        &self.gpu_buffer
     }
 
     /// Writes the valid uniforms in the given uniform buffer into the uniform
-    /// render buffer if the uniform buffer has changed (reallocating the render
+    /// GPU buffer if the uniform buffer has changed (reallocating the render
     /// buffer if required).
     ///
     /// # Returns
-    /// A [`UniformTransferResult`] indicating whether the render buffer had to
+    /// A [`UniformTransferResult`] indicating whether the GPU buffer had to
     /// be reallocated, in which case its bind group should also be recreated.
     ///
     /// # Panics
     /// If the given uniform buffer stores a different type of uniform than the
-    /// render buffer.
-    pub fn transfer_uniforms_to_render_buffer<ID, U>(
+    /// GPU buffer.
+    pub fn transfer_uniforms_to_gpu_buffer<ID, U>(
         &mut self,
         graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<ID, U>,
@@ -396,18 +396,15 @@ impl MultiUniformRenderBuffer {
 
             let n_valid_uniform_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
 
-            if self
-                .render_buffer
-                .bytes_exceed_capacity(n_valid_uniform_bytes)
-            {
+            if self.gpu_buffer.bytes_exceed_capacity(n_valid_uniform_bytes) {
                 // If the number of valid uniforms exceeds the capacity of the
                 // existing buffer, we create a new one that is large enough for
                 // all the uniforms (also the ones not currently valid)
-                self.render_buffer = CountedRenderBuffer::new_uniform_buffer(
+                self.gpu_buffer = CountedGPUBuffer::new_uniform_buffer(
                     graphics_device,
                     uniform_buffer.raw_buffer(),
                     n_valid_uniforms,
-                    self.render_buffer.label().clone(),
+                    self.gpu_buffer.label().clone(),
                 );
 
                 UniformTransferResult::CreatedNewBuffer
@@ -420,7 +417,7 @@ impl MultiUniformRenderBuffer {
                     None
                 };
 
-                self.render_buffer.update_valid_bytes(
+                self.gpu_buffer.update_valid_bytes(
                     graphics_device,
                     bytemuck::cast_slice(valid_uniforms),
                     new_count,
@@ -438,8 +435,8 @@ impl MultiUniformRenderBuffer {
     }
 }
 
-impl RenderBuffer {
-    /// Creates a uniform render buffer initialized with the given uniform data,
+impl GPUBuffer {
+    /// Creates a uniform GPU buffer initialized with the given uniform data,
     /// with the first `n_valid_uniforms` considered valid data.
     ///
     /// # Panics
@@ -459,13 +456,13 @@ impl RenderBuffer {
     {
         assert!(
             Alignment::SIXTEEN.is_aligned(mem::size_of::<U>()),
-            "Tried to create uniform render buffer with uniform size that \
+            "Tried to create uniform GPU buffer with uniform size that \
              causes invalid alignment (uniform buffer item stride \
              must be a multiple of 16)"
         );
         assert!(
             !uniforms.is_empty(),
-            "Tried to create empty uniform render buffer"
+            "Tried to create empty uniform GPU buffer"
         );
 
         let n_valid_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
@@ -474,14 +471,14 @@ impl RenderBuffer {
 
         Self::new(
             graphics_device,
-            RenderBufferType::Uniform,
+            GPUBufferType::Uniform,
             bytes,
             n_valid_bytes,
             label,
         )
     }
 
-    /// Creates a uniform render buffer initialized with the given uniform data.
+    /// Creates a uniform GPU buffer initialized with the given uniform data.
     ///
     /// # Panics
     /// - If `uniforms` is empty.
@@ -498,7 +495,7 @@ impl RenderBuffer {
         Self::new_uniform_buffer(graphics_device, uniforms, uniforms.len(), label)
     }
 
-    /// Creates a render buffer containing the data of the given uniform.
+    /// Creates a GPU buffer containing the data of the given uniform.
     ///
     /// # Panics
     /// If the size of the uniform is not a multiple of 16 (the minimum required
@@ -518,7 +515,7 @@ impl RenderBuffer {
         )
     }
 
-    /// Creates a render buffer containing the given bytes representing a single
+    /// Creates a GPU buffer containing the given bytes representing a single
     /// uniform.
     ///
     /// # Panics
@@ -531,17 +528,17 @@ impl RenderBuffer {
     ) -> Self {
         assert!(
             Alignment::SIXTEEN.is_aligned(uniform_bytes.len()),
-            "Tried to create uniform render buffer with invalid uniform size \
+            "Tried to create uniform GPU buffer with invalid uniform size \
             (must be a multiple of 16)"
         );
         assert!(
             !uniform_bytes.is_empty(),
-            "Tried to create uniform render buffer for a single zero-sized uniform"
+            "Tried to create uniform GPU buffer for a single zero-sized uniform"
         );
 
         Self::new(
             graphics_device,
-            RenderBufferType::Uniform,
+            GPUBufferType::Uniform,
             uniform_bytes,
             uniform_bytes.len(),
             label,
@@ -549,8 +546,8 @@ impl RenderBuffer {
     }
 }
 
-impl CountedRenderBuffer {
-    /// Creates a counted uniform render buffer initialized with the given
+impl CountedGPUBuffer {
+    /// Creates a counted uniform GPU buffer initialized with the given
     /// uniform data, with the first `n_valid_uniforms` considered valid data.
     ///
     /// # Panics
@@ -591,7 +588,7 @@ impl CountedRenderBuffer {
 
         Self::new(
             graphics_device,
-            RenderBufferType::Uniform,
+            GPUBufferType::Uniform,
             count,
             bytes,
             padded_count_size,
@@ -624,11 +621,11 @@ pub const fn create_uniform_buffer_bind_group_layout_entry(
 /// for the given uniform buffer representing a single uniform.
 pub fn create_single_uniform_bind_group_entry(
     binding: u32,
-    render_buffer: &RenderBuffer,
+    gpu_buffer: &GPUBuffer,
 ) -> wgpu::BindGroupEntry<'_> {
     wgpu::BindGroupEntry {
         binding,
-        resource: render_buffer.buffer().as_entire_binding(),
+        resource: gpu_buffer.buffer().as_entire_binding(),
     }
 }
 

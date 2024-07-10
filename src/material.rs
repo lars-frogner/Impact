@@ -12,9 +12,9 @@ use crate::{
     gpu::{
         rendering::{fre, render_command::RenderPassHints},
         shader::MaterialShaderInput,
-        storage::StorageRenderBuffer,
+        storage::StorageGPUBuffer,
         texture::attachment::RenderAttachmentQuantitySet,
-        uniform::SingleUniformRenderBuffer,
+        uniform::SingleUniformGPUBuffer,
         GraphicsDevice,
     },
     mesh::VertexAttributeSet,
@@ -80,7 +80,7 @@ pub struct MaterialSpecification {
 /// uses of the material.
 #[derive(Debug)]
 pub struct MaterialSpecificResourceGroup {
-    _single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
+    _single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
@@ -189,8 +189,8 @@ impl MaterialSpecificResourceGroup {
     /// storage_resources`.
     pub fn new(
         graphics_device: &GraphicsDevice,
-        single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
-        storage_buffers: &[&StorageRenderBuffer],
+        single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
+        storage_buffers: &[&StorageGPUBuffer],
         label: &str,
     ) -> Self {
         let n_entries = single_uniform_buffers.len() + storage_buffers.len();

@@ -1,4 +1,4 @@
-//! Data buffers for rendering.
+//! GPU buffers for rendering and computation.
 
 use crate::gpu::GraphicsDevice;
 use std::{
@@ -11,7 +11,7 @@ use wgpu::util::DeviceExt;
 
 /// A buffer containing bytes that can be passed to the GPU.
 #[derive(Debug)]
-pub struct RenderBuffer {
+pub struct GPUBuffer {
     buffer: wgpu::Buffer,
     buffer_size: usize,
     n_valid_bytes: AtomicUsize,
@@ -23,7 +23,7 @@ pub struct RenderBuffer {
 /// representing the number of valid elements contained in
 /// the buffer.
 #[derive(Debug)]
-pub struct CountedRenderBuffer {
+pub struct CountedGPUBuffer {
     buffer: wgpu::Buffer,
     buffer_size: usize,
     padded_count_size: usize,
@@ -32,12 +32,12 @@ pub struct CountedRenderBuffer {
     label: Cow<'static, str>,
 }
 
-/// Type of the count embedded in the beginning of a [`CountedRenderBuffer`].
+/// Type of the count embedded in the beginning of a [`CountedGPUBuffer`].
 pub type Count = u32;
 
-/// The type of information contained in a render buffer.
+/// The type of information contained in a GPU buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RenderBufferType {
+pub enum GPUBufferType {
     Vertex,
     Index,
     Uniform,
@@ -45,8 +45,8 @@ pub enum RenderBufferType {
     Result,
 }
 
-impl RenderBuffer {
-    /// Creates a render buffer of the given type from the given slice of
+impl GPUBuffer {
+    /// Creates a GPU buffer of the given type from the given slice of
     /// bytes. Only the first `n_valid_bytes` in the slice are considered
     /// to actually represent valid data, the rest is just buffer filling
     /// that gives room for writing a larger number of bytes than `n_valid_bytes`
@@ -57,17 +57,17 @@ impl RenderBuffer {
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
     pub fn new(
         graphics_device: &GraphicsDevice,
-        buffer_type: RenderBufferType,
+        buffer_type: GPUBufferType,
         bytes: &[u8],
         n_valid_bytes: usize,
         label: Cow<'static, str>,
     ) -> Self {
-        assert!(!bytes.is_empty(), "Tried to create empty render buffer");
+        assert!(!bytes.is_empty(), "Tried to create empty GPU buffer");
 
         let buffer_size = bytes.len();
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} {} render buffer", label, &buffer_type);
+        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
         let buffer = Self::create_initialized_buffer_of_type(
             graphics_device.device(),
             buffer_type,
@@ -83,7 +83,7 @@ impl RenderBuffer {
         }
     }
 
-    /// Creates an uninitialized render buffer of the given type with room for
+    /// Creates an uninitialized GPU buffer of the given type with room for
     /// `buffer_size` bytes.
     ///
     /// # Panics
@@ -91,15 +91,15 @@ impl RenderBuffer {
     /// - If `n_valid_bytes` exceeds `buffer_size`.
     pub fn new_uninitialized(
         graphics_device: &GraphicsDevice,
-        buffer_type: RenderBufferType,
+        buffer_type: GPUBufferType,
         buffer_size: usize,
         n_valid_bytes: usize,
         label: Cow<'static, str>,
     ) -> Self {
-        assert_ne!(buffer_size, 0, "Tried to create empty render buffer");
+        assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} {} render buffer", label, &buffer_type);
+        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
         let buffer = Self::create_uninitialized_buffer(
             graphics_device.device(),
             buffer_size as u64,
@@ -178,7 +178,7 @@ impl RenderBuffer {
     }
 
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
-    /// binding for the full render buffer.
+    /// binding for the full GPU buffer.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
@@ -193,7 +193,7 @@ impl RenderBuffer {
 
     fn create_initialized_buffer_of_type(
         device: &wgpu::Device,
-        buffer_type: RenderBufferType,
+        buffer_type: GPUBufferType,
         bytes: &[u8],
         label: &str,
     ) -> wgpu::Buffer {
@@ -229,8 +229,8 @@ impl RenderBuffer {
     }
 }
 
-impl CountedRenderBuffer {
-    /// Creates a render buffer of the given type from the given slice of bytes,
+impl CountedGPUBuffer {
+    /// Creates a GPU buffer of the given type from the given slice of bytes,
     /// and embed a count at the beginning of the buffer. Only the first
     /// `n_valid_bytes` in the buffer (including the count and its padding) are
     /// considered to actually represent valid data, the rest is just buffer
@@ -243,7 +243,7 @@ impl CountedRenderBuffer {
     ///   `bytes` slice.
     pub fn new(
         graphics_device: &GraphicsDevice,
-        buffer_type: RenderBufferType,
+        buffer_type: GPUBufferType,
         count: Count,
         bytes: &[u8],
         padded_count_size: usize,
@@ -253,13 +253,13 @@ impl CountedRenderBuffer {
     ) -> Self {
         assert!(
             !bytes.is_empty(),
-            "Tried to create empty counted render buffer"
+            "Tried to create empty counted GPU buffer"
         );
 
         let buffer_size = Self::compute_size_including_count(padded_count_size, bytes.len());
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} {} render buffer", label, &buffer_type);
+        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
         let buffer = Self::create_initialized_counted_buffer_of_type(
             graphics_device.device(),
             buffer_type,
@@ -332,7 +332,7 @@ impl CountedRenderBuffer {
     }
 
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
-    /// binding for the full counted render buffer.
+    /// binding for the full counted GPU buffer.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
@@ -351,7 +351,7 @@ impl CountedRenderBuffer {
 
     fn create_initialized_counted_buffer_of_type(
         device: &wgpu::Device,
-        buffer_type: RenderBufferType,
+        buffer_type: GPUBufferType,
         count: Count,
         bytes: &[u8],
         padded_count_size: usize,
@@ -418,7 +418,7 @@ impl CountedRenderBuffer {
     }
 }
 
-impl RenderBufferType {
+impl GPUBufferType {
     fn usage(&self) -> wgpu::BufferUsages {
         match self {
             Self::Vertex => wgpu::BufferUsages::VERTEX,
@@ -434,7 +434,7 @@ impl RenderBufferType {
     }
 }
 
-impl Display for RenderBufferType {
+impl Display for GPUBufferType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
