@@ -3,7 +3,7 @@
 pub mod tasks;
 
 use crate::{
-    camera::buffer::CameraRenderBufferManager,
+    camera::buffer::CameraGPUBufferManager,
     geometry::CubemapFace,
     gpu::{
         compute::{GPUComputationID, GPUComputationSpecification},
@@ -24,13 +24,13 @@ use crate::{
         },
         GraphicsDevice,
     },
-    light::{buffer::LightRenderBufferManager, LightID, LightType, MAX_SHADOW_MAP_CASCADES},
+    light::{buffer::LightGPUBufferManager, LightID, LightType, MAX_SHADOW_MAP_CASCADES},
     material::{
         MaterialID, MaterialLibrary, MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID,
         MaterialSpecification,
     },
-    mesh::{buffer::MeshRenderBufferManager, MeshID, VertexAttributeSet},
-    model::{buffer::InstanceFeatureRenderBufferManager, ModelID},
+    mesh::{buffer::MeshGPUBufferManager, MeshID, VertexAttributeSet},
+    model::{buffer::InstanceFeatureGPUBufferManager, ModelID},
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
@@ -337,11 +337,11 @@ impl RenderCommandManager {
         let light_buffer_manager = render_resources.get_light_buffer_manager();
 
         let ambient_light_ids =
-            light_buffer_manager.map_or_else(|| &[], LightRenderBufferManager::ambient_light_ids);
+            light_buffer_manager.map_or_else(|| &[], LightGPUBufferManager::ambient_light_ids);
         let omnidirectional_light_ids = light_buffer_manager
-            .map_or_else(|| &[], LightRenderBufferManager::omnidirectional_light_ids);
+            .map_or_else(|| &[], LightGPUBufferManager::omnidirectional_light_ids);
         let unidirectional_light_ids = light_buffer_manager
-            .map_or_else(|| &[], LightRenderBufferManager::unidirectional_light_ids);
+            .map_or_else(|| &[], LightGPUBufferManager::unidirectional_light_ids);
 
         // Remove shading passes for lights that are no longer present
         self.light_shaded_model_shading_passes
@@ -1119,10 +1119,10 @@ impl RenderPassSpecification {
     fn get_mesh_buffer_manager(
         render_resources: &SynchronizedRenderResources,
         mesh_id: MeshID,
-    ) -> Result<&MeshRenderBufferManager> {
+    ) -> Result<&MeshGPUBufferManager> {
         render_resources
             .get_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing render buffer for mesh {}", mesh_id))
+            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))
     }
 
     fn get_instance_feature_buffer_managers(
@@ -1132,8 +1132,8 @@ impl RenderPassSpecification {
         depth_map_usage: DepthMapUsage,
         shadow_map_usage: ShadowMapUsage,
     ) -> Result<(
-        &InstanceFeatureRenderBufferManager,
-        Option<&InstanceFeatureRenderBufferManager>,
+        &InstanceFeatureGPUBufferManager,
+        Option<&InstanceFeatureGPUBufferManager>,
     )> {
         if let Some(buffers) = render_resources.get_instance_feature_buffer_managers(model_id) {
             // Transform buffer is always present and always first
@@ -1186,7 +1186,7 @@ impl RenderPassSpecification {
             Ok((transform_buffer_manager, material_property_buffer_manager))
         } else {
             Err(anyhow!(
-                "Missing instance render buffer for model {}",
+                "Missing instance GPU buffer for model {}",
                 model_id
             ))
         }
@@ -1222,13 +1222,13 @@ impl RenderPassSpecification {
         size += Postprocessor::EXPOSURE_PUSH_CONSTANT_SIZE;
 
         if self.light.is_some() {
-            size += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
+            size += LightGPUBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
 
             if matches!(
                 self.shadow_map_usage,
                 ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(_))
             ) {
-                size += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
+                size += LightGPUBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
             }
         }
 
@@ -1341,14 +1341,14 @@ impl RenderPassSpecification {
         if !self.shadow_map_usage.is_update() && !self.hints.contains(RenderPassHints::NO_CAMERA) {
             if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
                 layouts.push(camera_buffer_manager.bind_group_layout());
-                shader_input.camera = Some(CameraRenderBufferManager::shader_input());
+                shader_input.camera = Some(CameraGPUBufferManager::shader_input());
             }
         }
 
         if let Some(LightInfo { light_type, .. }) = self.light {
             let light_buffer_manager = render_resources
                 .get_light_buffer_manager()
-                .expect("Missing light render buffer manager for shading pass with light");
+                .expect("Missing light GPU buffer manager for shading pass with light");
 
             layouts.push(light_buffer_manager.light_bind_group_layout());
 
@@ -1487,7 +1487,7 @@ impl RenderPassSpecification {
         if let Some(LightInfo { light_type, .. }) = self.light {
             let light_buffer_manager = render_resources
                 .get_light_buffer_manager()
-                .expect("Missing light render buffer manager for shading pass with light");
+                .expect("Missing light GPU buffer manager for shading pass with light");
 
             bind_groups.push(light_buffer_manager.light_bind_group());
 
@@ -1586,7 +1586,7 @@ impl RenderPassSpecification {
         if let Some(shadow_map_id) = self.shadow_map_usage.get_shadow_map_to_clear_or_update() {
             let light_buffer_manager = render_resources
                 .get_light_buffer_manager()
-                .expect("Missing light render buffer manager for shadow mapping render pass");
+                .expect("Missing light GPU buffer manager for shadow mapping render pass");
 
             Some(match shadow_map_id {
                 ShadowMapIdentifier::ForOmnidirectionalLight(face) => light_buffer_manager
@@ -2262,9 +2262,7 @@ impl RenderPassRecorder {
             let mut vertex_buffer_slot = 0;
 
             for vertex_buffer in mesh_buffer_manager
-                .request_vertex_render_buffers_including_position(
-                    self.vertex_attribute_requirements,
-                )?
+                .request_vertex_gpu_buffers_including_position(self.vertex_attribute_requirements)?
             {
                 render_pass
                     .set_vertex_buffer(vertex_buffer_slot, vertex_buffer.valid_buffer_slice());
@@ -2279,7 +2277,7 @@ impl RenderPassRecorder {
                     render_pass.set_vertex_buffer(
                         vertex_buffer_slot,
                         transform_buffer_manager
-                            .vertex_render_buffer()
+                            .vertex_gpu_buffer()
                             .valid_buffer_slice(),
                     );
                     vertex_buffer_slot += 1;
@@ -2325,7 +2323,7 @@ impl RenderPassRecorder {
                             render_pass.set_vertex_buffer(
                                 vertex_buffer_slot,
                                 material_property_buffer_manager
-                                    .vertex_render_buffer()
+                                    .vertex_gpu_buffer()
                                     .valid_buffer_slice(),
                             );
                             vertex_buffer_slot += 1;
@@ -2338,9 +2336,7 @@ impl RenderPassRecorder {
                 };
 
             render_pass.set_index_buffer(
-                mesh_buffer_manager
-                    .index_render_buffer()
-                    .valid_buffer_slice(),
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
                 mesh_buffer_manager.index_format(),
             );
 
@@ -2410,7 +2406,7 @@ impl RenderPassRecorder {
                         .get_light_idx_push_constant(light_type, light_id),
                 ),
             );
-            push_constant_offset += LightRenderBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
+            push_constant_offset += LightGPUBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE;
         }
 
         #[allow(unused_assignments)]
@@ -2424,7 +2420,7 @@ impl RenderPassRecorder {
                 push_constant_offset,
                 bytemuck::bytes_of(&cascade_idx),
             );
-            push_constant_offset += LightRenderBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
+            push_constant_offset += LightGPUBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE;
         }
     }
 

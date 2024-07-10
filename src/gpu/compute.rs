@@ -1,8 +1,8 @@
 //! Management of resources for GPU computation.
 
 use crate::gpu::{
-    shader::ComputeShaderInput, storage::StorageRenderBuffer,
-    texture::attachment::RenderAttachmentQuantitySet, uniform::SingleUniformRenderBuffer,
+    shader::ComputeShaderInput, storage::StorageGPUBuffer,
+    texture::attachment::RenderAttachmentQuantitySet, uniform::SingleUniformGPUBuffer,
 };
 use impact_utils::stringhash64_newtype;
 use std::collections::{hash_map::Entry, HashMap};
@@ -24,7 +24,7 @@ pub struct GPUComputationSpecification {
 /// A group of resources residing on the GPU for a specific GPU computation.
 #[derive(Debug)]
 pub struct GPUComputationResourceGroup {
-    _single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
+    _single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
     input_render_attachment_quantities: RenderAttachmentQuantitySet,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
@@ -71,8 +71,8 @@ impl GPUComputationResourceGroup {
     /// storage_buffers`.
     pub fn new(
         device: &wgpu::Device,
-        single_uniform_buffers: Vec<SingleUniformRenderBuffer>,
-        storage_buffers: &[&StorageRenderBuffer],
+        single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
+        storage_buffers: &[&StorageGPUBuffer],
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         label: &str,
     ) -> Self {

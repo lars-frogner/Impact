@@ -2,10 +2,8 @@
 
 use crate::{
     gpu::{
-        rendering::{
-            buffer::{RenderBuffer, RenderBufferType},
-            fre,
-        },
+        buffer::{GPUBuffer, GPUBufferType},
+        rendering::fre,
         shader::MeshShaderInput,
         GraphicsDevice,
     },
@@ -43,14 +41,14 @@ impl IndexBufferable for u32 {
     const INDEX_FORMAT: wgpu::IndexFormat = wgpu::IndexFormat::Uint32;
 }
 
-/// Owner and manager of render buffers for mesh geometry.
+/// Owner and manager of GPU buffers for mesh geometry.
 #[derive(Debug)]
-pub struct MeshRenderBufferManager {
+pub struct MeshGPUBufferManager {
     available_attributes: VertexAttributeSet,
-    vertex_buffers: [Option<RenderBuffer>; N_VERTEX_ATTRIBUTES],
+    vertex_buffers: [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
     vertex_buffer_layouts: [Option<wgpu::VertexBufferLayout<'static>>; N_VERTEX_ATTRIBUTES],
     shader_input: MeshShaderInput,
-    index_buffer: RenderBuffer,
+    index_buffer: GPUBuffer,
     index_format: wgpu::IndexFormat,
     n_indices: usize,
     mesh_id: MeshID,
@@ -58,8 +56,8 @@ pub struct MeshRenderBufferManager {
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
 
-impl MeshRenderBufferManager {
-    /// Creates a new manager with render buffers initialized
+impl MeshGPUBufferManager {
+    /// Creates a new manager with GPU buffers initialized
     /// from the given mesh.
     pub fn for_mesh(
         graphics_device: &GraphicsDevice,
@@ -68,7 +66,7 @@ impl MeshRenderBufferManager {
     ) -> Self {
         assert!(
             mesh.has_indices(),
-            "Tried to create render buffer manager for mesh with no indices"
+            "Tried to create GPU buffer manager for mesh with no indices"
         );
 
         let mut available_attributes = VertexAttributeSet::empty();
@@ -141,7 +139,7 @@ impl MeshRenderBufferManager {
         }
     }
 
-    /// Ensures that the render buffers are in sync with the given mesh.
+    /// Ensures that the GPU buffers are in sync with the given mesh.
     pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<fre>) {
         self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
         self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
@@ -166,7 +164,7 @@ impl MeshRenderBufferManager {
         mesh.reset_change_tracking();
     }
 
-    /// Returns an iterator over the layouts of the render buffers for the
+    /// Returns an iterator over the layouts of the GPU buffers for the
     /// requested set of vertex attributes.
     ///
     /// # Errors
@@ -195,15 +193,15 @@ impl MeshRenderBufferManager {
         }
     }
 
-    /// Returns an iterator over the render buffers for the requested set of
+    /// Returns an iterator over the GPU buffers for the requested set of
     /// vertex attributes.
     ///
     /// # Errors
     /// Returns an error if any of the requested vertex attributes are missing.
-    pub fn request_vertex_render_buffers(
+    pub fn request_vertex_gpu_buffers(
         &self,
         requested_attributes: VertexAttributeSet,
-    ) -> Result<impl Iterator<Item = &RenderBuffer>> {
+    ) -> Result<impl Iterator<Item = &GPUBuffer>> {
         if self.available_attributes.contains(requested_attributes) {
             Ok(VERTEX_ATTRIBUTE_FLAGS
                 .iter()
@@ -224,7 +222,7 @@ impl MeshRenderBufferManager {
         }
     }
 
-    /// Returns an iterator over the layouts of the render buffers for the
+    /// Returns an iterator over the layouts of the GPU buffers for the
     /// requested set of vertex attributes in addition to position, which is
     /// always included.
     ///
@@ -237,16 +235,16 @@ impl MeshRenderBufferManager {
         self.request_vertex_buffer_layouts(requested_attributes | VertexAttributeSet::POSITION)
     }
 
-    /// Returns an iterator over the render buffers for the requested set of
+    /// Returns an iterator over the GPU buffers for the requested set of
     /// vertex attributes in addition to position, which is always included.
     ///
     /// # Errors
     /// Returns an error if any of the requested vertex attributes are missing.
-    pub fn request_vertex_render_buffers_including_position(
+    pub fn request_vertex_gpu_buffers_including_position(
         &self,
         requested_attributes: VertexAttributeSet,
-    ) -> Result<impl Iterator<Item = &RenderBuffer>> {
-        self.request_vertex_render_buffers(requested_attributes | VertexAttributeSet::POSITION)
+    ) -> Result<impl Iterator<Item = &GPUBuffer>> {
+        self.request_vertex_gpu_buffers(requested_attributes | VertexAttributeSet::POSITION)
     }
 
     /// The input required for accessing the vertex attributes
@@ -255,8 +253,8 @@ impl MeshRenderBufferManager {
         &self.shader_input
     }
 
-    /// Returns the render buffer of indices.
-    pub fn index_render_buffer(&self) -> &RenderBuffer {
+    /// Returns the GPU buffer of indices.
+    pub fn index_gpu_buffer(&self) -> &GPUBuffer {
         &self.index_buffer
     }
 
@@ -273,7 +271,7 @@ impl MeshRenderBufferManager {
     fn add_vertex_attribute_if_available<V>(
         graphics_device: &GraphicsDevice,
         available_attributes: &mut VertexAttributeSet,
-        vertex_buffers: &mut [Option<RenderBuffer>; N_VERTEX_ATTRIBUTES],
+        vertex_buffers: &mut [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
         vertex_buffer_layouts: &mut [Option<wgpu::VertexBufferLayout<'static>>;
                  N_VERTEX_ATTRIBUTES],
         shader_input: &mut MeshShaderInput,
@@ -285,7 +283,7 @@ impl MeshRenderBufferManager {
         if !data.is_empty() {
             *available_attributes |= V::FLAG;
 
-            vertex_buffers[V::GLOBAL_INDEX] = Some(RenderBuffer::new_full_vertex_buffer(
+            vertex_buffers[V::GLOBAL_INDEX] = Some(GPUBuffer::new_full_vertex_buffer(
                 graphics_device,
                 data,
                 Cow::Owned(format!("{} {}", mesh_id, V::NAME)),
@@ -311,13 +309,13 @@ impl MeshRenderBufferManager {
         graphics_device: &GraphicsDevice,
         mesh_id: MeshID,
         indices: &[I],
-    ) -> (wgpu::IndexFormat, RenderBuffer)
+    ) -> (wgpu::IndexFormat, GPUBuffer)
     where
         I: IndexBufferable,
     {
         (
             I::INDEX_FORMAT,
-            RenderBuffer::new_full_index_buffer(
+            GPUBuffer::new_full_index_buffer(
                 graphics_device,
                 indices,
                 Cow::Owned(format!("{} index", mesh_id)),
@@ -345,7 +343,7 @@ impl MeshRenderBufferManager {
                     if vertex_bytes.len() > vertex_buffer.buffer_size() {
                         // If the new number of vertices exceeds the size of the existing buffer,
                         // we create a new one that is large enough
-                        *vertex_buffer = RenderBuffer::new_full_vertex_buffer(
+                        *vertex_buffer = GPUBuffer::new_full_vertex_buffer(
                             graphics_device,
                             data,
                             vertex_buffer.label().clone(),
@@ -382,7 +380,7 @@ impl MeshRenderBufferManager {
             if index_bytes.len() > self.index_buffer.buffer_size() {
                 // If the new number of indices exceeds the size of the existing buffer,
                 // we create a new one that is large enough
-                self.index_buffer = RenderBuffer::new_full_index_buffer(
+                self.index_buffer = GPUBuffer::new_full_index_buffer(
                     graphics_device,
                     indices,
                     self.index_buffer.label().clone(),
@@ -397,8 +395,8 @@ impl MeshRenderBufferManager {
     }
 }
 
-impl RenderBuffer {
-    /// Creates a vertex render buffer initialized with the given vertex data,
+impl GPUBuffer {
+    /// Creates a vertex GPU buffer initialized with the given vertex data,
     /// with the first `n_valid_vertices` considered valid data.
     ///
     /// # Panics
@@ -421,7 +419,7 @@ impl RenderBuffer {
         Self::new_vertex_buffer_with_bytes(graphics_device, bytes, n_valid_bytes, label)
     }
 
-    /// Creates a vertex render buffer initialized with the given vertex
+    /// Creates a vertex GPU buffer initialized with the given vertex
     /// data.
     ///
     /// # Panics
@@ -437,7 +435,7 @@ impl RenderBuffer {
         Self::new_vertex_buffer(graphics_device, vertices, vertices.len(), label)
     }
 
-    /// Creates a vertex render buffer initialized with the given bytes
+    /// Creates a vertex GPU buffer initialized with the given bytes
     /// representing vertex data, with the first `n_valid_bytes` considered
     /// valid data.
     ///
@@ -450,20 +448,17 @@ impl RenderBuffer {
         n_valid_bytes: usize,
         label: Cow<'static, str>,
     ) -> Self {
-        assert!(
-            !bytes.is_empty(),
-            "Tried to create empty vertex render buffer"
-        );
+        assert!(!bytes.is_empty(), "Tried to create empty vertex GPU buffer");
         Self::new(
             graphics_device,
-            RenderBufferType::Vertex,
+            GPUBufferType::Vertex,
             bytes,
             n_valid_bytes,
             label,
         )
     }
 
-    /// Creates an index render buffer initialized with the given index
+    /// Creates an index GPU buffer initialized with the given index
     /// data, with the first `n_valid_indices` considered valid data.
     ///
     /// # Panics
@@ -481,7 +476,7 @@ impl RenderBuffer {
     {
         assert!(
             !indices.is_empty(),
-            "Tried to create empty index render buffer"
+            "Tried to create empty index GPU buffer"
         );
 
         let n_valid_bytes = mem::size_of::<I>().checked_mul(n_valid_indices).unwrap();
@@ -490,14 +485,14 @@ impl RenderBuffer {
 
         Self::new(
             graphics_device,
-            RenderBufferType::Index,
+            GPUBufferType::Index,
             bytes,
             n_valid_bytes,
             label,
         )
     }
 
-    /// Creates an index render buffer initialized with the given index
+    /// Creates an index GPU buffer initialized with the given index
     /// data.
     ///
     /// # Panics

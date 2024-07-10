@@ -9,7 +9,7 @@ use crate::{
             MaterialShaderInput,
         },
         texture::attachment::RenderAttachmentQuantitySet,
-        uniform::{self, SingleUniformRenderBuffer, UniformBufferable},
+        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
     material::{MaterialSpecificResourceGroup, MaterialSpecification},
@@ -59,7 +59,7 @@ pub fn create_ambient_occlusion_computation_material(
 ) -> MaterialSpecification {
     let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
 
-    let sample_uniform_buffer = SingleUniformRenderBuffer::for_uniform(
+    let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
         graphics_device,
         &sample_uniform,
         wgpu::ShaderStages::FRAGMENT,
