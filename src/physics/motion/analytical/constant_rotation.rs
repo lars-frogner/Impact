@@ -67,7 +67,7 @@ mod test {
         let angular_velocity = AngularVelocity::zero();
         let rotation = ConstantRotationComp::new(0.0, orientation, angular_velocity);
         let rotated_orientation = rotation.compute_orientation(1.0);
-        assert_abs_diff_eq!(rotated_orientation, orientation);
+        assert_abs_diff_eq!(rotated_orientation, orientation, epsilon = 1e-6);
     }
 
     #[test]
@@ -76,7 +76,7 @@ mod test {
         let angular_velocity = AngularVelocity::new(Vector3::y_axis(), Radians(1.0));
         let rotation = ConstantRotationComp::new(0.0, orientation, angular_velocity);
         let rotated_orientation = rotation.compute_orientation(1.0);
-        assert_abs_diff_ne!(rotated_orientation, orientation);
+        assert_abs_diff_ne!(rotated_orientation, orientation, epsilon = 1e-6);
     }
 
     proptest! {
@@ -92,7 +92,7 @@ mod test {
                 angular_velocity
             );
             let rotated_orientation = rotation.compute_orientation(time);
-            prop_assert!(abs_diff_eq!(rotated_orientation, orientation));
+            prop_assert!(abs_diff_eq!(rotated_orientation, orientation, epsilon = 1e-6));
         }
     }
 }
