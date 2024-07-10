@@ -1,8 +1,8 @@
 //! Management of resources for GPU computation.
 
 use crate::gpu::{
-    shader::ComputeShaderInput, storage::StorageGPUBuffer,
-    texture::attachment::RenderAttachmentQuantitySet, uniform::SingleUniformGPUBuffer,
+    shader::ComputeShaderInput, storage::StorageGPUBuffer, texture::Texture,
+    uniform::SingleUniformGPUBuffer,
 };
 use impact_utils::stringhash64_newtype;
 use std::collections::{hash_map::Entry, HashMap};
@@ -25,7 +25,6 @@ pub struct GPUComputationSpecification {
 #[derive(Debug)]
 pub struct GPUComputationResourceGroup {
     _single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
-    input_render_attachment_quantities: RenderAttachmentQuantitySet,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
@@ -62,21 +61,21 @@ impl GPUComputationSpecification {
 }
 
 impl GPUComputationResourceGroup {
-    /// Gathers the given sets of uniform and storage buffers into a group of
-    /// resources used in a specific GPU computation.
+    /// Gathers the given sets of uniform and storage buffers and textures into
+    /// a group of resources used in a specific GPU computation.
     ///
     /// The resources will be gathered in a single bind group, and the binding
     /// for each resource will correspond to what its index would have been in
     /// the concatenated list of resources: `single_uniform_buffers +
-    /// storage_buffers`.
+    /// storage_buffers + textures`.
     pub fn new(
         device: &wgpu::Device,
         single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
         storage_buffers: &[&StorageGPUBuffer],
-        input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        textures: &[&Texture],
         label: &str,
     ) -> Self {
-        let n_entries = single_uniform_buffers.len() + storage_buffers.len();
+        let n_entries = single_uniform_buffers.len() + storage_buffers.len() + textures.len();
         let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
         let mut bind_group_entries = Vec::with_capacity(n_entries);
         let mut binding = 0;
@@ -94,6 +93,15 @@ impl GPUComputationResourceGroup {
             binding += 1;
         }
 
+        for texture in textures {
+            bind_group_layout_entries.push(
+                texture
+                    .create_texture_bind_group_layout_entry(binding, wgpu::ShaderStages::COMPUTE),
+            );
+            bind_group_entries.push(texture.create_texture_bind_group_entry(binding));
+            binding += 1;
+        }
+
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &bind_group_layout_entries,
             label: Some(&format!("{} bind group layout", label)),
@@ -107,16 +115,9 @@ impl GPUComputationResourceGroup {
 
         Self {
             _single_uniform_buffers: single_uniform_buffers,
-            input_render_attachment_quantities,
             bind_group_layout,
             bind_group,
         }
-    }
-
-    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
-    /// render attachment textures are required as input for the computation.
-    pub fn input_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
-        self.input_render_attachment_quantities
     }
 
     /// Returns a reference to the bind group layout for the compute resources.

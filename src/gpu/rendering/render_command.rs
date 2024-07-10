@@ -1944,25 +1944,15 @@ impl ComputePassSpecification {
 
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
-        render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
         gpu_computation_library: &GPUComputationLibrary,
     ) -> Result<(Vec<&'a wgpu::BindGroupLayout>, ComputeShaderInput)> {
         let computation_specification =
             Self::get_computation_specification(gpu_computation_library, self.computation_id)?;
 
-        let mut layouts = Vec::with_capacity(4);
+        let mut layouts = Vec::with_capacity(1);
 
         if let Some(resources) = computation_specification.resources() {
             layouts.push(resources.bind_group_layout());
-
-            if !resources.input_render_attachment_quantities().is_empty() {
-                layouts.extend(
-                    render_attachment_texture_manager
-                        .request_render_attachment_texture_bind_group_layouts(
-                            resources.input_render_attachment_quantities(),
-                        ),
-                );
-            }
         }
 
         Ok((layouts, computation_specification.shader_input().clone()))
@@ -1970,25 +1960,15 @@ impl ComputePassSpecification {
 
     fn get_bind_groups<'a>(
         &self,
-        render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
         gpu_computation_library: &'a GPUComputationLibrary,
     ) -> Result<Vec<&'a wgpu::BindGroup>> {
         let computation_specification =
             Self::get_computation_specification(gpu_computation_library, self.computation_id)?;
 
-        let mut bind_groups = Vec::with_capacity(4);
+        let mut bind_groups = Vec::with_capacity(1);
 
         if let Some(resources) = computation_specification.resources() {
             bind_groups.push(resources.bind_group());
-
-            if !resources.input_render_attachment_quantities().is_empty() {
-                bind_groups.extend(
-                    render_attachment_texture_manager
-                        .request_render_attachment_texture_bind_groups(
-                            resources.input_render_attachment_quantities(),
-                        ),
-                );
-            }
         }
 
         Ok(bind_groups)
@@ -2502,17 +2482,13 @@ impl ComputePassRecorder {
         _config: &RenderingConfig,
         graphics_device: &GraphicsDevice,
         _rendering_surface: &RenderingSurface,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_computation_library: &GPUComputationLibrary,
         shader_manager: &mut ShaderManager,
         specification: ComputePassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
-        let (bind_group_layouts, shader_input) = specification
-            .get_bind_group_layouts_and_shader_inputs(
-                render_attachment_texture_manager,
-                gpu_computation_library,
-            )?;
+        let (bind_group_layouts, shader_input) =
+            specification.get_bind_group_layouts_and_shader_inputs(gpu_computation_library)?;
 
         let push_constant_range = specification.get_push_constant_range();
 
@@ -2547,7 +2523,6 @@ impl ComputePassRecorder {
     pub fn record_pass(
         &self,
         rendering_surface: &RenderingSurface,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_computation_library: &GPUComputationLibrary,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
@@ -2560,7 +2535,7 @@ impl ComputePassRecorder {
 
         let bind_groups = self
             .specification
-            .get_bind_groups(render_attachment_texture_manager, gpu_computation_library)?;
+            .get_bind_groups(gpu_computation_library)?;
 
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             timestamp_writes: None,
@@ -2672,7 +2647,6 @@ impl RenderCommandRecorder {
                 config,
                 graphics_device,
                 rendering_surface,
-                render_attachment_texture_manager,
                 gpu_computation_library,
                 shader_manager,
                 specification,
@@ -2729,7 +2703,6 @@ impl RenderCommandRecorder {
         config: &RenderingConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_computation_library: &GPUComputationLibrary,
         shader_manager: &mut ShaderManager,
         specification: ComputePassSpecification,
@@ -2739,7 +2712,6 @@ impl RenderCommandRecorder {
             config,
             graphics_device,
             rendering_surface,
-            render_attachment_texture_manager,
             gpu_computation_library,
             shader_manager,
             specification,
@@ -2780,12 +2752,9 @@ impl RenderCommandRecorder {
                 postprocessor,
                 command_encoder,
             ),
-            Self::ComputePass(recorder) => recorder.record_pass(
-                rendering_surface,
-                render_attachment_texture_manager,
-                gpu_computation_library,
-                command_encoder,
-            ),
+            Self::ComputePass(recorder) => {
+                recorder.record_pass(rendering_surface, gpu_computation_library, command_encoder)
+            }
         }
     }
 
