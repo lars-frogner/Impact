@@ -1,11 +1,11 @@
 //! Tasks for rendering.
 
 use crate::{
+    application::{tasks::AppTaskScheduler, Application},
     gpu::rendering::{render_command::tasks::SyncRenderCommands, RenderingSystem},
     scheduling::Task,
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
-    world::{tasks::WorldTaskScheduler, World},
     {define_execution_tag, define_task},
 };
 use anyhow::Result;
@@ -24,12 +24,12 @@ define_task!(
     [pub] Render,
     depends_on = [SyncRenderCommands],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Rendering"; {
-            world.capture_screenshots()?;
-            let scene = world.scene().read().unwrap();
+            app.capture_screenshots()?;
+            let scene = app.scene().read().unwrap();
             let material_library = scene.material_library().read().unwrap();
-            world.renderer().read().unwrap().render(&material_library)
+            app.renderer().read().unwrap().render(&material_library)
         })
     }
 );
@@ -53,7 +53,7 @@ impl RenderingSystem {
 }
 
 /// Registers all tasks needed for rendering in the given task scheduler.
-pub fn register_rendering_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+pub fn register_rendering_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     resource::tasks::register_render_resource_tasks(task_scheduler)?;
     render_command::tasks::register_render_command_tasks(task_scheduler)?;
     task_scheduler.register_task(Render)

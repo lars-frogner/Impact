@@ -1,12 +1,12 @@
 //! Tasks for coordination between systems in the scene.
 
 use crate::{
+    application::{tasks::AppTaskScheduler, Application},
     define_task,
     gpu::rendering::tasks::RenderingTag,
     scene::{self, Scene},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
-    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::{anyhow, Result};
 
@@ -19,10 +19,10 @@ define_task!(
     [pub] SyncSceneObjectTransforms,
     depends_on = [],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing scene graph node transforms"; {
-            let ecs_world = world.ecs_world().read().unwrap();
-            let scene = world.scene().read().unwrap();
+            let ecs_world = app.ecs_world().read().unwrap();
+            let scene = app.scene().read().unwrap();
             let mut scene_graph = scene.scene_graph().write().unwrap();
             scene::systems::sync_scene_object_transforms(&ecs_world, &mut scene_graph);
             Ok(())
@@ -40,10 +40,10 @@ define_task!(
         SyncSceneCameraViewTransform
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing lights in storage"; {
-            let scene = world.scene().read().unwrap();
-            let ecs_world = world.ecs_world().read().unwrap();
+            let scene = app.scene().read().unwrap();
+            let ecs_world = app.ecs_world().read().unwrap();
             let scene_graph = scene.scene_graph().read().unwrap();
             let mut light_storage = scene.light_storage().write().unwrap();
             scene::systems::sync_lights_in_storage(
@@ -63,9 +63,9 @@ define_task!(
     [pub] UpdateSceneGroupToWorldTransforms,
     depends_on = [SyncSceneObjectTransforms],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Updating scene object group-to-world transforms"; {
-            let scene = world.scene().read().unwrap();
+            let scene = app.scene().read().unwrap();
             scene.scene_graph()
                 .write()
                 .unwrap()
@@ -86,16 +86,16 @@ define_task!(
         UpdateSceneGroupToWorldTransforms
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing scene camera view transform"; {
-            let scene = world.scene().read().unwrap();
+            let scene = app.scene().read().unwrap();
             if let Some(scene_camera) = scene.scene_camera().write().unwrap().as_mut() {
                 scene.scene_graph()
                     .read()
                     .unwrap()
                     .sync_camera_view_transform(scene_camera);
 
-                world
+                app
                     .renderer()
                     .read()
                     .unwrap()
@@ -112,9 +112,9 @@ define_task!(
     [pub] UpdateSceneObjectBoundingSpheres,
     depends_on = [SyncSceneObjectTransforms],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Updating scene object bounding spheres"; {
-            let scene = world.scene().read().unwrap();
+            let scene = app.scene().read().unwrap();
             scene.scene_graph()
                 .write()
                 .unwrap()
@@ -137,9 +137,9 @@ define_task!(
         SyncSceneCameraViewTransform
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Buffering visible model instances"; {
-            let scene = world.scene().read().unwrap();
+            let scene = app.scene().read().unwrap();
             let maybe_scene_camera = scene.scene_camera().read().unwrap();
             let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
                 anyhow!("Tried to buffer visible model instances without scene camera")
@@ -154,7 +154,7 @@ define_task!(
                     scene_camera,
                 );
 
-            world
+            app
                 .renderer()
                 .read()
                 .unwrap()
@@ -177,10 +177,10 @@ define_task!(
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Bounding omnidirectional lights and buffering shadow casting model instances"; {
-            if world.renderer().read().unwrap().config().shadow_mapping_enabled {
-                let scene = world.scene().read().unwrap();
+            if app.renderer().read().unwrap().config().shadow_mapping_enabled {
+                let scene = app.scene().read().unwrap();
                 let maybe_scene_camera = scene.scene_camera().read().unwrap();
                 let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
                     anyhow!("Tried to bound omnidirectional lights without scene camera")
@@ -196,7 +196,7 @@ define_task!(
                         scene_camera,
                     );
 
-                world
+                app
                     .renderer()
                     .read()
                     .unwrap()
@@ -219,10 +219,10 @@ define_task!(
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Bounding unidirectional lights and buffering shadow casting model instances"; {
-            if world.renderer().read().unwrap().config().shadow_mapping_enabled {
-                let scene = world.scene().read().unwrap();
+            if app.renderer().read().unwrap().config().shadow_mapping_enabled {
+                let scene = app.scene().read().unwrap();
                 let maybe_scene_camera = scene.scene_camera().read().unwrap();
                 let scene_camera = maybe_scene_camera.as_ref().ok_or_else(|| {
                     anyhow!("Tried to bound unidirectional lights without scene camera")
@@ -238,7 +238,7 @@ define_task!(
                         scene_camera,
                     );
 
-                world
+                app
                     .renderer()
                     .read()
                     .unwrap()
@@ -266,7 +266,7 @@ impl Scene {
 
 /// Registers all tasks needed for coordinate between systems in the scene in
 /// the given task scheduler.
-pub fn register_scene_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+pub fn register_scene_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncSceneObjectTransforms)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;

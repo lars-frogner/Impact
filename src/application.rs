@@ -1,4 +1,4 @@
-//! Container for all data in the world.
+//! Manager for all systems and data in the application.
 
 pub mod components;
 pub mod entity;
@@ -34,10 +34,9 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-/// Container for all data required for simulating and
-/// rendering the world.
+/// Manager for all systems and data in the application.
 #[derive(Debug)]
-pub struct World {
+pub struct Application {
     window: Arc<Window>,
     graphics_device: Arc<GraphicsDevice>,
     user_interface: RwLock<UserInterface>,
@@ -52,7 +51,7 @@ pub struct World {
     screen_capturer: ScreenCapturer,
 }
 
-impl World {
+impl Application {
     /// Creates a new world data container.
     pub fn new(
         window: Arc<Window>,

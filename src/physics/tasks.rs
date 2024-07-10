@@ -1,16 +1,14 @@
 //! Tasks for physics.
 
 use crate::{
+    application::{tasks::AppTaskScheduler, Application},
     define_execution_tag, define_task,
-    physics::PhysicsSimulator,
+    physics::{motion, PhysicsSimulator},
     scene::tasks::{SyncLightsInStorage, SyncSceneObjectTransforms},
     thread::ThreadPoolTaskErrors,
     window::EventLoopController,
-    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
-
-use super::motion;
 
 define_execution_tag!(
     /// Execution tag for [`Task`](crate::scheduling::Task)s
@@ -27,9 +25,9 @@ define_task!(
         SyncLightsInStorage
     ],
     execute_on = [PhysicsTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Updating controlled entities"; {
-            world.update_controlled_entities();
+            app.update_controlled_entities();
             Ok(())
         })
     }
@@ -45,9 +43,9 @@ define_task!(
         UpdateControlledEntities
     ],
     execute_on = [PhysicsTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Advancing simulation"; {
-            world.simulator().write().unwrap().advance_simulation(world.ecs_world());
+            app.simulator().write().unwrap().advance_simulation(app.ecs_world());
             Ok(())
         })
     }
@@ -69,7 +67,7 @@ impl PhysicsSimulator {
 }
 
 /// Registers all tasks needed for physics in the given task scheduler.
-pub fn register_physics_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+pub fn register_physics_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     task_scheduler.register_task(UpdateControlledEntities)?;
     task_scheduler.register_task(AdvanceSimulation)?;
     motion::tasks::register_motion_tasks(task_scheduler)

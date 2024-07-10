@@ -2,6 +2,7 @@
 
 use super::DesynchronizedRenderResources;
 use crate::{
+    application::{tasks::AppTaskScheduler, Application},
     define_task,
     gpu::rendering::tasks::RenderingTag,
     scene::tasks::{
@@ -9,7 +10,6 @@ use crate::{
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances, BufferVisibleModelInstances,
         SyncLightsInStorage, SyncSceneCameraViewTransform,
     },
-    world::{tasks::WorldTaskScheduler, World},
 };
 use anyhow::Result;
 
@@ -29,9 +29,9 @@ define_task!(
         SyncInstanceFeatureBuffers
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Completing synchronization of render resources"; {
-            let renderer = world.renderer().read().unwrap();
+            let renderer = app.renderer().read().unwrap();
             let mut render_resource_manager = renderer.render_resource_manager().write().unwrap();
             render_resource_manager.declare_synchronized();
             Ok(())
@@ -43,12 +43,12 @@ define_task!(
     SyncCameraGPUBuffer,
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing camera GPU buffer"; {
-            let renderer = world.renderer().read().unwrap();
+            let renderer = app.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                if let Some(scene_camera) = world.scene().read().unwrap()
+                if let Some(scene_camera) = app.scene().read().unwrap()
                                                  .scene_camera().read().unwrap().as_ref() {
                     DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
                         renderer.graphics_device(),
@@ -71,9 +71,9 @@ define_task!(
     SyncMeshGPUBuffers,
     depends_on = [],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing mesh GPU buffers"; {
-            let renderer = world.renderer().read().unwrap();
+            let renderer = app.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_mesh_buffers_with_meshes(
@@ -84,7 +84,7 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    world
+                    app
                         .scene().read().unwrap()
                         .mesh_repository().read().unwrap()
                         .meshes(),
@@ -103,12 +103,12 @@ define_task!(
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing light GPU buffers"; {
-            let renderer = world.renderer().read().unwrap();
+            let renderer = app.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
-                let scene = world.scene().read().unwrap();
+                let scene = app.scene().read().unwrap();
                 let light_storage = scene.light_storage().read().unwrap();
                 DesynchronizedRenderResources::sync_light_buffers_with_light_storage(
                     renderer.graphics_device(),
@@ -135,9 +135,9 @@ define_task!(
         BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
     ],
     execute_on = [RenderingTag],
-    |world: &World| {
+    |app: &Application| {
         with_debug_logging!("Synchronizing model instance feature GPU buffers"; {
-            let renderer = world.renderer().read().unwrap();
+            let renderer = app.renderer().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_instance_feature_buffers_with_manager(
@@ -148,7 +148,7 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                    &mut world
+                    &mut app
                         .scene().read().unwrap()
                         .instance_feature_manager().write().unwrap(),
                 );
@@ -160,7 +160,7 @@ define_task!(
 
 /// Registers tasks for synchronizing render resources in the given task
 /// scheduler.
-pub fn register_render_resource_tasks(task_scheduler: &mut WorldTaskScheduler) -> Result<()> {
+pub fn register_render_resource_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncCameraGPUBuffer)?;
     task_scheduler.register_task(SyncMeshGPUBuffers)?;
     task_scheduler.register_task(SyncLightGPUBuffers)?;
