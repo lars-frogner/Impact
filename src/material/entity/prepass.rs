@@ -3,11 +3,12 @@
 use crate::{
     assets::{Assets, TextureID},
     gpu::{
-        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::render_command::RenderPassHints,
         shader::{
             BumpMappingTextureShaderInput, MaterialShaderInput, NormalMappingShaderInput,
             ParallaxMappingShaderInput, PrepassTextureShaderInput,
         },
+        texture::attachment::RenderAttachmentQuantitySet,
         GraphicsDevice,
     },
     material::{

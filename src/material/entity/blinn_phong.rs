@@ -4,8 +4,9 @@ use super::{super::features::create_physical_material_feature, prepass::create_p
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::render_command::RenderPassHints,
         shader::{BlinnPhongTextureShaderInput, MaterialShaderInput},
+        texture::attachment::RenderAttachmentQuantitySet,
         GraphicsDevice,
     },
     material::{

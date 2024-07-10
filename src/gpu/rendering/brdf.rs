@@ -3,8 +3,11 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    gpu::{
+        rendering::fre,
+        texture::{DepthOrArrayLayers, TextureLookupTable},
+    },
     num::Float,
-    gpu::rendering::{fre, DepthOrArrayLayers, TextureLookupTable},
 };
 use std::num::NonZeroU32;
 

@@ -11,7 +11,7 @@ use super::{
     RenderShaderTricks,
 };
 use crate::{
-    gpu::rendering::RenderAttachmentQuantity,
+    gpu::texture::attachment::RenderAttachmentQuantity,
     material::special::ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 use naga::{

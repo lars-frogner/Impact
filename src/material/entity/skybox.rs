@@ -3,8 +3,9 @@
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::{RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::render_command::RenderPassHints,
         shader::{MaterialShaderInput, SkyboxTextureShaderInput},
+        texture::attachment::RenderAttachmentQuantitySet,
         GraphicsDevice,
     },
     material::{

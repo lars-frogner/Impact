@@ -2,8 +2,9 @@
 
 use crate::{
     gpu::{
-        rendering::{RenderAttachmentQuantity, RenderAttachmentQuantitySet, RenderPassHints},
+        rendering::render_command::RenderPassHints,
         shader::{MaterialShaderInput, ToneMappingShaderInput},
+        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
     },
     material::MaterialSpecification,
     mesh::VertexAttributeSet,

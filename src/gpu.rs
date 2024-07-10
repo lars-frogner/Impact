@@ -3,13 +3,14 @@ mod device;
 pub mod rendering;
 pub mod shader;
 pub mod storage;
+pub mod texture;
 pub mod uniform;
 
 pub use device::GraphicsDevice;
 
 use crate::window::Window;
 use anyhow::Result;
-use rendering::RenderingSurface;
+use rendering::surface::RenderingSurface;
 use std::sync::Arc;
 
 /// Creates a rendering surface for the given window, connects to a graphics

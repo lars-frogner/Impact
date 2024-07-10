@@ -1,10 +1,8 @@
 //! Management of rendering assets.
 
 use crate::gpu::{
-    rendering::{
-        create_specular_ggx_reflectance_lookup_tables, texture::MipmapGenerator, TexelType,
-        Texture, TextureConfig, TextureLookupTable,
-    },
+    rendering::brdf,
+    texture::{MipmapGenerator, TexelType, Texture, TextureConfig, TextureLookupTable},
     GraphicsDevice,
 };
 use anyhow::Result;
@@ -140,7 +138,7 @@ impl Assets {
         self.load_texture_from_stored_or_computed_lookup_table(
             graphics_device,
             Self::SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_PATH,
-            || create_specular_ggx_reflectance_lookup_tables(1024, 512),
+            || brdf::create_specular_ggx_reflectance_lookup_tables(1024, 512),
         )?;
 
         Ok(())

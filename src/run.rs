@@ -11,7 +11,8 @@ use crate::{
     game_loop::{GameLoop, GameLoopConfig},
     gpu::{
         self,
-        rendering::{fre, ColorSpace, RenderingConfig, TextureAddressingConfig, TextureConfig},
+        rendering::{fre, RenderingConfig},
+        texture::{ColorSpace, TextureAddressingConfig, TextureConfig},
     },
     light::components::{
         AmbientEmissionComp, OmnidirectionalEmissionComp, UnidirectionalEmissionComp,

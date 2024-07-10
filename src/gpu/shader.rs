@@ -17,7 +17,7 @@ pub use rendering::{
 };
 
 use crate::{
-    gpu::{rendering::RenderAttachmentQuantitySet, GraphicsDevice},
+    gpu::{texture::attachment::RenderAttachmentQuantitySet, GraphicsDevice},
     mesh::VertexAttributeSet,
 };
 use anyhow::Result;

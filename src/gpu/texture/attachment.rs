@@ -1,7 +1,7 @@
 //! Textures used as render attachments.
 
 use crate::gpu::{
-    rendering::{Blending, RenderingSurface},
+    rendering::{render_command::Blending, surface::RenderingSurface},
     GraphicsDevice,
 };
 use anyhow::{anyhow, Result};
