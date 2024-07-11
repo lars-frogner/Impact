@@ -1,6 +1,7 @@
 //! Generation of compute shaders.
 
-use super::EntryPointNames;
+use super::{EntryPointNames, PushConstantExpressions};
+use crate::gpu::push_constant::{PushConstantGroup, PushConstantGroupStage};
 use anyhow::Result;
 use naga::{Function, Module};
 use std::borrow::Cow;
@@ -16,9 +17,17 @@ pub struct ComputeShaderGenerator {}
 impl ComputeShaderGenerator {
     pub fn generate_shader_module(
         shader_input: &ComputeShaderInput,
+        push_constants: PushConstantGroup,
     ) -> Result<(Module, EntryPointNames)> {
         let mut module = Module::default();
         let mut compute_function = Function::default();
+
+        let push_constant_expressions = PushConstantExpressions::generate(
+            &mut module,
+            &mut compute_function,
+            push_constants,
+            PushConstantGroupStage::Compute,
+        );
 
         todo!();
 

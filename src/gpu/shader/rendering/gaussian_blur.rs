@@ -7,10 +7,11 @@ use super::{
         OutputStructBuilder, SampledTexture, SourceCode, TextureType, U32_TYPE, U32_WIDTH,
         VECTOR_4_SIZE, VECTOR_4_TYPE,
     },
-    MeshVertexOutputFieldIndices, PushConstantFieldExpressions, RenderShaderTricks,
+    MeshVertexOutputFieldIndices, PushConstantExpressions, RenderShaderTricks,
 };
-use crate::material::special::gaussian_blur::{
-    GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
+use crate::{
+    gpu::push_constant::PushConstantVariant,
+    material::special::gaussian_blur::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS},
 };
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Literal,
@@ -74,7 +75,7 @@ impl<'a> GaussianBlurShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
@@ -149,8 +150,9 @@ impl<'a> GaussianBlurShaderGenerator<'a> {
             Expression::GlobalVariable(sample_struct_var),
         );
 
-        let inverse_window_dimensions_expr =
-            push_constant_fragment_expressions.inverse_window_dimensions;
+        let inverse_window_dimensions_expr = push_constant_fragment_expressions
+            .get(PushConstantVariant::InverseWindowDimensions)
+            .expect("Missing inverse window dimensions push constant for Gaussian blur");
 
         let framebuffer_position_expr =
             fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position);

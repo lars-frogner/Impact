@@ -17,7 +17,11 @@ pub use rendering::{
 };
 
 use crate::{
-    gpu::{texture::attachment::RenderAttachmentQuantitySet, GraphicsDevice},
+    gpu::{
+        push_constant::{PushConstantGroup, PushConstantGroupStage, PushConstantVariant},
+        texture::attachment::RenderAttachmentQuantitySet,
+        GraphicsDevice,
+    },
     mesh::VertexAttributeSet,
 };
 use anyhow::Result;
@@ -130,6 +134,13 @@ struct SampledTexture {
     texture_var: Handle<GlobalVariable>,
     sampler_var: Option<Handle<GlobalVariable>>,
     comparison_sampler_var: Option<Handle<GlobalVariable>>,
+}
+
+#[derive(Clone, Debug)]
+struct PushConstantExpressions {
+    push_constants: PushConstantGroup,
+    stage: PushConstantGroupStage,
+    expressions: Vec<Handle<Expression>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -328,6 +339,7 @@ impl ShaderManager {
         vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constants: PushConstantGroup,
     ) -> Result<&Shader> {
         let shader_id = ShaderID::from_rendering_input(
             camera_shader_input,
@@ -338,6 +350,7 @@ impl ShaderManager {
             vertex_attribute_requirements,
             input_render_attachment_quantities,
             output_render_attachment_quantities,
+            &push_constants,
         );
 
         match self.rendering_shaders.entry(shader_id) {
@@ -352,6 +365,7 @@ impl ShaderManager {
                     vertex_attribute_requirements,
                     input_render_attachment_quantities,
                     output_render_attachment_quantities,
+                    push_constants,
                 )?;
                 Ok(entry.insert(Shader::from_naga_module(
                     graphics_device,
@@ -375,14 +389,15 @@ impl ShaderManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_input: &ComputeShaderInput,
+        push_constants: PushConstantGroup,
     ) -> Result<&Shader> {
-        let shader_id = ShaderID::from_compute_input(shader_input);
+        let shader_id = ShaderID::from_compute_input(shader_input, &push_constants);
 
         match self.compute_shaders.entry(shader_id) {
             Entry::Occupied(entry) => Ok(entry.into_mut()),
             Entry::Vacant(entry) => {
                 let (module, entry_point_names) =
-                    ComputeShaderGenerator::generate_shader_module(shader_input)?;
+                    ComputeShaderGenerator::generate_shader_module(shader_input, push_constants)?;
                 Ok(entry.insert(Shader::from_naga_module(
                     graphics_device,
                     module,
@@ -410,6 +425,7 @@ impl ShaderID {
         vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constants: &PushConstantGroup,
     ) -> Self {
         let mut hasher = DefaultHasher::new();
         "rendering".hash(&mut hasher);
@@ -421,13 +437,18 @@ impl ShaderID {
         vertex_attribute_requirements.hash(&mut hasher);
         input_render_attachment_quantities.hash(&mut hasher);
         output_render_attachment_quantities.hash(&mut hasher);
+        push_constants.hash(&mut hasher);
         Self(hasher.finish())
     }
 
-    fn from_compute_input(shader_input: &ComputeShaderInput) -> Self {
+    fn from_compute_input(
+        shader_input: &ComputeShaderInput,
+        push_constants: &PushConstantGroup,
+    ) -> Self {
         let mut hasher = DefaultHasher::new();
         "compute".hash(&mut hasher);
         shader_input.hash(&mut hasher);
+        push_constants.hash(&mut hasher);
         Self(hasher.finish())
     }
 }
@@ -1265,6 +1286,87 @@ impl SampledTexture {
                 },
             )
         })
+    }
+}
+
+impl PushConstantExpressions {
+    pub fn generate(
+        module: &mut Module,
+        function: &mut Function,
+        push_constants: PushConstantGroup,
+        stage: PushConstantGroupStage,
+    ) -> Self {
+        let mut builder = StructBuilder::new(format!("PushConstantsFor{:?}", stage));
+
+        for push_constant in push_constants.iter_for_stage(stage) {
+            match push_constant.variant() {
+                PushConstantVariant::InverseWindowDimensions => {
+                    let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
+                    builder.add_field("inverseWindowDimensions", vec2_type, None, VECTOR_2_SIZE);
+                }
+                PushConstantVariant::LightIdx => {
+                    let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
+                    builder.add_field("activeLightIdx", u32_type, None, U32_WIDTH);
+                }
+                PushConstantVariant::CascadeIdx => {
+                    let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
+                    builder.add_field("activeCascadeIdx", u32_type, None, U32_WIDTH);
+                }
+                PushConstantVariant::Exposure => {
+                    let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
+                    builder.add_field("exposure", f32_type, None, F32_WIDTH);
+                }
+            }
+        }
+
+        let n_push_constants = builder.n_fields() as u32;
+
+        let expressions = if n_push_constants > 0 {
+            let struct_type = insert_in_arena(&mut module.types, builder.into_type());
+
+            let struct_var_ptr_expr = append_to_arena(
+                &mut module.global_variables,
+                GlobalVariable {
+                    name: new_name(format!("pushConstantsFor{:?}", stage)),
+                    space: AddressSpace::PushConstant,
+                    binding: None,
+                    ty: struct_type,
+                    init: None,
+                },
+            );
+
+            let struct_ptr_expr =
+                include_expr_in_func(function, Expression::GlobalVariable(struct_var_ptr_expr));
+
+            (0..n_push_constants)
+                .map(|index| {
+                    emit_in_func(function, |function| {
+                        let pointer = include_expr_in_func(
+                            function,
+                            Expression::AccessIndex {
+                                base: struct_ptr_expr,
+                                index,
+                            },
+                        );
+                        include_expr_in_func(function, Expression::Load { pointer })
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        Self {
+            push_constants,
+            stage,
+            expressions,
+        }
+    }
+
+    pub fn get(&self, variant: PushConstantVariant) -> Option<Handle<Expression>> {
+        self.push_constants
+            .find_idx_for_stage(variant, self.stage)
+            .map(|idx| self.expressions[idx])
     }
 }
 
