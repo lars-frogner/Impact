@@ -7,11 +7,11 @@ use super::{
         OutputStructBuilder, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
         U32_TYPE, U32_WIDTH, VECTOR_4_SIZE, VECTOR_4_TYPE,
     },
-    CameraProjectionVariable, MeshVertexOutputFieldIndices, PushConstantFieldExpressions,
+    CameraProjectionVariable, MeshVertexOutputFieldIndices, PushConstantExpressions,
     RenderShaderTricks,
 };
 use crate::{
-    gpu::texture::attachment::RenderAttachmentQuantity,
+    gpu::{push_constant::PushConstantVariant, texture::attachment::RenderAttachmentQuantity},
     material::special::ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
 };
 use naga::{
@@ -69,13 +69,14 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         camera_projection: Option<&CameraProjectionVariable>,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
     ) {
-        let inverse_window_dimensions_expr =
-            push_constant_fragment_expressions.inverse_window_dimensions;
+        let inverse_window_dimensions_expr = push_constant_fragment_expressions
+            .get(PushConstantVariant::InverseWindowDimensions)
+            .expect("Missing inverse window dimensions push constant for ambient occlusion");
 
         let framebuffer_position_expr =
             fragment_input_struct.get_field_expr(mesh_input_field_indices.framebuffer_position);

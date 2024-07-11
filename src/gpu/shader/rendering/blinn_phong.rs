@@ -8,10 +8,13 @@ use super::{
         VECTOR_4_TYPE,
     },
     LightShaderGenerator, LightVertexOutputFieldIndices, MeshVertexOutputFieldIndices,
-    OmnidirectionalLightShaderGenerator, PushConstantFieldExpressions,
+    OmnidirectionalLightShaderGenerator, PushConstantExpressions,
     UnidirectionalLightShaderGenerator,
 };
-use crate::gpu::texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet};
+use crate::gpu::{
+    push_constant::PushConstantVariant,
+    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
+};
 use naga::{Function, Module};
 
 /// Input description specifying the bindings of textures for Blinn-Phong
@@ -160,7 +163,7 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
@@ -175,15 +178,18 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
         let screen_space_texture_coord_expr = if input_render_attachment_quantities.is_empty() {
             None
         } else {
+            let inverse_window_dimensions_expr = push_constant_fragment_expressions
+                .get(PushConstantVariant::InverseWindowDimensions)
+                .expect("Missing inverse window dimensions push constant for Blinn-Phong shading");
             Some(source_code_lib.generate_function_call(
                 module,
                 fragment_function,
                 "convertFramebufferPositionToScreenTextureCoords",
                 vec![
-                        push_constant_fragment_expressions.inverse_window_dimensions,
-                        fragment_input_struct
-                            .get_field_expr(mesh_input_field_indices.framebuffer_position),
-                    ],
+                    inverse_window_dimensions_expr,
+                    fragment_input_struct
+                        .get_field_expr(mesh_input_field_indices.framebuffer_position),
+                ],
             ))
         };
 

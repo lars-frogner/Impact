@@ -7,9 +7,11 @@ use super::{
         SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
         VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
     },
-    LightShaderGenerator, MeshVertexOutputFieldIndices, PushConstantFieldExpressions,
+    LightShaderGenerator, MeshVertexOutputFieldIndices, PushConstantExpressions,
 };
-use crate::gpu::texture::attachment::RenderAttachmentQuantitySet;
+use crate::gpu::{
+    push_constant::PushConstantVariant, texture::attachment::RenderAttachmentQuantitySet,
+};
 use naga::{BinaryOperator, Expression, Function, Handle, Module};
 
 /// Input description specifying the bindings of textures for prepass material
@@ -265,7 +267,7 @@ impl<'a> PrepassShaderGenerator<'a> {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &PrepassVertexOutputFieldIndices,
@@ -348,7 +350,9 @@ impl<'a> PrepassShaderGenerator<'a> {
                         vec![
                             albedo_expr,
                             ambient_light_shader_generator.luminance,
-                            push_constant_fragment_expressions.exposure,
+                            push_constant_fragment_expressions
+                                .get(PushConstantVariant::Exposure)
+                                .expect("Missing exposure push constant for prepass shader"),
                         ],
                     )
                 });
@@ -472,7 +476,9 @@ impl<'a> PrepassShaderGenerator<'a> {
                                     specular_reflectance_expr.expect("Missing specular reflectance for computing specular ambient reflected luminance"),
                                     roughness_expr,
                                     ambient_light_shader_generator.luminance,
-                                    push_constant_fragment_expressions.exposure,
+                                    push_constant_fragment_expressions
+                                        .get(PushConstantVariant::Exposure)
+                                        .expect("Missing exposure push constant for prepass shader"),
                                 ],
                             )
                         },
@@ -614,7 +620,9 @@ impl<'a> PrepassShaderGenerator<'a> {
                 "preExposeEmissiveLuminance",
                 vec![
                     emissive_luminance_expr,
-                    push_constant_fragment_expressions.exposure,
+                    push_constant_fragment_expressions
+                        .get(PushConstantVariant::Exposure)
+                        .expect("Missing exposure push constant for prepass shader"),
                 ],
             );
 

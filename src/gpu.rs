@@ -1,6 +1,7 @@
 pub mod buffer;
 pub mod compute;
 mod device;
+pub mod push_constant;
 pub mod rendering;
 pub mod shader;
 pub mod storage;

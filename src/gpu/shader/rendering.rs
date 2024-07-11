@@ -31,12 +31,16 @@ use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, generate_input_argument,
     generate_location_bound_input_argument, include_expr_in_func, include_named_expr_in_func,
     insert_in_arena, new_name, swizzle_xyz_expr, EntryPointNames, InputStruct, OutputStructBuilder,
-    SampledTexture, SourceCode, StructBuilder, TextureType, F32_TYPE, F32_WIDTH, MATRIX_4X4_TYPE,
-    U32_TYPE, U32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
-    VECTOR_4_TYPE,
+    PushConstantExpressions, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
+    MATRIX_4X4_TYPE, U32_TYPE, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE,
+    VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::{
-    gpu::{rendering::fre, texture::attachment::RenderAttachmentQuantitySet},
+    gpu::{
+        push_constant::{PushConstantGroup, PushConstantGroupStage, PushConstantVariant},
+        rendering::fre,
+        texture::attachment::RenderAttachmentQuantitySet,
+    },
     light::MAX_SHADOW_MAP_CASCADES,
     mesh::{
         VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
@@ -378,32 +382,6 @@ enum MaterialVertexOutputFieldIndices {
     None,
 }
 
-/// Helper for constructing a struct containing push constants.
-#[derive(Clone, Debug)]
-struct PushConstantStruct {
-    builder: StructBuilder,
-    field_indices: PushConstantFieldIndices,
-    global_variable: Option<Handle<GlobalVariable>>,
-}
-
-/// Indices of fields in the struct containing push constants.
-#[derive(Clone, Debug)]
-struct PushConstantFieldIndices {
-    inverse_window_dimensions: usize,
-    exposure: usize,
-    light_idx: Option<usize>,
-    cascade_idx: Option<usize>,
-}
-
-/// Expressions for accessing fields in the struct containing push constants.
-#[derive(Clone, Debug)]
-struct PushConstantFieldExpressions {
-    pub inverse_window_dimensions: Handle<Expression>,
-    pub exposure: Handle<Expression>,
-    pub light_idx: Option<Handle<Expression>>,
-    pub cascade_idx: Option<Handle<Expression>>,
-}
-
 lazy_static! {
     static ref SHADER_SOURCE_LIB: SourceCode = SourceCode::from_wgsl_source(concat!(
         include_str!("../../../shader/util.wgsl"),
@@ -442,6 +420,7 @@ impl RenderShaderGenerator {
         mut vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constants: PushConstantGroup,
     ) -> Result<(Module, EntryPointNames)> {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
@@ -458,29 +437,19 @@ impl RenderShaderGenerator {
 
         let mut source_code_lib = SHADER_SOURCE_LIB.clone();
 
-        let mut push_constant_struct = PushConstantStruct::new(&mut module);
+        let push_constant_vertex_expressions = PushConstantExpressions::generate(
+            &mut module,
+            &mut vertex_function,
+            push_constants.clone(),
+            PushConstantGroupStage::Vertex,
+        );
 
-        if let Some(light_shader_input) = light_shader_input {
-            Self::add_light_push_constants(
-                light_shader_input,
-                &mut module,
-                &mut push_constant_struct,
-                material_shader_generator.is_some(),
-            );
-        }
-
-        if let Some(material_shader_input) = material_shader_input {
-            Self::add_material_push_constants(
-                material_shader_input,
-                &mut module,
-                &mut push_constant_struct,
-            );
-        }
-
-        let push_constant_vertex_expressions =
-            push_constant_struct.generate_expressions(&mut module, &mut vertex_function);
-        let push_constant_fragment_expressions =
-            push_constant_struct.generate_expressions(&mut module, &mut fragment_function);
+        let push_constant_fragment_expressions = PushConstantExpressions::generate(
+            &mut module,
+            &mut fragment_function,
+            push_constants,
+            PushConstantGroupStage::Fragment,
+        );
 
         // Caution: The order in which the shader generators use and increment
         // the bind group index must match the order in which the bind groups
@@ -1186,38 +1155,6 @@ impl RenderShaderGenerator {
         }
     }
 
-    fn add_light_push_constants(
-        light_shader_input: &LightShaderInput,
-        module: &mut Module,
-        push_constant_struct: &mut PushConstantStruct,
-        has_material: bool,
-    ) {
-        let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
-
-        push_constant_struct.field_indices.light_idx = Some(
-            push_constant_struct
-                .builder
-                .add_field("activeLightIdx", u32_type, None, U32_WIDTH),
-        );
-
-        if matches!(light_shader_input, LightShaderInput::UnidirectionalLight(_)) && !has_material {
-            push_constant_struct.field_indices.cascade_idx =
-                Some(push_constant_struct.builder.add_field(
-                    "activeCascadeIdx",
-                    u32_type,
-                    None,
-                    U32_WIDTH,
-                ));
-        }
-    }
-
-    fn add_material_push_constants(
-        _material_shader_input: &MaterialShaderInput,
-        _module: &mut Module,
-        _push_constant_struct: &mut PushConstantStruct,
-    ) {
-    }
-
     /// Creates a generator of shader code for the light type in the given
     /// shader input.
     fn create_light_shader_generator(
@@ -1227,8 +1164,8 @@ impl RenderShaderGenerator {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         vertex_attribute_requirements: &mut VertexAttributeSet,
-        push_constant_vertex_expressions: &PushConstantFieldExpressions,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_vertex_expressions: &PushConstantExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         has_material: bool,
     ) -> LightShaderGenerator {
         match light_shader_input {
@@ -1278,7 +1215,7 @@ impl RenderShaderGenerator {
         module: &mut Module,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
     ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
         let vec3_type = insert_in_arena(&mut module.types, VECTOR_3_TYPE);
@@ -1384,7 +1321,7 @@ impl RenderShaderGenerator {
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
         vertex_attribute_requirements: &mut VertexAttributeSet,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         has_material: bool,
     ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
@@ -1571,8 +1508,8 @@ impl RenderShaderGenerator {
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        push_constant_vertex_expressions: &PushConstantFieldExpressions,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_vertex_expressions: &PushConstantExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         has_material: bool,
     ) -> LightShaderGenerator {
         let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
@@ -1863,7 +1800,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         bind_group_idx: &mut u32,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         camera_projection: Option<&CameraProjectionVariable>,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
@@ -2159,7 +2096,7 @@ impl LightShaderGenerator {
     pub fn new_for_ambient_light_shading(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
     ) -> Self {
         Self::AmbientLight(AmbientLightShaderGenerator::new(
             fragment_function,
@@ -2171,7 +2108,7 @@ impl LightShaderGenerator {
     pub fn new_for_omnidirectional_light_shadow_map_update(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
     ) -> Self {
         Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShadowMapUpdate(
             OmnidirectionalLightShadowMapUpdateShaderGenerator::new(
@@ -2185,7 +2122,7 @@ impl LightShaderGenerator {
     pub fn new_for_omnidirectional_light_shading(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         Self::OmnidirectionalLight(OmnidirectionalLightShaderGenerator::ForShading(
@@ -2201,7 +2138,7 @@ impl LightShaderGenerator {
     pub fn new_for_unidirectional_light_shadow_map_update(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_vertex_expressions: &PushConstantFieldExpressions,
+        push_constant_vertex_expressions: &PushConstantExpressions,
     ) -> Self {
         Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShadowMapUpdate(
             UnidirectionalLightShadowMapUpdateShaderGenerator::new(
@@ -2216,8 +2153,8 @@ impl LightShaderGenerator {
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_vertex_expressions: &PushConstantFieldExpressions,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_vertex_expressions: &PushConstantExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         Self::UnidirectionalLight(UnidirectionalLightShaderGenerator::ForShading(
@@ -2302,7 +2239,7 @@ impl LightShaderGenerator {
     fn generate_active_light_ptr_expr(
         function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_expressions: &PushConstantFieldExpressions,
+        push_constant_expressions: &PushConstantExpressions,
     ) -> Handle<Expression> {
         let lights_struct_ptr_expr =
             include_expr_in_func(function, Expression::GlobalVariable(lights_struct_var));
@@ -2311,7 +2248,7 @@ impl LightShaderGenerator {
             function,
             lights_struct_ptr_expr,
             push_constant_expressions
-                .light_idx
+                .get(PushConstantVariant::LightIdx)
                 .expect("Missing light index push constant"),
         )
     }
@@ -2368,7 +2305,7 @@ impl AmbientLightShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
     ) -> Self {
         let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             fragment_function,
@@ -2391,7 +2328,7 @@ impl OmnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
     ) -> Self {
         let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
             fragment_function,
@@ -2469,7 +2406,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
     pub fn new(
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         let active_light_ptr_expr = LightShaderGenerator::generate_active_light_ptr_expr(
@@ -2553,7 +2490,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         framebuffer_position_expr: Handle<Expression>,
         position_expr: Handle<Expression>,
         normal_vector_expr: Handle<Expression>,
@@ -2562,6 +2499,12 @@ impl OmnidirectionalLightShadingShaderGenerator {
         emulate_area_light_reflection: bool,
     ) -> (Handle<Expression>, Handle<Expression>) {
         source_code_lib.use_type(module, "OmniLightQuantities");
+
+        let exposure = push_constant_fragment_expressions
+            .get(PushConstantVariant::Exposure)
+            .expect(
+                "Missing exposure push constant for computing omnidirectional light quantities",
+            );
 
         let light_quantities = if emulate_area_light_reflection {
             source_code_lib.generate_function_call(
@@ -2581,7 +2524,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                     roughness_expr.expect(
                         "Missing roughness for omnidirectional area light luminance modification",
                     ),
-                    push_constant_fragment_expressions.exposure,
+                    exposure,
                 ],
             )
         } else {
@@ -2598,7 +2541,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                     position_expr,
                     normal_vector_expr,
                     view_dir_expr,
-                    push_constant_fragment_expressions.exposure,
+                    exposure,
                 ],
             )
         };
@@ -2698,7 +2641,7 @@ impl UnidirectionalLightShadowMapUpdateShaderGenerator {
     pub fn new(
         vertex_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_vertex_expressions: &PushConstantFieldExpressions,
+        push_constant_vertex_expressions: &PushConstantExpressions,
     ) -> Self {
         let lights_struct_ptr_expr = include_expr_in_func(
             vertex_function,
@@ -2709,7 +2652,7 @@ impl UnidirectionalLightShadowMapUpdateShaderGenerator {
             vertex_function,
             lights_struct_ptr_expr,
             push_constant_vertex_expressions
-                .light_idx
+                .get(PushConstantVariant::LightIdx)
                 .expect("Missing light index push constant"),
         );
 
@@ -2718,7 +2661,7 @@ impl UnidirectionalLightShadowMapUpdateShaderGenerator {
                 vertex_function,
                 active_light_ptr_expr,
                 push_constant_vertex_expressions
-                    .cascade_idx
+                    .get(PushConstantVariant::CascadeIdx)
                     .expect("Missing cascade index push constant"),
             );
 
@@ -2756,8 +2699,8 @@ impl UnidirectionalLightShadingShaderGenerator {
         vertex_function: &mut Function,
         fragment_function: &mut Function,
         lights_struct_var: Handle<GlobalVariable>,
-        push_constant_vertex_expressions: &PushConstantFieldExpressions,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_vertex_expressions: &PushConstantExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         shadow_map: SampledTexture,
     ) -> Self {
         let active_light_ptr_expr_in_vertex_function =
@@ -2863,7 +2806,7 @@ impl UnidirectionalLightShadingShaderGenerator {
         fragment_function: &mut Function,
         fragment_input_struct: &InputStruct,
         light_input_field_indices: &UnidirectionalLightVertexOutputFieldIndices,
-        push_constant_fragment_expressions: &PushConstantFieldExpressions,
+        push_constant_fragment_expressions: &PushConstantExpressions,
         framebuffer_position_expr: Handle<Expression>,
         camera_space_normal_vector_expr: Handle<Expression>,
         camera_space_view_dir_expr: Handle<Expression>,
@@ -3000,6 +2943,10 @@ impl UnidirectionalLightShadingShaderGenerator {
                 },
             );
 
+        let exposure = push_constant_fragment_expressions
+            .get(PushConstantVariant::Exposure)
+            .expect("Missing exposure push constant for computing unidirectional light quantities");
+
         let light_quantities = if emulate_area_light_reflection {
             source_code_lib.generate_function_call(
                 module,
@@ -3018,7 +2965,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                     roughness_expr.expect(
                         "Missing roughness for omnidirectional area light luminance modification",
                     ),
-                    push_constant_fragment_expressions.exposure,
+                    exposure,
                 ],
             )
         } else {
@@ -3035,7 +2982,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                     light_space_normal_vector_expr,
                     camera_space_normal_vector_expr,
                     camera_space_view_dir_expr,
-                    push_constant_fragment_expressions.exposure,
+                    exposure,
                 ],
             )
         };
@@ -3099,134 +3046,6 @@ impl UnidirectionalLightShadingShaderGenerator {
             reflection_dot_products_expr,
             shadow_masked_pre_exposed_incident_luminance_expr,
         )
-    }
-}
-
-impl PushConstantStruct {
-    fn new(module: &mut Module) -> Self {
-        let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
-        let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
-
-        let mut builder = StructBuilder::new("PushConstants");
-
-        let inverse_window_dimensions_idx =
-            builder.add_field("inverseWindowDimensions", vec2_type, None, VECTOR_2_SIZE);
-
-        let exposure_idx = builder.add_field("exposure", f32_type, None, F32_WIDTH);
-
-        let field_indices = PushConstantFieldIndices {
-            inverse_window_dimensions: inverse_window_dimensions_idx,
-            exposure: exposure_idx,
-            light_idx: None,
-            cascade_idx: None,
-        };
-
-        Self {
-            builder,
-            field_indices,
-            global_variable: None,
-        }
-    }
-
-    fn generate_expressions(
-        &mut self,
-        module: &mut Module,
-        function: &mut Function,
-    ) -> PushConstantFieldExpressions {
-        let struct_var_ptr_expr = self.global_variable.get_or_insert_with(|| {
-            let struct_type = insert_in_arena(&mut module.types, self.builder.clone().into_type());
-
-            append_to_arena(
-                &mut module.global_variables,
-                GlobalVariable {
-                    name: new_name("pushConstants"),
-                    space: AddressSpace::PushConstant,
-                    binding: None,
-                    ty: struct_type,
-                    init: None,
-                },
-            )
-        });
-
-        let struct_ptr_expr =
-            include_expr_in_func(function, Expression::GlobalVariable(*struct_var_ptr_expr));
-
-        let inverse_window_dimensions_expr = emit_in_func(function, |function| {
-            let inverse_window_dimensions_ptr_expr = include_expr_in_func(
-                function,
-                Expression::AccessIndex {
-                    base: struct_ptr_expr,
-                    index: self.field_indices.inverse_window_dimensions as u32,
-                },
-            );
-            include_expr_in_func(
-                function,
-                Expression::Load {
-                    pointer: inverse_window_dimensions_ptr_expr,
-                },
-            )
-        });
-
-        let exposure_expr = emit_in_func(function, |function| {
-            let exposure_ptr_expr = include_expr_in_func(
-                function,
-                Expression::AccessIndex {
-                    base: struct_ptr_expr,
-                    index: self.field_indices.exposure as u32,
-                },
-            );
-            include_expr_in_func(
-                function,
-                Expression::Load {
-                    pointer: exposure_ptr_expr,
-                },
-            )
-        });
-
-        let mut field_expressions = PushConstantFieldExpressions {
-            inverse_window_dimensions: inverse_window_dimensions_expr,
-            exposure: exposure_expr,
-            light_idx: None,
-            cascade_idx: None,
-        };
-
-        if let Some(light_idx) = self.field_indices.light_idx {
-            field_expressions.light_idx = Some(emit_in_func(function, |function| {
-                let light_idx_ptr_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: struct_ptr_expr,
-                        index: light_idx as u32,
-                    },
-                );
-                include_expr_in_func(
-                    function,
-                    Expression::Load {
-                        pointer: light_idx_ptr_expr,
-                    },
-                )
-            }));
-        }
-
-        if let Some(cascade_idx) = self.field_indices.cascade_idx {
-            field_expressions.cascade_idx = Some(emit_in_func(function, |function| {
-                let cascade_idx_ptr_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: struct_ptr_expr,
-                        index: cascade_idx as u32,
-                    },
-                );
-                include_expr_in_func(
-                    function,
-                    Expression::Load {
-                        pointer: cascade_idx_ptr_expr,
-                    },
-                )
-            }));
-        }
-
-        field_expressions
     }
 }
 
@@ -3484,8 +3303,9 @@ impl SampledTexture {
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
-    use crate::material::special::{
-        gaussian_blur::GaussianBlurDirection, tone_mapping::ToneMapping,
+    use crate::{
+        gpu::push_constant::PushConstant,
+        material::special::{gaussian_blur::GaussianBlurDirection, tone_mapping::ToneMapping},
     };
     use naga::{
         back::wgsl::{self as wgsl_out, WriterFlags},
@@ -3578,6 +3398,7 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstantGroup::new(),
         )
         .unwrap();
     }
@@ -3594,6 +3415,7 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstantGroup::new(),
         )
         .unwrap();
     }
@@ -3609,6 +3431,7 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -3632,6 +3455,7 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT).into(),
         )
         .unwrap()
         .0;
@@ -3655,6 +3479,12 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::VERTEX),
+                PushConstant::new(PushConstantVariant::CascadeIdx, wgpu::ShaderStages::VERTEX),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -3686,6 +3516,7 @@ mod test {
             VertexAttributeSet::COLOR,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -3709,6 +3540,7 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -3740,6 +3572,7 @@ mod test {
             VertexAttributeSet::TEXTURE_COORDS,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -3786,6 +3619,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -3832,6 +3671,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -3878,6 +3726,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -3924,6 +3778,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -3970,6 +3833,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4016,6 +3885,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4063,6 +3941,12 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4110,6 +3994,15 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4156,6 +4049,12 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4202,6 +4101,183 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_blinn_phong_shader_with_input_position_attachment_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_luminance_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    albedo_texture_and_sampler_bindings: None,
+                    specular_reflectance_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::POSITION,
+            RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_blinn_phong_shader_with_input_normal_vector_attachment_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_luminance_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    albedo_texture_and_sampler_bindings: None,
+                    specular_reflectance_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_blinn_phong_shader_with_input_position_and_normal_vector_attachment_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_luminance_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::BlinnPhong(
+                BlinnPhongTextureShaderInput {
+                    albedo_texture_and_sampler_bindings: None,
+                    specular_reflectance_texture_and_sampler_bindings: None,
+                },
+            )),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4251,6 +4327,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4300,6 +4382,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4349,6 +4440,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4398,6 +4495,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4446,6 +4552,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4494,6 +4606,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4542,6 +4663,12 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4590,6 +4717,15 @@ mod test {
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4639,6 +4775,12 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4688,6 +4830,15 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4737,6 +4888,12 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4786,6 +4943,15 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4835,6 +5001,12 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4884,6 +5056,15 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4933,6 +5114,12 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -4982,6 +5169,189 @@ mod test {
             VertexAttributeSet::FOR_TEXTURED_LIGHT_SHADING,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_microfacet_shader_with_input_position_attachment_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_luminance_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    albedo_texture_and_sampler_bindings: None,
+                    specular_reflectance_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::POSITION,
+            RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_microfacet_shader_with_input_normal_vector_attachment_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_luminance_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    albedo_texture_and_sampler_bindings: None,
+                    specular_reflectance_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap()
+        .0;
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_microfacet_shader_with_input_position_and_normal_vector_attachment_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [
+                    Some(MESH_VERTEX_BINDING_START),
+                    None,
+                    Some(MESH_VERTEX_BINDING_START + 1),
+                    None,
+                    None,
+                ],
+            }),
+            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
+            &[
+                &MODEL_VIEW_TRANSFORM_INPUT,
+                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
+                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
+                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
+                    emissive_luminance_location: None,
+                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
+                    parallax_displacement_scale_location: None,
+                    parallax_uv_per_distance_location: None,
+                }),
+            ],
+            Some(&MaterialShaderInput::Microfacet((
+                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
+                MicrofacetTextureShaderInput {
+                    albedo_texture_and_sampler_bindings: None,
+                    specular_reflectance_texture_and_sampler_bindings: None,
+                    roughness_texture_and_sampler_bindings: None,
+                },
+            ))),
+            VertexAttributeSet::FOR_LIGHT_SHADING,
+            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+            RenderAttachmentQuantitySet::empty(),
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5031,6 +5401,7 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -5080,6 +5451,7 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT).into(),
         )
         .unwrap()
         .0;
@@ -5135,6 +5507,7 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -5191,6 +5564,7 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            PushConstantGroup::new(),
         )
         .unwrap()
         .0;
@@ -5240,6 +5614,12 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5289,6 +5669,12 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5338,6 +5724,12 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5390,6 +5782,12 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5446,6 +5844,12 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5503,6 +5907,12 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+            [
+                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap()
         .0;
@@ -5528,6 +5938,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5555,6 +5970,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::OCCLUSION,
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5582,6 +6002,11 @@ mod test {
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::OCCLUSION,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5611,6 +6036,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::LUMINANCE,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5640,6 +6070,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::LUMINANCE,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5666,6 +6101,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::LUMINANCE,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5692,6 +6132,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::LUMINANCE,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;
@@ -5718,6 +6163,11 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::LUMINANCE,
             RenderAttachmentQuantitySet::empty(),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
         )
         .unwrap()
         .0;

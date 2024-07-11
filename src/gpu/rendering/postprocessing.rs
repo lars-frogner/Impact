@@ -2,6 +2,7 @@
 
 use crate::{
     gpu::{
+        push_constant::{PushConstant, PushConstantVariant},
         rendering::{
             fre,
             render_command::{
@@ -356,7 +357,7 @@ fn setup_ambient_occlusion_computation_material_and_render_pass(
                 sample_radius,
             )
         });
-    define_ambient_occlusion_computation_pass(material_id, specification.render_pass_hints())
+    define_ambient_occlusion_computation_pass(material_id, specification)
 }
 
 fn setup_ambient_occlusion_application_material_and_render_pass(
@@ -368,7 +369,7 @@ fn setup_ambient_occlusion_application_material_and_render_pass(
         .or_insert_with(
             material::special::ambient_occlusion::create_ambient_occlusion_application_material,
         );
-    define_ambient_occlusion_application_pass(material_id, specification.render_pass_hints())
+    define_ambient_occlusion_application_pass(material_id, specification)
 }
 
 fn setup_unoccluded_ambient_reflected_luminance_application_material_and_render_pass(
@@ -379,10 +380,7 @@ fn setup_unoccluded_ambient_reflected_luminance_application_material_and_render_
         RenderAttachmentQuantity::AmbientReflectedLuminance,
         RenderAttachmentQuantity::Luminance,
     );
-    define_unoccluded_ambient_reflected_luminance_application_pass(
-        material_id,
-        specification.render_pass_hints(),
-    )
+    define_unoccluded_ambient_reflected_luminance_application_pass(material_id, specification)
 }
 
 fn setup_gaussian_blur_material_and_render_pass(
@@ -412,7 +410,7 @@ fn setup_gaussian_blur_material_and_render_pass(
                 sample_uniform,
             )
         });
-    define_gaussian_blur_pass(material_id, specification.render_pass_hints(), direction)
+    define_gaussian_blur_pass(material_id, specification, direction)
 }
 
 fn setup_tone_mapping_material_and_render_pass(
@@ -432,7 +430,7 @@ fn setup_tone_mapping_material_and_render_pass(
                 mapping,
             )
         });
-    define_tone_mapping_pass(material_id, specification.render_pass_hints(), mapping)
+    define_tone_mapping_pass(material_id, specification, mapping)
 }
 
 fn define_passthrough_pass(
@@ -444,8 +442,15 @@ fn define_passthrough_pass(
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_material_id: Some(material_id),
-        hints,
+        input_render_attachment_quantities: input_render_attachment_quantity.flag(),
+        output_render_attachment_quantities: output_render_attachment_quantity.flag(),
         output_attachment_sampling: OutputAttachmentSampling::Single,
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints,
         label: format!(
             "Passthrough pass: {} -> {}",
             input_render_attachment_quantity, output_render_attachment_quantity
@@ -456,13 +461,24 @@ fn define_passthrough_pass(
 
 fn define_ambient_occlusion_computation_pass(
     material_id: MaterialID,
-    hints: RenderPassHints,
+    material_specification: &MaterialSpecification,
 ) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_material_id: Some(material_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        hints,
+        vertex_attribute_requirements: material_specification
+            .vertex_attribute_requirements_for_shader(),
+        input_render_attachment_quantities: material_specification
+            .input_render_attachment_quantities(),
+        output_render_attachment_quantities: material_specification
+            .output_render_attachment_quantities(),
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints: material_specification.render_pass_hints(),
         label: "Ambient occlusion computation pass".to_string(),
         ..Default::default()
     })
@@ -470,13 +486,24 @@ fn define_ambient_occlusion_computation_pass(
 
 fn define_ambient_occlusion_application_pass(
     material_id: MaterialID,
-    hints: RenderPassHints,
+    material_specification: &MaterialSpecification,
 ) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_material_id: Some(material_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        hints,
+        vertex_attribute_requirements: material_specification
+            .vertex_attribute_requirements_for_shader(),
+        input_render_attachment_quantities: material_specification
+            .input_render_attachment_quantities(),
+        output_render_attachment_quantities: material_specification
+            .output_render_attachment_quantities(),
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints: material_specification.render_pass_hints(),
         label: "Ambient occlusion application pass".to_string(),
         ..Default::default()
     })
@@ -484,13 +511,24 @@ fn define_ambient_occlusion_application_pass(
 
 fn define_unoccluded_ambient_reflected_luminance_application_pass(
     material_id: MaterialID,
-    hints: RenderPassHints,
+    material_specification: &MaterialSpecification,
 ) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_material_id: Some(material_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        hints,
+        vertex_attribute_requirements: material_specification
+            .vertex_attribute_requirements_for_shader(),
+        input_render_attachment_quantities: material_specification
+            .input_render_attachment_quantities(),
+        output_render_attachment_quantities: material_specification
+            .output_render_attachment_quantities(),
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints: material_specification.render_pass_hints(),
         label: "Unoccluded ambient reflected luminance application pass".to_string(),
         ..Default::default()
     })
@@ -498,14 +536,25 @@ fn define_unoccluded_ambient_reflected_luminance_application_pass(
 
 fn define_gaussian_blur_pass(
     material_id: MaterialID,
-    hints: RenderPassHints,
+    material_specification: &MaterialSpecification,
     direction: GaussianBlurDirection,
 ) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_material_id: Some(material_id),
-        hints,
+        vertex_attribute_requirements: material_specification
+            .vertex_attribute_requirements_for_shader(),
+        input_render_attachment_quantities: material_specification
+            .input_render_attachment_quantities(),
+        output_render_attachment_quantities: material_specification
+            .output_render_attachment_quantities(),
         output_attachment_sampling: OutputAttachmentSampling::Single,
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints: material_specification.render_pass_hints(),
         label: format!("1D Gaussian blur pass ({})", direction),
         ..Default::default()
     })
@@ -513,14 +562,25 @@ fn define_gaussian_blur_pass(
 
 fn define_tone_mapping_pass(
     material_id: MaterialID,
-    hints: RenderPassHints,
+    material_specification: &MaterialSpecification,
     mapping: ToneMapping,
 ) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_material_id: Some(material_id),
-        hints,
+        vertex_attribute_requirements: material_specification
+            .vertex_attribute_requirements_for_shader(),
+        input_render_attachment_quantities: material_specification
+            .input_render_attachment_quantities(),
+        output_render_attachment_quantities: material_specification
+            .output_render_attachment_quantities(),
         output_attachment_sampling: OutputAttachmentSampling::Single,
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints: material_specification.render_pass_hints(),
         label: format!("Tone mapping pass ({})", mapping),
         ..Default::default()
     })
