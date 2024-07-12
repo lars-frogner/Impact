@@ -2,7 +2,7 @@
 
 use crate::gpu::{
     rendering::brdf,
-    texture::{MipmapGenerator, TexelType, Texture, TextureConfig, TextureLookupTable},
+    texture::{mipmap::MipmapperGenerator, TexelType, Texture, TextureConfig, TextureLookupTable},
     GraphicsDevice,
 };
 use anyhow::Result;
@@ -25,8 +25,8 @@ stringhash32_newtype!(
 #[derive(Debug)]
 pub struct Assets {
     graphics_device: Arc<GraphicsDevice>,
+    mipmapper_generator: Arc<MipmapperGenerator>,
     pub textures: HashMap<TextureID, Texture>,
-    mipmap_generator: MipmapGenerator,
 }
 
 lazy_static! {
@@ -43,17 +43,22 @@ impl Assets {
         *SPECULAR_GGX_REFLECTANCE_LOOKUP_TABLE_TEXTURE_ID
     }
 
-    pub fn new(graphics_device: Arc<GraphicsDevice>) -> Self {
-        let mipmap_generator = MipmapGenerator::new(graphics_device.device());
+    pub fn new(
+        graphics_device: Arc<GraphicsDevice>,
+        mipmapper_generator: Arc<MipmapperGenerator>,
+    ) -> Self {
         Self {
             graphics_device,
+            mipmapper_generator,
             textures: HashMap::new(),
-            mipmap_generator,
         }
     }
 
-    pub fn new_with_default_lookup_tables(graphics_device: Arc<GraphicsDevice>) -> Result<Self> {
-        let mut assets = Self::new(graphics_device);
+    pub fn new_with_default_lookup_tables(
+        graphics_device: Arc<GraphicsDevice>,
+        mipmapper_generator: Arc<MipmapperGenerator>,
+    ) -> Result<Self> {
+        let mut assets = Self::new(graphics_device, mipmapper_generator);
         assets.load_default_lookup_table_textures()?;
         Ok(assets)
     }
@@ -75,7 +80,7 @@ impl Assets {
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
             entry.insert(Texture::from_path(
                 &self.graphics_device,
-                &self.mipmap_generator,
+                &self.mipmapper_generator,
                 image_path,
                 config,
             )?);

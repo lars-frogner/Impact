@@ -178,6 +178,7 @@ impl ShadowCubemapTexture {
         super::save_texture_as_image_file(
             graphics_device,
             &self.texture,
+            0,
             face.as_idx_u32(),
             output_path,
         )
@@ -347,7 +348,13 @@ impl CascadedShadowMapTexture {
         cascade_idx: u32,
         output_path: P,
     ) -> Result<()> {
-        super::save_texture_as_image_file(graphics_device, &self.texture, cascade_idx, output_path)
+        super::save_texture_as_image_file(
+            graphics_device,
+            &self.texture,
+            0,
+            cascade_idx,
+            output_path,
+        )
     }
 
     fn create_view(texture: &wgpu::Texture) -> wgpu::TextureView {

@@ -9,7 +9,7 @@ use super::{
     },
     MeshVertexOutputFieldIndices,
 };
-use naga::{Function, Interpolation, Module, Sampling};
+use naga::{Function, Interpolation, Module, SampleLevel, Sampling};
 
 /// Input description specifying the vertex attribute location reqired for
 /// generating a shader for a fixed color material.
@@ -174,6 +174,7 @@ impl<'a> FixedTextureShaderGenerator<'a> {
                     .texture_coords
                     .expect("No `texture_coords` passed to fixed texture fragment shader"),
             ),
+            SampleLevel::Auto,
             None,
             None,
             None,

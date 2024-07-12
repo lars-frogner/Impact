@@ -391,13 +391,11 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
 
-    // world
-    //     .create_entity((
-    //         &VoxelSphereComp::new(500, 4),
-    //         &VoxelTypeComp::new(VoxelType::Default),
-    //         &ReferenceFrameComp::unoriented(point![-100.0, -100.0, -4.0]),
-    //     ))
-    //     ?;
+    // app.create_entity((
+    //     &VoxelSphereComp::new(500, 4),
+    //     &VoxelTypeComp::new(VoxelType::Default),
+    //     &ReferenceFrameComp::unoriented(point![-100.0, -100.0, -4.0]),
+    // ))?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0), 1.0, 10.0, 3.0);
     // create_free_rotation_experiment(&world, Point3::new(0.0, 7.0, 2.0), 5.0, 1e-3);

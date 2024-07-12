@@ -1,6 +1,7 @@
 //! Textures.
 
 pub mod attachment;
+pub mod mipmap;
 pub mod shadow_map;
 
 use crate::{gpu::GraphicsDevice, io};
@@ -10,12 +11,11 @@ use image::{
     self, buffer::ConvertBuffer, io::Reader as ImageReader, DynamicImage, GenericImageView,
     ImageBuffer, Luma, Rgba,
 };
+use mipmap::MipmapperGenerator;
 use rmp_serde::{from_read, Serializer};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{
-    borrow::Cow, collections::HashMap, fs::File, io::BufReader, num::NonZeroU32, path::Path,
-};
-use wgpu::{util::DeviceExt, PipelineCompilationOptions};
+use std::{borrow::Cow, fs::File, io::BufReader, num::NonZeroU32, path::Path};
+use wgpu::util::DeviceExt;
 
 /// Represents a data type that can be copied directly to a [`Texture`].
 pub trait TexelType: Pod {
@@ -112,15 +112,6 @@ pub enum DepthOrArrayLayers {
     ArrayLayers(NonZeroU32),
 }
 
-/// Helper for generating mipmaps for a texture.
-#[derive(Debug)]
-pub struct MipmapGenerator {
-    _shader: wgpu::ShaderModule,
-    sampler: wgpu::Sampler,
-    pipelines_and_bind_group_layouts:
-        HashMap<wgpu::TextureFormat, (wgpu::RenderPipeline, wgpu::BindGroupLayout)>,
-}
-
 impl Default for ColorSpace {
     fn default() -> Self {
         Self::Linear
@@ -128,13 +119,6 @@ impl Default for ColorSpace {
 }
 
 impl TexelDescription {
-    const AVAILABLE_FORMATS: [wgpu::TextureFormat; 4] = [
-        wgpu::TextureFormat::R8Unorm,
-        wgpu::TextureFormat::R32Float,
-        wgpu::TextureFormat::Rgba8Unorm,
-        wgpu::TextureFormat::Rgba8UnormSrgb,
-    ];
-
     fn n_bytes(&self) -> u32 {
         match self {
             Self::Rgba8(_) | Self::Float32 => 4,
@@ -176,7 +160,7 @@ impl Texture {
     ///   linear.
     pub fn from_path(
         graphics_device: &GraphicsDevice,
-        mipmap_generator: &MipmapGenerator,
+        mipmapper_generator: &MipmapperGenerator,
         image_path: impl AsRef<Path>,
         config: TextureConfig,
     ) -> Result<Self> {
@@ -184,7 +168,7 @@ impl Texture {
         let image = ImageReader::open(image_path)?.decode()?;
         Self::from_image(
             graphics_device,
-            mipmap_generator,
+            mipmapper_generator,
             image,
             config,
             &image_path.to_string_lossy(),
@@ -206,13 +190,13 @@ impl Texture {
     ///   linear.
     pub fn from_bytes(
         graphics_device: &GraphicsDevice,
-        mipmap_generator: &MipmapGenerator,
+        mipmapper_generator: &MipmapperGenerator,
         byte_buffer: &[u8],
         config: TextureConfig,
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(graphics_device, mipmap_generator, image, config, label)
+        Self::from_image(graphics_device, mipmapper_generator, image, config, label)
     }
 
     /// Creates a texture for the given loaded image, using the given
@@ -228,7 +212,7 @@ impl Texture {
     ///   linear.
     pub fn from_image(
         graphics_device: &GraphicsDevice,
-        mipmap_generator: &MipmapGenerator,
+        mipmapper_generator: &MipmapperGenerator,
         image: DynamicImage,
         config: TextureConfig,
         label: &str,
@@ -241,7 +225,7 @@ impl Texture {
         if image.color().has_color() {
             Self::create(
                 graphics_device,
-                Some(mipmap_generator),
+                Some(mipmapper_generator),
                 &image.into_rgba8(),
                 width,
                 height,
@@ -261,7 +245,7 @@ impl Texture {
             }
             Self::create(
                 graphics_device,
-                Some(mipmap_generator),
+                Some(mipmapper_generator),
                 &image.into_luma8(),
                 width,
                 height,
@@ -485,7 +469,7 @@ impl Texture {
     ///   data between buffers and textures).
     fn create(
         graphics_device: &GraphicsDevice,
-        mipmap_generator: Option<&MipmapGenerator>,
+        mipmapper_generator: Option<&MipmapperGenerator>,
         byte_buffer: &[u8],
         width: NonZeroU32,
         height: NonZeroU32,
@@ -550,22 +534,14 @@ impl Texture {
 
         let format = texel_description.texture_format();
 
-        let full_mip_chain_level_count = ((u32::max(texture_size.width, texture_size.height) as f32)
-            .log2()
-            .ceil() as u32)
-            + 1;
+        let full_mip_chain_level_count = texture_size.max_mips(dimension);
 
-        let mip_level_count = if mipmap_generator.is_some() {
-            u32::max(
-                1,
-                u32::min(
-                    full_mip_chain_level_count,
-                    config
-                        .filtering
-                        .max_mip_level_count
-                        .unwrap_or(full_mip_chain_level_count),
-                ),
-            )
+        let mip_level_count = if mipmapper_generator.is_some() {
+            config
+                .filtering
+                .max_mip_level_count
+                .unwrap_or(full_mip_chain_level_count)
+                .clamp(1, full_mip_chain_level_count)
         } else {
             1
         };
@@ -587,17 +563,12 @@ impl Texture {
             texture_size,
         );
 
-        if mip_level_count > 1 {
-            if let Some(mipmap_generator) = mipmap_generator {
-                mipmap_generator.generate_mipmaps(
-                    device,
-                    queue,
-                    &texture,
-                    format,
-                    mip_level_count,
-                    label,
-                );
-            }
+        if let Some(mipmapper_generator) = mipmapper_generator {
+            mipmapper_generator.update_texture_mipmaps(
+                graphics_device,
+                &texture,
+                Cow::Owned(label.to_string()),
+            );
         }
 
         let view = Self::create_view(&texture, view_dimension);
@@ -961,155 +932,19 @@ impl DepthOrArrayLayers {
     }
 }
 
-impl MipmapGenerator {
-    /// Creates a new mipmap generator
-    pub fn new(device: &wgpu::Device) -> Self {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../../shader/mipmap.wgsl"
-            ))),
-            label: Some("Mipmap shader"),
-        });
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            label: Some("Mipmap sampler"),
-            ..Default::default()
-        });
-
-        let pipelines_and_bind_group_layouts = TexelDescription::AVAILABLE_FORMATS
-            .iter()
-            .map(|&format| {
-                let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    layout: None,
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "mainVS",
-                        buffers: &[],
-                        compilation_options: PipelineCompilationOptions::default(),
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: "mainFS",
-                        targets: &[Some(format.into())],
-                        compilation_options: PipelineCompilationOptions::default(),
-                    }),
-                    primitive: wgpu::PrimitiveState {
-                        topology: wgpu::PrimitiveTopology::TriangleList,
-                        ..Default::default()
-                    },
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                    label: Some("Mipmap pipeline"),
-                });
-
-                // Get bind group layout determined from shader code
-                let bind_group_layout = pipeline.get_bind_group_layout(0);
-
-                (format, (pipeline, bind_group_layout))
-            })
-            .collect();
-
-        Self {
-            _shader: shader,
-            sampler,
-            pipelines_and_bind_group_layouts,
-        }
-    }
-
-    fn generate_mipmaps(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture: &wgpu::Texture,
-        format: wgpu::TextureFormat,
-        mip_level_count: u32,
-        label: &str,
-    ) {
-        let (pipeline, bind_group_layout) = self
-            .pipelines_and_bind_group_layouts
-            .get(&format)
-            .expect("Tried to create mipmaps for unsupported format");
-
-        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Mipmap command encoder"),
-        });
-
-        let texture_views: Vec<_> = (0..mip_level_count)
-            .map(|mip_level| {
-                texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: None,
-                    dimension: None,
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: mip_level,
-                    mip_level_count: Some(1),
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                    label: Some(&format!("{} mipmap view", label)),
-                })
-            })
-            .collect();
-
-        for target_mip_level in 1..mip_level_count as usize {
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: bind_group_layout,
-                entries: &[
-                    // Bind the view for the previous mip level
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(
-                            &texture_views[target_mip_level - 1],
-                        ),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                ],
-                label: Some(&format!("{} mipmap bind group", label)),
-            });
-
-            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // Render to the view for the current mip level
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_views[target_mip_level],
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                label: Some(&format!("{} mipmap render pass", label)),
-            });
-
-            render_pass.set_pipeline(pipeline);
-            render_pass.set_bind_group(0, &bind_group, &[]);
-
-            render_pass.draw(0..3, 0..1);
-        }
-
-        queue.submit(Some(command_encoder.finish()));
-    }
-}
-
 /// Saves the texture at the given index of the given texture array as a color
 /// or grayscale image at the given output path. The image file format is
 /// automatically determined from the file extension.
 ///
 /// # Errors
-/// Returns an error if the format of the given texture is not supported.
+/// Returns an error if:
+/// - The format of the given texture is not supported.
+/// - The mip level is invalid.
+/// - The texture array index is invalid.
 pub fn save_texture_as_image_file<P: AsRef<Path>>(
     graphics_device: &GraphicsDevice,
     texture: &wgpu::Texture,
+    mip_level: u32,
     texture_array_idx: u32,
     output_path: P,
 ) -> Result<()> {
@@ -1135,7 +970,27 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
         float_to_byte(gamma_corrected(byte_to_float(linear_value)))
     }
 
+    if mip_level >= texture.mip_level_count() {
+        return Err(anyhow!(
+            "Mip level {} out of bounds for texture with {} mip levels",
+            mip_level,
+            texture.mip_level_count()
+        ));
+    }
+
+    if texture_array_idx >= texture.depth_or_array_layers() {
+        return Err(anyhow!(
+            "Texture array index {} out of bounds for texture with {} array layers",
+            texture_array_idx,
+            texture.depth_or_array_layers()
+        ));
+    }
+
     let format = texture.format();
+
+    let size = texture
+        .size()
+        .mip_level_size(mip_level, texture.dimension());
 
     match format {
         wgpu::TextureFormat::Rgba8Unorm
@@ -1147,6 +1002,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 graphics_device.device(),
                 graphics_device.queue(),
                 texture,
+                mip_level,
                 texture_array_idx,
             );
 
@@ -1159,7 +1015,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
 
             if matches!(format, wgpu::TextureFormat::R8Unorm) {
                 let mut image_buffer: ImageBuffer<Luma<u8>, _> =
-                    ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
 
                 for p in image_buffer.pixels_mut() {
                     p.0[0] = gamma_corrected_byte(p.0[0]);
@@ -1170,8 +1026,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 image_buffer.save(output_path)?;
             } else {
                 let mut image_buffer =
-                    ImageBuffer::<Rgba<u8>, _>::from_raw(texture.width(), texture.height(), data)
-                        .unwrap();
+                    ImageBuffer::<Rgba<u8>, _>::from_raw(size.width, size.height, data).unwrap();
 
                 if matches!(
                     format,
@@ -1198,6 +1053,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 graphics_device.device(),
                 graphics_device.queue(),
                 texture,
+                mip_level,
                 texture_array_idx,
             );
 
@@ -1210,7 +1066,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 }
 
                 let image_buffer: ImageBuffer<Luma<f32>, _> =
-                    ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
 
                 let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
 
@@ -1221,7 +1077,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 }
 
                 let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
-                    ImageBuffer::from_raw(texture.width(), texture.height(), data).unwrap();
+                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
 
                 for p in image_buffer.pixels_mut() {
                     p.0[3] = 1.0;
@@ -1247,13 +1103,19 @@ fn extract_texture_data<T: Pod>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
+    mip_level: u32,
     texture_array_idx: u32,
 ) -> Vec<T> {
+    assert!(mip_level <= texture.mip_level_count());
+
     assert!(texture_array_idx < texture.depth_or_array_layers());
     let texture_array_idx = texture_array_idx as usize;
 
-    let width = texture.width();
-    let height = texture.height();
+    let size = texture
+        .size()
+        .mip_level_size(mip_level, texture.dimension());
+    let width = size.width;
+    let height = size.height;
 
     let format = texture.format();
 
@@ -1284,7 +1146,7 @@ fn extract_texture_data<T: Pod>(
     command_encoder.copy_texture_to_buffer(
         wgpu::ImageCopyTexture {
             texture,
-            mip_level: 0,
+            mip_level,
             origin: wgpu::Origin3d::ZERO,
             aspect,
         },
@@ -1296,7 +1158,7 @@ fn extract_texture_data<T: Pod>(
                 rows_per_image: Some(height),
             },
         },
-        texture.size(),
+        size,
     );
 
     queue.submit(std::iter::once(command_encoder.finish()));

@@ -7,7 +7,7 @@ use super::{
     },
     MeshVertexInputExpressions, RenderShaderTricks,
 };
-use naga::{Function, Module};
+use naga::{Function, Module, SampleLevel};
 
 /// Input description specifying the texture bindings required for generating a
 /// shader for rendering a skybox.
@@ -108,6 +108,7 @@ impl<'a> SkyboxShaderGenerator<'a> {
         let color_sampling_expr = skybox_cubemap_texture.generate_sampling_expr(
             fragment_function,
             fragment_input_struct.get_field_expr(material_input_field_indices.model_space_position),
+            SampleLevel::Auto,
             None,
             None,
             None,

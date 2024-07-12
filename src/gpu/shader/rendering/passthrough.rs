@@ -9,7 +9,7 @@ use super::{
     MeshVertexOutputFieldIndices, PushConstantExpressions, RenderShaderTricks,
 };
 use crate::gpu::push_constant::PushConstantVariant;
-use naga::{Function, Module};
+use naga::{Function, Module, SampleLevel};
 
 /// Input description specifying the bindings for the texture to pass through to
 /// the output attachment.
@@ -81,6 +81,7 @@ impl<'a> PassthroughShaderGenerator<'a> {
         let input_color_expr = input_texture.generate_sampling_expr(
             fragment_function,
             screen_space_texture_coord_expr,
+            SampleLevel::Zero,
             None,
             None,
             None,

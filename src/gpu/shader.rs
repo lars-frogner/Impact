@@ -1191,17 +1191,18 @@ impl SampledTexture {
     }
 
     /// Generates and returns an expression sampling the texture at the given
-    /// texture coordinates. If sampling a depth texture, a reference depth must
-    /// also be provided for the comparison sampling. If an array index is
-    /// provided, it will be used to select the texture to sample from the
-    /// texture array. If `gather` is not [`None`], the specified component of
-    /// the texture will be sampled in the 2x2 grid of texels surrounding the
-    /// texture coordinates, and the returned expression is a vec4 containing
-    /// the samples.
+    /// texture coordinates and level of detail. If sampling a depth texture, a
+    /// reference depth must also be provided for the comparison sampling. If an
+    /// array index is provided, it will be used to select the texture to sample
+    /// from the texture array. If `gather` is not [`None`], the specified
+    /// component of the texture will be sampled in the 2x2 grid of texels
+    /// surrounding the texture coordinates, and the returned expression is a
+    /// vec4 containing the samples.
     pub fn generate_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
+        level: SampleLevel,
         array_index_expr: Option<Handle<Expression>>,
         depth_reference_expr: Option<Handle<Expression>>,
         gather: Option<SwizzleComponent>,
@@ -1220,7 +1221,7 @@ impl SampledTexture {
                     array_index: array_index_expr,
                     offset: None,
                     level: if gather.is_none() {
-                        SampleLevel::Auto
+                        level
                     } else {
                         SampleLevel::Zero
                     },
@@ -1233,15 +1234,16 @@ impl SampledTexture {
     }
 
     /// Generates and returns an expression sampling the texture at the texture
-    /// coordinates specified by the given expression, and extracting the RGB
-    /// values of the sampled RGBA color.
+    /// coordinates specified by the given expression at the given level of
+    /// detail and extracting the RGB values of the sampled RGBA color.
     pub fn generate_rgb_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
+        level: SampleLevel,
     ) -> Handle<Expression> {
         let sampling_expr =
-            self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
+            self.generate_sampling_expr(function, texture_coord_expr, level, None, None, None);
 
         emit_in_func(function, |function| {
             include_expr_in_func(function, swizzle_xyz_expr(sampling_expr))
@@ -1249,15 +1251,16 @@ impl SampledTexture {
     }
 
     /// Generates and returns an expression sampling the texture at the texture
-    /// coordinates specified by the given expression, and extracting the RG
-    /// values of the sampled RGBA color.
+    /// coordinates specified by the given expression at the given level of
+    /// detail, and extracting the RG values of the sampled RGBA color.
     pub fn generate_rg_sampling_expr(
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
+        level: SampleLevel,
     ) -> Handle<Expression> {
         let sampling_expr =
-            self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
+            self.generate_sampling_expr(function, texture_coord_expr, level, None, None, None);
 
         emit_in_func(function, |function| {
             include_expr_in_func(function, swizzle_xy_expr(sampling_expr))
@@ -1272,10 +1275,11 @@ impl SampledTexture {
         &self,
         function: &mut Function,
         texture_coord_expr: Handle<Expression>,
+        level: SampleLevel,
         channel_index: u32,
     ) -> Handle<Expression> {
         let sampling_expr =
-            self.generate_sampling_expr(function, texture_coord_expr, None, None, None);
+            self.generate_sampling_expr(function, texture_coord_expr, level, None, None, None);
 
         emit_in_func(function, |function| {
             include_expr_in_func(
