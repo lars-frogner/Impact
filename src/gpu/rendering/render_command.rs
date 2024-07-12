@@ -140,9 +140,16 @@ pub struct ComputePassRecorder {
 }
 
 #[derive(Debug)]
+pub struct RenderAttachmentMipmappingPassRecorder {
+    quantity: RenderAttachmentQuantity,
+    state: RenderCommandState,
+}
+
+#[derive(Debug)]
 pub enum RenderCommandRecorder {
     RenderPass(RenderPassRecorder),
     ComputePass(ComputePassRecorder),
+    RenderAttachmentMipmappingPass(RenderAttachmentMipmappingPassRecorder),
 }
 
 /// The active state of a render command.
@@ -315,11 +322,11 @@ impl RenderCommandManager {
         self.clearing_passes.clear();
         self.non_light_shaded_model_depth_prepasses.clear();
         self.light_shaded_model_shading_prepasses.clear();
-        self.postprocessing_passes.clear();
         self.non_light_shaded_model_shading_passes.clear();
         self.light_shaded_model_shading_passes.clear();
         self.non_light_shaded_model_index_mapper.clear();
         self.light_shaded_model_index_mapper.clear();
+        self.postprocessing_passes.clear();
     }
 
     /// Ensures that all render commands required for rendering the entities
@@ -2686,6 +2693,59 @@ impl ComputePassRecorder {
     }
 }
 
+impl RenderAttachmentMipmappingPassRecorder {
+    /// Creates a new mipmapping pass recorder for the render attachment for the
+    /// given quantity.
+    pub fn new(quantity: RenderAttachmentQuantity, state: RenderCommandState) -> Self {
+        Self { quantity, state }
+    }
+
+    /// Returns the state of the mipmapping pass.
+    pub fn state(&self) -> RenderCommandState {
+        self.state
+    }
+
+    /// Sets the state of the mipmapping pass.
+    pub fn set_state(&mut self, state: RenderCommandState) {
+        self.state = state;
+    }
+
+    /// Set whether the mipmapping pass should be skipped.
+    pub fn set_disabled(&mut self, disabled: bool) {
+        self.state = RenderCommandState::disabled_if(disabled);
+    }
+
+    /// Records the mipmapping pass to the given command encoder.
+    pub fn record_pass(
+        &self,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> RenderCommandOutcome {
+        if self.state().is_disabled() {
+            log::debug!(
+                "Skipping {} render attachment mipmapping pass",
+                self.quantity
+            );
+            return RenderCommandOutcome::Skipped;
+        }
+
+        log::debug!(
+            "Recording {} render attachment mipmapping pass",
+            self.quantity
+        );
+
+        let texture = render_attachment_texture_manager.render_attachment_texture(self.quantity);
+
+        texture
+            .regular
+            .mipmapper()
+            .expect("Missing mipmapper for mipmapped render attachment texture")
+            .encode_mipmap_passes(command_encoder);
+
+        RenderCommandOutcome::Recorded
+    }
+}
+
 impl RenderCommandRecorder {
     /// Creates a new recorder for the command defined by the given
     /// specification.
@@ -2789,10 +2849,21 @@ impl RenderCommandRecorder {
         )?))
     }
 
+    /// Creates a new mipmapping pass recorder for the render attachment for the
+    /// given quantity.
+    pub fn new_render_attachment_mipmapping_pass(
+        quantity: RenderAttachmentQuantity,
+        state: RenderCommandState,
+    ) -> Self {
+        Self::RenderAttachmentMipmappingPass(RenderAttachmentMipmappingPassRecorder::new(
+            quantity, state,
+        ))
+    }
+
     pub fn as_render_pass_mut(&mut self) -> Option<&mut RenderPassRecorder> {
         match self {
             Self::RenderPass(recorder) => Some(recorder),
-            Self::ComputePass(_) => None,
+            _ => None,
         }
     }
 
@@ -2828,6 +2899,9 @@ impl RenderCommandRecorder {
                 postprocessor,
                 command_encoder,
             ),
+            Self::RenderAttachmentMipmappingPass(recorder) => {
+                Ok(recorder.record_pass(render_attachment_texture_manager, command_encoder))
+            }
         }
     }
 
@@ -2836,6 +2910,7 @@ impl RenderCommandRecorder {
         match self {
             Self::RenderPass(recorder) => recorder.state(),
             Self::ComputePass(recorder) => recorder.state(),
+            Self::RenderAttachmentMipmappingPass(recorder) => recorder.state(),
         }
     }
 
@@ -2844,6 +2919,7 @@ impl RenderCommandRecorder {
         match self {
             Self::RenderPass(recorder) => recorder.set_state(state),
             Self::ComputePass(recorder) => recorder.set_state(state),
+            Self::RenderAttachmentMipmappingPass(recorder) => recorder.set_state(state),
         }
     }
 

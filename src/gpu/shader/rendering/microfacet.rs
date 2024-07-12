@@ -15,7 +15,7 @@ use crate::gpu::{
     push_constant::PushConstantVariant,
     texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
 };
-use naga::{Function, Module};
+use naga::{Function, Module, SampleLevel};
 
 /// Describes the combination of models used for diffuse and specular reflection
 /// as part of a microfacet based reflection model.
@@ -270,6 +270,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 position_texture.generate_rgb_sampling_expr(
                     fragment_function,
                     screen_space_texture_coord_expr.unwrap(),
+                    SampleLevel::Zero,
                 )
             } else {
                 fragment_input_struct.get_field_expr(
@@ -301,6 +302,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             let normal_color_expr = normal_vector_texture.generate_rgb_sampling_expr(
                 fragment_function,
                 screen_space_texture_coord_expr.unwrap(),
+                SampleLevel::Zero,
             );
 
             source_code_lib.generate_function_call(
@@ -345,6 +347,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 texture_coord_texture.generate_rg_sampling_expr(
                     fragment_function,
                     screen_space_texture_coord_expr.unwrap(),
+                    SampleLevel::Zero,
                 )
             } else {
                 fragment_input_struct.get_field_expr(
@@ -377,8 +380,11 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     None,
                 );
 
-                albedo_texture
-                    .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+                albedo_texture.generate_rgb_sampling_expr(
+                    fragment_function,
+                    texture_coord_expr.unwrap(),
+                    SampleLevel::Auto,
+                )
             })
             .or_else(|| {
                 material_input_field_indices
@@ -402,8 +408,11 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         None,
                     );
 
-                    specular_reflectance_texture
-                        .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap())
+                    specular_reflectance_texture.generate_rgb_sampling_expr(
+                        fragment_function,
+                        texture_coord_expr.unwrap(),
+                        SampleLevel::Auto,
+                    )
                 },
             )
             .or_else(|| {
@@ -436,6 +445,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         .generate_single_channel_sampling_expr(
                             fragment_function,
                             texture_coord_expr.unwrap(),
+                            SampleLevel::Auto,
                             0,
                         );
 

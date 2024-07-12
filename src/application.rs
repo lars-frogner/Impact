@@ -72,15 +72,25 @@ impl Application {
 
         let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
 
-        let assets = Assets::new_with_default_lookup_tables(Arc::clone(&graphics_device))?;
+        let mut material_library = MaterialLibrary::new();
+
+        let renderer = RenderingSystem::new(
+            rendering_config,
+            Arc::clone(&graphics_device),
+            rendering_surface,
+            &mut material_library,
+        )?;
+
+        let assets = Assets::new_with_default_lookup_tables(
+            Arc::clone(&graphics_device),
+            Arc::clone(renderer.mipmapper_generator()),
+        )?;
 
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
         material::register_material_feature_types(&mut instance_feature_manager);
-
-        let mut material_library = MaterialLibrary::new();
 
         let voxel_manager = VoxelManager::create(
             voxel_config,
@@ -90,13 +100,6 @@ impl Application {
             &mut material_library,
             &mut instance_feature_manager,
         );
-
-        let renderer = RenderingSystem::new(
-            rendering_config,
-            Arc::clone(&graphics_device),
-            rendering_surface,
-            &mut material_library,
-        )?;
 
         let scene = Scene::new(
             mesh_repository,

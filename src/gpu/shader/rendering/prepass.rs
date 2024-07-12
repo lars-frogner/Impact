@@ -12,7 +12,7 @@ use super::{
 use crate::gpu::{
     push_constant::PushConstantVariant, texture::attachment::RenderAttachmentQuantitySet,
 };
-use naga::{BinaryOperator, Expression, Function, Handle, Module};
+use naga::{BinaryOperator, Expression, Function, Handle, Module, SampleLevel};
 
 /// Input description specifying the bindings of textures for prepass material
 /// properties.
@@ -334,6 +334,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                         albedo_texture.generate_rgb_sampling_expr(
                             fragment_function,
                             texture_coord_expr.unwrap(),
+                            SampleLevel::Auto,
                         )
                     })
                     .or_else(|| {
@@ -399,7 +400,7 @@ impl<'a> PrepassShaderGenerator<'a> {
 
                                     specular_reflectance_texture.generate_rgb_sampling_expr(
                                         fragment_function,
-                                        texture_coord_expr.unwrap(),
+                                        texture_coord_expr.unwrap(),SampleLevel::Auto
                                     )
                                 })
                                 .or_else(|| {
@@ -434,7 +435,7 @@ impl<'a> PrepassShaderGenerator<'a> {
                                         let roughness_texture_value_expr = roughness_texture
                                             .generate_single_channel_sampling_expr(
                                                 fragment_function,
-                                                texture_coord_expr.unwrap(),
+                                                texture_coord_expr.unwrap(),SampleLevel::Auto,
                                                 0,
                                             );
 
@@ -705,8 +706,11 @@ fn generate_normal_vector_and_texture_coord_expr(
                 None,
             );
 
-            let normal_map_color_expr = normal_map_texture
-                .generate_rgb_sampling_expr(fragment_function, texture_coord_expr.unwrap());
+            let normal_map_color_expr = normal_map_texture.generate_rgb_sampling_expr(
+                fragment_function,
+                texture_coord_expr.unwrap(),
+                SampleLevel::Auto,
+            );
 
             let tangent_space_normal_expr = source_code_lib.generate_function_call(
                 module,

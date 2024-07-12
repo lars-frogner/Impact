@@ -2,13 +2,16 @@
 
 use crate::gpu::{
     rendering::{render_command::Blending, surface::RenderingSurface},
-    texture::Texture,
+    texture::{
+        mipmap::{Mipmapper, MipmapperGenerator},
+        Texture,
+    },
     GraphicsDevice,
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
-use std::{fmt::Display, path::Path};
+use std::{borrow::Cow, fmt::Display, path::Path};
 
 bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
@@ -59,6 +62,7 @@ pub struct RenderAttachmentTexture {
     quantity: RenderAttachmentQuantity,
     texture: Texture,
     attachment_view: wgpu::TextureView,
+    mipmapper: Option<Mipmapper>,
 }
 
 #[derive(Debug)]
@@ -136,6 +140,19 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
     true, // Emissive luminance
     true, // Emissive luminance (auxiliary)
     true, // Occlusion
+];
+
+/// Whether the texture for each render attachment quantity will have mipmaps.
+const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    false, // Depth
+    false, // Luminance
+    false, // Position
+    false, // Normal vector
+    false, // Texture coordinates
+    false, // Ambient reflected luminance
+    false, // Emissive luminance
+    false, // Emissive luminance (auxiliary)
+    false, // Occlusion
 ];
 
 /// The clear color used for each color render attachment quantity (depth is not
@@ -260,6 +277,12 @@ impl RenderAttachmentQuantity {
         RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT[self.index()]
     }
 
+    /// Whether the texture used for this render attachment quantity will have
+    /// mipmaps.
+    pub const fn is_mipmapped(&self) -> bool {
+        RENDER_ATTACHMENT_MIPMAPPED[self.index()]
+    }
+
     /// The clear color of this render attachment quantity.
     ///
     /// # Panics
@@ -335,6 +358,7 @@ impl RenderAttachmentTextureManager {
     pub fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
+        mipmapper_generator: &MipmapperGenerator,
         sample_count: u32,
     ) -> Self {
         let mut manager = Self {
@@ -345,7 +369,12 @@ impl RenderAttachmentTextureManager {
             quantity_texture_bind_groups: [None, None, None, None, None, None, None, None, None],
         };
 
-        manager.recreate_textures(graphics_device, rendering_surface, sample_count);
+        manager.recreate_textures(
+            graphics_device,
+            rendering_surface,
+            mipmapper_generator,
+            sample_count,
+        );
 
         manager
     }
@@ -420,18 +449,20 @@ impl RenderAttachmentTextureManager {
             })
     }
 
-    /// Saves the texture for the given render attachment quantity as a color or
-    /// grayscale image at the given output path. The image file format is
-    /// automatically determined from the file extension.
+    /// Saves the given mip level of the texture for the given render attachment
+    /// quantity as a color or grayscale image at the given output path. The
+    /// image file format is automatically determined from the file extension.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The requested quantity is missing.
     /// - The format of the given texture is not supported.
+    /// - The mip level is invalid.
     pub fn save_render_attachment_texture_as_image_file<P: AsRef<Path>>(
         &self,
         graphics_device: &GraphicsDevice,
         quantity: RenderAttachmentQuantity,
+        mip_level: u32,
         output_path: P,
     ) -> Result<()> {
         let texture = self.quantity_textures[quantity.index()]
@@ -446,22 +477,26 @@ impl RenderAttachmentTextureManager {
         super::save_texture_as_image_file(
             graphics_device,
             texture.regular.texture().texture(),
+            mip_level,
             0,
             output_path,
         )
     }
+
     /// Recreates all render attachment textures for the current state of the
     /// core system, using the given sample count.
     pub fn recreate_textures(
         &mut self,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
+        mipmapper_generator: &MipmapperGenerator,
         sample_count: u32,
     ) {
         for &quantity in RenderAttachmentQuantity::all() {
             self.recreate_render_attachment_texture(
                 graphics_device,
                 rendering_surface,
+                mipmapper_generator,
                 quantity,
                 sample_count,
             );
@@ -472,6 +507,7 @@ impl RenderAttachmentTextureManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
+        mipmapper_generator: &MipmapperGenerator,
         quantity: RenderAttachmentQuantity,
         sample_count: u32,
     ) {
@@ -480,6 +516,7 @@ impl RenderAttachmentTextureManager {
         let quantity_texture = MaybeWithMultisampling::new(
             graphics_device,
             rendering_surface,
+            mipmapper_generator,
             quantity,
             texture_format,
             sample_count,
@@ -564,6 +601,7 @@ impl RenderAttachmentTexture {
     pub fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
+        mipmapper_generator: &MipmapperGenerator,
         quantity: RenderAttachmentQuantity,
         format: wgpu::TextureFormat,
         sample_count: u32,
@@ -577,15 +615,34 @@ impl RenderAttachmentTexture {
             depth_or_array_layers: 1,
         };
 
+        let mip_level_count = if quantity.is_mipmapped() {
+            texture_size.max_mips(wgpu::TextureDimension::D2)
+        } else {
+            1
+        };
+
         let texture = Self::create_empty_render_attachment_texture(
             device,
             texture_size,
             format,
+            mip_level_count,
             sample_count,
-            &format!("Render attachment texture (format = {:?})", format),
+            &format!(
+                "Render attachment texture for {} (format = {:?})",
+                quantity, format
+            ),
         );
 
-        let attachment_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mipmapper = mipmapper_generator.generate_mipmapper(
+            graphics_device,
+            &texture,
+            Cow::Owned(format!("{} render attachment", quantity)),
+        );
+
+        let attachment_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
 
         // When using a depth texture as a binding, we must exclude the stencil
         // aspect
@@ -612,6 +669,7 @@ impl RenderAttachmentTexture {
             quantity,
             texture,
             attachment_view,
+            mipmapper,
         }
     }
 
@@ -650,18 +708,25 @@ impl RenderAttachmentTexture {
         self.texture.sampler()
     }
 
+    /// Returns a reference to the mipmapper for the render attachment texture,
+    /// or [`None`] if the texture has no mipmaps.
+    pub fn mipmapper(&self) -> Option<&Mipmapper> {
+        self.mipmapper.as_ref()
+    }
+
     /// Creates a new 2D [`wgpu::Texture`] with the given size and format for
     /// use as a render attachment.
     fn create_empty_render_attachment_texture(
         device: &wgpu::Device,
         texture_size: wgpu::Extent3d,
         format: wgpu::TextureFormat,
+        mip_level_count: u32,
         sample_count: u32,
         label: &str,
     ) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
             size: texture_size,
-            mip_level_count: 1,
+            mip_level_count,
             sample_count,
             dimension: wgpu::TextureDimension::D2,
             format,
@@ -699,17 +764,25 @@ impl MaybeWithMultisampling<RenderAttachmentTexture> {
     fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
+        mipmapper_generator: &MipmapperGenerator,
         quantity: RenderAttachmentQuantity,
         format: wgpu::TextureFormat,
         sample_count: u32,
     ) -> Self {
-        let regular =
-            RenderAttachmentTexture::new(graphics_device, rendering_surface, quantity, format, 1);
+        let regular = RenderAttachmentTexture::new(
+            graphics_device,
+            rendering_surface,
+            mipmapper_generator,
+            quantity,
+            format,
+            1,
+        );
 
         let multisampled = if sample_count > 1 && quantity.supports_multisampling() {
             Some(RenderAttachmentTexture::new(
                 graphics_device,
                 rendering_surface,
+                mipmapper_generator,
                 quantity,
                 format,
                 sample_count,

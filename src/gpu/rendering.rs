@@ -15,6 +15,7 @@ use crate::{
         texture::{
             self,
             attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+            mipmap::MipmapperGenerator,
         },
         GraphicsDevice,
     },
@@ -52,6 +53,7 @@ pub struct RenderingSystem {
     config: RenderingConfig,
     graphics_device: Arc<GraphicsDevice>,
     rendering_surface: RenderingSurface,
+    mipmapper_generator: Arc<MipmapperGenerator>,
     shader_manager: RwLock<ShaderManager>,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_command_manager: RwLock<RenderCommandManager>,
@@ -103,9 +105,15 @@ impl RenderingSystem {
         rendering_surface: RenderingSurface,
         material_library: &mut MaterialLibrary,
     ) -> Result<Self> {
+        let mipmapper_generator = Arc::new(MipmapperGenerator::new(
+            &graphics_device,
+            MipmapperGenerator::DEFAULT_SUPPORTED_FORMATS,
+        ));
+
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &graphics_device,
             &rendering_surface,
+            &mipmapper_generator,
             config.multisampling_sample_count,
         );
 
@@ -122,6 +130,7 @@ impl RenderingSystem {
             config,
             graphics_device,
             rendering_surface,
+            mipmapper_generator,
             shader_manager: RwLock::new(ShaderManager::new()),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(RenderCommandManager::new()),
@@ -144,6 +153,11 @@ impl RenderingSystem {
     /// Returns a reference to the rendering surface.
     pub fn rendering_surface(&self) -> &RenderingSurface {
         &self.rendering_surface
+    }
+
+    /// Returns a reference counting pointer to the [`MipmapperGenerator`].
+    pub fn mipmapper_generator(&self) -> &Arc<MipmapperGenerator> {
+        &self.mipmapper_generator
     }
 
     /// Returns a reference to the [`ShaderManager`], guarded by a [`RwLock`].
@@ -202,6 +216,7 @@ impl RenderingSystem {
         self.render_attachment_texture_manager.recreate_textures(
             &self.graphics_device,
             &self.rendering_surface,
+            &self.mipmapper_generator,
             self.config.multisampling_sample_count,
         );
     }
@@ -341,6 +356,7 @@ impl RenderingSystem {
             self.render_attachment_texture_manager.recreate_textures(
                 &self.graphics_device,
                 &self.rendering_surface,
+                &self.mipmapper_generator,
                 sample_count,
             );
 
@@ -391,14 +407,15 @@ impl ScreenCapturer {
     }
 
     /// Schedule a screenshot capture for the next
-    /// [`save_screenshot_if_requested`] call.
+    /// [`Self::save_screenshot_if_requested`] call.
     pub fn request_screenshot_save(&self) {
         self.screenshot_save_requested
             .store(true, Ordering::Release);
     }
 
     /// Schedule a capture of the render attachment texture for the given
-    /// quantity for the next [`save_render_attachment_quantity_if_requested`]
+    /// quantity for the next
+    /// [`Self::save_render_attachment_quantity_if_requested`]
     /// call.
     pub fn request_render_attachment_quantity_save(&self, quantity: RenderAttachmentQuantity) {
         self.render_attachment_save_requested
@@ -408,22 +425,24 @@ impl ScreenCapturer {
     }
 
     /// Schedule a capture of the omnidirectional light shadow map texture for
-    /// the next [`save_omnidirectional_light_shadow_map_if_requested`] call.
+    /// the next [`Self::save_omnidirectional_light_shadow_map_if_requested`]
+    /// call.
     pub fn request_omnidirectional_light_shadow_map_save(&self) {
         self.omnidirectional_light_shadow_map_save_requested
             .store(true, Ordering::Release);
     }
 
     /// Schedule a capture of the unidirectional light shadow map texture for
-    /// the next [`save_unidirectional_light_shadow_map_if_requested`] call.
+    /// the next [`Self::save_unidirectional_light_shadow_map_if_requested`]
+    /// call.
     pub fn request_unidirectional_light_shadow_map_save(&self) {
         self.unidirectional_light_shadow_map_save_requested
             .store(true, Ordering::Release);
     }
 
     /// Checks if a screenshot capture was scheduled with
-    /// [`request_screenshot_save`], and if so, captures a screenshot and saves
-    /// it as a timestamped PNG file in the current directory.
+    /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
+    /// saves it as a timestamped PNG file in the current directory.
     pub fn save_screenshot_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -452,6 +471,7 @@ impl ScreenCapturer {
                     renderer.graphics_device(),
                     &surface_texture.texture,
                     0,
+                    0,
                     format!("screenshot_{}.png", Utc::now().to_rfc3339()),
                 )?;
             }
@@ -461,9 +481,9 @@ impl ScreenCapturer {
     }
 
     /// Checks if a render attachment capture was scheduled with
-    /// [`request_render_attachment_quantity_save`], and if so, captures the
-    /// requested render attachment texture and saves it as a timestamped PNG
-    /// file in the current directory.
+    /// [`Self::request_render_attachment_quantity_save`], and if so, captures
+    /// the requested render attachment texture and saves it as a timestamped
+    /// PNG file in the current directory.
     pub fn save_render_attachment_quantity_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -498,6 +518,7 @@ impl ScreenCapturer {
                     .save_render_attachment_texture_as_image_file(
                         renderer.graphics_device(),
                         quantity,
+                        0,
                         format!("{}_{}.png", quantity, Utc::now().to_rfc3339()),
                     )?;
             }
@@ -507,9 +528,9 @@ impl ScreenCapturer {
     }
 
     /// Checks if a omnidirectional light shadow map capture was scheduled with
-    /// [`request_omnidirectional_light_shadow_map_save`], and if so, captures
-    /// the texture and saves it as a timestamped PNG file in the current
-    /// directory.
+    /// [`Self::request_omnidirectional_light_shadow_map_save`], and if so,
+    /// captures the texture and saves it as a timestamped PNG file in the
+    /// current directory.
     pub fn save_omnidirectional_light_shadow_map_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -549,9 +570,9 @@ impl ScreenCapturer {
     }
 
     /// Checks if a unidirectional light shadow map capture was scheduled with
-    /// [`request_unidirectional_light_shadow_map_save`], and if so, captures
-    /// the texture and saves it as a timestamped PNG file in the current
-    /// directory.
+    /// [`Self::request_unidirectional_light_shadow_map_save`], and if so,
+    /// captures the texture and saves it as a timestamped PNG file in the
+    /// current directory.
     pub fn save_unidirectional_light_shadow_map_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,

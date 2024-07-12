@@ -16,7 +16,7 @@ use crate::{
 };
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Handle, Literal,
-    LocalVariable, Module, ResourceBinding, Statement, StructMember, Type, TypeInner,
+    LocalVariable, Module, ResourceBinding, SampleLevel, Statement, StructMember, Type, TypeInner,
 };
 use std::num::NonZeroU32;
 
@@ -317,8 +317,11 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         let (position_texture_expr, position_sampler_expr) =
             position_texture.generate_texture_and_sampler_expressions(fragment_function, false);
 
-        let position_expr = position_texture
-            .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
+        let position_expr = position_texture.generate_rgb_sampling_expr(
+            fragment_function,
+            screen_space_texture_coord_expr,
+            SampleLevel::Zero,
+        );
 
         let (normal_vector_texture_binding, normal_vector_sampler_binding) =
             RenderAttachmentQuantity::NormalVector.bindings();
@@ -336,8 +339,11 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
 
         *bind_group_idx += 1;
 
-        let normal_color_expr = normal_vector_texture
-            .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
+        let normal_color_expr = normal_vector_texture.generate_rgb_sampling_expr(
+            fragment_function,
+            screen_space_texture_coord_expr,
+            SampleLevel::Zero,
+        );
 
         let normal_vector_expr = source_code_lib.generate_function_call(
             module,
@@ -553,7 +559,11 @@ impl<'a> AmbientOcclusionShaderGenerator<'a> {
         *bind_group_idx += 1;
 
         let ambient_reflected_luminance_expr = ambient_reflected_luminance_texture
-            .generate_rgb_sampling_expr(fragment_function, screen_space_texture_coord_expr);
+            .generate_rgb_sampling_expr(
+                fragment_function,
+                screen_space_texture_coord_expr,
+                SampleLevel::Zero,
+            );
 
         let (ambient_visibility_texture_binding, ambient_visibility_sampler_binding) =
             RenderAttachmentQuantity::Occlusion.bindings();
