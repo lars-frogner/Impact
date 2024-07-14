@@ -12,6 +12,7 @@ use crate::{
     gpu::{
         compute::GPUComputationLibrary,
         shader::ShaderManager,
+        storage::StorageGPUBufferManager,
         texture::{
             self,
             attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
@@ -26,7 +27,7 @@ use crate::{
 };
 use anyhow::{Error, Result};
 use chrono::Utc;
-use postprocessing::{AmbientOcclusionConfig, BloomConfig, Postprocessor};
+use postprocessing::{AmbientOcclusionConfig, BloomConfig, ExposureConfig, Postprocessor};
 use render_command::RenderCommandManager;
 use render_command::RenderCommandOutcome;
 use resource::RenderResourceManager;
@@ -59,6 +60,7 @@ pub struct RenderingSystem {
     render_command_manager: RwLock<RenderCommandManager>,
     render_attachment_texture_manager: RenderAttachmentTextureManager,
     postprocessor: RwLock<Postprocessor>,
+    storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     gpu_computation_library: RwLock<GPUComputationLibrary>,
 }
 
@@ -81,8 +83,8 @@ pub struct RenderingConfig {
     pub multisampling_sample_count: u32,
     pub ambient_occlusion: AmbientOcclusionConfig,
     pub bloom: BloomConfig,
+    pub exposure: ExposureConfig,
     pub tone_mapping: ToneMapping,
-    pub initial_exposure: fre,
 }
 
 /// Helper for capturing screenshots and related textures.
@@ -110,6 +112,8 @@ impl RenderingSystem {
             MipmapperGenerator::DEFAULT_SUPPORTED_FORMATS,
         ));
 
+        let mut shader_manager = ShaderManager::new();
+
         let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &graphics_device,
             &rendering_surface,
@@ -117,13 +121,21 @@ impl RenderingSystem {
             config.multisampling_sample_count,
         );
 
+        let mut storage_gpu_buffer_manager = StorageGPUBufferManager::new();
+
+        let mut gpu_computation_library = GPUComputationLibrary::new();
+
         let postprocessor = Postprocessor::new(
             &graphics_device,
             material_library,
+            &mut shader_manager,
+            &render_attachment_texture_manager,
+            &mut storage_gpu_buffer_manager,
+            &mut gpu_computation_library,
             &config.ambient_occlusion,
             &config.bloom,
+            &config.exposure,
             config.tone_mapping,
-            config.initial_exposure,
         );
 
         Ok(Self {
@@ -131,12 +143,13 @@ impl RenderingSystem {
             graphics_device,
             rendering_surface,
             mipmapper_generator,
-            shader_manager: RwLock::new(ShaderManager::new()),
+            shader_manager: RwLock::new(shader_manager),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(RenderCommandManager::new()),
             render_attachment_texture_manager,
             postprocessor: RwLock::new(postprocessor),
-            gpu_computation_library: RwLock::new(GPUComputationLibrary::new()),
+            storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
+            gpu_computation_library: RwLock::new(gpu_computation_library),
         })
     }
 
@@ -187,6 +200,12 @@ impl RenderingSystem {
         &self.postprocessor
     }
 
+    /// Returns a reference to the [`StorageGPUBufferManager`], guarded by a
+    /// [`RwLock`].
+    pub fn storage_gpu_buffer_manager(&self) -> &RwLock<StorageGPUBufferManager> {
+        &self.storage_gpu_buffer_manager
+    }
+
     /// Returns a reference to the [`GPUComputationLibrary`], guarded by a
     /// [`RwLock`].
     pub fn gpu_computation_library(&self) -> &RwLock<GPUComputationLibrary> {
@@ -213,12 +232,8 @@ impl RenderingSystem {
     pub fn resize_rendering_surface(&mut self, new_width: NonZeroU32, new_height: NonZeroU32) {
         self.rendering_surface
             .resize(&self.graphics_device, new_width, new_height);
-        self.render_attachment_texture_manager.recreate_textures(
-            &self.graphics_device,
-            &self.rendering_surface,
-            &self.mipmapper_generator,
-            self.config.multisampling_sample_count,
-        );
+
+        self.recreate_render_attachment_textures();
     }
 
     /// Marks the render resources as being out of sync with the source data.
@@ -353,12 +368,7 @@ impl RenderingSystem {
 
             self.config.multisampling_sample_count = sample_count;
 
-            self.render_attachment_texture_manager.recreate_textures(
-                &self.graphics_device,
-                &self.rendering_surface,
-                &self.mipmapper_generator,
-                sample_count,
-            );
+            self.recreate_render_attachment_textures();
 
             // Remove all render command recorders so that they will be
             // recreated with the updated configuration
@@ -367,6 +377,32 @@ impl RenderingSystem {
                 .unwrap()
                 .clear_recorders();
         }
+    }
+
+    fn recreate_render_attachment_textures(&mut self) {
+        self.render_attachment_texture_manager.recreate_textures(
+            &self.graphics_device,
+            &self.rendering_surface,
+            &self.mipmapper_generator,
+            self.config.multisampling_sample_count,
+        );
+
+        self.postprocessor
+            .write()
+            .unwrap()
+            .handle_new_render_attachment_textures(
+                &self.graphics_device,
+                &mut self.shader_manager.write().unwrap(),
+                &self.render_attachment_texture_manager,
+                &mut self.storage_gpu_buffer_manager.write().unwrap(),
+                &mut self.gpu_computation_library.write().unwrap(),
+                &self.config.exposure,
+            );
+
+        self.render_command_manager
+            .write()
+            .unwrap()
+            .clear_postprocessing_recorders();
     }
 }
 
@@ -381,8 +417,8 @@ impl Default for RenderingConfig {
             multisampling_sample_count: 1,
             ambient_occlusion: AmbientOcclusionConfig::default(),
             bloom: BloomConfig::default(),
+            exposure: ExposureConfig::default(),
             tone_mapping: ToneMapping::default(),
-            initial_exposure: 1e-4,
         }
     }
 }

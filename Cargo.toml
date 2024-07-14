@@ -36,6 +36,7 @@ petgraph = { version = "0.6", default-features = false, features = [
 ply-rs = "0.1"
 pollster = "0.3"
 rand = "0.8"
+regex = "1.10"
 rmp-serde = "1.1"
 roots = "0.0.8"
 serde = { version = "1.0", features = ["derive"] }

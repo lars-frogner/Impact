@@ -10,9 +10,10 @@ use bytemuck::Pod;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PushConstantVariant {
     InverseWindowDimensions,
-    Exposure,
     LightIdx,
     CascadeIdx,
+    Exposure,
+    InverseExposure,
 }
 
 /// Specification for a push constant that can be passed to the GPU.
@@ -50,6 +51,7 @@ impl PushConstantVariant {
             Self::LightIdx => LightGPUBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE,
             Self::CascadeIdx => LightGPUBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE,
             Self::Exposure => Postprocessor::EXPOSURE_PUSH_CONSTANT_SIZE,
+            Self::InverseExposure => Postprocessor::INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE,
         }
     }
 }

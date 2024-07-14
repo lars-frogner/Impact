@@ -1,9 +1,9 @@
 //! Generation and management of shaders.
 
-mod compute;
+pub mod compute;
 mod rendering;
+pub mod template;
 
-pub use compute::{ComputeShaderGenerator, ComputeShaderInput};
 pub use rendering::{
     AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
     BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput, CameraShaderInput,
@@ -30,8 +30,8 @@ use naga::{
     AddressSpace, Arena, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant, Expression,
     Function, FunctionArgument, FunctionResult, GlobalVariable, Handle, ImageClass, ImageDimension,
     ImageQuery, Interpolation, Literal, LocalVariable, Module, Override, ResourceBinding,
-    SampleLevel, Sampling, Scalar, ScalarKind, Span, Statement, StructMember, SwitchCase,
-    SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
+    SampleLevel, Sampling, Scalar, ScalarKind, ShaderStage, Span, Statement, StructMember,
+    SwitchCase, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
 };
 use rendering::RenderShaderGenerator;
 use std::{
@@ -64,8 +64,7 @@ pub struct ShaderManager {
 pub struct Shader {
     module: wgpu::ShaderModule,
     entry_point_names: EntryPointNames,
-    #[cfg(debug_assertions)]
-    source_code: String,
+    source_code: Option<String>,
 }
 
 /// Names of the different shader entry point functions.
@@ -356,7 +355,7 @@ impl ShaderManager {
         match self.rendering_shaders.entry(shader_id) {
             Entry::Occupied(entry) => Ok(entry.into_mut()),
             Entry::Vacant(entry) => {
-                let (module, entry_point_names) = RenderShaderGenerator::generate_shader_module(
+                let module = RenderShaderGenerator::generate_shader_module(
                     camera_shader_input,
                     mesh_shader_input,
                     light_shader_input,
@@ -370,39 +369,8 @@ impl ShaderManager {
                 Ok(entry.insert(Shader::from_naga_module(
                     graphics_device,
                     module,
-                    entry_point_names,
                     format!("Generated rendering shader (hash {})", shader_id.0).as_str(),
-                )))
-            }
-        }
-    }
-
-    /// Obtains the appropriate compute [`Shader`] for the given set of shader
-    /// inputs.
-    ///
-    /// If a shader for the given inputs already exists, it is returned,
-    /// otherwise a new shader is generated, compiled and cached.
-    ///
-    /// # Errors
-    /// See [`ShaderGenerator::generate_shader_module`].
-    pub fn obtain_compute_shader(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        shader_input: &ComputeShaderInput,
-        push_constants: PushConstantGroup,
-    ) -> Result<&Shader> {
-        let shader_id = ShaderID::from_compute_input(shader_input, &push_constants);
-
-        match self.compute_shaders.entry(shader_id) {
-            Entry::Occupied(entry) => Ok(entry.into_mut()),
-            Entry::Vacant(entry) => {
-                let (module, entry_point_names) =
-                    ComputeShaderGenerator::generate_shader_module(shader_input, push_constants)?;
-                Ok(entry.insert(Shader::from_naga_module(
-                    graphics_device,
-                    module,
-                    entry_point_names,
-                    format!("Generated compute shader (hash {})", shader_id.0).as_str(),
+                    None,
                 )))
             }
         }
@@ -416,6 +384,13 @@ impl Default for ShaderManager {
 }
 
 impl ShaderID {
+    /// Generates a [`ShaderID`] from the given string identifying the shader.
+    pub fn from_identifier(identifier: &str) -> Self {
+        let mut hasher = DefaultHasher::new();
+        identifier.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+
     fn from_rendering_input(
         camera_shader_input: Option<&CameraShaderInput>,
         mesh_shader_input: Option<&MeshShaderInput>,
@@ -440,17 +415,6 @@ impl ShaderID {
         push_constants.hash(&mut hasher);
         Self(hasher.finish())
     }
-
-    fn from_compute_input(
-        shader_input: &ComputeShaderInput,
-        push_constants: &PushConstantGroup,
-    ) -> Self {
-        let mut hasher = DefaultHasher::new();
-        "compute".hash(&mut hasher);
-        shader_input.hash(&mut hasher);
-        push_constants.hash(&mut hasher);
-        Self(hasher.finish())
-    }
 }
 
 impl Shader {
@@ -461,49 +425,41 @@ impl Shader {
     pub fn from_wgsl_path(
         graphics_device: &GraphicsDevice,
         shader_path: impl AsRef<Path>,
-        entry_point_names: EntryPointNames,
     ) -> Result<Self> {
         let shader_path = shader_path.as_ref();
         let label = shader_path.to_string_lossy();
         let source = fs::read_to_string(shader_path)?;
-        Ok(Self::from_wgsl_source(
-            graphics_device,
-            &source,
-            entry_point_names,
-            label.as_ref(),
-        ))
+        Self::from_wgsl_source(graphics_device, source, label.as_ref())
     }
 
     /// Creates a new shader from the given source code.
     pub fn from_wgsl_source(
         graphics_device: &GraphicsDevice,
-        source: &str,
-        entry_point_names: EntryPointNames,
+        source: String,
         label: &str,
-    ) -> Self {
-        let module = graphics_device
-            .device()
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(source)),
-                label: Some(label),
-            });
-        Self {
-            module,
-            entry_point_names,
-            #[cfg(debug_assertions)]
-            source_code: source.to_string(),
-        }
+    ) -> Result<Self> {
+        let naga_module = naga::front::wgsl::parse_str(&source)?;
+        Ok(Self::from_naga_module(
+            graphics_device,
+            naga_module,
+            label,
+            Some(source),
+        ))
     }
 
     /// Creates a new shader from the given [`Module`].
     pub fn from_naga_module(
         graphics_device: &GraphicsDevice,
         naga_module: Module,
-        entry_point_names: EntryPointNames,
         label: &str,
+        mut source_code: Option<String>,
     ) -> Self {
         #[cfg(debug_assertions)]
-        let source_code = Self::generate_wgsl_from_naga_module(&naga_module);
+        if source_code.is_none() {
+            source_code = Some(Self::generate_wgsl_from_naga_module(&naga_module));
+        }
+
+        let entry_point_names = EntryPointNames::from_naga_module(&naga_module);
 
         let module = graphics_device
             .device()
@@ -515,7 +471,6 @@ impl Shader {
         Self {
             module,
             entry_point_names,
-            #[cfg(debug_assertions)]
             source_code,
         }
     }
@@ -582,10 +537,40 @@ impl Shader {
     }
 }
 
-#[cfg(debug_assertions)]
 impl std::fmt::Display for Shader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.source_code)
+        write!(
+            f,
+            "{}",
+            match &self.source_code {
+                Some(source) => source,
+                None => "<Source code unavailable>",
+            }
+        )
+    }
+}
+
+impl EntryPointNames {
+    fn from_naga_module(module: &Module) -> Self {
+        let mut entry_point_names = Self {
+            vertex: None,
+            fragment: None,
+            compute: None,
+        };
+        for entry_point in &module.entry_points {
+            match entry_point.stage {
+                ShaderStage::Vertex => {
+                    entry_point_names.vertex = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::Fragment => {
+                    entry_point_names.fragment = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::Compute => {
+                    entry_point_names.compute = Some(Cow::Owned(entry_point.name.clone()));
+                }
+            }
+        }
+        entry_point_names
     }
 }
 
@@ -1319,6 +1304,10 @@ impl PushConstantExpressions {
                 PushConstantVariant::Exposure => {
                     let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
                     builder.add_field("exposure", f32_type, None, F32_WIDTH);
+                }
+                PushConstantVariant::InverseExposure => {
+                    let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
+                    builder.add_field("inverseExposure", f32_type, None, F32_WIDTH);
                 }
             }
         }

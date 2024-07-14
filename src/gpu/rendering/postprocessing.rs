@@ -1,7 +1,12 @@
 //! Application of postprocessing.
 
+mod exposure;
+
+pub use exposure::ExposureConfig;
+
 use crate::{
     gpu::{
+        compute::GPUComputationLibrary,
         push_constant::{PushConstant, PushConstantVariant},
         rendering::{
             fre,
@@ -10,8 +15,9 @@ use crate::{
                 RenderCommandState, RenderPassHints, RenderPassSpecification,
             },
         },
-        shader::{MaterialShaderInput, PassthroughShaderInput},
-        texture::attachment::RenderAttachmentQuantity,
+        shader::{MaterialShaderInput, PassthroughShaderInput, ShaderManager},
+        storage::StorageGPUBufferManager,
+        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         GraphicsDevice,
     },
     material::{
@@ -34,6 +40,7 @@ pub struct Postprocessor {
     ambient_occlusion_commands: Vec<RenderCommandSpecification>,
     bloom_enabled: bool,
     bloom_commands: Vec<RenderCommandSpecification>,
+    exposure_commands: Vec<RenderCommandSpecification>,
     tone_mapping: ToneMapping,
     tone_mapping_commands: Vec<RenderCommandSpecification>,
     exposure: fre,
@@ -50,6 +57,7 @@ pub struct AmbientOcclusionConfig {
     pub sample_radius: fre,
 }
 
+/// Configuration options for bloom.
 #[derive(Clone, Debug)]
 pub struct BloomConfig {
     /// Whether bloom should be enabled when the scene loads.
@@ -67,16 +75,21 @@ pub struct BloomConfig {
 
 impl Postprocessor {
     pub const EXPOSURE_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<fre>() as u32;
+    pub const INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<fre>() as u32;
 
-    /// Creates a new postprocessor along with the associated materials and
-    /// render commands according to the given configuration.
+    /// Creates a new postprocessor along with the associated materials,
+    /// computations and render commands according to the given configuration.
     pub fn new(
         graphics_device: &GraphicsDevice,
         material_library: &mut MaterialLibrary,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
+        gpu_computation_library: &mut GPUComputationLibrary,
         ambient_occlusion_config: &AmbientOcclusionConfig,
         bloom_config: &BloomConfig,
+        exposure_config: &ExposureConfig,
         tone_mapping: ToneMapping,
-        exposure: fre,
     ) -> Self {
         let ambient_occlusion_commands = setup_ambient_occlusion_materials_and_render_commands(
             graphics_device,
@@ -90,6 +103,16 @@ impl Postprocessor {
             bloom_config,
         );
 
+        let exposure_commands = exposure::setup_exposure_computations_and_render_commands(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            storage_gpu_buffer_manager,
+            gpu_computation_library,
+            exposure_config,
+            false,
+        );
+
         let tone_mapping_commands =
             setup_tone_mapping_materials_and_render_commands(material_library);
 
@@ -98,26 +121,34 @@ impl Postprocessor {
             ambient_occlusion_commands,
             bloom_enabled: bloom_config.initially_enabled,
             bloom_commands,
+            exposure_commands,
             tone_mapping,
             tone_mapping_commands,
-            exposure,
+            exposure: exposure_config.initial_exposure,
         }
     }
 
-    /// Returns the exposure value.
-    pub fn exposure(&self) -> fre {
+    /// Returns the exposure push constant.
+    pub fn get_exposure_push_constant(&self) -> fre {
         self.exposure
+    }
+
+    /// Returns the inverse exposure push constant.
+    pub fn get_inverse_exposure_push_constant(&self) -> fre {
+        self.exposure.recip()
     }
 
     /// Returns an iterator over the specifications for all postprocessing
     /// render commands, in the order in which they are to be performed.
     pub fn render_commands(&self) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
         assert_eq!(self.ambient_occlusion_commands.len(), 3);
+        assert_eq!(self.exposure_commands.len(), 1);
         assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
         self.ambient_occlusion_commands
             .iter()
             .cloned()
             .chain(self.bloom_commands.iter().cloned())
+            .chain(self.exposure_commands.iter().cloned())
             .chain(self.tone_mapping_commands.iter().cloned())
     }
 
@@ -125,6 +156,7 @@ impl Postprocessor {
     /// commands, in the same order as from [`Self::render_commands`].
     pub fn render_command_states(&self) -> impl Iterator<Item = RenderCommandState> + '_ {
         assert_eq!(self.ambient_occlusion_commands.len(), 3);
+        assert_eq!(self.exposure_commands.len(), 1);
         assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
         [
             !self.ambient_occlusion_enabled,
@@ -134,8 +166,31 @@ impl Postprocessor {
         .into_iter()
         .chain(iter::once(!self.bloom_enabled))
         .chain(iter::repeat(self.bloom_enabled).take(self.bloom_commands.len() - 1))
+        .chain(iter::repeat(true).take(self.exposure_commands.len()))
         .chain(ToneMapping::all().map(|mapping| mapping == self.tone_mapping))
         .map(RenderCommandState::active_if)
+    }
+
+    /// Updates the required postprocessing resources to account for the render
+    /// attachment textures being recreated.
+    pub fn handle_new_render_attachment_textures(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
+        gpu_computation_library: &mut GPUComputationLibrary,
+        exposure_config: &ExposureConfig,
+    ) {
+        self.exposure_commands = exposure::setup_exposure_computations_and_render_commands(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            storage_gpu_buffer_manager,
+            gpu_computation_library,
+            exposure_config,
+            true,
+        );
     }
 
     /// Toggles ambient occlusion.

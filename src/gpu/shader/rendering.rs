@@ -384,16 +384,19 @@ enum MaterialVertexOutputFieldIndices {
 
 lazy_static! {
     static ref SHADER_SOURCE_LIB: SourceCode = SourceCode::from_wgsl_source(concat!(
-        include_str!("../../../shader/util.wgsl"),
-        include_str!("../../../shader/light.wgsl"),
-        include_str!("../../../shader/normal_map.wgsl"),
-        include_str!("../../../shader/blinn_phong.wgsl"),
-        include_str!("../../../shader/microfacet.wgsl"),
-        include_str!("../../../shader/ambient_occlusion.wgsl"),
-        include_str!("../../../shader/gaussian_blur.wgsl"),
-        include_str!("../../../shader/tone_mapping.wgsl")
+        include_str!("../../../shader/rendering/util.wgsl"),
+        include_str!("../../../shader/rendering/light.wgsl"),
+        include_str!("../../../shader/rendering/normal_map.wgsl"),
+        include_str!("../../../shader/rendering/blinn_phong.wgsl"),
+        include_str!("../../../shader/rendering/microfacet.wgsl"),
+        include_str!("../../../shader/rendering/ambient_occlusion.wgsl"),
+        include_str!("../../../shader/rendering/gaussian_blur.wgsl"),
+        include_str!("../../../shader/rendering/tone_mapping.wgsl")
     ))
-    .unwrap_or_else(|err| panic!("Error when including shader source library: {}", err));
+    .unwrap_or_else(|err| panic!(
+        "Error when including rendering shader source library: {}",
+        err
+    ));
 }
 
 impl RenderShaderGenerator {
@@ -402,7 +405,7 @@ impl RenderShaderGenerator {
     /// vertex and (optionally) a fragment entry point.
     ///
     /// # Returns
-    /// The generated shader [`Module`] and its [`EntryPointNames`].
+    /// The generated shader [`Module`].
     ///
     /// # Errors
     /// Returns an error if:
@@ -421,7 +424,7 @@ impl RenderShaderGenerator {
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         push_constants: PushConstantGroup,
-    ) -> Result<(Module, EntryPointNames)> {
+    ) -> Result<Module> {
         let mesh_shader_input =
             mesh_shader_input.ok_or_else(|| anyhow!("Tried to build shader with no mesh input"))?;
 
@@ -621,7 +624,7 @@ impl RenderShaderGenerator {
             });
         }
 
-        Ok((module, entry_point_names))
+        Ok(module)
     }
 
     /// Interprets the set of instance feature, material and and material
@@ -3433,8 +3436,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3457,8 +3459,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT).into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3486,8 +3487,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3518,8 +3518,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3542,8 +3541,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3574,8 +3572,7 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3626,8 +3623,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3681,8 +3677,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3733,8 +3728,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3788,8 +3782,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3840,8 +3833,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3895,8 +3887,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -3948,8 +3939,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4004,8 +3994,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4056,8 +4045,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4111,8 +4099,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4167,8 +4154,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4223,8 +4209,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4279,8 +4264,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4334,8 +4318,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4392,8 +4375,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4447,8 +4429,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4505,8 +4486,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4559,8 +4539,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4616,8 +4595,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4670,8 +4648,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4727,8 +4704,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4782,8 +4758,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4840,8 +4815,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4895,8 +4869,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -4953,8 +4926,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5008,8 +4980,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5066,8 +5037,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5121,8 +5091,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5179,8 +5148,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5237,8 +5205,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5295,8 +5262,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5353,8 +5319,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5403,8 +5368,7 @@ mod test {
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5453,8 +5417,7 @@ mod test {
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT).into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5509,8 +5472,7 @@ mod test {
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5566,8 +5528,7 @@ mod test {
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             PushConstantGroup::new(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5621,8 +5582,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5676,8 +5636,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5731,8 +5690,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5789,8 +5747,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5851,8 +5808,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5914,8 +5870,7 @@ mod test {
             .into_iter()
             .collect(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5944,8 +5899,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -5976,8 +5930,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -6008,8 +5961,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -6042,8 +5994,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -6076,8 +6027,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -6107,8 +6057,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -6138,8 +6087,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 
@@ -6169,8 +6117,7 @@ mod test {
             )
             .into(),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
         let module_info = validate_module(&module);
 

@@ -13,8 +13,8 @@ use crate::{
             surface::RenderingSurface, GPUComputationLibrary, RenderingConfig,
         },
         shader::{
-            CameraShaderInput, ComputeShaderInput, InstanceFeatureShaderInput, LightShaderInput,
-            MaterialShaderInput, MeshShaderInput, Shader, ShaderManager,
+            CameraShaderInput, InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput,
+            MeshShaderInput, Shader, ShaderManager,
         },
         texture::{
             attachment::{
@@ -109,9 +109,6 @@ pub struct RenderPassSpecification {
 #[derive(Clone, Debug)]
 pub struct ComputePassSpecification {
     pub computation_id: GPUComputationID,
-    pub workgroups: (u32, u32, u32),
-    /// The group of push constants to use in the pass.
-    pub push_constants: PushConstantGroup,
     pub label: String,
 }
 
@@ -326,6 +323,11 @@ impl RenderCommandManager {
         self.light_shaded_model_shading_passes.clear();
         self.non_light_shaded_model_index_mapper.clear();
         self.light_shaded_model_index_mapper.clear();
+        self.postprocessing_passes.clear();
+    }
+
+    /// Deletes the render command recorders for postprocessing.
+    pub fn clear_postprocessing_recorders(&mut self) {
         self.postprocessing_passes.clear();
     }
 
@@ -2039,48 +2041,16 @@ impl RenderPassSpecification {
 }
 
 impl ComputePassSpecification {
-    fn get_bind_group_layouts_and_shader_inputs<'a>(
-        &self,
-        gpu_computation_library: &GPUComputationLibrary,
-    ) -> Result<(Vec<&'a wgpu::BindGroupLayout>, ComputeShaderInput)> {
-        let computation_specification =
-            Self::get_computation_specification(gpu_computation_library, self.computation_id)?;
-
-        let mut layouts = Vec::with_capacity(1);
-
-        if let Some(resources) = computation_specification.resources() {
-            layouts.push(resources.bind_group_layout());
-        }
-
-        Ok((layouts, computation_specification.shader_input().clone()))
-    }
-
-    fn get_bind_groups<'a>(
+    fn get_computation_specification<'a>(
         &self,
         gpu_computation_library: &'a GPUComputationLibrary,
-    ) -> Result<Vec<&'a wgpu::BindGroup>> {
-        let computation_specification =
-            Self::get_computation_specification(gpu_computation_library, self.computation_id)?;
-
-        let mut bind_groups = Vec::with_capacity(1);
-
-        if let Some(resources) = computation_specification.resources() {
-            bind_groups.push(resources.bind_group());
-        }
-
-        Ok(bind_groups)
-    }
-
-    fn get_computation_specification(
-        gpu_computation_library: &GPUComputationLibrary,
-        computation_id: GPUComputationID,
-    ) -> Result<&GPUComputationSpecification> {
+    ) -> Result<&'a GPUComputationSpecification> {
         gpu_computation_library
-            .get_computation_specification(computation_id)
+            .get_computation_specification(self.computation_id)
             .ok_or_else(|| {
                 anyhow!(
                     "Missing specification for GPU computation {}",
-                    computation_id
+                    self.computation_id
                 )
             })
     }
@@ -2472,7 +2442,7 @@ impl RenderPassRecorder {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 PushConstantVariant::Exposure,
-                || postprocessor.exposure(),
+                || postprocessor.get_exposure_push_constant(),
             );
     }
 
@@ -2552,16 +2522,25 @@ impl ComputePassRecorder {
         specification: ComputePassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
-        let (bind_group_layouts, shader_input) =
-            specification.get_bind_group_layouts_and_shader_inputs(gpu_computation_library)?;
+        let computation_specification =
+            specification.get_computation_specification(gpu_computation_library)?;
 
-        let push_constant_ranges = specification.push_constants.create_ranges();
+        let bind_group_layouts = computation_specification
+            .resources()
+            .map(|resources| vec![resources.bind_group_layout()])
+            .unwrap_or_default();
 
-        let shader = shader_manager.obtain_compute_shader(
-            graphics_device,
-            &shader_input,
-            specification.push_constants.clone(),
-        )?;
+        let push_constant_ranges = computation_specification.push_constants().create_ranges();
+
+        let shader = shader_manager
+            .compute_shaders
+            .get(&computation_specification.shader_id())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing compute shader for GPU computation: {}",
+                    specification.computation_id
+                )
+            })?;
 
         let pipeline_layout = Self::create_pipeline_layout(
             graphics_device.device(),
@@ -2603,9 +2582,9 @@ impl ComputePassRecorder {
 
         log::debug!("Recording compute pass: {}", &self.specification.label);
 
-        let bind_groups = self
+        let computation_specification = self
             .specification
-            .get_bind_groups(gpu_computation_library)?;
+            .get_computation_specification(gpu_computation_library)?;
 
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             timestamp_writes: None,
@@ -2614,13 +2593,18 @@ impl ComputePassRecorder {
 
         compute_pass.set_pipeline(&self.pipeline);
 
-        self.set_push_constants(&mut compute_pass, rendering_surface, postprocessor);
+        Self::set_push_constants(
+            computation_specification.push_constants(),
+            &mut compute_pass,
+            rendering_surface,
+            postprocessor,
+        );
 
-        for (index, &bind_group) in bind_groups.iter().enumerate() {
-            compute_pass.set_bind_group(u32::try_from(index).unwrap(), bind_group, &[]);
+        if let Some(resources) = computation_specification.resources() {
+            compute_pass.set_bind_group(0, resources.bind_group(), &[]);
         }
 
-        let (x, y, z) = self.specification.workgroups;
+        let &[x, y, z] = computation_specification.workgroup_size();
         compute_pass.dispatch_workgroups(x, y, z);
 
         Ok(RenderCommandOutcome::Recorded)
@@ -2642,26 +2626,28 @@ impl ComputePassRecorder {
     }
 
     fn set_push_constants(
-        &self,
+        push_constants: &PushConstantGroup,
         compute_pass: &mut wgpu::ComputePass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
     ) {
-        self.specification
-            .push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                PushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.get_inverse_window_dimensions_push_constant(),
-            );
+        push_constants.set_push_constant_for_compute_pass_if_present(
+            compute_pass,
+            PushConstantVariant::InverseWindowDimensions,
+            || rendering_surface.get_inverse_window_dimensions_push_constant(),
+        );
 
-        self.specification
-            .push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                PushConstantVariant::Exposure,
-                || postprocessor.exposure(),
-            );
+        push_constants.set_push_constant_for_compute_pass_if_present(
+            compute_pass,
+            PushConstantVariant::Exposure,
+            || postprocessor.get_exposure_push_constant(),
+        );
+
+        push_constants.set_push_constant_for_compute_pass_if_present(
+            compute_pass,
+            PushConstantVariant::InverseExposure,
+            || postprocessor.get_inverse_exposure_push_constant(),
+        );
     }
 
     fn create_pipeline_layout(
