@@ -117,6 +117,7 @@ pub struct ComputePassSpecification {
 pub enum RenderCommandSpecification {
     RenderPass(RenderPassSpecification),
     ComputePass(ComputePassSpecification),
+    RenderAttachmentMipmappingPass { quantity: RenderAttachmentQuantity },
 }
 
 /// Recorder for a specific render pass.
@@ -2770,6 +2771,9 @@ impl RenderCommandRecorder {
                 specification,
                 state,
             ),
+            RenderCommandSpecification::RenderAttachmentMipmappingPass { quantity } => {
+                Ok(Self::new_render_attachment_mipmapping_pass(quantity, state))
+            }
         }
     }
 

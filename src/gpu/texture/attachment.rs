@@ -615,7 +615,7 @@ impl RenderAttachmentTexture {
             depth_or_array_layers: 1,
         };
 
-        let mip_level_count = if quantity.is_mipmapped() {
+        let mip_level_count = if quantity.is_mipmapped() && sample_count == 1 {
             texture_size.max_mips(wgpu::TextureDimension::D2)
         } else {
             1
@@ -655,13 +655,13 @@ impl RenderAttachmentTexture {
             ..Default::default()
         });
 
-        let sampler = Self::create_sampler(device);
+        let (sampler, sampler_binding_type) = Self::create_sampler(device, quantity);
 
         let texture = Texture::new(
             texture,
             binding_view,
             sampler,
-            wgpu::SamplerBindingType::NonFiltering,
+            sampler_binding_type,
             wgpu::TextureViewDimension::D2,
         );
 
@@ -738,15 +738,35 @@ impl RenderAttachmentTexture {
         })
     }
 
-    fn create_sampler(device: &wgpu::Device) -> wgpu::Sampler {
-        device.create_sampler(&wgpu::SamplerDescriptor {
+    fn create_sampler(
+        device: &wgpu::Device,
+        quantity: RenderAttachmentQuantity,
+    ) -> (wgpu::Sampler, wgpu::SamplerBindingType) {
+        let (mag_filter, mipmap_filter, binding_type) = if quantity.is_mipmapped() {
+            (
+                wgpu::FilterMode::Linear,
+                wgpu::FilterMode::Linear,
+                wgpu::SamplerBindingType::Filtering,
+            )
+        } else {
+            (
+                wgpu::FilterMode::Nearest,
+                wgpu::FilterMode::Nearest,
+                wgpu::SamplerBindingType::NonFiltering,
+            )
+        };
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
+            mag_filter,
             min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter,
             ..Default::default()
-        })
+        });
+
+        (sampler, binding_type)
     }
 }
 
