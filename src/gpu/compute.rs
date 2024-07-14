@@ -1,8 +1,8 @@
 //! Management of resources for GPU computation.
 
 use crate::gpu::{
-    shader::ComputeShaderInput, storage::StorageGPUBuffer, texture::Texture,
-    uniform::SingleUniformGPUBuffer,
+    push_constant::PushConstantGroup, shader::ShaderID, storage::StorageGPUBuffer,
+    texture::Texture, uniform::SingleUniformGPUBuffer, GraphicsDevice,
 };
 use impact_utils::stringhash64_newtype;
 use std::collections::{hash_map::Entry, HashMap};
@@ -13,12 +13,14 @@ stringhash64_newtype!(
     [pub] GPUComputationID
 );
 
-/// A GPU computation description specifying the resources used in the
-/// computation and the input to the compute shader.
+/// A GPU computation description specifying the shader, workgroup size, push
+/// constants and GPU resources used for the computation
 #[derive(Debug)]
 pub struct GPUComputationSpecification {
+    shader_id: ShaderID,
+    workgroup_size: [u32; 3],
+    push_constants: PushConstantGroup,
     resources: Option<GPUComputationResourceGroup>,
-    shader_input: ComputeShaderInput,
 }
 
 /// A group of resources residing on the GPU for a specific GPU computation.
@@ -36,27 +38,41 @@ pub struct GPUComputationLibrary {
 }
 
 impl GPUComputationSpecification {
-    /// Creates a new GPU computation specification with the given resources and
-    /// shader input.
+    /// Creates a new GPU computation specification with the given shader,
+    /// workgroup size, push constants and GPU resources.
     pub fn new(
+        shader_id: ShaderID,
+        workgroup_size: [u32; 3],
+        push_constants: PushConstantGroup,
         resources: Option<GPUComputationResourceGroup>,
-        shader_input: ComputeShaderInput,
     ) -> Self {
         Self {
+            shader_id,
+            workgroup_size,
+            push_constants,
             resources,
-            shader_input,
         }
     }
 
-    /// Returns a reference to the resources used by the GPU computation, or
-    /// [`None`] if the computation uses no resources.
-    pub fn resources(&self) -> Option<&GPUComputationResourceGroup> {
-        self.resources.as_ref()
+    /// Returns the ID of the compute shader for the computation.
+    pub fn shader_id(&self) -> ShaderID {
+        self.shader_id
     }
 
-    /// Returns the input required for generating a shader for the computation.
-    pub fn shader_input(&self) -> &ComputeShaderInput {
-        &self.shader_input
+    /// Returns the workgroup size for the computation.
+    pub fn workgroup_size(&self) -> &[u32; 3] {
+        &self.workgroup_size
+    }
+
+    /// Returns the push constants for the computation.
+    pub fn push_constants(&self) -> &PushConstantGroup {
+        &self.push_constants
+    }
+
+    /// Returns a reference to the GPU resources used by the computation, or
+    /// [`None`] if the computation uses no GPU resources.
+    pub fn resources(&self) -> Option<&GPUComputationResourceGroup> {
+        self.resources.as_ref()
     }
 }
 
@@ -69,7 +85,7 @@ impl GPUComputationResourceGroup {
     /// the concatenated list of resources: `single_uniform_buffers +
     /// storage_buffers + textures`.
     pub fn new(
-        device: &wgpu::Device,
+        graphics_device: &GraphicsDevice,
         single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
         storage_buffers: &[&StorageGPUBuffer],
         textures: &[&Texture],
@@ -102,16 +118,21 @@ impl GPUComputationResourceGroup {
             binding += 1;
         }
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &bind_group_layout_entries,
-            label: Some(&format!("{} bind group layout", label)),
-        });
+        let bind_group_layout =
+            graphics_device
+                .device()
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &bind_group_layout_entries,
+                    label: Some(&format!("{} bind group layout", label)),
+                });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &bind_group_entries,
-            label: Some(&format!("{} bind group", label)),
-        });
+        let bind_group = graphics_device
+            .device()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &bind_group_entries,
+                label: Some(&format!("{} bind group", label)),
+            });
 
         Self {
             _single_uniform_buffers: single_uniform_buffers,
@@ -156,6 +177,12 @@ impl GPUComputationLibrary {
         self.computation_specifications.get(&computation_id)
     }
 
+    /// Removes the specification of the computation with the given ID if it
+    /// exists.
+    pub fn remove_computation_specification(&mut self, computation_id: GPUComputationID) {
+        self.computation_specifications.remove(&computation_id);
+    }
+
     /// Returns a hashmap entry for the specification of the computation with
     /// the given ID.
     pub fn computation_specification_entry(
@@ -174,6 +201,11 @@ impl GPUComputationLibrary {
     ) {
         self.computation_specifications
             .insert(computation_id, computation_specification);
+    }
+
+    /// Removes all computation specifications from the library.
+    pub fn clear_computation_specifications(&mut self) {
+        self.computation_specifications.clear();
     }
 }
 
