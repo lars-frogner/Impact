@@ -8,8 +8,9 @@ use super::{
     },
     MeshVertexOutputFieldIndices, PushConstantExpressions, RenderShaderTricks,
 };
-use crate::{
-    gpu::push_constant::PushConstantVariant, material::special::tone_mapping::ToneMapping,
+use crate::gpu::{
+    push_constant::PushConstantVariant,
+    rendering::postprocessing::capturing::tone_mapping::ToneMapping,
 };
 use naga::{Function, Module, SampleLevel};
 

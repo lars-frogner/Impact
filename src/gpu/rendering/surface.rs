@@ -26,6 +26,7 @@ enum SurfaceConfiguration {
 
 impl RenderingSurface {
     pub const INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE: u32 = 2 * mem::size_of::<f32>() as u32;
+    pub const PIXEL_COUNT_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<f32>() as u32;
 
     /// Creates a rendering surface for the given window.
     ///
@@ -105,6 +106,13 @@ impl RenderingSurface {
             1.0 / (u32::from(width) as fre),
             1.0 / (u32::from(height) as fre),
         ]
+    }
+
+    /// Returns the data for the push constant containing the total surface
+    /// pixel count.
+    pub fn get_pixel_count_push_constant(&self) -> f32 {
+        let (width, height) = self.surface_config.surface_dimensions();
+        (u32::from(width) as f32) * (u32::from(height) as f32)
     }
 
     fn initialize_surface_config_for_adapter(&mut self, adapter: &wgpu::Adapter) {

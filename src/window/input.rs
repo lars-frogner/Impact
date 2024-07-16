@@ -208,13 +208,13 @@ impl KeyInputHandler {
                     }
                     KeyboardInputAction::IncreaseExposure => {
                         if state == &ElementState::Released {
-                            app.increase_exposure();
+                            app.increase_camera_sensitivity();
                         }
                         Ok(HandlingResult::Handled)
                     }
                     KeyboardInputAction::DecreaseExposure => {
                         if state == &ElementState::Released {
-                            app.decrease_exposure();
+                            app.decrease_camera_sensitivity();
                         }
                         Ok(HandlingResult::Handled)
                     }

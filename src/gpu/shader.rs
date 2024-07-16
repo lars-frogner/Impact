@@ -1293,6 +1293,10 @@ impl PushConstantExpressions {
                     let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
                     builder.add_field("inverseWindowDimensions", vec2_type, None, VECTOR_2_SIZE);
                 }
+                PushConstantVariant::PixelCount => {
+                    let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
+                    builder.add_field("pixelCount", f32_type, None, F32_WIDTH);
+                }
                 PushConstantVariant::LightIdx => {
                     let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
                     builder.add_field("activeLightIdx", u32_type, None, U32_WIDTH);

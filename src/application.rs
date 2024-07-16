@@ -408,26 +408,30 @@ impl Application {
         }
     }
 
-    /// Increases the exposure by a small multiplicative factor.
-    pub fn increase_exposure(&self) {
+    /// Increases the sensitivity of the capturing camera by a small
+    /// multiplicative factor.
+    pub fn increase_camera_sensitivity(&self) {
         self.renderer()
             .read()
             .unwrap()
             .postprocessor()
             .write()
             .unwrap()
-            .increase_exposure();
+            .capturing_camera_mut()
+            .increase_sensitivity();
     }
 
-    /// Decreases the exposure by a small multiplicative factor.
-    pub fn decrease_exposure(&self) {
+    /// Decreases the sensitivity of the capturing camera by a small
+    /// multiplicative factor.
+    pub fn decrease_camera_sensitivity(&self) {
         self.renderer()
             .read()
             .unwrap()
             .postprocessor()
             .write()
             .unwrap()
-            .decrease_exposure();
+            .capturing_camera_mut()
+            .decrease_sensitivity();
     }
 
     /// Increases the simulation speed multiplier by the

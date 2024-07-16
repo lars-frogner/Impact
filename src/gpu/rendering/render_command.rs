@@ -16,6 +16,7 @@ use crate::{
             CameraShaderInput, InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput,
             MeshShaderInput, Shader, ShaderManager,
         },
+        storage::{StorageBufferID, StorageGPUBufferManager},
         texture::{
             attachment::{
                 RenderAttachmentQuantity, RenderAttachmentQuantitySet,
@@ -118,6 +119,7 @@ pub enum RenderCommandSpecification {
     RenderPass(RenderPassSpecification),
     ComputePass(ComputePassSpecification),
     RenderAttachmentMipmappingPass { quantity: RenderAttachmentQuantity },
+    StorageBufferResultCopyPass { buffer_id: StorageBufferID },
 }
 
 /// Recorder for a specific render pass.
@@ -143,11 +145,20 @@ pub struct RenderAttachmentMipmappingPassRecorder {
     state: RenderCommandState,
 }
 
+/// Recorder for a pass copying the contents of a storage buffer into its
+/// associated result buffer (which can be mapped to the CPU).
+#[derive(Debug)]
+pub struct StorageBufferResultCopyPassRecorder {
+    buffer_id: StorageBufferID,
+    state: RenderCommandState,
+}
+
 #[derive(Debug)]
 pub enum RenderCommandRecorder {
     RenderPass(RenderPassRecorder),
     ComputePass(ComputePassRecorder),
     RenderAttachmentMipmappingPass(RenderAttachmentMipmappingPassRecorder),
+    StorageBufferResultCopyPass(StorageBufferResultCopyPassRecorder),
 }
 
 /// The active state of a render command.
@@ -2407,6 +2418,14 @@ impl RenderPassRecorder {
                 || rendering_surface.get_inverse_window_dimensions_push_constant(),
             );
 
+        self.specification
+            .push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::PixelCount,
+                || rendering_surface.get_pixel_count_push_constant(),
+            );
+
         if let Some(LightInfo {
             light_type,
             light_id,
@@ -2443,7 +2462,23 @@ impl RenderPassRecorder {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 PushConstantVariant::Exposure,
-                || postprocessor.get_exposure_push_constant(),
+                || {
+                    postprocessor
+                        .capturing_camera()
+                        .get_exposure_push_constant()
+                },
+            );
+
+        self.specification
+            .push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::InverseExposure,
+                || {
+                    postprocessor
+                        .capturing_camera()
+                        .get_inverse_exposure_push_constant()
+                },
             );
     }
 
@@ -2605,7 +2640,7 @@ impl ComputePassRecorder {
             compute_pass.set_bind_group(0, resources.bind_group(), &[]);
         }
 
-        let &[x, y, z] = computation_specification.workgroup_size();
+        let &[x, y, z] = computation_specification.workgroup_counts();
         compute_pass.dispatch_workgroups(x, y, z);
 
         Ok(RenderCommandOutcome::Recorded)
@@ -2640,14 +2675,28 @@ impl ComputePassRecorder {
 
         push_constants.set_push_constant_for_compute_pass_if_present(
             compute_pass,
+            PushConstantVariant::PixelCount,
+            || rendering_surface.get_pixel_count_push_constant(),
+        );
+
+        push_constants.set_push_constant_for_compute_pass_if_present(
+            compute_pass,
             PushConstantVariant::Exposure,
-            || postprocessor.get_exposure_push_constant(),
+            || {
+                postprocessor
+                    .capturing_camera()
+                    .get_exposure_push_constant()
+            },
         );
 
         push_constants.set_push_constant_for_compute_pass_if_present(
             compute_pass,
             PushConstantVariant::InverseExposure,
-            || postprocessor.get_inverse_exposure_push_constant(),
+            || {
+                postprocessor
+                    .capturing_camera()
+                    .get_inverse_exposure_push_constant()
+            },
         );
     }
 
@@ -2733,6 +2782,61 @@ impl RenderAttachmentMipmappingPassRecorder {
     }
 }
 
+impl StorageBufferResultCopyPassRecorder {
+    /// Creates a new result copy pass recorder for the storage buffer with the
+    /// given ID.
+    pub fn new(buffer_id: StorageBufferID, state: RenderCommandState) -> Self {
+        Self { buffer_id, state }
+    }
+
+    /// Returns the state of the copy pass.
+    pub fn state(&self) -> RenderCommandState {
+        self.state
+    }
+
+    /// Sets the state of the copy pass.
+    pub fn set_state(&mut self, state: RenderCommandState) {
+        self.state = state;
+    }
+
+    /// Set whether the copy pass should be skipped.
+    pub fn set_disabled(&mut self, disabled: bool) {
+        self.state = RenderCommandState::disabled_if(disabled);
+    }
+
+    /// Records the copy pass to the given command encoder.
+    ///
+    /// # Errors
+    /// Returns an error if the storage buffer is not available or does not have
+    /// a result buffer.
+    pub fn record_pass(
+        &self,
+        storage_gpu_buffer_manager: &StorageGPUBufferManager,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<RenderCommandOutcome> {
+        if self.state().is_disabled() {
+            log::debug!(
+                "Skipping storage buffer result copy pass for {}",
+                self.buffer_id
+            );
+            return Ok(RenderCommandOutcome::Skipped);
+        }
+
+        log::debug!(
+            "Recording storage buffer result copy pass for {}",
+            self.buffer_id
+        );
+
+        let storage_buffer = storage_gpu_buffer_manager
+            .get_storage_buffer(self.buffer_id)
+            .ok_or_else(|| anyhow!("Missing storage buffer {}", self.buffer_id))?;
+
+        storage_buffer.encode_copy_to_result_buffer(command_encoder)?;
+
+        Ok(RenderCommandOutcome::Recorded)
+    }
+}
+
 impl RenderCommandRecorder {
     /// Creates a new recorder for the command defined by the given
     /// specification.
@@ -2773,6 +2877,9 @@ impl RenderCommandRecorder {
             ),
             RenderCommandSpecification::RenderAttachmentMipmappingPass { quantity } => {
                 Ok(Self::new_render_attachment_mipmapping_pass(quantity, state))
+            }
+            RenderCommandSpecification::StorageBufferResultCopyPass { buffer_id } => {
+                Ok(Self::new_storage_buffer_result_copy_pass(buffer_id, state))
             }
         }
     }
@@ -2850,6 +2957,17 @@ impl RenderCommandRecorder {
         ))
     }
 
+    /// Creates a new result copy pass recorder for the storage buffer with the
+    /// given ID.
+    pub fn new_storage_buffer_result_copy_pass(
+        buffer_id: StorageBufferID,
+        state: RenderCommandState,
+    ) -> Self {
+        Self::StorageBufferResultCopyPass(StorageBufferResultCopyPassRecorder::new(
+            buffer_id, state,
+        ))
+    }
+
     pub fn as_render_pass_mut(&mut self) -> Option<&mut RenderPassRecorder> {
         match self {
             Self::RenderPass(recorder) => Some(recorder),
@@ -2870,6 +2988,7 @@ impl RenderCommandRecorder {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
+        storage_gpu_buffer_manager: &StorageGPUBufferManager,
         gpu_computation_library: &GPUComputationLibrary,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
@@ -2892,6 +3011,9 @@ impl RenderCommandRecorder {
             Self::RenderAttachmentMipmappingPass(recorder) => {
                 Ok(recorder.record_pass(render_attachment_texture_manager, command_encoder))
             }
+            Self::StorageBufferResultCopyPass(recorder) => {
+                recorder.record_pass(storage_gpu_buffer_manager, command_encoder)
+            }
         }
     }
 
@@ -2901,6 +3023,7 @@ impl RenderCommandRecorder {
             Self::RenderPass(recorder) => recorder.state(),
             Self::ComputePass(recorder) => recorder.state(),
             Self::RenderAttachmentMipmappingPass(recorder) => recorder.state(),
+            Self::StorageBufferResultCopyPass(recorder) => recorder.state(),
         }
     }
 
@@ -2910,6 +3033,7 @@ impl RenderCommandRecorder {
             Self::RenderPass(recorder) => recorder.set_state(state),
             Self::ComputePass(recorder) => recorder.set_state(state),
             Self::RenderAttachmentMipmappingPass(recorder) => recorder.set_state(state),
+            Self::StorageBufferResultCopyPass(recorder) => recorder.set_state(state),
         }
     }
 

@@ -1,19 +1,26 @@
-//! Material for applying a Gaussian blur.
+//! Materials and render passes for applying a Gaussian blur.
 
 use crate::{
     assert_uniform_valid,
     gpu::{
-        rendering::{fre, render_command::RenderPassHints},
+        push_constant::{PushConstant, PushConstantVariant},
+        rendering::{
+            fre,
+            render_command::{
+                OutputAttachmentSampling, RenderCommandSpecification, RenderPassHints,
+                RenderPassSpecification,
+            },
+        },
         shader::{GaussianBlurShaderInput, MaterialShaderInput},
         texture::attachment::RenderAttachmentQuantity,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
-    material::{MaterialSpecificResourceGroup, MaterialSpecification},
-    mesh::VertexAttributeSet,
+    material::{MaterialID, MaterialLibrary, MaterialSpecificResourceGroup, MaterialSpecification},
+    mesh::{VertexAttributeSet, SCREEN_FILLING_QUAD_MESH_ID},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_utils::ConstStringHash64;
+use impact_utils::{hash64, ConstStringHash64};
 use nalgebra::Vector4;
 use std::{borrow::Cow, fmt::Display};
 
@@ -21,6 +28,13 @@ use std::{borrow::Cow, fmt::Display};
 /// for computing Gaussian blur. The actual number of samples that will be
 /// averaged along each direction is `2 * MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS - 1`.
 pub const MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS: usize = 64;
+
+/// The direction of a 1D Gaussian blur.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GaussianBlurDirection {
+    Horizontal,
+    Vertical,
+}
 
 /// Uniform holding offsets and weights for the Gaussian blur samples. Only the
 /// first `sample_count` sets of offsets and weights in the array will be
@@ -32,7 +46,7 @@ pub const MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS: usize = 64;
 /// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct GaussianBlurSamples {
+pub(super) struct GaussianBlurSamples {
     /// Each entry stores an offset as the first vector component and a weight
     /// as the second component. The remaining vector components are ignored.
     /// The reason we need to use a `Vector4` is that arrays in uniforms must
@@ -43,11 +57,17 @@ pub struct GaussianBlurSamples {
     _pad: [u8; 8],
 }
 
-/// The direction of a 1D Gaussian blur.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum GaussianBlurDirection {
-    Horizontal,
-    Vertical,
+impl Display for GaussianBlurDirection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Horizontal => "horizontal",
+                Self::Vertical => "vertical",
+            }
+        )
+    }
 }
 
 impl GaussianBlurSamples {
@@ -121,6 +141,7 @@ impl GaussianBlurSamples {
 
     /// Returns an iterator over the 1D Gaussian kernel sample offsets starting
     /// at the center and proceeding along the positive offset side.
+    #[cfg(test)]
     pub fn sample_offsets(&self) -> impl Iterator<Item = fre> + '_ {
         self.sample_offsets_and_weights
             .iter()
@@ -129,7 +150,8 @@ impl GaussianBlurSamples {
     }
 
     /// Returns an iterator over the 1D Gaussian kernel sample weights starting
-    /// at the center and proceeding along the positive offset side
+    /// at the center and proceeding along the positive offset side.
+    #[cfg(test)]
     pub fn sample_weights(&self) -> impl Iterator<Item = fre> + '_ {
         self.sample_offsets_and_weights
             .iter()
@@ -138,23 +160,52 @@ impl GaussianBlurSamples {
     }
 }
 
-impl Display for GaussianBlurDirection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Horizontal => "horizontal",
-                Self::Vertical => "vertical",
-            }
-        )
+impl UniformBufferable for GaussianBlurSamples {
+    const ID: ConstStringHash64 = ConstStringHash64::new("Gaussian blur samples");
+
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
+}
+assert_uniform_valid!(GaussianBlurSamples);
+
+pub(super) fn setup_gaussian_blur_material_and_render_pass(
+    graphics_device: &GraphicsDevice,
+    material_library: &mut MaterialLibrary,
+    input_render_attachment_quantity: RenderAttachmentQuantity,
+    output_render_attachment_quantity: RenderAttachmentQuantity,
+    direction: GaussianBlurDirection,
+    sample_uniform: &GaussianBlurSamples,
+) -> RenderCommandSpecification {
+    let material_id = MaterialID(hash64!(format!(
+        "GaussianBlurMaterial{{ direction: {}, input: {}, output: {}, sample_count: {}, truncated_tail_samples: {} }}",
+        direction,
+        input_render_attachment_quantity,
+        output_render_attachment_quantity,
+        sample_uniform.sample_count(),
+        sample_uniform.truncated_tail_samples(),
+    )));
+    let specification = material_library
+        .material_specification_entry(material_id)
+        .or_insert_with(|| {
+            create_gaussian_blur_material(
+                graphics_device,
+                input_render_attachment_quantity,
+                output_render_attachment_quantity,
+                direction,
+                sample_uniform,
+            )
+        });
+    define_gaussian_blur_pass(material_id, specification, direction)
 }
 
 /// Creates a [`MaterialSpecification`] for a material that applies a 1D
 /// Gaussian blur in the given direction to the input attachment and writes the
 /// result to the output attachment.
-pub fn create_gaussian_blur_material(
+fn create_gaussian_blur_material(
     graphics_device: &GraphicsDevice,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
@@ -192,17 +243,31 @@ pub fn create_gaussian_blur_material(
     )
 }
 
-impl UniformBufferable for GaussianBlurSamples {
-    const ID: ConstStringHash64 = ConstStringHash64::new("Gaussian blur samples");
-
-    fn create_bind_group_layout_entry(
-        binding: u32,
-        visibility: wgpu::ShaderStages,
-    ) -> wgpu::BindGroupLayoutEntry {
-        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
-    }
+fn define_gaussian_blur_pass(
+    material_id: MaterialID,
+    material_specification: &MaterialSpecification,
+    direction: GaussianBlurDirection,
+) -> RenderCommandSpecification {
+    RenderCommandSpecification::RenderPass(RenderPassSpecification {
+        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+        explicit_material_id: Some(material_id),
+        vertex_attribute_requirements: material_specification
+            .vertex_attribute_requirements_for_shader(),
+        input_render_attachment_quantities: material_specification
+            .input_render_attachment_quantities(),
+        output_render_attachment_quantities: material_specification
+            .output_render_attachment_quantities(),
+        output_attachment_sampling: OutputAttachmentSampling::Single,
+        push_constants: PushConstant::new(
+            PushConstantVariant::InverseWindowDimensions,
+            wgpu::ShaderStages::FRAGMENT,
+        )
+        .into(),
+        hints: material_specification.render_pass_hints(),
+        label: format!("1D Gaussian blur pass ({})", direction),
+        ..Default::default()
+    })
 }
-assert_uniform_valid!(GaussianBlurSamples);
 
 /// Computes the `k`'th row of Pascal's triangle, which contains the binomial
 /// coefficients `(n k)` for `n = 0..=k`.

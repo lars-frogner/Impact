@@ -3302,13 +3302,15 @@ impl SampledTexture {
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-// #[cfg(not(miri))]
+#[cfg(not(miri))]
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
-    use crate::{
-        gpu::push_constant::PushConstant,
-        material::special::{gaussian_blur::GaussianBlurDirection, tone_mapping::ToneMapping},
+    use crate::gpu::{
+        push_constant::PushConstant,
+        rendering::postprocessing::{
+            capturing::tone_mapping::ToneMapping, gaussian_blur::GaussianBlurDirection,
+        },
     };
     use naga::{
         back::wgsl::{self as wgsl_out, WriterFlags},

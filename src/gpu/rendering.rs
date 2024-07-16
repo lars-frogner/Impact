@@ -21,13 +21,15 @@ use crate::{
         GraphicsDevice,
     },
     light::MAX_SHADOW_MAP_CASCADES,
-    material::{special::tone_mapping::ToneMapping, MaterialLibrary},
+    material::MaterialLibrary,
     scene::Scene,
     window::EventLoopController,
 };
 use anyhow::{Error, Result};
 use chrono::Utc;
-use postprocessing::{AmbientOcclusionConfig, BloomConfig, ExposureConfig, Postprocessor};
+use postprocessing::{
+    ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig, Postprocessor,
+};
 use render_command::RenderCommandManager;
 use render_command::RenderCommandOutcome;
 use resource::RenderResourceManager;
@@ -82,9 +84,7 @@ pub struct RenderingConfig {
     /// The number of samples to use for multisampling anti-aliasing.
     pub multisampling_sample_count: u32,
     pub ambient_occlusion: AmbientOcclusionConfig,
-    pub bloom: BloomConfig,
-    pub exposure: ExposureConfig,
-    pub tone_mapping: ToneMapping,
+    pub capturing_camera: CapturingCameraConfig,
 }
 
 /// Helper for capturing screenshots and related textures.
@@ -133,9 +133,7 @@ impl RenderingSystem {
             &mut storage_gpu_buffer_manager,
             &mut gpu_computation_library,
             &config.ambient_occlusion,
-            &config.bloom,
-            &config.exposure,
-            config.tone_mapping,
+            &config.capturing_camera,
         );
 
         Ok(Self {
@@ -298,12 +296,20 @@ impl RenderingSystem {
 
     /// Toggles bloom.
     pub fn toggle_bloom(&self) {
-        self.postprocessor.write().unwrap().toggle_bloom();
+        self.postprocessor
+            .write()
+            .unwrap()
+            .capturing_camera_mut()
+            .toggle_bloom();
     }
 
     /// Cycle tone mapping.
     pub fn cycle_tone_mapping(&self) {
-        self.postprocessor.write().unwrap().cycle_tone_mapping();
+        self.postprocessor
+            .write()
+            .unwrap()
+            .capturing_camera_mut()
+            .cycle_tone_mapping();
     }
 
     fn render_surface(&self, material_library: &MaterialLibrary) -> Result<wgpu::SurfaceTexture> {
@@ -319,9 +325,6 @@ impl RenderingSystem {
 
         {
             let render_resources_guard = self.render_resource_manager.read().unwrap();
-            let postprocessor = self.postprocessor.read().unwrap();
-            let gpu_computation_library_guard = self.gpu_computation_library.read().unwrap();
-
             for render_pass_recorder in self.render_command_manager.read().unwrap().recorders() {
                 let outcome = render_pass_recorder.record(
                     &self.rendering_surface,
@@ -329,21 +332,31 @@ impl RenderingSystem {
                     material_library,
                     render_resources_guard.synchronized(),
                     &self.render_attachment_texture_manager,
-                    &postprocessor,
-                    &gpu_computation_library_guard,
+                    &self.postprocessor.read().unwrap(),
+                    &self.storage_gpu_buffer_manager.read().unwrap(),
+                    &self.gpu_computation_library.read().unwrap(),
                     &mut command_encoder,
                 )?;
                 if outcome == RenderCommandOutcome::Recorded {
                     n_recorded_passes += 1;
                 }
             }
-        } // <- Lock guards are released here
+        } // <- Render resource guard is released here
 
         log::info!("Performing {} render passes", n_recorded_passes);
 
         self.graphics_device
             .queue()
             .submit(std::iter::once(command_encoder.finish()));
+
+        self.postprocessor
+            .write()
+            .unwrap()
+            .capturing_camera_mut()
+            .update_exposure(
+                &self.graphics_device,
+                &self.storage_gpu_buffer_manager.read().unwrap(),
+            )?;
 
         Ok(surface_texture)
     }
@@ -390,13 +403,13 @@ impl RenderingSystem {
         self.postprocessor
             .write()
             .unwrap()
+            .capturing_camera_mut()
             .handle_new_render_attachment_textures(
                 &self.graphics_device,
                 &mut self.shader_manager.write().unwrap(),
                 &self.render_attachment_texture_manager,
                 &mut self.storage_gpu_buffer_manager.write().unwrap(),
                 &mut self.gpu_computation_library.write().unwrap(),
-                &self.config.exposure,
             );
 
         self.render_command_manager
@@ -416,9 +429,7 @@ impl Default for RenderingConfig {
             shadow_mapping_enabled: true,
             multisampling_sample_count: 1,
             ambient_occlusion: AmbientOcclusionConfig::default(),
-            bloom: BloomConfig::default(),
-            exposure: ExposureConfig::default(),
-            tone_mapping: ToneMapping::default(),
+            capturing_camera: CapturingCameraConfig::default(),
         }
     }
 }

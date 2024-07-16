@@ -1,9 +1,10 @@
 //! Management of storage buffers for GPU computation or rendering.
 
 use crate::gpu::{
-    buffer::{GPUBuffer, GPUBufferType},
+    buffer::{self, GPUBuffer, GPUBufferType},
     GraphicsDevice,
 };
+use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
 use impact_utils::stringhash64_newtype;
 use std::{
@@ -25,7 +26,7 @@ pub struct StorageGPUBuffer {
     storage_buffer: GPUBuffer,
     /// Buffer that the storage buffer can be copied in, which can be mapped for
     /// transferring the data to the CPU.
-    _result_buffer: Option<GPUBuffer>,
+    result_buffer: Option<GPUBuffer>,
     is_read_only: bool,
 }
 
@@ -66,7 +67,7 @@ impl StorageGPUBuffer {
 
         Self {
             storage_buffer,
-            _result_buffer: None,
+            result_buffer: None,
             is_read_only: true,
         }
     }
@@ -92,7 +93,7 @@ impl StorageGPUBuffer {
 
         Self {
             storage_buffer,
-            _result_buffer: None,
+            result_buffer: None,
             is_read_only: false,
         }
     }
@@ -128,7 +129,7 @@ impl StorageGPUBuffer {
 
         Self {
             storage_buffer,
-            _result_buffer: result_buffer,
+            result_buffer,
             is_read_only: false,
         }
     }
@@ -147,6 +148,54 @@ impl StorageGPUBuffer {
     /// given binding.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         self.storage_buffer.create_bind_group_entry(binding)
+    }
+
+    /// Encodes the command to copy the contents of the storage buffer to the
+    /// accompanying result buffer.
+    ///
+    /// # Errors
+    /// Returns an error if the storage buffer has no accompanying result
+    /// buffer.
+    pub fn encode_copy_to_result_buffer(
+        &self,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.result_buffer
+            .as_ref()
+            .map(|result_buffer| {
+                buffer::encode_buffer_to_buffer_copy_command(
+                    command_encoder,
+                    &self.storage_buffer,
+                    result_buffer,
+                );
+            })
+            .ok_or_else(|| anyhow!("No result buffer to copy storage buffer to"))
+    }
+
+    /// Maps the result buffer from the GPU to the CPU, calls the given closure
+    /// with the mapped bytes and returns the result of the closure. If there is
+    /// no result buffer accompanying the storage, nothing is done and [`None`]
+    /// is returned.
+    ///
+    /// # Errors
+    /// Returns an error if the mapping operation fails.
+    pub fn load_result<T>(
+        &self,
+        graphics_device: &GraphicsDevice,
+        process_bytes: impl FnOnce(&[u8]) -> T,
+    ) -> Option<Result<T>> {
+        self.result_buffer.as_ref().map(|result_buffer| {
+            buffer::map_buffer_slice_to_cpu(
+                graphics_device.device(),
+                result_buffer.valid_buffer_slice(),
+            )
+            .map(|view| {
+                let processed = process_bytes(&view);
+                drop(view);
+                result_buffer.buffer().unmap();
+                processed
+            })
+        })
     }
 }
 

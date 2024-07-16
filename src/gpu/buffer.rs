@@ -1,11 +1,15 @@
 //! GPU buffers for rendering and computation.
 
 use crate::gpu::GraphicsDevice;
+use anyhow::Result;
 use std::{
     borrow::Cow,
     fmt::Display,
     mem,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
 use wgpu::util::DeviceExt;
 
@@ -153,8 +157,7 @@ impl GPUBuffer {
     /// If the slice of updated bytes exceeds the total size of the
     /// buffer.
     pub fn update_valid_bytes(&self, graphics_device: &GraphicsDevice, updated_bytes: &[u8]) {
-        self.n_valid_bytes
-            .store(updated_bytes.len(), Ordering::Release);
+        self.set_n_valid_bytes(updated_bytes.len());
 
         queue_write_to_buffer(
             graphics_device.queue(),
@@ -189,6 +192,11 @@ impl GPUBuffer {
     /// Returns the underlying [`wgpu::Buffer`].
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
+    }
+
+    fn set_n_valid_bytes(&self, n_valid_bytes: usize) {
+        assert!(n_valid_bytes <= self.buffer_size);
+        self.n_valid_bytes.store(n_valid_bytes, Ordering::Release);
     }
 
     fn create_initialized_buffer_of_type(
@@ -448,6 +456,56 @@ impl Display for GPUBufferType {
             }
         )
     }
+}
+
+/// Encodes the command for copying the valid bytes from the given source buffer
+/// to the given destination buffer, and updates the range of valid bytes in the
+/// destination buffer accordingly.
+///
+/// # Warning
+/// The number of valid bytes in the destination buffer will be updated
+/// immediately, while the actual copy will not be perform until the command is
+/// submitted.
+pub fn encode_buffer_to_buffer_copy_command(
+    command_encoder: &mut wgpu::CommandEncoder,
+    source: &GPUBuffer,
+    destination: &GPUBuffer,
+) {
+    let n_valid_bytes = source.n_valid_bytes();
+    assert!(n_valid_bytes <= destination.buffer_size());
+
+    command_encoder.copy_buffer_to_buffer(
+        source.buffer(),
+        0,
+        destination.buffer(),
+        0,
+        n_valid_bytes as u64,
+    );
+
+    destination.set_n_valid_bytes(n_valid_bytes);
+}
+
+/// Maps the given buffer slice from the GPU to the CPU and returns the mapped
+/// view.
+///
+/// # Errors
+/// Returns an error if the mapping operation fails.
+pub fn map_buffer_slice_to_cpu<'a>(
+    device: &wgpu::Device,
+    buffer_slice: wgpu::BufferSlice<'a>,
+) -> Result<wgpu::BufferView<'a>> {
+    let map_result_sender = Arc::new(Mutex::new(None));
+    let map_result_receiver = Arc::clone(&map_result_sender);
+
+    buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+        *map_result_sender.lock().unwrap() = Some(result);
+    });
+
+    device.poll(wgpu::Maintain::Wait);
+
+    map_result_receiver.lock().unwrap().take().unwrap()?;
+
+    Ok(buffer_slice.get_mapped_range())
 }
 
 fn queue_write_to_buffer(
