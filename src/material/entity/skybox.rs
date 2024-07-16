@@ -1,28 +1,63 @@
 //! Material for rendering a skybox.
 
 use crate::{
+    assert_uniform_valid,
     assets::Assets,
     gpu::{
-        rendering::render_command::RenderPassHints,
-        shader::{MaterialShaderInput, SkyboxTextureShaderInput},
+        rendering::{fre, render_command::RenderPassHints},
+        shader::{MaterialShaderInput, SkyboxShaderInput},
         texture::attachment::RenderAttachmentQuantitySet,
+        uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
     material::{
         components::{MaterialComp, SkyboxComp},
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecification,
+        MaterialPropertyTextureGroupID, MaterialSpecificResourceGroup, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
 };
+use bytemuck::{Pod, Zeroable};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
-use impact_utils::hash64;
+use impact_utils::{hash64, ConstStringHash64};
 use lazy_static::lazy_static;
-use std::sync::RwLock;
+use std::{borrow::Cow, sync::RwLock};
 
 lazy_static! {
     static ref SKYBOX_MATERIAL_ID: MaterialID = MaterialID(hash64!("SkyboxMaterial"));
 }
+
+/// Uniform holding the maximum possible luminance from a skybox.
+///
+/// The size of this struct has to be a multiple of 16 bytes as required for
+/// uniforms.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct SkyboxProperties {
+    max_luminance: fre,
+    _pad: [u8; 12],
+}
+
+impl SkyboxProperties {
+    fn new(max_luminance: fre) -> Self {
+        Self {
+            max_luminance,
+            _pad: [0; 12],
+        }
+    }
+}
+
+impl UniformBufferable for SkyboxProperties {
+    const ID: ConstStringHash64 = ConstStringHash64::new("Skybox properties");
+
+    fn create_bind_group_layout_entry(
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
+    }
+}
+assert_uniform_valid!(SkyboxProperties);
 
 /// Checks if the entity-to-be with the given components has the component for a
 /// skybox material, and if so, adds the material specification to the material
@@ -53,12 +88,28 @@ pub fn setup_skybox_material(
     material_library: &mut MaterialLibrary,
     skybox: &SkyboxComp,
 ) -> MaterialComp {
-    let texture_shader_input = SkyboxTextureShaderInput {
+    let properties_uniform = SkyboxProperties::new(skybox.max_luminance);
+
+    let properties_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
+        graphics_device,
+        &properties_uniform,
+        wgpu::ShaderStages::FRAGMENT,
+        Cow::Borrowed("Skybox properties"),
+    );
+    let material_specific_resources = MaterialSpecificResourceGroup::new(
+        graphics_device,
+        vec![properties_uniform_buffer],
+        &[],
+        "Skybox properties",
+    );
+
+    let texture_shader_input = SkyboxShaderInput {
+        parameters_uniform_binding: 0,
         skybox_cubemap_texture_and_sampler_bindings:
             MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(0),
     };
 
-    let texture_ids = vec![skybox.0];
+    let texture_ids = vec![skybox.texture_id];
 
     // Add material specification unless a specification for the same material exists
     material_library
@@ -69,7 +120,7 @@ pub fn setup_skybox_material(
                 VertexAttributeSet::empty(),
                 RenderAttachmentQuantitySet::empty(),
                 RenderAttachmentQuantitySet::LUMINANCE,
-                None,
+                Some(material_specific_resources),
                 Vec::new(),
                 RenderPassHints::NO_DEPTH_PREPASS,
                 MaterialShaderInput::Skybox(texture_shader_input),

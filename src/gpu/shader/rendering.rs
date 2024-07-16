@@ -24,7 +24,7 @@ pub use prepass::{
     BumpMappingTextureShaderInput, NormalMappingShaderInput, ParallaxMappingShaderInput,
     PrepassTextureShaderInput,
 };
-pub use skybox::SkyboxTextureShaderInput;
+pub use skybox::SkyboxShaderInput;
 pub use tone_mapping::ToneMappingShaderInput;
 
 use super::{
@@ -133,7 +133,7 @@ pub enum MaterialShaderInput {
     BlinnPhong(BlinnPhongTextureShaderInput),
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
     Prepass(PrepassTextureShaderInput),
-    Skybox(SkyboxTextureShaderInput),
+    Skybox(SkyboxShaderInput),
     Passthrough(PassthroughShaderInput),
     AmbientOcclusion(AmbientOcclusionShaderInput),
     GaussianBlur(GaussianBlurShaderInput),
@@ -1894,6 +1894,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                     module,
                     fragment_function,
                     bind_group_idx,
+                    push_constant_fragment_expressions,
                     fragment_input_struct,
                     material_input_field_indices,
                 );
@@ -3302,7 +3303,7 @@ impl SampledTexture {
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-#[cfg(not(miri))]
+// #[cfg(not(miri))]
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
@@ -3488,6 +3489,34 @@ mod test {
             ]
             .into_iter()
             .collect(),
+        )
+        .unwrap();
+
+        let module_info = validate_module(&module);
+
+        println!(
+            "{}",
+            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
+        );
+    }
+
+    #[test]
+    fn building_skybox_shader_works() {
+        let module = RenderShaderGenerator::generate_shader_module(
+            Some(&CAMERA_INPUT),
+            Some(&MeshShaderInput {
+                locations: [Some(MESH_VERTEX_BINDING_START), None, None, None, None],
+            }),
+            None,
+            &[&MODEL_VIEW_TRANSFORM_INPUT],
+            Some(&MaterialShaderInput::Skybox(SkyboxShaderInput {
+                parameters_uniform_binding: 0,
+                skybox_cubemap_texture_and_sampler_bindings: (0, 1),
+            })),
+            VertexAttributeSet::empty(),
+            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::LUMINANCE,
+            PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT).into(),
         )
         .unwrap();
 
