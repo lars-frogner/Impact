@@ -169,7 +169,10 @@ pub struct ParallaxMapComp {
 /// for the entity. It is therefore not kept after entity creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct SkyboxComp(pub TextureID);
+pub struct SkyboxComp {
+    pub texture_id: TextureID,
+    pub max_luminance: fre,
+}
 
 /// [`Component`](impact_ecs::component::Component) for entities that
 /// have a material.
@@ -239,6 +242,15 @@ impl ParallaxMapComp {
             height_map_texture_id,
             displacement_scale,
             uv_per_distance,
+        }
+    }
+}
+
+impl SkyboxComp {
+    pub fn new(texture_id: TextureID, max_luminance: fre) -> Self {
+        Self {
+            texture_id,
+            max_luminance,
         }
     }
 }

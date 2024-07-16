@@ -212,7 +212,7 @@ fn init_app(window: Window) -> Result<Application> {
     app.create_entity((
         &BoxMeshComp::SKYBOX,
         &ReferenceFrameComp::default(),
-        &SkyboxComp(skybox_texture_id),
+        &SkyboxComp::new(skybox_texture_id, 1e6),
         &UncullableComp,
     ))?;
 

@@ -12,7 +12,7 @@ pub use rendering::{
     LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
     MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
     OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PassthroughShaderInput,
-    PrepassTextureShaderInput, SkyboxTextureShaderInput, SpecularMicrofacetShadingModel,
+    PrepassTextureShaderInput, SkyboxShaderInput, SpecularMicrofacetShadingModel,
     ToneMappingShaderInput, UnidirectionalLightShaderInput,
 };
 
