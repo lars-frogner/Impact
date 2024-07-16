@@ -1,7 +1,7 @@
 //! Management of push constants.
 
 use crate::{
-    gpu::rendering::{postprocessing::Postprocessor, surface::RenderingSurface},
+    gpu::rendering::{postprocessing::capturing::CapturingCamera, surface::RenderingSurface},
     light::buffer::LightGPUBufferManager,
 };
 use bytemuck::Pod;
@@ -10,6 +10,7 @@ use bytemuck::Pod;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PushConstantVariant {
     InverseWindowDimensions,
+    PixelCount,
     LightIdx,
     CascadeIdx,
     Exposure,
@@ -48,10 +49,11 @@ impl PushConstantVariant {
             Self::InverseWindowDimensions => {
                 RenderingSurface::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE
             }
+            Self::PixelCount => RenderingSurface::PIXEL_COUNT_PUSH_CONSTANT_SIZE,
             Self::LightIdx => LightGPUBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE,
             Self::CascadeIdx => LightGPUBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE,
-            Self::Exposure => Postprocessor::EXPOSURE_PUSH_CONSTANT_SIZE,
-            Self::InverseExposure => Postprocessor::INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE,
+            Self::Exposure => CapturingCamera::EXPOSURE_PUSH_CONSTANT_SIZE,
+            Self::InverseExposure => CapturingCamera::INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE,
         }
     }
 }

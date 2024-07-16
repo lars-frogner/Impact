@@ -18,7 +18,7 @@ stringhash64_newtype!(
 #[derive(Debug)]
 pub struct GPUComputationSpecification {
     shader_id: ShaderID,
-    workgroup_size: [u32; 3],
+    workgroup_counts: [u32; 3],
     push_constants: PushConstantGroup,
     resources: Option<GPUComputationResourceGroup>,
 }
@@ -39,16 +39,16 @@ pub struct GPUComputationLibrary {
 
 impl GPUComputationSpecification {
     /// Creates a new GPU computation specification with the given shader,
-    /// workgroup size, push constants and GPU resources.
+    /// workgroup counts, push constants and GPU resources.
     pub fn new(
         shader_id: ShaderID,
-        workgroup_size: [u32; 3],
+        workgroup_counts: [u32; 3],
         push_constants: PushConstantGroup,
         resources: Option<GPUComputationResourceGroup>,
     ) -> Self {
         Self {
             shader_id,
-            workgroup_size,
+            workgroup_counts,
             push_constants,
             resources,
         }
@@ -59,9 +59,9 @@ impl GPUComputationSpecification {
         self.shader_id
     }
 
-    /// Returns the workgroup size for the computation.
-    pub fn workgroup_size(&self) -> &[u32; 3] {
-        &self.workgroup_size
+    /// Returns the workgroup counts for the computation.
+    pub fn workgroup_counts(&self) -> &[u32; 3] {
+        &self.workgroup_counts
     }
 
     /// Returns the push constants for the computation.

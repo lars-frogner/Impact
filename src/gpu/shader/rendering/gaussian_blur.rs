@@ -9,9 +9,11 @@ use super::{
     },
     MeshVertexOutputFieldIndices, PushConstantExpressions, RenderShaderTricks,
 };
-use crate::{
-    gpu::push_constant::PushConstantVariant,
-    material::special::gaussian_blur::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS},
+use crate::gpu::{
+    push_constant::PushConstantVariant,
+    rendering::postprocessing::gaussian_blur::{
+        GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS,
+    },
 };
 use naga::{
     AddressSpace, ArraySize, BinaryOperator, Expression, Function, GlobalVariable, Literal,

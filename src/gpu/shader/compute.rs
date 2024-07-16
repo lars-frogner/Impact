@@ -8,4 +8,8 @@ lazy_static! {
         ShaderTemplate::new(include_str!(
             "../../../shader/compute/luminance_histogram.template.wgsl"
         ));
+    pub static ref LUMINANCE_HISTOGRAM_AVERAGE_SHADER_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(include_str!(
+            "../../../shader/compute/luminance_histogram_average.template.wgsl"
+        ));
 }

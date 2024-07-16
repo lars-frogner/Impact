@@ -3,7 +3,6 @@
 pub mod components;
 pub mod entity;
 mod features;
-pub mod special;
 
 pub use features::register_material_feature_types;
 

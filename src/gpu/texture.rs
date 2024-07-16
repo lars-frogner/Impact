@@ -4,7 +4,10 @@ pub mod attachment;
 pub mod mipmap;
 pub mod shadow_map;
 
-use crate::{gpu::GraphicsDevice, io};
+use crate::{
+    gpu::{buffer, GraphicsDevice},
+    io,
+};
 use anyhow::{anyhow, bail, Result};
 use bytemuck::Pod;
 use image::{
@@ -1004,7 +1007,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 texture,
                 mip_level,
                 texture_array_idx,
-            );
+            )?;
 
             if matches!(
                 format,
@@ -1055,7 +1058,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 texture,
                 mip_level,
                 texture_array_idx,
-            );
+            )?;
 
             if matches!(
                 format,
@@ -1105,7 +1108,7 @@ fn extract_texture_data<T: Pod>(
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
-) -> Vec<T> {
+) -> Result<Vec<T>> {
     assert!(mip_level <= texture.mip_level_count());
 
     assert!(texture_array_idx < texture.depth_or_array_layers());
@@ -1163,21 +1166,14 @@ fn extract_texture_data<T: Pod>(
 
     queue.submit(std::iter::once(command_encoder.finish()));
 
-    let buffer_slice = buffer.slice(..);
-    buffer_slice.map_async(wgpu::MapMode::Read, |result| {
-        if let Err(err) = result {
-            panic!("Copying texture to buffer failed: {}", err)
-        }
-    });
-    device.poll(wgpu::Maintain::Wait);
-    let buffer_view = buffer_slice.get_mapped_range();
+    let buffer_view = buffer::map_buffer_slice_to_cpu(device, buffer.slice(..))?;
 
     // Extract only the data of the texture with the given texture array index
     let texture_image_size = (texel_size * width * height) as usize;
     let buffer_view = &buffer_view
         [texture_array_idx * texture_image_size..(texture_array_idx + 1) * texture_image_size];
 
-    bytemuck::cast_slice(buffer_view).to_vec()
+    Ok(bytemuck::cast_slice(buffer_view).to_vec())
 }
 
 fn convert_bgra8_to_rgba8(bgra_bytes: &mut [u8]) {
