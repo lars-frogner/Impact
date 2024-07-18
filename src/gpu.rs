@@ -3,6 +3,7 @@ pub mod compute;
 mod device;
 pub mod push_constant;
 pub mod rendering;
+pub mod resource_group;
 pub mod shader;
 pub mod storage;
 pub mod texture;

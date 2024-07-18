@@ -1,31 +1,23 @@
 //! Generation of rendering shaders.
 
-mod ambient_occlusion;
 mod blinn_phong;
 mod fixed;
-mod gaussian_blur;
 mod microfacet;
-mod passthrough;
 mod prepass;
 mod skybox;
-mod tone_mapping;
 mod vertex_color;
 
-pub use ambient_occlusion::{AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput};
 pub use blinn_phong::BlinnPhongTextureShaderInput;
 pub use fixed::{FixedColorFeatureShaderInput, FixedTextureShaderInput};
-pub use gaussian_blur::GaussianBlurShaderInput;
 pub use microfacet::{
     DiffuseMicrofacetShadingModel, MicrofacetShadingModel, MicrofacetTextureShaderInput,
     SpecularMicrofacetShadingModel,
 };
-pub use passthrough::PassthroughShaderInput;
 pub use prepass::{
     BumpMappingTextureShaderInput, NormalMappingShaderInput, ParallaxMappingShaderInput,
     PrepassTextureShaderInput,
 };
 pub use skybox::SkyboxShaderInput;
-pub use tone_mapping::ToneMappingShaderInput;
 
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, generate_input_argument,
@@ -47,14 +39,12 @@ use crate::{
         VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
     },
 };
-use ambient_occlusion::AmbientOcclusionShaderGenerator;
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use blinn_phong::{BlinnPhongShaderGenerator, BlinnPhongVertexOutputFieldIndices};
 use fixed::{
     FixedColorShaderGenerator, FixedColorVertexOutputFieldIdx, FixedTextureShaderGenerator,
 };
-use gaussian_blur::GaussianBlurShaderGenerator;
 use lazy_static::lazy_static;
 use microfacet::{MicrofacetShaderGenerator, MicrofacetVertexOutputFieldIndices};
 use naga::{
@@ -62,11 +52,9 @@ use naga::{
     GlobalVariable, Handle, Literal, Module, ResourceBinding, ShaderStage, StructMember,
     SwizzleComponent, Type, TypeInner, UnaryOperator, VectorSize,
 };
-use passthrough::PassthroughShaderGenerator;
 use prepass::{PrepassShaderGenerator, PrepassVertexOutputFieldIndices};
 use skybox::{SkyboxShaderGenerator, SkyboxVertexOutputFieldIndices};
 use std::{borrow::Cow, num::NonZeroU32};
-use tone_mapping::ToneMappingShaderGenerator;
 use vertex_color::VertexColorShaderGenerator;
 
 /// Generator for shader programs.
@@ -134,10 +122,6 @@ pub enum MaterialShaderInput {
     Microfacet((MicrofacetShadingModel, MicrofacetTextureShaderInput)),
     Prepass(PrepassTextureShaderInput),
     Skybox(SkyboxShaderInput),
-    Passthrough(PassthroughShaderInput),
-    AmbientOcclusion(AmbientOcclusionShaderInput),
-    GaussianBlur(GaussianBlurShaderInput),
-    ToneMapping(ToneMappingShaderInput),
 }
 
 /// Input description specifying the vertex attribute locations of the
@@ -207,10 +191,6 @@ enum MaterialShaderGenerator<'a> {
     Microfacet(MicrofacetShaderGenerator<'a>),
     Prepass(PrepassShaderGenerator<'a>),
     Skybox(SkyboxShaderGenerator<'a>),
-    Passthrough(PassthroughShaderGenerator<'a>),
-    AmbientOcclusion(AmbientOcclusionShaderGenerator<'a>),
-    GaussianBlur(GaussianBlurShaderGenerator<'a>),
-    ToneMapping(ToneMappingShaderGenerator<'a>),
 }
 
 bitflags! {
@@ -389,9 +369,6 @@ lazy_static! {
         include_str!("../../../shader/rendering/normal_map.wgsl"),
         include_str!("../../../shader/rendering/blinn_phong.wgsl"),
         include_str!("../../../shader/rendering/microfacet.wgsl"),
-        include_str!("../../../shader/rendering/ambient_occlusion.wgsl"),
-        include_str!("../../../shader/rendering/gaussian_blur.wgsl"),
-        include_str!("../../../shader/rendering/tone_mapping.wgsl")
     ))
     .unwrap_or_else(|err| panic!(
         "Error when including rendering shader source library: {}",
@@ -460,9 +437,10 @@ impl RenderShaderGenerator {
         // 1. Camera.
         // 2. Lights.
         // 3. Shadow map textures.
-        // 4. Fixed material resources.
-        // 5. Render attachment textures.
-        // 6. Material property textures.
+        // 4. Material-specific resources.
+        // 5. Material property textures.
+        // 6. Render attachment textures.
+        // 7. Generic GPU resource group.
         let mut bind_group_idx = 0;
 
         let camera_projection = camera_shader_input.map(|camera_shader_input| {
@@ -559,7 +537,6 @@ impl RenderShaderGenerator {
                 input_render_attachment_quantities,
                 output_render_attachment_quantities,
                 &push_constant_fragment_expressions,
-                camera_projection.as_ref(),
                 &fragment_input_struct,
                 &mesh_vertex_output_field_indices,
                 light_vertex_output_field_indices.as_ref(),
@@ -708,20 +685,6 @@ impl RenderShaderGenerator {
             }
             (None, None, Some(MaterialShaderInput::Skybox(input))) => Some(
                 MaterialShaderGenerator::Skybox(SkyboxShaderGenerator::new(input)),
-            ),
-            (None, None, Some(MaterialShaderInput::Passthrough(input))) => Some(
-                MaterialShaderGenerator::Passthrough(PassthroughShaderGenerator::new(input)),
-            ),
-            (None, None, Some(MaterialShaderInput::AmbientOcclusion(input))) => {
-                Some(MaterialShaderGenerator::AmbientOcclusion(
-                    AmbientOcclusionShaderGenerator::new(input),
-                ))
-            }
-            (None, None, Some(MaterialShaderInput::GaussianBlur(input))) => Some(
-                MaterialShaderGenerator::GaussianBlur(GaussianBlurShaderGenerator::new(input)),
-            ),
-            (None, None, Some(MaterialShaderInput::ToneMapping(input))) => Some(
-                MaterialShaderGenerator::ToneMapping(ToneMappingShaderGenerator::new(input)),
             ),
             input => {
                 return Err(anyhow!(
@@ -1719,10 +1682,6 @@ impl<'a> MaterialShaderGenerator<'a> {
     pub fn tricks(&self) -> RenderShaderTricks {
         match self {
             Self::Skybox(_) => SkyboxShaderGenerator::TRICKS,
-            Self::Passthrough(_) => PassthroughShaderGenerator::TRICKS,
-            Self::AmbientOcclusion(_) => AmbientOcclusionShaderGenerator::TRICKS,
-            Self::GaussianBlur(_) => GaussianBlurShaderGenerator::TRICKS,
-            Self::ToneMapping(_) => ToneMappingShaderGenerator::TRICKS,
             _ => RenderShaderTricks::empty(),
         }
     }
@@ -1804,7 +1763,6 @@ impl<'a> MaterialShaderGenerator<'a> {
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         push_constant_fragment_expressions: &PushConstantExpressions,
-        camera_projection: Option<&CameraProjectionVariable>,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
@@ -1897,51 +1855,6 @@ impl<'a> MaterialShaderGenerator<'a> {
                     push_constant_fragment_expressions,
                     fragment_input_struct,
                     material_input_field_indices,
-                );
-            }
-            (Self::Passthrough(generator), MaterialVertexOutputFieldIndices::None) => {
-                generator.generate_fragment_code(
-                    module,
-                    source_code_lib,
-                    fragment_function,
-                    bind_group_idx,
-                    push_constant_fragment_expressions,
-                    fragment_input_struct,
-                    mesh_input_field_indices,
-                );
-            }
-            (Self::AmbientOcclusion(generator), MaterialVertexOutputFieldIndices::None) => {
-                generator.generate_fragment_code(
-                    module,
-                    source_code_lib,
-                    fragment_function,
-                    bind_group_idx,
-                    push_constant_fragment_expressions,
-                    camera_projection,
-                    fragment_input_struct,
-                    mesh_input_field_indices,
-                );
-            }
-            (Self::GaussianBlur(generator), MaterialVertexOutputFieldIndices::None) => {
-                generator.generate_fragment_code(
-                    module,
-                    source_code_lib,
-                    fragment_function,
-                    bind_group_idx,
-                    push_constant_fragment_expressions,
-                    fragment_input_struct,
-                    mesh_input_field_indices,
-                );
-            }
-            (Self::ToneMapping(generator), MaterialVertexOutputFieldIndices::None) => {
-                generator.generate_fragment_code(
-                    module,
-                    source_code_lib,
-                    fragment_function,
-                    bind_group_idx,
-                    push_constant_fragment_expressions,
-                    fragment_input_struct,
-                    mesh_input_field_indices,
                 );
             }
             _ => panic!("Mismatched material shader builder and output field indices type"),
@@ -3303,16 +3216,11 @@ impl SampledTexture {
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-// #[cfg(not(miri))]
+#[cfg(not(miri))]
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
-    use crate::gpu::{
-        push_constant::PushConstant,
-        rendering::postprocessing::{
-            capturing::tone_mapping::ToneMapping, gaussian_blur::GaussianBlurDirection,
-        },
-    };
+    use crate::gpu::push_constant::PushConstant;
     use naga::{
         back::wgsl::{self as wgsl_out, WriterFlags},
         front::wgsl as wgsl_in,
@@ -5900,253 +5808,6 @@ mod test {
             ]
             .into_iter()
             .collect(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_passthrough_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::Passthrough(PassthroughShaderInput {
-                input_texture_and_sampler_bindings: (0, 1),
-            })),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_ambient_occlusion_computation_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::AmbientOcclusion(
-                AmbientOcclusionShaderInput::Calculation(AmbientOcclusionCalculationShaderInput {
-                    sample_uniform_binding: 0,
-                }),
-            )),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::OCCLUSION,
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_ambient_occlusion_application_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::AmbientOcclusion(
-                AmbientOcclusionShaderInput::Application,
-            )),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::POSITION
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
-                | RenderAttachmentQuantitySet::OCCLUSION,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_horizontal_gaussian_blur_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::GaussianBlur(
-                GaussianBlurShaderInput {
-                    direction: GaussianBlurDirection::Horizontal,
-                    sample_uniform_binding: 0,
-                    input_texture_and_sampler_bindings: (0, 1),
-                },
-            )),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::LUMINANCE,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_vertical_gaussian_blur_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::GaussianBlur(
-                GaussianBlurShaderInput {
-                    direction: GaussianBlurDirection::Vertical,
-                    sample_uniform_binding: 0,
-                    input_texture_and_sampler_bindings: (0, 1),
-                },
-            )),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::LUMINANCE,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_no_tone_mapping_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
-                mapping: ToneMapping::None,
-                input_texture_and_sampler_bindings: (0, 1),
-            })),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::LUMINANCE,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_aces_tone_mapping_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
-                mapping: ToneMapping::ACES,
-                input_texture_and_sampler_bindings: (0, 1),
-            })),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::LUMINANCE,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_khronos_pbr_neutral_tone_mapping_shader_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            None,
-            Some(&MINIMAL_MESH_INPUT),
-            None,
-            &[],
-            Some(&MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
-                mapping: ToneMapping::KhronosPBRNeutral,
-                input_texture_and_sampler_bindings: (0, 1),
-            })),
-            VertexAttributeSet::empty(),
-            RenderAttachmentQuantitySet::LUMINANCE,
-            RenderAttachmentQuantitySet::empty(),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
         )
         .unwrap();
 

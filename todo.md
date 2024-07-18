@@ -2,10 +2,6 @@
 
 ## Features
 
-- Try moving post-processing shaders to templates.
-
-  - Add import functionality to templating system if deemed useful.
-
 - Change to "global" bloom: https://learnopengl.com/Guest-Articles/2022/Phys.-Based-Bloom.
 
 - Generalize tone mapping pass to dynamic range compression pass and include high-quality gamma correction.

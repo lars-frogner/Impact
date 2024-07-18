@@ -6,15 +6,16 @@ use crate::{
     camera::buffer::CameraGPUBufferManager,
     geometry::CubemapFace,
     gpu::{
-        compute::{GPUComputationID, GPUComputationSpecification},
+        compute::{ComputePassRecorder, ComputePassSpecification},
         push_constant::{PushConstant, PushConstantGroup, PushConstantVariant},
         rendering::{
             postprocessing::Postprocessor, resource::SynchronizedRenderResources,
-            surface::RenderingSurface, GPUComputationLibrary, RenderingConfig,
+            surface::RenderingSurface, RenderingConfig,
         },
+        resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
         shader::{
             CameraShaderInput, InstanceFeatureShaderInput, LightShaderInput, MaterialShaderInput,
-            MeshShaderInput, Shader, ShaderManager,
+            MeshShaderInput, Shader, ShaderID, ShaderManager,
         },
         storage::{StorageBufferID, StorageGPUBufferManager},
         texture::{
@@ -77,6 +78,10 @@ pub struct RenderPassSpecification {
     /// If present, use this material rather than a material associated with a
     /// model.
     pub explicit_material_id: Option<MaterialID>,
+    /// If present, bind this GPU resource group for the pass.
+    pub resource_group_id: Option<GPUResourceGroupID>,
+    /// If present, using this shader for the pass rather than generating one.
+    pub explicit_shader_id: Option<ShaderID>,
     /// Whether to use the prepass material associated with the model's material
     /// rather than using the model's material.
     pub use_prepass_material: bool,
@@ -106,13 +111,6 @@ pub struct RenderPassSpecification {
     pub label: String,
 }
 
-/// Holds the information describing a specific compute pass.
-#[derive(Clone, Debug)]
-pub struct ComputePassSpecification {
-    pub computation_id: GPUComputationID,
-    pub label: String,
-}
-
 /// Holds the information describing a specific render command.
 #[derive(Clone, Debug)]
 pub enum RenderCommandSpecification {
@@ -128,14 +126,6 @@ pub struct RenderPassRecorder {
     specification: RenderPassSpecification,
     attachments_to_resolve: RenderAttachmentQuantitySet,
     pipeline: Option<wgpu::RenderPipeline>,
-    state: RenderCommandState,
-}
-
-/// Recorder for a specific compute pass.
-#[derive(Debug)]
-pub struct ComputePassRecorder {
-    specification: ComputePassSpecification,
-    pipeline: wgpu::ComputePipeline,
     state: RenderCommandState,
 }
 
@@ -358,7 +348,7 @@ impl RenderCommandManager {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
-        gpu_computation_library: &GPUComputationLibrary,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         postprocessor: &Postprocessor,
     ) -> Result<()> {
@@ -463,6 +453,7 @@ impl RenderCommandManager {
                                         material_library,
                                         render_resources,
                                         render_attachment_texture_manager,
+                                        gpu_resource_group_manager,
                                         shader_manager,
                                         RenderPassSpecification::shading_prepass(
                                             None,
@@ -500,6 +491,7 @@ impl RenderCommandManager {
                                             material_library,
                                             render_resources,
                                             render_attachment_texture_manager,
+                                            gpu_resource_group_manager,
                                             shader_manager,
                                             RenderPassSpecification::shading_prepass(
                                                 Some(light),
@@ -522,6 +514,7 @@ impl RenderCommandManager {
                                     material_library,
                                     render_resources,
                                     render_attachment_texture_manager,
+                                    gpu_resource_group_manager,
                                     shader_manager,
                                     RenderPassSpecification::depth_prepass(model_id, hints),
                                     RenderCommandState::disabled_if(
@@ -562,6 +555,7 @@ impl RenderCommandManager {
                                                 material_library,
                                                 render_resources,
                                                 render_attachment_texture_manager,
+                                                gpu_resource_group_manager,
                                                 shader_manager,
                                                 RenderPassSpecification::shadow_map_clearing_pass(
                                                     ShadowMapIdentifier::ForOmnidirectionalLight(
@@ -601,6 +595,7 @@ impl RenderCommandManager {
                                         material_library,
                                         render_resources,
                                         render_attachment_texture_manager,
+                                        gpu_resource_group_manager,
                                         shader_manager,
                                         RenderPassSpecification::shadow_map_update_pass(
                                             light,
@@ -627,6 +622,7 @@ impl RenderCommandManager {
                                     material_library,
                                     render_resources,
                                     render_attachment_texture_manager,
+                                    gpu_resource_group_manager,
                                     shader_manager,
                                     RenderPassSpecification::model_shading_pass_with_shadow_map(
                                         light,
@@ -667,6 +663,7 @@ impl RenderCommandManager {
                                                 material_library,
                                                 render_resources,
                                                 render_attachment_texture_manager,
+                                                gpu_resource_group_manager,
                                                 shader_manager,
                                                 RenderPassSpecification::shadow_map_clearing_pass(
                                                     ShadowMapIdentifier::ForUnidirectionalLight(
@@ -708,6 +705,7 @@ impl RenderCommandManager {
                                         material_library,
                                         render_resources,
                                         render_attachment_texture_manager,
+                                        gpu_resource_group_manager,
                                         shader_manager,
                                         RenderPassSpecification::shadow_map_update_pass(
                                             light,
@@ -736,6 +734,7 @@ impl RenderCommandManager {
                                     material_library,
                                     render_resources,
                                     render_attachment_texture_manager,
+                                    gpu_resource_group_manager,
                                     shader_manager,
                                     RenderPassSpecification::model_shading_pass_with_shadow_map(
                                         light,
@@ -818,6 +817,7 @@ impl RenderCommandManager {
                                 material_library,
                                 render_resources,
                                 render_attachment_texture_manager,
+                                gpu_resource_group_manager,
                                 shader_manager,
                                 RenderPassSpecification::depth_prepass(model_id, hints),
                                 RenderCommandState::disabled_if(
@@ -836,6 +836,7 @@ impl RenderCommandManager {
                                 material_library,
                                 render_resources,
                                 render_attachment_texture_manager,
+                                gpu_resource_group_manager,
                                 shader_manager,
                                 RenderPassSpecification::model_shading_pass_without_shadow_map(
                                     None,
@@ -874,7 +875,7 @@ impl RenderCommandManager {
                     material_library,
                     render_resources,
                     render_attachment_texture_manager,
-                    gpu_computation_library,
+                    gpu_resource_group_manager,
                     shader_manager,
                     specification,
                     state,
@@ -1466,13 +1467,15 @@ impl RenderPassSpecification {
     /// 2. Lights.
     /// 3. Shadow map textures.
     /// 4. Material-specific resources.
-    /// 5. Render attachment textures.
-    /// 6. Material property textures.
+    /// 5. Material property textures.
+    /// 6. Render attachment textures.
+    /// 7. Generic GPU resource group.
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
         material_library: &'a MaterialLibrary,
         render_resources: &'a SynchronizedRenderResources,
         render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &'a GPUResourceGroupManager,
     ) -> Result<(
         Vec<&'a wgpu::BindGroupLayout>,
         BindGroupRenderingShaderInput<'a>,
@@ -1521,15 +1524,6 @@ impl RenderPassSpecification {
                 layouts.push(material_specific_resources.bind_group_layout());
             }
 
-            if !self.input_render_attachment_quantities.is_empty() {
-                layouts.extend(
-                    render_attachment_texture_manager
-                        .request_render_attachment_texture_bind_group_layouts(
-                            self.input_render_attachment_quantities,
-                        ),
-                );
-            }
-
             shader_input.material = Some(material_specification.shader_input());
         } else if let Some(model_id) = self.model_id {
             // We do not need a material if we are doing a pure depth prepass or
@@ -1554,15 +1548,6 @@ impl RenderPassSpecification {
                     layouts.push(material_specific_resources.bind_group_layout());
                 }
 
-                if !self.input_render_attachment_quantities.is_empty() {
-                    layouts.extend(
-                        render_attachment_texture_manager
-                            .request_render_attachment_texture_bind_group_layouts(
-                                self.input_render_attachment_quantities,
-                            ),
-                    );
-                }
-
                 shader_input.material = Some(material_specification.shader_input());
 
                 if let Some(texture_group_id) = material_handle.material_property_texture_group_id()
@@ -1578,28 +1563,44 @@ impl RenderPassSpecification {
             }
         }
 
+        if !self.input_render_attachment_quantities.is_empty() {
+            layouts.extend(
+                render_attachment_texture_manager
+                    .request_render_attachment_texture_bind_group_layouts(
+                        self.input_render_attachment_quantities,
+                    ),
+            );
+        }
+
+        if let Some(resource_group_id) = self.resource_group_id {
+            let resource_group = gpu_resource_group_manager
+                .get_resource_group(resource_group_id)
+                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
+
+            layouts.push(resource_group.bind_group_layout());
+        }
+
         Ok((layouts, shader_input))
     }
 
-    /// Obtains all bind groups involved in the render pass as well as the
-    /// output render attachment quantities of the material.
+    /// Obtains all bind groups involved in the render pass.
     ///
     /// The order of the bind groups is:
     /// 1. Camera.
     /// 2. Lights.
     /// 3. Shadow map textures.
     /// 4. Material-specific resources.
-    /// 5. Render attachment textures.
-    /// 6. Material property textures.
-    fn get_bind_groups_and_material_data<'a>(
+    /// 5. Material property textures.
+    /// 6. Render attachment textures.
+    /// 7. Generic GPU resource group.
+    fn get_bind_groups<'a>(
         &self,
         material_library: &'a MaterialLibrary,
         render_resources: &'a SynchronizedRenderResources,
         render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
-    ) -> Result<(Vec<&'a wgpu::BindGroup>, RenderAttachmentQuantitySet)> {
+        gpu_resource_group_manager: &'a GPUResourceGroupManager,
+    ) -> Result<Vec<&'a wgpu::BindGroup>> {
         let mut bind_groups = Vec::with_capacity(8);
-
-        let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
 
         // We do not need a camera if we are updating shadow map
         if !self.shadow_map_usage.is_update() && !self.hints.contains(RenderPassHints::NO_CAMERA) {
@@ -1633,21 +1634,6 @@ impl RenderPassSpecification {
             {
                 bind_groups.push(material_specific_resources.bind_group());
             }
-
-            let input_render_attachment_quantities =
-                material_specification.input_render_attachment_quantities();
-
-            output_render_attachment_quantities =
-                material_specification.output_render_attachment_quantities();
-
-            if !input_render_attachment_quantities.is_empty() {
-                bind_groups.extend(
-                    render_attachment_texture_manager
-                        .request_render_attachment_texture_bind_groups(
-                            input_render_attachment_quantities,
-                        ),
-                );
-            }
         } else if let Some(model_id) = self.model_id {
             // We do not need a material if we are doing a pure depth prepass or
             // updating a shadow map
@@ -1671,21 +1657,6 @@ impl RenderPassSpecification {
                     bind_groups.push(material_specific_resources.bind_group());
                 }
 
-                let input_render_attachment_quantities =
-                    material_specification.input_render_attachment_quantities();
-
-                output_render_attachment_quantities =
-                    material_specification.output_render_attachment_quantities();
-
-                if !input_render_attachment_quantities.is_empty() {
-                    bind_groups.extend(
-                        render_attachment_texture_manager
-                            .request_render_attachment_texture_bind_groups(
-                                input_render_attachment_quantities,
-                            ),
-                    );
-                }
-
                 if let Some(texture_group_id) = material_handle.material_property_texture_group_id()
                 {
                     let material_property_texture_group =
@@ -1699,7 +1670,23 @@ impl RenderPassSpecification {
             }
         }
 
-        Ok((bind_groups, output_render_attachment_quantities))
+        if !self.input_render_attachment_quantities.is_empty() {
+            bind_groups.extend(
+                render_attachment_texture_manager.request_render_attachment_texture_bind_groups(
+                    self.input_render_attachment_quantities,
+                ),
+            );
+        }
+
+        if let Some(resource_group_id) = self.resource_group_id {
+            let resource_group = gpu_resource_group_manager
+                .get_resource_group(resource_group_id)
+                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
+
+            bind_groups.push(resource_group.bind_group());
+        }
+
+        Ok(bind_groups)
     }
 
     /// Obtains a view into the shadow map texture involved in the render pass.
@@ -2052,22 +2039,6 @@ impl RenderPassSpecification {
     }
 }
 
-impl ComputePassSpecification {
-    fn get_computation_specification<'a>(
-        &self,
-        gpu_computation_library: &'a GPUComputationLibrary,
-    ) -> Result<&'a GPUComputationSpecification> {
-        gpu_computation_library
-            .get_computation_specification(self.computation_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Missing specification for GPU computation {}",
-                    self.computation_id
-                )
-            })
-    }
-}
-
 impl Default for RenderPassSpecification {
     fn default() -> Self {
         Self {
@@ -2076,6 +2047,8 @@ impl Default for RenderPassSpecification {
             model_id: None,
             explicit_mesh_id: None,
             explicit_material_id: None,
+            resource_group_id: None,
+            explicit_shader_id: None,
             use_prepass_material: false,
             depth_map_usage: DepthMapUsage::None,
             light: None,
@@ -2105,6 +2078,7 @@ impl RenderPassRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
         state: RenderCommandState,
@@ -2118,6 +2092,7 @@ impl RenderPassRecorder {
                     material_library,
                     render_resources,
                     render_attachment_texture_manager,
+                    gpu_resource_group_manager,
                 )?;
 
             let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
@@ -2125,18 +2100,30 @@ impl RenderPassRecorder {
 
             let push_constant_ranges = specification.push_constants.create_ranges();
 
-            let shader = shader_manager.obtain_rendering_shader(
-                graphics_device,
-                bind_group_shader_input.camera,
-                mesh_shader_input,
-                bind_group_shader_input.light,
-                &instance_feature_shader_inputs,
-                bind_group_shader_input.material,
-                specification.vertex_attribute_requirements,
-                specification.input_render_attachment_quantities,
-                specification.output_render_attachment_quantities,
-                specification.push_constants.clone(),
-            )?;
+            let shader = if let Some(shader_id) = &specification.explicit_shader_id {
+                shader_manager
+                    .rendering_shaders
+                    .get(shader_id)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Missing explicit shader for render pass: {}",
+                            specification.label
+                        )
+                    })?
+            } else {
+                shader_manager.obtain_rendering_shader(
+                    graphics_device,
+                    bind_group_shader_input.camera,
+                    mesh_shader_input,
+                    bind_group_shader_input.light,
+                    &instance_feature_shader_inputs,
+                    bind_group_shader_input.material,
+                    specification.vertex_attribute_requirements,
+                    specification.input_render_attachment_quantities,
+                    specification.output_render_attachment_quantities,
+                    specification.push_constants.clone(),
+                )?
+            };
 
             let pipeline_layout = Self::create_pipeline_layout(
                 graphics_device.device(),
@@ -2212,6 +2199,7 @@ impl RenderPassRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
@@ -2224,12 +2212,12 @@ impl RenderPassRecorder {
 
         // Make sure all data is available before doing anything else
 
-        let (bind_groups, output_render_attachment_quantities) =
-            self.specification.get_bind_groups_and_material_data(
-                material_library,
-                render_resources,
-                render_attachment_texture_manager,
-            )?;
+        let bind_groups = self.specification.get_bind_groups(
+            material_library,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+        )?;
 
         let mesh_buffer_manager = if let Some(mesh_id) =
             self.specification.explicit_mesh_id.or_else(|| {
@@ -2262,7 +2250,7 @@ impl RenderPassRecorder {
         let color_attachments = self.specification.create_color_attachments(
             surface_texture_view,
             render_attachment_texture_manager,
-            output_render_attachment_quantities,
+            self.specification.output_render_attachment_quantities,
             self.attachments_to_resolve,
         );
 
@@ -2544,191 +2532,6 @@ impl RenderPassRecorder {
     }
 }
 
-impl ComputePassRecorder {
-    /// Creates a new recorder for the compute pass defined by the given
-    /// specification.
-    ///
-    /// Shader inputs extracted from the specification are used to build or
-    /// fetch the appropriate shader.
-    pub fn new(
-        _config: &RenderingConfig,
-        graphics_device: &GraphicsDevice,
-        gpu_computation_library: &GPUComputationLibrary,
-        shader_manager: &mut ShaderManager,
-        specification: ComputePassSpecification,
-        state: RenderCommandState,
-    ) -> Result<Self> {
-        let computation_specification =
-            specification.get_computation_specification(gpu_computation_library)?;
-
-        let bind_group_layouts = computation_specification
-            .resources()
-            .map(|resources| vec![resources.bind_group_layout()])
-            .unwrap_or_default();
-
-        let push_constant_ranges = computation_specification.push_constants().create_ranges();
-
-        let shader = shader_manager
-            .compute_shaders
-            .get(&computation_specification.shader_id())
-            .ok_or_else(|| {
-                anyhow!(
-                    "Missing compute shader for GPU computation: {}",
-                    specification.computation_id
-                )
-            })?;
-
-        let pipeline_layout = Self::create_pipeline_layout(
-            graphics_device.device(),
-            &bind_group_layouts,
-            &push_constant_ranges,
-            &format!("{} compute pipeline layout", &specification.label),
-        );
-
-        let pipeline = Self::create_pipeline(
-            graphics_device.device(),
-            &pipeline_layout,
-            shader,
-            &format!("{} compute pipeline", &specification.label),
-        );
-
-        Ok(Self {
-            specification,
-            pipeline,
-            state,
-        })
-    }
-
-    /// Records the compute pass to the given command encoder.
-    ///
-    /// # Errors
-    /// Returns an error if any of the resources used in this compute pass are
-    /// no longer available.
-    pub fn record_pass(
-        &self,
-        rendering_surface: &RenderingSurface,
-        gpu_computation_library: &GPUComputationLibrary,
-        postprocessor: &Postprocessor,
-        command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
-        if self.state().is_disabled() {
-            log::debug!("Skipping compute pass: {}", &self.specification.label);
-            return Ok(RenderCommandOutcome::Skipped);
-        }
-
-        log::debug!("Recording compute pass: {}", &self.specification.label);
-
-        let computation_specification = self
-            .specification
-            .get_computation_specification(gpu_computation_library)?;
-
-        let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            timestamp_writes: None,
-            label: Some(&self.specification.label),
-        });
-
-        compute_pass.set_pipeline(&self.pipeline);
-
-        Self::set_push_constants(
-            computation_specification.push_constants(),
-            &mut compute_pass,
-            rendering_surface,
-            postprocessor,
-        );
-
-        if let Some(resources) = computation_specification.resources() {
-            compute_pass.set_bind_group(0, resources.bind_group(), &[]);
-        }
-
-        let &[x, y, z] = computation_specification.workgroup_counts();
-        compute_pass.dispatch_workgroups(x, y, z);
-
-        Ok(RenderCommandOutcome::Recorded)
-    }
-
-    /// Returns the state of the compute pass.
-    pub fn state(&self) -> RenderCommandState {
-        self.state
-    }
-
-    /// Sets the state of the compute pass.
-    pub fn set_state(&mut self, state: RenderCommandState) {
-        self.state = state;
-    }
-
-    /// Set whether the compute pass should be skipped.
-    pub fn set_disabled(&mut self, disabled: bool) {
-        self.state = RenderCommandState::disabled_if(disabled);
-    }
-
-    fn set_push_constants(
-        push_constants: &PushConstantGroup,
-        compute_pass: &mut wgpu::ComputePass<'_>,
-        rendering_surface: &RenderingSurface,
-        postprocessor: &Postprocessor,
-    ) {
-        push_constants.set_push_constant_for_compute_pass_if_present(
-            compute_pass,
-            PushConstantVariant::InverseWindowDimensions,
-            || rendering_surface.get_inverse_window_dimensions_push_constant(),
-        );
-
-        push_constants.set_push_constant_for_compute_pass_if_present(
-            compute_pass,
-            PushConstantVariant::PixelCount,
-            || rendering_surface.get_pixel_count_push_constant(),
-        );
-
-        push_constants.set_push_constant_for_compute_pass_if_present(
-            compute_pass,
-            PushConstantVariant::Exposure,
-            || {
-                postprocessor
-                    .capturing_camera()
-                    .get_exposure_push_constant()
-            },
-        );
-
-        push_constants.set_push_constant_for_compute_pass_if_present(
-            compute_pass,
-            PushConstantVariant::InverseExposure,
-            || {
-                postprocessor
-                    .capturing_camera()
-                    .get_inverse_exposure_push_constant()
-            },
-        );
-    }
-
-    fn create_pipeline_layout(
-        device: &wgpu::Device,
-        bind_group_layouts: &[&wgpu::BindGroupLayout],
-        push_constant_ranges: &[wgpu::PushConstantRange],
-        label: &str,
-    ) -> wgpu::PipelineLayout {
-        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts,
-            push_constant_ranges,
-            label: Some(label),
-        })
-    }
-
-    fn create_pipeline(
-        device: &wgpu::Device,
-        layout: &wgpu::PipelineLayout,
-        shader: &Shader,
-        label: &str,
-    ) -> wgpu::ComputePipeline {
-        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            layout: Some(layout),
-            module: shader.compute_module(),
-            entry_point: shader.compute_entry_point_name().unwrap(),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            label: Some(label),
-        })
-    }
-}
-
 impl RenderAttachmentMipmappingPassRecorder {
     /// Creates a new mipmapping pass recorder for the render attachment for the
     /// given quantity.
@@ -2850,7 +2653,7 @@ impl RenderCommandRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
-        gpu_computation_library: &GPUComputationLibrary,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         specification: RenderCommandSpecification,
         state: RenderCommandState,
@@ -2863,15 +2666,15 @@ impl RenderCommandRecorder {
                 material_library,
                 render_resources,
                 render_attachment_texture_manager,
+                gpu_resource_group_manager,
                 shader_manager,
                 specification,
                 state,
             ),
             RenderCommandSpecification::ComputePass(specification) => Self::new_compute_pass(
-                config,
                 graphics_device,
-                gpu_computation_library,
                 shader_manager,
+                gpu_resource_group_manager,
                 specification,
                 state,
             ),
@@ -2896,6 +2699,7 @@ impl RenderCommandRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
         state: RenderCommandState,
@@ -2907,6 +2711,7 @@ impl RenderCommandRecorder {
             material_library,
             render_resources,
             render_attachment_texture_manager,
+            gpu_resource_group_manager,
             shader_manager,
             specification,
             state,
@@ -2929,18 +2734,16 @@ impl RenderCommandRecorder {
     /// Shader inputs extracted from the specification are used to build or
     /// fetch the appropriate shader.
     pub fn new_compute_pass(
-        config: &RenderingConfig,
         graphics_device: &GraphicsDevice,
-        gpu_computation_library: &GPUComputationLibrary,
-        shader_manager: &mut ShaderManager,
+        shader_manager: &ShaderManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         specification: ComputePassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
         Ok(Self::ComputePass(ComputePassRecorder::new(
-            config,
             graphics_device,
-            gpu_computation_library,
             shader_manager,
+            gpu_resource_group_manager,
             specification,
             state,
         )?))
@@ -2987,9 +2790,9 @@ impl RenderCommandRecorder {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
-        postprocessor: &Postprocessor,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
-        gpu_computation_library: &GPUComputationLibrary,
+        postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
         match self {
@@ -2999,12 +2802,13 @@ impl RenderCommandRecorder {
                 material_library,
                 render_resources,
                 render_attachment_texture_manager,
+                gpu_resource_group_manager,
                 postprocessor,
                 command_encoder,
             ),
             Self::ComputePass(recorder) => recorder.record_pass(
                 rendering_surface,
-                gpu_computation_library,
+                gpu_resource_group_manager,
                 postprocessor,
                 command_encoder,
             ),

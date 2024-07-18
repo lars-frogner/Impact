@@ -4,19 +4,16 @@ pub mod average_luminance;
 pub mod bloom;
 pub mod tone_mapping;
 
-use crate::{
-    gpu::{
-        compute::GPUComputationLibrary,
-        rendering::{
-            fre,
-            render_command::{RenderCommandSpecification, RenderCommandState},
-        },
-        shader::ShaderManager,
-        storage::StorageGPUBufferManager,
-        texture::attachment::RenderAttachmentTextureManager,
-        GraphicsDevice,
+use crate::gpu::{
+    rendering::{
+        fre,
+        render_command::{RenderCommandSpecification, RenderCommandState},
     },
-    material::MaterialLibrary,
+    resource_group::GPUResourceGroupManager,
+    shader::ShaderManager,
+    storage::StorageGPUBufferManager,
+    texture::attachment::RenderAttachmentTextureManager,
+    GraphicsDevice,
 };
 use anyhow::Result;
 use average_luminance::AverageLuminanceComputationConfig;
@@ -177,20 +174,20 @@ impl CapturingCamera {
     pub const EXPOSURE_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<fre>() as u32;
     pub const INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<fre>() as u32;
 
-    /// Creates a new capturing camera along with the required materials,
-    /// computations and render commands according to the given configuration.
+    /// Creates a new capturing camera along with the required ender commands
+    /// according to the given configuration.
     pub(super) fn new(
         graphics_device: &GraphicsDevice,
-        material_library: &mut MaterialLibrary,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-        gpu_computation_library: &mut GPUComputationLibrary,
         config: &CapturingCameraConfig,
     ) -> Self {
-        let bloom_commands = bloom::setup_bloom_materials_and_render_commands(
+        let bloom_commands = bloom::create_bloom_render_commands(
             graphics_device,
-            material_library,
+            shader_manager,
+            gpu_resource_group_manager,
             &config.bloom,
         );
 
@@ -199,13 +196,13 @@ impl CapturingCamera {
                 graphics_device,
                 shader_manager,
                 render_attachment_texture_manager,
+                gpu_resource_group_manager,
                 storage_gpu_buffer_manager,
-                gpu_computation_library,
                 &config.average_luminance_computation,
             );
 
         let tone_mapping_commands =
-            tone_mapping::setup_tone_mapping_materials_and_render_commands(material_library);
+            tone_mapping::create_tone_mapping_render_commands(graphics_device, shader_manager);
 
         let settings = config.initial_settings.clone();
 
@@ -285,16 +282,16 @@ impl CapturingCamera {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-        gpu_computation_library: &mut GPUComputationLibrary,
     ) {
         self.average_luminance_commands[0] =
-            average_luminance::setup_luminance_histogram_computation_and_compute_pass(
+            average_luminance::create_luminance_histogram_compute_pass(
                 graphics_device,
                 shader_manager,
                 render_attachment_texture_manager,
+                gpu_resource_group_manager,
                 storage_gpu_buffer_manager,
-                gpu_computation_library,
                 &self.average_luminance_computation_config.luminance_bounds,
                 true,
             );

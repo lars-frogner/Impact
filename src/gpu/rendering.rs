@@ -10,7 +10,7 @@ pub mod tasks;
 use crate::{
     geometry::CubemapFace,
     gpu::{
-        compute::GPUComputationLibrary,
+        resource_group::GPUResourceGroupManager,
         shader::ShaderManager,
         storage::StorageGPUBufferManager,
         texture::{
@@ -61,9 +61,9 @@ pub struct RenderingSystem {
     render_resource_manager: RwLock<RenderResourceManager>,
     render_command_manager: RwLock<RenderCommandManager>,
     render_attachment_texture_manager: RenderAttachmentTextureManager,
-    postprocessor: RwLock<Postprocessor>,
+    gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
-    gpu_computation_library: RwLock<GPUComputationLibrary>,
+    postprocessor: RwLock<Postprocessor>,
 }
 
 /// Global rendering configuration options.
@@ -105,7 +105,6 @@ impl RenderingSystem {
         config: RenderingConfig,
         graphics_device: Arc<GraphicsDevice>,
         rendering_surface: RenderingSurface,
-        material_library: &mut MaterialLibrary,
     ) -> Result<Self> {
         let mipmapper_generator = Arc::new(MipmapperGenerator::new(
             &graphics_device,
@@ -121,17 +120,16 @@ impl RenderingSystem {
             config.multisampling_sample_count,
         );
 
-        let mut storage_gpu_buffer_manager = StorageGPUBufferManager::new();
+        let mut gpu_resource_group_manager = GPUResourceGroupManager::new();
 
-        let mut gpu_computation_library = GPUComputationLibrary::new();
+        let mut storage_gpu_buffer_manager = StorageGPUBufferManager::new();
 
         let postprocessor = Postprocessor::new(
             &graphics_device,
-            material_library,
             &mut shader_manager,
             &render_attachment_texture_manager,
+            &mut gpu_resource_group_manager,
             &mut storage_gpu_buffer_manager,
-            &mut gpu_computation_library,
             &config.ambient_occlusion,
             &config.capturing_camera,
         );
@@ -145,9 +143,9 @@ impl RenderingSystem {
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(RenderCommandManager::new()),
             render_attachment_texture_manager,
-            postprocessor: RwLock::new(postprocessor),
+            gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
-            gpu_computation_library: RwLock::new(gpu_computation_library),
+            postprocessor: RwLock::new(postprocessor),
         })
     }
 
@@ -193,9 +191,10 @@ impl RenderingSystem {
         &self.render_attachment_texture_manager
     }
 
-    /// Returns a reference to the [`Postprocessor`], guarded by a [`RwLock`].
-    pub fn postprocessor(&self) -> &RwLock<Postprocessor> {
-        &self.postprocessor
+    /// Returns a reference to the [`GPUResourceGroupManager`], guarded by a
+    /// [`RwLock`].
+    pub fn gpu_resource_group_manager(&self) -> &RwLock<GPUResourceGroupManager> {
+        &self.gpu_resource_group_manager
     }
 
     /// Returns a reference to the [`StorageGPUBufferManager`], guarded by a
@@ -204,10 +203,9 @@ impl RenderingSystem {
         &self.storage_gpu_buffer_manager
     }
 
-    /// Returns a reference to the [`GPUComputationLibrary`], guarded by a
-    /// [`RwLock`].
-    pub fn gpu_computation_library(&self) -> &RwLock<GPUComputationLibrary> {
-        &self.gpu_computation_library
+    /// Returns a reference to the [`Postprocessor`], guarded by a [`RwLock`].
+    pub fn postprocessor(&self) -> &RwLock<Postprocessor> {
+        &self.postprocessor
     }
 
     /// Creates and presents a rendering using the current synchronized render
@@ -332,9 +330,9 @@ impl RenderingSystem {
                     material_library,
                     render_resources_guard.synchronized(),
                     &self.render_attachment_texture_manager,
-                    &self.postprocessor.read().unwrap(),
+                    &self.gpu_resource_group_manager.read().unwrap(),
                     &self.storage_gpu_buffer_manager.read().unwrap(),
-                    &self.gpu_computation_library.read().unwrap(),
+                    &self.postprocessor.read().unwrap(),
                     &mut command_encoder,
                 )?;
                 if outcome == RenderCommandOutcome::Recorded {
@@ -408,8 +406,8 @@ impl RenderingSystem {
                 &self.graphics_device,
                 &mut self.shader_manager.write().unwrap(),
                 &self.render_attachment_texture_manager,
+                &mut self.gpu_resource_group_manager.write().unwrap(),
                 &mut self.storage_gpu_buffer_manager.write().unwrap(),
-                &mut self.gpu_computation_library.write().unwrap(),
             );
 
         self.render_command_manager

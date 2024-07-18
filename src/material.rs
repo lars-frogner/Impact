@@ -10,10 +10,9 @@ use crate::{
     assets::{Assets, TextureID},
     gpu::{
         rendering::{fre, render_command::RenderPassHints},
+        resource_group::GPUResourceGroup,
         shader::MaterialShaderInput,
-        storage::StorageGPUBuffer,
         texture::attachment::RenderAttachmentQuantitySet,
-        uniform::SingleUniformGPUBuffer,
         GraphicsDevice,
     },
     mesh::VertexAttributeSet,
@@ -69,19 +68,10 @@ pub struct MaterialSpecification {
     vertex_attribute_requirements_for_shader: VertexAttributeSet,
     input_render_attachment_quantities: RenderAttachmentQuantitySet,
     output_render_attachment_quantities: RenderAttachmentQuantitySet,
-    material_specific_resources: Option<MaterialSpecificResourceGroup>,
+    material_specific_resources: Option<GPUResourceGroup>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     render_pass_hints: RenderPassHints,
     shader_input: MaterialShaderInput,
-}
-
-/// A group of render resources for a material type that are the same for all
-/// uses of the material.
-#[derive(Debug)]
-pub struct MaterialSpecificResourceGroup {
-    _single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
 }
 
 /// A group of textures used for textured material properties.
@@ -119,7 +109,7 @@ impl MaterialSpecification {
         vertex_attribute_requirements_for_shader: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
-        material_specific_resources: Option<MaterialSpecificResourceGroup>,
+        material_specific_resources: Option<GPUResourceGroup>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
         render_pass_hints: RenderPassHints,
         shader_input: MaterialShaderInput,
@@ -162,10 +152,10 @@ impl MaterialSpecification {
         self.output_render_attachment_quantities
     }
 
-    /// Returns a reference to the [`MaterialSpecificResourceGroup`] of the
-    /// material, or [`None`] if the material has no material-specific
-    /// resources.
-    pub fn material_specific_resources(&self) -> Option<&MaterialSpecificResourceGroup> {
+    /// Returns a reference to the [`GPUResourceGroup`] of material-specific
+    /// resources of the material, or [`None`] if the material has no
+    /// material-specific resources.
+    pub fn material_specific_resources(&self) -> Option<&GPUResourceGroup> {
         self.material_specific_resources.as_ref()
     }
 
@@ -183,71 +173,6 @@ impl MaterialSpecification {
     /// Returns the input required for using the material in a shader.
     pub fn shader_input(&self) -> &MaterialShaderInput {
         &self.shader_input
-    }
-}
-impl MaterialSpecificResourceGroup {
-    /// Gathers the given sets of uniform and storage buffers into a group of
-    /// material-specific resources used for all instances of a material.
-    ///
-    /// The resources will be gathered in a single bind group, and the binding
-    /// for each resource will correspond to what its index would have been in
-    /// the concatenated list of resources: `single_uniform_resources +
-    /// storage_resources`.
-    pub fn new(
-        graphics_device: &GraphicsDevice,
-        single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
-        storage_buffers: &[&StorageGPUBuffer],
-        label: &str,
-    ) -> Self {
-        let n_entries = single_uniform_buffers.len() + storage_buffers.len();
-        let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
-        let mut bind_group_entries = Vec::with_capacity(n_entries);
-        let mut binding = 0;
-
-        for buffer in &single_uniform_buffers {
-            bind_group_layout_entries.push(buffer.create_bind_group_layout_entry(binding));
-            bind_group_entries.push(buffer.create_bind_group_entry(binding));
-            binding += 1;
-        }
-
-        for buffer in storage_buffers {
-            bind_group_layout_entries
-                .push(buffer.create_bind_group_layout_entry(binding, wgpu::ShaderStages::COMPUTE));
-            bind_group_entries.push(buffer.create_bind_group_entry(binding));
-            binding += 1;
-        }
-
-        let bind_group_layout =
-            graphics_device
-                .device()
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &bind_group_layout_entries,
-                    label: Some(&format!("{} bind group layout", label)),
-                });
-
-        let bind_group = graphics_device
-            .device()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &bind_group_entries,
-                label: Some(&format!("{} bind group", label)),
-            });
-
-        Self {
-            _single_uniform_buffers: single_uniform_buffers,
-            bind_group_layout,
-            bind_group,
-        }
-    }
-
-    /// Returns a reference to the bind group layout for the compute resources.
-    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.bind_group_layout
-    }
-
-    /// Returns a reference to the bind group for the compute resources.
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
     }
 }
 

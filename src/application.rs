@@ -72,19 +72,18 @@ impl Application {
 
         let (graphics_device, rendering_surface) = gpu::initialize_for_rendering(&window)?;
 
-        let mut material_library = MaterialLibrary::new();
-
         let renderer = RenderingSystem::new(
             rendering_config,
             Arc::clone(&graphics_device),
             rendering_surface,
-            &mut material_library,
         )?;
 
         let assets = Assets::new_with_default_lookup_tables(
             Arc::clone(&graphics_device),
             Arc::clone(renderer.mipmapper_generator()),
         )?;
+
+        let mut material_library = MaterialLibrary::new();
 
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
