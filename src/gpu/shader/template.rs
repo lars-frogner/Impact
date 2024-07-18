@@ -1,6 +1,9 @@
 //! Generation of shaders from templates.
 
-use crate::gpu::{shader::Shader, GraphicsDevice};
+use crate::gpu::{
+    shader::{Shader, ShaderID},
+    GraphicsDevice,
+};
 use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -9,7 +12,17 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use super::ShaderID;
+/// Specific shader templates that can be resolved to generate shaders.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpecificShaderTemplate {
+    Passthrough,
+    AmbientOcclusionComputation,
+    AmbientOcclusionApplication,
+    GaussianBlur,
+    LuminanceHistogram,
+    LuminanceHistogramAverage,
+    ToneMapping,
+}
 
 /// A shader template that can be resolved to generate a shader.
 #[derive(Clone, Debug)]
@@ -20,6 +33,92 @@ pub struct ShaderTemplate<'a> {
 
 lazy_static! {
     static ref REPLACEMENT_LABEL_CAPTURE_REGEX: Regex = Regex::new(r"\{\{(\w+)\}\}").unwrap();
+    static ref PASSTHROUGH_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::Passthrough.wgsl_source());
+    static ref AMBIENT_OCCLUSION_COMPUTATION_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::AmbientOcclusionComputation.wgsl_source());
+    static ref AMBIENT_OCCLUSION_APPLICATION_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::AmbientOcclusionApplication.wgsl_source());
+    static ref GAUSSIAN_BLUR_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::GaussianBlur.wgsl_source());
+    static ref LUMINANCE_HISTOGRAM_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::LuminanceHistogram.wgsl_source());
+    static ref LUMINANCE_HISTOGRAM_AVERAGE_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::LuminanceHistogramAverage.wgsl_source());
+    static ref TONE_MAPPING_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::ToneMapping.wgsl_source());
+}
+
+macro_rules! template_source {
+    ($type:expr, $name:expr) => {{
+        include_str!(concat!(
+            "../../../shader/",
+            $type,
+            "/",
+            $name,
+            ".template.wgsl"
+        ))
+    }};
+}
+
+macro_rules! rendering_template_source {
+    ($name:expr) => {{
+        template_source!("rendering", $name)
+    }};
+}
+
+macro_rules! compute_template_source {
+    ($name:expr) => {{
+        template_source!("compute", $name)
+    }};
+}
+
+impl SpecificShaderTemplate {
+    /// Returns the WGSL source code of the template.
+    pub const fn wgsl_source(&self) -> &'static str {
+        match self {
+            Self::Passthrough => {
+                rendering_template_source!("passthrough")
+            }
+            Self::AmbientOcclusionComputation => {
+                rendering_template_source!("ambient_occlusion_computation")
+            }
+            Self::AmbientOcclusionApplication => {
+                rendering_template_source!("ambient_occlusion_application")
+            }
+            Self::GaussianBlur => {
+                rendering_template_source!("gaussian_blur")
+            }
+            Self::LuminanceHistogram => {
+                compute_template_source!("luminance_histogram")
+            }
+            Self::LuminanceHistogramAverage => {
+                compute_template_source!("luminance_histogram_average")
+            }
+            Self::ToneMapping => {
+                rendering_template_source!("tone_mapping")
+            }
+        }
+    }
+
+    /// Returns the [`ShaderTemplate`] for this specific shader template.
+    pub fn template(&self) -> &'static ShaderTemplate<'static> {
+        match self {
+            Self::Passthrough => &PASSTHROUGH_TEMPLATE,
+            Self::AmbientOcclusionComputation => &AMBIENT_OCCLUSION_COMPUTATION_TEMPLATE,
+            Self::AmbientOcclusionApplication => &AMBIENT_OCCLUSION_APPLICATION_TEMPLATE,
+            Self::GaussianBlur => &GAUSSIAN_BLUR_TEMPLATE,
+            Self::LuminanceHistogram => &LUMINANCE_HISTOGRAM_TEMPLATE,
+            Self::LuminanceHistogramAverage => &LUMINANCE_HISTOGRAM_AVERAGE_TEMPLATE,
+            Self::ToneMapping => &TONE_MAPPING_TEMPLATE,
+        }
+    }
+}
+
+impl std::fmt::Display for SpecificShaderTemplate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl<'a> ShaderTemplate<'a> {

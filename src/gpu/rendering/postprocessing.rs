@@ -6,23 +6,21 @@ pub mod gaussian_blur;
 
 use crate::{
     gpu::{
-        compute::GPUComputationLibrary,
         push_constant::{PushConstant, PushConstantVariant},
         rendering::render_command::{
-            OutputAttachmentSampling, RenderCommandSpecification, RenderCommandState,
-            RenderPassHints, RenderPassSpecification,
+            DepthMapUsage, OutputAttachmentSampling, RenderCommandSpecification,
+            RenderCommandState, RenderPassHints, RenderPassSpecification,
         },
-        shader::{MaterialShaderInput, PassthroughShaderInput, ShaderManager},
+        resource_group::GPUResourceGroupManager,
+        shader::{template::SpecificShaderTemplate, ShaderManager},
         storage::StorageGPUBufferManager,
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         GraphicsDevice,
     },
-    material::{MaterialID, MaterialLibrary, MaterialSpecification},
-    mesh::{VertexAttributeSet, SCREEN_FILLING_QUAD_MESH_ID},
+    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
 };
 use ambient_occlusion::AmbientOcclusionConfig;
 use capturing::{CapturingCamera, CapturingCameraConfig};
-use impact_utils::hash64;
 
 /// Manager of materials and render commands for postprocessing effects.
 #[derive(Clone, Debug)]
@@ -33,32 +31,31 @@ pub struct Postprocessor {
 }
 
 impl Postprocessor {
-    /// Creates a new postprocessor along with the associated materials,
-    /// computations and render commands according to the given configuration.
+    /// Creates a new postprocessor along with the associated render commands
+    /// according to the given configuration.
     pub fn new(
         graphics_device: &GraphicsDevice,
-        material_library: &mut MaterialLibrary,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-        gpu_computation_library: &mut GPUComputationLibrary,
         ambient_occlusion_config: &AmbientOcclusionConfig,
         capturing_camera_settings: &CapturingCameraConfig,
     ) -> Self {
         let ambient_occlusion_commands =
-            ambient_occlusion::setup_ambient_occlusion_materials_and_render_commands(
+            ambient_occlusion::create_ambient_occlusion_render_commands(
                 graphics_device,
-                material_library,
+                shader_manager,
+                gpu_resource_group_manager,
                 ambient_occlusion_config,
             );
 
         let capturing_camera = CapturingCamera::new(
             graphics_device,
-            material_library,
             shader_manager,
             render_attachment_texture_manager,
+            gpu_resource_group_manager,
             storage_gpu_buffer_manager,
-            gpu_computation_library,
             capturing_camera_settings,
         );
 
@@ -109,86 +106,53 @@ impl Postprocessor {
     }
 }
 
-fn setup_passthrough_material_and_render_pass(
-    material_library: &mut MaterialLibrary,
+fn create_passthrough_render_pass(
+    graphics_device: &GraphicsDevice,
+    shader_manager: &mut ShaderManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
+    output_attachment_sampling: OutputAttachmentSampling,
+    perform_stencil_test: bool,
 ) -> RenderCommandSpecification {
-    let (material_id, material_specification) = setup_passthrough_material(
-        material_library,
-        input_render_attachment_quantity,
-        output_render_attachment_quantity,
-    );
-    define_passthrough_pass(
-        material_id,
-        material_specification.render_pass_hints(),
-        input_render_attachment_quantity,
-        output_render_attachment_quantity,
-    )
-}
+    let (input_texture_binding, input_sampler_binding) =
+        input_render_attachment_quantity.bindings();
 
-fn setup_passthrough_material(
-    material_library: &mut MaterialLibrary,
-    input_render_attachment_quantity: RenderAttachmentQuantity,
-    output_render_attachment_quantity: RenderAttachmentQuantity,
-) -> (MaterialID, &MaterialSpecification) {
-    let material_id = MaterialID(hash64!(format!(
-        "PassthroughMaterial{{ input: {}, output: {} }}",
-        input_render_attachment_quantity, output_render_attachment_quantity,
-    )));
-    (
-        material_id,
-        material_library
-            .material_specification_entry(material_id)
-            .or_insert_with(|| {
-                create_passthrough_material(
-                    input_render_attachment_quantity,
-                    output_render_attachment_quantity,
-                )
-            }),
-    )
-}
+    let shader_id = shader_manager
+        .get_or_create_rendering_shader_from_template(
+            graphics_device,
+            SpecificShaderTemplate::Passthrough,
+            &[
+                (
+                    "position_location",
+                    VertexPosition::BINDING_LOCATION.to_string(),
+                ),
+                ("input_texture_binding", input_texture_binding.to_string()),
+                ("input_sampler_binding", input_sampler_binding.to_string()),
+            ],
+        )
+        .unwrap();
 
-fn create_passthrough_material(
-    input_render_attachment_quantity: RenderAttachmentQuantity,
-    output_render_attachment_quantity: RenderAttachmentQuantity,
-) -> MaterialSpecification {
-    MaterialSpecification::new(
-        VertexAttributeSet::POSITION,
-        VertexAttributeSet::empty(),
-        input_render_attachment_quantity.flag(),
-        output_render_attachment_quantity.flag(),
-        None,
-        Vec::new(),
-        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        MaterialShaderInput::Passthrough(PassthroughShaderInput {
-            input_texture_and_sampler_bindings: input_render_attachment_quantity.bindings(),
-        }),
-    )
-}
-
-fn define_passthrough_pass(
-    material_id: MaterialID,
-    hints: RenderPassHints,
-    input_render_attachment_quantity: RenderAttachmentQuantity,
-    output_render_attachment_quantity: RenderAttachmentQuantity,
-) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_material_id: Some(material_id),
+        explicit_shader_id: Some(shader_id),
         input_render_attachment_quantities: input_render_attachment_quantity.flag(),
         output_render_attachment_quantities: output_render_attachment_quantity.flag(),
-        output_attachment_sampling: OutputAttachmentSampling::Single,
+        output_attachment_sampling,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
         )
         .into(),
-        hints,
+        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
         label: format!(
             "Passthrough pass: {} -> {}",
             input_render_attachment_quantity, output_render_attachment_quantity
         ),
+        depth_map_usage: if perform_stencil_test {
+            DepthMapUsage::StencilTest
+        } else {
+            DepthMapUsage::None
+        },
         ..Default::default()
     })
 }

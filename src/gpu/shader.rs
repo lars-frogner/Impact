@@ -1,20 +1,18 @@
 //! Generation and management of shaders.
 
-pub mod compute;
 mod rendering;
 pub mod template;
 
 pub use rendering::{
-    AmbientLightShaderInput, AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
-    BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput, CameraShaderInput,
-    DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput, FixedTextureShaderInput,
-    GaussianBlurShaderInput, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput,
+    AmbientLightShaderInput, BlinnPhongTextureShaderInput, BumpMappingTextureShaderInput,
+    CameraShaderInput, DiffuseMicrofacetShadingModel, FixedColorFeatureShaderInput,
+    FixedTextureShaderInput, InstanceFeatureShaderInput, LightMaterialFeatureShaderInput,
     LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
     MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
-    OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PassthroughShaderInput,
-    PrepassTextureShaderInput, SkyboxShaderInput, SpecularMicrofacetShadingModel,
-    ToneMappingShaderInput, UnidirectionalLightShaderInput,
+    OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
+    SkyboxShaderInput, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
 };
+use template::SpecificShaderTemplate;
 
 use crate::{
     gpu::{
@@ -27,8 +25,8 @@ use crate::{
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use naga::{
-    AddressSpace, Arena, BinaryOperator, Binding, Block, BuiltIn, Bytes, Constant, Expression,
-    Function, FunctionArgument, FunctionResult, GlobalVariable, Handle, ImageClass, ImageDimension,
+    AddressSpace, Arena, Binding, Block, BuiltIn, Bytes, Constant, Expression, Function,
+    FunctionArgument, FunctionResult, GlobalVariable, Handle, ImageClass, ImageDimension,
     ImageQuery, Interpolation, Literal, LocalVariable, Module, Override, ResourceBinding,
     SampleLevel, Sampling, Scalar, ScalarKind, ShaderStage, Span, Statement, StructMember,
     SwitchCase, SwizzleComponent, Type, TypeInner, UniqueArena, VectorSize,
@@ -112,18 +110,6 @@ struct StructBuilder {
     type_name: String,
     fields: Vec<StructMember>,
     offset: u32,
-}
-
-/// Helper for generating code for a for-loop.
-struct ForLoop {
-    /// Expression for the index in the for-loop body.
-    pub idx_expr: Handle<Expression>,
-    /// Set of statements making up the for-loop body.
-    pub body: Block,
-    continuing: Block,
-    break_if: Option<Handle<Expression>>,
-    start_expr: Handle<Expression>,
-    end_expr: Handle<Expression>,
 }
 
 /// Helper for declaring global variables for a texture with an associated
@@ -319,6 +305,46 @@ impl ShaderManager {
         }
     }
 
+    /// Determines the shader ID for the given shader template and replacements,
+    /// resolves the template and stores it as a rendering shader if it does not
+    /// already exist and returns the shader ID.
+    ///
+    /// # Errors
+    /// Returns an error if the shader template can not be resolved or compiled.
+    pub fn get_or_create_rendering_shader_from_template(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        template: SpecificShaderTemplate,
+        replacements: &[(&str, String)],
+    ) -> Result<ShaderID> {
+        Self::get_or_create_shader_from_template(
+            &mut self.rendering_shaders,
+            graphics_device,
+            template,
+            replacements,
+        )
+    }
+
+    /// Determines the shader ID for the given shader template and replacements,
+    /// resolves the template and stores it as a compute shader if it does not
+    /// already exist and returns the shader ID.
+    ///
+    /// # Errors
+    /// Returns an error if the shader template can not be resolved or compiled.
+    pub fn get_or_create_compute_shader_from_template(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        template: SpecificShaderTemplate,
+        replacements: &[(&str, String)],
+    ) -> Result<ShaderID> {
+        Self::get_or_create_shader_from_template(
+            &mut self.compute_shaders,
+            graphics_device,
+            template,
+            replacements,
+        )
+    }
+
     /// Obtains the appropriate rendering [`Shader`] for the given set of shader
     /// inputs.
     ///
@@ -374,6 +400,31 @@ impl ShaderManager {
                 )))
             }
         }
+    }
+
+    fn get_or_create_shader_from_template(
+        shaders: &mut HashMap<ShaderID, Shader>,
+        graphics_device: &GraphicsDevice,
+        template: SpecificShaderTemplate,
+        replacements: &[(&str, String)],
+    ) -> Result<ShaderID> {
+        let template_name = template.to_string();
+
+        let shader_id =
+            template::create_shader_id_for_template(&template_name, replacements.iter().cloned());
+
+        match shaders.entry(shader_id) {
+            Entry::Occupied(_) => {}
+            Entry::Vacant(entry) => {
+                entry.insert(template.template().resolve_and_compile_as_wgsl(
+                    graphics_device,
+                    replacements.iter().cloned(),
+                    &template_name,
+                )?);
+            }
+        };
+
+        Ok(shader_id)
     }
 }
 
@@ -921,147 +972,6 @@ impl StructBuilder {
                 span: self.offset,
             },
         }
-    }
-}
-
-impl ForLoop {
-    /// Generates code for a new for-loop with the start index given by
-    /// `start_expr` (zero is used if `start_expr` is `None`) and end index
-    /// given by `end_expr` and returns a new [`ForLoop`]. The loop index starts
-    /// at zero, and is available as the `idx_expr` field of the returned
-    /// `ForLoop` struct. The main body of the loop is empty, and statements can
-    /// be added to it by pushing to the `body` field of the returned `ForLoop`.
-    pub fn new(
-        types: &mut UniqueArena<Type>,
-        function: &mut Function,
-        name: &str,
-        start_expr: Option<Handle<Expression>>,
-        end_expr: Handle<Expression>,
-    ) -> Self {
-        let u32_type = insert_in_arena(types, U32_TYPE);
-
-        let start_expr = start_expr.unwrap_or_else(|| {
-            append_to_arena(
-                &mut function.expressions,
-                Expression::Literal(Literal::U32(0)),
-            )
-        });
-
-        let idx_ptr_expr = append_to_arena(
-            &mut function.expressions,
-            Expression::LocalVariable(append_to_arena(
-                &mut function.local_variables,
-                LocalVariable {
-                    name: Some(format!("{}Idx", name)),
-                    ty: u32_type,
-                    init: Some(start_expr),
-                },
-            )),
-        );
-
-        let mut body_block = Block::new();
-
-        let idx_expr = emit(&mut body_block, &mut function.expressions, |expressions| {
-            append_to_arena(
-                expressions,
-                Expression::Load {
-                    pointer: idx_ptr_expr,
-                },
-            )
-        });
-
-        let mut continuing_block = Block::new();
-
-        let unity_constant_expr =
-            include_expr_in_func(function, Expression::Literal(Literal::U32(1)));
-
-        let incremented_idx_expr = emit(
-            &mut continuing_block,
-            &mut function.expressions,
-            |expressions| {
-                append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::Add,
-                        left: idx_expr,
-                        right: unity_constant_expr,
-                    },
-                )
-            },
-        );
-
-        push_to_block(
-            &mut continuing_block,
-            Statement::Store {
-                pointer: idx_ptr_expr,
-                value: incremented_idx_expr,
-            },
-        );
-
-        let break_if_expr = emit(
-            &mut continuing_block,
-            &mut function.expressions,
-            |expressions| {
-                let idx_expr = append_to_arena(
-                    expressions,
-                    Expression::Load {
-                        pointer: idx_ptr_expr,
-                    },
-                );
-                append_to_arena(
-                    expressions,
-                    Expression::Binary {
-                        op: BinaryOperator::GreaterEqual,
-                        left: idx_expr,
-                        right: end_expr,
-                    },
-                )
-            },
-        );
-
-        Self {
-            body: body_block,
-            continuing: continuing_block,
-            break_if: Some(break_if_expr),
-            idx_expr,
-            start_expr,
-            end_expr,
-        }
-    }
-
-    /// Generates the actual loop statement. Call this when the `body` field has
-    /// been filled with all required statements.
-    pub fn generate_code(self, block: &mut Block, expressions: &mut Arena<Expression>) {
-        let mut loop_block = Block::new();
-
-        push_to_block(
-            &mut loop_block,
-            Statement::Loop {
-                body: self.body,
-                continuing: self.continuing,
-                break_if: self.break_if,
-            },
-        );
-
-        let n_iter_above_zero_expr = emit(block, expressions, |expressions| {
-            append_to_arena(
-                expressions,
-                Expression::Binary {
-                    op: BinaryOperator::Greater,
-                    left: self.end_expr,
-                    right: self.start_expr,
-                },
-            )
-        });
-
-        push_to_block(
-            block,
-            Statement::If {
-                condition: n_iter_above_zero_expr,
-                accept: loop_block,
-                reject: Block::new(),
-            },
-        );
     }
 }
 
@@ -2333,23 +2243,6 @@ fn define_constant_if_missing(
     constant: Constant,
 ) -> Handle<Constant> {
     constants.fetch_or_append(constant, Span::UNDEFINED)
-}
-
-/// Executes the given closure that adds [`Expression`]s to the given [`Arena`]
-/// before pushing to the given [`Block`] a [`Statement::Emit`] emitting the
-/// range of added expressions.
-///
-/// # Returns
-/// The value returned from the closure.
-fn emit<T>(
-    block: &mut Block,
-    arena: &mut Arena<Expression>,
-    add_expressions: impl FnOnce(&mut Arena<Expression>) -> T,
-) -> T {
-    let start_length = arena.len();
-    let ret = add_expressions(arena);
-    push_to_block(block, Statement::Emit(arena.range_from(start_length)));
-    ret
 }
 
 /// Executes the given closure that adds [`Expression`]s to the given

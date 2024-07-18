@@ -5,6 +5,7 @@ use crate::{
     assets::Assets,
     gpu::{
         rendering::{fre, render_command::RenderPassHints},
+        resource_group::GPUResourceGroup,
         shader::{MaterialShaderInput, SkyboxShaderInput},
         texture::attachment::RenderAttachmentQuantitySet,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
@@ -13,7 +14,7 @@ use crate::{
     material::{
         components::{MaterialComp, SkyboxComp},
         MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecificResourceGroup, MaterialSpecification,
+        MaterialPropertyTextureGroupID, MaterialSpecification,
     },
     mesh::VertexAttributeSet,
 };
@@ -96,10 +97,13 @@ pub fn setup_skybox_material(
         wgpu::ShaderStages::FRAGMENT,
         Cow::Borrowed("Skybox properties"),
     );
-    let material_specific_resources = MaterialSpecificResourceGroup::new(
+    let material_specific_resources = GPUResourceGroup::new(
         graphics_device,
         vec![properties_uniform_buffer],
         &[],
+        &[],
+        &[],
+        wgpu::ShaderStages::FRAGMENT,
         "Skybox properties",
     );
 

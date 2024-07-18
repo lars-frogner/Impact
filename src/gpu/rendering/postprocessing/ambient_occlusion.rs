@@ -1,25 +1,24 @@
-//! Materials and render passes for computing and applying ambient occlusion.
+//! Render passes for computing and applying ambient occlusion.
 
 use crate::{
     assert_uniform_valid,
+    camera::buffer::CameraGPUBufferManager,
     gpu::{
         push_constant::{PushConstant, PushConstantVariant},
         rendering::{
             fre,
             render_command::{
-                DepthMapUsage, RenderCommandSpecification, RenderPassHints, RenderPassSpecification,
+                DepthMapUsage, OutputAttachmentSampling, RenderCommandSpecification,
+                RenderPassHints, RenderPassSpecification,
             },
         },
-        shader::{
-            AmbientOcclusionCalculationShaderInput, AmbientOcclusionShaderInput,
-            MaterialShaderInput,
-        },
+        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+        shader::{template::SpecificShaderTemplate, ShaderManager},
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
-    material::{MaterialID, MaterialLibrary, MaterialSpecificResourceGroup, MaterialSpecification},
-    mesh::{VertexAttributeSet, SCREEN_FILLING_QUAD_MESH_ID},
+    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};
@@ -121,203 +120,221 @@ impl UniformBufferable for AmbientOcclusionSamples {
 }
 assert_uniform_valid!(AmbientOcclusionSamples);
 
-pub(super) fn setup_ambient_occlusion_materials_and_render_commands(
+pub(super) fn create_ambient_occlusion_render_commands(
     graphics_device: &GraphicsDevice,
-    material_library: &mut MaterialLibrary,
+    shader_manager: &mut ShaderManager,
+    gpu_resource_group_manager: &mut GPUResourceGroupManager,
     ambient_occlusion_config: &AmbientOcclusionConfig,
 ) -> Vec<RenderCommandSpecification> {
     vec![
-        setup_unoccluded_ambient_reflected_luminance_application_material_and_render_pass(
-            material_library,
-        ),
-        setup_ambient_occlusion_computation_material_and_render_pass(
+        create_unoccluded_ambient_reflected_luminance_application_render_pass(
             graphics_device,
-            material_library,
+            shader_manager,
+        ),
+        create_ambient_occlusion_computation_render_pass(
+            graphics_device,
+            shader_manager,
+            gpu_resource_group_manager,
             ambient_occlusion_config.sample_count,
             ambient_occlusion_config.sample_radius,
         ),
-        setup_ambient_occlusion_application_material_and_render_pass(material_library),
+        create_ambient_occlusion_application_render_pass(graphics_device, shader_manager),
     ]
 }
 
-fn setup_ambient_occlusion_computation_material_and_render_pass(
-    graphics_device: &GraphicsDevice,
-    material_library: &mut MaterialLibrary,
-    sample_count: u32,
-    sample_radius: fre,
-) -> RenderCommandSpecification {
-    let material_id = MaterialID(hash64!(format!(
-        "AmbientOcclusionComputationMaterial{{ sample_count: {}, sampling_radius: {} }}",
-        sample_count, sample_radius,
-    )));
-    let specification = material_library
-        .material_specification_entry(material_id)
-        .or_insert_with(|| {
-            create_ambient_occlusion_computation_material(
-                graphics_device,
-                sample_count,
-                sample_radius,
-            )
-        });
-    define_ambient_occlusion_computation_pass(material_id, specification)
-}
-
-fn setup_ambient_occlusion_application_material_and_render_pass(
-    material_library: &mut MaterialLibrary,
-) -> RenderCommandSpecification {
-    let material_id = MaterialID(hash64!("AmbientOcclusionApplicationMaterial"));
-    let specification = material_library
-        .material_specification_entry(material_id)
-        .or_insert_with(create_ambient_occlusion_application_material);
-    define_ambient_occlusion_application_pass(material_id, specification)
-}
-
-fn setup_unoccluded_ambient_reflected_luminance_application_material_and_render_pass(
-    material_library: &mut MaterialLibrary,
-) -> RenderCommandSpecification {
-    let (material_id, specification) = super::setup_passthrough_material(
-        material_library,
-        RenderAttachmentQuantity::AmbientReflectedLuminance,
-        RenderAttachmentQuantity::Luminance,
-    );
-    define_unoccluded_ambient_reflected_luminance_application_pass(material_id, specification)
-}
-
-/// Creates a [`MaterialSpecification`] for a material that computes ambient
-/// occlusion and writes it to the occlusion attachment.
+/// Creates a [`RenderCommandSpecification`] for a render pass that computes
+/// ambient occlusion and writes it to the occlusion attachment.
 ///
 /// # Panics
 /// - If the sample count is zero or exceeds
 ///   [`MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT`].
 /// - If the sample radius does not exceed zero.
-fn create_ambient_occlusion_computation_material(
+fn create_ambient_occlusion_computation_render_pass(
     graphics_device: &GraphicsDevice,
+    shader_manager: &mut ShaderManager,
+    gpu_resource_group_manager: &mut GPUResourceGroupManager,
     sample_count: u32,
     sample_radius: fre,
-) -> MaterialSpecification {
-    let sample_uniform = AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
-
-    let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
-        graphics_device,
-        &sample_uniform,
-        wgpu::ShaderStages::FRAGMENT,
-        Cow::Borrowed("Ambient occlusion samples"),
-    );
-    let material_specific_resources = MaterialSpecificResourceGroup::new(
-        graphics_device,
-        vec![sample_uniform_buffer],
-        &[],
-        "Ambient occlusion samples",
-    );
-
-    let shader_input = MaterialShaderInput::AmbientOcclusion(
-        AmbientOcclusionShaderInput::Calculation(AmbientOcclusionCalculationShaderInput {
-            sample_uniform_binding: 0,
-        }),
-    );
-
-    MaterialSpecification::new(
-        VertexAttributeSet::POSITION,
-        VertexAttributeSet::empty(),
-        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
-        RenderAttachmentQuantitySet::OCCLUSION,
-        Some(material_specific_resources),
-        Vec::new(),
-        RenderPassHints::NO_DEPTH_PREPASS,
-        shader_input,
-    )
-}
-
-/// Creates a [`MaterialSpecification`] for a material that combines occlusion
-/// and ambient reflected luminance from their respective attachments and adds
-/// the resulting occluded ambient reflected luminance to the luminance
-/// attachment.
-fn create_ambient_occlusion_application_material() -> MaterialSpecification {
-    MaterialSpecification::new(
-        VertexAttributeSet::POSITION,
-        VertexAttributeSet::empty(),
-        RenderAttachmentQuantitySet::POSITION
-            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
-            | RenderAttachmentQuantitySet::OCCLUSION,
-        RenderAttachmentQuantitySet::LUMINANCE,
-        None,
-        Vec::new(),
-        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        MaterialShaderInput::AmbientOcclusion(AmbientOcclusionShaderInput::Application),
-    )
-}
-
-fn define_ambient_occlusion_computation_pass(
-    material_id: MaterialID,
-    material_specification: &MaterialSpecification,
 ) -> RenderCommandSpecification {
+    let resource_group_id = GPUResourceGroupID(hash64!(format!(
+        "AmbientOcclusionSamples{{ sample_count: {}, sample_radius: {} }}",
+        sample_count, sample_radius,
+    )));
+    gpu_resource_group_manager
+        .resource_group_entry(resource_group_id)
+        .or_insert_with(|| {
+            let sample_uniform =
+                AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
+
+            let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
+                graphics_device,
+                &sample_uniform,
+                wgpu::ShaderStages::FRAGMENT,
+                Cow::Borrowed("Ambient occlusion samples"),
+            );
+            GPUResourceGroup::new(
+                graphics_device,
+                vec![sample_uniform_buffer],
+                &[],
+                &[],
+                &[],
+                wgpu::ShaderStages::FRAGMENT,
+                "Ambient occlusion samples",
+            )
+        });
+
+    let (position_texture_binding, position_sampler_binding) =
+        RenderAttachmentQuantity::Position.bindings();
+    let (normal_vector_texture_binding, normal_vector_sampler_binding) =
+        RenderAttachmentQuantity::NormalVector.bindings();
+
+    let shader_id = shader_manager
+        .get_or_create_rendering_shader_from_template(
+            graphics_device,
+            SpecificShaderTemplate::AmbientOcclusionComputation,
+            &[
+                (
+                    "max_samples",
+                    MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT.to_string(),
+                ),
+                (
+                    "position_location",
+                    VertexPosition::BINDING_LOCATION.to_string(),
+                ),
+                ("projection_matrix_group", "0".to_string()),
+                (
+                    "projection_matrix_binding",
+                    CameraGPUBufferManager::shader_input()
+                        .projection_matrix_binding
+                        .to_string(),
+                ),
+                ("position_texture_group", "1".to_string()),
+                (
+                    "position_texture_binding",
+                    position_texture_binding.to_string(),
+                ),
+                (
+                    "position_sampler_binding",
+                    position_sampler_binding.to_string(),
+                ),
+                ("normal_vector_texture_group", "2".to_string()),
+                (
+                    "normal_vector_texture_binding",
+                    normal_vector_texture_binding.to_string(),
+                ),
+                (
+                    "normal_vector_sampler_binding",
+                    normal_vector_sampler_binding.to_string(),
+                ),
+                ("samples_group", "3".to_string()),
+                ("samples_binding", "0".to_string()),
+            ],
+        )
+        .unwrap();
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_material_id: Some(material_id),
+        explicit_shader_id: Some(shader_id),
+        resource_group_id: Some(resource_group_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        vertex_attribute_requirements: material_specification
-            .vertex_attribute_requirements_for_shader(),
-        input_render_attachment_quantities: material_specification
-            .input_render_attachment_quantities(),
-        output_render_attachment_quantities: material_specification
-            .output_render_attachment_quantities(),
+        input_render_attachment_quantities: RenderAttachmentQuantitySet::POSITION
+            | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet::OCCLUSION,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
         )
         .into(),
-        hints: material_specification.render_pass_hints(),
+        hints: RenderPassHints::NO_DEPTH_PREPASS,
         label: "Ambient occlusion computation pass".to_string(),
         ..Default::default()
     })
 }
 
-fn define_ambient_occlusion_application_pass(
-    material_id: MaterialID,
-    material_specification: &MaterialSpecification,
+/// Creates a [`RenderCommandSpecification`] for a render pass that combines
+/// occlusion and ambient reflected luminance from their respective attachments
+/// and adds the resulting occluded ambient reflected luminance to the luminance
+/// attachment.
+fn create_ambient_occlusion_application_render_pass(
+    graphics_device: &GraphicsDevice,
+    shader_manager: &mut ShaderManager,
 ) -> RenderCommandSpecification {
+    let (position_texture_binding, position_sampler_binding) =
+        RenderAttachmentQuantity::Position.bindings();
+    let (ambient_reflected_luminance_texture_binding, ambient_reflected_luminance_sampler_binding) =
+        RenderAttachmentQuantity::NormalVector.bindings();
+    let (occlusion_texture_binding, occlusion_sampler_binding) =
+        RenderAttachmentQuantity::Occlusion.bindings();
+
+    let shader_id = shader_manager
+        .get_or_create_rendering_shader_from_template(
+            graphics_device,
+            SpecificShaderTemplate::AmbientOcclusionApplication,
+            &[
+                (
+                    "position_location",
+                    VertexPosition::BINDING_LOCATION.to_string(),
+                ),
+                ("position_texture_group", "0".to_string()),
+                (
+                    "position_texture_binding",
+                    position_texture_binding.to_string(),
+                ),
+                (
+                    "position_sampler_binding",
+                    position_sampler_binding.to_string(),
+                ),
+                ("ambient_reflected_luminance_texture_group", "1".to_string()),
+                (
+                    "ambient_reflected_luminance_texture_binding",
+                    ambient_reflected_luminance_texture_binding.to_string(),
+                ),
+                (
+                    "ambient_reflected_luminance_sampler_binding",
+                    ambient_reflected_luminance_sampler_binding.to_string(),
+                ),
+                ("occlusion_texture_group", "2".to_string()),
+                (
+                    "occlusion_texture_binding",
+                    occlusion_texture_binding.to_string(),
+                ),
+                (
+                    "occlusion_sampler_binding",
+                    occlusion_sampler_binding.to_string(),
+                ),
+            ],
+        )
+        .unwrap();
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_material_id: Some(material_id),
+        explicit_shader_id: Some(shader_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        vertex_attribute_requirements: material_specification
-            .vertex_attribute_requirements_for_shader(),
-        input_render_attachment_quantities: material_specification
-            .input_render_attachment_quantities(),
-        output_render_attachment_quantities: material_specification
-            .output_render_attachment_quantities(),
+        input_render_attachment_quantities: RenderAttachmentQuantitySet::POSITION
+            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+            | RenderAttachmentQuantitySet::OCCLUSION,
+        output_render_attachment_quantities: RenderAttachmentQuantitySet::LUMINANCE,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
         )
         .into(),
-        hints: material_specification.render_pass_hints(),
+        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
         label: "Ambient occlusion application pass".to_string(),
         ..Default::default()
     })
 }
 
-fn define_unoccluded_ambient_reflected_luminance_application_pass(
-    material_id: MaterialID,
-    material_specification: &MaterialSpecification,
+fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
+    graphics_device: &GraphicsDevice,
+    shader_manager: &mut ShaderManager,
 ) -> RenderCommandSpecification {
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_material_id: Some(material_id),
-        depth_map_usage: DepthMapUsage::StencilTest,
-        vertex_attribute_requirements: material_specification
-            .vertex_attribute_requirements_for_shader(),
-        input_render_attachment_quantities: material_specification
-            .input_render_attachment_quantities(),
-        output_render_attachment_quantities: material_specification
-            .output_render_attachment_quantities(),
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
-        hints: material_specification.render_pass_hints(),
-        label: "Unoccluded ambient reflected luminance application pass".to_string(),
-        ..Default::default()
-    })
+    super::create_passthrough_render_pass(
+        graphics_device,
+        shader_manager,
+        RenderAttachmentQuantity::AmbientReflectedLuminance,
+        RenderAttachmentQuantity::Luminance,
+        OutputAttachmentSampling::MultiIfAvailable,
+        true,
+    )
 }

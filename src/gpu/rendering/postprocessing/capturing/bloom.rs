@@ -1,15 +1,14 @@
-//! Materials and render passes for applying bloom.
+//! Render passes for applying bloom.
 
-use crate::{
-    gpu::{
-        rendering::{
-            postprocessing::gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
-            render_command::RenderCommandSpecification,
-        },
-        texture::attachment::RenderAttachmentQuantity,
-        GraphicsDevice,
+use crate::gpu::{
+    rendering::{
+        postprocessing::gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
+        render_command::{OutputAttachmentSampling, RenderCommandSpecification},
     },
-    material::MaterialLibrary,
+    resource_group::GPUResourceGroupManager,
+    shader::ShaderManager,
+    texture::attachment::RenderAttachmentQuantity,
+    GraphicsDevice,
 };
 
 /// Configuration options for bloom.
@@ -39,17 +38,21 @@ impl Default for BloomConfig {
     }
 }
 
-pub(super) fn setup_bloom_materials_and_render_commands(
+pub(super) fn create_bloom_render_commands(
     graphics_device: &GraphicsDevice,
-    material_library: &mut MaterialLibrary,
+    shader_manager: &mut ShaderManager,
+    gpu_resource_group_manager: &mut GPUResourceGroupManager,
     bloom_config: &BloomConfig,
 ) -> Vec<RenderCommandSpecification> {
     let mut render_passes = Vec::with_capacity(1 + 2 * bloom_config.n_iterations);
 
-    render_passes.push(super::super::setup_passthrough_material_and_render_pass(
-        material_library,
+    render_passes.push(super::super::create_passthrough_render_pass(
+        graphics_device,
+        shader_manager,
         RenderAttachmentQuantity::EmissiveLuminance,
         RenderAttachmentQuantity::Luminance,
+        OutputAttachmentSampling::Single,
+        false,
     ));
 
     if bloom_config.n_iterations > 0 {
@@ -58,35 +61,39 @@ pub(super) fn setup_bloom_materials_and_render_commands(
             bloom_config.tail_samples_to_truncate,
         );
         for _ in 1..bloom_config.n_iterations {
-            render_passes.push(gaussian_blur::setup_gaussian_blur_material_and_render_pass(
+            render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
                 graphics_device,
-                material_library,
+                shader_manager,
+                gpu_resource_group_manager,
                 RenderAttachmentQuantity::EmissiveLuminance,
                 RenderAttachmentQuantity::EmissiveLuminanceAux,
                 GaussianBlurDirection::Horizontal,
                 &bloom_sample_uniform,
             ));
-            render_passes.push(gaussian_blur::setup_gaussian_blur_material_and_render_pass(
+            render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
                 graphics_device,
-                material_library,
+                shader_manager,
+                gpu_resource_group_manager,
                 RenderAttachmentQuantity::EmissiveLuminanceAux,
                 RenderAttachmentQuantity::EmissiveLuminance,
                 GaussianBlurDirection::Vertical,
                 &bloom_sample_uniform,
             ));
         }
-        render_passes.push(gaussian_blur::setup_gaussian_blur_material_and_render_pass(
+        render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
             graphics_device,
-            material_library,
+            shader_manager,
+            gpu_resource_group_manager,
             RenderAttachmentQuantity::EmissiveLuminance,
             RenderAttachmentQuantity::EmissiveLuminanceAux,
             GaussianBlurDirection::Horizontal,
             &bloom_sample_uniform,
         ));
         // For the last pass, we write to the luminance attachment
-        render_passes.push(gaussian_blur::setup_gaussian_blur_material_and_render_pass(
+        render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
             graphics_device,
-            material_library,
+            shader_manager,
+            gpu_resource_group_manager,
             RenderAttachmentQuantity::EmissiveLuminanceAux,
             RenderAttachmentQuantity::Luminance,
             GaussianBlurDirection::Vertical,

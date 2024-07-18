@@ -249,6 +249,16 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             ))
         };
 
+        // The bind group for material textures comes before the bind groups for
+        // render attachments
+        let material_texture_bind_group = if !self.texture_input.is_empty() {
+            let material_texture_bind_group = *bind_group_idx;
+            *bind_group_idx += 1;
+            Some(material_texture_bind_group)
+        } else {
+            None
+        };
+
         let position_expr =
             if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
                 let (position_texture_binding, position_sampler_binding) =
@@ -324,7 +334,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
             )
         };
 
-        let (material_texture_bind_group, texture_coord_expr) = if !self.texture_input.is_empty() {
+        let texture_coord_expr = if !self.texture_input.is_empty() {
             let texture_coord_expr = if input_render_attachment_quantities
                 .contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
             {
@@ -357,12 +367,9 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                 )
             };
 
-            let material_texture_bind_group = *bind_group_idx;
-            *bind_group_idx += 1;
-
-            (material_texture_bind_group, Some(texture_coord_expr))
+            Some(texture_coord_expr)
         } else {
-            (*bind_group_idx, None)
+            None
         };
 
         let albedo_expr = self
@@ -374,7 +381,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                     &mut module.global_variables,
                     TextureType::Image2D,
                     "albedo",
-                    material_texture_bind_group,
+                    material_texture_bind_group.unwrap(),
                     albedo_texture_binding,
                     Some(diffuse_sampler_binding),
                     None,
@@ -402,7 +409,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         &mut module.global_variables,
                         TextureType::Image2D,
                         "normalIncidenceSpecularReflectance",
-                        material_texture_bind_group,
+                        material_texture_bind_group.unwrap(),
                         specular_reflectance_texture_binding,
                         Some(specular_sampler_binding),
                         None,
@@ -435,7 +442,7 @@ impl<'a> MicrofacetShaderGenerator<'a> {
                         &mut module.global_variables,
                         TextureType::Image2D,
                         "roughness",
-                        material_texture_bind_group,
+                        material_texture_bind_group.unwrap(),
                         roughness_texture_binding,
                         Some(roughness_sampler_binding),
                         None,

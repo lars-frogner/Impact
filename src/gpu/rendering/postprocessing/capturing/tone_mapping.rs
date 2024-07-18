@@ -1,4 +1,4 @@
-//! Materials and render passes for applying tone mapping.
+//! Render passes for applying tone mapping.
 
 use crate::{
     gpu::{
@@ -7,13 +7,12 @@ use crate::{
             OutputAttachmentSampling, RenderCommandSpecification, RenderPassHints,
             RenderPassSpecification,
         },
-        shader::{MaterialShaderInput, ToneMappingShaderInput},
+        shader::{template::SpecificShaderTemplate, ShaderManager},
         texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
+        GraphicsDevice,
     },
-    material::{MaterialID, MaterialLibrary, MaterialSpecification},
-    mesh::{VertexAttributeSet, SCREEN_FILLING_QUAD_MESH_ID},
+    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
 };
-use impact_utils::hash64;
 use std::fmt::Display;
 
 /// The method to use for tone mapping.
@@ -38,21 +37,23 @@ impl Display for ToneMapping {
             f,
             "{}",
             match self {
-                Self::None => "none",
+                Self::None => "None",
                 Self::ACES => "ACES",
-                Self::KhronosPBRNeutral => "Khronos PBR Neutral",
+                Self::KhronosPBRNeutral => "KhronosPBRNeutral",
             }
         )
     }
 }
 
-pub(super) fn setup_tone_mapping_materials_and_render_commands(
-    material_library: &mut MaterialLibrary,
+pub(super) fn create_tone_mapping_render_commands(
+    graphics_device: &GraphicsDevice,
+    shader_manager: &mut ShaderManager,
 ) -> Vec<RenderCommandSpecification> {
     ToneMapping::all()
         .map(|mapping| {
-            setup_tone_mapping_material_and_render_pass(
-                material_library,
+            create_tone_mapping_render_pass(
+                graphics_device,
+                shader_manager,
                 RenderAttachmentQuantity::Luminance,
                 mapping,
             )
@@ -60,66 +61,48 @@ pub(super) fn setup_tone_mapping_materials_and_render_commands(
         .to_vec()
 }
 
-fn setup_tone_mapping_material_and_render_pass(
-    material_library: &mut MaterialLibrary,
+/// Creates a [`RenderCommandSpecification`] for a render pass that applies the
+/// given tone mapping to the input attachment and writes the result to the
+/// surface attachment.
+fn create_tone_mapping_render_pass(
+    graphics_device: &GraphicsDevice,
+    shader_manager: &mut ShaderManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     mapping: ToneMapping,
 ) -> RenderCommandSpecification {
-    let material_id = MaterialID(hash64!(format!(
-        "ToneMappingMaterial{{ mapping: {}, input: {} }}",
-        mapping, input_render_attachment_quantity,
-    )));
-    let specification = material_library
-        .material_specification_entry(material_id)
-        .or_insert_with(|| create_tone_mapping_material(input_render_attachment_quantity, mapping));
-    define_tone_mapping_pass(material_id, specification, mapping)
-}
+    let (input_texture_binding, input_sampler_binding) =
+        input_render_attachment_quantity.bindings();
 
-/// Creates a [`MaterialSpecification`] for a material that applies the given
-/// tone mapping to the input attachment and writes the result to the output
-/// attachment.
-fn create_tone_mapping_material(
-    input_render_attachment_quantity: RenderAttachmentQuantity,
-    mapping: ToneMapping,
-) -> MaterialSpecification {
-    MaterialSpecification::new(
-        VertexAttributeSet::POSITION,
-        VertexAttributeSet::empty(),
-        input_render_attachment_quantity.flag(),
-        RenderAttachmentQuantitySet::empty(), // We output directly to surface
-        None,
-        Vec::new(),
-        RenderPassHints::NO_DEPTH_PREPASS
-            .union(RenderPassHints::NO_CAMERA)
-            .union(RenderPassHints::WRITES_TO_SURFACE),
-        MaterialShaderInput::ToneMapping(ToneMappingShaderInput {
-            mapping,
-            input_texture_and_sampler_bindings: input_render_attachment_quantity.bindings(),
-        }),
-    )
-}
+    let shader_id = shader_manager
+        .get_or_create_rendering_shader_from_template(
+            graphics_device,
+            SpecificShaderTemplate::ToneMapping,
+            &[
+                ("tone_mapping_method", mapping.to_string()),
+                (
+                    "position_location",
+                    VertexPosition::BINDING_LOCATION.to_string(),
+                ),
+                ("input_texture_binding", input_texture_binding.to_string()),
+                ("input_sampler_binding", input_sampler_binding.to_string()),
+            ],
+        )
+        .unwrap();
 
-fn define_tone_mapping_pass(
-    material_id: MaterialID,
-    material_specification: &MaterialSpecification,
-    mapping: ToneMapping,
-) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_material_id: Some(material_id),
-        vertex_attribute_requirements: material_specification
-            .vertex_attribute_requirements_for_shader(),
-        input_render_attachment_quantities: material_specification
-            .input_render_attachment_quantities(),
-        output_render_attachment_quantities: material_specification
-            .output_render_attachment_quantities(),
+        explicit_shader_id: Some(shader_id),
+        input_render_attachment_quantities: input_render_attachment_quantity.flag(),
+        output_render_attachment_quantities: RenderAttachmentQuantitySet::empty(), // We output directly to surface
         output_attachment_sampling: OutputAttachmentSampling::Single,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
         )
         .into(),
-        hints: material_specification.render_pass_hints(),
+        hints: RenderPassHints::NO_DEPTH_PREPASS
+            .union(RenderPassHints::NO_CAMERA)
+            .union(RenderPassHints::WRITES_TO_SURFACE),
         label: format!("Tone mapping pass ({})", mapping),
         ..Default::default()
     })

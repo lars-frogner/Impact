@@ -1,4 +1,4 @@
-//! Materials and render passes for applying a Gaussian blur.
+//! Render passes for applying a Gaussian blur.
 
 use crate::{
     assert_uniform_valid,
@@ -11,13 +11,13 @@ use crate::{
                 RenderPassSpecification,
             },
         },
-        shader::{GaussianBlurShaderInput, MaterialShaderInput},
+        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+        shader::{template::SpecificShaderTemplate, ShaderManager},
         texture::attachment::RenderAttachmentQuantity,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
-    material::{MaterialID, MaterialLibrary, MaterialSpecificResourceGroup, MaterialSpecification},
-    mesh::{VertexAttributeSet, SCREEN_FILLING_QUAD_MESH_ID},
+    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, ConstStringHash64};
@@ -63,8 +63,8 @@ impl Display for GaussianBlurDirection {
             f,
             "{}",
             match self {
-                Self::Horizontal => "horizontal",
-                Self::Vertical => "vertical",
+                Self::Horizontal => "Horizontal",
+                Self::Vertical => "Vertical",
             }
         )
     }
@@ -172,99 +172,80 @@ impl UniformBufferable for GaussianBlurSamples {
 }
 assert_uniform_valid!(GaussianBlurSamples);
 
-pub(super) fn setup_gaussian_blur_material_and_render_pass(
+pub(super) fn create_gaussian_blur_render_pass(
     graphics_device: &GraphicsDevice,
-    material_library: &mut MaterialLibrary,
+    shader_manager: &mut ShaderManager,
+    gpu_resource_group_manager: &mut GPUResourceGroupManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     direction: GaussianBlurDirection,
     sample_uniform: &GaussianBlurSamples,
 ) -> RenderCommandSpecification {
-    let material_id = MaterialID(hash64!(format!(
-        "GaussianBlurMaterial{{ direction: {}, input: {}, output: {}, sample_count: {}, truncated_tail_samples: {} }}",
-        direction,
-        input_render_attachment_quantity,
-        output_render_attachment_quantity,
+    let resource_group_id = GPUResourceGroupID(hash64!(format!(
+        "GaussianBlurSamples{{ sample_count: {}, truncated_tail_samples: {} }}",
         sample_uniform.sample_count(),
         sample_uniform.truncated_tail_samples(),
     )));
-    let specification = material_library
-        .material_specification_entry(material_id)
+    gpu_resource_group_manager
+        .resource_group_entry(resource_group_id)
         .or_insert_with(|| {
-            create_gaussian_blur_material(
+            let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
                 graphics_device,
-                input_render_attachment_quantity,
-                output_render_attachment_quantity,
-                direction,
                 sample_uniform,
+                wgpu::ShaderStages::FRAGMENT,
+                Cow::Borrowed("Gaussian blur samples"),
+            );
+            GPUResourceGroup::new(
+                graphics_device,
+                vec![sample_uniform_buffer],
+                &[],
+                &[],
+                &[],
+                wgpu::ShaderStages::FRAGMENT,
+                "Gaussian blur samples",
             )
         });
-    define_gaussian_blur_pass(material_id, specification, direction)
-}
 
-/// Creates a [`MaterialSpecification`] for a material that applies a 1D
-/// Gaussian blur in the given direction to the input attachment and writes the
-/// result to the output attachment.
-fn create_gaussian_blur_material(
-    graphics_device: &GraphicsDevice,
-    input_render_attachment_quantity: RenderAttachmentQuantity,
-    output_render_attachment_quantity: RenderAttachmentQuantity,
-    direction: GaussianBlurDirection,
-    sample_uniform: &GaussianBlurSamples,
-) -> MaterialSpecification {
-    let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
-        graphics_device,
-        sample_uniform,
-        wgpu::ShaderStages::FRAGMENT,
-        Cow::Borrowed("Gaussian blur samples"),
-    );
-    let material_specific_resources = MaterialSpecificResourceGroup::new(
-        graphics_device,
-        vec![sample_uniform_buffer],
-        &[],
-        "Gaussian blur samples",
-    );
+    let (input_texture_binding, input_sampler_binding) =
+        input_render_attachment_quantity.bindings();
 
-    let shader_input = MaterialShaderInput::GaussianBlur(GaussianBlurShaderInput {
-        direction,
-        sample_uniform_binding: 0,
-        input_texture_and_sampler_bindings: input_render_attachment_quantity.bindings(),
-    });
+    let shader_id = shader_manager
+        .get_or_create_rendering_shader_from_template(
+            graphics_device,
+            SpecificShaderTemplate::GaussianBlur,
+            &[
+                ("direction", direction.to_string()),
+                ("max_samples", MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS.to_string()),
+                (
+                    "position_location",
+                    VertexPosition::BINDING_LOCATION.to_string(),
+                ),
+                ("input_texture_group", "0".to_string()),
+                ("input_texture_binding", input_texture_binding.to_string()),
+                ("input_sampler_binding", input_sampler_binding.to_string()),
+                ("samples_group", "1".to_string()),
+                ("samples_binding", "0".to_string()),
+            ],
+        )
+        .unwrap();
 
-    MaterialSpecification::new(
-        VertexAttributeSet::POSITION,
-        VertexAttributeSet::empty(),
-        input_render_attachment_quantity.flag(),
-        output_render_attachment_quantity.flag(),
-        Some(material_specific_resources),
-        Vec::new(),
-        RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        shader_input,
-    )
-}
-
-fn define_gaussian_blur_pass(
-    material_id: MaterialID,
-    material_specification: &MaterialSpecification,
-    direction: GaussianBlurDirection,
-) -> RenderCommandSpecification {
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_material_id: Some(material_id),
-        vertex_attribute_requirements: material_specification
-            .vertex_attribute_requirements_for_shader(),
-        input_render_attachment_quantities: material_specification
-            .input_render_attachment_quantities(),
-        output_render_attachment_quantities: material_specification
-            .output_render_attachment_quantities(),
+        explicit_shader_id: Some(shader_id),
+        resource_group_id: Some(resource_group_id),
+        input_render_attachment_quantities: input_render_attachment_quantity.flag(),
+        output_render_attachment_quantities: output_render_attachment_quantity.flag(),
         output_attachment_sampling: OutputAttachmentSampling::Single,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
         )
         .into(),
-        hints: material_specification.render_pass_hints(),
-        label: format!("1D Gaussian blur pass ({})", direction),
+        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
+        label: format!(
+            "{} Gaussian blur pass: {} -> {}",
+            direction, input_render_attachment_quantity, output_render_attachment_quantity
+        ),
         ..Default::default()
     })
 }
