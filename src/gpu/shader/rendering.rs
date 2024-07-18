@@ -364,11 +364,11 @@ enum MaterialVertexOutputFieldIndices {
 
 lazy_static! {
     static ref SHADER_SOURCE_LIB: SourceCode = SourceCode::from_wgsl_source(concat!(
-        include_str!("../../../shader/rendering/util.wgsl"),
-        include_str!("../../../shader/rendering/light.wgsl"),
-        include_str!("../../../shader/rendering/normal_map.wgsl"),
-        include_str!("../../../shader/rendering/blinn_phong.wgsl"),
-        include_str!("../../../shader/rendering/microfacet.wgsl"),
+        include_str!("../../../shaders/rendering/util.wgsl"),
+        include_str!("../../../shaders/rendering/light.wgsl"),
+        include_str!("../../../shaders/rendering/normal_map.wgsl"),
+        include_str!("../../../shaders/rendering/blinn_phong.wgsl"),
+        include_str!("../../../shaders/rendering/microfacet.wgsl"),
     ))
     .unwrap_or_else(|err| panic!(
         "Error when including rendering shader source library: {}",

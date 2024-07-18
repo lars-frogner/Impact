@@ -52,7 +52,7 @@ lazy_static! {
 macro_rules! template_source {
     ($type:expr, $name:expr) => {{
         include_str!(concat!(
-            "../../../shader/",
+            "../../../shaders/",
             $type,
             "/",
             $name,

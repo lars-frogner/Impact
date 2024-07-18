@@ -39,7 +39,7 @@ impl MipmapperGenerator {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../../../shader/rendering/mipmap.wgsl"
+                "../../../shaders/rendering/mipmap.wgsl"
             ))),
             label: Some("Mipmap shader"),
         });
