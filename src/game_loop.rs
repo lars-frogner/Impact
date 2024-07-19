@@ -44,7 +44,7 @@ struct GenericFrameDurationTracker<const N_FRAMES: usize> {
     idx_of_oldest: usize,
 }
 
-type FrameDurationTracker = GenericFrameDurationTracker<5>;
+type FrameDurationTracker = GenericFrameDurationTracker<10>;
 
 impl GameLoop {
     pub fn new(
@@ -126,7 +126,10 @@ impl GameLoop {
             }
         }
 
+        self.app.renderer().write().unwrap().present();
+
         let iter_end_time = self.wait_for_target_frame_duration();
+
         let iter_duration = iter_end_time - self.previous_iter_end_time;
         self.frame_rate_tracker.add_frame_duration(iter_duration);
         self.previous_iter_end_time = iter_end_time;
@@ -158,9 +161,16 @@ impl GameLoop {
         if let Some(min_frame_duration) = self.config.min_frame_duration() {
             let target_end_time = self.previous_iter_end_time + min_frame_duration;
 
-            let remaining_duration = target_end_time - iter_end_time;
-            if remaining_duration > Duration::ZERO {
-                thread::sleep(remaining_duration);
+            while iter_end_time < target_end_time {
+                let remaining_duration = target_end_time - iter_end_time;
+
+                if remaining_duration > Duration::from_millis(1) {
+                    thread::sleep(remaining_duration - Duration::from_micros(500));
+                } else {
+                    // Busy-wait for the final microseconds
+                    std::hint::spin_loop();
+                }
+
                 iter_end_time = Instant::now();
             }
         };
@@ -212,7 +222,7 @@ impl Default for GameLoopConfig {
     fn default() -> Self {
         Self {
             n_worker_threads: NonZeroUsize::new(1).unwrap(),
-            max_fps: Some(NonZeroU32::new(30).unwrap()),
+            max_fps: None,
         }
     }
 }

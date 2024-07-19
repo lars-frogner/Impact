@@ -29,7 +29,7 @@ define_task!(
             app.capture_screenshots()?;
             let scene = app.scene().read().unwrap();
             let material_library = scene.material_library().read().unwrap();
-            app.renderer().read().unwrap().render(&material_library)
+            app.renderer().write().unwrap().render_to_surface(&material_library)
         })
     }
 );

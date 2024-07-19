@@ -56,6 +56,7 @@ pub struct RenderingSystem {
     config: RenderingConfig,
     graphics_device: Arc<GraphicsDevice>,
     rendering_surface: RenderingSurface,
+    surface_texture_to_present: Option<wgpu::SurfaceTexture>,
     mipmapper_generator: Arc<MipmapperGenerator>,
     shader_manager: RwLock<ShaderManager>,
     render_resource_manager: RwLock<RenderResourceManager>,
@@ -138,6 +139,7 @@ impl RenderingSystem {
             config,
             graphics_device,
             rendering_surface,
+            surface_texture_to_present: None,
             mipmapper_generator,
             shader_manager: RwLock::new(shader_manager),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
@@ -208,17 +210,24 @@ impl RenderingSystem {
         &self.postprocessor
     }
 
-    /// Creates and presents a rendering using the current synchronized render
-    /// resources.
+    /// Presents the last surface texture that was rendered to.
+    pub fn present(&mut self) {
+        if let Some(surface_texture) = self.surface_texture_to_present.take() {
+            surface_texture.present();
+        }
+    }
+
+    /// Renders to the surface using the current synchronized render resources.
+    /// The surface texture to present is stored for later presentation by
+    /// calling [`Self::present`].
     ///
     /// # Errors
     /// Returns an error if:
     /// - The surface texture to render to can not be obtained.
     /// - Recording a render pass fails.
-    pub fn render(&self, material_library: &MaterialLibrary) -> Result<()> {
+    pub fn render_to_surface(&mut self, material_library: &MaterialLibrary) -> Result<()> {
         with_timing_info_logging!("Rendering"; {
-            let surface_texture = self.render_surface(material_library)?;
-            surface_texture.present();
+            self.surface_texture_to_present = Some(self.render_surface(material_library)?);
         });
         Ok(())
     }
