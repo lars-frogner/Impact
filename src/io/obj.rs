@@ -4,7 +4,7 @@ use crate::{
     assets::Assets,
     gpu::{
         rendering::fre,
-        texture::{ColorSpace, TextureAddressingConfig, TextureConfig},
+        texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     },
     material::{
         components::{
@@ -321,9 +321,12 @@ fn create_material_components_from_tobj_material(
             albedo_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
-                addressing: TextureAddressingConfig::REPEATING,
                 ..Default::default()
             },
+            Some(SamplerConfig {
+                addressing: TextureAddressingConfig::REPEATING,
+                ..Default::default()
+            }),
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
@@ -340,9 +343,12 @@ fn create_material_components_from_tobj_material(
             specular_reflectance_path,
             TextureConfig {
                 color_space: ColorSpace::Srgb,
-                addressing: TextureAddressingConfig::REPEATING,
                 ..Default::default()
             },
+            Some(SamplerConfig {
+                addressing: TextureAddressingConfig::REPEATING,
+                ..Default::default()
+            }),
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
@@ -361,9 +367,12 @@ fn create_material_components_from_tobj_material(
             normal_texture_path,
             TextureConfig {
                 color_space: ColorSpace::Linear,
-                addressing: TextureAddressingConfig::REPEATING,
                 ..Default::default()
             },
+            Some(SamplerConfig {
+                addressing: TextureAddressingConfig::REPEATING,
+                ..Default::default()
+            }),
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(&NormalMapComp(

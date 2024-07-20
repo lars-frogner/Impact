@@ -2,11 +2,15 @@
 
 use crate::gpu::{
     rendering::brdf,
-    texture::{mipmap::MipmapperGenerator, TexelType, Texture, TextureConfig, TextureLookupTable},
+    texture::{
+        mipmap::MipmapperGenerator, Sampler, SamplerConfig, SamplerID, TexelType, Texture,
+        TextureAddressingConfig, TextureConfig, TextureFilteringConfig, TextureID,
+        TextureLookupTable,
+    },
     GraphicsDevice,
 };
 use anyhow::Result;
-use impact_utils::{hash32, stringhash32_newtype};
+use impact_utils::hash32;
 use lazy_static::lazy_static;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -15,18 +19,13 @@ use std::{
     sync::Arc,
 };
 
-stringhash32_newtype!(
-    /// Identifier for specific textures.
-    /// Wraps a [`StringHash32`](impact_utils::StringHash32).
-    [pub] TextureID
-);
-
 /// Container for any rendering assets that never change.
 #[derive(Debug)]
 pub struct Assets {
     graphics_device: Arc<GraphicsDevice>,
     mipmapper_generator: Arc<MipmapperGenerator>,
     pub textures: HashMap<TextureID, Texture>,
+    pub samplers: HashMap<SamplerID, Sampler>,
 }
 
 lazy_static! {
@@ -51,6 +50,7 @@ impl Assets {
             graphics_device,
             mipmapper_generator,
             textures: HashMap::new(),
+            samplers: HashMap::new(),
         }
     }
 
@@ -74,16 +74,27 @@ impl Assets {
     pub fn load_texture_from_path(
         &mut self,
         image_path: impl AsRef<Path>,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_config: Option<SamplerConfig>,
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(image_path.as_ref().to_string_lossy()));
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            entry.insert(Texture::from_path(
+            let sampler_id = sampler_config.as_ref().map(Into::into);
+
+            let texture = entry.insert(Texture::from_path(
                 &self.graphics_device,
                 &self.mipmapper_generator,
                 image_path,
-                config,
+                texture_config,
+                sampler_id,
             )?);
+
+            if let (Some(sampler_id), Some(sampler_config)) = (texture.sampler_id(), sampler_config)
+            {
+                self.samplers
+                    .entry(sampler_id)
+                    .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+            }
         }
         Ok(texture_id)
     }
@@ -104,7 +115,8 @@ impl Assets {
         bottom_image_path: P,
         front_image_path: P,
         back_image_path: P,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_config: Option<SamplerConfig>,
     ) -> Result<TextureID> {
         let texture_id = TextureID(hash32!(format!(
             "Cubemap {{{}, {}, {}, {}, {}, {}}}",
@@ -117,7 +129,9 @@ impl Assets {
         )));
 
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
-            entry.insert(Texture::from_cubemap_image_paths(
+            let sampler_id = sampler_config.as_ref().map(Into::into);
+
+            let texture = entry.insert(Texture::from_cubemap_image_paths(
                 &self.graphics_device,
                 right_image_path,
                 left_image_path,
@@ -125,8 +139,16 @@ impl Assets {
                 bottom_image_path,
                 front_image_path,
                 back_image_path,
-                config,
+                texture_config,
+                sampler_id,
             )?);
+
+            if let (Some(sampler_id), Some(sampler_config)) = (texture.sampler_id(), sampler_config)
+            {
+                self.samplers
+                    .entry(sampler_id)
+                    .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
+            }
         }
 
         Ok(texture_id)
@@ -164,11 +186,22 @@ impl Assets {
         let label = label.as_ref();
         let texture_id = TextureID(hash32!(label));
         if let Entry::Vacant(entry) = self.textures.entry(texture_id) {
+            let sampler_config = SamplerConfig {
+                addressing: TextureAddressingConfig::CLAMPED,
+                filtering: TextureFilteringConfig::NONE,
+            };
+            let sampler_id = (&sampler_config).into();
+
             entry.insert(Texture::from_lookup_table(
                 &self.graphics_device,
                 &generate_table()?,
                 label,
+                Some(sampler_id),
             )?);
+
+            self.samplers
+                .entry(sampler_id)
+                .or_insert_with(|| Sampler::create(&self.graphics_device, sampler_config));
         }
         Ok(texture_id)
     }

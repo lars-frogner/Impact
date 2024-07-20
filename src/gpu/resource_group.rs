@@ -1,7 +1,10 @@
 //! Groups of GPU data resources.
 
 use crate::gpu::{
-    storage::StorageGPUBuffer, texture::Texture, uniform::SingleUniformGPUBuffer, GraphicsDevice,
+    storage::StorageGPUBuffer,
+    texture::{Sampler, Texture},
+    uniform::SingleUniformGPUBuffer,
+    GraphicsDevice,
 };
 use impact_utils::stringhash64_newtype;
 use std::collections::{hash_map::Entry, HashMap};
@@ -17,8 +20,8 @@ stringhash64_newtype!(
 pub struct GPUResourceGroup {
     single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
     n_storage_buffers: usize,
-    n_unsampled_textures: usize,
-    n_sampled_textures: usize,
+    n_textures: usize,
+    n_samplers: usize,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
 }
@@ -30,8 +33,8 @@ pub struct GPUResourceGroupManager {
 }
 
 impl GPUResourceGroup {
-    /// Gathers the given sets of uniform buffers, storage buffers, unsampled
-    /// textures and sampled textures into a group of GPU resources.
+    /// Gathers the given sets of uniform buffers, storage buffers, textures and
+    /// samplers into a group of GPU resources.
     ///
     /// The resources will be gathered in a single bind group, and the binding
     /// for each resource can be obtained by calling the appropriate
@@ -41,15 +44,13 @@ impl GPUResourceGroup {
         graphics_device: &GraphicsDevice,
         single_uniform_buffers: Vec<SingleUniformGPUBuffer>,
         storage_buffers: &[&StorageGPUBuffer],
-        unsampled_textures: &[&Texture],
-        sampled_textures: &[&Texture],
+        textures: &[&Texture],
+        samplers: &[&Sampler],
         visibility: wgpu::ShaderStages,
         label: &str,
     ) -> Self {
-        let n_entries = single_uniform_buffers.len()
-            + storage_buffers.len()
-            + unsampled_textures.len()
-            + 2 * sampled_textures.len();
+        let n_entries =
+            single_uniform_buffers.len() + storage_buffers.len() + textures.len() + samplers.len();
 
         let mut bind_group_layout_entries = Vec::with_capacity(n_entries);
         let mut bind_group_entries = Vec::with_capacity(n_entries);
@@ -68,22 +69,17 @@ impl GPUResourceGroup {
             binding += 1;
         }
 
-        for texture in unsampled_textures {
+        for texture in textures {
             bind_group_layout_entries
-                .push(texture.create_texture_bind_group_layout_entry(binding, visibility));
-            bind_group_entries.push(texture.create_texture_bind_group_entry(binding));
+                .push(texture.create_bind_group_layout_entry(binding, visibility));
+            bind_group_entries.push(texture.create_bind_group_entry(binding));
             binding += 1;
         }
 
-        for texture in sampled_textures {
+        for sampler in samplers {
             bind_group_layout_entries
-                .push(texture.create_texture_bind_group_layout_entry(binding, visibility));
-            bind_group_entries.push(texture.create_texture_bind_group_entry(binding));
-            binding += 1;
-
-            bind_group_layout_entries
-                .push(texture.create_sampler_bind_group_layout_entry(binding, visibility));
-            bind_group_entries.push(texture.create_sampler_bind_group_entry(binding));
+                .push(sampler.create_bind_group_layout_entry(binding, visibility));
+            bind_group_entries.push(sampler.create_bind_group_entry(binding));
             binding += 1;
         }
 
@@ -106,8 +102,8 @@ impl GPUResourceGroup {
         Self {
             single_uniform_buffers,
             n_storage_buffers: storage_buffers.len(),
-            n_unsampled_textures: unsampled_textures.len(),
-            n_sampled_textures: sampled_textures.len(),
+            n_textures: textures.len(),
+            n_samplers: samplers.len(),
             bind_group_layout,
             bind_group,
         }
@@ -134,33 +130,26 @@ impl GPUResourceGroup {
         }
     }
 
-    /// Returns the binding for the unsampled texture at the given index, or
-    /// [`None`] if the index is out of bounds.
-    pub fn unsampled_texture_binding(&self, idx: usize) -> Option<u32> {
+    /// Returns the binding for the texture at the given index, or [`None`] if
+    /// the index is out of bounds.
+    pub fn texture_binding(&self, idx: usize) -> Option<u32> {
         let offset = self.single_uniform_buffers.len() + self.n_storage_buffers;
-        if idx < self.n_unsampled_textures {
+        if idx < self.n_textures {
             Some((offset + idx) as u32)
         } else {
             None
         }
     }
 
-    /// Returns the binding for the sampled texture at the given index, or
-    /// [`None`] if the index is out of bounds.
-    pub fn sampled_texture_binding(&self, idx: usize) -> Option<u32> {
-        let offset =
-            self.single_uniform_buffers.len() + self.n_storage_buffers + self.n_unsampled_textures;
-        if idx < self.n_sampled_textures {
-            Some((offset + 2 * idx) as u32)
+    /// Returns the binding for the sampler at the given index, or [`None`] if
+    /// the index is out of bounds.
+    pub fn sampler_binding(&self, idx: usize) -> Option<u32> {
+        let offset = self.single_uniform_buffers.len() + self.n_storage_buffers + self.n_textures;
+        if idx < self.n_samplers {
+            Some((offset + idx) as u32)
         } else {
             None
         }
-    }
-
-    /// Returns the binding for the sampler for the sampled texture at the given
-    /// index, or [`None`] if the index is out of bounds.
-    pub fn sampler_binding(&self, idx: usize) -> Option<u32> {
-        self.sampled_texture_binding(idx).map(|binding| binding + 1)
     }
 
     /// Returns a reference to the bind group layout for the resources.

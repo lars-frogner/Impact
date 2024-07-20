@@ -3,11 +3,11 @@
 use crate::gpu::{
     rendering::{
         postprocessing::gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
-        render_command::{OutputAttachmentSampling, RenderCommandSpecification},
+        render_command::{Blending, RenderCommandSpecification},
     },
     resource_group::GPUResourceGroupManager,
     shader::ShaderManager,
-    texture::attachment::RenderAttachmentQuantity,
+    texture::attachment::{OutputAttachmentSampling, RenderAttachmentQuantity},
     GraphicsDevice,
 };
 
@@ -52,6 +52,7 @@ pub(super) fn create_bloom_render_commands(
         RenderAttachmentQuantity::EmissiveLuminance,
         RenderAttachmentQuantity::Luminance,
         OutputAttachmentSampling::Single,
+        Blending::Additive,
         false,
     ));
 
@@ -67,6 +68,7 @@ pub(super) fn create_bloom_render_commands(
                 gpu_resource_group_manager,
                 RenderAttachmentQuantity::EmissiveLuminance,
                 RenderAttachmentQuantity::EmissiveLuminanceAux,
+                Blending::Replace,
                 GaussianBlurDirection::Horizontal,
                 &bloom_sample_uniform,
             ));
@@ -76,6 +78,7 @@ pub(super) fn create_bloom_render_commands(
                 gpu_resource_group_manager,
                 RenderAttachmentQuantity::EmissiveLuminanceAux,
                 RenderAttachmentQuantity::EmissiveLuminance,
+                Blending::Replace,
                 GaussianBlurDirection::Vertical,
                 &bloom_sample_uniform,
             ));
@@ -86,16 +89,18 @@ pub(super) fn create_bloom_render_commands(
             gpu_resource_group_manager,
             RenderAttachmentQuantity::EmissiveLuminance,
             RenderAttachmentQuantity::EmissiveLuminanceAux,
+            Blending::Replace,
             GaussianBlurDirection::Horizontal,
             &bloom_sample_uniform,
         ));
-        // For the last pass, we write to the luminance attachment
+        // For the last pass, we add to the luminance attachment
         render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
             graphics_device,
             shader_manager,
             gpu_resource_group_manager,
             RenderAttachmentQuantity::EmissiveLuminanceAux,
             RenderAttachmentQuantity::Luminance,
+            Blending::Additive,
             GaussianBlurDirection::Vertical,
             &bloom_sample_uniform,
         ));

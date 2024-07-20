@@ -20,6 +20,8 @@ use crate::{
         storage::{StorageBufferID, StorageGPUBufferManager},
         texture::{
             attachment::{
+                OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
+                RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
                 RenderAttachmentQuantity, RenderAttachmentQuantitySet,
                 RenderAttachmentTextureManager,
             },
@@ -93,18 +95,10 @@ pub struct RenderPassSpecification {
     pub shadow_map_usage: ShadowMapUsage,
     /// The vertex attributes to use in the pass.
     pub vertex_attribute_requirements: VertexAttributeSet,
-    /// The render attachment quantities to bind as inputs to the pass.
-    pub input_render_attachment_quantities: RenderAttachmentQuantitySet,
-    /// The render attachment quantities to use as output attachments in the
-    /// pass.
-    pub output_render_attachment_quantities: RenderAttachmentQuantitySet,
-    /// Whether to write to the multisampled versions of the output attachment
-    /// textures when available, or only use the regular versions.
-    pub output_attachment_sampling: OutputAttachmentSampling,
-    /// The blending mode to use for each output attachment in this pass. When
-    /// not specified here, the default blending mode for the attachment will be
-    /// used.
-    pub blending_overrides: HashMap<RenderAttachmentQuantity, Blending>,
+    /// Descriptions for the render attachments to bind as inputs to the pass.
+    pub input_render_attachments: RenderAttachmentInputDescriptionSet,
+    /// Descriptions for the render attachments to use as outputs in the pass.
+    pub output_render_attachments: RenderAttachmentOutputDescriptionSet,
     /// The group of push constants to use in the pass.
     pub push_constants: PushConstantGroup,
     pub hints: RenderPassHints,
@@ -236,17 +230,8 @@ pub enum ShadowMapIdentifier {
     ForOmnidirectionalLight(CubemapFace),
 }
 
-/// Whether a render pass should write to the multisampled versions of the
-/// output attachment textures when available, or only use the regular
-/// versions.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OutputAttachmentSampling {
-    Single,
-    MultiIfAvailable,
-}
-
 /// The blending mode to use for a render pass.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Blending {
     Replace,
     Additive,
@@ -347,7 +332,7 @@ impl RenderCommandManager {
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         postprocessor: &Postprocessor,
@@ -943,24 +928,23 @@ impl RenderCommandManager {
             recorder.attachments_to_resolve = RenderAttachmentQuantitySet::empty();
 
             if !recorder.state().is_disabled() {
-                for quantity in RenderAttachmentQuantity::all() {
+                for &quantity in RenderAttachmentQuantity::all() {
                     if quantity.supports_multisampling() {
-                        if recorder
+                        if let Some(output_description) = recorder
                             .specification
-                            .output_render_attachment_quantities
-                            .contains(quantity.flag())
-                            && recorder
-                                .specification
-                                .output_attachment_sampling
-                                .is_multi_if_available()
+                            .output_render_attachments
+                            .get_description(quantity)
                         {
-                            last_indices_of_multisampled_output_attachments[quantity.index()] =
-                                Some(idx);
+                            if output_description.sampling().is_multi_if_available() {
+                                last_indices_of_multisampled_output_attachments[quantity.index()] =
+                                    Some(idx);
+                            }
                         }
 
                         if recorder
                             .specification
-                            .input_render_attachment_quantities
+                            .input_render_attachments
+                            .quantities()
                             .contains(quantity.flag())
                         {
                             let first_idx =
@@ -1078,10 +1062,7 @@ impl RenderPassSpecification {
             ));
         }
 
-        if !material_specification
-            .input_render_attachment_quantities()
-            .is_empty()
-        {
+        if !material_specification.input_render_attachments().is_empty() {
             push_constants.add_push_constant(PushConstant::new(
                 PushConstantVariant::InverseWindowDimensions,
                 wgpu::ShaderStages::FRAGMENT,
@@ -1104,10 +1085,8 @@ impl RenderPassSpecification {
             light,
             vertex_attribute_requirements: material_specification
                 .vertex_attribute_requirements_for_shader(),
-            input_render_attachment_quantities: material_specification
-                .input_render_attachment_quantities(),
-            output_render_attachment_quantities: material_specification
-                .output_render_attachment_quantities(),
+            input_render_attachments: material_specification.input_render_attachments().clone(),
+            output_render_attachments: material_specification.output_render_attachments().clone(),
             push_constants,
             hints: material_specification.render_pass_hints(),
             label,
@@ -1148,10 +1127,7 @@ impl RenderPassSpecification {
             most_general_fragment_stage,
         ));
 
-        if !material_specification
-            .input_render_attachment_quantities()
-            .is_empty()
-        {
+        if !material_specification.input_render_attachments().is_empty() {
             push_constants.add_push_constant(PushConstant::new(
                 PushConstantVariant::InverseWindowDimensions,
                 most_general_fragment_stage,
@@ -1173,10 +1149,8 @@ impl RenderPassSpecification {
             light,
             vertex_attribute_requirements: material_specification
                 .vertex_attribute_requirements_for_shader(),
-            input_render_attachment_quantities: material_specification
-                .input_render_attachment_quantities(),
-            output_render_attachment_quantities: material_specification
-                .output_render_attachment_quantities(),
+            input_render_attachments: material_specification.input_render_attachments().clone(),
+            output_render_attachments: material_specification.output_render_attachments().clone(),
             push_constants,
             hints: material_specification.render_pass_hints(),
             label,
@@ -1215,10 +1189,7 @@ impl RenderPassSpecification {
             most_general_fragment_stage,
         ));
 
-        if !material_specification
-            .input_render_attachment_quantities()
-            .is_empty()
-        {
+        if !material_specification.input_render_attachments().is_empty() {
             push_constants.add_push_constant(PushConstant::new(
                 PushConstantVariant::InverseWindowDimensions,
                 most_general_fragment_stage,
@@ -1232,10 +1203,8 @@ impl RenderPassSpecification {
             shadow_map_usage: ShadowMapUsage::Use,
             vertex_attribute_requirements: material_specification
                 .vertex_attribute_requirements_for_shader(),
-            input_render_attachment_quantities: material_specification
-                .input_render_attachment_quantities(),
-            output_render_attachment_quantities: material_specification
-                .output_render_attachment_quantities(),
+            input_render_attachments: material_specification.input_render_attachments().clone(),
+            output_render_attachments: material_specification.output_render_attachments().clone(),
             push_constants,
             hints: material_specification.render_pass_hints(),
             label: format!(
@@ -1472,9 +1441,10 @@ impl RenderPassSpecification {
     /// 7. Generic GPU resource group.
     fn get_bind_group_layouts_and_shader_inputs<'a>(
         &self,
+        graphics_device: &'a GraphicsDevice,
         material_library: &'a MaterialLibrary,
         render_resources: &'a SynchronizedRenderResources,
-        render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &'a mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &'a GPUResourceGroupManager,
     ) -> Result<(
         Vec<&'a wgpu::BindGroupLayout>,
@@ -1563,11 +1533,12 @@ impl RenderPassSpecification {
             }
         }
 
-        if !self.input_render_attachment_quantities.is_empty() {
+        if !self.input_render_attachments.is_empty() {
             layouts.extend(
                 render_attachment_texture_manager
-                    .request_render_attachment_texture_bind_group_layouts(
-                        self.input_render_attachment_quantities,
+                    .create_and_get_render_attachment_texture_bind_group_layouts(
+                        graphics_device,
+                        &self.input_render_attachments,
                     ),
             );
         }
@@ -1670,11 +1641,10 @@ impl RenderPassSpecification {
             }
         }
 
-        if !self.input_render_attachment_quantities.is_empty() {
+        if !self.input_render_attachments.is_empty() {
             bind_groups.extend(
-                render_attachment_texture_manager.request_render_attachment_texture_bind_groups(
-                    self.input_render_attachment_quantities,
-                ),
+                render_attachment_texture_manager
+                    .get_render_attachment_texture_bind_groups(&self.input_render_attachments),
             );
         }
 
@@ -1713,16 +1683,9 @@ impl RenderPassSpecification {
     }
 
     fn determine_color_blend_state(
-        &self,
-        quantity: RenderAttachmentQuantity,
+        output_description: &RenderAttachmentOutputDescription,
     ) -> Option<wgpu::BlendState> {
-        let blending = self
-            .blending_overrides
-            .get(&quantity)
-            .copied()
-            .unwrap_or_else(|| quantity.blending());
-
-        match blending {
+        match output_description.blending() {
             Blending::Replace => Some(wgpu::BlendState::REPLACE),
             Blending::Additive => {
                 Some(wgpu::BlendState {
@@ -1750,16 +1713,20 @@ impl RenderPassSpecification {
         } else {
             let mut color_target_states = Vec::with_capacity(RenderAttachmentQuantity::count());
 
-            if !self.output_render_attachment_quantities.is_empty() {
+            if !self.output_render_attachments.is_empty() {
                 color_target_states.extend(
                     render_attachment_texture_manager
                         .request_render_attachment_textures(
-                            self.output_render_attachment_quantities,
+                            self.output_render_attachments.quantities(),
                         )
                         .map(|texture| {
+                            let output_description = self
+                                .output_render_attachments
+                                .get_description(texture.quantity())
+                                .unwrap();
                             Some(wgpu::ColorTargetState {
                                 format: texture.format(),
-                                blend: self.determine_color_blend_state(texture.quantity()),
+                                blend: Self::determine_color_blend_state(&output_description),
                                 write_mask: wgpu::ColorWrites::COLOR,
                             })
                         }),
@@ -1870,14 +1837,10 @@ impl RenderPassSpecification {
         &self,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
     ) -> u32 {
-        if self.output_attachment_sampling.is_single() {
-            return 1;
-        }
-
         let output_render_attachment_quantities = if self.depth_map_usage.will_update() {
-            self.output_render_attachment_quantities | RenderAttachmentQuantitySet::DEPTH
+            self.output_render_attachments.quantities() | RenderAttachmentQuantitySet::DEPTH
         } else {
-            self.output_render_attachment_quantities
+            self.output_render_attachments.quantities()
         };
 
         let mut sample_count = None;
@@ -1888,14 +1851,26 @@ impl RenderPassSpecification {
             for texture in render_attachment_texture_manager
                 .request_render_attachment_textures(output_render_attachment_quantities)
             {
+                let output_description = self
+                    .output_render_attachments
+                    .get_description(texture.quantity())
+                    .unwrap_or_default();
+
+                let sample_count_for_this_attachment = match output_description.sampling() {
+                    OutputAttachmentSampling::Single => 1,
+                    OutputAttachmentSampling::MultiIfAvailable => {
+                        texture.multisampling_sample_count()
+                    }
+                };
+
                 match sample_count {
                     Some(count) => {
-                        if count != texture.multisampling_sample_count() {
+                        if count != sample_count_for_this_attachment {
                             panic!("found multisampling and non-multisampling output render attachments in the same render pass");
                         }
                     }
                     None => {
-                        sample_count = Some(texture.multisampling_sample_count());
+                        sample_count = Some(sample_count_for_this_attachment);
                     }
                 }
             }
@@ -1907,7 +1882,7 @@ impl RenderPassSpecification {
         &'a self,
         surface_texture_view: &'a wgpu::TextureView,
         render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
-        output_render_attachment_quantities: RenderAttachmentQuantitySet,
+        output_render_attachments: &RenderAttachmentOutputDescriptionSet,
         attachments_to_resolve: RenderAttachmentQuantitySet,
     ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
         if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_clear_or_update() {
@@ -1918,9 +1893,9 @@ impl RenderPassSpecification {
             let mut color_attachments = Vec::with_capacity(RenderAttachmentQuantity::count());
 
             let render_attachment_quantities = if self.color_attachments_to_clear.is_empty() {
-                output_render_attachment_quantities
+                output_render_attachments.quantities()
             } else {
-                self.color_attachments_to_clear
+                self.color_attachments_to_clear.with_clear_color_only()
             };
 
             if !render_attachment_quantities.is_empty() {
@@ -1931,15 +1906,19 @@ impl RenderPassSpecification {
                             let should_resolve =
                                 attachments_to_resolve.contains(texture.quantity().flag());
 
+                            let output_description = output_render_attachments
+                                .get_description(texture.quantity())
+                                .unwrap_or_default();
+
                             let (view, resolve_target) = texture.view_and_resolve_target(
-                                self.output_attachment_sampling.is_multi_if_available(),
+                                output_description.sampling().is_multi_if_available(),
                                 should_resolve,
                             );
 
                             let load = if self.color_attachments_to_clear.is_empty() {
                                 wgpu::LoadOp::Load
                             } else {
-                                wgpu::LoadOp::Clear(texture.quantity().clear_color())
+                                wgpu::LoadOp::Clear(texture.quantity().clear_color().unwrap())
                             };
 
                             Some(wgpu::RenderPassColorAttachment {
@@ -2003,9 +1982,7 @@ impl RenderPassSpecification {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
-                    .multisampled_if_available_and(
-                        self.output_attachment_sampling.is_multi_if_available(),
-                    )
+                    .multisampled_if_available_and(true)
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
@@ -2021,7 +1998,11 @@ impl RenderPassSpecification {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::Depth)
                     .multisampled_if_available_and(
-                        self.output_attachment_sampling.is_multi_if_available(),
+                        self.output_render_attachments
+                            .get_description(RenderAttachmentQuantity::Depth)
+                            .unwrap_or_default()
+                            .sampling()
+                            .is_multi_if_available(),
                     )
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
@@ -2054,10 +2035,8 @@ impl Default for RenderPassSpecification {
             light: None,
             shadow_map_usage: ShadowMapUsage::None,
             vertex_attribute_requirements: VertexAttributeSet::empty(),
-            input_render_attachment_quantities: RenderAttachmentQuantitySet::empty(),
-            output_render_attachment_quantities: RenderAttachmentQuantitySet::empty(),
-            output_attachment_sampling: OutputAttachmentSampling::MultiIfAvailable,
-            blending_overrides: HashMap::new(),
+            input_render_attachments: RenderAttachmentInputDescriptionSet::empty(),
+            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(),
             push_constants: PushConstantGroup::new(),
             hints: RenderPassHints::empty(),
             label: String::new(),
@@ -2077,7 +2056,7 @@ impl RenderPassRecorder {
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
@@ -2089,6 +2068,7 @@ impl RenderPassRecorder {
         {
             let (bind_group_layouts, bind_group_shader_input) = specification
                 .get_bind_group_layouts_and_shader_inputs(
+                    graphics_device,
                     material_library,
                     render_resources,
                     render_attachment_texture_manager,
@@ -2119,8 +2099,8 @@ impl RenderPassRecorder {
                     &instance_feature_shader_inputs,
                     bind_group_shader_input.material,
                     specification.vertex_attribute_requirements,
-                    specification.input_render_attachment_quantities,
-                    specification.output_render_attachment_quantities,
+                    specification.input_render_attachments.quantities(),
+                    specification.output_render_attachments.quantities(),
                     specification.push_constants.clone(),
                 )?
             };
@@ -2250,13 +2230,30 @@ impl RenderPassRecorder {
         let color_attachments = self.specification.create_color_attachments(
             surface_texture_view,
             render_attachment_texture_manager,
-            self.specification.output_render_attachment_quantities,
+            &self.specification.output_render_attachments,
             self.attachments_to_resolve,
         );
 
-        let depth_stencil_attachment = self
+        let mut depth_stencil_attachment = self
             .specification
             .create_depth_stencil_attachment(render_resources, render_attachment_texture_manager);
+
+        if self.pipeline.is_none() && !color_attachments.is_empty() {
+            // If we don't have a pipeline, it is safe to split up the
+            // attachments into chunks of 8 to avoid exceeding the maximum
+            // number of color attachments per render pass (this is probably
+            // only relevant for clearing passes)
+            for color_attachments in color_attachments.chunks(8) {
+                command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments,
+                    depth_stencil_attachment: depth_stencil_attachment.take(), // Only include the depth attachment once
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    label: Some(&self.specification.label),
+                });
+            }
+            return Ok(RenderCommandOutcome::Recorded);
+        }
 
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             // A `@location(i)` directive in the fragment shader output targets color attachment `i` here
@@ -2652,7 +2649,7 @@ impl RenderCommandRecorder {
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         specification: RenderCommandSpecification,
@@ -2675,6 +2672,7 @@ impl RenderCommandRecorder {
                 graphics_device,
                 shader_manager,
                 gpu_resource_group_manager,
+                render_attachment_texture_manager,
                 specification,
                 state,
             ),
@@ -2698,7 +2696,7 @@ impl RenderCommandRecorder {
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
         specification: RenderPassSpecification,
@@ -2737,6 +2735,7 @@ impl RenderCommandRecorder {
         graphics_device: &GraphicsDevice,
         shader_manager: &ShaderManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         specification: ComputePassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
@@ -2744,6 +2743,7 @@ impl RenderCommandRecorder {
             graphics_device,
             shader_manager,
             gpu_resource_group_manager,
+            render_attachment_texture_manager,
             specification,
             state,
         )?))
@@ -2809,6 +2809,7 @@ impl RenderCommandRecorder {
             Self::ComputePass(recorder) => recorder.record_pass(
                 rendering_surface,
                 gpu_resource_group_manager,
+                render_attachment_texture_manager,
                 postprocessor,
                 command_encoder,
             ),
@@ -2928,15 +2929,5 @@ impl ShadowMapUsage {
             Self::Update(shadow_map_id) | Self::Clear(shadow_map_id) => Some(*shadow_map_id),
             _ => None,
         }
-    }
-}
-
-impl OutputAttachmentSampling {
-    fn is_single(&self) -> bool {
-        *self == Self::Single
-    }
-
-    fn is_multi_if_available(&self) -> bool {
-        *self == Self::MultiIfAvailable
     }
 }

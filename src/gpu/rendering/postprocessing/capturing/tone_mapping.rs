@@ -4,11 +4,13 @@ use crate::{
     gpu::{
         push_constant::{PushConstant, PushConstantVariant},
         rendering::render_command::{
-            OutputAttachmentSampling, RenderCommandSpecification, RenderPassHints,
-            RenderPassSpecification,
+            RenderCommandSpecification, RenderPassHints, RenderPassSpecification,
         },
         shader::{template::SpecificShaderTemplate, ShaderManager},
-        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
+        texture::attachment::{
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity,
+        },
         GraphicsDevice,
     },
     mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
@@ -89,12 +91,14 @@ fn create_tone_mapping_render_pass(
         )
         .unwrap();
 
+    let input_render_attachments =
+        RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_shader_id: Some(shader_id),
-        input_render_attachment_quantities: input_render_attachment_quantity.flag(),
-        output_render_attachment_quantities: RenderAttachmentQuantitySet::empty(), // We output directly to surface
-        output_attachment_sampling: OutputAttachmentSampling::Single,
+        input_render_attachments,
+        output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(), // We output directly to the surface
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,

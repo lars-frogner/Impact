@@ -8,13 +8,17 @@ use crate::{
     gpu::{
         push_constant::{PushConstant, PushConstantVariant},
         rendering::render_command::{
-            DepthMapUsage, OutputAttachmentSampling, RenderCommandSpecification,
-            RenderCommandState, RenderPassHints, RenderPassSpecification,
+            Blending, DepthMapUsage, RenderCommandSpecification, RenderCommandState,
+            RenderPassHints, RenderPassSpecification,
         },
         resource_group::GPUResourceGroupManager,
         shader::{template::SpecificShaderTemplate, ShaderManager},
         storage::StorageGPUBufferManager,
-        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+        texture::attachment::{
+            OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity, RenderAttachmentTextureManager,
+        },
         GraphicsDevice,
     },
     mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
@@ -112,6 +116,7 @@ fn create_passthrough_render_pass(
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     output_attachment_sampling: OutputAttachmentSampling,
+    blending: Blending,
     perform_stencil_test: bool,
 ) -> RenderCommandSpecification {
     let (input_texture_binding, input_sampler_binding) =
@@ -132,12 +137,21 @@ fn create_passthrough_render_pass(
         )
         .unwrap();
 
+    let input_render_attachments =
+        RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
+
+    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+        output_render_attachment_quantity,
+        RenderAttachmentOutputDescription::default()
+            .with_sampling(output_attachment_sampling)
+            .with_blending(blending),
+    );
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_shader_id: Some(shader_id),
-        input_render_attachment_quantities: input_render_attachment_quantity.flag(),
-        output_render_attachment_quantities: output_render_attachment_quantity.flag(),
-        output_attachment_sampling,
+        input_render_attachments,
+        output_render_attachments,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,

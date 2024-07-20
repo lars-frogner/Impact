@@ -13,7 +13,7 @@ use crate::{
     gpu::{
         self,
         rendering::{fre, RenderingConfig},
-        texture::{ColorSpace, TextureAddressingConfig, TextureConfig},
+        texture::{ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig},
     },
     light::components::{
         AmbientEmissionComp, OmnidirectionalEmissionComp, UnidirectionalEmissionComp,
@@ -133,60 +133,79 @@ fn init_app(window: Window) -> Result<Application> {
             color_space: ColorSpace::Srgb,
             ..Default::default()
         },
+        Some(SamplerConfig::default()),
     )?;
 
     let bricks_color_texture_id = assets.load_texture_from_path(
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
-            addressing: TextureAddressingConfig::REPEATING,
             ..Default::default()
         },
+        Some(SamplerConfig {
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        }),
     )?;
 
     let bricks_roughness_texture_id = assets.load_texture_from_path(
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
-            addressing: TextureAddressingConfig::REPEATING,
             ..Default::default()
         },
+        Some(SamplerConfig {
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        }),
     )?;
 
     let bricks_height_texture_id = assets.load_texture_from_path(
         "assets/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
-            addressing: TextureAddressingConfig::REPEATING,
             ..Default::default()
         },
+        Some(SamplerConfig {
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        }),
     )?;
 
     let wood_floor_color_texture_id = assets.load_texture_from_path(
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg",
         TextureConfig {
             color_space: ColorSpace::Srgb,
-            addressing: TextureAddressingConfig::REPEATING,
             ..Default::default()
         },
+        Some(SamplerConfig {
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        }),
     )?;
 
     let wood_floor_roughness_texture_id = assets.load_texture_from_path(
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
-            addressing: TextureAddressingConfig::REPEATING,
             ..Default::default()
         },
+        Some(SamplerConfig {
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        }),
     )?;
 
     let wood_floor_normal_texture_id = assets.load_texture_from_path(
         "assets/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg",
         TextureConfig {
             color_space: ColorSpace::Linear,
-            addressing: TextureAddressingConfig::REPEATING,
             ..Default::default()
         },
+        Some(SamplerConfig {
+            addressing: TextureAddressingConfig::REPEATING,
+            ..Default::default()
+        }),
     )?;
 
     drop(assets);

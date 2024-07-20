@@ -4,14 +4,19 @@ use crate::gpu::{
     rendering::{render_command::Blending, surface::RenderingSurface},
     texture::{
         mipmap::{Mipmapper, MipmapperGenerator},
-        Texture,
+        Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig,
     },
     GraphicsDevice,
 };
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
-use std::{borrow::Cow, fmt::Display, path::Path};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    path::Path,
+};
 
 bitflags! {
     /// Bitflag encoding a set of quantities that can be rendered to dedicated
@@ -20,39 +25,88 @@ bitflags! {
     pub struct RenderAttachmentQuantitySet: u16 {
         const DEPTH                       = 1 << 0;
         const LUMINANCE                   = 1 << 1;
-        const POSITION                    = 1 << 2;
-        const NORMAL_VECTOR               = 1 << 3;
-        const TEXTURE_COORDS              = 1 << 4;
-        const AMBIENT_REFLECTED_LUMINANCE = 1 << 5;
-        const EMISSIVE_LUMINANCE          = 1 << 6;
-        const EMISSIVE_LUMINANCE_AUX      = 1 << 7;
-        const OCCLUSION                   = 1 << 8;
+        const PREVIOUS_LUMINANCE          = 1 << 2;
+        const POSITION                    = 1 << 3;
+        const PREVIOUS_POSITION           = 1 << 4;
+        const NORMAL_VECTOR               = 1 << 5;
+        const TEXTURE_COORDS              = 1 << 6;
+        const MOTION_VECTOR               = 1 << 7;
+        const AMBIENT_REFLECTED_LUMINANCE = 1 << 8;
+        const EMISSIVE_LUMINANCE          = 1 << 9;
+        const EMISSIVE_LUMINANCE_AUX      = 1 << 10;
+        const OCCLUSION                   = 1 << 11;
     }
 }
 
 /// A quantity that can be rendered to a dedicated render attachment texture.
-#[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RenderAttachmentQuantity {
     Depth = 0,
     Luminance = 1,
-    Position = 2,
-    NormalVector = 3,
-    TextureCoords = 4,
-    AmbientReflectedLuminance = 5,
-    EmissiveLuminance = 6,
-    EmissiveLuminanceAux = 7,
-    Occlusion = 8,
+    PreviousLuminance = 2,
+    Position = 3,
+    PreviousPosition = 4,
+    NormalVector = 5,
+    TextureCoords = 6,
+    MotionVector = 7,
+    AmbientReflectedLuminance = 8,
+    EmissiveLuminance = 9,
+    EmissiveLuminanceAux = 10,
+    Occlusion = 11,
 }
+
+/// A sampler variant for render attachment textures.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RenderAttachmentSampler {
+    NonFiltering = 0,
+    Filtering = 1,
+}
+
+/// Specifies how a render attachment should be used when bound as an input.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RenderAttachmentInputDescription {
+    sampler: RenderAttachmentSampler,
+    visibility: wgpu::ShaderStages,
+}
+
+/// Specifies how a render attachment should be used when bound as an output.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RenderAttachmentOutputDescription {
+    blending: Blending,
+    sampling: OutputAttachmentSampling,
+}
+
+/// Whether to write to the multisampled versions of an output render attachment
+/// texture if available, or only use the regular version.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OutputAttachmentSampling {
+    Single,
+    MultiIfAvailable,
+}
+
+/// A set of descriptions for render attachments.
+#[derive(Clone, Debug)]
+pub struct RenderAttachmentDescriptionSet<D> {
+    quantities: RenderAttachmentQuantitySet,
+    descriptions: HashMap<RenderAttachmentQuantity, D>,
+}
+
+/// A set of input descriptions for render attachments.
+pub type RenderAttachmentInputDescriptionSet =
+    RenderAttachmentDescriptionSet<RenderAttachmentInputDescription>;
+
+/// A set of output descriptions for render attachments.
+pub type RenderAttachmentOutputDescriptionSet =
+    RenderAttachmentDescriptionSet<RenderAttachmentOutputDescription>;
 
 /// Manager for textures used as render attachments.
 #[derive(Debug)]
 pub struct RenderAttachmentTextureManager {
     quantity_textures:
         [Option<MaybeWithMultisampling<RenderAttachmentTexture>>; N_RENDER_ATTACHMENT_QUANTITIES],
-    quantity_texture_bind_group_layouts:
-        [Option<wgpu::BindGroupLayout>; N_RENDER_ATTACHMENT_QUANTITIES],
-    quantity_texture_bind_groups: [Option<wgpu::BindGroup>; N_RENDER_ATTACHMENT_QUANTITIES],
+    samplers: [Sampler; 2],
+    bind_groups_and_layouts:
+        HashMap<FullRenderAttachmentInputDescription, (wgpu::BindGroupLayout, wgpu::BindGroup)>,
 }
 
 /// A texture that can be used as a color attachment for rendering a specific
@@ -71,8 +125,14 @@ pub struct MaybeWithMultisampling<T> {
     pub multisampled: Option<T>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct FullRenderAttachmentInputDescription {
+    quantity: RenderAttachmentQuantity,
+    description: RenderAttachmentInputDescription,
+}
+
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 9;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 12;
 
 /// Each individual render attachment quantity.
 ///
@@ -81,9 +141,12 @@ const N_RENDER_ATTACHMENT_QUANTITIES: usize = 9;
 const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantity::Depth,
     RenderAttachmentQuantity::Luminance,
+    RenderAttachmentQuantity::PreviousLuminance,
     RenderAttachmentQuantity::Position,
+    RenderAttachmentQuantity::PreviousPosition,
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
+    RenderAttachmentQuantity::MotionVector,
     RenderAttachmentQuantity::AmbientReflectedLuminance,
     RenderAttachmentQuantity::EmissiveLuminance,
     RenderAttachmentQuantity::EmissiveLuminanceAux,
@@ -94,9 +157,12 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
 const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantitySet::DEPTH,
     RenderAttachmentQuantitySet::LUMINANCE,
+    RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE,
     RenderAttachmentQuantitySet::POSITION,
+    RenderAttachmentQuantitySet::PREVIOUS_POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
+    RenderAttachmentQuantitySet::MOTION_VECTOR,
     RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
     RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE,
     RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE_AUX,
@@ -107,9 +173,15 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
 const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "depth",
     "luminance",
+    // We use the same name for the previous luminance attachment so that their
+    // `BindGroupLayout`s can be used interchangeably
+    "luminance",
+    "position",
+    // Same for the previous position
     "position",
     "normal_vector",
     "texture_coords",
+    "motion_vector",
     "ambient_reflected_luminance",
     "emissive_luminance",
     "emissive_luminance_aux",
@@ -120,9 +192,12 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
 const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
     wgpu::TextureFormat::Depth32FloatStencil8, // Depth
     wgpu::TextureFormat::Rgba16Float,          // Luminance
+    wgpu::TextureFormat::Rgba16Float,          // Previous luminance
     wgpu::TextureFormat::Rgba32Float,          // Position
+    wgpu::TextureFormat::Rgba32Float,          // Previous position
     wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
     wgpu::TextureFormat::Rg32Float,            // Texture coordinates
+    wgpu::TextureFormat::Rgba16Float,          // Motion vector
     wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance (auxiliary)
@@ -133,9 +208,12 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
 const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     true, // Depth
     true, // Luminance
+    true, // Previous luminance
     true, // Position
+    true, // Previous position
     true, // Normal vector
     true, // Texture coordinates
+    true, // Motion vector
     true, // Ambient reflected luminance
     true, // Emissive luminance
     true, // Emissive luminance (auxiliary)
@@ -146,55 +224,50 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
 const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     false, // Depth
     false, // Luminance
+    false, // Previous luminance
     false, // Position
+    false, // Previous position
     false, // Normal vector
     false, // Texture coordinates
+    false, // Motion vector
     false, // Ambient reflected luminance
     false, // Emissive luminance
     false, // Emissive luminance (auxiliary)
     false, // Occlusion
 ];
 
-/// The clear color used for each color render attachment quantity (depth is not
-/// included).
-const RENDER_ATTACHMENT_CLEAR_COLORS: [wgpu::Color; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
-    wgpu::Color::BLACK, // Luminance
-    wgpu::Color::BLACK, // Position
-    wgpu::Color::BLACK, // Normal vector
-    wgpu::Color::BLACK, // Texture coordinates
-    wgpu::Color::BLACK, // Ambient reflected luminance
-    wgpu::Color::BLACK, // Emissive luminance
-    wgpu::Color::BLACK, // Emissive luminance (auxiliary)
-    wgpu::Color::WHITE, // Occlusion
-];
-
-/// The blending mode used for each color render attachment quantity (depth is not
-/// included).
-const RENDER_ATTACHMENT_BLENDING_MODES: [Blending; N_RENDER_ATTACHMENT_QUANTITIES - 1] = [
-    // Since we determine contributions from each light in separate render
-    // passes, we need to add up the color contributions.
-    Blending::Additive, // Luminance
-    Blending::Replace,  // Position
-    Blending::Replace,  // Normal vector
-    Blending::Replace,  // Texture coordinates
-    Blending::Replace,  // Ambient reflected luminance
-    Blending::Replace,  // Emissive luminance
-    Blending::Replace,  // Emissive luminance (auxiliary)
-    Blending::Replace,  // Occlusion
+/// The clear color used for each render attachment quantity, or [`None`] if the
+/// render attachment should never be cleared with a color.
+const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    None,                     // Depth
+    Some(wgpu::Color::BLACK), // Luminance
+    None,                     // Previous luminance
+    Some(wgpu::Color::BLACK), // Position
+    None,                     // Previous position
+    Some(wgpu::Color::BLACK), // Normal vector
+    Some(wgpu::Color::BLACK), // Texture coordinates
+    Some(wgpu::Color::BLACK), // Motion vector
+    Some(wgpu::Color::BLACK), // Ambient reflected luminance
+    Some(wgpu::Color::BLACK), // Emissive luminance
+    Some(wgpu::Color::BLACK), // Emissive luminance (auxiliary)
+    Some(wgpu::Color::WHITE), // Occlusion
 ];
 
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
 const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] = [
-    (0, 1),
-    (0, 1),
-    (0, 1),
-    (0, 1),
-    (0, 1),
-    (0, 1),
-    (0, 1),
-    (0, 1),
-    (0, 1),
+    (0, 1), // Depth
+    (0, 1), // Luminance
+    (0, 1), // Previous luminance
+    (0, 1), // Position
+    (0, 1), // Previous position
+    (0, 1), // Normal vector
+    (0, 1), // Texture coordinates
+    (0, 1), // Motion vector
+    (0, 1), // Ambient reflected luminance
+    (0, 1), // Emissive luminance
+    (0, 1), // Emissive luminance (auxiliary)
+    (0, 1), // Occlusion
 ];
 
 impl RenderAttachmentQuantity {
@@ -228,16 +301,9 @@ impl RenderAttachmentQuantity {
         RENDER_ATTACHMENT_FORMATS[Self::Depth.index()]
     }
 
-    /// The clear color used for each color render attachment quantity (the
-    /// first quantity, depth, is not included).
-    pub const fn clear_colors() -> &'static [wgpu::Color; Self::count() - 1] {
+    /// The clear color used for each render attachment quantity.
+    pub const fn clear_colors() -> &'static [Option<wgpu::Color>; Self::count()] {
         &RENDER_ATTACHMENT_CLEAR_COLORS
-    }
-
-    /// The default blending mode used for each color render attachment quantity
-    /// (the first quantity, depth, is not included).
-    pub const fn blending_modes() -> &'static [Blending; Self::count() - 1] {
-        &RENDER_ATTACHMENT_BLENDING_MODES
     }
 
     /// The texture and sampler bind group bindings used for each render attachment
@@ -283,22 +349,10 @@ impl RenderAttachmentQuantity {
         RENDER_ATTACHMENT_MIPMAPPED[self.index()]
     }
 
-    /// The clear color of this render attachment quantity.
-    ///
-    /// # Panics
-    /// If this quantity is depth.
-    pub fn clear_color(&self) -> wgpu::Color {
-        assert_ne!(*self, Self::Depth);
-        Self::clear_colors()[self.index() - 1]
-    }
-
-    /// The default blending mode of this render attachment quantity.
-    ///
-    /// # Panics
-    /// If this quantity is depth.
-    pub fn blending(&self) -> Blending {
-        assert_ne!(*self, Self::Depth);
-        Self::blending_modes()[self.index() - 1]
+    /// The clear color of this render attachment quantity, or [`None`] if this
+    /// quantity should never be cleared with a color.
+    pub fn clear_color(&self) -> Option<wgpu::Color> {
+        Self::clear_colors()[self.index()]
     }
 
     /// The texture and sampler bind group bindings used for this render
@@ -337,6 +391,17 @@ impl RenderAttachmentQuantitySet {
     pub fn color_only(&self) -> Self {
         *self - Self::DEPTH
     }
+
+    /// Returns this set without any quantities that do not have a clear color.
+    pub fn with_clear_color_only(&self) -> Self {
+        let mut quantities = Self::empty();
+        for quantity in RenderAttachmentQuantity::all() {
+            if self.contains(quantity.flag()) && quantity.clear_color().is_some() {
+                quantities |= quantity.flag();
+            }
+        }
+        quantities
+    }
 }
 
 impl Display for RenderAttachmentQuantitySet {
@@ -351,6 +416,195 @@ impl Display for RenderAttachmentQuantitySet {
     }
 }
 
+impl RenderAttachmentSampler {
+    /// Returns the configuration for this sampler variant.
+    pub fn config(&self) -> SamplerConfig {
+        match self {
+            Self::NonFiltering => SamplerConfig {
+                addressing: TextureAddressingConfig::CLAMPED,
+                filtering: TextureFilteringConfig::NONE,
+            },
+            Self::Filtering => SamplerConfig {
+                addressing: TextureAddressingConfig::CLAMPED,
+                filtering: TextureFilteringConfig::BASIC,
+            },
+        }
+    }
+}
+
+impl RenderAttachmentInputDescription {
+    /// Sets how the render attachment should be sampled.
+    pub fn with_sampler(mut self, sampler: RenderAttachmentSampler) -> Self {
+        self.sampler = sampler;
+        self
+    }
+
+    /// Sets the shader stages where the render attachment texture and its
+    /// sampler should be visible.
+    pub fn with_visibility(mut self, visibility: wgpu::ShaderStages) -> Self {
+        self.visibility = visibility;
+        self
+    }
+
+    /// Returns how the render attachment should be sampled.
+    pub fn sampler(&self) -> RenderAttachmentSampler {
+        self.sampler
+    }
+
+    /// Returns the shader stages where the render attachment texture and its
+    /// sampler should be visible.
+    pub fn visibility(&self) -> wgpu::ShaderStages {
+        self.visibility
+    }
+}
+
+impl Default for RenderAttachmentInputDescription {
+    fn default() -> Self {
+        Self {
+            sampler: RenderAttachmentSampler::NonFiltering,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+        }
+    }
+}
+
+impl RenderAttachmentOutputDescription {
+    /// Sets the blending mode that should be used when rendering to the render
+    /// attachment.
+    pub fn with_blending(mut self, blending: Blending) -> Self {
+        self.blending = blending;
+        self
+    }
+
+    /// Sets whether the multisampled version of the render attachment should be
+    /// writted to if available.
+    pub fn with_sampling(mut self, sampling: OutputAttachmentSampling) -> Self {
+        self.sampling = sampling;
+        self
+    }
+
+    /// Returns the blending mode that should be used when rendering to the
+    /// render attachment.
+    pub fn blending(&self) -> Blending {
+        self.blending
+    }
+
+    /// Returns whether the multisampled version of the render attachment should
+    /// be writted to if available.
+    pub fn sampling(&self) -> OutputAttachmentSampling {
+        self.sampling
+    }
+}
+
+impl Default for RenderAttachmentOutputDescription {
+    fn default() -> Self {
+        Self {
+            blending: Blending::Replace,
+            sampling: OutputAttachmentSampling::MultiIfAvailable,
+        }
+    }
+}
+
+impl OutputAttachmentSampling {
+    pub fn is_single(&self) -> bool {
+        *self == Self::Single
+    }
+
+    pub fn is_multi_if_available(&self) -> bool {
+        *self == Self::MultiIfAvailable
+    }
+}
+
+impl<D> RenderAttachmentDescriptionSet<D> {
+    /// Creates a new set of descriptions for the render attachments for the
+    /// given quantities. Descriptions that are not specified will use the
+    /// default description.
+    pub fn new(
+        quantities: RenderAttachmentQuantitySet,
+        descriptions: HashMap<RenderAttachmentQuantity, D>,
+    ) -> Self {
+        let described_quantities = descriptions
+            .keys()
+            .cloned()
+            .fold(RenderAttachmentQuantitySet::empty(), |set, quantity| {
+                set | quantity.flag()
+            });
+        assert!(quantities.contains(described_quantities));
+        Self {
+            quantities,
+            descriptions,
+        }
+    }
+
+    /// Creates a new empty set of descriptions for render attachments.
+    pub fn empty() -> Self {
+        Self {
+            quantities: RenderAttachmentQuantitySet::empty(),
+            descriptions: HashMap::new(),
+        }
+    }
+
+    /// Creates a new set of descriptions for the render attachments for the
+    /// given quantities, using the default description for all of them.
+    pub fn with_defaults(quantities: RenderAttachmentQuantitySet) -> Self {
+        Self::new(quantities, HashMap::new())
+    }
+
+    /// Whether the set is empty.
+    pub fn is_empty(&self) -> bool {
+        self.quantities.is_empty()
+    }
+
+    /// Returns the render attachment quantities in the set.
+    pub fn quantities(&self) -> RenderAttachmentQuantitySet {
+        self.quantities
+    }
+}
+
+impl<D> RenderAttachmentDescriptionSet<D>
+where
+    D: Clone + Default,
+{
+    /// Creates a set of descriptions for a single render attachment quantity.
+    pub fn single(quantity: RenderAttachmentQuantity, description: D) -> Self {
+        Self::new(
+            quantity.flag(),
+            [(quantity, description)].into_iter().collect(),
+        )
+    }
+
+    /// Returns the description for the given quantity, or the default
+    /// description if the quantity does not have a specific description.
+    /// Returns [`None`] if the quantity is not in the set.
+    pub fn get_description(&self, quantity: RenderAttachmentQuantity) -> Option<Cow<'_, D>> {
+        if !self.quantities.contains(quantity.flag()) {
+            return None;
+        }
+        Some(
+            self.descriptions
+                .get(&quantity)
+                .map_or_else(|| Cow::Owned(D::default()), Cow::Borrowed),
+        )
+    }
+
+    /// Inserts the given quantities in the set, using the default description for all of them.
+    pub fn insert_with_defaults(&mut self, quantities: RenderAttachmentQuantitySet) {
+        self.quantities |= quantities;
+    }
+
+    /// Inserts the given quantity in the set, using the given description.
+    ///
+    /// # Panics
+    /// If the quantity is already in the set.
+    pub fn insert_description(&mut self, quantity: RenderAttachmentQuantity, description: D) {
+        assert!(
+            !self.quantities.contains(quantity.flag()),
+            "Tried to insert a description for an existing quantity"
+        );
+        self.quantities |= quantity.flag();
+        self.descriptions.insert(quantity, description);
+    }
+}
+
 impl RenderAttachmentTextureManager {
     /// Creates a new manager for render attachment textures, initializing
     /// render attachment textures for the given set of quantities with the
@@ -361,12 +615,20 @@ impl RenderAttachmentTextureManager {
         mipmapper_generator: &MipmapperGenerator,
         sample_count: u32,
     ) -> Self {
+        let samplers = [
+            Sampler::create(
+                graphics_device,
+                RenderAttachmentSampler::NonFiltering.config(),
+            ),
+            Sampler::create(graphics_device, RenderAttachmentSampler::Filtering.config()),
+        ];
+
         let mut manager = Self {
-            quantity_textures: [None, None, None, None, None, None, None, None, None],
-            quantity_texture_bind_group_layouts: [
-                None, None, None, None, None, None, None, None, None,
+            quantity_textures: [
+                None, None, None, None, None, None, None, None, None, None, None, None,
             ],
-            quantity_texture_bind_groups: [None, None, None, None, None, None, None, None, None],
+            samplers,
+            bind_groups_and_layouts: HashMap::new(),
         };
 
         manager.recreate_textures(
@@ -411,41 +673,59 @@ impl RenderAttachmentTextureManager {
             })
     }
 
-    /// Returns an iterator over the render attachment texture bind group
-    /// layouts for the requested set of quantities, in the order in which the
-    /// quantities are returned from the [`RenderAttachmentQuantity`] methods.
-    pub fn request_render_attachment_texture_bind_group_layouts(
-        &self,
-        requested_quantities: RenderAttachmentQuantitySet,
+    /// Returns an iterator over the render attachment texture and sampler bind
+    /// group layouts for the requested set of input descriptions, in the order
+    /// in which the quantities are returned from the
+    /// [`RenderAttachmentQuantity`] methods. Any layout that does not already
+    /// exist will be created.
+    pub fn create_and_get_render_attachment_texture_bind_group_layouts(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        input_descriptions: &RenderAttachmentInputDescriptionSet,
     ) -> impl Iterator<Item = &wgpu::BindGroupLayout> {
-        RenderAttachmentQuantity::flags()
-            .iter()
-            .zip(self.quantity_texture_bind_group_layouts.iter())
-            .filter_map(move |(&quantity_flag, bind_group_layout)| {
-                if requested_quantities.contains(quantity_flag) {
-                    Some(bind_group_layout.as_ref().unwrap())
-                } else {
-                    None
-                }
-            })
+        let descriptions =
+            self.create_missing_bind_groups_and_layouts(graphics_device, input_descriptions);
+
+        descriptions.into_iter().map(|description| {
+            let (layout, _) = self.bind_groups_and_layouts.get(&description).unwrap();
+            layout
+        })
     }
 
-    /// Returns an iterator over the render attachment texture bind groups for
-    /// the requested set of quantities, in the order in which the quantities
-    /// are returned from the [`RenderAttachmentQuantity`] methods.
-    pub fn request_render_attachment_texture_bind_groups(
-        &self,
-        requested_quantities: RenderAttachmentQuantitySet,
-    ) -> impl Iterator<Item = &wgpu::BindGroup> {
-        RenderAttachmentQuantity::flags()
+    /// Returns an iterator over the render attachment texture and sampler bind
+    /// groups for the requested set of input descriptions, in the order in
+    /// which the quantities are returned from the [`RenderAttachmentQuantity`]
+    /// methods.
+    ///
+    /// This method should only be called after
+    /// [`Self::create_and_get_render_attachment_texture_bind_group_layouts`]
+    /// has been called with the same input descriptions, otherwise the
+    /// requested bind groups may not exist yet.
+    ///
+    /// # Panics
+    /// If the bind group for any of the input descriptions has not been
+    /// created.
+    pub fn get_render_attachment_texture_bind_groups<'a, 'b>(
+        &'a self,
+        input_descriptions: &'b RenderAttachmentInputDescriptionSet,
+    ) -> impl Iterator<Item = &'a wgpu::BindGroup> + 'b
+    where
+        'a: 'b,
+    {
+        RenderAttachmentQuantity::all()
             .iter()
-            .zip(self.quantity_texture_bind_groups.iter())
-            .filter_map(move |(&quantity_flag, bind_group)| {
-                if requested_quantities.contains(quantity_flag) {
-                    Some(bind_group.as_ref().unwrap())
-                } else {
-                    None
-                }
+            .filter_map(|&quantity| {
+                let full_description = FullRenderAttachmentInputDescription {
+                    quantity,
+                    description: input_descriptions.get_description(quantity)?.into_owned(),
+                };
+
+                let (_, bind_group) = self
+                    .bind_groups_and_layouts
+                    .get(&full_description)
+                    .expect("Missing bind group for render attachment input description");
+
+                Some(bind_group)
             })
     }
 
@@ -492,6 +772,7 @@ impl RenderAttachmentTextureManager {
         mipmapper_generator: &MipmapperGenerator,
         sample_count: u32,
     ) {
+        self.bind_groups_and_layouts.clear();
         for &quantity in RenderAttachmentQuantity::all() {
             self.recreate_render_attachment_texture(
                 graphics_device,
@@ -501,6 +782,25 @@ impl RenderAttachmentTextureManager {
                 sample_count,
             );
         }
+    }
+
+    /// Swaps the current and previous render attachment for each render
+    /// attachment quantity that has a `Previous<Quantity>` variant. May create
+    /// new bind groups to accommodate the swapped attachments.
+    pub fn swap_previous_and_current_attachment_variants(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+    ) {
+        self.swap_two_attachments(
+            graphics_device,
+            RenderAttachmentQuantity::Luminance,
+            RenderAttachmentQuantity::PreviousLuminance,
+        );
+        self.swap_two_attachments(
+            graphics_device,
+            RenderAttachmentQuantity::Position,
+            RenderAttachmentQuantity::PreviousPosition,
+        );
     }
 
     fn recreate_render_attachment_texture(
@@ -522,73 +822,210 @@ impl RenderAttachmentTextureManager {
             sample_count,
         );
 
-        let label = format!("{} render attachment", quantity);
-
-        let (texture_binding, sampler_binding) = quantity.bindings();
-
-        let bind_group_layout = self.quantity_texture_bind_group_layouts[quantity.index()]
-            .get_or_insert_with(|| {
-                Self::create_render_attachment_texture_bind_group_layout(
-                    graphics_device.device(),
-                    texture_binding,
-                    sampler_binding,
-                    &quantity_texture.regular,
-                    wgpu::ShaderStages::FRAGMENT,
-                    &label,
-                )
-            });
-
-        self.quantity_texture_bind_groups[quantity.index()] =
-            Some(Self::create_render_attachment_texture_bind_group(
-                graphics_device.device(),
-                texture_binding,
-                sampler_binding,
-                bind_group_layout,
-                &quantity_texture.regular,
-                &label,
-            ));
-
         self.quantity_textures[quantity.index()] = Some(quantity_texture);
     }
 
-    fn create_render_attachment_texture_bind_group_layout(
+    fn create_missing_bind_groups_and_layouts(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        input_descriptions: &RenderAttachmentInputDescriptionSet,
+    ) -> Vec<FullRenderAttachmentInputDescription> {
+        RenderAttachmentQuantity::all()
+            .iter()
+            .filter_map(|&quantity| {
+                let full_description = FullRenderAttachmentInputDescription {
+                    quantity,
+                    description: input_descriptions.get_description(quantity)?.into_owned(),
+                };
+
+                self.bind_groups_and_layouts
+                    .entry(full_description.clone())
+                    .or_insert_with(|| {
+                        Self::create_bind_group_and_layout_from_description(
+                            graphics_device,
+                            &self.quantity_textures,
+                            &self.samplers,
+                            &full_description,
+                        )
+                    });
+
+                Some(full_description)
+            })
+            .collect()
+    }
+
+    fn swap_two_attachments(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        first: RenderAttachmentQuantity,
+        second: RenderAttachmentQuantity,
+    ) {
+        let input_descriptions_for_first: HashSet<_> = self
+            .bind_groups_and_layouts
+            .keys()
+            .filter_map(|full_description| {
+                if full_description.quantity == first {
+                    Some(full_description.description)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let input_descriptions_for_second: HashSet<_> = self
+            .bind_groups_and_layouts
+            .keys()
+            .filter_map(|full_description| {
+                if full_description.quantity == second {
+                    Some(full_description.description)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Create any bind groups and layouts that one of the quantities has but
+        // not the other
+        for (quantity, missing_descriptions) in [
+            (
+                second,
+                input_descriptions_for_first.difference(&input_descriptions_for_second),
+            ),
+            (
+                first,
+                input_descriptions_for_second.difference(&input_descriptions_for_first),
+            ),
+        ] {
+            for description in missing_descriptions {
+                let missing_full_description = FullRenderAttachmentInputDescription {
+                    quantity,
+                    description: *description,
+                };
+                let missing_bind_group_and_layout =
+                    Self::create_bind_group_and_layout_from_description(
+                        graphics_device,
+                        &self.quantity_textures,
+                        &self.samplers,
+                        &missing_full_description,
+                    );
+                self.bind_groups_and_layouts
+                    .insert(missing_full_description, missing_bind_group_and_layout);
+            }
+        }
+
+        // Now that both quantities have all the same bind groups and layouts,
+        // we can swap them all
+        input_descriptions_for_first
+            .union(&input_descriptions_for_second)
+            .for_each(|description| {
+                let description_for_first = FullRenderAttachmentInputDescription {
+                    quantity: first,
+                    description: *description,
+                };
+                let description_for_second = FullRenderAttachmentInputDescription {
+                    quantity: second,
+                    description: *description,
+                };
+
+                let bind_group_and_layout_for_first = self
+                    .bind_groups_and_layouts
+                    .remove(&description_for_first)
+                    .unwrap();
+                let bind_group_and_layout_for_second = self
+                    .bind_groups_and_layouts
+                    .remove(&description_for_second)
+                    .unwrap();
+
+                self.bind_groups_and_layouts
+                    .insert(description_for_second, bind_group_and_layout_for_first);
+                self.bind_groups_and_layouts
+                    .insert(description_for_first, bind_group_and_layout_for_second);
+            });
+
+        let mut first_attachment = self.quantity_textures[first.index()].take().unwrap();
+        let mut second_attachment = self.quantity_textures[second.index()].take().unwrap();
+        first_attachment.swap(&mut second_attachment);
+        self.quantity_textures[first.index()] = Some(first_attachment);
+        self.quantity_textures[second.index()] = Some(second_attachment);
+    }
+
+    fn create_bind_group_and_layout_from_description(
+        graphics_device: &GraphicsDevice,
+        quantity_textures: &[Option<MaybeWithMultisampling<RenderAttachmentTexture>>;
+             RenderAttachmentQuantity::count()],
+        samplers: &[Sampler; 2],
+        full_description: &FullRenderAttachmentInputDescription,
+    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let quantity_texture = quantity_textures[full_description.quantity.index()]
+            .as_ref()
+            .unwrap();
+
+        let sampler = &samplers[full_description.description.sampler as usize];
+
+        let (texture_binding, sampler_binding) = full_description.quantity.bindings();
+
+        let label = format!(
+            "{} render attachment with {:?} sampler in stages {:?}",
+            full_description.quantity,
+            full_description.description.sampler(),
+            full_description.description.visibility()
+        );
+
+        let bind_group_layout = Self::create_bind_group_layout(
+            graphics_device.device(),
+            texture_binding,
+            sampler_binding,
+            quantity_texture.regular.texture(),
+            sampler,
+            full_description.description.visibility,
+            &label,
+        );
+
+        let bind_group = Self::create_bind_group(
+            graphics_device.device(),
+            texture_binding,
+            sampler_binding,
+            &bind_group_layout,
+            quantity_texture.regular.texture(),
+            sampler,
+            &label,
+        );
+
+        (bind_group_layout, bind_group)
+    }
+
+    fn create_bind_group_layout(
         device: &wgpu::Device,
         texture_binding: u32,
         sampler_binding: u32,
-        render_attachment_texture: &RenderAttachmentTexture,
+        texture: &Texture,
+        sampler: &Sampler,
         visibility: wgpu::ShaderStages,
         label: &str,
     ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                render_attachment_texture
-                    .texture()
-                    .create_texture_bind_group_layout_entry(texture_binding, visibility),
-                render_attachment_texture
-                    .texture()
-                    .create_sampler_bind_group_layout_entry(sampler_binding, visibility),
+                texture.create_bind_group_layout_entry(texture_binding, visibility),
+                sampler.create_bind_group_layout_entry(sampler_binding, visibility),
             ],
             label: Some(&format!("{} bind group layout", label)),
         })
     }
 
-    fn create_render_attachment_texture_bind_group(
+    fn create_bind_group(
         device: &wgpu::Device,
         texture_binding: u32,
         sampler_binding: u32,
         layout: &wgpu::BindGroupLayout,
-        render_attachment_texture: &RenderAttachmentTexture,
+        texture: &Texture,
+        sampler: &Sampler,
         label: &str,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
-                render_attachment_texture
-                    .texture()
-                    .create_texture_bind_group_entry(texture_binding),
-                render_attachment_texture
-                    .texture()
-                    .create_sampler_bind_group_entry(sampler_binding),
+                texture.create_bind_group_entry(texture_binding),
+                sampler.create_bind_group_entry(sampler_binding),
             ],
             label: Some(&format!("{} bind group", label)),
         })
@@ -655,15 +1092,7 @@ impl RenderAttachmentTexture {
             ..Default::default()
         });
 
-        let (sampler, sampler_binding_type) = Self::create_sampler(device, quantity);
-
-        let texture = Texture::new(
-            texture,
-            binding_view,
-            sampler,
-            sampler_binding_type,
-            wgpu::TextureViewDimension::D2,
-        );
+        let texture = Texture::new(texture, binding_view, wgpu::TextureViewDimension::D2, None);
 
         Self {
             quantity,
@@ -703,15 +1132,31 @@ impl RenderAttachmentTexture {
         self.texture.view()
     }
 
-    /// Returns a sampler for the render attachment texture.
-    pub fn sampler(&self) -> &wgpu::Sampler {
-        self.texture.sampler()
-    }
-
     /// Returns a reference to the mipmapper for the render attachment texture,
     /// or [`None`] if the texture has no mipmaps.
     pub fn mipmapper(&self) -> Option<&Mipmapper> {
         self.mipmapper.as_ref()
+    }
+
+    fn swap(&mut self, other: &mut Self) {
+        assert_eq!(
+            self.format(),
+            other.format(),
+            "Cannot swap render attachments with different formats"
+        );
+        assert_eq!(
+            self.sample_count(),
+            other.sample_count(),
+            "Cannot swap render attachments with different sample counts"
+        );
+        assert_eq!(
+            self.mipmapper().is_some(),
+            other.mipmapper().is_some(),
+            "Cannot swap render attachments with and without mipmapping"
+        );
+        std::mem::swap(self, other);
+        // We want to keep the old quantity, so we swap it back
+        std::mem::swap(&mut self.quantity, &mut other.quantity);
     }
 
     /// Creates a new 2D [`wgpu::Texture`] with the given size and format for
@@ -736,37 +1181,6 @@ impl RenderAttachmentTexture {
             label: Some(label),
             view_formats: &[],
         })
-    }
-
-    fn create_sampler(
-        device: &wgpu::Device,
-        quantity: RenderAttachmentQuantity,
-    ) -> (wgpu::Sampler, wgpu::SamplerBindingType) {
-        let (mag_filter, mipmap_filter, binding_type) = if quantity.is_mipmapped() {
-            (
-                wgpu::FilterMode::Linear,
-                wgpu::FilterMode::Linear,
-                wgpu::SamplerBindingType::Filtering,
-            )
-        } else {
-            (
-                wgpu::FilterMode::Nearest,
-                wgpu::FilterMode::Nearest,
-                wgpu::SamplerBindingType::NonFiltering,
-            )
-        };
-
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter,
-            ..Default::default()
-        });
-
-        (sampler, binding_type)
     }
 }
 
@@ -854,6 +1268,18 @@ impl MaybeWithMultisampling<RenderAttachmentTexture> {
                 },
             ),
             _ => (self.regular.attachment_view(), None),
+        }
+    }
+
+    fn swap(&mut self, other: &mut Self) {
+        self.regular.swap(&mut other.regular);
+
+        match (&mut self.multisampled, &mut other.multisampled) {
+            (Some(ref mut multisampled), Some(ref mut other_multisampled)) => {
+                multisampled.swap(other_multisampled);
+            }
+            (None, None) => {}
+            _ => panic!("Cannot swap render attachments with and without multisampling"),
         }
     }
 }

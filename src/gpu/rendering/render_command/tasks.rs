@@ -24,6 +24,7 @@ define_task!(
             let mut shader_manager = renderer.shader_manager().write().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             let mut render_command_manager = renderer.render_command_manager().write().unwrap();
+            let mut render_attachment_texture_manager = renderer.render_attachment_texture_manager().write().unwrap();
             let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
             let scene = app.scene().read().unwrap();
             let material_library = scene.material_library().read().unwrap();
@@ -35,7 +36,7 @@ define_task!(
                 renderer.rendering_surface(),
                 &material_library,
                 render_resource_manager.synchronized(),
-                renderer.render_attachment_texture_manager(),
+                &mut render_attachment_texture_manager,
                 &gpu_resource_group_manager,
                 &mut shader_manager,
                 &postprocessor,
