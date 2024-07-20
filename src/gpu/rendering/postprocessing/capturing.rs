@@ -293,7 +293,6 @@ impl CapturingCamera {
                 gpu_resource_group_manager,
                 storage_gpu_buffer_manager,
                 &self.average_luminance_computation_config.luminance_bounds,
-                true,
             );
     }
 

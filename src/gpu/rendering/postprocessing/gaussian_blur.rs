@@ -7,13 +7,16 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                OutputAttachmentSampling, RenderCommandSpecification, RenderPassHints,
-                RenderPassSpecification,
+                Blending, RenderCommandSpecification, RenderPassHints, RenderPassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{template::SpecificShaderTemplate, ShaderManager},
-        texture::attachment::RenderAttachmentQuantity,
+        texture::attachment::{
+            OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity,
+        },
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
@@ -178,6 +181,7 @@ pub(super) fn create_gaussian_blur_render_pass(
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
+    blending: Blending,
     direction: GaussianBlurDirection,
     sample_uniform: &GaussianBlurSamples,
 ) -> RenderCommandSpecification {
@@ -229,13 +233,22 @@ pub(super) fn create_gaussian_blur_render_pass(
         )
         .unwrap();
 
+    let input_render_attachments =
+        RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
+
+    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+        output_render_attachment_quantity,
+        RenderAttachmentOutputDescription::default()
+            .with_sampling(OutputAttachmentSampling::Single)
+            .with_blending(blending),
+    );
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_shader_id: Some(shader_id),
         resource_group_id: Some(resource_group_id),
-        input_render_attachment_quantities: input_render_attachment_quantity.flag(),
-        output_render_attachment_quantities: output_render_attachment_quantity.flag(),
-        output_attachment_sampling: OutputAttachmentSampling::Single,
+        input_render_attachments,
+        output_render_attachments,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,

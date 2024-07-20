@@ -1,14 +1,20 @@
 //! Materials for use in shading prepasses.
 
 use crate::{
-    assets::{Assets, TextureID},
+    assets::Assets,
     gpu::{
         rendering::render_command::RenderPassHints,
         shader::{
             BumpMappingTextureShaderInput, MaterialShaderInput, NormalMappingShaderInput,
             ParallaxMappingShaderInput, PrepassTextureShaderInput,
         },
-        texture::attachment::RenderAttachmentQuantitySet,
+        texture::{
+            attachment::{
+                RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+                RenderAttachmentQuantitySet,
+            },
+            TextureID,
+        },
         GraphicsDevice,
     },
     material::{
@@ -41,7 +47,7 @@ pub fn create_prepass_material(
     graphics_device: &GraphicsDevice,
     assets: &Assets,
     material_library: &mut MaterialLibrary,
-    input_render_attachment_quantities_for_main_material: &mut RenderAttachmentQuantitySet,
+    input_render_attachments_for_main_material: &mut RenderAttachmentInputDescriptionSet,
     mut material_name_parts: Vec<&str>,
     feature_type_id: InstanceFeatureTypeID,
     feature_id: InstanceFeatureID,
@@ -56,18 +62,23 @@ pub fn create_prepass_material(
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
 
-    // All prepass materials render to the emissive luminance attachment, either
-    // an actual emissive luminance or a clear color to overwrite any existing
-    // emissive luminance from an object blocked by the new fragment
-    let mut output_render_attachment_quantities = RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE;
+    let mut output_render_attachments = RenderAttachmentOutputDescriptionSet::with_defaults(
+        // All prepass materials render to the emissive luminance attachment, either
+        // an actual emissive luminance or a clear color to overwrite any existing
+        // emissive luminance from an object blocked by the new fragment
+        RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE
+        // These will be needed for ambient occlusion
+            | RenderAttachmentQuantitySet::POSITION
+            | RenderAttachmentQuantitySet::NORMAL_VECTOR
+            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+    );
 
-    // These are required for ambient occlusion
-    output_render_attachment_quantities |= RenderAttachmentQuantitySet::POSITION
-        | RenderAttachmentQuantitySet::NORMAL_VECTOR
-        | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE;
-
-    *input_render_attachment_quantities_for_main_material |=
-        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR;
+    // Since we output the position and normal vectors to attachments, the main
+    // material can get this information from the attachments rather than having
+    // to use the corresponding vertex attributes
+    input_render_attachments_for_main_material.insert_with_defaults(
+        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+    );
 
     if !texture_ids.is_empty() {
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;
@@ -97,9 +108,9 @@ pub fn create_prepass_material(
         vertex_attribute_requirements_for_shader |=
             VertexAttributeSet::TEXTURE_COORDS | VertexAttributeSet::TANGENT_SPACE_QUATERNION;
 
-        output_render_attachment_quantities |= RenderAttachmentQuantitySet::NORMAL_VECTOR;
-        *input_render_attachment_quantities_for_main_material |=
-            RenderAttachmentQuantitySet::NORMAL_VECTOR;
+        output_render_attachments.insert_with_defaults(RenderAttachmentQuantitySet::NORMAL_VECTOR);
+        input_render_attachments_for_main_material
+            .insert_with_defaults(RenderAttachmentQuantitySet::NORMAL_VECTOR);
 
         texture_shader_input.bump_mapping_input = Some(
             BumpMappingTextureShaderInput::NormalMapping(NormalMappingShaderInput {
@@ -120,11 +131,14 @@ pub fn create_prepass_material(
             | VertexAttributeSet::TEXTURE_COORDS
             | VertexAttributeSet::TANGENT_SPACE_QUATERNION;
 
-        output_render_attachment_quantities |= RenderAttachmentQuantitySet::NORMAL_VECTOR
-            | RenderAttachmentQuantitySet::TEXTURE_COORDS;
-        *input_render_attachment_quantities_for_main_material |=
+        output_render_attachments.insert_with_defaults(
             RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::TEXTURE_COORDS;
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+        );
+        input_render_attachments_for_main_material.insert_with_defaults(
+            RenderAttachmentQuantitySet::NORMAL_VECTOR
+                | RenderAttachmentQuantitySet::TEXTURE_COORDS,
+        );
 
         texture_shader_input.bump_mapping_input = Some(
             BumpMappingTextureShaderInput::ParallaxMapping(ParallaxMappingShaderInput {
@@ -166,8 +180,8 @@ pub fn create_prepass_material(
             MaterialSpecification::new(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
-                RenderAttachmentQuantitySet::empty(),
-                output_render_attachment_quantities,
+                RenderAttachmentInputDescriptionSet::empty(),
+                output_render_attachments,
                 None,
                 vec![feature_type_id],
                 RenderPassHints::empty(),

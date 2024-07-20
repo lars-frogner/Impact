@@ -61,7 +61,7 @@ pub struct RenderingSystem {
     shader_manager: RwLock<ShaderManager>,
     render_resource_manager: RwLock<RenderResourceManager>,
     render_command_manager: RwLock<RenderCommandManager>,
-    render_attachment_texture_manager: RenderAttachmentTextureManager,
+    render_attachment_texture_manager: RwLock<RenderAttachmentTextureManager>,
     gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
@@ -144,7 +144,7 @@ impl RenderingSystem {
             shader_manager: RwLock::new(shader_manager),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
             render_command_manager: RwLock::new(RenderCommandManager::new()),
-            render_attachment_texture_manager,
+            render_attachment_texture_manager: RwLock::new(render_attachment_texture_manager),
             gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
@@ -188,8 +188,9 @@ impl RenderingSystem {
         &self.render_command_manager
     }
 
-    /// Returns a reference to the [`RenderAttachmentTextureManager`].
-    pub fn render_attachment_texture_manager(&self) -> &RenderAttachmentTextureManager {
+    /// Returns a reference to the [`RenderAttachmentTextureManager`], guarded by a
+    /// [`RwLock`].
+    pub fn render_attachment_texture_manager(&self) -> &RwLock<RenderAttachmentTextureManager> {
         &self.render_attachment_texture_manager
     }
 
@@ -319,7 +320,15 @@ impl RenderingSystem {
             .cycle_tone_mapping();
     }
 
-    fn render_surface(&self, material_library: &MaterialLibrary) -> Result<wgpu::SurfaceTexture> {
+    fn render_surface(
+        &mut self,
+        material_library: &MaterialLibrary,
+    ) -> Result<wgpu::SurfaceTexture> {
+        self.render_attachment_texture_manager
+            .write()
+            .unwrap()
+            .swap_previous_and_current_attachment_variants(&self.graphics_device);
+
         let surface_texture = self.rendering_surface.surface().get_current_texture()?;
         let surface_texture_view = surface_texture
             .texture
@@ -338,7 +347,7 @@ impl RenderingSystem {
                     &surface_texture_view,
                     material_library,
                     render_resources_guard.synchronized(),
-                    &self.render_attachment_texture_manager,
+                    &self.render_attachment_texture_manager.read().unwrap(),
                     &self.gpu_resource_group_manager.read().unwrap(),
                     &self.storage_gpu_buffer_manager.read().unwrap(),
                     &self.postprocessor.read().unwrap(),
@@ -400,12 +409,15 @@ impl RenderingSystem {
     }
 
     fn recreate_render_attachment_textures(&mut self) {
-        self.render_attachment_texture_manager.recreate_textures(
-            &self.graphics_device,
-            &self.rendering_surface,
-            &self.mipmapper_generator,
-            self.config.multisampling_sample_count,
-        );
+        self.render_attachment_texture_manager
+            .write()
+            .unwrap()
+            .recreate_textures(
+                &self.graphics_device,
+                &self.rendering_surface,
+                &self.mipmapper_generator,
+                self.config.multisampling_sample_count,
+            );
 
         self.postprocessor
             .write()
@@ -414,7 +426,7 @@ impl RenderingSystem {
             .handle_new_render_attachment_textures(
                 &self.graphics_device,
                 &mut self.shader_manager.write().unwrap(),
-                &self.render_attachment_texture_manager,
+                &self.render_attachment_texture_manager.read().unwrap(),
                 &mut self.gpu_resource_group_manager.write().unwrap(),
                 &mut self.storage_gpu_buffer_manager.write().unwrap(),
             );
@@ -422,7 +434,7 @@ impl RenderingSystem {
         self.render_command_manager
             .write()
             .unwrap()
-            .clear_postprocessing_recorders();
+            .clear_recorders();
     }
 }
 
@@ -568,7 +580,9 @@ impl ScreenCapturer {
                 renderer.render_surface(&material_library)?;
 
                 renderer
-                    .render_attachment_texture_manager()
+                    .render_attachment_texture_manager
+                    .read()
+                    .unwrap()
                     .save_render_attachment_texture_as_image_file(
                         renderer.graphics_device(),
                         quantity,

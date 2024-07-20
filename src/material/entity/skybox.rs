@@ -4,10 +4,16 @@ use crate::{
     assert_uniform_valid,
     assets::Assets,
     gpu::{
-        rendering::{fre, render_command::RenderPassHints},
+        rendering::{
+            fre,
+            render_command::{Blending, RenderPassHints},
+        },
         resource_group::GPUResourceGroup,
         shader::{MaterialShaderInput, SkyboxShaderInput},
-        texture::attachment::RenderAttachmentQuantitySet,
+        texture::attachment::{
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+        },
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
@@ -119,11 +125,15 @@ pub fn setup_skybox_material(
     material_library
         .material_specification_entry(*SKYBOX_MATERIAL_ID)
         .or_insert_with(|| {
+            let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+                RenderAttachmentQuantity::Luminance,
+                RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            );
             MaterialSpecification::new(
                 VertexAttributeSet::POSITION,
                 VertexAttributeSet::empty(),
-                RenderAttachmentQuantitySet::empty(),
-                RenderAttachmentQuantitySet::LUMINANCE,
+                RenderAttachmentInputDescriptionSet::empty(),
+                output_render_attachments,
                 Some(material_specific_resources),
                 Vec::new(),
                 RenderPassHints::NO_DEPTH_PREPASS,

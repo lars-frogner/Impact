@@ -1,9 +1,8 @@
 //! [`Component`](impact_ecs::component::Component)s related to materials.
 
 use crate::{
-    assets::TextureID,
     component::ComponentRegistry,
-    gpu::rendering::fre,
+    gpu::{rendering::fre, texture::TextureID},
     material::{MaterialHandle, RGBColor},
 };
 use anyhow::Result;

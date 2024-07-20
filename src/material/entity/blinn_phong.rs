@@ -4,9 +4,13 @@ use super::{super::features::create_physical_material_feature, prepass::create_p
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::render_command::RenderPassHints,
+        rendering::render_command::{Blending, RenderPassHints},
         shader::{BlinnPhongTextureShaderInput, MaterialShaderInput},
-        texture::attachment::RenderAttachmentQuantitySet,
+        texture::attachment::{
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+            RenderAttachmentQuantitySet,
+        },
         GraphicsDevice,
     },
     material::{
@@ -269,13 +273,13 @@ pub fn setup_blinn_phong_material(
         texture_ids.push(specular_reflectance_texture.0);
     }
 
-    let mut input_render_attachment_quantities = RenderAttachmentQuantitySet::empty();
+    let mut input_render_attachments = RenderAttachmentInputDescriptionSet::empty();
 
     let prepass_material_handle = create_prepass_material(
         graphics_device,
         assets,
         material_library,
-        &mut input_render_attachment_quantities,
+        &mut input_render_attachments,
         material_name_parts.clone(),
         feature_type_id,
         feature_id,
@@ -292,19 +296,30 @@ pub fn setup_blinn_phong_material(
         vertex_attribute_requirements_for_mesh |= VertexAttributeSet::TANGENT_SPACE_QUATERNION;
     }
 
-    if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::NORMAL_VECTOR) {
+    if input_render_attachments
+        .quantities()
+        .contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)
+    {
         vertex_attribute_requirements_for_shader -= VertexAttributeSet::NORMAL_VECTOR;
     }
 
-    if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::TEXTURE_COORDS) {
+    if input_render_attachments
+        .quantities()
+        .contains(RenderAttachmentQuantitySet::TEXTURE_COORDS)
+    {
         vertex_attribute_requirements_for_shader -= VertexAttributeSet::TEXTURE_COORDS;
     }
 
     let material_id = MaterialID(hash64!(format!(
         "{}{}BlinnPhongMaterial",
         material_name_parts.join(""),
-        input_render_attachment_quantities,
+        input_render_attachments.quantities(),
     )));
+
+    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+        RenderAttachmentQuantity::Luminance,
+        RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+    );
 
     // Add material specification unless a specification for the same material exists
     material_library
@@ -313,8 +328,8 @@ pub fn setup_blinn_phong_material(
             MaterialSpecification::new(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
-                input_render_attachment_quantities,
-                RenderAttachmentQuantitySet::LUMINANCE,
+                input_render_attachments,
+                output_render_attachments,
                 None,
                 vec![feature_type_id],
                 RenderPassHints::AFFECTED_BY_LIGHT,

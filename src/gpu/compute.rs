@@ -10,6 +10,7 @@ use crate::gpu::{
     },
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{Shader, ShaderID, ShaderManager},
+    texture::attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
     GraphicsDevice,
 };
 use anyhow::{anyhow, Result};
@@ -21,6 +22,7 @@ pub struct ComputePassSpecification {
     pub workgroup_counts: [u32; 3],
     pub push_constants: PushConstantGroup,
     pub resource_group_id: Option<GPUResourceGroupID>,
+    pub input_render_attachments: RenderAttachmentInputDescriptionSet,
     pub label: String,
 }
 
@@ -39,6 +41,7 @@ impl ComputePassRecorder {
         graphics_device: &GraphicsDevice,
         shader_manager: &ShaderManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         specification: ComputePassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
@@ -52,9 +55,19 @@ impl ComputePassRecorder {
             None
         };
 
-        let bind_group_layouts = resource_group
+        let mut bind_group_layouts = resource_group
             .map(|resource_group| vec![resource_group.bind_group_layout()])
             .unwrap_or_default();
+
+        if !specification.input_render_attachments.is_empty() {
+            bind_group_layouts.extend(
+                render_attachment_texture_manager
+                    .create_and_get_render_attachment_texture_bind_group_layouts(
+                        graphics_device,
+                        &specification.input_render_attachments,
+                    ),
+            );
+        }
 
         let push_constant_ranges = specification.push_constants.create_ranges();
 
@@ -98,6 +111,7 @@ impl ComputePassRecorder {
         &self,
         rendering_surface: &RenderingSurface,
         gpu_resource_group_manager: &GPUResourceGroupManager,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<RenderCommandOutcome> {
@@ -107,6 +121,16 @@ impl ComputePassRecorder {
         }
 
         log::debug!("Recording compute pass: {}", &self.specification.label);
+
+        let resource_group = if let Some(resource_group_id) = self.specification.resource_group_id {
+            Some(
+                gpu_resource_group_manager
+                    .get_resource_group(resource_group_id)
+                    .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?,
+            )
+        } else {
+            None
+        };
 
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             timestamp_writes: None,
@@ -122,12 +146,20 @@ impl ComputePassRecorder {
             postprocessor,
         );
 
-        if let Some(resource_group_id) = self.specification.resource_group_id {
-            let resource_group = gpu_resource_group_manager
-                .get_resource_group(resource_group_id)
-                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
+        let mut bind_groups = resource_group
+            .map(|resource_group| vec![resource_group.bind_group()])
+            .unwrap_or_default();
 
-            compute_pass.set_bind_group(0, resource_group.bind_group(), &[]);
+        if !self.specification.input_render_attachments.is_empty() {
+            bind_groups.extend(
+                render_attachment_texture_manager.get_render_attachment_texture_bind_groups(
+                    &self.specification.input_render_attachments,
+                ),
+            );
+        }
+
+        for (index, bind_group) in bind_groups.iter().enumerate() {
+            compute_pass.set_bind_group(index as u32, bind_group, &[]);
         }
 
         let [x, y, z] = self.specification.workgroup_counts;

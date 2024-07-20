@@ -15,9 +15,9 @@ struct Parameters {
 
 var<push_constant> inverseExposure: f32;
 
-@group(0) @binding({{params_binding}}) var<uniform> params: Parameters;
-@group(0) @binding({{histogram_binding}}) var<storage, read_write> histogram: array<atomic<u32>>;
-@group(0) @binding({{texture_binding}}) var preExposedLuminanceTexture: texture_2d<f32>;
+@group({{params_group}}) @binding({{params_binding}}) var<uniform> params: Parameters;
+@group({{histogram_group}}) @binding({{histogram_binding}}) var<storage, read_write> histogram: array<atomic<u32>>;
+@group({{texture_group}}) @binding({{texture_binding}}) var preExposedLuminanceTexture: texture_2d<f32>;
 
 // Shared histogram buffer used for storing intermediate sums for each workgroup
 var<workgroup> workgroupHistogram: array<atomic<u32>, BIN_COUNT>;

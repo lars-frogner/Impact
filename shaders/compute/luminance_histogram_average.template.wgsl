@@ -11,9 +11,9 @@ struct Parameters {
 
 var<push_constant> pixelCount: f32;
 
-@group(0) @binding({{params_binding}}) var<uniform> params: Parameters;
-@group(0) @binding({{histogram_binding}}) var<storage, read_write> histogram: array<u32>;
-@group(0) @binding({{average_binding}}) var<storage, read_write> average: array<f32>;
+@group({{params_group}}) @binding({{params_binding}}) var<uniform> params: Parameters;
+@group({{histogram_group}}) @binding({{histogram_binding}}) var<storage, read_write> histogram: array<u32>;
+@group({{average_group}}) @binding({{average_binding}}) var<storage, read_write> average: array<f32>;
 
 var<workgroup> weightedCountBuffer: array<u32, BIN_COUNT>;
 

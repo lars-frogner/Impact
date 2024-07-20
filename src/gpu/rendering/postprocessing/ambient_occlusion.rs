@@ -8,13 +8,17 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                DepthMapUsage, OutputAttachmentSampling, RenderCommandSpecification,
-                RenderPassHints, RenderPassSpecification,
+                Blending, DepthMapUsage, RenderCommandSpecification, RenderPassHints,
+                RenderPassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{template::SpecificShaderTemplate, ShaderManager},
-        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
+        texture::attachment::{
+            OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+        },
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
@@ -232,14 +236,20 @@ fn create_ambient_occlusion_computation_render_pass(
         )
         .unwrap();
 
+    let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
+        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+    );
+
+    let output_render_attachments =
+        RenderAttachmentOutputDescriptionSet::with_defaults(RenderAttachmentQuantitySet::OCCLUSION);
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_shader_id: Some(shader_id),
         resource_group_id: Some(resource_group_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        input_render_attachment_quantities: RenderAttachmentQuantitySet::POSITION
-            | RenderAttachmentQuantitySet::NORMAL_VECTOR,
-        output_render_attachment_quantities: RenderAttachmentQuantitySet::OCCLUSION,
+        input_render_attachments,
+        output_render_attachments,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
@@ -306,14 +316,23 @@ fn create_ambient_occlusion_application_render_pass(
         )
         .unwrap();
 
+    let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
+        RenderAttachmentQuantitySet::POSITION
+            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+            | RenderAttachmentQuantitySet::OCCLUSION,
+    );
+
+    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+        RenderAttachmentQuantity::Luminance,
+        RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+    );
+
     RenderCommandSpecification::RenderPass(RenderPassSpecification {
         explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
         explicit_shader_id: Some(shader_id),
         depth_map_usage: DepthMapUsage::StencilTest,
-        input_render_attachment_quantities: RenderAttachmentQuantitySet::POSITION
-            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
-            | RenderAttachmentQuantitySet::OCCLUSION,
-        output_render_attachment_quantities: RenderAttachmentQuantitySet::LUMINANCE,
+        input_render_attachments,
+        output_render_attachments,
         push_constants: PushConstant::new(
             PushConstantVariant::InverseWindowDimensions,
             wgpu::ShaderStages::FRAGMENT,
@@ -335,6 +354,7 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
         RenderAttachmentQuantity::AmbientReflectedLuminance,
         RenderAttachmentQuantity::Luminance,
         OutputAttachmentSampling::MultiIfAvailable,
+        Blending::Additive,
         true,
     )
 }

@@ -4,9 +4,12 @@ use super::super::features::FixedColorMaterialFeature;
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::render_command::RenderPassHints,
+        rendering::render_command::{Blending, RenderPassHints},
         shader::{FixedTextureShaderInput, MaterialShaderInput},
-        texture::attachment::RenderAttachmentQuantitySet,
+        texture::attachment::{
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+        },
         GraphicsDevice,
     },
     material::{
@@ -96,11 +99,15 @@ pub fn setup_fixed_color_material(
     material_library
         .material_specification_entry(*FIXED_COLOR_MATERIAL_ID)
         .or_insert_with(|| {
+            let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+                RenderAttachmentQuantity::Luminance,
+                RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            );
             MaterialSpecification::new(
                 VertexAttributeSet::empty(),
                 VertexAttributeSet::empty(),
-                RenderAttachmentQuantitySet::empty(),
-                RenderAttachmentQuantitySet::LUMINANCE,
+                RenderAttachmentInputDescriptionSet::empty(),
+                output_render_attachments,
                 None,
                 vec![FixedColorMaterialFeature::FEATURE_TYPE_ID],
                 RenderPassHints::empty(),
@@ -123,11 +130,15 @@ pub fn setup_fixed_texture_material(
     material_library
         .material_specification_entry(*FIXED_TEXTURE_MATERIAL_ID)
         .or_insert_with(|| {
+            let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+                RenderAttachmentQuantity::Luminance,
+                RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            );
             MaterialSpecification::new(
                 VertexAttributeSet::TEXTURE_COORDS,
                 VertexAttributeSet::TEXTURE_COORDS,
-                RenderAttachmentQuantitySet::empty(),
-                RenderAttachmentQuantitySet::LUMINANCE,
+                RenderAttachmentInputDescriptionSet::empty(),
+                output_render_attachments,
                 None,
                 Vec::new(),
                 RenderPassHints::empty(),

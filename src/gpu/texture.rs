@@ -14,11 +14,31 @@ use image::{
     self, buffer::ConvertBuffer, io::Reader as ImageReader, DynamicImage, GenericImageView,
     ImageBuffer, Luma, Rgba,
 };
+use impact_utils::stringhash32_newtype;
 use mipmap::MipmapperGenerator;
+use ordered_float::OrderedFloat;
 use rmp_serde::{from_read, Serializer};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{borrow::Cow, fs::File, io::BufReader, num::NonZeroU32, path::Path};
+use std::{
+    borrow::Cow,
+    fs::File,
+    hash::{DefaultHasher, Hash, Hasher},
+    io::BufReader,
+    num::NonZeroU32,
+    path::Path,
+};
 use wgpu::util::DeviceExt;
+
+stringhash32_newtype!(
+    /// Identifier for specific textures.
+    /// Wraps a [`StringHash32`](impact_utils::StringHash32).
+    [pub] TextureID
+);
+
+/// Identifier for specific texture samplers.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SamplerID(u64);
 
 /// Represents a data type that can be copied directly to a [`Texture`].
 pub trait TexelType: Pod {
@@ -45,9 +65,15 @@ pub enum ColorSpace {
 pub struct Texture {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
-    sampler_binding_type: wgpu::SamplerBindingType,
     view_dimension: wgpu::TextureViewDimension,
+    sampler_id: Option<SamplerID>,
+}
+
+/// A sampler for sampling [`Texture`]s.
+#[derive(Debug)]
+pub struct Sampler {
+    sampler: wgpu::Sampler,
+    binding_type: wgpu::SamplerBindingType,
 }
 
 /// Configuration parameters for [`Texture`]s.
@@ -56,14 +82,23 @@ pub struct TextureConfig {
     /// The color space that the texel data values should be assumed to be
     /// stored in.
     pub color_space: ColorSpace,
-    /// Configuration for texture addressing.
+    /// The maximum number of mip levels that should be generated for the
+    /// texture. If [`None`], a full mipmap chain will be generated.
+    pub max_mip_level_count: Option<u32>,
+}
+
+/// Configuration parameters for [`Sampler`]s.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SamplerConfig {
+    /// Configuration for how the sampler should address into textures.
     pub addressing: TextureAddressingConfig,
-    /// Configuration for texture filtering.
+    /// Configuration for how the sampler should filter textures.
     pub filtering: TextureFilteringConfig,
 }
 
-/// Configuration parameters for addressing [`Texture`]s.
-#[derive(Clone, Debug)]
+/// Configuration parameters for how a [`Sampler`] should address into
+/// [`Texture`]s.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextureAddressingConfig {
     /// How addressing outside the [0, 1] range for the U texture coordinate
     /// should be handled.
@@ -76,18 +111,15 @@ pub struct TextureAddressingConfig {
     pub address_mode_w: wgpu::AddressMode,
 }
 
-/// Configuration parameters for filtering of [`Texture`]s.
-#[derive(Clone, Debug)]
+/// Configuration parameters for how a [`Sampler`] should filter [`Texture`]s.
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextureFilteringConfig {
-    /// Whether filtering will be disabled when sampling the texture.
-    pub disable_filtering: bool,
+    /// Whether filtering will be enabled when sampling the texture.
+    pub filtering_enabled: bool,
     /// How to filter the texture when it needs to be magnified.
     pub mag_filter: wgpu::FilterMode,
     /// How to filter the texture when it needs to be minified.
     pub min_filter: wgpu::FilterMode,
-    /// The maximum number of mip levels that should be generated for the
-    /// texture. If [`None`], a full mipmap chain will be generated.
-    pub max_mip_level_count: Option<u32>,
     /// How to filter between mipmap levels.
     pub mipmap_filter: wgpu::FilterMode,
     /// Minimum level of detail (i.e. mip level) to use.
@@ -113,6 +145,21 @@ pub struct TextureLookupTable<T: TexelType> {
 pub enum DepthOrArrayLayers {
     Depth(NonZeroU32),
     ArrayLayers(NonZeroU32),
+}
+
+impl From<&SamplerConfig> for SamplerID {
+    fn from(config: &SamplerConfig) -> Self {
+        let mut hasher = DefaultHasher::new();
+        config.addressing.hash(&mut hasher);
+        config.filtering.filtering_enabled.hash(&mut hasher);
+        config.filtering.mag_filter.hash(&mut hasher);
+        config.filtering.min_filter.hash(&mut hasher);
+        config.filtering.mipmap_filter.hash(&mut hasher);
+        OrderedFloat(config.filtering.lod_min_clamp).hash(&mut hasher);
+        OrderedFloat(config.filtering.lod_max_clamp).hash(&mut hasher);
+        config.filtering.anisotropy_clamp.hash(&mut hasher);
+        SamplerID(hasher.finish())
+    }
 }
 
 impl Default for ColorSpace {
@@ -165,7 +212,8 @@ impl Texture {
         graphics_device: &GraphicsDevice,
         mipmapper_generator: &MipmapperGenerator,
         image_path: impl AsRef<Path>,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
     ) -> Result<Self> {
         let image_path = image_path.as_ref();
         let image = ImageReader::open(image_path)?.decode()?;
@@ -173,7 +221,8 @@ impl Texture {
             graphics_device,
             mipmapper_generator,
             image,
-            config,
+            texture_config,
+            sampler_id,
             &image_path.to_string_lossy(),
         )
     }
@@ -195,11 +244,19 @@ impl Texture {
         graphics_device: &GraphicsDevice,
         mipmapper_generator: &MipmapperGenerator,
         byte_buffer: &[u8],
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
         label: &str,
     ) -> Result<Self> {
         let image = image::load_from_memory(byte_buffer)?;
-        Self::from_image(graphics_device, mipmapper_generator, image, config, label)
+        Self::from_image(
+            graphics_device,
+            mipmapper_generator,
+            image,
+            texture_config,
+            sampler_id,
+            label,
+        )
     }
 
     /// Creates a texture for the given loaded image, using the given
@@ -217,7 +274,8 @@ impl Texture {
         graphics_device: &GraphicsDevice,
         mipmapper_generator: &MipmapperGenerator,
         image: DynamicImage,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
         label: &str,
     ) -> Result<Self> {
         let (width, height) = image.dimensions();
@@ -233,16 +291,17 @@ impl Texture {
                 width,
                 height,
                 DepthOrArrayLayers::Depth(depth),
-                TexelDescription::Rgba8(config.color_space),
+                TexelDescription::Rgba8(texture_config.color_space),
                 false,
-                config,
+                texture_config,
+                sampler_id,
                 label,
             )
         } else {
-            if config.color_space != ColorSpace::Linear {
+            if texture_config.color_space != ColorSpace::Linear {
                 bail!(
                     "Unsupported color space {:?} for grayscale image {}",
-                    config.color_space,
+                    texture_config.color_space,
                     label
                 );
             }
@@ -255,7 +314,8 @@ impl Texture {
                 DepthOrArrayLayers::Depth(depth),
                 TexelDescription::Grayscale8,
                 false,
-                config,
+                texture_config,
+                sampler_id,
                 label,
             )
         }
@@ -282,7 +342,8 @@ impl Texture {
         bottom_image_path: P,
         front_image_path: P,
         back_image_path: P,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
     ) -> Result<Self> {
         let right_image_path = right_image_path.as_ref();
         let left_image_path = left_image_path.as_ref();
@@ -316,7 +377,8 @@ impl Texture {
             bottom_image,
             front_image,
             back_image,
-            config,
+            texture_config,
+            sampler_id,
             &label,
         )
     }
@@ -341,7 +403,8 @@ impl Texture {
         bottom_image: DynamicImage,
         front_image: DynamicImage,
         back_image: DynamicImage,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
         label: &str,
     ) -> Result<Self> {
         let dimensions = right_image.dimensions();
@@ -370,7 +433,7 @@ impl Texture {
         let array_layers = NonZeroU32::new(6).unwrap();
 
         let (texel_description, byte_buffer) = if color.has_color() {
-            let texel_description = TexelDescription::Rgba8(config.color_space);
+            let texel_description = TexelDescription::Rgba8(texture_config.color_space);
 
             let mut byte_buffer = Vec::with_capacity(
                 (6 * dimensions.0 * dimensions.1 * texel_description.n_bytes()) as usize,
@@ -385,10 +448,10 @@ impl Texture {
 
             (texel_description, byte_buffer)
         } else {
-            if config.color_space != ColorSpace::Linear {
+            if texture_config.color_space != ColorSpace::Linear {
                 bail!(
                     "Unsupported color space {:?} for grayscale image {}",
-                    config.color_space,
+                    texture_config.color_space,
                     label
                 );
             }
@@ -418,7 +481,8 @@ impl Texture {
             DepthOrArrayLayers::ArrayLayers(array_layers),
             texel_description,
             true,
-            config,
+            texture_config,
+            sampler_id,
             label,
         )
     }
@@ -435,13 +499,13 @@ impl Texture {
         graphics_device: &GraphicsDevice,
         table: &TextureLookupTable<T>,
         label: &str,
+        sampler_id: Option<SamplerID>,
     ) -> Result<Self> {
         let byte_buffer = bytemuck::cast_slice(&table.data);
 
-        let config = TextureConfig {
+        let texture_config = TextureConfig {
             color_space: ColorSpace::Linear,
-            addressing: TextureAddressingConfig::CLAMPED,
-            filtering: TextureFilteringConfig::LOOKUP,
+            ..Default::default()
         };
 
         Self::create(
@@ -453,7 +517,8 @@ impl Texture {
             table.depth_or_array_layers,
             T::DESCRIPTION,
             false,
-            config,
+            texture_config,
+            sampler_id,
             label,
         )
     }
@@ -479,7 +544,8 @@ impl Texture {
         depth_or_array_layers: DepthOrArrayLayers,
         texel_description: TexelDescription,
         is_cubemap: bool,
-        config: TextureConfig,
+        texture_config: TextureConfig,
+        sampler_id: Option<SamplerID>,
         label: &str,
     ) -> Result<Self> {
         let texture_size = wgpu::Extent3d {
@@ -540,8 +606,7 @@ impl Texture {
         let full_mip_chain_level_count = texture_size.max_mips(dimension);
 
         let mip_level_count = if mipmapper_generator.is_some() {
-            config
-                .filtering
+            texture_config
                 .max_mip_level_count
                 .unwrap_or(full_mip_chain_level_count)
                 .clamp(1, full_mip_chain_level_count)
@@ -576,33 +641,7 @@ impl Texture {
 
         let view = Self::create_view(&texture, view_dimension);
 
-        let sampler = Self::create_sampler(
-            device,
-            config.addressing.address_mode_u,
-            config.addressing.address_mode_v,
-            config.addressing.address_mode_w,
-            config.filtering.mag_filter,
-            config.filtering.min_filter,
-            config.filtering.mipmap_filter,
-            config.filtering.lod_min_clamp,
-            config.filtering.lod_max_clamp,
-            config.filtering.anisotropy_clamp,
-        );
-
-        let sampler_binding_type =
-            if !config.filtering.disable_filtering && Self::format_is_filterable(&format) {
-                wgpu::SamplerBindingType::Filtering
-            } else {
-                wgpu::SamplerBindingType::NonFiltering
-            };
-
-        Ok(Self::new(
-            texture,
-            view,
-            sampler,
-            sampler_binding_type,
-            view_dimension,
-        ))
+        Ok(Self::new(texture, view, view_dimension, sampler_id))
     }
 
     /// Creates a new [`Texture`] comprised of the given `wgpu` texture and
@@ -610,16 +649,14 @@ impl Texture {
     pub fn new(
         texture: wgpu::Texture,
         view: wgpu::TextureView,
-        sampler: wgpu::Sampler,
-        sampler_binding_type: wgpu::SamplerBindingType,
         view_dimension: wgpu::TextureViewDimension,
+        sampler_id: Option<SamplerID>,
     ) -> Self {
         Self {
             texture,
             view,
-            sampler,
-            sampler_binding_type,
             view_dimension,
+            sampler_id,
         }
     }
 
@@ -633,14 +670,15 @@ impl Texture {
         &self.view
     }
 
-    /// Returns a sampler for the texture.
-    pub fn sampler(&self) -> &wgpu::Sampler {
-        &self.sampler
+    /// Returns the ID of the specific sampler to use for this texture, or
+    /// [`None`] if this texture has no specific sampler.
+    pub fn sampler_id(&self) -> Option<SamplerID> {
+        self.sampler_id
     }
 
     /// Creates the bind group layout entry for this texture, assigned to the
     /// given binding.
-    pub fn create_texture_bind_group_layout_entry(
+    pub fn create_bind_group_layout_entry(
         &self,
         binding: u32,
         visibility: wgpu::ShaderStages,
@@ -661,46 +699,12 @@ impl Texture {
         }
     }
 
-    /// Creates the bind group layout entry for this texture's sampler, assigned
-    /// to the given binding.
-    pub fn create_sampler_bind_group_layout_entry(
-        &self,
-        binding: u32,
-        visibility: wgpu::ShaderStages,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility,
-            ty: wgpu::BindingType::Sampler(self.sampler_binding_type),
-            count: None,
-        }
-    }
-
     /// Creates the bind group entry for this texture, assigned to the given
     /// binding.
-    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         wgpu::BindGroupEntry {
             binding,
             resource: wgpu::BindingResource::TextureView(self.view()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's sampler, assigned to the
-    /// given binding.
-    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.sampler()),
-        }
-    }
-
-    fn format_is_filterable(format: &wgpu::TextureFormat) -> bool {
-        #[allow(clippy::manual_unwrap_or_default)]
-        if let Some(wgpu::TextureSampleType::Float { filterable }) = format.sample_type(None, None)
-        {
-            filterable
-        } else {
-            false
         }
     }
 
@@ -760,31 +764,65 @@ impl Texture {
             ..Default::default()
         })
     }
+}
 
-    fn create_sampler(
-        device: &wgpu::Device,
-        address_mode_u: wgpu::AddressMode,
-        address_mode_v: wgpu::AddressMode,
-        address_mode_w: wgpu::AddressMode,
-        mag_filter: wgpu::FilterMode,
-        min_filter: wgpu::FilterMode,
-        mipmap_filter: wgpu::FilterMode,
-        lod_min_clamp: f32,
-        lod_max_clamp: f32,
-        anisotropy_clamp: u16,
-    ) -> wgpu::Sampler {
-        device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u,
-            address_mode_v,
-            address_mode_w,
-            mag_filter,
-            min_filter,
-            mipmap_filter,
-            lod_min_clamp,
-            lod_max_clamp,
-            anisotropy_clamp,
-            ..Default::default()
-        })
+impl Sampler {
+    /// Creates a new sampler with the given configuration.
+    pub fn create(graphics_device: &GraphicsDevice, config: SamplerConfig) -> Self {
+        let sampler = graphics_device
+            .device()
+            .create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: config.addressing.address_mode_u,
+                address_mode_v: config.addressing.address_mode_v,
+                address_mode_w: config.addressing.address_mode_w,
+                mag_filter: config.filtering.mag_filter,
+                min_filter: config.filtering.min_filter,
+                mipmap_filter: config.filtering.mipmap_filter,
+                lod_min_clamp: config.filtering.lod_min_clamp,
+                lod_max_clamp: config.filtering.lod_max_clamp,
+                anisotropy_clamp: config.filtering.anisotropy_clamp,
+                ..Default::default()
+            });
+
+        let binding_type = if config.filtering.filtering_enabled {
+            wgpu::SamplerBindingType::Filtering
+        } else {
+            wgpu::SamplerBindingType::NonFiltering
+        };
+
+        Self {
+            sampler,
+            binding_type,
+        }
+    }
+
+    /// Returns a reference to the underlying [`wgpu::Sampler`] sampler.
+    pub fn sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
+    }
+
+    /// Creates the bind group layout entry for this sampler, assigned to the
+    /// given binding.
+    pub fn create_bind_group_layout_entry(
+        &self,
+        binding: u32,
+        visibility: wgpu::ShaderStages,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: wgpu::BindingType::Sampler(self.binding_type),
+            count: None,
+        }
+    }
+
+    /// Creates the bind group entry for this sampler, assigned to the given
+    /// binding.
+    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(self.sampler()),
+        }
     }
 }
 
@@ -810,10 +848,9 @@ impl Default for TextureAddressingConfig {
 
 impl TextureFilteringConfig {
     pub const BASIC: Self = Self {
-        disable_filtering: false,
+        filtering_enabled: true,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Nearest,
-        max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,
@@ -821,10 +858,9 @@ impl TextureFilteringConfig {
     };
 
     pub const ANISOTROPIC_2X: Self = Self {
-        disable_filtering: false,
+        filtering_enabled: true,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,
@@ -846,11 +882,10 @@ impl TextureFilteringConfig {
         ..Self::ANISOTROPIC_2X
     };
 
-    pub const LOOKUP: Self = Self {
-        disable_filtering: true,
+    pub const NONE: Self = Self {
+        filtering_enabled: false,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        max_mip_level_count: None,
         mipmap_filter: wgpu::FilterMode::Nearest,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,

@@ -2,8 +2,12 @@
 
 use crate::{
     gpu::{
-        rendering::render_command::RenderPassHints, shader::MaterialShaderInput,
-        texture::attachment::RenderAttachmentQuantitySet,
+        rendering::render_command::{Blending, RenderPassHints},
+        shader::MaterialShaderInput,
+        texture::attachment::{
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+        },
     },
     material::{
         components::{MaterialComp, VertexColorComp},
@@ -42,11 +46,15 @@ pub fn setup_vertex_color_material(material_library: &mut MaterialLibrary) -> Ma
     material_library
         .material_specification_entry(*VERTEX_COLOR_MATERIAL_ID)
         .or_insert_with(|| {
+            let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+                RenderAttachmentQuantity::Luminance,
+                RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            );
             MaterialSpecification::new(
                 VertexAttributeSet::COLOR,
                 VertexAttributeSet::COLOR,
-                RenderAttachmentQuantitySet::empty(),
-                RenderAttachmentQuantitySet::LUMINANCE,
+                RenderAttachmentInputDescriptionSet::empty(),
+                output_render_attachments,
                 None,
                 Vec::new(),
                 RenderPassHints::empty(),

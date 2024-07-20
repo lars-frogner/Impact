@@ -7,12 +7,17 @@ mod features;
 pub use features::register_material_feature_types;
 
 use crate::{
-    assets::{Assets, TextureID},
+    assets::Assets,
     gpu::{
         rendering::{fre, render_command::RenderPassHints},
         resource_group::GPUResourceGroup,
         shader::MaterialShaderInput,
-        texture::attachment::RenderAttachmentQuantitySet,
+        texture::{
+            attachment::{
+                RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+            },
+            TextureID,
+        },
         GraphicsDevice,
     },
     mesh::VertexAttributeSet,
@@ -66,8 +71,8 @@ pub struct MaterialHandle {
 pub struct MaterialSpecification {
     vertex_attribute_requirements_for_mesh: VertexAttributeSet,
     vertex_attribute_requirements_for_shader: VertexAttributeSet,
-    input_render_attachment_quantities: RenderAttachmentQuantitySet,
-    output_render_attachment_quantities: RenderAttachmentQuantitySet,
+    input_render_attachments: RenderAttachmentInputDescriptionSet,
+    output_render_attachments: RenderAttachmentOutputDescriptionSet,
     material_specific_resources: Option<GPUResourceGroup>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
     render_pass_hints: RenderPassHints,
@@ -101,14 +106,14 @@ const MATERIAL_VERTEX_BINDING_START: u32 = 20;
 
 impl MaterialSpecification {
     /// Creates a new material specification with the given vertex attribute
-    /// requirements, input and output render attachment quantities,
+    /// requirements, input and output render attachment descriptions,
     /// material-specific resources, untextured material property types, render
     /// pass hints and shader input.
     pub fn new(
         vertex_attribute_requirements_for_mesh: VertexAttributeSet,
         vertex_attribute_requirements_for_shader: VertexAttributeSet,
-        input_render_attachment_quantities: RenderAttachmentQuantitySet,
-        output_render_attachment_quantities: RenderAttachmentQuantitySet,
+        input_render_attachments: RenderAttachmentInputDescriptionSet,
+        output_render_attachments: RenderAttachmentOutputDescriptionSet,
         material_specific_resources: Option<GPUResourceGroup>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
         render_pass_hints: RenderPassHints,
@@ -117,8 +122,8 @@ impl MaterialSpecification {
         Self {
             vertex_attribute_requirements_for_mesh,
             vertex_attribute_requirements_for_shader,
-            input_render_attachment_quantities,
-            output_render_attachment_quantities,
+            input_render_attachments,
+            output_render_attachments,
             material_specific_resources,
             instance_feature_type_ids,
             render_pass_hints,
@@ -138,18 +143,18 @@ impl MaterialSpecification {
         self.vertex_attribute_requirements_for_shader
     }
 
-    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
-    /// render attachment textures are required as input for rendering with the
-    /// material.
-    pub fn input_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
-        self.input_render_attachment_quantities
+    /// Returns a reference to the [`RenderAttachmentInputDescriptionSet`]
+    /// describing the render attachments required as input for rendering with
+    /// the material.
+    pub fn input_render_attachments(&self) -> &RenderAttachmentInputDescriptionSet {
+        &self.input_render_attachments
     }
 
-    /// Returns a [`RenderAttachmentQuantitySet`] encoding the quantities whose
-    /// render attachment textures are written to when rendering with the
+    /// Returns a reference to the [`RenderAttachmentOutputDescriptionSet`]
+    /// describing the render attachments are written to when rendering with the
     /// material.
-    pub fn output_render_attachment_quantities(&self) -> RenderAttachmentQuantitySet {
-        self.output_render_attachment_quantities
+    pub fn output_render_attachments(&self) -> &RenderAttachmentOutputDescriptionSet {
+        &self.output_render_attachments
     }
 
     /// Returns a reference to the [`GPUResourceGroup`] of material-specific
@@ -242,19 +247,26 @@ impl MaterialPropertyTextureGroup {
                 .get(texture_id)
                 .ok_or_else(|| anyhow!("Texture {} missing from assets", texture_id))?;
 
+            let sampler = assets
+                .samplers
+                .get(&texture.sampler_id().ok_or_else(|| {
+                    anyhow!("Material texture {} has no associated sampler", texture_id)
+                })?)
+                .ok_or_else(|| anyhow!("Sampler for texture {} missing from assets", texture_id))?;
+
             let (texture_binding, sampler_binding) = Self::get_texture_and_sampler_bindings(idx);
 
-            bind_group_layout_entries.push(texture.create_texture_bind_group_layout_entry(
-                texture_binding,
-                wgpu::ShaderStages::FRAGMENT,
-            ));
-            bind_group_layout_entries.push(texture.create_sampler_bind_group_layout_entry(
-                sampler_binding,
-                wgpu::ShaderStages::FRAGMENT,
-            ));
+            bind_group_layout_entries.push(
+                texture
+                    .create_bind_group_layout_entry(texture_binding, wgpu::ShaderStages::FRAGMENT),
+            );
+            bind_group_layout_entries.push(
+                sampler
+                    .create_bind_group_layout_entry(sampler_binding, wgpu::ShaderStages::FRAGMENT),
+            );
 
-            bind_group_entries.push(texture.create_texture_bind_group_entry(texture_binding));
-            bind_group_entries.push(texture.create_sampler_bind_group_entry(sampler_binding));
+            bind_group_entries.push(texture.create_bind_group_entry(texture_binding));
+            bind_group_entries.push(sampler.create_bind_group_entry(sampler_binding));
         }
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
