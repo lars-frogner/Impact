@@ -171,9 +171,6 @@ impl SensorSensitivity {
 }
 
 impl CapturingCamera {
-    pub const EXPOSURE_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<fre>() as u32;
-    pub const INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<fre>() as u32;
-
     /// Creates a new capturing camera along with the required ender commands
     /// according to the given configuration.
     pub(super) fn new(
@@ -223,13 +220,25 @@ impl CapturingCamera {
         }
     }
 
+    /// Returns the size of the push constant obtained by calling
+    /// [`Self::exposure_push_constant`].
+    pub const fn exposure_push_constant_size() -> u32 {
+        mem::size_of::<fre>() as u32
+    }
+
     /// Returns the exposure push constant.
-    pub fn get_exposure_push_constant(&self) -> fre {
+    pub fn exposure_push_constant(&self) -> fre {
         self.exposure
     }
 
+    /// Returns the size of the push constant obtained by calling
+    /// [`Self::inverse_exposure_push_constant`].
+    pub const fn inverse_exposure_push_constant_size() -> u32 {
+        mem::size_of::<fre>() as u32
+    }
+
     /// Returns the inverse exposure push constant.
-    pub fn get_inverse_exposure_push_constant(&self) -> fre {
+    pub fn inverse_exposure_push_constant(&self) -> fre {
         self.exposure.recip()
     }
 

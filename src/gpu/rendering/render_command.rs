@@ -2400,7 +2400,7 @@ impl RenderPassRecorder {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 PushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.get_inverse_window_dimensions_push_constant(),
+                || rendering_surface.inverse_window_dimensions_push_constant(),
             );
 
         self.specification
@@ -2408,7 +2408,7 @@ impl RenderPassRecorder {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 PushConstantVariant::PixelCount,
-                || rendering_surface.get_pixel_count_push_constant(),
+                || rendering_surface.pixel_count_push_constant(),
             );
 
         if let Some(LightInfo {
@@ -2425,7 +2425,7 @@ impl RenderPassRecorder {
                         render_resources
                             .get_light_buffer_manager()
                             .unwrap()
-                            .get_light_idx_push_constant(light_type, light_id)
+                            .light_idx_push_constant(light_type, light_id)
                     },
                 );
         }
@@ -2447,11 +2447,7 @@ impl RenderPassRecorder {
             .set_push_constant_for_render_pass_if_present(
                 render_pass,
                 PushConstantVariant::Exposure,
-                || {
-                    postprocessor
-                        .capturing_camera()
-                        .get_exposure_push_constant()
-                },
+                || postprocessor.capturing_camera().exposure_push_constant(),
             );
 
         self.specification
@@ -2462,7 +2458,7 @@ impl RenderPassRecorder {
                 || {
                     postprocessor
                         .capturing_camera()
-                        .get_inverse_exposure_push_constant()
+                        .inverse_exposure_push_constant()
                 },
             );
     }
