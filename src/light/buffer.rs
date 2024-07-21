@@ -65,9 +65,6 @@ impl LightGPUBufferManager {
 
     const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
 
-    pub const LIGHT_IDX_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<u32>() as u32;
-    pub const CASCADE_IDX_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<CascadeIdx>() as u32;
-
     /// Creates a new manager with GPU buffers initialized from the given
     /// [`LightStorage`].
     pub fn for_light_storage(
@@ -80,18 +77,16 @@ impl LightGPUBufferManager {
             light_storage.ambient_light_buffer(),
             Self::VISIBILITY,
         );
-        let omnidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightIDs::for_uniform_buffer(
-                graphics_device,
-                light_storage.omnidirectional_light_buffer(),
-                Self::VISIBILITY,
-            );
-        let unidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightIDs::for_uniform_buffer(
-                graphics_device,
-                light_storage.unidirectional_light_buffer(),
-                Self::VISIBILITY,
-            );
+        let omnidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
+            graphics_device,
+            light_storage.omnidirectional_light_buffer(),
+            Self::VISIBILITY,
+        );
+        let unidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
+            graphics_device,
+            light_storage.unidirectional_light_buffer(),
+            Self::VISIBILITY,
+        );
 
         let omnidirectional_light_shadow_map_texture = ShadowCubemapTexture::new(
             graphics_device,
@@ -258,12 +253,18 @@ impl LightGPUBufferManager {
         }
     }
 
+    /// Returns the size of the push constant obtained by calling
+    /// [`Self::light_idx_push_constant`].
+    pub const fn light_idx_push_constant_size() -> u32 {
+        mem::size_of::<u32>() as u32
+    }
+
     /// Finds and returns the index of the light with the given ID in the light
     /// type's uniform buffer, for use as a push constant.
     ///
     /// # Panics
     /// If no light with the given ID is present in the relevant uniform buffer.
-    pub fn get_light_idx_push_constant(&self, light_type: LightType, light_id: LightID) -> u32 {
+    pub fn light_idx_push_constant(&self, light_type: LightType, light_id: LightID) -> u32 {
         let light_idx = match light_type {
             LightType::AmbientLight => &self.ambient_light_gpu_buffer,
             LightType::OmnidirectionalLight => &self.omnidirectional_light_gpu_buffer,
@@ -273,6 +274,11 @@ impl LightGPUBufferManager {
         .expect("Tried to set light index push constant for missing light");
 
         u32::try_from(light_idx).unwrap()
+    }
+
+    /// Returns the size of the push constant obtained holding a [`CascadeIdx`].
+    pub const fn cascade_idx_push_constant_size() -> u32 {
+        mem::size_of::<CascadeIdx>() as u32
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data
@@ -285,10 +291,7 @@ impl LightGPUBufferManager {
     ) {
         let ambient_light_transfer_result = self
             .ambient_light_gpu_buffer
-            .transfer_uniforms_to_gpu_buffer(
-                graphics_device,
-                light_storage.ambient_light_buffer(),
-            );
+            .transfer_uniforms_to_gpu_buffer(graphics_device, light_storage.ambient_light_buffer());
 
         let omnidirectional_light_transfer_result = self
             .omnidirectional_light_gpu_buffer
@@ -497,9 +500,7 @@ impl LightGPUBufferManager {
     ) -> LightShaderInput {
         LightShaderInput::UnidirectionalLight(UnidirectionalLightShaderInput {
             uniform_binding: Self::UNIDIRECTIONAL_LIGHT_BINDING,
-            max_light_count: unidirectional_light_gpu_buffer
-                .buffer()
-                .max_uniform_count() as u64,
+            max_light_count: unidirectional_light_gpu_buffer.buffer().max_uniform_count() as u64,
             shadow_map_texture_and_sampler_bindings: (
                 Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
                 Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,

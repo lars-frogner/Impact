@@ -192,23 +192,19 @@ impl ComputePassRecorder {
         push_constants.set_push_constant_for_compute_pass_if_present(
             compute_pass,
             PushConstantVariant::InverseWindowDimensions,
-            || rendering_surface.get_inverse_window_dimensions_push_constant(),
+            || rendering_surface.inverse_window_dimensions_push_constant(),
         );
 
         push_constants.set_push_constant_for_compute_pass_if_present(
             compute_pass,
             PushConstantVariant::PixelCount,
-            || rendering_surface.get_pixel_count_push_constant(),
+            || rendering_surface.pixel_count_push_constant(),
         );
 
         push_constants.set_push_constant_for_compute_pass_if_present(
             compute_pass,
             PushConstantVariant::Exposure,
-            || {
-                postprocessor
-                    .capturing_camera()
-                    .get_exposure_push_constant()
-            },
+            || postprocessor.capturing_camera().exposure_push_constant(),
         );
 
         push_constants.set_push_constant_for_compute_pass_if_present(
@@ -217,7 +213,7 @@ impl ComputePassRecorder {
             || {
                 postprocessor
                     .capturing_camera()
-                    .get_inverse_exposure_push_constant()
+                    .inverse_exposure_push_constant()
             },
         );
     }

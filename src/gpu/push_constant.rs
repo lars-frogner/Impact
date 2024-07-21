@@ -47,13 +47,13 @@ impl PushConstantVariant {
     pub const fn size(&self) -> u32 {
         match self {
             Self::InverseWindowDimensions => {
-                RenderingSurface::INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE
+                RenderingSurface::inverse_window_dimensions_push_constant_size()
             }
-            Self::PixelCount => RenderingSurface::PIXEL_COUNT_PUSH_CONSTANT_SIZE,
-            Self::LightIdx => LightGPUBufferManager::LIGHT_IDX_PUSH_CONSTANT_SIZE,
-            Self::CascadeIdx => LightGPUBufferManager::CASCADE_IDX_PUSH_CONSTANT_SIZE,
-            Self::Exposure => CapturingCamera::EXPOSURE_PUSH_CONSTANT_SIZE,
-            Self::InverseExposure => CapturingCamera::INVERSE_EXPOSURE_PUSH_CONSTANT_SIZE,
+            Self::PixelCount => RenderingSurface::pixel_count_push_constant_size(),
+            Self::LightIdx => LightGPUBufferManager::light_idx_push_constant_size(),
+            Self::CascadeIdx => LightGPUBufferManager::cascade_idx_push_constant_size(),
+            Self::Exposure => CapturingCamera::exposure_push_constant_size(),
+            Self::InverseExposure => CapturingCamera::inverse_exposure_push_constant_size(),
         }
     }
 }

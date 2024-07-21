@@ -25,9 +25,6 @@ enum SurfaceConfiguration {
 }
 
 impl RenderingSurface {
-    pub const INVERSE_WINDOW_DIMENSIONS_PUSH_CONSTANT_SIZE: u32 = 2 * mem::size_of::<f32>() as u32;
-    pub const PIXEL_COUNT_PUSH_CONSTANT_SIZE: u32 = mem::size_of::<f32>() as u32;
-
     /// Creates a rendering surface for the given window.
     ///
     /// # Errors
@@ -98,9 +95,15 @@ impl RenderingSurface {
         self.configure_surface_for_device(graphics_device);
     }
 
+    /// Returns the size of the push constant obtained by calling
+    /// [`Self::inverse_window_dimensions_push_constant`].
+    pub const fn inverse_window_dimensions_push_constant_size() -> u32 {
+        2 * mem::size_of::<f32>() as u32
+    }
+
     /// Returns the data for the push constant containing the reciprocals of the
     /// window dimensions in pixels.
-    pub fn get_inverse_window_dimensions_push_constant(&self) -> [fre; 2] {
+    pub fn inverse_window_dimensions_push_constant(&self) -> [fre; 2] {
         let (width, height) = self.surface_config.surface_dimensions();
         [
             1.0 / (u32::from(width) as fre),
@@ -108,9 +111,15 @@ impl RenderingSurface {
         ]
     }
 
+    /// Returns the size of the push constant obtained by calling
+    /// [`Self::pixel_count_push_constant`].
+    pub const fn pixel_count_push_constant_size() -> u32 {
+        mem::size_of::<f32>() as u32
+    }
+
     /// Returns the data for the push constant containing the total surface
     /// pixel count.
-    pub fn get_pixel_count_push_constant(&self) -> f32 {
+    pub fn pixel_count_push_constant(&self) -> f32 {
         let (width, height) = self.surface_config.surface_dimensions();
         (u32::from(width) as f32) * (u32::from(height) as f32)
     }
