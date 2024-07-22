@@ -180,6 +180,25 @@ impl GPUBuffer {
         self.update_valid_bytes(graphics_device, updated_bytes);
     }
 
+    /// Queues a write of the given slice of bytes to the existing buffer,
+    /// starting at the beginning of the buffer. The number of valid bytes in
+    /// the buffer does not change.
+    ///
+    /// # Panics
+    /// If the slice of updated bytes exceeds the total number of valid bytes in
+    /// the buffer.
+    pub fn update_first_bytes(&self, graphics_device: &GraphicsDevice, updated_bytes: &[u8]) {
+        assert!(updated_bytes.len() <= self.n_valid_bytes());
+
+        queue_write_to_buffer(
+            graphics_device.queue(),
+            self.buffer(),
+            0,
+            updated_bytes,
+            self.buffer_size(),
+        );
+    }
+
     /// Creates a [`BindGroupEntry`](wgpu::BindGroupEntry) with the given
     /// binding for the full GPU buffer.
     pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {

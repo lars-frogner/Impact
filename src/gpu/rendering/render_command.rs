@@ -1030,9 +1030,23 @@ impl RenderPassSpecification {
     /// Creates the specification for the render pass that will update the depth
     /// map with the depths of the model with the given ID.
     fn depth_prepass(model_id: ModelID, hints: RenderPassHints) -> Self {
+        let push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX,
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX,
+            ),
+        ]
+        .into_iter()
+        .collect();
+
         Self {
             model_id: Some(model_id),
             depth_map_usage: DepthMapUsage::Prepass,
+            push_constants,
             hints,
             label: format!("Depth prepass for model {}", model_id),
             ..Default::default()
@@ -1046,8 +1060,22 @@ impl RenderPassSpecification {
         model_id: ModelID,
         material_specification: &MaterialSpecification,
     ) -> Self {
-        let mut push_constants: PushConstantGroup =
-            PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT).into();
+        let mut push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
+            ),
+            PushConstant::new(
+                PushConstantVariant::Exposure,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ),
+        ]
+        .into_iter()
+        .collect();
 
         if matches!(
             light,
@@ -1058,14 +1086,7 @@ impl RenderPassSpecification {
         ) {
             push_constants.add_push_constant(PushConstant::new(
                 PushConstantVariant::LightIdx,
-                wgpu::ShaderStages::FRAGMENT,
-            ));
-        }
-
-        if !material_specification.input_render_attachments().is_empty() {
-            push_constants.add_push_constant(PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
             ));
         }
 
@@ -1101,36 +1122,28 @@ impl RenderPassSpecification {
         model_id: ModelID,
         material_specification: &MaterialSpecification,
     ) -> Self {
-        let mut push_constants = PushConstantGroup::new();
-        let mut most_general_fragment_stage = wgpu::ShaderStages::FRAGMENT;
+        let mut push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
+            ),
+            PushConstant::new(
+                PushConstantVariant::Exposure,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ),
+        ]
+        .into_iter()
+        .collect();
 
-        if let Some(light) = light {
-            let light_idx_stages = match light.light_type {
-                LightType::AmbientLight | LightType::OmnidirectionalLight => {
-                    wgpu::ShaderStages::FRAGMENT
-                }
-                LightType::UnidirectionalLight => {
-                    // If any stage is `VERTEX_FRAGMENT`, then all `VERTEX` or
-                    // `FRAGMENT` stages must also be made `VERTEX_FRAGMENT`
-                    most_general_fragment_stage = wgpu::ShaderStages::VERTEX_FRAGMENT;
-                    most_general_fragment_stage
-                }
-            };
+        if light.is_some() {
             push_constants.add_push_constant(PushConstant::new(
                 PushConstantVariant::LightIdx,
-                light_idx_stages,
-            ));
-        }
-
-        push_constants.add_push_constant(PushConstant::new(
-            PushConstantVariant::Exposure,
-            most_general_fragment_stage,
-        ));
-
-        if !material_specification.input_render_attachments().is_empty() {
-            push_constants.add_push_constant(PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                most_general_fragment_stage,
+                // FRAGMENT for AmbientLight or OmnidirectionalLight, VERTEX_FRAGMENT for UnidirectionalLight
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
             ));
         }
 
@@ -1165,36 +1178,27 @@ impl RenderPassSpecification {
         model_id: ModelID,
         material_specification: &MaterialSpecification,
     ) -> Self {
-        let mut push_constants = PushConstantGroup::new();
-        let mut most_general_fragment_stage = wgpu::ShaderStages::FRAGMENT;
-
-        let light_idx_stages = match light.light_type {
-            LightType::AmbientLight | LightType::OmnidirectionalLight => {
-                wgpu::ShaderStages::FRAGMENT
-            }
-            LightType::UnidirectionalLight => {
-                // If any stage is `VERTEX_FRAGMENT`, then all `VERTEX` or
-                // `FRAGMENT` stages must also be made `VERTEX_FRAGMENT`
-                most_general_fragment_stage = wgpu::ShaderStages::VERTEX_FRAGMENT;
-                most_general_fragment_stage
-            }
-        };
-        push_constants.add_push_constant(PushConstant::new(
-            PushConstantVariant::LightIdx,
-            light_idx_stages,
-        ));
-
-        push_constants.add_push_constant(PushConstant::new(
-            PushConstantVariant::Exposure,
-            most_general_fragment_stage,
-        ));
-
-        if !material_specification.input_render_attachments().is_empty() {
-            push_constants.add_push_constant(PushConstant::new(
+        let push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
+            ),
+            PushConstant::new(
                 PushConstantVariant::InverseWindowDimensions,
-                most_general_fragment_stage,
-            ));
-        }
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
+            ),
+            PushConstant::new(
+                PushConstantVariant::Exposure,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ),
+            PushConstant::new(
+                PushConstantVariant::LightIdx,
+                // FRAGMENT for AmbientLight or OmnidirectionalLight, VERTEX_FRAGMENT for UnidirectionalLight
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ),
+        ]
+        .into_iter()
+        .collect();
 
         Self {
             model_id: Some(model_id),
@@ -2080,6 +2084,11 @@ impl RenderPassRecorder {
 
             let push_constant_ranges = specification.push_constants.create_ranges();
 
+            assert!(
+                push_constant_ranges.len() < 2,
+                "Push constants don't work correctly with multiple ranges"
+            );
+
             let shader = if let Some(shader_id) = &specification.explicit_shader_id {
                 shader_manager
                     .rendering_shaders
@@ -2182,6 +2191,7 @@ impl RenderPassRecorder {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
+        frame_counter: u32,
     ) -> Result<RenderCommandOutcome> {
         if self.state().is_disabled() {
             log::debug!("Skipping render pass: {}", &self.specification.label);
@@ -2276,6 +2286,7 @@ impl RenderPassRecorder {
                 rendering_surface,
                 render_resources,
                 postprocessor,
+                frame_counter,
             );
 
             for (index, &bind_group) in bind_groups.iter().enumerate() {
@@ -2394,6 +2405,7 @@ impl RenderPassRecorder {
         rendering_surface: &RenderingSurface,
         render_resources: &SynchronizedRenderResources,
         postprocessor: &Postprocessor,
+        frame_counter: u32,
     ) {
         self.specification
             .push_constants
@@ -2460,6 +2472,14 @@ impl RenderPassRecorder {
                         .capturing_camera()
                         .inverse_exposure_push_constant()
                 },
+            );
+
+        self.specification
+            .push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::FrameCounter,
+                || frame_counter,
             );
     }
 
@@ -2790,6 +2810,7 @@ impl RenderCommandRecorder {
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
+        frame_counter: u32,
     ) -> Result<RenderCommandOutcome> {
         match self {
             Self::RenderPass(recorder) => recorder.record_pass(
@@ -2801,6 +2822,7 @@ impl RenderCommandRecorder {
                 gpu_resource_group_manager,
                 postprocessor,
                 command_encoder,
+                frame_counter,
             ),
             Self::ComputePass(recorder) => recorder.record_pass(
                 rendering_surface,
