@@ -209,7 +209,7 @@ fn create_ambient_occlusion_computation_render_pass(
                 (
                     "projection_matrix_binding",
                     CameraGPUBufferManager::shader_input()
-                        .projection_matrix_binding
+                        .projection_binding
                         .to_string(),
                 ),
                 ("position_texture_group", "1".to_string()),

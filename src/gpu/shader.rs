@@ -231,6 +231,7 @@ const MATRIX_4X4_TYPE: Type = Type {
         },
     },
 };
+const MATRIX_4X4_SIZE: u32 = 4 * 4 * F32_WIDTH;
 
 const IMAGE_2D_TEXTURE_TYPE: Type = Type {
     name: None,
@@ -1222,6 +1223,10 @@ impl PushConstantExpressions {
                 PushConstantVariant::InverseExposure => {
                     let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
                     builder.add_field("inverseExposure", f32_type, None, F32_WIDTH);
+                }
+                PushConstantVariant::FrameCounter => {
+                    let u32_type = insert_in_arena(&mut module.types, U32_TYPE);
+                    builder.add_field("frameCounter", u32_type, None, U32_WIDTH);
                 }
             }
         }

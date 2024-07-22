@@ -24,10 +24,11 @@ use super::{
     generate_location_bound_input_argument, include_expr_in_func, include_named_expr_in_func,
     insert_in_arena, new_name, swizzle_xyz_expr, EntryPointNames, InputStruct, OutputStructBuilder,
     PushConstantExpressions, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
-    MATRIX_4X4_TYPE, U32_TYPE, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE,
-    VECTOR_4_SIZE, VECTOR_4_TYPE,
+    MATRIX_4X4_SIZE, MATRIX_4X4_TYPE, U32_TYPE, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE,
+    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
 };
 use crate::{
+    camera::buffer::JITTER_COUNT,
     gpu::{
         push_constant::{PushConstantGroup, PushConstantGroupStage, PushConstantVariant},
         rendering::fre,
@@ -67,7 +68,7 @@ pub(super) struct RenderShaderGenerator;
 pub struct CameraShaderInput {
     /// Bind group binding of the uniform buffer holding the camera projection
     /// matrix.
-    pub projection_matrix_binding: u32,
+    pub projection_binding: u32,
 }
 
 /// Input description specifying the locations of the available vertex
@@ -199,11 +200,13 @@ bitflags! {
     struct RenderShaderTricks: u8 {
         /// Ignore the translational part of the model-to-camera transform when
         /// transforming the position.
-        const FOLLOW_CAMERA = 0b00000001;
+        const FOLLOW_CAMERA = 1 << 0;
         /// Make the depth of every fragment in framebuffer space 1.0.
-        const DRAW_AT_MAX_DEPTH = 0b00000010;
+        const DRAW_AT_MAX_DEPTH = 1 << 1;
         /// Do not apply the projection to the vertex position.
-        const NO_VERTEX_PROJECTION = 0b00000100;
+        const NO_VERTEX_PROJECTION = 1 << 2;
+        /// Do not apply a jitter to the projection matrix.
+        const NO_JITTER = 1 << 3;
     }
 }
 
@@ -224,10 +227,10 @@ enum ProjectionExpressions {
     UnidirectionalLight(UnidirectionalLightProjectionExpressions),
 }
 
-/// Handle to the global variable for the camera projection matrix.
+/// Handle to the global variable for the camera projection.
 #[derive(Clone, Debug)]
 struct CameraProjectionVariable {
-    projection_matrix_var: Handle<GlobalVariable>,
+    projection_uniform_var: Handle<GlobalVariable>,
 }
 
 /// Marker type with method for projecting points onto a face of a shadow
@@ -444,7 +447,7 @@ impl RenderShaderGenerator {
         let mut bind_group_idx = 0;
 
         let camera_projection = camera_shader_input.map(|camera_shader_input| {
-            Self::generate_code_for_projection_matrix(
+            Self::generate_code_for_projection(
                 camera_shader_input,
                 &mut module,
                 &mut bind_group_idx,
@@ -494,6 +497,7 @@ impl RenderShaderGenerator {
             mesh_shader_input,
             vertex_attribute_requirements,
             input_render_attachment_quantities,
+            &push_constant_vertex_expressions,
             tricks,
             &mut module,
             &mut source_code_lib,
@@ -790,9 +794,9 @@ impl RenderShaderGenerator {
     }
 
     /// Generates the declaration of the global uniform variable for the camera
-    /// projection matrix and returns a new [`CameraProjectionVariable`]
-    /// representing the matrix.
-    fn generate_code_for_projection_matrix(
+    /// projection and returns a new [`CameraProjectionVariable`] representing
+    /// the uniform.
+    fn generate_code_for_projection(
         camera_shader_input: &CameraShaderInput,
         module: &mut Module,
         bind_group_idx: &mut u32,
@@ -800,24 +804,63 @@ impl RenderShaderGenerator {
         let bind_group = *bind_group_idx;
         *bind_group_idx += 1;
 
+        let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
         let mat4x4_type = insert_in_arena(&mut module.types, MATRIX_4X4_TYPE);
 
-        let projection_matrix_var = append_to_arena(
+        let jitter_array_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: vec4_type,
+                    size: ArraySize::Constant(NonZeroU32::new(JITTER_COUNT as u32).unwrap()),
+                    stride: VECTOR_4_SIZE,
+                },
+            },
+        );
+
+        let uniform_size = MATRIX_4X4_SIZE + VECTOR_4_SIZE * JITTER_COUNT as u32;
+
+        let uniform_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: new_name("ProjectionUniform"),
+                inner: TypeInner::Struct {
+                    members: vec![
+                        StructMember {
+                            name: new_name("projection"),
+                            ty: mat4x4_type,
+                            binding: None,
+                            offset: 0,
+                        },
+                        StructMember {
+                            name: new_name("jitterOffsets"),
+                            ty: jitter_array_type,
+                            binding: None,
+                            offset: MATRIX_4X4_SIZE,
+                        },
+                    ],
+                    span: uniform_size,
+                },
+            },
+        );
+
+        let projection_uniform_var = append_to_arena(
             &mut module.global_variables,
             GlobalVariable {
-                name: new_name("projectionMatrix"),
+                name: new_name("projectionUniform"),
                 space: AddressSpace::Uniform,
                 binding: Some(ResourceBinding {
                     group: bind_group,
-                    binding: camera_shader_input.projection_matrix_binding,
+                    binding: camera_shader_input.projection_binding,
                 }),
-                ty: mat4x4_type,
+                ty: uniform_type,
                 init: None,
             },
         );
 
         CameraProjectionVariable {
-            projection_matrix_var,
+            projection_uniform_var,
         }
     }
 
@@ -853,6 +896,7 @@ impl RenderShaderGenerator {
         mesh_shader_input: &MeshShaderInput,
         vertex_attribute_requirements: VertexAttributeSet,
         input_render_attachment_quantities: RenderAttachmentQuantitySet,
+        push_constant_expressions: &PushConstantExpressions,
         tricks: RenderShaderTricks,
         module: &mut Module,
         source_code_lib: &mut SourceCode,
@@ -983,6 +1027,7 @@ impl RenderShaderGenerator {
                     module,
                     source_code_lib,
                     vertex_function,
+                    push_constant_expressions,
                     tricks,
                     position_expr,
                 )
@@ -1871,12 +1916,20 @@ impl ProjectionExpressions {
         module: &mut Module,
         source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
         tricks: RenderShaderTricks,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
         match self {
             Self::Camera(camera_projection_matrix) => camera_projection_matrix
-                .generate_projected_position_expr(module, vertex_function, tricks, position_expr),
+                .generate_projected_position_expr(
+                    module,
+                    source_code_lib,
+                    vertex_function,
+                    push_constant_expressions,
+                    tricks,
+                    position_expr,
+                ),
             Self::OmnidirectionalLight(omnidirectional_light_cubemap_projection) => {
                 omnidirectional_light_cubemap_projection.generate_projected_position_expr(
                     module,
@@ -1901,12 +1954,19 @@ impl CameraProjectionVariable {
     /// Generates the expression for the projection matrix in the given
     /// function.
     pub fn generate_projection_matrix_expr(&self, function: &mut Function) -> Handle<Expression> {
-        let projection_matrix_ptr_expr = include_expr_in_func(
+        let projection_uniform_ptr_expr = include_expr_in_func(
             function,
-            Expression::GlobalVariable(self.projection_matrix_var),
+            Expression::GlobalVariable(self.projection_uniform_var),
         );
 
-        let matrix_expr = emit_in_func(function, |function| {
+        let projection_matrix_expr = emit_in_func(function, |function| {
+            let projection_matrix_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: projection_uniform_ptr_expr,
+                    index: 0,
+                },
+            );
             include_named_expr_in_func(
                 function,
                 "projectionMatrix",
@@ -1916,7 +1976,150 @@ impl CameraProjectionVariable {
             )
         });
 
-        matrix_expr
+        projection_matrix_expr
+    }
+
+    /// Generates the expression for the projection matrix in the given
+    /// function, jittered with the current jitter offsets.
+    pub fn generate_jittered_projection_matrix_expr(
+        &self,
+        module: &mut Module,
+        source_code_lib: &mut SourceCode,
+        function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
+    ) -> Handle<Expression> {
+        let frame_counter_expr = push_constant_expressions
+            .get(PushConstantVariant::FrameCounter)
+            .expect("Missing frame counter push constant for jittering");
+
+        self.generate_jittered_projection_matrix_expr_for_frame_counter(
+            module,
+            source_code_lib,
+            function,
+            push_constant_expressions,
+            frame_counter_expr,
+        )
+    }
+
+    /// Generates the expression for the projection matrix in the given
+    /// function, jittered with the previous frame's jitter offsets.
+    pub fn generate_jittered_projection_matrix_expr_for_previous_frame(
+        &self,
+        module: &mut Module,
+        source_code_lib: &mut SourceCode,
+        function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
+    ) -> Handle<Expression> {
+        let frame_counter_expr = push_constant_expressions
+            .get(PushConstantVariant::FrameCounter)
+            .expect("Missing frame counter push constant for jittering");
+
+        let one_expr = include_expr_in_func(function, Expression::Literal(Literal::U32(1)));
+
+        let previous_frame_counter_expr = emit_in_func(function, |function| {
+            include_expr_in_func(
+                function,
+                Expression::Binary {
+                    op: BinaryOperator::Subtract,
+                    left: frame_counter_expr,
+                    right: one_expr,
+                },
+            )
+        });
+
+        self.generate_jittered_projection_matrix_expr_for_frame_counter(
+            module,
+            source_code_lib,
+            function,
+            push_constant_expressions,
+            previous_frame_counter_expr,
+        )
+    }
+
+    fn generate_jittered_projection_matrix_expr_for_frame_counter(
+        &self,
+        module: &mut Module,
+        source_code_lib: &mut SourceCode,
+        function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
+        frame_counter_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let projection_uniform_ptr_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(self.projection_uniform_var),
+        );
+
+        let jitter_count_expr = include_expr_in_func(
+            function,
+            Expression::Literal(Literal::U32(JITTER_COUNT as u32)),
+        );
+
+        let (projection_matrix_expr, jitter_offsets_expr) = emit_in_func(function, |function| {
+            let projection_matrix_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: projection_uniform_ptr_expr,
+                    index: 0,
+                },
+            );
+            let projection_matrix_expr = include_named_expr_in_func(
+                function,
+                "projectionMatrix",
+                Expression::Load {
+                    pointer: projection_matrix_ptr_expr,
+                },
+            );
+
+            let jitter_offsets_ptr_expr = include_named_expr_in_func(
+                function,
+                "jitterOffsets",
+                Expression::AccessIndex {
+                    base: projection_uniform_ptr_expr,
+                    index: 1,
+                },
+            );
+            let jitter_index_expr = include_named_expr_in_func(
+                function,
+                "jitterIndex",
+                Expression::Binary {
+                    op: BinaryOperator::Modulo,
+                    left: frame_counter_expr,
+                    right: jitter_count_expr,
+                },
+            );
+            let jitter_offset_ptr_expr = include_expr_in_func(
+                function,
+                Expression::Access {
+                    base: jitter_offsets_ptr_expr,
+                    index: jitter_index_expr,
+                },
+            );
+            let jitter_offsets_expr = include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: jitter_offset_ptr_expr,
+                },
+            );
+
+            (projection_matrix_expr, jitter_offsets_expr)
+        });
+
+        // We assume here that the projection is a perspective transform and not
+        // an orthographic transform
+        let jittered_projection_matrix_expr = source_code_lib.generate_function_call(
+            module,
+            function,
+            "createJitteredPerspectiveProjectionMatrix",
+            vec![
+                projection_matrix_expr,
+                jitter_offsets_expr,
+                push_constant_expressions
+                    .get(PushConstantVariant::InverseWindowDimensions)
+                    .expect("Missing inverse window dimensions push constant for jittering"),
+            ],
+        );
+
+        jittered_projection_matrix_expr
     }
 
     /// Generates an expression for the given position (as a vec3) projected
@@ -1925,11 +2128,22 @@ impl CameraProjectionVariable {
     pub fn generate_projected_position_expr(
         &self,
         module: &mut Module,
+        source_code_lib: &mut SourceCode,
         vertex_function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
         tricks: RenderShaderTricks,
         position_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let matrix_expr = self.generate_projection_matrix_expr(vertex_function);
+        let matrix_expr = if tricks.contains(RenderShaderTricks::NO_JITTER) {
+            self.generate_projection_matrix_expr(vertex_function)
+        } else {
+            self.generate_jittered_projection_matrix_expr(
+                module,
+                source_code_lib,
+                vertex_function,
+                push_constant_expressions,
+            )
+        };
 
         let homogeneous_position_expr =
             append_unity_component_to_vec3(&mut module.types, vertex_function, position_expr);
@@ -3216,7 +3430,7 @@ impl SampledTexture {
 // Ignore tests if running with Miri, since `naga::front::wgsl::parse_str`
 // becomes extremely slow
 #[cfg(test)]
-#[cfg(not(miri))]
+// #[cfg(not(miri))]
 #[allow(clippy::dbg_macro)]
 mod test {
     use super::*;
@@ -3232,7 +3446,7 @@ mod test {
     const MATERIAL_VERTEX_BINDING_START: u32 = 20;
 
     const CAMERA_INPUT: CameraShaderInput = CameraShaderInput {
-        projection_matrix_binding: 0,
+        projection_binding: 0,
     };
 
     const MODEL_VIEW_TRANSFORM_INPUT: InstanceFeatureShaderInput =
@@ -3345,7 +3559,18 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -3424,7 +3649,19 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::LUMINANCE,
-            PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT).into(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -3455,7 +3692,18 @@ mod test {
             VertexAttributeSet::COLOR,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -3478,7 +3726,18 @@ mod test {
             VertexAttributeSet::empty(),
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -3509,7 +3768,18 @@ mod test {
             VertexAttributeSet::TEXTURE_COORDS,
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -3556,6 +3826,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -3608,10 +3886,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -3661,6 +3950,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -3713,10 +4010,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -3766,6 +4074,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -3818,10 +4134,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -3872,6 +4199,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -3925,10 +4260,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -3978,6 +4324,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4030,10 +4384,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4083,11 +4448,21 @@ mod test {
             RenderAttachmentQuantitySet::POSITION,
             RenderAttachmentQuantitySet::empty(),
             [
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::FRAGMENT,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -4138,11 +4513,21 @@ mod test {
             RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
             [
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::FRAGMENT,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -4193,11 +4578,21 @@ mod test {
             RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
             [
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::FRAGMENT,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -4251,6 +4646,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4306,10 +4709,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4362,6 +4776,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4417,10 +4839,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4472,6 +4905,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4526,10 +4967,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4581,6 +5033,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4635,10 +5095,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4691,6 +5162,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4746,10 +5225,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4802,6 +5292,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4857,10 +5355,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -4913,6 +5422,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -4968,10 +5485,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -5024,6 +5552,14 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::empty(),
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -5079,10 +5615,21 @@ mod test {
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
                     PushConstantVariant::LightIdx,
                     wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -5134,11 +5681,21 @@ mod test {
             RenderAttachmentQuantitySet::POSITION,
             RenderAttachmentQuantitySet::empty(),
             [
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::FRAGMENT,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -5191,11 +5748,21 @@ mod test {
             RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
             [
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::FRAGMENT,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -5248,11 +5815,21 @@ mod test {
             RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
             [
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::FRAGMENT,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -5305,7 +5882,18 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -5354,7 +5942,19 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-            PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT).into(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -5409,7 +6009,18 @@ mod test {
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -5465,7 +6076,18 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-            PushConstantGroup::new(),
+            [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
         .unwrap();
 
@@ -5515,6 +6137,14 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -5569,6 +6199,14 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -5623,6 +6261,14 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -5680,6 +6326,14 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -5741,6 +6395,14 @@ mod test {
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -5803,6 +6465,14 @@ mod test {
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
             [
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::VERTEX,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::VERTEX,
+                ),
                 PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]

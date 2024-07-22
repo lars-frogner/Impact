@@ -40,8 +40,9 @@ pub(super) struct SkyboxVertexOutputFieldIndices {
 
 impl<'a> SkyboxShaderGenerator<'a> {
     /// The [`ShaderTricks`] employed by the material.
-    pub const TRICKS: RenderShaderTricks =
-        RenderShaderTricks::FOLLOW_CAMERA.union(RenderShaderTricks::DRAW_AT_MAX_DEPTH);
+    pub const TRICKS: RenderShaderTricks = RenderShaderTricks::FOLLOW_CAMERA
+        .union(RenderShaderTricks::DRAW_AT_MAX_DEPTH)
+        .union(RenderShaderTricks::NO_JITTER);
 
     /// Creates a new shader generator using the given input description.
     pub fn new(input: &'a SkyboxShaderInput) -> Self {

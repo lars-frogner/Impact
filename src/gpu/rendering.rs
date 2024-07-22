@@ -34,6 +34,7 @@ use render_command::RenderCommandManager;
 use render_command::RenderCommandOutcome;
 use resource::RenderResourceManager;
 use std::{
+    mem,
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
@@ -65,6 +66,7 @@ pub struct RenderingSystem {
     gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
+    frame_counter: u32,
 }
 
 /// Global rendering configuration options.
@@ -148,6 +150,7 @@ impl RenderingSystem {
             gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
+            frame_counter: 1,
         })
     }
 
@@ -215,6 +218,7 @@ impl RenderingSystem {
     pub fn present(&mut self) {
         if let Some(surface_texture) = self.surface_texture_to_present.take() {
             surface_texture.present();
+            self.frame_counter = self.frame_counter.wrapping_add(1);
         }
     }
 
@@ -320,6 +324,11 @@ impl RenderingSystem {
             .cycle_tone_mapping();
     }
 
+    /// Returns the size of the push constant containing `self.frame_counter`.
+    pub const fn frame_counter_push_constant_size() -> u32 {
+        mem::size_of::<u32>() as u32
+    }
+
     fn render_surface(
         &mut self,
         material_library: &MaterialLibrary,
@@ -352,6 +361,7 @@ impl RenderingSystem {
                     &self.storage_gpu_buffer_manager.read().unwrap(),
                     &self.postprocessor.read().unwrap(),
                     &mut command_encoder,
+                    self.frame_counter,
                 )?;
                 if outcome == RenderCommandOutcome::Recorded {
                     n_recorded_passes += 1;

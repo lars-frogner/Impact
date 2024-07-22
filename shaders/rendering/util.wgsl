@@ -128,3 +128,14 @@ fn generateRandomAngle(cameraFramebufferPosition: vec4<f32>) -> f32 {
     // Multiply noise factor with 2 * pi to get random angle
     return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferPosition);
 }
+
+fn createJitteredPerspectiveProjectionMatrix(
+    perspectiveProjectionMatrix: mat4x4<f32>,
+    jitterOffsets: vec4<f32>,
+    inverseWindowDimensions: vec2<f32>
+) -> mat4x4<f32> {
+    var jitteredMatrix = perspectiveProjectionMatrix;
+    jitteredMatrix[2][0] += jitterOffsets.x * inverseWindowDimensions.x;
+    jitteredMatrix[2][1] += jitterOffsets.y * inverseWindowDimensions.y;
+    return jitteredMatrix;
+}

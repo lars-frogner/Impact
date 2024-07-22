@@ -1,7 +1,9 @@
 //! Management of push constants.
 
 use crate::{
-    gpu::rendering::{postprocessing::capturing::CapturingCamera, surface::RenderingSurface},
+    gpu::rendering::{
+        postprocessing::capturing::CapturingCamera, surface::RenderingSurface, RenderingSystem,
+    },
     light::buffer::LightGPUBufferManager,
 };
 use bytemuck::Pod;
@@ -15,6 +17,7 @@ pub enum PushConstantVariant {
     CascadeIdx,
     Exposure,
     InverseExposure,
+    FrameCounter,
 }
 
 /// Specification for a push constant that can be passed to the GPU.
@@ -54,6 +57,7 @@ impl PushConstantVariant {
             Self::CascadeIdx => LightGPUBufferManager::cascade_idx_push_constant_size(),
             Self::Exposure => CapturingCamera::exposure_push_constant_size(),
             Self::InverseExposure => CapturingCamera::inverse_exposure_push_constant_size(),
+            Self::FrameCounter => RenderingSystem::frame_counter_push_constant_size(),
         }
     }
 }
@@ -604,6 +608,27 @@ mod test {
     }
 
     #[test]
+    fn creating_ranges_for_one_vertex_and_one_fragment_element_group_works() {
+        let group: PushConstantGroup = [
+            PushConstant::new(FrameCounter, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
+        ]
+        .into_iter()
+        .collect();
+
+        let ranges = group.create_ranges();
+
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges[0].range, 0..FrameCounter.size());
+        assert_eq!(ranges[0].stages, wgpu::ShaderStages::VERTEX);
+        assert_eq!(
+            ranges[1].range,
+            FrameCounter.size()..(FrameCounter.size() + Exposure.size())
+        );
+        assert_eq!(ranges[1].stages, wgpu::ShaderStages::FRAGMENT);
+    }
+
+    #[test]
     fn creating_ranges_for_group_with_each_stages_works() {
         let group: PushConstantGroup = [
             PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::VERTEX_FRAGMENT),
@@ -636,6 +661,33 @@ mod test {
 
         assert_eq!(ranges[3].range, offset..offset + LightIdx.size());
         assert_eq!(ranges[3].stages, wgpu::ShaderStages::COMPUTE);
+    }
+
+    #[test]
+    fn creating_ranges_for_one_vertex_and_three_fragment_group_works() {
+        let group: PushConstantGroup = [
+            PushConstant::new(FrameCounter, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
+            PushConstant::new(LightIdx, wgpu::ShaderStages::FRAGMENT),
+            PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::FRAGMENT),
+        ]
+        .into_iter()
+        .collect();
+
+        let ranges = group.create_ranges();
+
+        assert_eq!(ranges.len(), 2);
+
+        let mut offset = 0;
+        assert_eq!(ranges[0].range, offset..offset + FrameCounter.size());
+        assert_eq!(ranges[0].stages, wgpu::ShaderStages::VERTEX);
+        offset += FrameCounter.size();
+
+        assert_eq!(
+            ranges[1].range,
+            offset..offset + Exposure.size() + LightIdx.size() + InverseWindowDimensions.size()
+        );
+        assert_eq!(ranges[1].stages, wgpu::ShaderStages::FRAGMENT);
     }
 
     #[test]
@@ -747,5 +799,126 @@ mod test {
             Some(CascadeIdx.size() + InverseWindowDimensions.size() + Exposure.size())
         );
         assert_eq!(set_data, Some(bytemuck::bytes_of(&3_u32).to_vec()));
+    }
+
+    #[test]
+    fn setting_push_constant_for_pass_for_one_vertex_and_three_fragment_group_works() {
+        let group: PushConstantGroup = [
+            PushConstant::new(FrameCounter, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
+            PushConstant::new(LightIdx, wgpu::ShaderStages::FRAGMENT),
+            PushConstant::new(InverseWindowDimensions, wgpu::ShaderStages::FRAGMENT),
+        ]
+        .into_iter()
+        .collect();
+
+        let mut set_stages = None;
+        let mut set_offset = None;
+        let mut set_data = None;
+        group.set_push_constant_for_pass_if_present(
+            |stages, offset, data| {
+                set_stages = Some(stages);
+                set_offset = Some(offset);
+                set_data = Some(data.to_vec());
+            },
+            FrameCounter,
+            || 1_u32,
+        );
+        assert_eq!(set_stages, Some(wgpu::ShaderStages::VERTEX));
+        assert_eq!(set_offset, Some(0));
+        assert_eq!(set_data, Some(bytemuck::bytes_of(&1_u32).to_vec()));
+
+        let mut set_stages = None;
+        let mut set_offset = None;
+        let mut set_data = None;
+        group.set_push_constant_for_pass_if_present(
+            |stages, offset, data| {
+                set_stages = Some(stages);
+                set_offset = Some(offset);
+                set_data = Some(data.to_vec());
+            },
+            Exposure,
+            || 2.0_f32,
+        );
+        assert_eq!(set_stages, Some(wgpu::ShaderStages::FRAGMENT));
+        assert_eq!(set_offset, Some(FrameCounter.size()));
+        assert_eq!(set_data, Some(bytemuck::bytes_of(&2.0_f32).to_vec()));
+
+        let mut set_stages = None;
+        let mut set_offset = None;
+        let mut set_data = None;
+        group.set_push_constant_for_pass_if_present(
+            |stages, offset, data| {
+                set_stages = Some(stages);
+                set_offset = Some(offset);
+                set_data = Some(data.to_vec());
+            },
+            LightIdx,
+            || 2_u32,
+        );
+        assert_eq!(set_stages, Some(wgpu::ShaderStages::FRAGMENT));
+        assert_eq!(set_offset, Some(FrameCounter.size() + Exposure.size()));
+        assert_eq!(set_data, Some(bytemuck::bytes_of(&2_u32).to_vec()));
+
+        let mut set_stages = None;
+        let mut set_offset = None;
+        let mut set_data = None;
+        group.set_push_constant_for_pass_if_present(
+            |stages, offset, data| {
+                set_stages = Some(stages);
+                set_offset = Some(offset);
+                set_data = Some(data.to_vec());
+            },
+            InverseWindowDimensions,
+            || [1_u32, 2],
+        );
+        assert_eq!(set_stages, Some(wgpu::ShaderStages::FRAGMENT));
+        assert_eq!(
+            set_offset,
+            Some(FrameCounter.size() + Exposure.size() + LightIdx.size())
+        );
+        assert_eq!(set_data, Some(bytemuck::bytes_of(&[1_u32, 2]).to_vec()));
+    }
+
+    #[test]
+    fn setting_push_constant_for_pass_for_group_with_each_stages_works_3() {
+        let group: PushConstantGroup = [
+            PushConstant::new(FrameCounter, wgpu::ShaderStages::VERTEX),
+            PushConstant::new(Exposure, wgpu::ShaderStages::FRAGMENT),
+        ]
+        .into_iter()
+        .collect();
+
+        let mut set_stages = None;
+        let mut set_offset = None;
+        let mut set_data = None;
+        group.set_push_constant_for_pass_if_present(
+            |stages, offset, data| {
+                set_stages = Some(stages);
+                set_offset = Some(offset);
+                set_data = Some(data.to_vec());
+            },
+            FrameCounter,
+            || 1_u32,
+        );
+        assert_eq!(set_stages, Some(wgpu::ShaderStages::VERTEX));
+        assert_eq!(set_offset, Some(0));
+        assert_eq!(set_data, Some(bytemuck::bytes_of(&1_u32).to_vec()));
+
+        let mut set_stages = None;
+        let mut set_offset = None;
+        let mut set_data = None;
+        group.set_push_constant_for_pass_if_present(
+            |stages, offset, data| {
+                set_stages = Some(stages);
+                set_offset = Some(offset);
+                set_data = Some(data.to_vec());
+            },
+            Exposure,
+            || 2.0_f32,
+        );
+        assert_eq!(set_stages, Some(wgpu::ShaderStages::FRAGMENT));
+        assert_eq!(set_offset, Some(FrameCounter.size()));
+        assert_eq!(set_data, Some(bytemuck::bytes_of(&2.0_f32).to_vec()));
     }
 }
