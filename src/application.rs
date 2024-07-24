@@ -119,7 +119,7 @@ impl Application {
             simulator: RwLock::new(simulator),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
-            screen_capturer: ScreenCapturer::new(NonZeroU32::new(2048).unwrap()),
+            screen_capturer: ScreenCapturer::new(),
         })
     }
 
@@ -180,10 +180,10 @@ impl Application {
     /// [`ScreenCapturer`].
     pub fn capture_screenshots(&self) -> Result<()> {
         self.screen_capturer
-            .save_screenshot_if_requested(self.renderer(), self.scene())?;
+            .save_screenshot_if_requested(self.renderer())?;
 
         self.screen_capturer
-            .save_render_attachment_quantity_if_requested(self.renderer(), self.scene())?;
+            .save_render_attachment_quantity_if_requested(self.renderer())?;
 
         self.screen_capturer
             .save_omnidirectional_light_shadow_map_if_requested(self.renderer())?;

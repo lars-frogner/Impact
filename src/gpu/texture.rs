@@ -1036,7 +1036,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
         | wgpu::TextureFormat::Bgra8Unorm
         | wgpu::TextureFormat::Bgra8UnormSrgb
         | wgpu::TextureFormat::R8Unorm => {
-            let mut data = extract_texture_data::<u8>(
+            let mut data = extract_texture_bytes(
                 graphics_device.device(),
                 graphics_device.queue(),
                 texture,
@@ -1084,6 +1084,30 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 image_buffer.save(output_path)?;
             }
         }
+        wgpu::TextureFormat::Rgba16Float => {
+            let mut data = extract_texture_data_and_convert::<half::f16, f32>(
+                graphics_device.device(),
+                graphics_device.queue(),
+                texture,
+                mip_level,
+                texture_array_idx,
+            )?;
+
+            for value in &mut data {
+                *value = gamma_corrected(value.clamp(0.0, 1.0));
+            }
+
+            let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
+                ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+
+            for p in image_buffer.pixels_mut() {
+                p.0[3] = 1.0;
+            }
+
+            let image_buffer: ImageBuffer<Rgba<u8>, _> = image_buffer.convert();
+
+            image_buffer.save(output_path)?;
+        }
         wgpu::TextureFormat::Depth32Float
         | wgpu::TextureFormat::Depth32FloatStencil8
         | wgpu::TextureFormat::Rgba32Float => {
@@ -1111,7 +1135,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 image_buffer.save(output_path)?;
             } else {
                 for value in &mut data {
-                    *value = gamma_corrected(*value);
+                    *value = gamma_corrected(value.clamp(0.0, 1.0));
                 }
 
                 let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
@@ -1137,6 +1161,17 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
     Ok(())
 }
 
+fn extract_texture_data_and_convert<IN: Pod, OUT: From<IN>>(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+    mip_level: u32,
+    texture_array_idx: u32,
+) -> Result<Vec<OUT>> {
+    let data = extract_texture_data::<IN>(device, queue, texture, mip_level, texture_array_idx)?;
+    Ok(data.into_iter().map(|value| OUT::from(value)).collect())
+}
+
 fn extract_texture_data<T: Pod>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -1144,6 +1179,17 @@ fn extract_texture_data<T: Pod>(
     mip_level: u32,
     texture_array_idx: u32,
 ) -> Result<Vec<T>> {
+    let data = extract_texture_bytes(device, queue, texture, mip_level, texture_array_idx)?;
+    Ok(bytemuck::cast_slice(&data).to_vec())
+}
+
+fn extract_texture_bytes(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+    mip_level: u32,
+    texture_array_idx: u32,
+) -> Result<Vec<u8>> {
     assert!(mip_level <= texture.mip_level_count());
 
     assert!(texture_array_idx < texture.depth_or_array_layers());
@@ -1208,7 +1254,7 @@ fn extract_texture_data<T: Pod>(
     let buffer_view = &buffer_view
         [texture_array_idx * texture_image_size..(texture_array_idx + 1) * texture_image_size];
 
-    Ok(bytemuck::cast_slice(buffer_view).to_vec())
+    Ok(buffer_view.to_vec())
 }
 
 fn convert_bgra8_to_rgba8(bgra_bytes: &mut [u8]) {
