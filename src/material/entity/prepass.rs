@@ -62,16 +62,28 @@ pub fn create_prepass_material(
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
 
+    let mut input_render_attachments = RenderAttachmentInputDescriptionSet::empty();
+
+    // All prepass materials render to the emissive luminance attachment, either
+    // an actual emissive luminance or a clear color to overwrite any existing
+    // emissive luminance from an object blocked by the new fragment
     let mut output_render_attachments = RenderAttachmentOutputDescriptionSet::with_defaults(
-        // All prepass materials render to the emissive luminance attachment, either
-        // an actual emissive luminance or a clear color to overwrite any existing
-        // emissive luminance from an object blocked by the new fragment
         RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE
-        // These will be needed for ambient occlusion
-            | RenderAttachmentQuantitySet::POSITION
+            | RenderAttachmentQuantitySet::MOTION_VECTOR,
+    );
+
+    // These will be needed for ambient occlusion
+    output_render_attachments.insert_with_defaults(
+        RenderAttachmentQuantitySet::POSITION // Also needed for temporal anti-aliasing
             | RenderAttachmentQuantitySet::NORMAL_VECTOR
             | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
     );
+
+    // This will be needed for temporal anti-aliasing
+    output_render_attachments.insert_with_defaults(RenderAttachmentQuantitySet::MOTION_VECTOR);
+
+    // We need previous position to compute motion vectors
+    input_render_attachments.insert_with_defaults(RenderAttachmentQuantitySet::PREVIOUS_POSITION);
 
     // Since we output the position and normal vectors to attachments, the main
     // material can get this information from the attachments rather than having
@@ -180,7 +192,7 @@ pub fn create_prepass_material(
             MaterialSpecification::new(
                 vertex_attribute_requirements_for_mesh,
                 vertex_attribute_requirements_for_shader,
-                RenderAttachmentInputDescriptionSet::empty(),
+                input_render_attachments,
                 output_render_attachments,
                 None,
                 vec![feature_type_id],

@@ -546,6 +546,7 @@ impl RenderShaderGenerator {
                 light_vertex_output_field_indices.as_ref(),
                 &material_vertex_output_field_indices,
                 light_shader_generator.as_ref(),
+                camera_projection.as_ref(),
             );
 
             EntryPointNames {
@@ -1813,6 +1814,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
+        camera_projection: Option<&CameraProjectionVariable>,
     ) {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
@@ -1881,12 +1883,14 @@ impl<'a> MaterialShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
+                    input_render_attachment_quantities,
                     output_render_attachment_quantities,
                     push_constant_fragment_expressions,
                     fragment_input_struct,
                     mesh_input_field_indices,
                     material_input_field_indices,
                     light_shader_generator,
+                    camera_projection,
                 );
             }
             (
@@ -2036,6 +2040,70 @@ impl CameraProjectionVariable {
         )
     }
 
+    /// Generates an expression for the given position (as a vec3) projected
+    /// with the projection matrix in the given function. The projected position
+    /// will be a vec4.
+    pub fn generate_projected_position_expr(
+        &self,
+        module: &mut Module,
+        source_code_lib: &mut SourceCode,
+        function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
+        tricks: RenderShaderTricks,
+        position_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let matrix_expr = if tricks.contains(RenderShaderTricks::NO_JITTER) {
+            self.generate_projection_matrix_expr(function)
+        } else {
+            self.generate_jittered_projection_matrix_expr(
+                module,
+                source_code_lib,
+                function,
+                push_constant_expressions,
+            )
+        };
+
+        Self::generate_projected_position_expr_for_matrix(
+            module,
+            function,
+            tricks,
+            position_expr,
+            matrix_expr,
+        )
+    }
+
+    /// Generates an expression for the given position (as a vec3) projected
+    /// with the projection matrix of the previous frame in the given function.
+    /// The projected position will be a vec4.
+    pub fn generate_projected_position_expr_for_previous_frame(
+        &self,
+        module: &mut Module,
+        source_code_lib: &mut SourceCode,
+        function: &mut Function,
+        push_constant_expressions: &PushConstantExpressions,
+        tricks: RenderShaderTricks,
+        position_expr: Handle<Expression>,
+    ) -> Handle<Expression> {
+        let matrix_expr = if tricks.contains(RenderShaderTricks::NO_JITTER) {
+            self.generate_projection_matrix_expr(function)
+        } else {
+            self.generate_jittered_projection_matrix_expr_for_previous_frame(
+                module,
+                source_code_lib,
+                function,
+                push_constant_expressions,
+            )
+        };
+
+        Self::generate_projected_position_expr_for_matrix(
+            module,
+            function,
+            tricks,
+            position_expr,
+            matrix_expr,
+        )
+    }
+
     fn generate_jittered_projection_matrix_expr_for_frame_counter(
         &self,
         module: &mut Module,
@@ -2122,33 +2190,17 @@ impl CameraProjectionVariable {
         jittered_projection_matrix_expr
     }
 
-    /// Generates an expression for the given position (as a vec3) projected
-    /// with the projection matrix in the vertex entry point function. The
-    /// projected position will be a vec4.
-    pub fn generate_projected_position_expr(
-        &self,
+    fn generate_projected_position_expr_for_matrix(
         module: &mut Module,
-        source_code_lib: &mut SourceCode,
-        vertex_function: &mut Function,
-        push_constant_expressions: &PushConstantExpressions,
+        function: &mut Function,
         tricks: RenderShaderTricks,
         position_expr: Handle<Expression>,
+        matrix_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let matrix_expr = if tricks.contains(RenderShaderTricks::NO_JITTER) {
-            self.generate_projection_matrix_expr(vertex_function)
-        } else {
-            self.generate_jittered_projection_matrix_expr(
-                module,
-                source_code_lib,
-                vertex_function,
-                push_constant_expressions,
-            )
-        };
-
         let homogeneous_position_expr =
-            append_unity_component_to_vec3(&mut module.types, vertex_function, position_expr);
+            append_unity_component_to_vec3(&mut module.types, function, position_expr);
 
-        emit_in_func(vertex_function, |function| {
+        emit_in_func(function, |function| {
             let projected_position_expr = include_expr_in_func(
                 function,
                 Expression::Binary {
@@ -5878,18 +5930,19 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -5938,18 +5991,19 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
             ]
@@ -6005,18 +6059,19 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -6071,19 +6126,20 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
             ]
             .into_iter()
@@ -6132,21 +6188,28 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -6194,21 +6257,28 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -6256,21 +6326,28 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -6321,21 +6398,28 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::NORMAL_VECTOR
                 | VertexAttributeSet::TEXTURE_COORDS,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -6390,21 +6474,28 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
@@ -6459,22 +6550,29 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::empty(),
+            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
-                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+                | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
+                | RenderAttachmentQuantitySet::MOTION_VECTOR,
             [
                 PushConstant::new(
                     PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
                 PushConstant::new(
                     PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ),
-                PushConstant::new(PushConstantVariant::LightIdx, wgpu::ShaderStages::FRAGMENT),
-                PushConstant::new(PushConstantVariant::Exposure, wgpu::ShaderStages::FRAGMENT),
+                PushConstant::new(
+                    PushConstantVariant::LightIdx,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::Exposure,
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ),
             ]
             .into_iter()
             .collect(),
