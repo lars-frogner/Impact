@@ -551,6 +551,7 @@ fn generate_component_storing_code(
             let names = create_return_comp_names(return_comp_types);
             let indices = 0..names.len();
             quote! {
+                #[allow(non_snake_case)]
                 let (#(#names),*) = #closure_return_value_name;
                 #(
                     #storage_array_name[#indices].push(&#names);
