@@ -22,10 +22,9 @@ use crate::{
     },
     light::MAX_SHADOW_MAP_CASCADES,
     material::MaterialLibrary,
-    scene::Scene,
     window::EventLoopController,
 };
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use chrono::Utc;
 use postprocessing::{
     ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig, Postprocessor,
@@ -93,7 +92,6 @@ pub struct RenderingConfig {
 /// Helper for capturing screenshots and related textures.
 #[derive(Debug)]
 pub struct ScreenCapturer {
-    screenshot_width: NonZeroU32,
     screenshot_save_requested: AtomicBool,
     render_attachment_save_requested: AtomicBool,
     render_attachment_quantity: AtomicU8,
@@ -464,16 +462,13 @@ impl Default for RenderingConfig {
 }
 
 impl ScreenCapturer {
-    /// Creates a new screen capturer that will use the given width when saving
-    /// screenshots. The height will be determined automatically to match the
-    /// aspect ratio of the rendering surface.
+    /// Creates a new screen capturer.
     ///
     /// # Panics
     /// When a screenshot is captured, a panic will occur if the width times the
     /// number of bytes per pixel is not a multiple of 256.
-    pub fn new(screenshot_width: NonZeroU32) -> Self {
+    pub fn new() -> Self {
         Self {
-            screenshot_width,
             screenshot_save_requested: AtomicBool::new(false),
             render_attachment_save_requested: AtomicBool::new(false),
             render_attachment_quantity: AtomicU8::new(0),
@@ -519,40 +514,27 @@ impl ScreenCapturer {
     /// Checks if a screenshot capture was scheduled with
     /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
     /// saves it as a timestamped PNG file in the current directory.
-    pub fn save_screenshot_if_requested(
-        &self,
-        renderer: &RwLock<RenderingSystem>,
-        scene: &RwLock<Scene>,
-    ) -> Result<()> {
+    pub fn save_screenshot_if_requested(&self, renderer: &RwLock<RenderingSystem>) -> Result<()> {
         if self
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
-            let mut renderer = renderer.write().unwrap();
-            let scene = scene.read().unwrap();
-            let material_library = scene.material_library().read().unwrap();
+            let renderer = renderer.read().unwrap();
 
-            let (original_width, original_height) =
-                renderer.rendering_surface().surface_dimensions();
+            let surface_texture = renderer
+                .surface_texture_to_present
+                .as_ref()
+                .ok_or_else(|| anyhow!("No unpresented surface to save as screenshot"))?;
 
-            renderer.resize_rendering_surface(
-                self.screenshot_width,
-                self.determine_screenshot_height(original_width, original_height),
-            );
-            {
-                // Re-render the surface at the screenshot resolution.
-                let surface_texture = renderer.render_surface(&material_library)?;
-
-                texture::save_texture_as_image_file(
-                    renderer.graphics_device(),
-                    &surface_texture.texture,
-                    0,
-                    0,
-                    format!("screenshot_{}.png", Utc::now().to_rfc3339()),
-                )?;
-            }
-            renderer.resize_rendering_surface(original_width, original_height);
+            texture::save_texture_as_image_file(
+                renderer.graphics_device(),
+                &surface_texture.texture,
+                0,
+                0,
+                format!("screenshot_{}.png", Utc::now().to_rfc3339()),
+            )?;
         }
+
         Ok(())
     }
 
@@ -563,7 +545,6 @@ impl ScreenCapturer {
     pub fn save_render_attachment_quantity_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
-        scene: &RwLock<Scene>,
     ) -> Result<()> {
         if self
             .render_attachment_save_requested
@@ -574,33 +555,18 @@ impl ScreenCapturer {
             )
             .unwrap();
 
-            let mut renderer = renderer.write().unwrap();
-            let scene = scene.read().unwrap();
-            let material_library = scene.material_library().read().unwrap();
+            let renderer = renderer.read().unwrap();
 
-            let (original_width, original_height) =
-                renderer.rendering_surface().surface_dimensions();
-
-            renderer.resize_rendering_surface(
-                self.screenshot_width,
-                self.determine_screenshot_height(original_width, original_height),
-            );
-            {
-                // Re-render the surface at the screenshot resolution.
-                renderer.render_surface(&material_library)?;
-
-                renderer
-                    .render_attachment_texture_manager
-                    .read()
-                    .unwrap()
-                    .save_render_attachment_texture_as_image_file(
-                        renderer.graphics_device(),
-                        quantity,
-                        0,
-                        format!("{}_{}.png", quantity, Utc::now().to_rfc3339()),
-                    )?;
-            }
-            renderer.resize_rendering_surface(original_width, original_height);
+            renderer
+                .render_attachment_texture_manager()
+                .read()
+                .unwrap()
+                .save_render_attachment_texture_as_image_file(
+                    renderer.graphics_device(),
+                    quantity,
+                    0,
+                    format!("{}_{}.png", quantity, Utc::now().to_rfc3339()),
+                )?;
         }
         Ok(())
     }
@@ -688,15 +654,10 @@ impl ScreenCapturer {
             Ok(())
         }
     }
+}
 
-    fn determine_screenshot_height(
-        &self,
-        surface_width: NonZeroU32,
-        surface_height: NonZeroU32,
-    ) -> NonZeroU32 {
-        let aspect_ratio = (u32::from(surface_height) as f32) / (u32::from(surface_width) as f32);
-        let screenshot_height =
-            f32::round((u32::from(self.screenshot_width) as f32) * aspect_ratio) as u32;
-        NonZeroU32::new(u32::max(1, screenshot_height)).unwrap()
+impl Default for ScreenCapturer {
+    fn default() -> Self {
+        Self::new()
     }
 }
