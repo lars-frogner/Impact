@@ -139,3 +139,18 @@ fn createJitteredPerspectiveProjectionMatrix(
     jitteredMatrix[2][1] += jitterOffsets.y * inverseWindowDimensions.y;
     return jitteredMatrix;
 }
+
+fn computeMotionVector(
+    screenTextureCoords: vec2<f32>,
+    currentDepth: f32,
+    previousClipSpacePosition: vec4<f32>,
+) -> vec3<f32> {
+    if (previousClipSpacePosition.w < 1e-6) {
+        // The previous position is behind the camera
+        return vec3<f32>(1.0, 1.0, 0.0);
+    }
+    let currentScreenCoords = vec3<f32>(screenTextureCoords.xy, currentDepth);
+    let previousNDCPosition = previousClipSpacePosition.xyz / previousClipSpacePosition.w;
+    let previousScreenCoords = vec3<f32>(0.5 * (1.0 + previousNDCPosition.x), 0.5 * (1.0 - previousNDCPosition.y), previousNDCPosition.z);
+    return vec3<f32>(currentScreenCoords.xy - previousScreenCoords.xy, 0.0);
+}

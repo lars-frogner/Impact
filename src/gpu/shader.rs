@@ -2295,17 +2295,29 @@ fn append_unity_component_to_vec3(
     function: &mut Function,
     vec3_expr: Handle<Expression>,
 ) -> Handle<Expression> {
+    append_literal_to_vec3(types, function, vec3_expr, 1.0)
+}
+
+/// Takes an expression for a `vec3<f32>` and generates an expression for a
+/// `vec4<f32>` where the first three components are the same as in the `vec3`
+/// and the last component is the given float literal.
+fn append_literal_to_vec3(
+    types: &mut UniqueArena<Type>,
+    function: &mut Function,
+    vec3_expr: Handle<Expression>,
+    literal: f32,
+) -> Handle<Expression> {
     let vec4_type = insert_in_arena(types, VECTOR_4_TYPE);
 
-    let unity_constant_expr =
-        include_expr_in_func(function, Expression::Literal(Literal::F32(1.0)));
+    let literal_constant_expr =
+        include_expr_in_func(function, Expression::Literal(Literal::F32(literal)));
 
     emit_in_func(function, |function| {
         include_expr_in_func(
             function,
             Expression::Compose {
                 ty: vec4_type,
-                components: vec![vec3_expr, unity_constant_expr],
+                components: vec![vec3_expr, literal_constant_expr],
             },
         )
     })
