@@ -126,9 +126,18 @@ pub enum MaterialShaderInput {
 }
 
 /// Input description specifying the vertex attribute locations of the
-/// components of the model view transform.
+/// components of the current, and optionally the previous, model view
+/// transform.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModelViewTransformShaderInput {
+    pub current: SingleModelViewTransformShaderInput,
+    pub previous: Option<SingleModelViewTransformShaderInput>,
+}
+
+/// Input description specifying the vertex attribute locations of the
+/// components of a model view transform.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SingleModelViewTransformShaderInput {
     /// Vertex attribute location for the rotation quaternion.
     pub rotation_location: u32,
     /// Vertex attribute locations for the 4-element vector containing the
@@ -725,7 +734,7 @@ impl RenderShaderGenerator {
                         name: new_name("rotationQuaternion"),
                         ty: vec4_type,
                         binding: Some(Binding::Location {
-                            location: model_view_transform_shader_input.rotation_location,
+                            location: model_view_transform_shader_input.current.rotation_location,
                             second_blend_source: false,
                             interpolation: None,
                             sampling: None,
@@ -737,6 +746,7 @@ impl RenderShaderGenerator {
                         ty: vec4_type,
                         binding: Some(Binding::Location {
                             location: model_view_transform_shader_input
+                                .current
                                 .translation_and_scaling_location,
                             second_blend_source: false,
                             interpolation: None,
@@ -3503,8 +3513,11 @@ mod test {
 
     const MODEL_VIEW_TRANSFORM_INPUT: InstanceFeatureShaderInput =
         InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-            rotation_location: INSTANCE_VERTEX_BINDING_START,
-            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
+            current: SingleModelViewTransformShaderInput {
+                rotation_location: INSTANCE_VERTEX_BINDING_START,
+                translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
+            },
+            previous: None,
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {

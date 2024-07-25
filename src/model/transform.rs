@@ -3,7 +3,10 @@
 use crate::{
     gpu::{
         rendering::fre,
-        shader::{InstanceFeatureShaderInput, ModelViewTransformShaderInput},
+        shader::{
+            InstanceFeatureShaderInput, ModelViewTransformShaderInput,
+            SingleModelViewTransformShaderInput,
+        },
     },
     impl_InstanceFeature,
     model::InstanceFeatureManager,
@@ -23,8 +26,17 @@ pub struct InstanceModelViewTransform {
     pub scaling: fre,
 }
 
-/// A model-to-light transform for a specific instance of a model.
-pub type InstanceModelLightTransform = InstanceModelViewTransform;
+/// A model-to-camera transform for a specific instance of a model, along with
+/// the corresponding transform from the previous frame.
+///
+/// This struct is intended to be passed to the GPU in a vertex buffer. The
+/// order of the fields is assumed in the shaders.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Default, Zeroable, Pod)]
+pub struct InstanceModelViewTransformWithPrevious {
+    pub current: InstanceModelViewTransform,
+    pub previous: InstanceModelViewTransform,
+}
 
 const INSTANCE_VERTEX_BINDING_START: u32 = 0;
 
@@ -50,17 +62,6 @@ impl InstanceModelViewTransform {
         }
     }
 
-    #[cfg(test)]
-    pub fn dummy_instance_feature_id() -> super::InstanceFeatureID {
-        use crate::model::InstanceFeature;
-        super::InstanceFeatureID {
-            feature_type_id: InstanceModelViewTransform::FEATURE_TYPE_ID,
-            idx: 0,
-        }
-    }
-}
-
-impl InstanceModelLightTransform {
     /// Creates a new model-to-light transform corresponding to the given
     /// similarity transform.
     pub fn with_model_light_transform(transform: Similarity3<fre>) -> Self {
@@ -74,6 +75,32 @@ impl Default for InstanceModelViewTransform {
     }
 }
 
+impl InstanceModelViewTransformWithPrevious {
+    /// Uses the identity transform for the previous frame.
+    pub fn current_only(transform: InstanceModelViewTransform) -> Self {
+        Self {
+            current: transform,
+            previous: InstanceModelViewTransform::identity(),
+        }
+    }
+
+    /// Sets the transform for the current frame to the given transform and the
+    /// transform for the previous frame to the replaced transform.
+    pub fn set_transform_for_new_frame(&mut self, transform: InstanceModelViewTransform) {
+        self.previous = self.current;
+        self.current = transform;
+    }
+
+    #[cfg(test)]
+    pub fn dummy_instance_feature_id() -> super::InstanceFeatureID {
+        use crate::model::InstanceFeature;
+        super::InstanceFeatureID {
+            feature_type_id: Self::FEATURE_TYPE_ID,
+            idx: 0,
+        }
+    }
+}
+
 impl_InstanceFeature!(
     InstanceModelViewTransform,
     wgpu::vertex_attr_array![
@@ -81,11 +108,35 @@ impl_InstanceFeature!(
         INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
     ],
     InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-        rotation_location: INSTANCE_VERTEX_BINDING_START,
-        translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
+        current: SingleModelViewTransformShaderInput {
+            rotation_location: INSTANCE_VERTEX_BINDING_START,
+            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
+        },
+        previous: None
+    })
+);
+
+impl_InstanceFeature!(
+    InstanceModelViewTransformWithPrevious,
+    wgpu::vertex_attr_array![
+        INSTANCE_VERTEX_BINDING_START => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
+        INSTANCE_VERTEX_BINDING_START + 3 => Float32x4,
+    ],
+    InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
+        current: SingleModelViewTransformShaderInput {
+            rotation_location: INSTANCE_VERTEX_BINDING_START,
+            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
+        },
+        previous: Some(SingleModelViewTransformShaderInput {
+            rotation_location: INSTANCE_VERTEX_BINDING_START + 2,
+            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 3,
+        })
     })
 );
 
 pub fn register_model_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {
     instance_feature_manager.register_feature_type::<InstanceModelViewTransform>();
+    instance_feature_manager.register_feature_type::<InstanceModelViewTransformWithPrevious>();
 }
