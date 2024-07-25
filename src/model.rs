@@ -1,21 +1,21 @@
 //! Models defined by a mesh and material.
 
 pub mod buffer;
+pub mod transform;
+
+pub use transform::register_model_feature_types;
 
 use crate::{
-    gpu::{
-        rendering::fre,
-        shader::{InstanceFeatureShaderInput, ModelViewTransformShaderInput},
-    },
-    impl_InstanceFeature,
-    material::{MaterialHandle, MaterialLibrary},
+    gpu::{shader::InstanceFeatureShaderInput, GraphicsDevice},
+    material::MaterialHandle,
     mesh::MeshID,
 };
+use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{self, AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
-use nalgebra::{Similarity3, UnitQuaternion, Vector3};
 use nohash_hasher::BuildNoHashHasher;
 use std::{
+    borrow::Cow,
     cmp,
     collections::HashMap,
     fmt::{self},
@@ -54,6 +54,26 @@ pub trait InstanceFeature: Pod {
     }
 }
 
+/// Convenience macro for implementing the [`InstanceFeature`] trait. The
+/// feature type ID is created by hashing the name of the implementing type.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! impl_InstanceFeature {
+    ($ty:ty, $vertex_attr_array:expr, $shader_input:expr) => {
+        impl $crate::model::InstanceFeature for $ty {
+            const FEATURE_TYPE_ID: $crate::model::InstanceFeatureTypeID =
+                impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
+
+            const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
+                $crate::mesh::buffer::create_vertex_buffer_layout_for_instance::<Self>(
+                    &$vertex_attr_array,
+                );
+
+            const SHADER_INPUT: $crate::gpu::shader::InstanceFeatureShaderInput = $shader_input;
+        }
+    };
+}
+
 /// Identifier for specific models.
 ///
 /// A model is uniquely defined by its mesh and material. If the material has an
@@ -66,7 +86,8 @@ pub struct ModelID {
     hash: Hash64,
 }
 
-/// Container for features associated with instances of specific models.
+/// Container for features (distinct pieces of data) associated with instances
+/// of specific models.
 ///
 /// Holds a set of [`InstanceFeatureStorage`]s, one storage for each feature
 /// type. These storages are presistent and can be accessed to add, remove or
@@ -74,15 +95,23 @@ pub struct ModelID {
 ///
 /// Additionally, a set of [`DynamicInstanceFeatureBuffer`]s is kept for each
 /// model that has instances, one buffer for each feature type associated with
-/// the model, with the first one always being a buffer for model-to-camera
-/// transforms. These buffers are filled with transforms as well as feature
-/// values from the `InstanceFeatureStorage`s for all instances that are to be
-/// rendered. Their contents can then be copied directly to the corresponding
-/// GPU buffers, before they are cleared in preparation for the next frame.
+/// the model. These buffers are filled with feature values from the
+/// `InstanceFeatureStorage`s for all instances that are to be rendered. Their
+/// contents can then be copied directly to the corresponding GPU buffers,
+/// before they are cleared in preparation for the next frame.
 #[derive(Debug, Default)]
 pub struct InstanceFeatureManager {
     feature_storages: HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
-    instance_feature_buffers: HashMap<ModelID, (usize, Vec<DynamicInstanceFeatureBuffer>)>,
+    instance_buffers: HashMap<ModelID, ModelInstanceBuffer>,
+}
+
+/// Container for the [`DynamicInstanceFeatureBuffer`]s holding buffered
+/// features for all instances of one specific model.
+#[derive(Debug, Default)]
+pub struct ModelInstanceBuffer {
+    feature_buffers: Vec<DynamicInstanceFeatureBuffer>,
+    buffer_index_map: KeyIndexMapper<InstanceFeatureTypeID>,
+    instance_count: usize,
 }
 
 /// Identifier for a type of instance feature.
@@ -152,29 +181,12 @@ pub struct InstanceFeatureBufferRangeMap {
     range_id_index_map: HashMap<InstanceFeatureBufferRangeID, usize>,
 }
 
-/// A model-to-camera transform for a specific instance of a model.
-///
-/// This struct is intended to be passed to the GPU in a vertex buffer. The
-/// order of the fields is assumed in the shaders.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct InstanceModelViewTransform {
-    pub rotation: UnitQuaternion<fre>,
-    pub translation: Vector3<fre>,
-    pub scaling: fre,
-}
-
-/// A model-to-light transform for a specific instance of a model.
-pub type InstanceModelLightTransform = InstanceModelViewTransform;
-
 #[derive(Copy, Clone, Debug)]
 struct InstanceFeatureTypeDescriptor {
     id: InstanceFeatureTypeID,
     size: usize,
     alignment: Alignment,
 }
-
-const INSTANCE_VERTEX_BINDING_START: u32 = 0;
 
 impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the mesh and
@@ -268,83 +280,24 @@ impl InstanceFeatureManager {
     pub fn new() -> Self {
         Self {
             feature_storages: HashMap::new(),
-            instance_feature_buffers: HashMap::new(),
+            instance_buffers: HashMap::new(),
         }
+    }
+
+    /// Sets up a storage for features of type `Fe`, which is required for
+    /// supporting instances with features of that type.
+    ///
+    /// If a storage for the feature type is already set up, nothing happens.
+    pub fn register_feature_type<Fe: InstanceFeature>(&mut self) {
+        self.feature_storages
+            .entry(Fe::FEATURE_TYPE_ID)
+            .or_insert_with(|| InstanceFeatureStorage::new::<Fe>());
     }
 
     /// Whether the manager has instance feature buffers for the model with the
     /// given ID.
-    pub fn has_model_id(&self, model_id: ModelID) -> bool {
-        self.instance_feature_buffers.contains_key(&model_id)
-    }
-
-    /// Returns a reference to the set of instance feature buffers for the model
-    /// with the given ID, or [`None`] if the model is not present.
-    pub fn get_buffers(&self, model_id: ModelID) -> Option<&Vec<DynamicInstanceFeatureBuffer>> {
-        self.instance_feature_buffers
-            .get(&model_id)
-            .map(|(_, buffers)| buffers)
-    }
-
-    /// Returns a mutable iterator over each buffer of model instance
-    /// transforms.
-    pub fn transform_buffers_mut(
-        &mut self,
-    ) -> impl Iterator<Item = &'_ mut DynamicInstanceFeatureBuffer> {
-        self.instance_feature_buffers.values_mut().map(|buffers| {
-            buffers
-                .1
-                .get_mut(0)
-                .expect("Missing transform buffer for model")
-        })
-    }
-
-    /// Returns a mutable reference to the buffer of model instance transforms
-    /// for the model with the given ID.
-    pub fn transform_buffer_mut(&mut self, model_id: ModelID) -> &mut DynamicInstanceFeatureBuffer {
-        self.instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to buffer instances of missing model")
-            .1
-            .get_mut(0)
-            .expect("Missing transform buffer for model")
-    }
-
-    /// Returns a mutable reference to the buffer of model instance transforms
-    /// for the model with the given ID and another mutable reference to the
-    /// first instance feature buffer following the transform buffer, along with
-    /// a reference to the feature storage associated with the latter.
-    ///
-    /// # Panics
-    /// If any of the requested buffers are not present.
-    pub fn transform_and_next_feature_buffer_mut_with_storage(
-        &mut self,
-        model_id: ModelID,
-    ) -> (
-        &mut DynamicInstanceFeatureBuffer,
-        (&InstanceFeatureStorage, &mut DynamicInstanceFeatureBuffer),
-    ) {
-        let feature_buffers = &mut self
-            .instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to buffer instances of missing model")
-            .1;
-
-        let (transform_buffer, remaining_buffers) = feature_buffers
-            .split_first_mut()
-            .expect("Missing instance feature buffer for transforms");
-
-        let (next_feature_buffer, _) = remaining_buffers
-            .split_first_mut()
-            .expect("Missing instance feature buffer following transform buffer");
-
-        let feature_type_id = next_feature_buffer.feature_type_id();
-
-        let storage = self.feature_storages.get(&feature_type_id).expect(
-            "Missing storage associated with instance feature buffer following transform buffer",
-        );
-
-        (transform_buffer, (storage, next_feature_buffer))
+    pub fn has_model_id(&self, model_id: &ModelID) -> bool {
+        self.instance_buffers.contains_key(model_id)
     }
 
     /// Returns a reference to the storage of instance features of type `Fe`, or
@@ -377,133 +330,335 @@ impl InstanceFeatureManager {
         self.feature_storages.get_mut(&feature_type_id)
     }
 
-    /// Returns an iterator over the model IDs and their associated sets of
-    /// instance feature buffers.
-    pub fn model_ids_and_buffers(
-        &self,
-    ) -> impl Iterator<Item = (ModelID, &'_ Vec<DynamicInstanceFeatureBuffer>)> {
-        self.instance_feature_buffers
-            .iter()
-            .map(|(model_id, (_, buffers))| (*model_id, buffers))
-    }
-
-    /// Returns an iterator over the model IDs and their associated sets of
-    /// instance feature buffers, with the buffers being mutable.
-    pub fn model_ids_and_mutable_buffers(
-        &mut self,
-    ) -> impl Iterator<Item = (ModelID, &'_ mut Vec<DynamicInstanceFeatureBuffer>)> {
-        self.instance_feature_buffers
-            .iter_mut()
-            .map(|(model_id, (_, buffers))| (*model_id, buffers))
-    }
-
-    /// Sets up a storage for features of type `Fe`, which is required for
-    /// supporting instances with features of that type.
-    ///
-    /// If a storage for the feature type is already set up, nothing happens.
-    pub fn register_feature_type<Fe: InstanceFeature>(&mut self) {
-        self.feature_storages
-            .entry(Fe::FEATURE_TYPE_ID)
-            .or_insert_with(|| InstanceFeatureStorage::new::<Fe>());
-    }
-
-    /// Registers the existance of a new instance of the model with the given
-    /// ID. This involves initializing instance feature buffers for all the
-    /// feature types associated with the model if they do not already exist.
+    /// Returns a mutable reference to the value of the feature stored under the
+    /// given ID.
     ///
     /// # Panics
-    /// - If the model's material is not present in the material library.
+    /// - If the feature's type has not been registered.
+    /// - If no feature with the given ID exists in the associated storage.
+    pub fn feature_mut<Fe: InstanceFeature>(&mut self, feature_id: InstanceFeatureID) -> &mut Fe {
+        self.get_storage_mut::<Fe>()
+            .expect("Missing storage for instance feature type")
+            .feature_mut::<Fe>(feature_id)
+    }
+
+    /// Returns a reference to the [`ModelInstanceBuffer`] for the model with
+    /// the given ID, or [`None`] if the model is not present.
+    pub fn get_model_instance_buffer(&self, model_id: &ModelID) -> Option<&ModelInstanceBuffer> {
+        self.instance_buffers.get(model_id)
+    }
+
+    /// Returns a mutable reference to the [`ModelInstanceBuffer`] for the model
+    /// with the given ID, or [`None`] if the model is not present.
+    pub fn get_model_instance_buffer_mut(
+        &mut self,
+        model_id: &ModelID,
+    ) -> Option<&mut ModelInstanceBuffer> {
+        self.instance_buffers.get_mut(model_id)
+    }
+
+    /// Returns an iterator over the model IDs and their associated instance
+    /// buffers.
+    pub fn model_ids_and_instance_buffers(
+        &self,
+    ) -> impl Iterator<Item = (&ModelID, &'_ ModelInstanceBuffer)> {
+        self.instance_buffers.iter()
+    }
+
+    /// Returns an iterator over the model IDs and their associated instance
+    /// buffers, with the buffers being mutable.
+    pub fn model_ids_and_mutable_instance_buffers(
+        &mut self,
+    ) -> impl Iterator<Item = (&ModelID, &'_ mut ModelInstanceBuffer)> {
+        self.instance_buffers.iter_mut()
+    }
+
+    /// Registers the existence of a new instance of the model with the given
+    /// ID, where the model has associated features of the given types. This
+    /// involves initializing the [`ModelInstanceBuffer`] associated with the
+    /// model if it do not already exist.
+    ///
+    /// # Panics
+    /// - If the `ModelInstanceBuffer` for the model has already been
+    ///   initialized with a different set of feature types than provided.
     /// - If any of the model's feature types have not been registered with
-    ///   [`register_feature_type`].
-    pub fn register_instance(&mut self, material_library: &MaterialLibrary, model_id: ModelID)
-    where
-        InstanceModelViewTransform: InstanceFeature,
-    {
-        let material_feature_type_ids = material_library
-            .get_material_specification(model_id.material_handle().material_id())
-            .expect("Missing material specification for model material")
-            .instance_feature_type_ids();
-
-        if let Some(prepass_material_handle) = model_id.prepass_material_handle() {
-            let prepass_material_feature_type_ids = material_library
-                .get_material_specification(prepass_material_handle.material_id())
-                .expect("Missing material specification for model prepass material")
-                .instance_feature_type_ids();
-
-            if !prepass_material_feature_type_ids.is_empty() {
-                assert_eq!(
-                    prepass_material_feature_type_ids, material_feature_type_ids,
-                    "Prepass material must use the same feature types as main material"
-                );
-            }
-        }
-
-        self.register_instance_with_feature_type_ids(model_id, material_feature_type_ids);
+    ///   [`Self::register_feature_type`].
+    pub fn register_instance(
+        &mut self,
+        model_id: ModelID,
+        feature_type_ids: &[InstanceFeatureTypeID],
+    ) {
+        self.instance_buffers
+            .entry(model_id)
+            .and_modify(|instance_buffer| {
+                assert_eq!(instance_buffer.n_feature_types(), feature_type_ids.len());
+                instance_buffer.register_instance();
+            })
+            .or_insert_with(|| {
+                ModelInstanceBuffer::new(feature_type_ids.iter().map(|feature_type_id| {
+                    self.feature_storages.get(feature_type_id).expect(
+                        "Missing storage for instance feature type \
+                             (all feature types must be registered with `register_feature_type`)",
+                    )
+                }))
+            });
     }
 
     /// Informs the manager that an instance of the model with the given ID has
-    /// been deleted, so that the associated instance feature buffers can be
+    /// been deleted, so that the associated [`ModelInstanceBuffer`] can be
     /// deleted if this was the last instance of that model.
     ///
     /// # Panics
     /// If no instance of the specified model exists.
-    pub fn unregister_instance(&mut self, model_id: ModelID) {
-        let count = &mut self
-            .instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to unregister instance of model that has no instances")
-            .0;
+    pub fn unregister_instance(&mut self, model_id: &ModelID) {
+        let instance_buffer = self
+            .get_model_instance_buffer_mut(model_id)
+            .expect("Tried to unregister instance of model that has no instances");
 
-        assert!(*count > 0);
+        instance_buffer.unregister_instance();
 
-        *count -= 1;
-
-        if *count == 0 {
-            self.instance_feature_buffers.remove(&model_id);
+        if !instance_buffer.has_instances() {
+            self.instance_buffers.remove(model_id);
         }
     }
 
     /// Finds the instance feature buffers for the model with the given ID and
-    /// pushes the given transform and the feature values corrsponding to the
-    /// given feature IDs onto the buffers.
+    /// pushes the values of the features with the given IDs from their storages
+    /// onto the buffers.
     ///
     /// # Panics
-    /// - If no buffers exist for the model with the given ID.
-    /// - If the number of feature IDs is not exactly one less than the number
-    ///   of buffers (the first buffer is used for the transform).
+    /// - If no [`ModelInstanceBuffer`] exists for the model with the given ID.
+    /// - If the number of feature IDs does not match the number of buffers.
     /// - If any of the feature IDs are for feature types other than the type
     ///   stored in the corresponding buffer (the order of the feature IDs has
-    ///   to be the same as in the
-    ///   [`MaterialSpecification`](crate::material::MaterialSpecification) of
-    ///   the model, which was used to initialize the buffers.
-    pub fn buffer_instance(
+    ///   to be the same as in the [`Self::register_instance`] call used to
+    ///   initialize the buffers).
+    pub fn buffer_instance_features_from_storages(
         &mut self,
-        model_id: ModelID,
-        transform: &InstanceModelViewTransform,
+        model_id: &ModelID,
         feature_ids: &[InstanceFeatureID],
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-    {
-        let feature_buffers = &mut self
-            .instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to buffer instance of missing model")
-            .1;
+    ) {
+        let instance_buffer = self
+            .instance_buffers
+            .get_mut(model_id)
+            .expect("Tried to buffer instance of missing model");
 
-        assert_eq!(feature_ids.len() + 1, feature_buffers.len());
+        instance_buffer.buffer_instance_features_from_storage(&self.feature_storages, feature_ids);
+    }
 
-        let mut feature_buffers = feature_buffers.iter_mut();
+    /// Pushes the given feature value onto the associated buffer for the model
+    /// with the given ID.
+    ///
+    /// # Panics
+    /// - If no [`ModelInstanceBuffer`] exists for the model with the given ID.
+    /// - If the model does not have a buffer for the feature type.
+    pub fn buffer_instance_feature<Fe: InstanceFeature>(
+        &mut self,
+        model_id: &ModelID,
+        feature: &Fe,
+    ) {
+        let instance_buffer = self
+            .instance_buffers
+            .get_mut(model_id)
+            .expect("Tried to buffer instance of missing model");
 
-        feature_buffers
-            .next()
-            .expect("Missing transform buffer for instance")
-            .add_feature(transform);
+        instance_buffer.buffer_instance_feature::<Fe>(feature);
+    }
 
-        for (&feature_id, feature_buffer) in feature_ids.iter().zip(feature_buffers) {
+    /// Calls [`DynamicInstanceFeatureBuffer::begin_range`] with the given range
+    /// ID for all instance feature buffers holding the given feature type
+    /// (across all models).
+    pub fn begin_range_in_feature_buffers(
+        &mut self,
+        feature_type_id: InstanceFeatureTypeID,
+        range_id: InstanceFeatureBufferRangeID,
+    ) {
+        for instance_buffer in self.instance_buffers.values_mut() {
+            instance_buffer.begin_range_in_feature_buffer(feature_type_id, range_id);
+        }
+    }
+
+    /// Clears all instance feature buffers and removes all features from the
+    /// storages.
+    pub fn clear_storages_and_buffers(&mut self) {
+        self.instance_buffers.clear();
+        for storage in self.feature_storages.values_mut() {
+            storage.remove_all_features();
+        }
+    }
+
+    /// Returns mutable references to the first and second instance feature
+    /// buffers of the model with the given ID, along with references to the
+    /// associated storages.
+    ///
+    /// # Panics
+    /// If any of the requested buffers are not present.
+    pub fn first_and_second_feature_buffer_mut_with_storages(
+        &mut self,
+        model_id: &ModelID,
+    ) -> (
+        (&mut DynamicInstanceFeatureBuffer, &InstanceFeatureStorage),
+        (&mut DynamicInstanceFeatureBuffer, &InstanceFeatureStorage),
+    ) {
+        let instance_buffer = self
+            .instance_buffers
+            .get_mut(model_id)
+            .expect("Tried to buffer instances of missing model");
+
+        let (first_buffer, second_buffer) =
+            instance_buffer.first_and_second_feature_buffer_mut_with_storage();
+
+        let first_storage = self
+            .feature_storages
+            .get(&first_buffer.feature_type_id())
+            .expect("Missing storage associated with first instance feature buffer");
+
+        let second_storage = self
+            .feature_storages
+            .get(&second_buffer.feature_type_id())
+            .expect("Missing storage associated with second instance feature buffer");
+
+        (
+            (first_buffer, first_storage),
+            (second_buffer, second_storage),
+        )
+    }
+}
+
+impl ModelInstanceBuffer {
+    fn new<'a>(feature_storages: impl IntoIterator<Item = &'a InstanceFeatureStorage>) -> Self {
+        let mut buffer_index_map = KeyIndexMapper::new();
+        let mut feature_buffers = Vec::new();
+
+        for storage in feature_storages {
+            let buffer = DynamicInstanceFeatureBuffer::new_for_storage(storage);
+            buffer_index_map.push_key(buffer.feature_type_id());
+            feature_buffers.push(buffer);
+        }
+
+        Self {
+            feature_buffers,
+            buffer_index_map,
+            instance_count: 1,
+        }
+    }
+
+    /// Creates a new GPU buffer manager for each feature type associated with
+    /// the model and moves the buffered feature values to the new GPU buffers
+    /// (clearing the source buffers). The buffer managers are returned in the
+    /// same order as the feature types passed to the
+    /// [`InstanceFeatureManager::register_instance`] calls for this model.
+    ///
+    /// Call [`Self::move_buffered_instance_features_to_gpu_buffers`] with the
+    /// same list of GPU buffer managers for subsequent moves of buffered
+    /// feature values to the GPU buffers.
+    pub fn move_buffered_instance_features_to_new_gpu_buffers(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        label: Cow<'static, str>,
+    ) -> Vec<InstanceFeatureGPUBufferManager> {
+        self.feature_buffers
+            .iter_mut()
+            .map(|feature_buffer| {
+                let gpu_buffer_manager = InstanceFeatureGPUBufferManager::new(
+                    graphics_device,
+                    feature_buffer,
+                    label.clone(),
+                );
+
+                feature_buffer.clear();
+
+                gpu_buffer_manager
+            })
+            .collect()
+    }
+
+    /// Copies all buffered feature values to the given GPU buffers and then
+    /// clears the source buffers.
+    ///
+    /// # Panics
+    /// If the GPU buffer managers are not given in the same order as returned
+    /// from [`Self::move_buffered_instance_features_to_new_gpu_buffers`].
+    pub fn move_buffered_instance_features_to_gpu_buffers(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        gpu_buffer_managers: &mut [InstanceFeatureGPUBufferManager],
+    ) {
+        for (feature_buffer, gpu_buffer_manager) in
+            self.feature_buffers.iter_mut().zip(gpu_buffer_managers)
+        {
+            gpu_buffer_manager
+                .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
+
+            feature_buffer.clear();
+        }
+    }
+
+    /// Returns the number of feature types associated with the model.
+    fn n_feature_types(&self) -> usize {
+        self.feature_buffers.len()
+    }
+
+    /// Returns a reference to the [`DynamicInstanceFeatureBuffer`] for
+    /// features of the given type, or [`None`] if the modes does not use this
+    /// feature type.
+    pub fn get_feature_buffer(
+        &self,
+        feature_type_id: InstanceFeatureTypeID,
+    ) -> Option<&DynamicInstanceFeatureBuffer> {
+        let idx = self.buffer_index_map.get(feature_type_id)?;
+        Some(&self.feature_buffers[idx])
+    }
+
+    /// Returns a mutable reference to the [`DynamicInstanceFeatureBuffer`] for
+    /// features of the given type, or [`None`] if the modes does not use this
+    /// feature type.
+    pub fn get_feature_buffer_mut(
+        &mut self,
+        feature_type_id: InstanceFeatureTypeID,
+    ) -> Option<&mut DynamicInstanceFeatureBuffer> {
+        let idx = self.buffer_index_map.get(feature_type_id)?;
+        Some(&mut self.feature_buffers[idx])
+    }
+
+    /// Whether any instances of the model have been registered.
+    fn has_instances(&self) -> bool {
+        self.instance_count > 0
+    }
+
+    /// Registers the existence of a new instance of the model.
+    fn register_instance(&mut self) {
+        self.instance_count += 1;
+    }
+
+    /// Informs that an instance of the model has been deleted.
+    fn unregister_instance(&mut self) {
+        assert!(self.instance_count > 0);
+        self.instance_count -= 1;
+    }
+
+    /// Finds the instance feature buffers for the model and pushes the values
+    /// of the features with the given IDs from the given storages onto the
+    /// buffers.
+    ///
+    /// # Panics
+    /// - If the number of feature IDs does not match the number of buffers.
+    /// - If any of the feature IDs are for feature types other than the type
+    ///   stored in the corresponding buffer (the order of the feature IDs has
+    ///   to be the same as in the [`Self::register_instance`] call used to
+    ///   initialize the buffers).
+    fn buffer_instance_features_from_storage(
+        &mut self,
+        feature_storages: &HashMap<InstanceFeatureTypeID, InstanceFeatureStorage>,
+        feature_ids: &[InstanceFeatureID],
+    ) {
+        assert_eq!(feature_ids.len(), self.feature_buffers.len());
+
+        for (&feature_id, feature_buffer) in feature_ids.iter().zip(self.feature_buffers.iter_mut())
+        {
             let feature_type_id = feature_buffer.feature_type_id();
 
-            let storage = self
-                .feature_storages
+            let storage = feature_storages
                 .get(&feature_type_id)
                 .expect("Missing storage for model instance feature");
 
@@ -511,163 +666,48 @@ impl InstanceFeatureManager {
         }
     }
 
-    /// Finds the instance feature buffers for the model with the given ID and
-    /// pushes the given set of transforms (one for each instance) and the
-    /// feature values corrsponding to the given sets of feature IDs (one
-    /// [`Vec`] for each feature type, each [`Vec`] containing either a single
-    /// feature ID, in which case this is assumed to apply to all instances, or
-    /// containing a separate feature ID for each instance) onto the buffers.
+    /// Pushes the given feature value onto the associated buffer.
     ///
     /// # Panics
-    /// - If no buffers exist for the model with the given ID.
-    /// - If the number of feature IDs is not exactly one less than the number
-    ///   of buffers (the first buffer is used for the transform).
-    /// - If any of the feature IDs are for feature types other than the type
-    ///   stored in the corresponding buffer (the order of the feature IDs has
-    ///   to be the same as in the
-    ///   [`MaterialSpecification`](crate::material::MaterialSpecification) of
-    ///   the
-    ///   model, which was used to initialize the buffers.
-    /// - If any of the [`Vec`] with feature IDs has a different length than one
-    ///   or the number of transforms.
-    pub fn buffer_multiple_instances(
+    /// If the model does not have a buffer for the feature type.
+    fn buffer_instance_feature<Fe: InstanceFeature>(&mut self, feature: &Fe) {
+        let feature_buffer = self
+            .get_feature_buffer_mut(Fe::FEATURE_TYPE_ID)
+            .expect("Missing feature buffer for feature type");
+
+        feature_buffer.add_feature(feature);
+    }
+
+    /// Calls [`DynamicInstanceFeatureBuffer::begin_range`] with the given range
+    /// ID for the instance feature buffer holding the given feature type.
+    /// If the model has no instance feature buffer for the given feature type,
+    /// nothing happens.
+    fn begin_range_in_feature_buffer(
         &mut self,
-        model_id: ModelID,
-        transforms: impl ExactSizeIterator<Item = InstanceModelViewTransform>,
-        feature_ids: &[Vec<InstanceFeatureID>],
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-    {
-        let feature_buffers = &mut self
-            .instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to buffer instances of missing model")
-            .1;
-
-        assert_eq!(feature_ids.len() + 1, feature_buffers.len());
-
-        let mut feature_buffers = feature_buffers.iter_mut();
-
-        let transform_buffer = feature_buffers
-            .next()
-            .expect("Missing transform buffer for instance");
-
-        let n_instances = transforms.len();
-        transform_buffer.add_features_from_iterator(transforms);
-
-        for (feature_ids_for_feature_type, feature_buffer) in
-            feature_ids.iter().zip(feature_buffers)
-        {
-            let feature_type_id = feature_buffer.feature_type_id();
-
-            let storage = self
-                .feature_storages
-                .get(&feature_type_id)
-                .expect("Missing storage for model instance feature");
-
-            let n_features_for_feature_type = feature_ids_for_feature_type.len();
-            if n_features_for_feature_type == 1 && n_instances > 1 {
-                feature_buffer.add_feature_from_storage_repeatedly(
-                    storage,
-                    feature_ids_for_feature_type[0],
-                    n_instances,
-                );
-            } else {
-                assert_eq!(
-                    n_features_for_feature_type, n_instances,
-                    "Encountered different instance counts for different feature types when buffering multiple instances"
-                );
-                for &feature_id in feature_ids_for_feature_type {
-                    feature_buffer.add_feature_from_storage(storage, feature_id);
-                }
-            }
+        feature_type_id: InstanceFeatureTypeID,
+        range_id: InstanceFeatureBufferRangeID,
+    ) {
+        if let Some(feature_buffer) = self.get_feature_buffer_mut(feature_type_id) {
+            feature_buffer.begin_range(range_id);
         }
     }
 
-    /// Finds the instance transform buffer for the model with the given ID and
-    /// pushes the given transfrom onto it.
-    ///
-    /// # Panics
-    /// If no buffers exist for the model with the given ID.
-    pub fn buffer_instance_transform(
+    fn first_and_second_feature_buffer_mut_with_storage(
         &mut self,
-        model_id: ModelID,
-        transform: &InstanceModelViewTransform,
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-    {
-        let feature_buffers = &mut self
-            .instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to buffer instance of missing model")
-            .1;
+    ) -> (
+        &mut DynamicInstanceFeatureBuffer,
+        &mut DynamicInstanceFeatureBuffer,
+    ) {
+        let (first_buffer, remaining_buffers) = self
+            .feature_buffers
+            .split_first_mut()
+            .expect("Missing first instance feature buffer");
 
-        feature_buffers
-            .get_mut(0)
-            .expect("Missing transform buffer for instance")
-            .add_feature(transform);
-    }
+        let (second_buffer, _) = remaining_buffers
+            .split_first_mut()
+            .expect("Missing second instance feature buffer");
 
-    /// Finds the instance transform buffer for the model with the given ID and
-    /// pushes the given transforms onto it.
-    ///
-    /// # Panics
-    /// If no buffers exist for the model with the given ID.
-    pub fn buffer_multiple_instance_transforms(
-        &mut self,
-        model_id: ModelID,
-        transforms: impl ExactSizeIterator<Item = InstanceModelViewTransform>,
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-    {
-        let feature_buffers = &mut self
-            .instance_feature_buffers
-            .get_mut(&model_id)
-            .expect("Tried to buffer instance of missing model")
-            .1;
-
-        feature_buffers
-            .get_mut(0)
-            .expect("Missing transform buffer for instance")
-            .add_features_from_iterator(transforms);
-    }
-
-    /// Clears all instance feature buffers and removes all features from the
-    /// storages.
-    pub fn clear_storages_and_buffers(&mut self) {
-        self.instance_feature_buffers.clear();
-        for storage in self.feature_storages.values_mut() {
-            storage.remove_all_features();
-        }
-    }
-
-    fn register_instance_with_feature_type_ids(
-        &mut self,
-        model_id: ModelID,
-        feature_type_ids: &[InstanceFeatureTypeID],
-    ) where
-        InstanceModelViewTransform: InstanceFeature,
-    {
-        self.instance_feature_buffers
-            .entry(model_id)
-            .and_modify(|(count, buffers)| {
-                assert_eq!(buffers.len(), feature_type_ids.len() + 1);
-                *count += 1;
-            })
-            .or_insert_with(|| {
-                let mut buffers = Vec::with_capacity(feature_type_ids.len() + 1);
-                buffers.push(DynamicInstanceFeatureBuffer::new::<
-                    InstanceModelViewTransform,
-                >());
-                buffers.extend(feature_type_ids.iter().map(|feature_type_id| {
-                    let storage = self.feature_storages.get(feature_type_id).expect(
-                        "Missing storage for instance feature type \
-                             (all feature types must be registered with `register_feature_type`)",
-                    );
-                    DynamicInstanceFeatureBuffer::new_for_storage(storage)
-                }));
-                (1, buffers)
-            });
+        (first_buffer, second_buffer)
     }
 }
 
@@ -1373,106 +1413,33 @@ impl InstanceFeatureTypeDescriptor {
     }
 }
 
-impl InstanceModelViewTransform {
-    /// Creates a new identity transform.
-    pub fn identity() -> Self {
-        Self {
-            rotation: UnitQuaternion::identity(),
-            translation: Vector3::zeros(),
-            scaling: 1.0,
-        }
-    }
-
-    /// Creates a new model-to-camera transform corresponding to the given
-    /// similarity transform.
-    pub fn with_model_view_transform(transform: Similarity3<fre>) -> Self {
-        let scaling = transform.scaling();
-
-        Self {
-            rotation: transform.isometry.rotation,
-            translation: transform.isometry.translation.vector,
-            scaling,
-        }
-    }
-}
-
-impl InstanceModelLightTransform {
-    /// Creates a new model-to-light transform corresponding to the given
-    /// similarity transform.
-    pub fn with_model_light_transform(transform: Similarity3<fre>) -> Self {
-        Self::with_model_view_transform(transform)
-    }
-}
-
-impl Default for InstanceModelViewTransform {
-    fn default() -> Self {
-        Self::identity()
-    }
-}
-
-impl_InstanceFeature!(
-    InstanceModelViewTransform,
-    wgpu::vertex_attr_array![
-        INSTANCE_VERTEX_BINDING_START => Float32x4,
-        INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
-    ],
-    InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-        rotation_location: INSTANCE_VERTEX_BINDING_START,
-        translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
-    })
-);
-
-/// Convenience macro for implementing the [`InstanceFeature`] trait. The
-/// feature type ID is created by hashing the name of the implementing type.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! impl_InstanceFeature {
-    ($ty:ty, $vertex_attr_array:expr, $shader_input:expr) => {
-        impl $crate::model::InstanceFeature for $ty {
-            const FEATURE_TYPE_ID: $crate::model::InstanceFeatureTypeID =
-                impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
-
-            const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-                $crate::mesh::buffer::create_vertex_buffer_layout_for_instance::<Self>(
-                    &$vertex_attr_array,
-                );
-
-            const SHADER_INPUT: $crate::gpu::shader::InstanceFeatureShaderInput = $shader_input;
-        }
-    };
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
+    struct Feature(u8);
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+    struct DifferentFeature(f64);
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
+    struct ZeroSizedFeature;
+
+    impl_InstanceFeature!(Feature, [], InstanceFeatureShaderInput::None);
+    impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
+    impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
+
     mod manager {
         use super::*;
         use crate::{
-            gpu::shader::InstanceFeatureShaderInput,
-            impl_InstanceFeature,
             material::{MaterialHandle, MaterialID},
             mesh::MeshID,
         };
-        use bytemuck::{Pod, Zeroable};
         use impact_utils::hash64;
-        use nalgebra::{Similarity3, Translation3, UnitQuaternion};
-
-        #[repr(transparent)]
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
-        struct Feature(u8);
-
-        #[repr(transparent)]
-        #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
-        struct DifferentFeature(f64);
-
-        #[repr(transparent)]
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
-        struct ZeroSizedFeature;
-
-        impl_InstanceFeature!(Feature, [], InstanceFeatureShaderInput::None);
-        impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
-        impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
 
         fn create_dummy_model_id<S: AsRef<str>>(tag: S) -> ModelID {
             ModelID::for_mesh_and_material(
@@ -1486,30 +1453,14 @@ mod test {
             )
         }
 
-        fn create_dummy_transform() -> InstanceModelViewTransform {
-            InstanceModelViewTransform::with_model_view_transform(Similarity3::from_parts(
-                Translation3::new(2.1, -5.9, 0.01),
-                UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
-                7.0,
-            ))
-        }
-
-        fn create_dummy_transform_2() -> InstanceModelViewTransform {
-            InstanceModelViewTransform::with_model_view_transform(Similarity3::from_parts(
-                Translation3::new(6.1, -2.7, -0.21),
-                UnitQuaternion::from_euler_angles(1.1, 3.2, 2.3),
-                3.0,
-            ))
-        }
-
         #[test]
         fn creating_instance_feature_manager_works() {
             let manager = InstanceFeatureManager::new();
-            assert!(manager.model_ids_and_buffers().next().is_none());
+            assert!(manager.model_ids_and_instance_buffers().next().is_none());
         }
 
         #[test]
-        fn registering_feature_types_for_instance_feature_manager_works() {
+        fn registering_feature_types_works() {
             let mut manager = InstanceFeatureManager::new();
 
             assert!(manager.get_storage::<ZeroSizedFeature>().is_none());
@@ -1535,83 +1486,72 @@ mod test {
         }
 
         #[test]
-        fn registering_one_instance_of_one_model_with_no_features_in_instance_feature_manager_works(
-        ) {
+        fn registering_one_instance_of_one_model_with_no_features_works() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
+            manager.register_instance(model_id, &[]);
 
-            let mut models_and_buffers = manager.model_ids_and_buffers();
-            let (registered_model_id, buffers) = models_and_buffers.next().unwrap();
-            assert_eq!(registered_model_id, model_id);
-            assert_eq!(buffers.len(), 1);
-            assert_eq!(
-                buffers[0].feature_type_id(),
-                InstanceModelViewTransform::FEATURE_TYPE_ID
-            );
-            assert_eq!(buffers[0].n_valid_bytes(), 0);
+            let mut models_and_buffers = manager.model_ids_and_instance_buffers();
+            let (registered_model_id, buffer) = models_and_buffers.next().unwrap();
+            assert_eq!(registered_model_id, &model_id);
+            assert!(buffer.n_feature_types() == 0);
 
             assert!(models_and_buffers.next().is_none());
             drop(models_and_buffers);
 
-            assert!(manager.has_model_id(model_id));
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 1);
-            assert_eq!(
-                buffers[0].feature_type_id(),
-                InstanceModelViewTransform::FEATURE_TYPE_ID
-            );
-            assert_eq!(buffers[0].n_valid_bytes(), 0);
+            assert!(manager.has_model_id(&model_id));
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert!(buffer.n_feature_types() == 0);
         }
 
         #[test]
         #[should_panic]
-        fn registering_instance_with_unregistered_features_in_instance_feature_manager_fails() {
+        fn registering_instance_with_unregistered_features_fails() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
+            manager.register_instance(model_id, &[Feature::FEATURE_TYPE_ID]);
         }
 
         #[test]
-        fn registering_one_instance_of_one_model_with_features_in_instance_feature_manager_works() {
+        fn registering_one_instance_of_one_model_with_features_works() {
             let mut manager = InstanceFeatureManager::new();
             manager.register_feature_type::<Feature>();
             manager.register_feature_type::<ZeroSizedFeature>();
 
             let model_id = create_dummy_model_id("");
 
-            manager.register_instance_with_feature_type_ids(
+            manager.register_instance(
                 model_id,
                 &[ZeroSizedFeature::FEATURE_TYPE_ID, Feature::FEATURE_TYPE_ID],
             );
 
-            assert!(manager.has_model_id(model_id));
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 3);
+            assert!(manager.has_model_id(&model_id));
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert_eq!(buffer.n_feature_types(), 2);
+
+            let zero_sized_feature_buffer = buffer
+                .get_feature_buffer(ZeroSizedFeature::FEATURE_TYPE_ID)
+                .unwrap();
             assert_eq!(
-                buffers[0].feature_type_id(),
-                InstanceModelViewTransform::FEATURE_TYPE_ID
-            );
-            assert_eq!(buffers[0].n_valid_bytes(), 0);
-            assert_eq!(
-                buffers[1].feature_type_id(),
+                zero_sized_feature_buffer.feature_type_id(),
                 ZeroSizedFeature::FEATURE_TYPE_ID
             );
-            assert_eq!(buffers[1].n_valid_bytes(), 0);
-            assert_eq!(buffers[2].feature_type_id(), Feature::FEATURE_TYPE_ID);
-            assert_eq!(buffers[2].n_valid_bytes(), 0);
+            assert_eq!(zero_sized_feature_buffer.n_valid_bytes(), 0);
+
+            let feature_buffer = buffer.get_feature_buffer(Feature::FEATURE_TYPE_ID).unwrap();
+            assert_eq!(feature_buffer.feature_type_id(), Feature::FEATURE_TYPE_ID);
+            assert_eq!(feature_buffer.n_valid_bytes(), 0);
         }
 
         #[test]
-        fn registering_one_instance_of_two_models_with_no_features_in_instance_feature_manager_works(
-        ) {
+        fn registering_one_instance_of_two_models_with_no_features_works() {
             let mut manager = InstanceFeatureManager::new();
             let model_id_1 = create_dummy_model_id("1");
             let model_id_2 = create_dummy_model_id("2");
-            manager.register_instance_with_feature_type_ids(model_id_1, &[]);
-            manager.register_instance_with_feature_type_ids(model_id_2, &[]);
+            manager.register_instance(model_id_1, &[]);
+            manager.register_instance(model_id_2, &[]);
 
-            let mut models_and_buffers = manager.model_ids_and_buffers();
+            let mut models_and_buffers = manager.model_ids_and_instance_buffers();
             assert_ne!(
                 models_and_buffers.next().unwrap().0,
                 models_and_buffers.next().unwrap().0
@@ -1619,63 +1559,78 @@ mod test {
             assert!(models_and_buffers.next().is_none());
             drop(models_and_buffers);
 
-            assert!(manager.has_model_id(model_id_1));
-            assert!(manager.has_model_id(model_id_2));
-            assert_eq!(manager.get_buffers(model_id_1).unwrap().len(), 1);
-            assert_eq!(manager.get_buffers(model_id_2).unwrap().len(), 1);
+            assert!(manager.has_model_id(&model_id_1));
+            assert!(manager.has_model_id(&model_id_2));
+            assert_eq!(
+                manager
+                    .get_model_instance_buffer(&model_id_1)
+                    .unwrap()
+                    .n_feature_types(),
+                0
+            );
+            assert_eq!(
+                manager
+                    .get_model_instance_buffer(&model_id_2)
+                    .unwrap()
+                    .n_feature_types(),
+                0
+            );
         }
 
         #[test]
-        fn registering_two_instances_of_one_model_with_no_features_in_instance_feature_manager_works(
-        ) {
+        fn registering_two_instances_of_one_model_with_no_features_works() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
+            manager.register_instance(model_id, &[]);
+            manager.register_instance(model_id, &[]);
 
-            let mut models_and_buffers = manager.model_ids_and_buffers();
-            assert_eq!(models_and_buffers.next().unwrap().0, model_id);
+            let mut models_and_buffers = manager.model_ids_and_instance_buffers();
+            assert_eq!(models_and_buffers.next().unwrap().0, &model_id);
             assert!(models_and_buffers.next().is_none());
             drop(models_and_buffers);
 
-            assert!(manager.has_model_id(model_id));
-            assert_eq!(manager.get_buffers(model_id).unwrap().len(), 1);
+            assert!(manager.has_model_id(&model_id));
+            assert_eq!(
+                manager
+                    .get_model_instance_buffer(&model_id)
+                    .unwrap()
+                    .n_feature_types(),
+                0
+            );
         }
 
         #[test]
-        fn registering_and_then_unregistering_one_instance_of_model_in_instance_feature_manager_works(
-        ) {
+        fn registering_and_then_unregistering_one_instance_of_model_works() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
 
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-            manager.unregister_instance(model_id);
+            manager.register_instance(model_id, &[]);
+            manager.unregister_instance(&model_id);
 
-            assert!(manager.model_ids_and_buffers().next().is_none());
-            assert!(!manager.has_model_id(model_id));
-            assert!(manager.get_buffers(model_id).is_none());
+            assert!(manager.model_ids_and_instance_buffers().next().is_none());
+            assert!(!manager.has_model_id(&model_id));
+            assert!(manager.get_model_instance_buffer(&model_id).is_none());
 
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-            manager.unregister_instance(model_id);
+            manager.register_instance(model_id, &[]);
+            manager.unregister_instance(&model_id);
 
-            assert!(manager.model_ids_and_buffers().next().is_none());
-            assert!(!manager.has_model_id(model_id));
-            assert!(manager.get_buffers(model_id).is_none());
+            assert!(manager.model_ids_and_instance_buffers().next().is_none());
+            assert!(!manager.has_model_id(&model_id));
+            assert!(manager.get_model_instance_buffer(&model_id).is_none());
         }
 
         #[test]
-        fn registering_and_then_unregistering_two_instances_of_model_in_instance_feature_manager_works(
-        ) {
+        fn registering_and_then_unregistering_two_instances_of_model_works() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-            manager.unregister_instance(model_id);
-            manager.unregister_instance(model_id);
+            manager.register_instance(model_id, &[]);
+            manager.register_instance(model_id, &[]);
+            manager.unregister_instance(&model_id);
+            manager.unregister_instance(&model_id);
 
-            assert!(manager.model_ids_and_buffers().next().is_none());
-            assert!(!manager.has_model_id(model_id));
-            assert!(manager.get_buffers(model_id).is_none());
+            assert!(manager.model_ids_and_instance_buffers().next().is_none());
+            assert!(!manager.has_model_id(&model_id));
+            assert!(manager.get_model_instance_buffer(&model_id).is_none());
         }
 
         #[test]
@@ -1683,105 +1638,46 @@ mod test {
         fn unregistering_instance_in_empty_instance_feature_manager_fails() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.unregister_instance(model_id);
+            manager.unregister_instance(&model_id);
         }
 
         #[test]
         #[should_panic]
-        fn buffering_unregistered_instance_in_instance_feature_manager_fails() {
+        fn buffering_unregistered_features_from_storages_fails() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.buffer_instance(model_id, &InstanceModelViewTransform::identity(), &[]);
+            manager.buffer_instance_features_from_storages(&model_id, &[]);
         }
 
         #[test]
         #[should_panic]
-        fn buffering_multiple_of_unregistered_instance_in_instance_feature_manager_fails() {
+        fn buffering_unregistered_feature_fails() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.buffer_multiple_instances(
-                model_id,
-                [InstanceModelViewTransform::identity(); 2].into_iter(),
-                &[],
-            );
+            manager.buffer_instance_feature(&model_id, &Feature(42));
         }
 
         #[test]
-        fn buffering_instances_with_no_features_in_instance_feature_manager_works() {
+        fn buffering_features_from_storages_for_model_with_no_features_works() {
             let mut manager = InstanceFeatureManager::new();
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-
-            let transform_1 = create_dummy_transform();
-            let transform_2 = InstanceModelViewTransform::identity();
-
-            manager.buffer_instance(model_id, &transform_1, &[]);
-
-            let buffer = &manager.get_buffers(model_id).unwrap()[0];
-            assert_eq!(buffer.n_valid_features(), 1);
-            assert_eq!(
-                buffer.valid_features::<InstanceModelViewTransform>(),
-                &[transform_1]
-            );
-
-            manager.buffer_instance(model_id, &transform_2, &[]);
-
-            let buffer = &manager.get_buffers(model_id).unwrap()[0];
-            assert_eq!(buffer.n_valid_features(), 2);
-            assert_eq!(
-                buffer.valid_features::<InstanceModelViewTransform>(),
-                &[transform_1, transform_2]
-            );
+            manager.register_instance(model_id, &[]);
+            manager.buffer_instance_features_from_storages(&model_id, &[]);
         }
 
         #[test]
-        fn buffering_multiple_instances_with_no_features_in_instance_feature_manager_works() {
-            let mut manager = InstanceFeatureManager::new();
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-
-            let transform_1 = create_dummy_transform();
-            let transform_2 = create_dummy_transform_2();
-            let transform_3 = InstanceModelViewTransform::identity();
-
-            manager.buffer_multiple_instances(
-                model_id,
-                [transform_1, transform_2].into_iter(),
-                &[],
-            );
-
-            let buffer = &manager.get_buffers(model_id).unwrap()[0];
-            assert_eq!(buffer.n_valid_features(), 2);
-            assert_eq!(
-                buffer.valid_features::<InstanceModelViewTransform>(),
-                &[transform_1, transform_2]
-            );
-
-            manager.buffer_multiple_instances(model_id, [transform_3].into_iter(), &[]);
-
-            let buffer = &manager.get_buffers(model_id).unwrap()[0];
-            assert_eq!(buffer.n_valid_features(), 3);
-            assert_eq!(
-                buffer.valid_features::<InstanceModelViewTransform>(),
-                &[transform_1, transform_2, transform_3]
-            );
-        }
-
-        #[test]
-        fn buffering_instance_with_features_in_instance_feature_manager_works() {
+        fn buffering_features_from_storages_for_model_with_multiple_features_works() {
             let mut manager = InstanceFeatureManager::new();
 
             manager.register_feature_type::<Feature>();
             manager.register_feature_type::<DifferentFeature>();
 
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(
+            manager.register_instance(
                 model_id,
                 &[Feature::FEATURE_TYPE_ID, DifferentFeature::FEATURE_TYPE_ID],
             );
 
-            let transform_instance_1 = create_dummy_transform();
-            let transform_instance_2 = InstanceModelViewTransform::identity();
             let feature_1_instance_1 = Feature(22);
             let feature_1_instance_2 = Feature(43);
             let feature_2_instance_1 = DifferentFeature(-73.1);
@@ -1804,352 +1700,162 @@ mod test {
                 .unwrap()
                 .add_feature(&feature_2_instance_2);
 
-            manager.buffer_instance(
-                model_id,
-                &transform_instance_1,
+            manager.buffer_instance_features_from_storages(
+                &model_id,
                 &[id_1_instance_1, id_2_instance_1],
             );
 
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 3);
-            assert_eq!(buffers[0].n_valid_features(), 1);
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert_eq!(buffer.n_feature_types(), 2);
+
+            let feature_1_buffer = buffer.get_feature_buffer(Feature::FEATURE_TYPE_ID).unwrap();
+            assert_eq!(feature_1_buffer.n_valid_features(), 1);
             assert_eq!(
-                buffers[0].valid_features::<InstanceModelViewTransform>(),
-                &[transform_instance_1]
-            );
-            assert_eq!(buffers[1].n_valid_features(), 1);
-            assert_eq!(
-                buffers[1].valid_features::<Feature>(),
+                feature_1_buffer.valid_features::<Feature>(),
                 &[feature_1_instance_1]
             );
-            assert_eq!(buffers[2].n_valid_features(), 1);
+
+            let feature_2_buffer = buffer
+                .get_feature_buffer(DifferentFeature::FEATURE_TYPE_ID)
+                .unwrap();
+            assert_eq!(feature_2_buffer.n_valid_features(), 1);
             assert_eq!(
-                buffers[2].valid_features::<DifferentFeature>(),
+                feature_2_buffer.valid_features::<DifferentFeature>(),
                 &[feature_2_instance_1]
             );
 
-            manager.buffer_instance(
-                model_id,
-                &transform_instance_2,
+            manager.buffer_instance_features_from_storages(
+                &model_id,
                 &[id_1_instance_2, id_2_instance_2],
             );
 
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 3);
-            assert_eq!(buffers[0].n_valid_features(), 2);
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert_eq!(buffer.n_feature_types(), 2);
+
+            let feature_1_buffer = buffer.get_feature_buffer(Feature::FEATURE_TYPE_ID).unwrap();
+            assert_eq!(feature_1_buffer.n_valid_features(), 2);
             assert_eq!(
-                buffers[0].valid_features::<InstanceModelViewTransform>(),
-                &[transform_instance_1, transform_instance_2]
-            );
-            assert_eq!(buffers[1].n_valid_features(), 2);
-            assert_eq!(
-                buffers[1].valid_features::<Feature>(),
+                feature_1_buffer.valid_features::<Feature>(),
                 &[feature_1_instance_1, feature_1_instance_2]
             );
-            assert_eq!(buffers[2].n_valid_features(), 2);
+
+            let feature_2_buffer = buffer
+                .get_feature_buffer(DifferentFeature::FEATURE_TYPE_ID)
+                .unwrap();
+            assert_eq!(feature_2_buffer.n_valid_features(), 2);
             assert_eq!(
-                buffers[2].valid_features::<DifferentFeature>(),
+                feature_2_buffer.valid_features::<DifferentFeature>(),
                 &[feature_2_instance_1, feature_2_instance_2]
             );
         }
 
         #[test]
-        fn buffering_multiple_instances_with_features_in_instance_feature_manager_works() {
+        #[should_panic]
+        fn buffering_too_many_feature_types_from_storages_fails() {
+            let mut manager = InstanceFeatureManager::new();
+            let model_id = create_dummy_model_id("");
+            manager.register_instance(model_id, &[]);
+
+            let mut storage = InstanceFeatureStorage::new::<Feature>();
+            let id = storage.add_feature(&Feature(33));
+
+            manager.buffer_instance_features_from_storages(&model_id, &[id]);
+        }
+
+        #[test]
+        #[should_panic]
+        fn buffering_too_few_feature_types_from_storages_fails() {
+            let mut manager = InstanceFeatureManager::new();
+            manager.register_feature_type::<Feature>();
+            let model_id = create_dummy_model_id("");
+            manager.register_instance(model_id, &[Feature::FEATURE_TYPE_ID]);
+            manager.buffer_instance_features_from_storages(&model_id, &[]);
+        }
+
+        #[test]
+        #[should_panic]
+        fn buffering_feature_with_invalid_feature_id_from_storages_fails() {
+            let mut manager = InstanceFeatureManager::new();
+            manager.register_feature_type::<Feature>();
+
+            let model_id = create_dummy_model_id("");
+            manager.register_instance(model_id, &[Feature::FEATURE_TYPE_ID]);
+
+            let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
+            let id = storage.add_feature(&DifferentFeature(-0.2));
+
+            manager.buffer_instance_features_from_storages(&model_id, &[id]);
+        }
+
+        #[test]
+        fn buffering_feature_directly_works() {
             let mut manager = InstanceFeatureManager::new();
 
             manager.register_feature_type::<Feature>();
             manager.register_feature_type::<DifferentFeature>();
 
             let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(
+            manager.register_instance(
                 model_id,
                 &[Feature::FEATURE_TYPE_ID, DifferentFeature::FEATURE_TYPE_ID],
             );
 
-            let transform_instance_1 = create_dummy_transform();
-            let transform_instance_2 = create_dummy_transform_2();
-            let transform_instance_3 = InstanceModelViewTransform::identity();
             let feature_1_instance_1 = Feature(22);
             let feature_1_instance_2 = Feature(43);
-            let feature_1_instance_3 = Feature(31);
-            let feature_2_instance_1 = DifferentFeature(-73.1);
-            let feature_2_instance_2 = DifferentFeature(32.7);
-            let feature_2_instance_3 = DifferentFeature(2.72);
-
-            let id_1_instance_1 = manager
-                .get_storage_mut::<Feature>()
-                .unwrap()
-                .add_feature(&feature_1_instance_1);
-            let id_2_instance_1 = manager
-                .get_storage_mut::<DifferentFeature>()
-                .unwrap()
-                .add_feature(&feature_2_instance_1);
-            let id_1_instance_2 = manager
-                .get_storage_mut::<Feature>()
-                .unwrap()
-                .add_feature(&feature_1_instance_2);
-            let id_2_instance_2 = manager
-                .get_storage_mut::<DifferentFeature>()
-                .unwrap()
-                .add_feature(&feature_2_instance_2);
-            let id_1_instance_3 = manager
-                .get_storage_mut::<Feature>()
-                .unwrap()
-                .add_feature(&feature_1_instance_3);
-            let id_2_instance_3 = manager
-                .get_storage_mut::<DifferentFeature>()
-                .unwrap()
-                .add_feature(&feature_2_instance_3);
-
-            manager.buffer_multiple_instances(
-                model_id,
-                [transform_instance_1, transform_instance_2].into_iter(),
-                &[
-                    vec![id_1_instance_1, id_1_instance_2],
-                    vec![id_2_instance_1, id_2_instance_2],
-                ],
-            );
-
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 3);
-            assert_eq!(buffers[0].n_valid_features(), 2);
-            assert_eq!(
-                buffers[0].valid_features::<InstanceModelViewTransform>(),
-                &[transform_instance_1, transform_instance_2]
-            );
-            assert_eq!(buffers[1].n_valid_features(), 2);
-            assert_eq!(
-                buffers[1].valid_features::<Feature>(),
-                &[feature_1_instance_1, feature_1_instance_2]
-            );
-            assert_eq!(buffers[2].n_valid_features(), 2);
-            assert_eq!(
-                buffers[2].valid_features::<DifferentFeature>(),
-                &[feature_2_instance_1, feature_2_instance_2]
-            );
-
-            manager.buffer_multiple_instances(
-                model_id,
-                [transform_instance_3].into_iter(),
-                &[vec![id_1_instance_3], vec![id_2_instance_3]],
-            );
-
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 3);
-            assert_eq!(buffers[0].n_valid_features(), 3);
-            assert_eq!(
-                buffers[0].valid_features::<InstanceModelViewTransform>(),
-                &[
-                    transform_instance_1,
-                    transform_instance_2,
-                    transform_instance_3
-                ]
-            );
-            assert_eq!(buffers[1].n_valid_features(), 3);
-            assert_eq!(
-                buffers[1].valid_features::<Feature>(),
-                &[
-                    feature_1_instance_1,
-                    feature_1_instance_2,
-                    feature_1_instance_3
-                ]
-            );
-            assert_eq!(buffers[2].n_valid_features(), 3);
-            assert_eq!(
-                buffers[2].valid_features::<DifferentFeature>(),
-                &[
-                    feature_2_instance_1,
-                    feature_2_instance_2,
-                    feature_2_instance_3
-                ]
-            );
-        }
-
-        #[test]
-        fn buffering_multiple_instances_with_repeated_feature_in_instance_feature_manager_works() {
-            let mut manager = InstanceFeatureManager::new();
-
-            manager.register_feature_type::<Feature>();
-            manager.register_feature_type::<DifferentFeature>();
-
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(
-                model_id,
-                &[Feature::FEATURE_TYPE_ID, DifferentFeature::FEATURE_TYPE_ID],
-            );
-
-            let transform_instance_1 = create_dummy_transform();
-            let transform_instance_2 = create_dummy_transform_2();
-            let transform_instance_3 = InstanceModelViewTransform::identity();
-            let feature_1 = Feature(22);
             let feature_2 = DifferentFeature(-73.1);
 
-            let id_1 = manager
-                .get_storage_mut::<Feature>()
-                .unwrap()
-                .add_feature(&feature_1);
-            let id_2 = manager
-                .get_storage_mut::<DifferentFeature>()
-                .unwrap()
-                .add_feature(&feature_2);
+            manager.buffer_instance_feature(&model_id, &feature_1_instance_1);
 
-            manager.buffer_multiple_instances(
-                model_id,
-                [
-                    transform_instance_1,
-                    transform_instance_2,
-                    transform_instance_3,
-                ]
-                .into_iter(),
-                &[vec![id_1], vec![id_2]],
-            );
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert_eq!(buffer.n_feature_types(), 2);
 
-            let buffers = manager.get_buffers(model_id).unwrap();
-            assert_eq!(buffers.len(), 3);
-            assert_eq!(buffers[0].n_valid_features(), 3);
+            let feature_1_buffer = buffer.get_feature_buffer(Feature::FEATURE_TYPE_ID).unwrap();
+            assert_eq!(feature_1_buffer.n_valid_features(), 1);
             assert_eq!(
-                buffers[0].valid_features::<InstanceModelViewTransform>(),
-                &[
-                    transform_instance_1,
-                    transform_instance_2,
-                    transform_instance_3
-                ]
+                feature_1_buffer.valid_features::<Feature>(),
+                &[feature_1_instance_1]
             );
-            assert_eq!(buffers[1].n_valid_features(), 3);
+
+            let feature_2_buffer = buffer
+                .get_feature_buffer(DifferentFeature::FEATURE_TYPE_ID)
+                .unwrap();
+            assert_eq!(feature_2_buffer.n_valid_features(), 0);
+
+            manager.buffer_instance_feature(&model_id, &feature_1_instance_2);
+
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert_eq!(buffer.n_feature_types(), 2);
+
+            let feature_1_buffer = buffer.get_feature_buffer(Feature::FEATURE_TYPE_ID).unwrap();
+            assert_eq!(feature_1_buffer.n_valid_features(), 2);
             assert_eq!(
-                buffers[1].valid_features::<Feature>(),
-                &[feature_1, feature_1, feature_1]
+                feature_1_buffer.valid_features::<Feature>(),
+                &[feature_1_instance_1, feature_1_instance_2]
             );
-            assert_eq!(buffers[2].n_valid_features(), 3);
+
+            let feature_2_buffer = buffer
+                .get_feature_buffer(DifferentFeature::FEATURE_TYPE_ID)
+                .unwrap();
+            assert_eq!(feature_2_buffer.n_valid_features(), 0);
+
+            manager.buffer_instance_feature(&model_id, &feature_2);
+
+            let buffer = manager.get_model_instance_buffer(&model_id).unwrap();
+            assert_eq!(buffer.n_feature_types(), 2);
+
+            let feature_2_buffer = buffer
+                .get_feature_buffer(DifferentFeature::FEATURE_TYPE_ID)
+                .unwrap();
+            assert_eq!(feature_2_buffer.n_valid_features(), 1);
             assert_eq!(
-                buffers[2].valid_features::<DifferentFeature>(),
-                &[feature_2, feature_2, feature_2]
-            );
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_instance_with_too_many_feature_ids_in_instance_feature_manager_fails() {
-            let mut manager = InstanceFeatureManager::new();
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-
-            let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let id = storage.add_feature(&Feature(33));
-
-            manager.buffer_instance(model_id, &InstanceModelViewTransform::identity(), &[id]);
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_multiple_instances_with_too_many_feature_ids_in_instance_feature_manager_fails(
-        ) {
-            let mut manager = InstanceFeatureManager::new();
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[]);
-
-            let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let id = storage.add_feature(&Feature(33));
-
-            manager.buffer_multiple_instances(
-                model_id,
-                [InstanceModelViewTransform::identity()].into_iter(),
-                &[vec![id]],
-            );
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_instance_with_too_few_feature_ids_in_instance_feature_manager_fails() {
-            let mut manager = InstanceFeatureManager::new();
-            manager.register_feature_type::<Feature>();
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
-            manager.buffer_instance(model_id, &InstanceModelViewTransform::identity(), &[]);
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_multiple_instances_with_too_few_feature_ids_in_instance_feature_manager_fails()
-        {
-            let mut manager = InstanceFeatureManager::new();
-            manager.register_feature_type::<Feature>();
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
-            manager.buffer_multiple_instances(
-                model_id,
-                [InstanceModelViewTransform::identity()].into_iter(),
-                &[],
-            );
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_instance_with_invalid_feature_id_in_instance_feature_manager_fails() {
-            let mut manager = InstanceFeatureManager::new();
-            manager.register_feature_type::<Feature>();
-
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
-
-            let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
-            let id = storage.add_feature(&DifferentFeature(-0.2));
-
-            manager.buffer_instance(model_id, &InstanceModelViewTransform::identity(), &[id]);
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_multiple_instances_with_invalid_feature_id_in_instance_feature_manager_fails()
-        {
-            let mut manager = InstanceFeatureManager::new();
-            manager.register_feature_type::<Feature>();
-
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
-
-            let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
-            let id = storage.add_feature(&DifferentFeature(-0.2));
-
-            manager.buffer_multiple_instances(
-                model_id,
-                [InstanceModelViewTransform::identity()].into_iter(),
-                &[vec![id]],
-            );
-        }
-
-        #[test]
-        #[should_panic]
-        fn buffering_multiple_instances_with_different_transform_and_feature_id_counts_in_instance_feature_manager_fails(
-        ) {
-            let mut manager = InstanceFeatureManager::new();
-            manager.register_feature_type::<Feature>();
-
-            let model_id = create_dummy_model_id("");
-            manager.register_instance_with_feature_type_ids(model_id, &[Feature::FEATURE_TYPE_ID]);
-
-            let id = manager
-                .get_storage_mut::<Feature>()
-                .unwrap()
-                .add_feature(&Feature(42));
-
-            manager.buffer_multiple_instances(
-                model_id,
-                [
-                    create_dummy_transform(),
-                    InstanceModelViewTransform::identity(),
-                ]
-                .into_iter(),
-                &[vec![id; 3]],
+                feature_2_buffer.valid_features::<DifferentFeature>(),
+                &[feature_2]
             );
         }
     }
 
     mod storage_and_buffer {
         use super::*;
-        use nalgebra::{Similarity3, Translation3, UnitQuaternion};
-
-        type Feature = InstanceModelViewTransform;
 
         #[repr(transparent)]
         #[derive(Clone, Copy, Zeroable, Pod)]
@@ -2161,14 +1867,6 @@ mod test {
 
         impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
         impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
-
-        fn create_dummy_feature() -> InstanceModelViewTransform {
-            InstanceModelViewTransform::with_model_view_transform(Similarity3::from_parts(
-                Translation3::new(2.1, -5.9, 0.01),
-                UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
-                7.0,
-            ))
-        }
 
         #[test]
         fn creating_new_instance_feature_storage_works() {
@@ -2182,8 +1880,8 @@ mod test {
         #[test]
         fn adding_features_to_instance_feature_storage_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature_1 = create_dummy_feature();
-            let feature_2 = InstanceModelViewTransform::identity();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
 
             let id_1 = storage.add_feature(&feature_1);
 
@@ -2204,7 +1902,7 @@ mod test {
         #[should_panic]
         fn adding_different_feature_type_to_instance_feature_storage_fails() {
             let mut storage = InstanceFeatureStorage::new::<DifferentFeature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
             storage.add_feature(&feature);
         }
 
@@ -2213,7 +1911,7 @@ mod test {
         fn checking_existence_of_feature_with_invalid_id_in_instance_feature_storage_fails() {
             let mut storage_1 = InstanceFeatureStorage::new::<Feature>();
             let storage_2 = InstanceFeatureStorage::new::<DifferentFeature>();
-            let feature_1 = create_dummy_feature();
+            let feature_1 = Feature(42);
             let id_1 = storage_1.add_feature(&feature_1);
             storage_2.has_feature(id_1);
         }
@@ -2223,7 +1921,7 @@ mod test {
         fn retrieving_feature_with_invalid_id_in_instance_feature_storage_fails() {
             let mut storage_1 = InstanceFeatureStorage::new::<Feature>();
             let storage_2 = InstanceFeatureStorage::new::<DifferentFeature>();
-            let feature_1 = create_dummy_feature();
+            let feature_1 = Feature(42);
             let id_1 = storage_1.add_feature(&feature_1);
             storage_2.feature::<Feature>(id_1);
         }
@@ -2233,7 +1931,7 @@ mod test {
         fn retrieving_feature_mutably_with_invalid_id_in_instance_feature_storage_fails() {
             let mut storage_1 = InstanceFeatureStorage::new::<Feature>();
             let mut storage_2 = InstanceFeatureStorage::new::<DifferentFeature>();
-            let feature_1 = create_dummy_feature();
+            let feature_1 = Feature(42);
             let id_1 = storage_1.add_feature(&feature_1);
             storage_2.feature_mut::<Feature>(id_1);
         }
@@ -2252,8 +1950,8 @@ mod test {
         #[test]
         fn removing_features_from_instance_feature_storage_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature_1 = create_dummy_feature();
-            let feature_2 = InstanceModelViewTransform::identity();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
 
             let id_1 = storage.add_feature(&feature_1);
             let id_2 = storage.add_feature(&feature_2);
@@ -2292,7 +1990,7 @@ mod test {
         #[should_panic]
         fn removing_missing_feature_in_instance_feature_storage_fails() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
             let id = storage.add_feature(&feature);
             storage.remove_feature(id);
             storage.remove_feature(id);
@@ -2308,7 +2006,7 @@ mod test {
         #[test]
         fn removing_all_features_from_single_instance_feature_storage_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature_1 = create_dummy_feature();
+            let feature_1 = Feature(42);
 
             let id_1 = storage.add_feature(&feature_1);
 
@@ -2321,8 +2019,8 @@ mod test {
         #[test]
         fn removing_all_features_from_multi_instance_feature_storage_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature_1 = create_dummy_feature();
-            let feature_2 = InstanceModelViewTransform::identity();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
 
             let id_1 = storage.add_feature(&feature_1);
             let id_2 = storage.add_feature(&feature_2);
@@ -2415,7 +2113,7 @@ mod test {
         #[test]
         fn adding_one_feature_to_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
             buffer.add_feature(&feature);
 
             assert_eq!(buffer.n_valid_bytes(), mem::size_of::<Feature>());
@@ -2427,8 +2125,8 @@ mod test {
         #[test]
         fn adding_two_features_to_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = InstanceModelViewTransform::identity();
-            let feature_2 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
             buffer.add_feature(&feature_1);
             buffer.add_feature(&feature_2);
 
@@ -2444,9 +2142,9 @@ mod test {
         #[test]
         fn adding_three_features_to_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = create_dummy_feature();
-            let feature_2 = InstanceModelViewTransform::identity();
-            let feature_3 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
+            let feature_3 = Feature(44);
 
             buffer.add_feature(&feature_1);
             buffer.add_feature(&feature_2);
@@ -2464,8 +2162,8 @@ mod test {
         #[test]
         fn adding_feature_slice_to_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = InstanceModelViewTransform::identity();
-            let feature_2 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
             buffer.add_feature_slice(&[feature_1, feature_2]);
 
             let feature_slice = &[feature_1, feature_2];
@@ -2480,9 +2178,9 @@ mod test {
         #[test]
         fn adding_two_feature_slices_to_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = InstanceModelViewTransform::identity();
-            let feature_2 = create_dummy_feature();
-            let feature_3 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
+            let feature_3 = Feature(44);
 
             buffer.add_feature_slice(&[feature_1, feature_2]);
             buffer.add_feature_slice(&[feature_3]);
@@ -2499,11 +2197,7 @@ mod test {
         #[test]
         fn adding_features_from_iterator_to_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let features = vec![
-                InstanceModelViewTransform::identity(),
-                create_dummy_feature(),
-                create_dummy_feature(),
-            ];
+            let features = vec![Feature(42), Feature(43), Feature(44)];
 
             buffer.add_features_from_iterator(features.iter().cloned());
 
@@ -2519,7 +2213,7 @@ mod test {
         #[test]
         fn adding_feature_from_storage_to_instance_feature_buffer_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
             let id = storage.add_feature(&feature);
 
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
@@ -2534,8 +2228,8 @@ mod test {
         #[test]
         fn adding_two_features_from_storage_to_instance_feature_buffer_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature_1 = InstanceModelViewTransform::identity();
-            let feature_2 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
             let id_1 = storage.add_feature(&feature_1);
             let id_2 = storage.add_feature(&feature_2);
 
@@ -2555,7 +2249,7 @@ mod test {
         #[test]
         fn adding_feature_from_storage_repeatedly_to_instance_feature_buffer_works() {
             let mut storage = InstanceFeatureStorage::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
             let id = storage.add_feature(&feature);
 
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
@@ -2584,8 +2278,8 @@ mod test {
         #[test]
         fn clearing_one_feature_from_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = InstanceModelViewTransform::identity();
-            let feature_2 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
 
             buffer.add_feature(&feature_1);
             buffer.clear();
@@ -2610,8 +2304,8 @@ mod test {
         #[test]
         fn clearing_two_features_from_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = InstanceModelViewTransform::identity();
-            let feature_2 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
 
             buffer.add_feature(&feature_1);
             buffer.add_feature(&feature_2);
@@ -2637,9 +2331,9 @@ mod test {
         #[test]
         fn clearing_three_features_from_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature_1 = create_dummy_feature();
-            let feature_2 = InstanceModelViewTransform::identity();
-            let feature_3 = create_dummy_feature();
+            let feature_1 = Feature(42);
+            let feature_2 = Feature(43);
+            let feature_3 = Feature(44);
 
             buffer.add_feature(&feature_1);
             buffer.add_feature(&feature_2);
@@ -2758,7 +2452,7 @@ mod test {
         #[test]
         fn creating_single_range_from_beginning_in_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
 
             buffer.begin_range(0);
 
@@ -2774,7 +2468,7 @@ mod test {
         #[test]
         fn creating_single_range_not_from_beginning_in_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
 
             buffer.add_feature(&feature);
             buffer.add_feature(&feature);
@@ -2794,7 +2488,7 @@ mod test {
         #[test]
         fn creating_multiple_ranges_from_beginning_in_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
 
             buffer.begin_range(0);
 
@@ -2820,7 +2514,7 @@ mod test {
         #[test]
         fn creating_multiple_ranges_not_from_beginning_in_instance_feature_buffer_works() {
             let mut buffer = DynamicInstanceFeatureBuffer::new::<Feature>();
-            let feature = create_dummy_feature();
+            let feature = Feature(42);
 
             buffer.add_feature(&feature);
             buffer.add_feature(&feature);

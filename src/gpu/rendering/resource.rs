@@ -292,42 +292,31 @@ impl DesynchronizedRenderResources {
         feature_gpu_buffer_managers: &mut InstanceFeatureGPUBufferManagerMap,
         instance_feature_manager: &mut InstanceFeatureManager,
     ) {
-        for (model_id, instance_feature_buffers) in
-            instance_feature_manager.model_ids_and_mutable_buffers()
+        for (model_id, model_instance_buffer) in
+            instance_feature_manager.model_ids_and_mutable_instance_buffers()
         {
-            match feature_gpu_buffer_managers.entry(model_id) {
+            match feature_gpu_buffer_managers.entry(*model_id) {
                 Entry::Occupied(mut occupied_entry) => {
                     let feature_gpu_buffer_managers = occupied_entry.get_mut();
 
-                    for (feature_buffer, gpu_buffer_manager) in instance_feature_buffers
-                        .iter_mut()
-                        .zip(feature_gpu_buffer_managers.iter_mut())
-                    {
-                        gpu_buffer_manager
-                            .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
-                        feature_buffer.clear();
-                    }
+                    model_instance_buffer.move_buffered_instance_features_to_gpu_buffers(
+                        graphics_device,
+                        feature_gpu_buffer_managers,
+                    );
                 }
                 Entry::Vacant(vacant_entry) => {
-                    let feature_gpu_buffer_managers = instance_feature_buffers
-                        .iter_mut()
-                        .map(|feature_buffer| {
-                            let gpu_buffer_manager = InstanceFeatureGPUBufferManager::new(
-                                graphics_device,
-                                feature_buffer,
-                                Cow::Owned(model_id.to_string()),
-                            );
-                            feature_buffer.clear();
-                            gpu_buffer_manager
-                        })
-                        .collect();
+                    let feature_gpu_buffer_managers = model_instance_buffer
+                        .move_buffered_instance_features_to_new_gpu_buffers(
+                            graphics_device,
+                            Cow::Owned(model_id.to_string()),
+                        );
 
                     vacant_entry.insert(feature_gpu_buffer_managers);
                 }
             }
         }
         feature_gpu_buffer_managers
-            .retain(|model_id, _| instance_feature_manager.has_model_id(*model_id));
+            .retain(|model_id, _| instance_feature_manager.has_model_id(model_id));
     }
 
     /// Removes render resources whose source data is no longer present.

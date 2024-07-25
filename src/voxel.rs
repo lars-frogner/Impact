@@ -15,8 +15,8 @@ use crate::{
     material::MaterialLibrary,
     mesh::{FrontFaceSide, MeshID, MeshRepository, TriangleMesh},
     model::{
-        DynamicInstanceFeatureBuffer, InstanceFeatureID, InstanceFeatureManager,
-        InstanceFeatureStorage, InstanceModelViewTransform,
+        transform::InstanceModelViewTransform, DynamicInstanceFeatureBuffer, InstanceFeatureID,
+        InstanceFeatureManager, InstanceFeatureStorage,
     },
     num::Float,
 };

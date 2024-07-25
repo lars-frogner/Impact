@@ -12,7 +12,9 @@ use crate::{
         components::{AlbedoComp, MaterialComp, RoughnessComp, SpecularReflectanceComp},
         MaterialHandle, MaterialLibrary, RGBColor,
     },
-    model::{InstanceFeatureManager, ModelID},
+    model::{
+        transform::InstanceModelViewTransform, InstanceFeature, InstanceFeatureManager, ModelID,
+    },
     voxel::VoxelType,
 };
 use nalgebra::vector;
@@ -53,7 +55,18 @@ impl VoxelAppearance {
             prepass_material_handle,
         );
 
-        instance_feature_manager.register_instance(material_library, model_id);
+        let mut feature_type_ids = Vec::with_capacity(2);
+
+        feature_type_ids.push(InstanceModelViewTransform::FEATURE_TYPE_ID);
+
+        feature_type_ids.extend_from_slice(
+            material_library
+                .get_material_specification(model_id.material_handle().material_id())
+                .expect("Missing material specification for model material")
+                .instance_feature_type_ids(),
+        );
+
+        instance_feature_manager.register_instance(model_id, &feature_type_ids);
 
         Self {
             model_id,
