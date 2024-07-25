@@ -10,7 +10,8 @@ pub use rendering::{
     LightShaderInput, MaterialShaderInput, MeshShaderInput, MicrofacetShadingModel,
     MicrofacetTextureShaderInput, ModelViewTransformShaderInput, NormalMappingShaderInput,
     OmnidirectionalLightShaderInput, ParallaxMappingShaderInput, PrepassTextureShaderInput,
-    SkyboxShaderInput, SpecularMicrofacetShadingModel, UnidirectionalLightShaderInput,
+    SingleModelViewTransformShaderInput, SkyboxShaderInput, SpecularMicrofacetShadingModel,
+    UnidirectionalLightShaderInput,
 };
 use template::SpecificShaderTemplate;
 

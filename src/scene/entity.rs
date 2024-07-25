@@ -7,7 +7,7 @@ use crate::{
     light,
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
-    model::{transform::InstanceModelViewTransform, InstanceFeature, ModelID},
+    model::{transform::InstanceModelViewTransformWithPrevious, InstanceFeature, ModelID},
     physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{
@@ -210,7 +210,7 @@ impl Scene {
 
                 let mut feature_type_ids = Vec::with_capacity(2);
 
-                feature_type_ids.push(InstanceModelViewTransform::FEATURE_TYPE_ID);
+                feature_type_ids.push(InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID);
 
                 feature_type_ids.extend_from_slice(
                     material_library
@@ -231,9 +231,9 @@ impl Scene {
                 // Add an entry for the model-to-camera transform for the scene
                 // graph to access and modify using the returned ID
                 let model_view_transform_feature_id = instance_feature_manager
-                    .get_storage_mut::<InstanceModelViewTransform>()
+                    .get_storage_mut::<InstanceModelViewTransformWithPrevious>()
                     .expect("Missing storage for InstanceModelViewTransform feature")
-                    .add_feature(&InstanceModelViewTransform::default());
+                    .add_feature(&InstanceModelViewTransformWithPrevious::default());
 
                 // The first feature is expected to be the transform
                 feature_ids.push(model_view_transform_feature_id);
