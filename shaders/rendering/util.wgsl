@@ -152,5 +152,9 @@ fn computeMotionVector(
     let currentScreenCoords = vec3<f32>(screenTextureCoords.xy, currentDepth);
     let previousNDCPosition = previousClipSpacePosition.xyz / previousClipSpacePosition.w;
     let previousScreenCoords = vec3<f32>(0.5 * (1.0 + previousNDCPosition.x), 0.5 * (1.0 - previousNDCPosition.y), previousNDCPosition.z);
-    return vec3<f32>(currentScreenCoords.xy - previousScreenCoords.xy, 0.0);
+    return currentScreenCoords - previousScreenCoords;
+}
+
+fn zeroMotionVector() -> vec3<f32> {
+    return vec3<f32>(0.0, 0.0, 0.0);
 }

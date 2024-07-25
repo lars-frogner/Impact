@@ -206,6 +206,7 @@ enum MaterialShaderGenerator<'a> {
 bitflags! {
     /// Bitflag encoding a set of "tricks" that can be made to achieve certain
     /// effects in rendering shaders.
+    #[derive(Clone, Copy, Debug)]
     struct RenderShaderTricks: u8 {
         /// Ignore the translational part of the model-to-camera transform when
         /// transforming the position.
@@ -219,10 +220,18 @@ bitflags! {
     }
 }
 
+/// Handles to expressions for the current, and optionally previous, model view
+/// transform variable.
+#[derive(Clone, Debug)]
+struct ModelViewTransformExpressions {
+    pub current: SingleModelViewTransformExpressions,
+    pub previous: Option<SingleModelViewTransformExpressions>,
+}
+
 /// Handles to expressions for accessing the rotational, translational and
 /// scaling components of the model view transform variable.
 #[derive(Clone, Debug)]
-struct ModelViewTransformExpressions {
+struct SingleModelViewTransformExpressions {
     pub rotation_quaternion: Handle<Expression>,
     pub translation_vector: Handle<Expression>,
     pub scaling_factor: Handle<Expression>,
@@ -345,6 +354,8 @@ struct MeshVertexOutputFieldIndices {
     pub texture_coords: Option<usize>,
     /// Quaternion for rotation from tangent space to camera space.
     pub tangent_space_quaternion: Option<usize>,
+    /// Clip space position of the previous frame.
+    pub previous_clip_space_position: Option<usize>,
 }
 
 /// Indices of the fields holding the various light related properties for the
@@ -555,7 +566,6 @@ impl RenderShaderGenerator {
                 light_vertex_output_field_indices.as_ref(),
                 &material_vertex_output_field_indices,
                 light_shader_generator.as_ref(),
-                camera_projection.as_ref(),
             );
 
             EntryPointNames {
@@ -711,30 +721,60 @@ impl RenderShaderGenerator {
         Ok((model_view_transform_shader_input, material_shader_builder))
     }
 
-    /// Generates the declaration of the model view transform type, adds it as
-    /// an argument to the main vertex shader function and generates expressions
-    /// for the rotational, translational and scaling components of the
-    /// transformation in the body of the function.
-    ///
-    /// # Returns
-    /// A [`ModelViewTransformExpressions`] with handles to expressions for the
-    /// components of the transformation.
     fn generate_vertex_code_for_model_view_transform(
         model_view_transform_shader_input: &ModelViewTransformShaderInput,
         module: &mut Module,
         vertex_function: &mut Function,
     ) -> ModelViewTransformExpressions {
+        ModelViewTransformExpressions {
+            current: Self::generate_vertex_code_for_single_model_view_transform(
+                &model_view_transform_shader_input.current,
+                module,
+                vertex_function,
+                "ModelViewTransform",
+                "modelViewTransform",
+            ),
+            previous: model_view_transform_shader_input
+                .previous
+                .as_ref()
+                .map(|previous| {
+                    Self::generate_vertex_code_for_single_model_view_transform(
+                        previous,
+                        module,
+                        vertex_function,
+                        "PreviousModelViewTransform",
+                        "previousModelViewTransform",
+                    )
+                }),
+        }
+    }
+
+    /// Generates the declaration of a model view transform type, adds it as an
+    /// argument to the main vertex shader function and generates expressions
+    /// for the rotational, translational and scaling components of the
+    /// transformation in the body of the function.
+    ///
+    /// # Returns
+    /// A [`SingleModelViewTransformExpressions`] with handles to expressions
+    /// for the components of the transformation.
+    fn generate_vertex_code_for_single_model_view_transform(
+        model_view_transform_shader_input: &SingleModelViewTransformShaderInput,
+        module: &mut Module,
+        vertex_function: &mut Function,
+        type_name: impl ToString,
+        var_name: impl ToString,
+    ) -> SingleModelViewTransformExpressions {
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
         let model_view_transform_type = Type {
-            name: new_name("ModelViewTransform"),
+            name: new_name(type_name),
             inner: TypeInner::Struct {
                 members: vec![
                     StructMember {
                         name: new_name("rotationQuaternion"),
                         ty: vec4_type,
                         binding: Some(Binding::Location {
-                            location: model_view_transform_shader_input.current.rotation_location,
+                            location: model_view_transform_shader_input.rotation_location,
                             second_blend_source: false,
                             interpolation: None,
                             sampling: None,
@@ -746,7 +786,6 @@ impl RenderShaderGenerator {
                         ty: vec4_type,
                         binding: Some(Binding::Location {
                             location: model_view_transform_shader_input
-                                .current
                                 .translation_and_scaling_location,
                             second_blend_source: false,
                             interpolation: None,
@@ -764,7 +803,7 @@ impl RenderShaderGenerator {
 
         let model_view_transform_arg_ptr_expr = generate_input_argument(
             vertex_function,
-            new_name("modelViewTransform"),
+            new_name(var_name),
             model_view_transform_type,
             None,
         );
@@ -797,7 +836,7 @@ impl RenderShaderGenerator {
                 (rotation_quaternion_expr, translation_expr, scaling_expr)
             });
 
-        ModelViewTransformExpressions {
+        SingleModelViewTransformExpressions {
             rotation_quaternion: rotation_quaternion_expr,
             translation_vector: translation_expr,
             scaling_factor: scaling_expr,
@@ -1010,8 +1049,8 @@ impl RenderShaderGenerator {
                         vertex_function,
                         "transformPositionWithoutTranslation",
                         vec![
-                            model_view_transform.rotation_quaternion,
-                            model_view_transform.scaling_factor,
+                            model_view_transform.current.rotation_quaternion,
+                            model_view_transform.current.scaling_factor,
                             input_model_position_expr,
                         ],
                     )
@@ -1021,9 +1060,9 @@ impl RenderShaderGenerator {
                         vertex_function,
                         "transformPosition",
                         vec![
-                            model_view_transform.rotation_quaternion,
-                            model_view_transform.translation_vector,
-                            model_view_transform.scaling_factor,
+                            model_view_transform.current.rotation_quaternion,
+                            model_view_transform.current.translation_vector,
+                            model_view_transform.current.scaling_factor,
                             input_model_position_expr,
                         ],
                     )
@@ -1032,7 +1071,7 @@ impl RenderShaderGenerator {
 
         let mut output_struct_builder = OutputStructBuilder::new("VertexOutput");
 
-        let projected_position_expr = match projection {
+        let projected_position_expr = match projection.as_ref() {
             Some(projection) if !tricks.contains(RenderShaderTricks::NO_VERTEX_PROJECTION) => {
                 projection.generate_projected_position_expr(
                     module,
@@ -1060,6 +1099,7 @@ impl RenderShaderGenerator {
             normal_vector: None,
             texture_coords: None,
             tangent_space_quaternion: None,
+            previous_clip_space_position: None,
         };
 
         if vertex_attribute_requirements.contains(VertexAttributeSet::POSITION) {
@@ -1093,7 +1133,7 @@ impl RenderShaderGenerator {
                         vertex_function,
                         "rotateVectorWithQuaternion",
                         vec![
-                            model_view_transform.rotation_quaternion,
+                            model_view_transform.current.rotation_quaternion,
                             input_model_normal_vector_expr,
                         ],
                     )
@@ -1132,7 +1172,7 @@ impl RenderShaderGenerator {
                         vertex_function,
                         "applyRotationToTangentSpaceQuaternion",
                         vec![
-                            model_view_transform.rotation_quaternion,
+                            model_view_transform.current.rotation_quaternion,
                             input_tangent_to_model_space_quaternion_expr,
                         ],
                     )
@@ -1145,6 +1185,59 @@ impl RenderShaderGenerator {
                     vec4_type,
                     VECTOR_4_SIZE,
                     tangent_space_quaternion_expr,
+                ),
+            );
+        }
+
+        if let (
+            Some(previous_model_view_transform),
+            Some(ProjectionExpressions::Camera(projection)),
+        ) = (
+            model_view_transform
+                .and_then(|model_view_transform| model_view_transform.previous.as_ref()),
+            projection.as_ref(),
+        ) {
+            let previous_position_expr = if tricks.contains(RenderShaderTricks::FOLLOW_CAMERA) {
+                source_code_lib.generate_function_call(
+                    module,
+                    vertex_function,
+                    "transformPositionWithoutTranslation",
+                    vec![
+                        previous_model_view_transform.rotation_quaternion,
+                        previous_model_view_transform.scaling_factor,
+                        input_model_position_expr,
+                    ],
+                )
+            } else {
+                source_code_lib.generate_function_call(
+                    module,
+                    vertex_function,
+                    "transformPosition",
+                    vec![
+                        previous_model_view_transform.rotation_quaternion,
+                        previous_model_view_transform.translation_vector,
+                        previous_model_view_transform.scaling_factor,
+                        input_model_position_expr,
+                    ],
+                )
+            };
+
+            let previous_clip_space_position_expr = projection
+                .generate_projected_position_expr_for_previous_frame(
+                    module,
+                    source_code_lib,
+                    vertex_function,
+                    push_constant_expressions,
+                    tricks,
+                    previous_position_expr,
+                );
+
+            output_field_indices.previous_clip_space_position = Some(
+                output_struct_builder.add_field_with_perspective_interpolation(
+                    "previousClipSpacePosition",
+                    vec4_type,
+                    VECTOR_4_SIZE,
+                    previous_clip_space_position_expr,
                 ),
             );
         }
@@ -1824,7 +1917,6 @@ impl<'a> MaterialShaderGenerator<'a> {
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
-        camera_projection: Option<&CameraProjectionVariable>,
     ) {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
@@ -1893,14 +1985,12 @@ impl<'a> MaterialShaderGenerator<'a> {
                     source_code_lib,
                     fragment_function,
                     bind_group_idx,
-                    input_render_attachment_quantities,
                     output_render_attachment_quantities,
                     push_constant_fragment_expressions,
                     fragment_input_struct,
                     mesh_input_field_indices,
                     material_input_field_indices,
                     light_shader_generator,
-                    camera_projection,
                 );
             }
             (
@@ -3518,6 +3608,18 @@ mod test {
                 translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
             },
             previous: None,
+        });
+
+    const MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT: InstanceFeatureShaderInput =
+        InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
+            current: SingleModelViewTransformShaderInput {
+                rotation_location: INSTANCE_VERTEX_BINDING_START,
+                translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
+            },
+            previous: Some(SingleModelViewTransformShaderInput {
+                rotation_location: INSTANCE_VERTEX_BINDING_START + 2,
+                translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 3,
+            }),
         });
 
     const MINIMAL_MESH_INPUT: MeshShaderInput = MeshShaderInput {
@@ -5925,7 +6027,7 @@ mod test {
             }),
             None,
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -5943,7 +6045,7 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -5986,7 +6088,7 @@ mod test {
             }),
             None,
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -6004,7 +6106,7 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6048,7 +6150,7 @@ mod test {
             }),
             None,
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -6072,7 +6174,7 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6115,7 +6217,7 @@ mod test {
             }),
             None,
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -6139,7 +6241,7 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
@@ -6183,7 +6285,7 @@ mod test {
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_reflectance_location: None,
@@ -6201,7 +6303,7 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6252,7 +6354,7 @@ mod test {
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START),
@@ -6270,7 +6372,7 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6321,7 +6423,7 @@ mod test {
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
                     specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
@@ -6339,7 +6441,7 @@ mod test {
                 bump_mapping_input: None,
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6391,7 +6493,7 @@ mod test {
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -6411,7 +6513,7 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::NORMAL_VECTOR
                 | VertexAttributeSet::TEXTURE_COORDS,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6463,7 +6565,7 @@ mod test {
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -6487,7 +6589,7 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6539,7 +6641,7 @@ mod test {
             }),
             Some(&AMBIENT_LIGHT_INPUT),
             &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
+                &MODEL_VIEW_TRANSFORM_WITH_PREVIOUS_INPUT,
                 &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
                     albedo_location: None,
                     specular_reflectance_location: None,
@@ -6563,7 +6665,7 @@ mod test {
             VertexAttributeSet::POSITION
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
-            RenderAttachmentQuantitySet::PREVIOUS_POSITION,
+            RenderAttachmentQuantitySet::empty(),
             RenderAttachmentQuantitySet::POSITION
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
