@@ -6,8 +6,8 @@ use crate::{
     gpu::{rendering::fre, texture::shadow_map::CascadeIdx},
     light::{LightStorage, OmnidirectionalLight, UnidirectionalLight, MAX_SHADOW_MAP_CASCADES},
     model::{
-        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceModelLightTransform,
-        InstanceModelViewTransform, ModelID,
+        transform::{InstanceModelLightTransform, InstanceModelViewTransform},
+        InstanceFeature, InstanceFeatureID, InstanceFeatureManager, ModelID,
     },
     num::Float,
     voxel::{VoxelManager, VoxelTreeID},
@@ -227,6 +227,8 @@ impl<F: Float> SceneGraph<F> {
     /// The ID of the created model instance node.
     ///
     /// # Panics
+    /// - If no feature IDs are provided.
+    /// - If the first feature ID is not the model view transform feature.
     /// - If the specified parent group node does not exist.
     /// - If no bounding sphere is provided when the parent node is not the root
     ///   node.
@@ -238,6 +240,13 @@ impl<F: Float> SceneGraph<F> {
         frustum_culling_bounding_sphere: Option<Sphere<F>>,
         feature_ids: Vec<InstanceFeatureID>,
     ) -> ModelInstanceNodeID {
+        assert!(!feature_ids.is_empty(), "Tried to create model instance node with no features (at least the transform feature is required)");
+        assert_eq!(
+            feature_ids[0].feature_type_id(),
+            InstanceModelViewTransform::FEATURE_TYPE_ID,
+            "First feature for model instance node must be the transform feature"
+        );
+
         // Since we don't guarantee that any other parent node than the root is
         // never culled, allowing a non-root node to have an uncullable child
         // could lead to unexpected behavior, so we disallow it
@@ -373,7 +382,7 @@ impl<F: Float> SceneGraph<F> {
         model_instance_node_id: ModelInstanceNodeID,
     ) -> ModelID {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
-        let model_id = model_instance_node.model_id();
+        let model_id = *model_instance_node.model_id();
         let parent_node_id = model_instance_node.parent_node_id();
         self.model_instance_nodes
             .remove_node(model_instance_node_id);
@@ -573,8 +582,8 @@ impl<F: Float> SceneGraph<F> {
                 let camera_position_in_voxel_tree_space =
                     camera_to_root_transform.transform_point(&Point3::origin());
 
-                let (transform_buffer, (material_feature_storage, material_feature_buffer)) =
-                    instance_feature_manager.transform_and_next_feature_buffer_mut_with_storage(
+                let ((transform_buffer, _), (material_feature_buffer, material_feature_storage)) =
+                    instance_feature_manager.first_and_second_feature_buffer_mut_with_storages(
                         voxel_tree_node.model_id(),
                     );
 
@@ -801,8 +810,8 @@ impl<F: Float> SceneGraph<F> {
                 let camera_position_in_voxel_tree_space =
                     camera_to_group_transform.transform_point(&Point3::origin());
 
-                let (transform_buffer, (material_feature_storage, material_feature_buffer)) =
-                    instance_feature_manager.transform_and_next_feature_buffer_mut_with_storage(
+                let ((transform_buffer, _), (material_feature_buffer, material_feature_storage)) =
+                    instance_feature_manager.first_and_second_feature_buffer_mut_with_storages(
                         voxel_tree_node.model_id(),
                     );
 
@@ -852,9 +861,12 @@ impl<F: Float> SceneGraph<F> {
         let instance_model_view_transform =
             InstanceModelViewTransform::with_model_view_transform(model_view_transform.cast());
 
-        instance_feature_manager.buffer_instance(
+        *instance_feature_manager.feature_mut::<InstanceModelViewTransform>(
+            model_instance_node.model_view_transform_feature_id(),
+        ) = instance_model_view_transform;
+
+        instance_feature_manager.buffer_instance_features_from_storages(
             model_instance_node.model_id(),
-            &instance_model_view_transform,
             model_instance_node.feature_ids(),
         );
     }
@@ -957,11 +969,10 @@ impl SceneGraph<fre> {
                     // cubemap face space for the current light at the end of
                     // each transform buffer, identified by the light's ID plus
                     // a face index offset
-                    for buffer in instance_feature_manager.transform_buffers_mut() {
-                        buffer.begin_range(
-                            light_id.as_instance_feature_buffer_range_id() + face.as_idx_u32(),
-                        );
-                    }
+                    instance_feature_manager.begin_range_in_feature_buffers(
+                        InstanceModelViewTransform::FEATURE_TYPE_ID,
+                        light_id.as_instance_feature_buffer_range_id() + face.as_idx_u32(),
+                    );
 
                     let camera_space_face_frustum =
                         omnidirectional_light.compute_camera_space_frustum_for_face(face);
@@ -1033,11 +1044,10 @@ impl SceneGraph<fre> {
                     // light's space for instances casting shadows in he current
                     // cascade at the end of each transform buffer, identified
                     // by the light's ID plus a cascade index offset
-                    for buffer in instance_feature_manager.transform_buffers_mut() {
-                        buffer.begin_range(
-                            light_id.as_instance_feature_buffer_range_id() + cascade_idx,
-                        );
-                    }
+                    instance_feature_manager.begin_range_in_feature_buffers(
+                        InstanceModelViewTransform::FEATURE_TYPE_ID,
+                        light_id.as_instance_feature_buffer_range_id() + cascade_idx,
+                    );
 
                     self.buffer_transforms_of_visibly_shadow_casting_model_instances_in_group_for_unidirectional_light_cascade(
                         instance_feature_manager,
@@ -1114,7 +1124,7 @@ impl SceneGraph<fre> {
                                 ),
                         );
 
-                    instance_feature_manager.buffer_instance_transform(
+                    instance_feature_manager.buffer_instance_feature(
                         model_instance_node.model_id(),
                         &instance_model_light_transform,
                     );
@@ -1149,8 +1159,13 @@ impl SceneGraph<fre> {
                 let camera_position_in_voxel_tree_space =
                     camera_to_group_transform.transform_point(&Point3::origin());
 
-                let transform_buffer =
-                    instance_feature_manager.transform_buffer_mut(voxel_tree_node.model_id());
+                let buffer = instance_feature_manager
+                    .get_model_instance_buffer_mut(voxel_tree_node.model_id())
+                    .expect("Missing model instance buffer for voxel tree node");
+
+                let transform_buffer = buffer
+                    .get_feature_buffer_mut(InstanceModelViewTransform::FEATURE_TYPE_ID)
+                    .expect("Missing transform buffer for voxel tree node");
 
                 // Here, we let the cubemap face space act as "camera" space, so
                 // the "camera position" is the light position, the "view
@@ -1244,7 +1259,7 @@ impl SceneGraph<fre> {
                             ),
                         );
 
-                    instance_feature_manager.buffer_instance_transform(
+                    instance_feature_manager.buffer_instance_feature(
                         model_instance_node.model_id(),
                         &instance_model_light_transform,
                     );
@@ -1288,8 +1303,13 @@ impl SceneGraph<fre> {
                     .get_voxel_tree(voxel_tree_node.voxel_tree_id())
                     .expect("Missing voxel tree for voxel tree node in scene graph");
 
-                let transform_buffer =
-                    instance_feature_manager.transform_buffer_mut(voxel_tree_node.model_id());
+                let buffer = instance_feature_manager
+                    .get_model_instance_buffer_mut(voxel_tree_node.model_id())
+                    .expect("Missing model instance buffer for voxel tree node");
+
+                let transform_buffer = buffer
+                    .get_feature_buffer_mut(InstanceModelViewTransform::FEATURE_TYPE_ID)
+                    .expect("Missing transform buffer for voxel tree node");
 
                 // Here, we let the light space act as "camera" space, so the
                 // the "view frustum" is the cascade frustum and the "view
@@ -1555,8 +1575,13 @@ impl<F: Float> ModelInstanceNode<F> {
 
     /// Returns the ID of the model the node represents an
     /// instance of.
-    pub fn model_id(&self) -> ModelID {
-        self.model_id
+    pub fn model_id(&self) -> &ModelID {
+        &self.model_id
+    }
+
+    /// Returns the ID of the instance's model-to-camera transform feature.
+    pub fn model_view_transform_feature_id(&self) -> InstanceFeatureID {
+        self.feature_ids[0]
     }
 
     /// Returns the IDs of the instance's features.
@@ -1607,8 +1632,8 @@ impl<F: Float> VoxelTreeNode<F> {
     }
 
     /// Returns the ID of the model the voxels in the node are instances of.
-    pub fn model_id(&self) -> ModelID {
-        self.model_id
+    pub fn model_id(&self) -> &ModelID {
+        &self.model_id
     }
 
     /// Returns the ID of the voxel tree.
@@ -1724,7 +1749,7 @@ mod test {
             model_to_parent_transform,
             create_dummy_model_id(""),
             Some(Sphere::new(Point3::origin(), F::one())),
-            Vec::new(),
+            vec![InstanceModelViewTransform::dummy_instance_feature_id()],
         )
     }
 
@@ -2094,7 +2119,7 @@ mod test {
             model_to_parent_transform,
             create_dummy_model_id(""),
             Some(bounding_sphere.clone()),
-            Vec::new(),
+            vec![InstanceModelViewTransform::dummy_instance_feature_id()],
         );
 
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
@@ -2163,14 +2188,14 @@ mod test {
             Similarity3::identity(),
             create_dummy_model_id("1"),
             Some(bounding_sphere_1.clone()),
-            Vec::new(),
+            vec![InstanceModelViewTransform::dummy_instance_feature_id()],
         );
         scene_graph.create_model_instance_node(
             root,
             Similarity3::identity(),
             create_dummy_model_id("2"),
             Some(bounding_sphere_2.clone()),
-            Vec::new(),
+            vec![InstanceModelViewTransform::dummy_instance_feature_id()],
         );
 
         let root_bounding_sphere = scene_graph.update_bounding_spheres(root);
@@ -2210,7 +2235,7 @@ mod test {
             Similarity3::identity(),
             create_dummy_model_id("1"),
             Some(bounding_sphere_1.clone()),
-            Vec::new(),
+            vec![InstanceModelViewTransform::dummy_instance_feature_id()],
         );
         let group_2 = scene_graph.create_group_node(group_1, group_2_to_parent_transform);
         scene_graph.create_model_instance_node(
@@ -2218,7 +2243,7 @@ mod test {
             model_instance_2_to_parent_transform,
             create_dummy_model_id("2"),
             Some(bounding_sphere_2.clone()),
-            Vec::new(),
+            vec![InstanceModelViewTransform::dummy_instance_feature_id()],
         );
 
         let correct_group_2_bounding_sphere =

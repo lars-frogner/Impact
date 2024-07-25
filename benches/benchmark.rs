@@ -1,7 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use impact::{
     geometry::{Degrees, Frustum, PerspectiveTransform},
-    model::{DynamicInstanceFeatureBuffer, InstanceFeatureStorage, InstanceModelViewTransform},
+    model::{
+        transform::InstanceModelViewTransform, DynamicInstanceFeatureBuffer, InstanceFeatureStorage,
+    },
     util::bounds::UpperExclusiveBounds,
     voxel::{generation::UniformSphereVoxelGenerator, VoxelTree, VoxelType},
 };

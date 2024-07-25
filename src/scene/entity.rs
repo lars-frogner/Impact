@@ -7,7 +7,7 @@ use crate::{
     light,
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
-    model::ModelID,
+    model::{transform::InstanceModelViewTransform, InstanceFeature, ModelID},
     physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{
@@ -207,29 +207,53 @@ impl Scene {
                     *material.material_handle(),
                     material.prepass_material_handle().cloned(),
                 );
-                instance_feature_manager.register_instance(&material_library, model_id);
+
+                let mut feature_type_ids = Vec::with_capacity(2);
+
+                feature_type_ids.push(InstanceModelViewTransform::FEATURE_TYPE_ID);
+
+                feature_type_ids.extend_from_slice(
+                    material_library
+                        .get_material_specification(model_id.material_handle().material_id())
+                        .expect("Missing material specification for model material")
+                        .instance_feature_type_ids(),
+                );
+
+                instance_feature_manager.register_instance(model_id, &feature_type_ids);
 
                 let model_to_parent_transform = frame
                     .cloned()
                     .unwrap_or_default()
                     .create_transform_to_parent_space();
 
-                let feature_ids = match (
+                let mut feature_ids = Vec::with_capacity(2);
+
+                // Add an entry for the model-to-camera transform for the scene
+                // graph to access and modify using the returned ID
+                let model_view_transform_feature_id = instance_feature_manager
+                    .get_storage_mut::<InstanceModelViewTransform>()
+                    .expect("Missing storage for InstanceModelViewTransform feature")
+                    .add_feature(&InstanceModelViewTransform::default());
+
+                // The first feature is expected to be the transform
+                feature_ids.push(model_view_transform_feature_id);
+
+                match (
                     material.material_handle().material_property_feature_id(),
                     material
                         .prepass_material_handle()
                         .and_then(MaterialHandle::material_property_feature_id),
                 ) {
-                    (None, None) => Vec::new(),
+                    (None, None) => {}
                     (Some(feature_id), None) | (None, Some(feature_id)) => {
-                        vec![feature_id]
+                        feature_ids.push(feature_id);
                     }
                     (Some(feature_id), Some(prepass_feature_id)) => {
                         assert_eq!(
                             prepass_feature_id, feature_id,
                             "Prepass material must use the same feature as main material"
                         );
-                        vec![feature_id]
+                        feature_ids.push(feature_id);
                     }
                 };
 
@@ -325,7 +349,7 @@ impl Scene {
             self.instance_feature_manager()
                 .write()
                 .unwrap()
-                .unregister_instance(model_id);
+                .unregister_instance(&model_id);
             desynchronized.set_yes();
         }
     }

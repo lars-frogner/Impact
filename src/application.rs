@@ -20,7 +20,7 @@ use crate::{
     io,
     material::{self, MaterialLibrary},
     mesh::{components::MeshComp, texture_projection::TextureProjection, MeshRepository},
-    model::InstanceFeatureManager,
+    model::{self, InstanceFeatureManager},
     physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
     scene::Scene,
     ui::UserInterface,
@@ -89,6 +89,7 @@ impl Application {
         mesh_repository.create_default_meshes();
 
         let mut instance_feature_manager = InstanceFeatureManager::new();
+        model::register_model_feature_types(&mut instance_feature_manager);
         material::register_material_feature_types(&mut instance_feature_manager);
 
         let voxel_manager = VoxelManager::create(
