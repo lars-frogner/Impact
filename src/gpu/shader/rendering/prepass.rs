@@ -7,13 +7,11 @@ use super::{
         SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
         VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
     },
-    CameraProjectionVariable, LightShaderGenerator, MeshVertexOutputFieldIndices,
-    PushConstantExpressions,
+    LightShaderGenerator, MeshVertexOutputFieldIndices, PushConstantExpressions,
 };
 use crate::gpu::{
-    push_constant::PushConstantVariant,
-    shader::{append_literal_to_vec3, rendering::RenderShaderTricks},
-    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentQuantitySet},
+    push_constant::PushConstantVariant, shader::append_literal_to_vec3,
+    texture::attachment::RenderAttachmentQuantitySet,
 };
 use naga::{BinaryOperator, Expression, Function, Handle, Module, SampleLevel};
 
@@ -269,14 +267,12 @@ impl<'a> PrepassShaderGenerator<'a> {
         source_code_lib: &mut SourceCode,
         fragment_function: &mut Function,
         bind_group_idx: &mut u32,
-        input_render_attachment_quantities: RenderAttachmentQuantitySet,
         output_render_attachment_quantities: RenderAttachmentQuantitySet,
         push_constant_fragment_expressions: &PushConstantExpressions,
         fragment_input_struct: &InputStruct,
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &PrepassVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
-        camera_projection: Option<&CameraProjectionVariable>,
     ) {
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
@@ -604,47 +600,6 @@ impl<'a> PrepassShaderGenerator<'a> {
                 vec![inverse_window_dimensions_expr, framebuffer_position_expr],
             );
 
-            assert!(
-                input_render_attachment_quantities
-                    .contains(RenderAttachmentQuantitySet::PREVIOUS_POSITION),
-                "Missing previous position attachment for computing motion vector in shading prepass"
-            );
-
-            let (prev_position_texture_binding, prev_position_sampler_binding) =
-                RenderAttachmentQuantity::PreviousPosition.bindings();
-
-            let prev_position_texture = SampledTexture::declare(
-                &mut module.types,
-                &mut module.global_variables,
-                TextureType::Image2D,
-                "previousPosition",
-                *bind_group_idx,
-                prev_position_texture_binding,
-                Some(prev_position_sampler_binding),
-                None,
-            );
-
-            *bind_group_idx += 1;
-
-            let prev_position_expr = prev_position_texture.generate_rgb_sampling_expr(
-                fragment_function,
-                screen_space_texture_coord_expr,
-                SampleLevel::Zero,
-            );
-
-            let camera_projection = camera_projection
-                .expect("Missing camera projection for computing motion vector in shading prepass");
-
-            let previous_clip_space_position_expr = camera_projection
-                .generate_projected_position_expr_for_previous_frame(
-                    module,
-                    source_code_lib,
-                    fragment_function,
-                    push_constant_fragment_expressions,
-                    RenderShaderTricks::empty(),
-                    prev_position_expr,
-                );
-
             let current_depth_expr = emit_in_func(fragment_function, |function| {
                 include_expr_in_func(
                     function,
@@ -655,16 +610,29 @@ impl<'a> PrepassShaderGenerator<'a> {
                 )
             });
 
-            let motion_vector_expr = source_code_lib.generate_function_call(
-                module,
-                fragment_function,
-                "computeMotionVector",
-                vec![
-                    screen_space_texture_coord_expr,
-                    current_depth_expr,
-                    previous_clip_space_position_expr,
-                ],
-            );
+            let motion_vector_expr = if let Some(previous_clip_space_position_expr) =
+                mesh_input_field_indices
+                    .previous_clip_space_position
+                    .map(|idx| fragment_input_struct.get_field_expr(idx))
+            {
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "computeMotionVector",
+                    vec![
+                        screen_space_texture_coord_expr,
+                        current_depth_expr,
+                        previous_clip_space_position_expr,
+                    ],
+                )
+            } else {
+                source_code_lib.generate_function_call(
+                    module,
+                    fragment_function,
+                    "zeroMotionVector",
+                    vec![],
+                )
+            };
 
             let padded_motion_vector_expr = append_literal_to_vec3(
                 &mut module.types,

@@ -62,7 +62,7 @@ pub fn create_prepass_material(
     let mut vertex_attribute_requirements_for_mesh = VertexAttributeSet::POSITION;
     let mut vertex_attribute_requirements_for_shader = vertex_attribute_requirements_for_mesh;
 
-    let mut input_render_attachments = RenderAttachmentInputDescriptionSet::empty();
+    let input_render_attachments = RenderAttachmentInputDescriptionSet::empty();
 
     // All prepass materials render to the emissive luminance attachment, either
     // an actual emissive luminance or a clear color to overwrite any existing
@@ -81,9 +81,6 @@ pub fn create_prepass_material(
 
     // This will be needed for temporal anti-aliasing
     output_render_attachments.insert_with_defaults(RenderAttachmentQuantitySet::MOTION_VECTOR);
-
-    // We need previous position to compute motion vectors
-    input_render_attachments.insert_with_defaults(RenderAttachmentQuantitySet::PREVIOUS_POSITION);
 
     // Since we output the position and normal vectors to attachments, the main
     // material can get this information from the attachments rather than having

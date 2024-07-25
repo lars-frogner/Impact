@@ -27,14 +27,13 @@ bitflags! {
         const LUMINANCE                   = 1 << 1;
         const PREVIOUS_LUMINANCE          = 1 << 2;
         const POSITION                    = 1 << 3;
-        const PREVIOUS_POSITION           = 1 << 4;
-        const NORMAL_VECTOR               = 1 << 5;
-        const TEXTURE_COORDS              = 1 << 6;
-        const MOTION_VECTOR               = 1 << 7;
-        const AMBIENT_REFLECTED_LUMINANCE = 1 << 8;
-        const EMISSIVE_LUMINANCE          = 1 << 9;
-        const EMISSIVE_LUMINANCE_AUX      = 1 << 10;
-        const OCCLUSION                   = 1 << 11;
+        const NORMAL_VECTOR               = 1 << 4;
+        const TEXTURE_COORDS              = 1 << 5;
+        const MOTION_VECTOR               = 1 << 6;
+        const AMBIENT_REFLECTED_LUMINANCE = 1 << 7;
+        const EMISSIVE_LUMINANCE          = 1 << 8;
+        const EMISSIVE_LUMINANCE_AUX      = 1 << 9;
+        const OCCLUSION                   = 1 << 10;
     }
 }
 
@@ -45,14 +44,13 @@ pub enum RenderAttachmentQuantity {
     Luminance = 1,
     PreviousLuminance = 2,
     Position = 3,
-    PreviousPosition = 4,
-    NormalVector = 5,
-    TextureCoords = 6,
-    MotionVector = 7,
-    AmbientReflectedLuminance = 8,
-    EmissiveLuminance = 9,
-    EmissiveLuminanceAux = 10,
-    Occlusion = 11,
+    NormalVector = 4,
+    TextureCoords = 5,
+    MotionVector = 6,
+    AmbientReflectedLuminance = 7,
+    EmissiveLuminance = 8,
+    EmissiveLuminanceAux = 9,
+    Occlusion = 10,
 }
 
 /// A sampler variant for render attachment textures.
@@ -132,7 +130,7 @@ struct FullRenderAttachmentInputDescription {
 }
 
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 12;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 11;
 
 /// Each individual render attachment quantity.
 ///
@@ -143,7 +141,6 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
     RenderAttachmentQuantity::Luminance,
     RenderAttachmentQuantity::PreviousLuminance,
     RenderAttachmentQuantity::Position,
-    RenderAttachmentQuantity::PreviousPosition,
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
     RenderAttachmentQuantity::MotionVector,
@@ -159,7 +156,6 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
     RenderAttachmentQuantitySet::LUMINANCE,
     RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE,
     RenderAttachmentQuantitySet::POSITION,
-    RenderAttachmentQuantitySet::PREVIOUS_POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
     RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -177,8 +173,6 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     // `BindGroupLayout`s can be used interchangeably
     "luminance",
     "position",
-    // Same for the previous position
-    "position",
     "normal_vector",
     "texture_coords",
     "motion_vector",
@@ -194,7 +188,6 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
     wgpu::TextureFormat::Rgba16Float,          // Luminance
     wgpu::TextureFormat::Rgba16Float,          // Previous luminance
     wgpu::TextureFormat::Rgba32Float,          // Position
-    wgpu::TextureFormat::Rgba32Float,          // Previous position
     wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
     wgpu::TextureFormat::Rg32Float,            // Texture coordinates
     wgpu::TextureFormat::Rgba16Float,          // Motion vector
@@ -210,7 +203,6 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
     true, // Luminance
     true, // Previous luminance
     true, // Position
-    true, // Previous position
     true, // Normal vector
     true, // Texture coordinates
     true, // Motion vector
@@ -226,7 +218,6 @@ const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     false, // Luminance
     false, // Previous luminance
     false, // Position
-    false, // Previous position
     false, // Normal vector
     false, // Texture coordinates
     false, // Motion vector
@@ -243,7 +234,6 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_
     Some(wgpu::Color::BLACK), // Luminance
     None,                     // Previous luminance
     Some(wgpu::Color::BLACK), // Position
-    None,                     // Previous position
     Some(wgpu::Color::BLACK), // Normal vector
     Some(wgpu::Color::BLACK), // Texture coordinates
     Some(wgpu::Color::BLACK), // Motion vector
@@ -260,7 +250,6 @@ const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
     (0, 1), // Luminance
     (0, 1), // Previous luminance
     (0, 1), // Position
-    (0, 1), // Previous position
     (0, 1), // Normal vector
     (0, 1), // Texture coordinates
     (0, 1), // Motion vector
@@ -625,7 +614,7 @@ impl RenderAttachmentTextureManager {
 
         let mut manager = Self {
             quantity_textures: [
-                None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None,
             ],
             samplers,
             bind_groups_and_layouts: HashMap::new(),
@@ -795,11 +784,6 @@ impl RenderAttachmentTextureManager {
             graphics_device,
             RenderAttachmentQuantity::Luminance,
             RenderAttachmentQuantity::PreviousLuminance,
-        );
-        self.swap_two_attachments(
-            graphics_device,
-            RenderAttachmentQuantity::Position,
-            RenderAttachmentQuantity::PreviousPosition,
         );
     }
 
