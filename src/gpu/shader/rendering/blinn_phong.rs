@@ -203,36 +203,11 @@ impl<'a> BlinnPhongShaderGenerator<'a> {
             None
         };
 
-        let position_expr =
-            if input_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
-                let (position_texture_binding, position_sampler_binding) =
-                    RenderAttachmentQuantity::Position.bindings();
-
-                let position_texture = SampledTexture::declare(
-                    &mut module.types,
-                    &mut module.global_variables,
-                    TextureType::Image2D,
-                    "position",
-                    *bind_group_idx,
-                    position_texture_binding,
-                    Some(position_sampler_binding),
-                    None,
-                );
-
-                *bind_group_idx += 1;
-
-                position_texture.generate_rgb_sampling_expr(
-                    fragment_function,
-                    screen_space_texture_coord_expr.unwrap(),
-                    SampleLevel::Zero,
-                )
-            } else {
-                fragment_input_struct.get_field_expr(
-                    mesh_input_field_indices
-                        .position
-                        .expect("Missing position for Blinn-Phong shading"),
-                )
-            };
+        let position_expr = fragment_input_struct.get_field_expr(
+            mesh_input_field_indices
+                .position
+                .expect("Missing position for Blinn-Phong shading"),
+        );
 
         let normal_vector_expr = if input_render_attachment_quantities
             .contains(RenderAttachmentQuantitySet::NORMAL_VECTOR)

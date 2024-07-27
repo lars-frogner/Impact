@@ -22,10 +22,11 @@ pub use skybox::SkyboxShaderInput;
 use super::{
     append_to_arena, append_unity_component_to_vec3, emit_in_func, generate_input_argument,
     generate_location_bound_input_argument, include_expr_in_func, include_named_expr_in_func,
-    insert_in_arena, new_name, swizzle_xyz_expr, EntryPointNames, InputStruct, OutputStructBuilder,
-    PushConstantExpressions, SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH,
-    MATRIX_4X4_SIZE, MATRIX_4X4_TYPE, U32_TYPE, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE,
-    VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+    insert_in_arena, new_name, swizzle_w_expr, swizzle_x_expr, swizzle_xyz_expr, swizzle_y_expr,
+    swizzle_z_expr, EntryPointNames, InputStruct, OutputStructBuilder, PushConstantExpressions,
+    SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, MATRIX_4X4_SIZE, MATRIX_4X4_TYPE,
+    U32_TYPE, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE,
+    VECTOR_4_TYPE,
 };
 use crate::{
     camera::buffer::JITTER_COUNT,
@@ -566,6 +567,7 @@ impl RenderShaderGenerator {
                 light_vertex_output_field_indices.as_ref(),
                 &material_vertex_output_field_indices,
                 light_shader_generator.as_ref(),
+                camera_projection.as_ref(),
             );
 
             EntryPointNames {
@@ -826,13 +828,8 @@ impl RenderShaderGenerator {
                 );
                 let translation_expr =
                     include_expr_in_func(function, swizzle_xyz_expr(translation_and_scaling_expr));
-                let scaling_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: translation_and_scaling_expr,
-                        index: 3,
-                    },
-                );
+                let scaling_expr =
+                    include_expr_in_func(function, swizzle_w_expr(translation_and_scaling_expr));
                 (rotation_quaternion_expr, translation_expr, scaling_expr)
             });
 
@@ -857,6 +854,19 @@ impl RenderShaderGenerator {
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
         let mat4x4_type = insert_in_arena(&mut module.types, MATRIX_4X4_TYPE);
 
+        let frustum_far_plane_corner_array_type = insert_in_arena(
+            &mut module.types,
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: vec4_type,
+                    size: ArraySize::Constant(NonZeroU32::new(4).unwrap()),
+                    stride: VECTOR_4_SIZE,
+                },
+            },
+        );
+        let frustum_far_plane_corner_array_size = VECTOR_4_SIZE * 4;
+
         let jitter_array_type = insert_in_arena(
             &mut module.types,
             Type {
@@ -868,8 +878,12 @@ impl RenderShaderGenerator {
                 },
             },
         );
+        let jitter_array_size = VECTOR_4_SIZE * JITTER_COUNT as u32;
 
-        let uniform_size = MATRIX_4X4_SIZE + VECTOR_4_SIZE * JITTER_COUNT as u32;
+        let uniform_size = MATRIX_4X4_SIZE
+            + frustum_far_plane_corner_array_size
+            + VECTOR_4_SIZE
+            + jitter_array_size;
 
         let uniform_type = insert_in_arena(
             &mut module.types,
@@ -884,10 +898,24 @@ impl RenderShaderGenerator {
                             offset: 0,
                         },
                         StructMember {
+                            name: new_name("frustumFarPlaneCorners"),
+                            ty: frustum_far_plane_corner_array_type,
+                            binding: None,
+                            offset: MATRIX_4X4_SIZE,
+                        },
+                        StructMember {
+                            name: new_name("inverseFarPlaneDistance"),
+                            ty: vec4_type,
+                            binding: None,
+                            offset: MATRIX_4X4_SIZE + frustum_far_plane_corner_array_size,
+                        },
+                        StructMember {
                             name: new_name("jitterOffsets"),
                             ty: jitter_array_type,
                             binding: None,
-                            offset: MATRIX_4X4_SIZE,
+                            offset: MATRIX_4X4_SIZE
+                                + frustum_far_plane_corner_array_size
+                                + VECTOR_4_SIZE,
                         },
                     ],
                     span: uniform_size,
@@ -1222,15 +1250,17 @@ impl RenderShaderGenerator {
                 )
             };
 
-            let previous_clip_space_position_expr = projection
-                .generate_projected_position_expr_for_previous_frame(
-                    module,
-                    source_code_lib,
-                    vertex_function,
-                    push_constant_expressions,
-                    tricks,
-                    previous_position_expr,
-                );
+            // The previous clip-space position will here be offset by the same
+            // jitter as the current clip-space position, so that we cancel it
+            // out when computing the motion vector
+            let previous_clip_space_position_expr = projection.generate_projected_position_expr(
+                module,
+                source_code_lib,
+                vertex_function,
+                push_constant_expressions,
+                tricks,
+                previous_position_expr,
+            );
 
             output_field_indices.previous_clip_space_position = Some(
                 output_struct_builder.add_field_with_perspective_interpolation(
@@ -1917,6 +1947,7 @@ impl<'a> MaterialShaderGenerator<'a> {
         light_input_field_indices: Option<&LightVertexOutputFieldIndices>,
         material_input_field_indices: &MaterialVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
+        camera_projection: Option<&CameraProjectionVariable>,
     ) {
         match (self, material_input_field_indices) {
             (Self::VertexColor, MaterialVertexOutputFieldIndices::None) => {
@@ -1991,6 +2022,7 @@ impl<'a> MaterialShaderGenerator<'a> {
                     mesh_input_field_indices,
                     material_input_field_indices,
                     light_shader_generator,
+                    camera_projection,
                 );
             }
             (
@@ -2105,41 +2137,6 @@ impl CameraProjectionVariable {
         )
     }
 
-    /// Generates the expression for the projection matrix in the given
-    /// function, jittered with the previous frame's jitter offsets.
-    pub fn generate_jittered_projection_matrix_expr_for_previous_frame(
-        &self,
-        module: &mut Module,
-        source_code_lib: &mut SourceCode,
-        function: &mut Function,
-        push_constant_expressions: &PushConstantExpressions,
-    ) -> Handle<Expression> {
-        let frame_counter_expr = push_constant_expressions
-            .get(PushConstantVariant::FrameCounter)
-            .expect("Missing frame counter push constant for jittering");
-
-        let one_expr = include_expr_in_func(function, Expression::Literal(Literal::U32(1)));
-
-        let previous_frame_counter_expr = emit_in_func(function, |function| {
-            include_expr_in_func(
-                function,
-                Expression::Binary {
-                    op: BinaryOperator::Subtract,
-                    left: frame_counter_expr,
-                    right: one_expr,
-                },
-            )
-        });
-
-        self.generate_jittered_projection_matrix_expr_for_frame_counter(
-            module,
-            source_code_lib,
-            function,
-            push_constant_expressions,
-            previous_frame_counter_expr,
-        )
-    }
-
     /// Generates an expression for the given position (as a vec3) projected
     /// with the projection matrix in the given function. The projected position
     /// will be a vec4.
@@ -2172,36 +2169,77 @@ impl CameraProjectionVariable {
         )
     }
 
-    /// Generates an expression for the given position (as a vec3) projected
-    /// with the projection matrix of the previous frame in the given function.
-    /// The projected position will be a vec4.
-    pub fn generate_projected_position_expr_for_previous_frame(
+    /// Generates an expression for the camera-space position of the view
+    /// frustum's far-plane corner with the given index in the given function.
+    /// The position will be a vec3.
+    pub fn generate_frustum_far_plane_corner_expr(
         &self,
-        module: &mut Module,
-        source_code_lib: &mut SourceCode,
         function: &mut Function,
-        push_constant_expressions: &PushConstantExpressions,
-        tricks: RenderShaderTricks,
-        position_expr: Handle<Expression>,
+        corner_index_expr: Handle<Expression>,
     ) -> Handle<Expression> {
-        let matrix_expr = if tricks.contains(RenderShaderTricks::NO_JITTER) {
-            self.generate_projection_matrix_expr(function)
-        } else {
-            self.generate_jittered_projection_matrix_expr_for_previous_frame(
-                module,
-                source_code_lib,
-                function,
-                push_constant_expressions,
-            )
-        };
-
-        Self::generate_projected_position_expr_for_matrix(
-            module,
+        let projection_uniform_ptr_expr = include_expr_in_func(
             function,
-            tricks,
-            position_expr,
-            matrix_expr,
-        )
+            Expression::GlobalVariable(self.projection_uniform_var),
+        );
+
+        emit_in_func(function, |function| {
+            let frustum_corners_ptr_expr = include_named_expr_in_func(
+                function,
+                "frustumFarPlaneCorners",
+                Expression::AccessIndex {
+                    base: projection_uniform_ptr_expr,
+                    index: 1,
+                },
+            );
+            let frustum_corner_ptr_expr = include_expr_in_func(
+                function,
+                Expression::Access {
+                    base: frustum_corners_ptr_expr,
+                    index: corner_index_expr,
+                },
+            );
+            let frustum_corner_vec4_expr = include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: frustum_corner_ptr_expr,
+                },
+            );
+            include_named_expr_in_func(
+                function,
+                "frustumFarPlaneCorner",
+                swizzle_xyz_expr(frustum_corner_vec4_expr),
+            )
+        })
+    }
+
+    /// Geneerates an expression for the inverse far plane z-coordinate in the
+    /// given function.
+    pub fn generate_inverse_far_plane_z_expr(&self, function: &mut Function) -> Handle<Expression> {
+        let projection_uniform_ptr_expr = include_expr_in_func(
+            function,
+            Expression::GlobalVariable(self.projection_uniform_var),
+        );
+
+        emit_in_func(function, |function| {
+            let inverse_far_plane_z_vec4_ptr_expr = include_expr_in_func(
+                function,
+                Expression::AccessIndex {
+                    base: projection_uniform_ptr_expr,
+                    index: 2,
+                },
+            );
+            let inverse_far_plane_z_vec4_expr = include_expr_in_func(
+                function,
+                Expression::Load {
+                    pointer: inverse_far_plane_z_vec4_ptr_expr,
+                },
+            );
+            include_named_expr_in_func(
+                function,
+                "inverseFarPlaneZ",
+                swizzle_x_expr(inverse_far_plane_z_vec4_expr),
+            )
+        })
     }
 
     fn generate_jittered_projection_matrix_expr_for_frame_counter(
@@ -2243,7 +2281,7 @@ impl CameraProjectionVariable {
                 "jitterOffsets",
                 Expression::AccessIndex {
                     base: projection_uniform_ptr_expr,
-                    index: 1,
+                    index: 3,
                 },
             );
             let jitter_index_expr = include_named_expr_in_func(
@@ -2729,10 +2767,7 @@ impl OmnidirectionalLightShadingShaderGenerator {
                 ),
                 include_expr_in_func(
                     function,
-                    Expression::AccessIndex {
-                        base: luminous_intensity_and_emission_radius,
-                        index: 3,
-                    },
+                    swizzle_w_expr(luminous_intensity_and_emission_radius),
                 ),
             )
         });
@@ -3121,10 +3156,7 @@ impl UnidirectionalLightShadingShaderGenerator {
                     ),
                     include_expr_in_func(
                         function,
-                        Expression::AccessIndex {
-                            base: perpendicular_illuminance_and_tan_angular_radius_expr,
-                            index: 3,
-                        },
+                        swizzle_w_expr(perpendicular_illuminance_and_tan_angular_radius_expr),
                     ),
                 )
             });
@@ -3166,21 +3198,11 @@ impl UnidirectionalLightShadingShaderGenerator {
 
         let (world_to_light_clip_space_xy_scale_expr, world_to_light_clip_space_z_scale_expr) =
             emit_in_func(fragment_function, |function| {
-                let world_to_light_clip_space_xy_scale_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: orthographic_scaling_expr,
-                        index: 0,
-                    },
-                );
+                let world_to_light_clip_space_xy_scale_expr =
+                    include_expr_in_func(function, swizzle_x_expr(orthographic_scaling_expr));
 
-                let orthographic_scale_z_expr = include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: orthographic_scaling_expr,
-                        index: 2,
-                    },
-                );
+                let orthographic_scale_z_expr =
+                    include_expr_in_func(function, swizzle_z_expr(orthographic_scaling_expr));
 
                 let world_to_light_clip_space_z_scale_expr = include_expr_in_func(
                     function,
@@ -3387,13 +3409,8 @@ impl SampledTexture {
         let (texture_coord_expr, depth_reference_expr) = emit_in_func(function, |function| {
             // Map x [-1, 1] to u [0, 1]
 
-            let light_clip_position_x_expr = include_expr_in_func(
-                function,
-                Expression::AccessIndex {
-                    base: light_clip_position_expr,
-                    index: 0,
-                },
-            );
+            let light_clip_position_x_expr =
+                include_expr_in_func(function, swizzle_x_expr(light_clip_position_expr));
 
             let offset_light_clip_position_x_expr = include_expr_in_func(
                 function,
@@ -3415,13 +3432,8 @@ impl SampledTexture {
 
             // Map y [-1, 1] to v [1, 0]
 
-            let light_clip_position_y_expr = include_expr_in_func(
-                function,
-                Expression::AccessIndex {
-                    base: light_clip_position_expr,
-                    index: 1,
-                },
-            );
+            let light_clip_position_y_expr =
+                include_expr_in_func(function, swizzle_y_expr(light_clip_position_expr));
 
             let negated_light_clip_position_y_expr = include_expr_in_func(
                 function,
@@ -3457,13 +3469,8 @@ impl SampledTexture {
                 },
             );
 
-            let depth_reference_expr = include_expr_in_func(
-                function,
-                Expression::AccessIndex {
-                    base: light_clip_position_expr,
-                    index: 2,
-                },
-            );
+            let depth_reference_expr =
+                include_expr_in_func(function, swizzle_z_expr(light_clip_position_expr));
 
             (texture_coords_expr, depth_reference_expr)
         });
@@ -4581,71 +4588,6 @@ mod test {
     }
 
     #[test]
-    fn building_blinn_phong_shader_with_input_position_attachment_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    None,
-                    None,
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    emissive_luminance_location: None,
-                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-                    parallax_displacement_scale_location: None,
-                    parallax_uv_per_distance_location: None,
-                }),
-            ],
-            Some(&MaterialShaderInput::BlinnPhong(
-                BlinnPhongTextureShaderInput {
-                    albedo_texture_and_sampler_bindings: None,
-                    specular_reflectance_texture_and_sampler_bindings: None,
-                },
-            )),
-            VertexAttributeSet::FOR_LIGHT_SHADING,
-            RenderAttachmentQuantitySet::POSITION,
-            RenderAttachmentQuantitySet::empty(),
-            [
-                PushConstant::new(
-                    PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::LightIdx,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::Exposure,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
     fn building_blinn_phong_shader_with_input_normal_vector_attachment_works() {
         let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
@@ -4678,71 +4620,6 @@ mod test {
             )),
             VertexAttributeSet::FOR_LIGHT_SHADING,
             RenderAttachmentQuantitySet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
-            [
-                PushConstant::new(
-                    PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::LightIdx,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::Exposure,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
-    fn building_blinn_phong_shader_with_input_position_and_normal_vector_attachment_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    None,
-                    None,
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    emissive_luminance_location: None,
-                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-                    parallax_displacement_scale_location: None,
-                    parallax_uv_per_distance_location: None,
-                }),
-            ],
-            Some(&MaterialShaderInput::BlinnPhong(
-                BlinnPhongTextureShaderInput {
-                    albedo_texture_and_sampler_bindings: None,
-                    specular_reflectance_texture_and_sampler_bindings: None,
-                },
-            )),
-            VertexAttributeSet::FOR_LIGHT_SHADING,
-            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
             [
                 PushConstant::new(
@@ -5812,73 +5689,6 @@ mod test {
     }
 
     #[test]
-    fn building_microfacet_shader_with_input_position_attachment_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    None,
-                    None,
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    emissive_luminance_location: None,
-                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-                    parallax_displacement_scale_location: None,
-                    parallax_uv_per_distance_location: None,
-                }),
-            ],
-            Some(&MaterialShaderInput::Microfacet((
-                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-                MicrofacetTextureShaderInput {
-                    albedo_texture_and_sampler_bindings: None,
-                    specular_reflectance_texture_and_sampler_bindings: None,
-                    roughness_texture_and_sampler_bindings: None,
-                },
-            ))),
-            VertexAttributeSet::FOR_LIGHT_SHADING,
-            RenderAttachmentQuantitySet::POSITION,
-            RenderAttachmentQuantitySet::empty(),
-            [
-                PushConstant::new(
-                    PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::LightIdx,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::Exposure,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
     fn building_microfacet_shader_with_input_normal_vector_attachment_works() {
         let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
@@ -5946,73 +5756,6 @@ mod test {
     }
 
     #[test]
-    fn building_microfacet_shader_with_input_position_and_normal_vector_attachment_works() {
-        let module = RenderShaderGenerator::generate_shader_module(
-            Some(&CAMERA_INPUT),
-            Some(&MeshShaderInput {
-                locations: [
-                    Some(MESH_VERTEX_BINDING_START),
-                    None,
-                    Some(MESH_VERTEX_BINDING_START + 1),
-                    None,
-                    None,
-                ],
-            }),
-            Some(&OMNIDIRECTIONAL_LIGHT_INPUT),
-            &[
-                &MODEL_VIEW_TRANSFORM_INPUT,
-                &InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-                    albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-                    specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-                    emissive_luminance_location: None,
-                    roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-                    parallax_displacement_scale_location: None,
-                    parallax_uv_per_distance_location: None,
-                }),
-            ],
-            Some(&MaterialShaderInput::Microfacet((
-                MicrofacetShadingModel::LAMBERTIAN_DIFFUSE_GGX_SPECULAR,
-                MicrofacetTextureShaderInput {
-                    albedo_texture_and_sampler_bindings: None,
-                    specular_reflectance_texture_and_sampler_bindings: None,
-                    roughness_texture_and_sampler_bindings: None,
-                },
-            ))),
-            VertexAttributeSet::FOR_LIGHT_SHADING,
-            RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
-            RenderAttachmentQuantitySet::empty(),
-            [
-                PushConstant::new(
-                    PushConstantVariant::FrameCounter,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::LightIdx,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::Exposure,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-                PushConstant::new(
-                    PushConstantVariant::InverseWindowDimensions,
-                    wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap();
-
-        let module_info = validate_module(&module);
-
-        println!(
-            "{}",
-            wgsl_out::write_string(&module, &module_info, WriterFlags::all()).unwrap()
-        );
-    }
-
-    #[test]
     fn building_minimal_prepass_shader_works() {
         let module = RenderShaderGenerator::generate_shader_module(
             Some(&CAMERA_INPUT),
@@ -6046,7 +5789,7 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6107,7 +5850,7 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6175,7 +5918,7 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6242,7 +5985,7 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
@@ -6304,7 +6047,7 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6373,7 +6116,7 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6442,7 +6185,7 @@ mod test {
             })),
             VertexAttributeSet::POSITION | VertexAttributeSet::NORMAL_VECTOR,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6514,7 +6257,7 @@ mod test {
                 | VertexAttributeSet::NORMAL_VECTOR
                 | VertexAttributeSet::TEXTURE_COORDS,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6590,7 +6333,7 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
                 | RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -6666,7 +6409,7 @@ mod test {
                 | VertexAttributeSet::TEXTURE_COORDS
                 | VertexAttributeSet::TANGENT_SPACE_QUATERNION,
             RenderAttachmentQuantitySet::empty(),
-            RenderAttachmentQuantitySet::POSITION
+            RenderAttachmentQuantitySet::LINEAR_DEPTH
                 | RenderAttachmentQuantitySet::NORMAL_VECTOR
                 | RenderAttachmentQuantitySet::TEXTURE_COORDS
                 | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE

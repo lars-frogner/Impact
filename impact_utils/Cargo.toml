@@ -8,3 +8,4 @@ anyhow = "1.0"
 bytemuck = { version = "1.14", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 lazy_static = "1.4"
+num-traits = "0.2"

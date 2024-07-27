@@ -23,34 +23,36 @@ bitflags! {
     /// render attachment textures.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
     pub struct RenderAttachmentQuantitySet: u16 {
-        const DEPTH                       = 1 << 0;
-        const LUMINANCE                   = 1 << 1;
-        const PREVIOUS_LUMINANCE          = 1 << 2;
-        const POSITION                    = 1 << 3;
-        const NORMAL_VECTOR               = 1 << 4;
-        const TEXTURE_COORDS              = 1 << 5;
-        const MOTION_VECTOR               = 1 << 6;
-        const AMBIENT_REFLECTED_LUMINANCE = 1 << 7;
-        const EMISSIVE_LUMINANCE          = 1 << 8;
-        const EMISSIVE_LUMINANCE_AUX      = 1 << 9;
-        const OCCLUSION                   = 1 << 10;
+        const DEPTH_STENCIL               = 1 << 0;
+        const LINEAR_DEPTH                = 1 << 1;
+        const PREVIOUS_LINEAR_DEPTH       = 1 << 2;
+        const LUMINANCE                   = 1 << 3;
+        const PREVIOUS_LUMINANCE          = 1 << 4;
+        const NORMAL_VECTOR               = 1 << 5;
+        const TEXTURE_COORDS              = 1 << 6;
+        const MOTION_VECTOR               = 1 << 7;
+        const AMBIENT_REFLECTED_LUMINANCE = 1 << 8;
+        const EMISSIVE_LUMINANCE          = 1 << 9;
+        const EMISSIVE_LUMINANCE_AUX      = 1 << 10;
+        const OCCLUSION                   = 1 << 11;
     }
 }
 
 /// A quantity that can be rendered to a dedicated render attachment texture.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RenderAttachmentQuantity {
-    Depth = 0,
-    Luminance = 1,
-    PreviousLuminance = 2,
-    Position = 3,
-    NormalVector = 4,
-    TextureCoords = 5,
-    MotionVector = 6,
-    AmbientReflectedLuminance = 7,
-    EmissiveLuminance = 8,
-    EmissiveLuminanceAux = 9,
-    Occlusion = 10,
+    DepthStencil = 0,
+    LinearDepth = 1,
+    PreviousLinearDepth = 2,
+    Luminance = 3,
+    PreviousLuminance = 4,
+    NormalVector = 5,
+    TextureCoords = 6,
+    MotionVector = 7,
+    AmbientReflectedLuminance = 8,
+    EmissiveLuminance = 9,
+    EmissiveLuminanceAux = 10,
+    Occlusion = 11,
 }
 
 /// A sampler variant for render attachment textures.
@@ -130,17 +132,18 @@ struct FullRenderAttachmentInputDescription {
 }
 
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 11;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 12;
 
 /// Each individual render attachment quantity.
 ///
 /// # Note
 /// This is the order expected by the shaders.
 const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    RenderAttachmentQuantity::Depth,
+    RenderAttachmentQuantity::DepthStencil,
+    RenderAttachmentQuantity::LinearDepth,
+    RenderAttachmentQuantity::PreviousLinearDepth,
     RenderAttachmentQuantity::Luminance,
     RenderAttachmentQuantity::PreviousLuminance,
-    RenderAttachmentQuantity::Position,
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
     RenderAttachmentQuantity::MotionVector,
@@ -152,10 +155,11 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
 
 /// The bitflag of each individual render attachment quantity.
 const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    RenderAttachmentQuantitySet::DEPTH,
+    RenderAttachmentQuantitySet::DEPTH_STENCIL,
+    RenderAttachmentQuantitySet::LINEAR_DEPTH,
+    RenderAttachmentQuantitySet::PREVIOUS_LINEAR_DEPTH,
     RenderAttachmentQuantitySet::LUMINANCE,
     RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE,
-    RenderAttachmentQuantitySet::POSITION,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
     RenderAttachmentQuantitySet::MOTION_VECTOR,
@@ -167,12 +171,14 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
 
 /// The name of each individual render attachment quantity.
 const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    "depth",
+    "depth_stencil",
+    "linear_depth",
+    // We use the same name for the previous linear depth attachment so that
+    // their `BindGroupLayout`s can be used interchangeably
+    "linear_depth",
     "luminance",
-    // We use the same name for the previous luminance attachment so that their
-    // `BindGroupLayout`s can be used interchangeably
+    // Same for the previous luminance attachment
     "luminance",
-    "position",
     "normal_vector",
     "texture_coords",
     "motion_vector",
@@ -184,25 +190,27 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
 
 /// The texture format used for each render attachment quantity.
 const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    wgpu::TextureFormat::Depth32FloatStencil8, // Depth
+    wgpu::TextureFormat::Depth32FloatStencil8, // Depth-stencil
+    wgpu::TextureFormat::R32Float,             // Linear depth
+    wgpu::TextureFormat::R32Float,             // Previous linear depth
     wgpu::TextureFormat::Rgba16Float,          // Luminance
     wgpu::TextureFormat::Rgba16Float,          // Previous luminance
-    wgpu::TextureFormat::Rgba32Float,          // Position
     wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
     wgpu::TextureFormat::Rg32Float,            // Texture coordinates
     wgpu::TextureFormat::Rgba16Float,          // Motion vector
     wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance (auxiliary)
-    wgpu::TextureFormat::R8Unorm,              // Occlusion
+    wgpu::TextureFormat::R16Float,             // Occlusion
 ];
 
 /// Whether multisampling will be used when requested for each render attachment quantity.
 const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    true, // Depth
+    true, // Depth-stencil
+    true, // Linear depth
+    true, // Previous linear depth
     true, // Luminance
     true, // Previous luminance
-    true, // Position
     true, // Normal vector
     true, // Texture coordinates
     true, // Motion vector
@@ -214,10 +222,11 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
 
 /// Whether the texture for each render attachment quantity will have mipmaps.
 const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    false, // Depth
+    false, // Depth-stencil
+    false, // Linear depth
+    false, // Previous linear depth
     false, // Luminance
     false, // Previous luminance
-    false, // Position
     false, // Normal vector
     false, // Texture coordinates
     false, // Motion vector
@@ -230,10 +239,11 @@ const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
 /// The clear color used for each render attachment quantity, or [`None`] if the
 /// render attachment should never be cleared with a color.
 const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    None,                     // Depth
+    None,                     // Depth-stencil
+    Some(wgpu::Color::BLACK), // Linear depth
+    None,                     // Previous linear depth
     Some(wgpu::Color::BLACK), // Luminance
     None,                     // Previous luminance
-    Some(wgpu::Color::BLACK), // Position
     Some(wgpu::Color::BLACK), // Normal vector
     Some(wgpu::Color::BLACK), // Texture coordinates
     Some(wgpu::Color::BLACK), // Motion vector
@@ -246,10 +256,11 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_
 /// The texture and sampler bind group bindings used for each render attachment
 /// quantity.
 const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] = [
-    (0, 1), // Depth
+    (0, 1), // Depth-stencil
+    (0, 1), // Linear depth
+    (0, 1), // Previous linear depth
     (0, 1), // Luminance
     (0, 1), // Previous luminance
-    (0, 1), // Position
     (0, 1), // Normal vector
     (0, 1), // Texture coordinates
     (0, 1), // Motion vector
@@ -287,7 +298,7 @@ impl RenderAttachmentQuantity {
 
     /// The texture format used for the depth render attachment texture.
     pub const fn depth_texture_format() -> wgpu::TextureFormat {
-        RENDER_ATTACHMENT_FORMATS[Self::Depth.index()]
+        RENDER_ATTACHMENT_FORMATS[Self::DepthStencil.index()]
     }
 
     /// The clear color used for each render attachment quantity.
@@ -378,7 +389,7 @@ impl RenderAttachmentQuantitySet {
 
     /// Returns this set without the depth quantity.
     pub fn color_only(&self) -> Self {
-        *self - Self::DEPTH
+        *self - Self::DEPTH_STENCIL
     }
 
     /// Returns this set without any quantities that do not have a clear color.
@@ -614,7 +625,7 @@ impl RenderAttachmentTextureManager {
 
         let mut manager = Self {
             quantity_textures: [
-                None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None,
             ],
             samplers,
             bind_groups_and_layouts: HashMap::new(),
@@ -780,6 +791,11 @@ impl RenderAttachmentTextureManager {
         &mut self,
         graphics_device: &GraphicsDevice,
     ) {
+        self.swap_two_attachments(
+            graphics_device,
+            RenderAttachmentQuantity::LinearDepth,
+            RenderAttachmentQuantity::PreviousLinearDepth,
+        );
         self.swap_two_attachments(
             graphics_device,
             RenderAttachmentQuantity::Luminance,

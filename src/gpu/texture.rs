@@ -690,7 +690,10 @@ impl Texture {
                 sample_type: self
                     .texture
                     .format()
-                    .sample_type(Some(wgpu::TextureAspect::DepthOnly), None)
+                    .sample_type(
+                        Some(wgpu::TextureAspect::DepthOnly),
+                        Some(wgpu::Features::FLOAT32_FILTERABLE),
+                    )
                     .unwrap(),
                 view_dimension: self.view_dimension,
                 multisampled: false,
@@ -1084,7 +1087,7 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 image_buffer.save(output_path)?;
             }
         }
-        wgpu::TextureFormat::Rgba16Float => {
+        wgpu::TextureFormat::Rgba16Float | wgpu::TextureFormat::R16Float => {
             let mut data = extract_texture_data_and_convert::<half::f16, f32>(
                 graphics_device.device(),
                 graphics_device.queue(),
@@ -1097,20 +1100,30 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 *value = gamma_corrected(value.clamp(0.0, 1.0));
             }
 
-            let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
-                ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+            if matches!(format, wgpu::TextureFormat::R16Float) {
+                let image_buffer: ImageBuffer<Luma<f32>, _> =
+                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
 
-            for p in image_buffer.pixels_mut() {
-                p.0[3] = 1.0;
+                let image_buffer: ImageBuffer<Luma<u16>, _> = image_buffer.convert();
+
+                image_buffer.save(output_path)?;
+            } else {
+                let mut image_buffer: ImageBuffer<Rgba<f32>, _> =
+                    ImageBuffer::from_raw(size.width, size.height, data).unwrap();
+
+                for p in image_buffer.pixels_mut() {
+                    p.0[3] = 1.0;
+                }
+
+                let image_buffer: ImageBuffer<Rgba<u8>, _> = image_buffer.convert();
+
+                image_buffer.save(output_path)?;
             }
-
-            let image_buffer: ImageBuffer<Rgba<u8>, _> = image_buffer.convert();
-
-            image_buffer.save(output_path)?;
         }
         wgpu::TextureFormat::Depth32Float
         | wgpu::TextureFormat::Depth32FloatStencil8
-        | wgpu::TextureFormat::Rgba32Float => {
+        | wgpu::TextureFormat::Rgba32Float
+        | wgpu::TextureFormat::R32Float => {
             let mut data = extract_texture_data::<f32>(
                 graphics_device.device(),
                 graphics_device.queue(),
@@ -1121,10 +1134,18 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
 
             if matches!(
                 format,
-                wgpu::TextureFormat::Depth32Float | wgpu::TextureFormat::Depth32FloatStencil8
+                wgpu::TextureFormat::Depth32Float
+                    | wgpu::TextureFormat::Depth32FloatStencil8
+                    | wgpu::TextureFormat::R32Float
             ) {
-                for value in &mut data {
-                    *value = gamma_corrected_depth(*value);
+                if matches!(format, wgpu::TextureFormat::R32Float) {
+                    for value in &mut data {
+                        *value = gamma_corrected(value.clamp(0.0, 1.0));
+                    }
+                } else {
+                    for value in &mut data {
+                        *value = gamma_corrected_depth(*value);
+                    }
                 }
 
                 let image_buffer: ImageBuffer<Luma<f32>, _> =

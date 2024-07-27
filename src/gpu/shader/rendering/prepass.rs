@@ -2,16 +2,17 @@
 
 use super::{
     super::{
-        append_unity_component_to_vec3, emit_in_func, include_expr_in_func, insert_in_arena,
-        InputStruct, InputStructBuilder, LightMaterialFeatureShaderInput, OutputStructBuilder,
-        SampledTexture, SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE,
-        VECTOR_3_SIZE, VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
+        append_literal_to_vec3, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
+        include_named_expr_in_func, insert_in_arena, swizzle_z_expr, InputStruct,
+        InputStructBuilder, LightMaterialFeatureShaderInput, OutputStructBuilder, SampledTexture,
+        SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE,
+        VECTOR_3_TYPE, VECTOR_4_SIZE, VECTOR_4_TYPE,
     },
-    LightShaderGenerator, MeshVertexOutputFieldIndices, PushConstantExpressions,
+    CameraProjectionVariable, LightShaderGenerator, MeshVertexOutputFieldIndices,
+    PushConstantExpressions,
 };
 use crate::gpu::{
-    push_constant::PushConstantVariant, shader::append_literal_to_vec3,
-    texture::attachment::RenderAttachmentQuantitySet,
+    push_constant::PushConstantVariant, texture::attachment::RenderAttachmentQuantitySet,
 };
 use naga::{BinaryOperator, Expression, Function, Handle, Module, SampleLevel};
 
@@ -273,7 +274,9 @@ impl<'a> PrepassShaderGenerator<'a> {
         mesh_input_field_indices: &MeshVertexOutputFieldIndices,
         material_input_field_indices: &PrepassVertexOutputFieldIndices,
         light_shader_generator: Option<&LightShaderGenerator>,
+        camera_projection: Option<&CameraProjectionVariable>,
     ) {
+        let f32_type = insert_in_arena(&mut module.types, F32_TYPE);
         let vec2_type = insert_in_arena(&mut module.types, VECTOR_2_TYPE);
         let vec4_type = insert_in_arena(&mut module.types, VECTOR_4_TYPE);
 
@@ -521,23 +524,38 @@ impl<'a> PrepassShaderGenerator<'a> {
 
         let mut output_struct_builder = OutputStructBuilder::new("FragmentOutput");
 
-        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::POSITION) {
+        if output_render_attachment_quantities.contains(RenderAttachmentQuantitySet::LINEAR_DEPTH) {
             let position_expr = fragment_input_struct.get_field_expr(
                 mesh_input_field_indices
                     .position
-                    .expect("Missing position for writing to render attachment"),
+                    .expect("Missing position for writing linear depth to render attachment"),
             );
 
-            let padded_position_expr =
-                append_unity_component_to_vec3(&mut module.types, fragment_function, position_expr);
+            let inverse_far_plane_z_expr = camera_projection
+                .expect("Missing camera projection computing normalized linear depth")
+                .generate_inverse_far_plane_z_expr(fragment_function);
+
+            let linear_depth_expr = emit_in_func(fragment_function, |function| {
+                let position_z_expr = include_expr_in_func(function, swizzle_z_expr(position_expr));
+
+                include_named_expr_in_func(
+                    function,
+                    "linearDepth",
+                    Expression::Binary {
+                        op: BinaryOperator::Multiply,
+                        left: inverse_far_plane_z_expr,
+                        right: position_z_expr,
+                    },
+                )
+            });
 
             output_struct_builder.add_field(
-                "position",
-                vec4_type,
+                "linearDepth",
+                f32_type,
                 None,
                 None,
-                VECTOR_4_SIZE,
-                padded_position_expr,
+                F32_WIDTH,
+                linear_depth_expr,
             );
         }
 

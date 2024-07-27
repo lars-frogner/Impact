@@ -8,10 +8,10 @@ struct FragmentOutput {
 
 var<push_constant> inverseWindowDimensions: vec2<f32>;
 
-@group({{position_texture_group}}) @binding({{position_texture_binding}})
-var positionTexture: texture_2d<f32>;
-@group({{position_texture_group}}) @binding({{position_sampler_binding}})
-var positionSampler: sampler;
+@group({{linear_depth_texture_group}}) @binding({{linear_depth_texture_binding}})
+var linearDepthTexture: texture_2d<f32>;
+@group({{linear_depth_texture_group}}) @binding({{linear_depth_sampler_binding}})
+var linearDepthSampler: sampler;
 
 @group({{ambient_reflected_luminance_texture_group}}) @binding({{ambient_reflected_luminance_texture_binding}})
 var ambientReflectedLuminanceTexture: texture_2d<f32>;
@@ -34,12 +34,12 @@ fn computeOccludedAmbientReflectedLuminance(
     // This should be odd so that the center is included
     let sqrtTotalSampleCount = 5u;
 
-    let maxDepthDifference = 0.01;
+    let maxDepthDifference = 1e-4;
 
     let halfSampleAreaDimensions = 0.5 * inverseWindowDimensions * f32(sqrtTotalSampleCount - 1u);
     let lowerTextureCoords = centerTextureCoords - halfSampleAreaDimensions;
 
-    let centerDepth = textureSampleLevel(positionTexture, positionSampler, centerTextureCoords, 0.0).z;
+    let centerDepth = textureSampleLevel(linearDepthTexture, linearDepthSampler, centerTextureCoords, 0.0).x;
 
     var summedOcclusion: f32 = 0.0;
     var acceptedSampleCount: u32 = 0u;
@@ -50,7 +50,7 @@ fn computeOccludedAmbientReflectedLuminance(
             let v = lowerTextureCoords.y + f32(j) * inverseWindowDimensions.y;
             let textureCoords = vec2<f32>(u, v);
 
-            let depth = textureSampleLevel(positionTexture, positionSampler, textureCoords, 0.0).z;
+            let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).x;
             
             if abs(depth - centerDepth) < maxDepthDifference {
                 summedOcclusion += textureSampleLevel(occlusionTexture, occlusionSampler, textureCoords, 0.0).r;

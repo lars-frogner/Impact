@@ -2188,6 +2188,34 @@ fn new_name<S: ToString>(name_str: S) -> Option<String> {
     Some(name_str.to_string())
 }
 
+fn swizzle_x_expr(expr: Handle<Expression>) -> Expression {
+    Expression::AccessIndex {
+        base: expr,
+        index: 0,
+    }
+}
+
+fn swizzle_y_expr(expr: Handle<Expression>) -> Expression {
+    Expression::AccessIndex {
+        base: expr,
+        index: 1,
+    }
+}
+
+fn swizzle_z_expr(expr: Handle<Expression>) -> Expression {
+    Expression::AccessIndex {
+        base: expr,
+        index: 2,
+    }
+}
+
+fn swizzle_w_expr(expr: Handle<Expression>) -> Expression {
+    Expression::AccessIndex {
+        base: expr,
+        index: 3,
+    }
+}
+
 fn swizzle_xy_expr(expr: Handle<Expression>) -> Expression {
     Expression::Swizzle {
         size: VectorSize::Bi,
