@@ -302,7 +302,7 @@ impl World {
     /// Returns an error if:
     /// - The entity does not exist.
     /// - The entity does not have a components of the specified
-    /// component type to remove.
+    ///   component type to remove.
     pub fn remove_component_for_entity<C: Component>(&mut self, entity: &mut Entity) -> Result<()> {
         self.remove_component_id_for_entity(entity, C::component_id())
     }
