@@ -34,7 +34,8 @@ pub fn initialize_for_rendering(
         wgpu::Features::PUSH_CONSTANTS
             | wgpu::Features::POLYGON_MODE_LINE
             | wgpu::Features::DEPTH32FLOAT_STENCIL8
-            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::FLOAT32_FILTERABLE,
         wgpu::Limits {
             max_bind_groups: 7,
             max_push_constant_size: 128,

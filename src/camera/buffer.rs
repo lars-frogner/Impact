@@ -3,6 +3,7 @@
 use crate::{
     assert_uniform_valid,
     camera::Camera,
+    geometry::Frustum,
     gpu::{
         buffer::GPUBuffer,
         rendering::fre,
@@ -12,16 +13,19 @@ use crate::{
     },
 };
 use bytemuck::{Pod, Zeroable};
-use impact_utils::ConstStringHash64;
+use impact_utils::{ConstStringHash64, HaltonSequence};
 use nalgebra::{Projective3, Vector4};
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::LazyLock};
 
 /// Length of the sequence of jitter offsets to apply to the projection for
 /// temporal anti-aliasing.
 pub const JITTER_COUNT: usize = 8;
 
 /// Bases for the Halton sequence used to generate the jitter offsets.
-const JITTER_BASES: (u32, u32) = (2, 3);
+const JITTER_BASES: (u64, u64) = (2, 3);
+
+static JITTER_OFFSETS: LazyLock<[Vector4<fre>; JITTER_COUNT]> =
+    LazyLock::new(CameraProjectionUniform::generate_jitter_offsets);
 
 /// Owner and manager of a GPU buffer for a camera projection transformation.
 #[derive(Debug)]
@@ -31,8 +35,10 @@ pub struct CameraGPUBufferManager {
     bind_group: wgpu::BindGroup,
 }
 
-/// Uniform holding the projection transformation of a camera and the sequence
-/// of jitter offsets to apply to the projection for temporal anti-aliasing.
+/// Uniform holding the projection transformation of a camera, the corners of
+/// the far plane of the view frustum in camera space, the inverse far-plane
+/// z-coordinate and the sequence of jitter offsets to apply to the projection
+/// for temporal anti-aliasing.
 ///
 /// The size of this struct has to be a multiple of 16 bytes as required for
 /// uniforms.
@@ -40,13 +46,20 @@ pub struct CameraGPUBufferManager {
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct CameraProjectionUniform {
     transform: Projective3<fre>,
+    /// The corners are listed in the order consistent with
+    /// [`TriangleMesh::create_screen_filling_quad`](`crate::mesh::TriangleMesh::create_screen_filling_quad`),
+    /// which means it can be indexed into using the `vertex_index` built-in in
+    /// the vertex shader when rendering a screen-filling quad to obtain the
+    /// far-plane corner for the current screen corner. When passed to the
+    /// fragment shader with interpolation, this will yield the camera-space
+    /// position of the point on the far plane corresponding to the current
+    /// fragment. By scaling this position by the fragment's normalized linear
+    /// depth (the camera-space z-coordinate of the point on the object it
+    /// covers divided by the far-plane z-coordinate), we can reconstruct the
+    /// camera-space position of the fragment from the depth.
+    frustum_far_plane_corners: [Vector4<fre>; 4],
+    inverse_far_plane_z: Vector4<fre>,
     jitter_offsets: [Vector4<fre>; JITTER_COUNT],
-}
-
-struct HaltonSequenceIter {
-    base: u32,
-    n: u32,
-    d: u32,
 }
 
 impl CameraGPUBufferManager {
@@ -62,11 +75,31 @@ impl CameraGPUBufferManager {
         graphics_device: &GraphicsDevice,
         camera: &(impl Camera<fre> + ?Sized),
     ) -> Self {
-        Self::new(
+        let label = Cow::Borrowed("Camera");
+
+        let projection_uniform = CameraProjectionUniform::new(camera);
+
+        let projection_uniform_gpu_buffer = GPUBuffer::new_buffer_for_single_uniform(
             graphics_device,
-            *camera.projection_transform(),
-            Cow::Borrowed("Camera"),
-        )
+            &projection_uniform,
+            label.clone(),
+        );
+
+        let bind_group_layout =
+            Self::create_bind_group_layout(graphics_device.device(), Self::VISIBILITY, &label);
+
+        let bind_group = Self::create_bind_group(
+            graphics_device.device(),
+            &projection_uniform_gpu_buffer,
+            &bind_group_layout,
+            &label,
+        );
+
+        Self {
+            projection_uniform_gpu_buffer,
+            bind_group_layout,
+            bind_group,
+        }
     }
 
     /// Returns the layout of the bind group for the camera projection uniform.
@@ -97,40 +130,8 @@ impl CameraGPUBufferManager {
         camera: &(impl Camera<fre> + ?Sized),
     ) {
         if camera.projection_transform_changed() {
-            self.sync_gpu_buffer(graphics_device, camera.projection_transform());
+            self.sync_gpu_buffer(graphics_device, camera);
             camera.reset_projection_change_tracking();
-        }
-    }
-
-    /// Creates a new manager with a GPU buffer initialized from the given
-    /// projection transform.
-    fn new(
-        graphics_device: &GraphicsDevice,
-        projection_transform: Projective3<fre>,
-        label: Cow<'static, str>,
-    ) -> Self {
-        let projection_uniform = CameraProjectionUniform::new(projection_transform);
-
-        let projection_uniform_gpu_buffer = GPUBuffer::new_buffer_for_single_uniform(
-            graphics_device,
-            &projection_uniform,
-            label.clone(),
-        );
-
-        let bind_group_layout =
-            Self::create_bind_group_layout(graphics_device.device(), Self::VISIBILITY, &label);
-
-        let bind_group = Self::create_bind_group(
-            graphics_device.device(),
-            &projection_uniform_gpu_buffer,
-            &bind_group_layout,
-            &label,
-        );
-
-        Self {
-            projection_uniform_gpu_buffer,
-            bind_group_layout,
-            bind_group,
         }
     }
 
@@ -176,25 +177,43 @@ impl CameraGPUBufferManager {
     fn sync_gpu_buffer(
         &mut self,
         graphics_device: &GraphicsDevice,
-        projection_transform: &Projective3<fre>,
+        camera: &(impl Camera<fre> + ?Sized),
     ) {
+        let projection_uniform = CameraProjectionUniform::new(camera);
         self.projection_uniform_gpu_buffer
-            .update_first_bytes(graphics_device, bytemuck::bytes_of(projection_transform));
+            .update_valid_bytes(graphics_device, bytemuck::bytes_of(&projection_uniform));
     }
 }
 
 impl CameraProjectionUniform {
-    fn new(transform: Projective3<fre>) -> Self {
+    fn new(camera: &(impl Camera<fre> + ?Sized)) -> Self {
+        let transform = *camera.projection_transform();
+        let frustum_far_plane_corners = Self::compute_far_plane_corners(camera.view_frustum());
+        let inverse_far_plane_z =
+            Vector4::new(frustum_far_plane_corners[0].z.recip(), 0.0, 0.0, 0.0);
+        let jitter_offsets = *JITTER_OFFSETS;
         Self {
             transform,
-            jitter_offsets: Self::generate_jitter_offsets(),
+            frustum_far_plane_corners,
+            inverse_far_plane_z,
+            jitter_offsets,
         }
+    }
+
+    fn compute_far_plane_corners(view_frustum: &Frustum<fre>) -> [Vector4<fre>; 4] {
+        let corners = view_frustum.compute_corners();
+        [
+            Vector4::new(corners[1].x, corners[1].y, corners[1].z, 0.0), // lower left
+            Vector4::new(corners[5].x, corners[5].y, corners[5].z, 0.0), // lower right
+            Vector4::new(corners[7].x, corners[7].y, corners[7].z, 0.0), // upper right
+            Vector4::new(corners[3].x, corners[3].y, corners[3].z, 0.0), // upper left
+        ]
     }
 
     fn generate_jitter_offsets() -> [Vector4<fre>; JITTER_COUNT] {
         let mut offsets = [Vector4::zeros(); JITTER_COUNT];
-        let halton_x = HaltonSequenceIter::new(JITTER_BASES.0);
-        let halton_y = HaltonSequenceIter::new(JITTER_BASES.1);
+        let halton_x = HaltonSequence::<fre>::new(JITTER_BASES.0);
+        let halton_y = HaltonSequence::<fre>::new(JITTER_BASES.1);
         for ((offset, x), y) in offsets.iter_mut().zip(halton_x).zip(halton_y) {
             offset.x = 2.0 * x - 1.0;
             offset.y = 2.0 * y - 1.0;
@@ -214,71 +233,3 @@ impl UniformBufferable for CameraProjectionUniform {
     }
 }
 assert_uniform_valid!(CameraProjectionUniform);
-
-impl HaltonSequenceIter {
-    fn new(base: u32) -> Self {
-        Self { base, n: 0, d: 1 }
-    }
-}
-
-impl Iterator for HaltonSequenceIter {
-    type Item = fre;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let x = self.d - self.n;
-        if x == 1 {
-            self.n = 1;
-            self.d *= self.base;
-        } else {
-            let mut y = self.d / self.base;
-            while x <= y {
-                y /= self.base;
-            }
-            self.n = (self.base + 1) * y - x;
-        }
-        Some(self.n as fre / self.d as fre)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn halton_sequence_for_base_2_is_correct() {
-        let halton = HaltonSequenceIter::new(2);
-        let expected = [
-            1.0 / 2.0,
-            1.0 / 4.0,
-            3.0 / 4.0,
-            1.0 / 8.0,
-            5.0 / 8.0,
-            3.0 / 8.0,
-            7.0 / 8.0,
-            1.0 / 16.0,
-            9.0 / 16.0,
-        ];
-        for (i, x) in halton.take(9).enumerate() {
-            assert_eq!(x, expected[i]);
-        }
-    }
-
-    #[test]
-    fn halton_sequence_for_base_3_is_correct() {
-        let halton = HaltonSequenceIter::new(3);
-        let expected = [
-            1.0 / 3.0,
-            2.0 / 3.0,
-            1.0 / 9.0,
-            4.0 / 9.0,
-            7.0 / 9.0,
-            2.0 / 9.0,
-            5.0 / 9.0,
-            8.0 / 9.0,
-            1.0 / 27.0,
-        ];
-        for (i, x) in halton.take(9).enumerate() {
-            assert_eq!(x, expected[i]);
-        }
-    }
-}

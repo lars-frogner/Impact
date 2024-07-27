@@ -74,7 +74,7 @@ pub fn create_prepass_material(
 
     // These will be needed for ambient occlusion
     output_render_attachments.insert_with_defaults(
-        RenderAttachmentQuantitySet::POSITION // Also needed for temporal anti-aliasing
+        RenderAttachmentQuantitySet::LINEAR_DEPTH
             | RenderAttachmentQuantitySet::NORMAL_VECTOR
             | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
     );
@@ -82,12 +82,11 @@ pub fn create_prepass_material(
     // This will be needed for temporal anti-aliasing
     output_render_attachments.insert_with_defaults(RenderAttachmentQuantitySet::MOTION_VECTOR);
 
-    // Since we output the position and normal vectors to attachments, the main
-    // material can get this information from the attachments rather than having
-    // to use the corresponding vertex attributes
-    input_render_attachments_for_main_material.insert_with_defaults(
-        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
-    );
+    // Since we output the normal vectors to attachments, the main material can
+    // get this information from the attachments rather than having to use the
+    // corresponding vertex attributes
+    input_render_attachments_for_main_material
+        .insert_with_defaults(RenderAttachmentQuantitySet::NORMAL_VECTOR);
 
     if !texture_ids.is_empty() {
         vertex_attribute_requirements_for_shader |= VertexAttributeSet::TEXTURE_COORDS;

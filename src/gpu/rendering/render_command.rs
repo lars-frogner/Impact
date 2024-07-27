@@ -1011,7 +1011,7 @@ impl RenderPassSpecification {
             clear_surface,
             color_attachments_to_clear: render_attachment_quantities_to_clear.color_only(),
             depth_map_usage: if render_attachment_quantities_to_clear
-                .contains(RenderAttachmentQuantitySet::DEPTH)
+                .contains(RenderAttachmentQuantitySet::DEPTH_STENCIL)
             {
                 DepthMapUsage::Clear
             } else {
@@ -1842,7 +1842,7 @@ impl RenderPassSpecification {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
     ) -> u32 {
         let output_render_attachment_quantities = if self.depth_map_usage.will_update() {
-            self.output_render_attachments.quantities() | RenderAttachmentQuantitySet::DEPTH
+            self.output_render_attachments.quantities() | RenderAttachmentQuantitySet::DEPTH_STENCIL
         } else {
             self.output_render_attachments.quantities()
         };
@@ -1985,7 +1985,7 @@ impl RenderPassSpecification {
         } else if self.depth_map_usage.is_clear() {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
-                    .render_attachment_texture(RenderAttachmentQuantity::Depth)
+                    .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
                     .multisampled_if_available_and(true)
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
@@ -2000,10 +2000,10 @@ impl RenderPassSpecification {
         } else if !self.depth_map_usage.is_none() {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
-                    .render_attachment_texture(RenderAttachmentQuantity::Depth)
+                    .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
                     .multisampled_if_available_and(
                         self.output_render_attachments
-                            .get_description(RenderAttachmentQuantity::Depth)
+                            .get_description(RenderAttachmentQuantity::DepthStencil)
                             .unwrap_or_default()
                             .sampling()
                             .is_multi_if_available(),

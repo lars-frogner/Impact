@@ -260,7 +260,7 @@ impl KeyInputHandler {
                         if state == &ElementState::Released {
                             app.screen_capturer()
                                 .request_render_attachment_quantity_save(
-                                    RenderAttachmentQuantity::Depth,
+                                    RenderAttachmentQuantity::DepthStencil,
                                 );
                         }
                         Ok(HandlingResult::Handled)

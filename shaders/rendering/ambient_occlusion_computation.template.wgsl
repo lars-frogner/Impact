@@ -1,5 +1,16 @@
 struct VertexOutput {
     @builtin(position) projectedPosition: vec4<f32>,
+    @location(0) frustumFarPlanePoint: vec3<f32>,
+}
+
+struct PushConstants {
+    inverseWindowDimensions: vec2<f32>,
+    frameCounter: u32,
+}
+
+struct ProjectionUniform {
+    projectionMatrix: mat4x4<f32>,
+    frustumFarPlaneCorners: array<vec4<f32>, 4>,
 }
 
 struct AmbientOcclusionSamples {
@@ -19,12 +30,12 @@ struct FragmentOutput {
     @location(0) occlusion: f32,
 }
 
-var<push_constant> inverseWindowDimensions: vec2<f32>;
+var<push_constant> pushConstants: PushConstants;
 
-@group({{projection_matrix_group}}) @binding({{projection_matrix_binding}}) var<uniform> projectionMatrix: mat4x4<f32>;
+@group({{projection_uniform_group}}) @binding({{projection_uniform_binding}}) var<uniform> projectionUniform: ProjectionUniform;
 
-@group({{position_texture_group}}) @binding({{position_texture_binding}}) var positionTexture: texture_2d<f32>;
-@group({{position_texture_group}}) @binding({{position_sampler_binding}}) var positionSampler: sampler;
+@group({{linear_depth_texture_group}}) @binding({{linear_depth_texture_binding}}) var linearDepthTexture: texture_2d<f32>;
+@group({{linear_depth_texture_group}}) @binding({{linear_depth_sampler_binding}}) var linearDepthSampler: sampler;
 
 @group({{normal_vector_texture_group}}) @binding({{normal_vector_texture_binding}}) var normalVectorTexture: texture_2d<f32>;
 @group({{normal_vector_texture_group}}) @binding({{normal_vector_sampler_binding}}) var normalVectorSampler: sampler;
@@ -32,7 +43,7 @@ var<push_constant> inverseWindowDimensions: vec2<f32>;
 @group({{samples_group}}) @binding({{samples_binding}}) var<uniform> ambientOcclusionSamples: AmbientOcclusionSamples;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4<f32>) -> vec2<f32> {
-    return (framebufferPosition.xy * inverseWindowDimensions);
+    return (framebufferPosition.xy * pushConstants.inverseWindowDimensions);
 }
 
 // From [0, 1] to [-1, 1]
@@ -58,10 +69,13 @@ fn generateRandomAngle(cameraFramebufferPosition: vec4<f32>) -> f32 {
     return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferPosition);
 }
 
-// Returns a random number between 0 and 1 based on the pixel coordinates
+// Returns a random number between 0 and 1 based on the pixel coordinates and
+// the current frame counter
 fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4<f32>) -> f32 {
+    let timeOffset = pushConstants.frameCounter % 8u;
+    let timeOffsetPosition = vec2<f32>(cameraFramebufferPosition.x + f32(timeOffset), cameraFramebufferPosition.y);
     let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
-    return fract(magic.z * fract(dot(magic.xy, cameraFramebufferPosition.xy)));
+    return fract(magic.z * fract(dot(magic.xy, timeOffsetPosition)));
 }
 
 fn computeAmbientOcclusionSampleValue(
@@ -89,7 +103,8 @@ fn computeAmbientOcclusionSampleValue(
 
     // Sample view space position of the occluder closest to the camera at the
     // projected position
-    let sampledOccluderPosition = textureSampleLevel(positionTexture, positionSampler, sampleTextureCoords, 0.0).xyz;
+    let sampledOccluderDepth = textureSampleLevel(linearDepthTexture, linearDepthSampler, sampleTextureCoords, 0.0).x;
+    let sampledOccluderPosition = computePositionFromLinearDepthAtScreenTextureCoords(sampledOccluderDepth, sampleTextureCoords);
 
     // Compute vector from fragment position to occluder position
     let sampledOccluderDisplacement = sampledOccluderPosition - position;
@@ -109,7 +124,7 @@ fn computeAmbientOcclusionSampleValue(
 }
 
 fn computeTextureCoordsForAmbientOcclusionSample(samplingPosition: vec3<f32>) -> vec2<f32> {
-    let undividedClipSpaceSamplingPosition = projectionMatrix * vec4<f32>(samplingPosition, 1.0);
+    let undividedClipSpaceSamplingPosition = projectionUniform.projectionMatrix * vec4<f32>(samplingPosition, 1.0);
     let horizontalClipSpaceSamplingPosition = undividedClipSpaceSamplingPosition.xy / undividedClipSpaceSamplingPosition.w;
     var sampleTextureCoords = 0.5 * (horizontalClipSpaceSamplingPosition + 1.0);
     sampleTextureCoords.y = 1.0 - sampleTextureCoords.y;
@@ -122,10 +137,27 @@ fn computeOcclusion(summedSampleValues: f32) -> f32 {
     return pow(max(0.0, 1.0 - ambientOcclusionSamples.sampleNormalization * summedSampleValues), ambientOcclusionSamples.contrast);
 }
 
+fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3<f32>) -> vec3<f32> {
+    return linearDepth * frustumFarPlanePoint;
+}
+
+fn computePositionFromLinearDepthAtScreenTextureCoords(linearDepth: f32, textureCoords: vec2<f32>) -> vec3<f32> {
+    let frustumFarPlanePoint = mix(
+        mix(projectionUniform.frustumFarPlaneCorners[3].xyz, projectionUniform.frustumFarPlaneCorners[2].xyz, textureCoords.x),
+        mix(projectionUniform.frustumFarPlaneCorners[0].xyz, projectionUniform.frustumFarPlaneCorners[1].xyz, textureCoords.x),
+        textureCoords.y
+    );
+    return computePositionFromLinearDepth(linearDepth, frustumFarPlanePoint);
+}
+
 @vertex 
-fn mainVS(@location({{position_location}}) modelSpacePosition: vec3<f32>) -> VertexOutput {
+fn mainVS(
+    @builtin(vertex_index) vertexIndex: u32,
+    @location({{position_location}}) modelSpacePosition: vec3<f32>
+) -> VertexOutput {
     var output: VertexOutput;
     output.projectedPosition = vec4<f32>(modelSpacePosition, 1.0);
+    output.frustumFarPlanePoint = projectionUniform.frustumFarPlaneCorners[vertexIndex].xyz;
     return output;
 }
 
@@ -137,7 +169,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let textureCoords = convertFramebufferPositionToScreenTextureCoords(input.projectedPosition);
 
-    let position = textureSampleLevel(positionTexture, positionSampler, textureCoords, 0.0);
+    let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).x;
+    let position = computePositionFromLinearDepth(depth, input.frustumFarPlanePoint);
 
     let normalColor = textureSampleLevel(normalVectorTexture, normalVectorSampler, textureCoords, 0.0);
     let normalVector = convertNormalColorToNormalizedNormalVector(normalColor.rgb);
@@ -150,7 +183,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     for (var sampleIdx: u32 = 0u; sampleIdx < ambientOcclusionSamples.sampleCount; sampleIdx++) {
         summedOcclusionSampleValues += computeAmbientOcclusionSampleValue(
             squaredSampleRadius,
-            position.xyz,
+            position,
             normalVector,
             rotation,
             ambientOcclusionSamples.sampleOffsets[sampleIdx]

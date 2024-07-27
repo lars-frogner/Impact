@@ -15,9 +15,10 @@ use crate::{
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
         shader::{template::SpecificShaderTemplate, ShaderManager},
         texture::attachment::{
-            OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity, RenderAttachmentQuantitySet,
+            OutputAttachmentSampling, RenderAttachmentInputDescription,
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+            RenderAttachmentQuantitySet, RenderAttachmentSampler,
         },
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
@@ -26,17 +27,13 @@ use crate::{
     num::Float,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_utils::{hash64, ConstStringHash64};
+use impact_utils::{hash64, ConstStringHash64, HaltonSequence};
 use nalgebra::Vector4;
-use rand::{
-    self,
-    distributions::{Distribution, Uniform},
-};
 use std::borrow::Cow;
 
 /// The maximum number of samples that can be used for computing ambient
 /// occlusion.
-pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 256;
+pub const MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT: usize = 16;
 
 /// Configuration options for ambient occlusion.
 #[derive(Clone, Debug)]
@@ -47,6 +44,10 @@ pub struct AmbientOcclusionConfig {
     pub sample_count: u32,
     /// The sampling radius to use when computing ambient occlusion.
     pub sample_radius: fre,
+    /// Factor for scaling the intensity of the ambient occlusion.
+    pub intensity: fre,
+    /// Factor for scaling the contrast of the ambient occlusion.
+    pub contrast: fre,
 }
 
 /// Uniform holding horizontal offsets for the ambient occlusion samples. Only
@@ -71,6 +72,8 @@ impl Default for AmbientOcclusionConfig {
             initially_enabled: true,
             sample_count: 4,
             sample_radius: 0.5,
+            intensity: 1.0,
+            contrast: 0.75,
         }
     }
 }
@@ -81,19 +84,20 @@ impl AmbientOcclusionSamples {
         assert!(sample_count <= MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u32);
         assert!(sample_radius > 0.0);
 
-        let mut rng = rand::thread_rng();
-        let unit_range = Uniform::from(0.0..1.0);
-        let angle_range = Uniform::from(0.0..fre::TWO_PI);
-
         let mut sample_offsets = [Vector4::zeroed(); MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT];
 
-        for offset in &mut sample_offsets[..(sample_count as usize)] {
-            // Take square root of radius fraction to ensure uniform
-            // distribution over the disk
-            let radius_fraction = fre::sqrt(unit_range.sample(&mut rng));
+        for (offset, (radius_halton_sample, angle_halton_sample)) in sample_offsets
+            [..(sample_count as usize)]
+            .iter_mut()
+            .zip(HaltonSequence::<fre>::new(2).zip(HaltonSequence::<fre>::new(3)))
+        {
+            // Take square root of the sampled value (which is uniformly
+            // distributed between 0 and 1) to ensure uniform distribution over
+            // the disk
+            let radius_fraction = fre::sqrt(radius_halton_sample);
             let radius = sample_radius * radius_fraction;
 
-            let angle = angle_range.sample(&mut rng);
+            let angle = angle_halton_sample * fre::TWO_PI;
             let (sin_angle, cos_angle) = fre::sin_cos(angle);
 
             offset.x = radius * cos_angle;
@@ -141,6 +145,8 @@ pub(super) fn create_ambient_occlusion_render_commands(
             gpu_resource_group_manager,
             ambient_occlusion_config.sample_count,
             ambient_occlusion_config.sample_radius,
+            ambient_occlusion_config.intensity,
+            ambient_occlusion_config.contrast,
         ),
         create_ambient_occlusion_application_render_pass(graphics_device, shader_manager),
     ]
@@ -159,6 +165,8 @@ fn create_ambient_occlusion_computation_render_pass(
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     sample_count: u32,
     sample_radius: fre,
+    intensity_scale: fre,
+    contrast: fre,
 ) -> RenderCommandSpecification {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "AmbientOcclusionSamples{{ sample_count: {}, sample_radius: {} }}",
@@ -167,8 +175,12 @@ fn create_ambient_occlusion_computation_render_pass(
     gpu_resource_group_manager
         .resource_group_entry(resource_group_id)
         .or_insert_with(|| {
-            let sample_uniform =
-                AmbientOcclusionSamples::new(sample_count, sample_radius, 1.0, 1.0);
+            let sample_uniform = AmbientOcclusionSamples::new(
+                sample_count,
+                sample_radius,
+                intensity_scale,
+                contrast,
+            );
 
             let sample_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
                 graphics_device,
@@ -187,8 +199,8 @@ fn create_ambient_occlusion_computation_render_pass(
             )
         });
 
-    let (position_texture_binding, position_sampler_binding) =
-        RenderAttachmentQuantity::Position.bindings();
+    let (linear_depth_texture_binding, linear_depth_sampler_binding) =
+        RenderAttachmentQuantity::LinearDepth.bindings();
     let (normal_vector_texture_binding, normal_vector_sampler_binding) =
         RenderAttachmentQuantity::NormalVector.bindings();
 
@@ -205,21 +217,21 @@ fn create_ambient_occlusion_computation_render_pass(
                     "position_location",
                     VertexPosition::BINDING_LOCATION.to_string(),
                 ),
-                ("projection_matrix_group", "0".to_string()),
+                ("projection_uniform_group", "0".to_string()),
                 (
-                    "projection_matrix_binding",
+                    "projection_uniform_binding",
                     CameraGPUBufferManager::shader_input()
                         .projection_binding
                         .to_string(),
                 ),
-                ("position_texture_group", "1".to_string()),
+                ("linear_depth_texture_group", "1".to_string()),
                 (
-                    "position_texture_binding",
-                    position_texture_binding.to_string(),
+                    "linear_depth_texture_binding",
+                    linear_depth_texture_binding.to_string(),
                 ),
                 (
-                    "position_sampler_binding",
-                    position_sampler_binding.to_string(),
+                    "linear_depth_sampler_binding",
+                    linear_depth_sampler_binding.to_string(),
                 ),
                 ("normal_vector_texture_group", "2".to_string()),
                 (
@@ -236,8 +248,13 @@ fn create_ambient_occlusion_computation_render_pass(
         )
         .unwrap();
 
-    let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
-        RenderAttachmentQuantitySet::POSITION | RenderAttachmentQuantitySet::NORMAL_VECTOR,
+    let mut input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
+        RenderAttachmentQuantitySet::NORMAL_VECTOR,
+    );
+    input_render_attachments.insert_description(
+        RenderAttachmentQuantity::LinearDepth,
+        RenderAttachmentInputDescription::default()
+            .with_sampler(RenderAttachmentSampler::Filtering),
     );
 
     let output_render_attachments =
@@ -250,11 +267,18 @@ fn create_ambient_occlusion_computation_render_pass(
         depth_map_usage: DepthMapUsage::StencilTest,
         input_render_attachments,
         output_render_attachments,
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
+        push_constants: [
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            ),
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::FRAGMENT,
+            ),
+        ]
+        .into_iter()
+        .collect(),
         hints: RenderPassHints::NO_DEPTH_PREPASS,
         label: "Ambient occlusion computation pass".to_string(),
         ..Default::default()
@@ -269,8 +293,8 @@ fn create_ambient_occlusion_application_render_pass(
     graphics_device: &GraphicsDevice,
     shader_manager: &mut ShaderManager,
 ) -> RenderCommandSpecification {
-    let (position_texture_binding, position_sampler_binding) =
-        RenderAttachmentQuantity::Position.bindings();
+    let (linear_depth_texture_binding, linear_depth_sampler_binding) =
+        RenderAttachmentQuantity::LinearDepth.bindings();
     let (ambient_reflected_luminance_texture_binding, ambient_reflected_luminance_sampler_binding) =
         RenderAttachmentQuantity::NormalVector.bindings();
     let (occlusion_texture_binding, occlusion_sampler_binding) =
@@ -285,14 +309,14 @@ fn create_ambient_occlusion_application_render_pass(
                     "position_location",
                     VertexPosition::BINDING_LOCATION.to_string(),
                 ),
-                ("position_texture_group", "0".to_string()),
+                ("linear_depth_texture_group", "0".to_string()),
                 (
-                    "position_texture_binding",
-                    position_texture_binding.to_string(),
+                    "linear_depth_texture_binding",
+                    linear_depth_texture_binding.to_string(),
                 ),
                 (
-                    "position_sampler_binding",
-                    position_sampler_binding.to_string(),
+                    "linear_depth_sampler_binding",
+                    linear_depth_sampler_binding.to_string(),
                 ),
                 ("ambient_reflected_luminance_texture_group", "1".to_string()),
                 (
@@ -316,10 +340,18 @@ fn create_ambient_occlusion_application_render_pass(
         )
         .unwrap();
 
-    let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
-        RenderAttachmentQuantitySet::POSITION
-            | RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE
-            | RenderAttachmentQuantitySet::OCCLUSION,
+    let mut input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
+        RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+    );
+    input_render_attachments.insert_description(
+        RenderAttachmentQuantity::LinearDepth,
+        RenderAttachmentInputDescription::default()
+            .with_sampler(RenderAttachmentSampler::Filtering),
+    );
+    input_render_attachments.insert_description(
+        RenderAttachmentQuantity::Occlusion,
+        RenderAttachmentInputDescription::default()
+            .with_sampler(RenderAttachmentSampler::Filtering),
     );
 
     let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
