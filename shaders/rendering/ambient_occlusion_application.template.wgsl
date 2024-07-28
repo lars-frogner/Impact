@@ -59,11 +59,10 @@ fn computeOccludedAmbientReflectedLuminance(
         }
     }
 
-    let occlusion = summedOcclusion / f32(acceptedSampleCount);
+    let occlusion = summedOcclusion / max(1.0, f32(acceptedSampleCount));
 
     return occlusion * ambientReflectedLuminance;
 }
-
 
 @vertex 
 fn mainVS(@location({{position_location}}) modelSpacePosition: vec3<f32>) -> VertexOutput {

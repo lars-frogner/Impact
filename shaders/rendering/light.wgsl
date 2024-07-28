@@ -144,7 +144,7 @@ fn computeOmniLightQuantities(
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
     output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * inverseDistanceSpan;
 
-    let onePlusLDotV = 1.0 + LDotV;
+    let onePlusLDotV = max(1.0 + LDotV, 1e-6);
     let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
     let NDotH = (LDotN + VDotN) * inverseHLength;
     let LDotH = onePlusLDotV * inverseHLength;
@@ -397,7 +397,7 @@ fn computeUniLightQuantities(
     let LDotN = dot(lightCenterDirection, fragmentNormal);
     let LDotV = dot(lightCenterDirection, viewDirection);
 
-    let onePlusLDotV = 1.0 + LDotV;
+    let onePlusLDotV = max(1.0 + LDotV, 1e-6);
     let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
     let NDotH = (LDotN + VDotN) * inverseHLength;
     let LDotH = onePlusLDotV * inverseHLength;
@@ -650,7 +650,7 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
     // T is the direction perpendicular to L pointing towards R:
     // T = (R - LDotR * L) / |R - LDotR * L|
 
-    let sinAngularLightRadiusOverTLength = sinAngularLightRadius * inverseSqrt(1.0 - LDotR * LDotR);
+    let sinAngularLightRadiusOverTLength = sinAngularLightRadius * inverseSqrt(max(1.0 - LDotR * LDotR, 1e-6));
 
     let newLDotNAlongT = (VDotN - LDotR * LDotN) * sinAngularLightRadiusOverTLength;
     let newLDotVAlongT = (2.0 * VDotN * VDotN - 1.0 - LDotR * LDotV) * sinAngularLightRadiusOverTLength;
@@ -658,7 +658,7 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
     let newLDotN = cosAngularLightRadius * LDotN + newLDotNAlongT;
     let newLDotV = cosAngularLightRadius * LDotV + newLDotVAlongT;
 
-    let inverseHLength = inverseSqrt(2.0 * (1.0 + newLDotV));
+    let inverseHLength = inverseSqrt(2.0 * max(1.0 + newLDotV, 1e-6));
     let NDotH = (newLDotN + VDotN) * inverseHLength;
     let LDotH = (1.0 + newLDotV) * inverseHLength;
 

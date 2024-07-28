@@ -177,8 +177,11 @@ fn computeDiffuseGGXBRDFTimesPi(
         clampedVDotN
     );
 
-    let halfOnePlusLDotV = 0.5 * (1.0 + LDotV);
-    let diffuseBRDFRoughComponent = halfOnePlusLDotV * (0.9 - 0.4 * halfOnePlusLDotV) * (1.0 + 0.5 / (NDotH + 1e-6));
+    var diffuseBRDFRoughComponent = 0.0;
+    if abs(NDotH) > 1e-6 {
+        let halfOnePlusLDotV = 0.5 * (1.0 + LDotV);
+        diffuseBRDFRoughComponent = halfOnePlusLDotV * (0.9 - 0.4 * halfOnePlusLDotV) * (1.0 + 0.5 / NDotH);
+    }
 
     let diffuseBRDFMultiComponent = 0.3641 * roughness;
 

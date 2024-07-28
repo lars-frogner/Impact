@@ -47,8 +47,12 @@ fn computeParallaxMappedTextureCoordinates(
 
             let currentDepthDiff = currentSampledDepth - currentDepth;
             let prevDepthDiff = prevSampledDepth - (currentDepth - layerDepth);
+            let differenceInDepthDiff = currentDepthDiff - prevDepthDiff;
 
-            let interpWeightForZeroDepthDiff = currentDepthDiff / (currentDepthDiff - prevDepthDiff);
+            var interpWeightForZeroDepthDiff = 0.0;
+            if abs(differenceInDepthDiff) > 1e-6 {
+                interpWeightForZeroDepthDiff = currentDepthDiff / differenceInDepthDiff;
+            }
 
             parallaxMappedTextureCoords = mix(currentTextureCoords, prevTextureCoords, interpWeightForZeroDepthDiff);
 
@@ -94,6 +98,6 @@ fn computeLevelOfDetail(textureDims: vec2<u32>, textureCoords: vec2<f32>) -> f32
     let duvdx = dpdx(texelPosition);
     let duvdy = dpdy(texelPosition);
     let duv = duvdx * duvdx + duvdy * duvdy;
-    let maxduv = max(duv.x, duv.y);
+    let maxduv = max(max(duv.x, duv.y), 1e-6);
     return max(0.0, 0.5 * log2(maxduv));
 }
