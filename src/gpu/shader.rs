@@ -501,6 +501,7 @@ impl Shader {
     }
 
     /// Creates a new shader from the given [`Module`].
+    #[allow(unused_mut)]
     pub fn from_naga_module(
         graphics_device: &GraphicsDevice,
         naga_module: Module,

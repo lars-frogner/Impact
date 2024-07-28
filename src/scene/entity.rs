@@ -3,7 +3,7 @@
 use crate::{
     assets::Assets,
     camera,
-    gpu::GraphicsDevice,
+    gpu::{rendering::RenderingSystem, GraphicsDevice},
     light,
     material::{self, components::MaterialComp, MaterialHandle},
     mesh::{self, components::MeshComp},
@@ -82,6 +82,7 @@ impl Scene {
     pub fn add_new_entity_to_scene_graph(
         &self,
         window: &Window,
+        renderer: &RwLock<RenderingSystem>,
         ecs_world: &RwLock<ECSWorld>,
         components: &mut ArchetypeComponentStorage,
         desynchronized: &mut RenderResourcesDesynchronized,
@@ -91,6 +92,7 @@ impl Scene {
 
         camera::entity::add_camera_to_scene_for_new_entity(
             window,
+            renderer,
             self.scene_graph(),
             self.scene_camera(),
             components,

@@ -2169,49 +2169,6 @@ impl CameraProjectionVariable {
         )
     }
 
-    /// Generates an expression for the camera-space position of the view
-    /// frustum's far-plane corner with the given index in the given function.
-    /// The position will be a vec3.
-    pub fn generate_frustum_far_plane_corner_expr(
-        &self,
-        function: &mut Function,
-        corner_index_expr: Handle<Expression>,
-    ) -> Handle<Expression> {
-        let projection_uniform_ptr_expr = include_expr_in_func(
-            function,
-            Expression::GlobalVariable(self.projection_uniform_var),
-        );
-
-        emit_in_func(function, |function| {
-            let frustum_corners_ptr_expr = include_named_expr_in_func(
-                function,
-                "frustumFarPlaneCorners",
-                Expression::AccessIndex {
-                    base: projection_uniform_ptr_expr,
-                    index: 1,
-                },
-            );
-            let frustum_corner_ptr_expr = include_expr_in_func(
-                function,
-                Expression::Access {
-                    base: frustum_corners_ptr_expr,
-                    index: corner_index_expr,
-                },
-            );
-            let frustum_corner_vec4_expr = include_expr_in_func(
-                function,
-                Expression::Load {
-                    pointer: frustum_corner_ptr_expr,
-                },
-            );
-            include_named_expr_in_func(
-                function,
-                "frustumFarPlaneCorner",
-                swizzle_xyz_expr(frustum_corner_vec4_expr),
-            )
-        })
-    }
-
     /// Geneerates an expression for the inverse far plane z-coordinate in the
     /// given function.
     pub fn generate_inverse_far_plane_z_expr(&self, function: &mut Function) -> Handle<Expression> {

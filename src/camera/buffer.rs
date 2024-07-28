@@ -2,7 +2,7 @@
 
 use crate::{
     assert_uniform_valid,
-    camera::Camera,
+    camera::SceneCamera,
     geometry::Frustum,
     gpu::{
         buffer::GPUBuffer,
@@ -33,6 +33,7 @@ pub struct CameraGPUBufferManager {
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
+    jitter_enabled: bool,
 }
 
 /// Uniform holding the projection transformation of a camera, the corners of
@@ -71,10 +72,7 @@ impl CameraGPUBufferManager {
 
     /// Creates a new manager with a GPU buffer initialized from the projection
     /// transform of the given camera.
-    pub fn for_camera(
-        graphics_device: &GraphicsDevice,
-        camera: &(impl Camera<fre> + ?Sized),
-    ) -> Self {
+    pub fn for_camera(graphics_device: &GraphicsDevice, camera: &SceneCamera<fre>) -> Self {
         let label = Cow::Borrowed("Camera");
 
         let projection_uniform = CameraProjectionUniform::new(camera);
@@ -99,6 +97,7 @@ impl CameraGPUBufferManager {
             projection_uniform_gpu_buffer,
             bind_group_layout,
             bind_group,
+            jitter_enabled: camera.jitter_enabled(),
         }
     }
 
@@ -127,11 +126,14 @@ impl CameraGPUBufferManager {
     pub fn sync_with_camera(
         &mut self,
         graphics_device: &GraphicsDevice,
-        camera: &(impl Camera<fre> + ?Sized),
+        camera: &SceneCamera<fre>,
     ) {
-        if camera.projection_transform_changed() {
+        if camera.camera().projection_transform_changed()
+            || camera.jitter_enabled() != self.jitter_enabled
+        {
             self.sync_gpu_buffer(graphics_device, camera);
-            camera.reset_projection_change_tracking();
+            camera.camera().reset_projection_change_tracking();
+            self.jitter_enabled = camera.jitter_enabled();
         }
     }
 
@@ -174,11 +176,7 @@ impl CameraGPUBufferManager {
         })
     }
 
-    fn sync_gpu_buffer(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        camera: &(impl Camera<fre> + ?Sized),
-    ) {
+    fn sync_gpu_buffer(&self, graphics_device: &GraphicsDevice, camera: &SceneCamera<fre>) {
         let projection_uniform = CameraProjectionUniform::new(camera);
         self.projection_uniform_gpu_buffer
             .update_valid_bytes(graphics_device, bytemuck::bytes_of(&projection_uniform));
@@ -186,12 +184,24 @@ impl CameraGPUBufferManager {
 }
 
 impl CameraProjectionUniform {
-    fn new(camera: &(impl Camera<fre> + ?Sized)) -> Self {
-        let transform = *camera.projection_transform();
-        let frustum_far_plane_corners = Self::compute_far_plane_corners(camera.view_frustum());
+    fn new(camera: &SceneCamera<fre>) -> Self {
+        let transform = *camera.camera().projection_transform();
+
+        let frustum_far_plane_corners =
+            Self::compute_far_plane_corners(camera.camera().view_frustum());
+
+        // Important: Don't use camera.far_distance() for this, or reconstructed
+        // positions will be off because the corners may not be exactly at the
+        // far distance due to inaccuracies
         let inverse_far_plane_z =
             Vector4::new(frustum_far_plane_corners[0].z.recip(), 0.0, 0.0, 0.0);
-        let jitter_offsets = *JITTER_OFFSETS;
+
+        let jitter_offsets = if camera.jitter_enabled() {
+            *JITTER_OFFSETS
+        } else {
+            [Vector4::zeros(); JITTER_COUNT]
+        };
+
         Self {
             transform,
             frustum_far_plane_corners,

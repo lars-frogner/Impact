@@ -5,7 +5,7 @@ use crate::{
         components::{OrthographicCameraComp, PerspectiveCameraComp},
         OrthographicCamera, PerspectiveCamera, SceneCamera,
     },
-    gpu::rendering::fre,
+    gpu::rendering::{fre, RenderingSystem},
     physics::motion::components::ReferenceFrameComp,
     scene::{
         components::{SceneGraphCameraNodeComp, SceneGraphParentNodeComp},
@@ -29,6 +29,7 @@ use std::sync::RwLock;
 /// that the scene already has a camera.
 pub fn add_camera_to_scene_for_new_entity(
     window: &Window,
+    renderer: &RwLock<RenderingSystem>,
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     components: &mut ArchetypeComponentStorage,
@@ -36,6 +37,7 @@ pub fn add_camera_to_scene_for_new_entity(
 ) -> Result<()> {
     add_perspective_camera_to_scene_for_new_entity(
         window,
+        renderer,
         scene_graph,
         scene_camera,
         components,
@@ -43,6 +45,7 @@ pub fn add_camera_to_scene_for_new_entity(
     )?;
     add_orthographic_camera_to_scene_for_new_entity(
         window,
+        renderer,
         scene_graph,
         scene_camera,
         components,
@@ -61,6 +64,7 @@ pub fn add_camera_to_scene_for_new_entity(
 /// that the scene already has a camera.
 pub fn add_perspective_camera_to_scene_for_new_entity(
     window: &Window,
+    renderer: &RwLock<RenderingSystem>,
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     components: &mut ArchetypeComponentStorage,
@@ -75,6 +79,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 
             desynchronized.set_yes();
 
+            let renderer = renderer.read().unwrap();
+            let postprocessor = renderer.postprocessor().read().unwrap();
             let mut scene_graph = scene_graph.write().unwrap();
         },
         components,
@@ -107,7 +113,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let node_id =
                 scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
 
-            *scene_camera = Some(SceneCamera::new(camera, node_id));
+            let jittering_enabled = postprocessor.temporal_anti_aliasing_enabled();
+            *scene_camera = Some(SceneCamera::new(camera, node_id, jittering_enabled));
 
             SceneGraphCameraNodeComp::new(node_id)
         },
@@ -127,6 +134,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 /// that the scene already has a camera.
 pub fn add_orthographic_camera_to_scene_for_new_entity(
     window: &Window,
+    renderer: &RwLock<RenderingSystem>,
     scene_graph: &RwLock<SceneGraph<fre>>,
     scene_camera: &RwLock<Option<SceneCamera<fre>>>,
     components: &mut ArchetypeComponentStorage,
@@ -141,6 +149,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 
             desynchronized.set_yes();
 
+            let renderer = renderer.read().unwrap();
+            let postprocessor = renderer.postprocessor().read().unwrap();
             let mut scene_graph = scene_graph.write().unwrap();
         },
         components,
@@ -173,7 +183,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let node_id =
                 scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
 
-            *scene_camera = Some(SceneCamera::new(camera, node_id));
+            let jittering_enabled = postprocessor.temporal_anti_aliasing_enabled();
+            *scene_camera = Some(SceneCamera::new(camera, node_id, jittering_enabled));
 
             SceneGraphCameraNodeComp::new(node_id)
         },

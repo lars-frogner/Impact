@@ -6,8 +6,6 @@ const BIN_COUNT_MINUS_TWO: f32 = f32(BIN_COUNT - 2u);
 
 const ZERO_LUMINANCE_THRESHOLD: f32 = 0.005;
 
-const SRGB_TO_LUMINANCE: vec3f = vec3f(0.2125, 0.7154, 0.0721);
-
 struct Parameters {
     minLog2Luminance: f32,
     inverseLog2LuminanceRange: f32,
@@ -22,12 +20,14 @@ var<push_constant> inverseExposure: f32;
 // Shared histogram buffer used for storing intermediate sums for each workgroup
 var<workgroup> workgroupHistogram: array<atomic<u32>, BIN_COUNT>;
 
-fn computeLuminanceFromColor(color: vec3f) -> f32 {
-  return dot(color, SRGB_TO_LUMINANCE);
+const SRGB_TO_LUMINANCE: vec3f = vec3f(0.2125, 0.7154, 0.0721);
+
+fn computeScalarLuminanceFromColor(color: vec3f) -> f32 {
+    return dot(SRGB_TO_LUMINANCE, color);
 }
 
 fn determineBinIndexForPreExposedLuminanceColor(preExposedLuminanceColor: vec3f) -> u32 {
-    let preExposedLuminance = computeLuminanceFromColor(preExposedLuminanceColor);
+    let preExposedLuminance = computeScalarLuminanceFromColor(preExposedLuminanceColor);
 
     let luminance = inverseExposure * preExposedLuminance;
 

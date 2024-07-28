@@ -53,6 +53,7 @@ impl Application {
 
         self.scene().read().unwrap().add_new_entity_to_scene_graph(
             self.window(),
+            self.renderer(),
             &self.ecs_world,
             &mut components,
             &mut render_resources_desynchronized,

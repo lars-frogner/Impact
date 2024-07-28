@@ -51,6 +51,7 @@ pub enum KeyboardInputAction {
     ToggleShadowMapping,
     CycleMSAA,
     ToggleAmbientOcclusion,
+    ToggleTemporalAntiAliasing,
     ToggleBloom,
     CycleToneMapping,
     IncreaseExposure,
@@ -194,6 +195,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::ToggleTemporalAntiAliasing => {
+                        if state == &ElementState::Released {
+                            app.toggle_temporal_anti_aliasing();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::ToggleBloom => {
                         if state == &ElementState::Released {
                             app.renderer().read().unwrap().toggle_bloom();
@@ -260,7 +267,7 @@ impl KeyInputHandler {
                         if state == &ElementState::Released {
                             app.screen_capturer()
                                 .request_render_attachment_quantity_save(
-                                    RenderAttachmentQuantity::DepthStencil,
+                                    RenderAttachmentQuantity::LinearDepth,
                                 );
                         }
                         Ok(HandlingResult::Handled)
@@ -327,8 +334,9 @@ impl Default for KeyActionMap {
             ToggleBackFaceCulling => KeyB,
             ToggleTriangleFill => KeyF,
             ToggleShadowMapping => KeyI,
-            CycleMSAA => KeyY,
+            // CycleMSAA => KeyY,
             ToggleAmbientOcclusion => KeyO,
+            ToggleTemporalAntiAliasing => KeyY,
             ToggleBloom => KeyU,
             CycleToneMapping => KeyT,
             IncreaseExposure => KeyX,

@@ -242,28 +242,53 @@ impl CapturingCamera {
         self.exposure.recip()
     }
 
-    /// Returns an iterator over the specifications for all capturing
-    /// render commands, in the order in which they are to be performed.
-    pub fn render_commands(&self) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
-        assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
+    /// Returns an iterator over the specifications for all capturing render
+    /// commands that should be performed before tone mapping, in the order in
+    /// which they are to be performed.
+    pub fn render_commands_before_tone_mapping(
+        &self,
+    ) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
         self.bloom_commands
             .iter()
             .cloned()
             .chain(self.average_luminance_commands.iter().cloned())
-            .chain(self.tone_mapping_commands.iter().cloned())
+    }
+
+    /// Returns an iterator over the specifications for the capturing render
+    /// commands starting at tone mapping command and onwards, in the order in
+    /// which they are to be performed.
+    pub fn render_commands_from_tone_mapping(
+        &self,
+    ) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
+        assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
+        self.tone_mapping_commands.iter().cloned()
     }
 
     /// Returns an iterator over the current states of all capturing render
-    /// commands, in the same order as from [`Self::render_commands`].
-    pub fn render_command_states(&self) -> impl Iterator<Item = RenderCommandState> + '_ {
-        assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
+    /// commands that should be performed before tone mapping, in the same order
+    /// as from [`Self::render_commands_before_tone_mapping`].
+    pub fn render_command_states_before_tone_mapping(
+        &self,
+    ) -> impl Iterator<Item = RenderCommandState> + '_ {
         iter::once(!self.produces_bloom)
             .chain(iter::repeat(self.produces_bloom).take(self.bloom_commands.len() - 1))
             .chain(
                 iter::repeat(self.settings.sensitivity().is_auto())
                     .take(self.average_luminance_commands.len()),
             )
-            .chain(ToneMapping::all().map(|mapping| mapping == self.tone_mapping))
+            .map(RenderCommandState::active_if)
+    }
+
+    /// Returns an iterator over the current states of the capturing render
+    /// commands starting at tone mapping command and onwards, in the same order
+    /// as from [`Self::render_commands_from_tone_mapping`].
+    pub fn render_command_states_from_tone_mapping(
+        &self,
+    ) -> impl Iterator<Item = RenderCommandState> + '_ {
+        assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
+        ToneMapping::all()
+            .map(|mapping| mapping == self.tone_mapping)
+            .into_iter()
             .map(RenderCommandState::active_if)
     }
 

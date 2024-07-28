@@ -56,7 +56,9 @@ pub(super) fn create_tone_mapping_render_commands(
             create_tone_mapping_render_pass(
                 graphics_device,
                 shader_manager,
-                RenderAttachmentQuantity::Luminance,
+                // The last shader before tone mapping (the TAA shader) writes
+                // to the auxiliary luminance attachment
+                RenderAttachmentQuantity::LuminanceAux,
                 mapping,
             )
         })

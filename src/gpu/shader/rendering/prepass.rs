@@ -2,7 +2,7 @@
 
 use super::{
     super::{
-        append_literal_to_vec3, append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
+        append_unity_component_to_vec3, emit_in_func, include_expr_in_func,
         include_named_expr_in_func, insert_in_arena, swizzle_z_expr, InputStruct,
         InputStructBuilder, LightMaterialFeatureShaderInput, OutputStructBuilder, SampledTexture,
         SourceCode, TextureType, F32_TYPE, F32_WIDTH, VECTOR_2_SIZE, VECTOR_2_TYPE, VECTOR_3_SIZE,
@@ -618,16 +618,6 @@ impl<'a> PrepassShaderGenerator<'a> {
                 vec![inverse_window_dimensions_expr, framebuffer_position_expr],
             );
 
-            let current_depth_expr = emit_in_func(fragment_function, |function| {
-                include_expr_in_func(
-                    function,
-                    Expression::AccessIndex {
-                        base: framebuffer_position_expr,
-                        index: 2,
-                    },
-                )
-            });
-
             let motion_vector_expr = if let Some(previous_clip_space_position_expr) =
                 mesh_input_field_indices
                     .previous_clip_space_position
@@ -639,7 +629,6 @@ impl<'a> PrepassShaderGenerator<'a> {
                     "computeMotionVector",
                     vec![
                         screen_space_texture_coord_expr,
-                        current_depth_expr,
                         previous_clip_space_position_expr,
                     ],
                 )
@@ -652,20 +641,13 @@ impl<'a> PrepassShaderGenerator<'a> {
                 )
             };
 
-            let padded_motion_vector_expr = append_literal_to_vec3(
-                &mut module.types,
-                fragment_function,
-                motion_vector_expr,
-                0.0,
-            );
-
             output_struct_builder.add_field(
                 "motionVector",
-                vec4_type,
+                vec2_type,
                 None,
                 None,
-                VECTOR_4_SIZE,
-                padded_motion_vector_expr,
+                VECTOR_2_SIZE,
+                motion_vector_expr,
             );
         }
 

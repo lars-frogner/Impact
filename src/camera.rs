@@ -49,6 +49,7 @@ pub struct SceneCamera<F: Float> {
     camera: Box<dyn Camera<F>>,
     view_transform: Similarity3<F>,
     scene_graph_node_id: CameraNodeID,
+    jitter_enabled: bool,
 }
 
 /// 3D camera using a perspective transformation.
@@ -75,11 +76,16 @@ pub struct OrthographicCamera<F: Float> {
 impl<F: Float> SceneCamera<F> {
     /// Creates a new [`SceneCamera`] representing the given [`Camera`] in the
     /// camera node with the given ID in the [`SceneGraph`].
-    pub fn new(camera: impl Camera<F>, scene_graph_node_id: CameraNodeID) -> Self {
+    pub fn new(
+        camera: impl Camera<F>,
+        scene_graph_node_id: CameraNodeID,
+        jitter_enabled: bool,
+    ) -> Self {
         Self {
             camera: Box::new(camera),
             view_transform: Similarity3::identity(),
             scene_graph_node_id,
+            jitter_enabled,
         }
     }
 
@@ -99,6 +105,11 @@ impl<F: Float> SceneCamera<F> {
         self.scene_graph_node_id
     }
 
+    /// Returns whether jittering is enabled for the camera.
+    pub fn jitter_enabled(&self) -> bool {
+        self.jitter_enabled
+    }
+
     /// Sets the transform from world space to camera space.
     pub fn set_view_transform(&mut self, view_transform: Similarity3<F>) {
         self.view_transform = view_transform;
@@ -110,6 +121,11 @@ impl<F: Float> SceneCamera<F> {
     /// If `aspect_ratio` is zero.
     pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
         self.camera.set_aspect_ratio(aspect_ratio);
+    }
+
+    /// Sets whether jittering is enabled for the camera.
+    pub fn set_jitter_enabled(&mut self, jitter_enabled: bool) {
+        self.jitter_enabled = jitter_enabled;
     }
 }
 
