@@ -387,6 +387,6 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
         RenderAttachmentQuantity::Luminance,
         OutputAttachmentSampling::MultiIfAvailable,
         Blending::Additive,
-        true,
+        DepthMapUsage::StencilTest,
     )
 }

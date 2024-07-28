@@ -408,6 +408,21 @@ impl Application {
         }
     }
 
+    /// Toggles temporal anti-aliasing.
+    pub fn toggle_temporal_anti_aliasing(&self) {
+        let renderer = self.renderer().read().unwrap();
+        let mut postprocessor = renderer.postprocessor().write().unwrap();
+        let scene = self.scene().read().unwrap();
+        let mut scene_camera = scene.scene_camera().write().unwrap();
+
+        postprocessor.toggle_temporal_anti_aliasing();
+
+        if let Some(camera) = scene_camera.as_mut() {
+            camera.set_jitter_enabled(postprocessor.temporal_anti_aliasing_enabled());
+            renderer.declare_render_resources_desynchronized();
+        }
+    }
+
     /// Increases the sensitivity of the capturing camera by a small
     /// multiplicative factor.
     pub fn increase_camera_sensitivity(&self) {

@@ -307,11 +307,11 @@ fn init_app(window: Window) -> Result<Application> {
     app.create_entity((
         &app.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
         &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8, 5.0), 0.016),
-        // &ConstantRotationComp::new(
-        //     0.0,
-        //     Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
-        //     AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
-        // ),
+        &ConstantRotationComp::new(
+            0.0,
+            Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
+            AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
+        ),
         &SpecularReflectanceComp::GOLD,
         &RoughnessComp(0.4),
         &MicrofacetSpecularReflectionComp,
@@ -395,19 +395,19 @@ fn init_app(window: Window) -> Result<Application> {
         &MicrofacetSpecularReflectionComp,
     ))?;
 
-    // app.create_entity((
-    //     &SphereMeshComp::new(25),
-    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
-    //     &AlbedoComp(Vector3::zeros()),
-    //     &EmissiveLuminanceComp(vector![1.0, 1.0, 1.0] * 1e5),
-    //     &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
-    // ))?;
+    app.create_entity((
+        &SphereMeshComp::new(25),
+        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
+        &AlbedoComp(Vector3::zeros()),
+        &EmissiveLuminanceComp(vector![1.0, 1.0, 1.0] * 1e5),
+        &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
+    ))?;
 
-    // app.create_entity(&UnidirectionalEmissionComp::new(
-    //     vector![1.0, 1.0, 1.0] * 100000.0,
-    //     UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
-    //     Degrees(2.0),
-    // ))?;
+    app.create_entity(&UnidirectionalEmissionComp::new(
+        vector![1.0, 1.0, 1.0] * 100000.0,
+        UnitVector3::new_normalize(vector![0.6, -0.3, 1.0]),
+        Degrees(2.0),
+    ))?;
 
     app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
 

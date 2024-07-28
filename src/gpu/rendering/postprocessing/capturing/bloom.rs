@@ -3,7 +3,7 @@
 use crate::gpu::{
     rendering::{
         postprocessing::gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
-        render_command::{Blending, RenderCommandSpecification},
+        render_command::{Blending, DepthMapUsage, RenderCommandSpecification},
     },
     resource_group::GPUResourceGroupManager,
     shader::ShaderManager,
@@ -53,7 +53,7 @@ pub(super) fn create_bloom_render_commands(
         RenderAttachmentQuantity::Luminance,
         OutputAttachmentSampling::Single,
         Blending::Additive,
-        false,
+        DepthMapUsage::None,
     ));
 
     if bloom_config.n_iterations > 0 {
@@ -67,7 +67,7 @@ pub(super) fn create_bloom_render_commands(
                 shader_manager,
                 gpu_resource_group_manager,
                 RenderAttachmentQuantity::EmissiveLuminance,
-                RenderAttachmentQuantity::EmissiveLuminanceAux,
+                RenderAttachmentQuantity::LuminanceAux,
                 Blending::Replace,
                 GaussianBlurDirection::Horizontal,
                 &bloom_sample_uniform,
@@ -76,7 +76,7 @@ pub(super) fn create_bloom_render_commands(
                 graphics_device,
                 shader_manager,
                 gpu_resource_group_manager,
-                RenderAttachmentQuantity::EmissiveLuminanceAux,
+                RenderAttachmentQuantity::LuminanceAux,
                 RenderAttachmentQuantity::EmissiveLuminance,
                 Blending::Replace,
                 GaussianBlurDirection::Vertical,
@@ -88,7 +88,7 @@ pub(super) fn create_bloom_render_commands(
             shader_manager,
             gpu_resource_group_manager,
             RenderAttachmentQuantity::EmissiveLuminance,
-            RenderAttachmentQuantity::EmissiveLuminanceAux,
+            RenderAttachmentQuantity::LuminanceAux,
             Blending::Replace,
             GaussianBlurDirection::Horizontal,
             &bloom_sample_uniform,
@@ -98,7 +98,7 @@ pub(super) fn create_bloom_render_commands(
             graphics_device,
             shader_manager,
             gpu_resource_group_manager,
-            RenderAttachmentQuantity::EmissiveLuminanceAux,
+            RenderAttachmentQuantity::LuminanceAux,
             RenderAttachmentQuantity::Luminance,
             Blending::Additive,
             GaussianBlurDirection::Vertical,

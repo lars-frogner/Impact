@@ -27,7 +27,8 @@ use crate::{
 use anyhow::{anyhow, Error, Result};
 use chrono::Utc;
 use postprocessing::{
-    ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig, Postprocessor,
+    ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
+    temporal_anti_aliasing::TemporalAntiAliasingConfig, Postprocessor,
 };
 use render_command::RenderCommandManager;
 use render_command::RenderCommandOutcome;
@@ -86,6 +87,7 @@ pub struct RenderingConfig {
     /// The number of samples to use for multisampling anti-aliasing.
     pub multisampling_sample_count: u32,
     pub ambient_occlusion: AmbientOcclusionConfig,
+    pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     pub capturing_camera: CapturingCameraConfig,
 }
 
@@ -132,6 +134,7 @@ impl RenderingSystem {
             &mut gpu_resource_group_manager,
             &mut storage_gpu_buffer_manager,
             &config.ambient_occlusion,
+            &config.temporal_anti_aliasing,
             &config.capturing_camera,
         );
 
@@ -456,6 +459,7 @@ impl Default for RenderingConfig {
             shadow_mapping_enabled: true,
             multisampling_sample_count: 1,
             ambient_occlusion: AmbientOcclusionConfig::default(),
+            temporal_anti_aliasing: TemporalAntiAliasingConfig::default(),
             capturing_camera: CapturingCameraConfig::default(),
         }
     }

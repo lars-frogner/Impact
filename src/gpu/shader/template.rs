@@ -21,6 +21,7 @@ pub enum SpecificShaderTemplate {
     GaussianBlur,
     LuminanceHistogram,
     LuminanceHistogramAverage,
+    TemporalAntiAliasing,
     ToneMapping,
 }
 
@@ -45,6 +46,8 @@ lazy_static! {
         ShaderTemplate::new(SpecificShaderTemplate::LuminanceHistogram.wgsl_source());
     static ref LUMINANCE_HISTOGRAM_AVERAGE_TEMPLATE: ShaderTemplate<'static> =
         ShaderTemplate::new(SpecificShaderTemplate::LuminanceHistogramAverage.wgsl_source());
+    static ref TEMPORAL_ANTI_ALIASING_TEMPLATE: ShaderTemplate<'static> =
+        ShaderTemplate::new(SpecificShaderTemplate::TemporalAntiAliasing.wgsl_source());
     static ref TONE_MAPPING_TEMPLATE: ShaderTemplate<'static> =
         ShaderTemplate::new(SpecificShaderTemplate::ToneMapping.wgsl_source());
 }
@@ -95,6 +98,9 @@ impl SpecificShaderTemplate {
             Self::LuminanceHistogramAverage => {
                 compute_template_source!("luminance_histogram_average")
             }
+            Self::TemporalAntiAliasing => {
+                rendering_template_source!("temporal_anti_aliasing")
+            }
             Self::ToneMapping => {
                 rendering_template_source!("tone_mapping")
             }
@@ -110,6 +116,7 @@ impl SpecificShaderTemplate {
             Self::GaussianBlur => &GAUSSIAN_BLUR_TEMPLATE,
             Self::LuminanceHistogram => &LUMINANCE_HISTOGRAM_TEMPLATE,
             Self::LuminanceHistogramAverage => &LUMINANCE_HISTOGRAM_AVERAGE_TEMPLATE,
+            Self::TemporalAntiAliasing => &TEMPORAL_ANTI_ALIASING_TEMPLATE,
             Self::ToneMapping => &TONE_MAPPING_TEMPLATE,
         }
     }

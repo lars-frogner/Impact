@@ -224,13 +224,13 @@ impl DesynchronizedRenderResources {
     ) {
         if let Some(scene_camera) = scene_camera {
             if let Some(camera_buffer_manager) = camera_buffer_manager {
-                camera_buffer_manager.sync_with_camera(graphics_device, scene_camera.camera());
+                camera_buffer_manager.sync_with_camera(graphics_device, scene_camera);
             } else {
                 // We initialize the camera GPU buffer manager the first time this
                 // method is called
                 *camera_buffer_manager = Some(CameraGPUBufferManager::for_camera(
                     graphics_device,
-                    scene_camera.camera(),
+                    scene_camera,
                 ));
             }
         } else {

@@ -1123,7 +1123,8 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
         wgpu::TextureFormat::Depth32Float
         | wgpu::TextureFormat::Depth32FloatStencil8
         | wgpu::TextureFormat::Rgba32Float
-        | wgpu::TextureFormat::R32Float => {
+        | wgpu::TextureFormat::R32Float
+        | wgpu::TextureFormat::Rg32Float => {
             let mut data = extract_texture_data::<f32>(
                 graphics_device.device(),
                 graphics_device.queue(),
@@ -1131,6 +1132,22 @@ pub fn save_texture_as_image_file<P: AsRef<Path>>(
                 mip_level,
                 texture_array_idx,
             )?;
+
+            if matches!(format, wgpu::TextureFormat::Rg32Float) {
+                let mut rgba_data = vec![0.0; 4 * data.len()];
+                for (source, dest) in data.iter().step_by(2).zip(rgba_data.iter_mut().step_by(4)) {
+                    *dest = *source;
+                }
+                for (source, dest) in data
+                    .iter()
+                    .skip(1)
+                    .step_by(2)
+                    .zip(rgba_data.iter_mut().skip(1).step_by(4))
+                {
+                    *dest = *source;
+                }
+                data = rgba_data;
+            }
 
             if matches!(
                 format,

@@ -3,6 +3,7 @@
 pub mod ambient_occlusion;
 pub mod capturing;
 pub mod gaussian_blur;
+pub mod temporal_anti_aliasing;
 
 use crate::{
     gpu::{
@@ -25,12 +26,15 @@ use crate::{
 };
 use ambient_occlusion::AmbientOcclusionConfig;
 use capturing::{CapturingCamera, CapturingCameraConfig};
+use temporal_anti_aliasing::TemporalAntiAliasingConfig;
 
 /// Manager of materials and render commands for postprocessing effects.
 #[derive(Clone, Debug)]
 pub struct Postprocessor {
     ambient_occlusion_enabled: bool,
     ambient_occlusion_commands: Vec<RenderCommandSpecification>,
+    temporal_anti_aliasing_enabled: bool,
+    temporal_anti_aliasing_commands: Vec<RenderCommandSpecification>,
     capturing_camera: CapturingCamera,
 }
 
@@ -44,6 +48,7 @@ impl Postprocessor {
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
         ambient_occlusion_config: &AmbientOcclusionConfig,
+        temporal_anti_aliasing_config: &TemporalAntiAliasingConfig,
         capturing_camera_settings: &CapturingCameraConfig,
     ) -> Self {
         let ambient_occlusion_commands =
@@ -52,6 +57,14 @@ impl Postprocessor {
                 shader_manager,
                 gpu_resource_group_manager,
                 ambient_occlusion_config,
+            );
+
+        let temporal_anti_aliasing_commands =
+            temporal_anti_aliasing::create_temporal_anti_aliasing_render_commands(
+                graphics_device,
+                shader_manager,
+                gpu_resource_group_manager,
+                temporal_anti_aliasing_config,
             );
 
         let capturing_camera = CapturingCamera::new(
@@ -66,6 +79,8 @@ impl Postprocessor {
         Self {
             ambient_occlusion_enabled: ambient_occlusion_config.initially_enabled,
             ambient_occlusion_commands,
+            temporal_anti_aliasing_enabled: temporal_anti_aliasing_config.initially_enabled,
+            temporal_anti_aliasing_commands,
             capturing_camera,
         }
     }
@@ -74,16 +89,20 @@ impl Postprocessor {
     /// render commands, in the order in which they are to be performed.
     pub fn render_commands(&self) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
         assert_eq!(self.ambient_occlusion_commands.len(), 3);
+        assert_eq!(self.temporal_anti_aliasing_commands.len(), 2);
         self.ambient_occlusion_commands
             .iter()
             .cloned()
-            .chain(self.capturing_camera.render_commands())
+            .chain(self.capturing_camera.render_commands_before_tone_mapping())
+            .chain(self.temporal_anti_aliasing_commands.iter().cloned())
+            .chain(self.capturing_camera.render_commands_from_tone_mapping())
     }
 
     /// Returns an iterator over the current states of all postprocessing render
     /// commands, in the same order as from [`Self::render_commands`].
     pub fn render_command_states(&self) -> impl Iterator<Item = RenderCommandState> + '_ {
         assert_eq!(self.ambient_occlusion_commands.len(), 3);
+        assert_eq!(self.temporal_anti_aliasing_commands.len(), 2);
         [
             !self.ambient_occlusion_enabled,
             self.ambient_occlusion_enabled,
@@ -91,12 +110,34 @@ impl Postprocessor {
         ]
         .into_iter()
         .map(RenderCommandState::active_if)
-        .chain(self.capturing_camera.render_command_states())
+        .chain(
+            self.capturing_camera
+                .render_command_states_before_tone_mapping(),
+        )
+        .chain(
+            [true, self.temporal_anti_aliasing_enabled]
+                .into_iter()
+                .map(RenderCommandState::active_if),
+        )
+        .chain(
+            self.capturing_camera
+                .render_command_states_from_tone_mapping(),
+        )
     }
 
     /// Returns a reference to the capturing camera.
     pub fn capturing_camera(&self) -> &CapturingCamera {
         &self.capturing_camera
+    }
+
+    /// Whether ambient occlusion is enabled.
+    pub fn ambient_occlusion_enabled(&self) -> bool {
+        self.ambient_occlusion_enabled
+    }
+
+    /// Whether temporal anti-aliasing is enabled.
+    pub fn temporal_anti_aliasing_enabled(&self) -> bool {
+        self.temporal_anti_aliasing_enabled
     }
 
     /// Returns a mutable reference to the capturing camera.
@@ -108,6 +149,11 @@ impl Postprocessor {
     pub fn toggle_ambient_occlusion(&mut self) {
         self.ambient_occlusion_enabled = !self.ambient_occlusion_enabled;
     }
+
+    /// Toggles temporal anti-aliasing.
+    pub fn toggle_temporal_anti_aliasing(&mut self) {
+        self.temporal_anti_aliasing_enabled = !self.temporal_anti_aliasing_enabled;
+    }
 }
 
 fn create_passthrough_render_pass(
@@ -117,7 +163,7 @@ fn create_passthrough_render_pass(
     output_render_attachment_quantity: RenderAttachmentQuantity,
     output_attachment_sampling: OutputAttachmentSampling,
     blending: Blending,
-    perform_stencil_test: bool,
+    depth_map_usage: DepthMapUsage,
 ) -> RenderCommandSpecification {
     let (input_texture_binding, input_sampler_binding) =
         input_render_attachment_quantity.bindings();
@@ -162,11 +208,7 @@ fn create_passthrough_render_pass(
             "Passthrough pass: {} -> {}",
             input_render_attachment_quantity, output_render_attachment_quantity
         ),
-        depth_map_usage: if perform_stencil_test {
-            DepthMapUsage::StencilTest
-        } else {
-            DepthMapUsage::None
-        },
+        depth_map_usage,
         ..Default::default()
     })
 }

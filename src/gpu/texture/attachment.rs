@@ -27,14 +27,15 @@ bitflags! {
         const LINEAR_DEPTH                = 1 << 1;
         const PREVIOUS_LINEAR_DEPTH       = 1 << 2;
         const LUMINANCE                   = 1 << 3;
-        const PREVIOUS_LUMINANCE          = 1 << 4;
-        const NORMAL_VECTOR               = 1 << 5;
-        const TEXTURE_COORDS              = 1 << 6;
-        const MOTION_VECTOR               = 1 << 7;
-        const AMBIENT_REFLECTED_LUMINANCE = 1 << 8;
-        const EMISSIVE_LUMINANCE          = 1 << 9;
-        const EMISSIVE_LUMINANCE_AUX      = 1 << 10;
-        const OCCLUSION                   = 1 << 11;
+        const LUMINANCE_AUX               = 1 << 4;
+        const PREVIOUS_LUMINANCE_AUX      = 1 << 5;
+        const NORMAL_VECTOR               = 1 << 6;
+        const TEXTURE_COORDS              = 1 << 7;
+        const MOTION_VECTOR               = 1 << 8;
+        const PREVIOUS_MOTION_VECTOR      = 1 << 9;
+        const AMBIENT_REFLECTED_LUMINANCE = 1 << 10;
+        const EMISSIVE_LUMINANCE          = 1 << 11;
+        const OCCLUSION                   = 1 << 12;
     }
 }
 
@@ -45,14 +46,15 @@ pub enum RenderAttachmentQuantity {
     LinearDepth = 1,
     PreviousLinearDepth = 2,
     Luminance = 3,
-    PreviousLuminance = 4,
-    NormalVector = 5,
-    TextureCoords = 6,
-    MotionVector = 7,
-    AmbientReflectedLuminance = 8,
-    EmissiveLuminance = 9,
-    EmissiveLuminanceAux = 10,
-    Occlusion = 11,
+    LuminanceAux = 4,
+    PreviousLuminanceAux = 5,
+    NormalVector = 6,
+    TextureCoords = 7,
+    MotionVector = 8,
+    PreviousMotionVector = 9,
+    AmbientReflectedLuminance = 10,
+    EmissiveLuminance = 11,
+    Occlusion = 12,
 }
 
 /// A sampler variant for render attachment textures.
@@ -132,7 +134,7 @@ struct FullRenderAttachmentInputDescription {
 }
 
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 12;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 13;
 
 /// Each individual render attachment quantity.
 ///
@@ -143,13 +145,14 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
     RenderAttachmentQuantity::LinearDepth,
     RenderAttachmentQuantity::PreviousLinearDepth,
     RenderAttachmentQuantity::Luminance,
-    RenderAttachmentQuantity::PreviousLuminance,
+    RenderAttachmentQuantity::LuminanceAux,
+    RenderAttachmentQuantity::PreviousLuminanceAux,
     RenderAttachmentQuantity::NormalVector,
     RenderAttachmentQuantity::TextureCoords,
     RenderAttachmentQuantity::MotionVector,
+    RenderAttachmentQuantity::PreviousMotionVector,
     RenderAttachmentQuantity::AmbientReflectedLuminance,
     RenderAttachmentQuantity::EmissiveLuminance,
-    RenderAttachmentQuantity::EmissiveLuminanceAux,
     RenderAttachmentQuantity::Occlusion,
 ];
 
@@ -159,13 +162,14 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
     RenderAttachmentQuantitySet::LINEAR_DEPTH,
     RenderAttachmentQuantitySet::PREVIOUS_LINEAR_DEPTH,
     RenderAttachmentQuantitySet::LUMINANCE,
-    RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE,
+    RenderAttachmentQuantitySet::LUMINANCE_AUX,
+    RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE_AUX,
     RenderAttachmentQuantitySet::NORMAL_VECTOR,
     RenderAttachmentQuantitySet::TEXTURE_COORDS,
     RenderAttachmentQuantitySet::MOTION_VECTOR,
+    RenderAttachmentQuantitySet::PREVIOUS_MOTION_VECTOR,
     RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
     RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE,
-    RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE_AUX,
     RenderAttachmentQuantitySet::OCCLUSION,
 ];
 
@@ -177,14 +181,15 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     // their `BindGroupLayout`s can be used interchangeably
     "linear_depth",
     "luminance",
-    // Same for the previous luminance attachment
-    "luminance",
+    "luminance_aux",
+    // Same for the previous auxiliary luminance attachment
+    "luminance_aux",
     "normal_vector",
     "texture_coords",
     "motion_vector",
+    "previous_motion_vector",
     "ambient_reflected_luminance",
     "emissive_luminance",
-    "emissive_luminance_aux",
     "occlusion",
 ];
 
@@ -194,13 +199,14 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
     wgpu::TextureFormat::R32Float,             // Linear depth
     wgpu::TextureFormat::R32Float,             // Previous linear depth
     wgpu::TextureFormat::Rgba16Float,          // Luminance
-    wgpu::TextureFormat::Rgba16Float,          // Previous luminance
+    wgpu::TextureFormat::Rgba16Float,          // Auxiliary luminance
+    wgpu::TextureFormat::Rgba16Float,          // Previous auxiliary luminance
     wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
     wgpu::TextureFormat::Rg32Float,            // Texture coordinates
-    wgpu::TextureFormat::Rgba16Float,          // Motion vector
+    wgpu::TextureFormat::Rg32Float,            // Motion vector
+    wgpu::TextureFormat::Rg32Float,            // Previous motion vector
     wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
-    wgpu::TextureFormat::Rgba16Float,          // Emissive luminance (auxiliary)
     wgpu::TextureFormat::R16Float,             // Occlusion
 ];
 
@@ -210,13 +216,14 @@ const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTI
     true, // Linear depth
     true, // Previous linear depth
     true, // Luminance
-    true, // Previous luminance
+    true, // Auxiliary luminance
+    true, // Previous auxiliary luminance
     true, // Normal vector
     true, // Texture coordinates
     true, // Motion vector
+    true, // Previous motion vector
     true, // Ambient reflected luminance
     true, // Emissive luminance
-    true, // Emissive luminance (auxiliary)
     true, // Occlusion
 ];
 
@@ -226,13 +233,14 @@ const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     false, // Linear depth
     false, // Previous linear depth
     false, // Luminance
-    false, // Previous luminance
+    false, // Auxiliary luminance
+    false, // Previous auxiliary luminance
     false, // Normal vector
     false, // Texture coordinates
     false, // Motion vector
+    false, // Previous motion vector
     false, // Ambient reflected luminance
     false, // Emissive luminance
-    false, // Emissive luminance (auxiliary)
     false, // Occlusion
 ];
 
@@ -243,13 +251,14 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_
     Some(wgpu::Color::BLACK), // Linear depth
     None,                     // Previous linear depth
     Some(wgpu::Color::BLACK), // Luminance
-    None,                     // Previous luminance
+    Some(wgpu::Color::BLACK), // Auxiliary luminance
+    None,                     // Previous auxiliary luminance
     Some(wgpu::Color::BLACK), // Normal vector
     Some(wgpu::Color::BLACK), // Texture coordinates
     Some(wgpu::Color::BLACK), // Motion vector
+    None,                     // Previous motion vector
     Some(wgpu::Color::BLACK), // Ambient reflected luminance
     Some(wgpu::Color::BLACK), // Emissive luminance
-    Some(wgpu::Color::BLACK), // Emissive luminance (auxiliary)
     Some(wgpu::Color::WHITE), // Occlusion
 ];
 
@@ -260,13 +269,14 @@ const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
     (0, 1), // Linear depth
     (0, 1), // Previous linear depth
     (0, 1), // Luminance
-    (0, 1), // Previous luminance
+    (0, 1), // Auxiliary luminance
+    (0, 1), // Previous auxiliary luminance
     (0, 1), // Normal vector
     (0, 1), // Texture coordinates
     (0, 1), // Motion vector
+    (0, 1), // Previous motion vector
     (0, 1), // Ambient reflected luminance
     (0, 1), // Emissive luminance
-    (0, 1), // Emissive luminance (auxiliary)
     (0, 1), // Occlusion
 ];
 
@@ -625,7 +635,7 @@ impl RenderAttachmentTextureManager {
 
         let mut manager = Self {
             quantity_textures: [
-                None, None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None, None,
             ],
             samplers,
             bind_groups_and_layouts: HashMap::new(),
@@ -798,8 +808,13 @@ impl RenderAttachmentTextureManager {
         );
         self.swap_two_attachments(
             graphics_device,
-            RenderAttachmentQuantity::Luminance,
-            RenderAttachmentQuantity::PreviousLuminance,
+            RenderAttachmentQuantity::LuminanceAux,
+            RenderAttachmentQuantity::PreviousLuminanceAux,
+        );
+        self.swap_two_attachments(
+            graphics_device,
+            RenderAttachmentQuantity::MotionVector,
+            RenderAttachmentQuantity::PreviousMotionVector,
         );
     }
 
