@@ -125,7 +125,7 @@ fn computeAmbientOcclusionSampleValue(
 
 fn computeTextureCoordsForAmbientOcclusionSample(samplingPosition: vec3<f32>) -> vec2<f32> {
     let undividedClipSpaceSamplingPosition = projectionUniform.projectionMatrix * vec4<f32>(samplingPosition, 1.0);
-    let horizontalClipSpaceSamplingPosition = undividedClipSpaceSamplingPosition.xy / undividedClipSpaceSamplingPosition.w;
+    let horizontalClipSpaceSamplingPosition = undividedClipSpaceSamplingPosition.xy / max(undividedClipSpaceSamplingPosition.w, 1e-6);
     var sampleTextureCoords = 0.5 * (horizontalClipSpaceSamplingPosition + 1.0);
     sampleTextureCoords.y = 1.0 - sampleTextureCoords.y;
     return sampleTextureCoords;
