@@ -4,7 +4,6 @@ use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, ConstStringHash64};
-use nalgebra::Vector4;
 
 use crate::{
     assert_uniform_valid,
@@ -39,6 +38,7 @@ pub struct TemporalAntiAliasingConfig {
     /// How much the luminance of the current frame should be weighted compared
     /// to the luminance reprojected from the previous frame.
     pub current_frame_weight: fre,
+    pub variance_clipping_threshold: fre,
 }
 
 /// Uniform holding parameters needed in the shader for applying temporal
@@ -49,7 +49,9 @@ pub struct TemporalAntiAliasingConfig {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct TemporalAntiAliasingParameters {
-    current_frame_weight: Vector4<fre>,
+    current_frame_weight: fre,
+    variance_clipping_threshold: fre,
+    _pad: [u8; 8],
 }
 
 impl Default for TemporalAntiAliasingConfig {
@@ -57,14 +59,17 @@ impl Default for TemporalAntiAliasingConfig {
         Self {
             initially_enabled: true,
             current_frame_weight: 0.1,
+            variance_clipping_threshold: 1.0,
         }
     }
 }
 
 impl TemporalAntiAliasingParameters {
-    fn new(current_frame_weight: fre) -> Self {
+    fn new(current_frame_weight: fre, variance_clipping_threshold: fre) -> Self {
         Self {
-            current_frame_weight: Vector4::new(current_frame_weight, 0.0, 0.0, 0.0),
+            current_frame_weight,
+            variance_clipping_threshold,
+            _pad: [0; 8],
         }
     }
 }
@@ -94,6 +99,7 @@ pub(super) fn create_temporal_anti_aliasing_render_commands(
             shader_manager,
             gpu_resource_group_manager,
             config.current_frame_weight,
+            config.variance_clipping_threshold,
         ),
     ]
 }
@@ -103,6 +109,7 @@ fn create_temporal_anti_aliasing_render_pass(
     shader_manager: &mut ShaderManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     current_frame_weight: fre,
+    variance_clipping_threshold: fre,
 ) -> RenderCommandSpecification {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "TemporalAntiAliasingParameters{{ current_frame_weight: {} }}",
@@ -112,7 +119,10 @@ fn create_temporal_anti_aliasing_render_pass(
     gpu_resource_group_manager
         .resource_group_entry(resource_group_id)
         .or_insert_with(|| {
-            let parameter_uniform = TemporalAntiAliasingParameters::new(current_frame_weight);
+            let parameter_uniform = TemporalAntiAliasingParameters::new(
+                current_frame_weight,
+                variance_clipping_threshold,
+            );
 
             let parameter_uniform_buffer = SingleUniformGPUBuffer::for_uniform(
                 graphics_device,
@@ -134,16 +144,12 @@ fn create_temporal_anti_aliasing_render_pass(
 
     let (linear_depth_texture_binding, linear_depth_sampler_binding) =
         RenderAttachmentQuantity::LinearDepth.bindings();
-    let (previous_linear_depth_texture_binding, previous_linear_depth_sampler_binding) =
-        RenderAttachmentQuantity::PreviousLinearDepth.bindings();
     let (luminance_texture_binding, luminance_sampler_binding) =
         RenderAttachmentQuantity::Luminance.bindings();
     let (previous_luminance_texture_binding, previous_luminance_sampler_binding) =
         RenderAttachmentQuantity::PreviousLuminanceAux.bindings();
     let (motion_vector_texture_binding, motion_vector_sampler_binding) =
         RenderAttachmentQuantity::MotionVector.bindings();
-    let (previous_motion_vector_texture_binding, previous_motion_vector_sampler_binding) =
-        RenderAttachmentQuantity::PreviousMotionVector.bindings();
 
     let shader_id = shader_manager
         .get_or_create_rendering_shader_from_template(
@@ -163,16 +169,7 @@ fn create_temporal_anti_aliasing_render_pass(
                     "linear_depth_sampler_binding",
                     linear_depth_sampler_binding.to_string(),
                 ),
-                ("previous_linear_depth_texture_group", "1".to_string()),
-                (
-                    "previous_linear_depth_texture_binding",
-                    previous_linear_depth_texture_binding.to_string(),
-                ),
-                (
-                    "previous_linear_depth_sampler_binding",
-                    previous_linear_depth_sampler_binding.to_string(),
-                ),
-                ("luminance_texture_group", "2".to_string()),
+                ("luminance_texture_group", "1".to_string()),
                 (
                     "luminance_texture_binding",
                     luminance_texture_binding.to_string(),
@@ -181,7 +178,7 @@ fn create_temporal_anti_aliasing_render_pass(
                     "luminance_sampler_binding",
                     luminance_sampler_binding.to_string(),
                 ),
-                ("previous_luminance_texture_group", "3".to_string()),
+                ("previous_luminance_texture_group", "2".to_string()),
                 (
                     "previous_luminance_texture_binding",
                     previous_luminance_texture_binding.to_string(),
@@ -190,7 +187,7 @@ fn create_temporal_anti_aliasing_render_pass(
                     "previous_luminance_sampler_binding",
                     previous_luminance_sampler_binding.to_string(),
                 ),
-                ("motion_vector_texture_group", "4".to_string()),
+                ("motion_vector_texture_group", "3".to_string()),
                 (
                     "motion_vector_texture_binding",
                     motion_vector_texture_binding.to_string(),
@@ -199,16 +196,7 @@ fn create_temporal_anti_aliasing_render_pass(
                     "motion_vector_sampler_binding",
                     motion_vector_sampler_binding.to_string(),
                 ),
-                ("previous_motion_vector_texture_group", "5".to_string()),
-                (
-                    "previous_motion_vector_texture_binding",
-                    previous_motion_vector_texture_binding.to_string(),
-                ),
-                (
-                    "previous_motion_vector_sampler_binding",
-                    previous_motion_vector_sampler_binding.to_string(),
-                ),
-                ("params_group", "6".to_string()),
+                ("params_group", "4".to_string()),
                 ("params_binding", "0".to_string()),
             ],
         )
@@ -221,17 +209,7 @@ fn create_temporal_anti_aliasing_render_pass(
     );
 
     input_render_attachments.insert_description(
-        RenderAttachmentQuantity::PreviousLinearDepth,
-        RenderAttachmentInputDescription::default()
-            .with_sampler(RenderAttachmentSampler::Filtering),
-    );
-    input_render_attachments.insert_description(
         RenderAttachmentQuantity::PreviousLuminanceAux,
-        RenderAttachmentInputDescription::default()
-            .with_sampler(RenderAttachmentSampler::Filtering),
-    );
-    input_render_attachments.insert_description(
-        RenderAttachmentQuantity::PreviousMotionVector,
         RenderAttachmentInputDescription::default()
             .with_sampler(RenderAttachmentSampler::Filtering),
     );

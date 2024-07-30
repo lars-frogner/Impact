@@ -150,7 +150,7 @@ fn computeMotionVector(
     }
     let previousNDCXYPosition = previousClipSpacePosition.xy / previousClipSpacePosition.w;
     let previousScreenCoords = vec2<f32>(0.5 * (1.0 + previousNDCXYPosition.x), 0.5 * (1.0 - previousNDCXYPosition.y));
-    return previousScreenCoords - screenTextureCoords;
+    return screenTextureCoords - previousScreenCoords;
 }
 
 fn zeroMotionVector() -> vec2<f32> {
