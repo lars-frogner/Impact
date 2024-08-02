@@ -13,6 +13,7 @@ The engine does physically based 3D rendering. The graphics system is built on [
 - Normal mapping and parallax mapping.
 - Ambient lighting and ambient occlusion.
 - Fully HDR rendering with bloom, automatic exposure and tone mapping.
+- Temporal anti-aliasing.
 
 ### Physics
 
