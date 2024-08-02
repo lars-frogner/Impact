@@ -2,7 +2,7 @@
 
 use crate::{
     gpu::{
-        rendering::render_command::{Blending, RenderPassHints},
+        rendering::render_command::{Blending, RenderPipelineHints},
         shader::MaterialShaderInput,
         texture::attachment::{
             RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
@@ -57,7 +57,7 @@ pub fn setup_vertex_color_material(material_library: &mut MaterialLibrary) -> Ma
                 output_render_attachments,
                 None,
                 Vec::new(),
-                RenderPassHints::empty(),
+                RenderPipelineHints::empty(),
                 MaterialShaderInput::VertexColor,
             )
         });

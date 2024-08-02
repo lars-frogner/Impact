@@ -4,7 +4,7 @@ use super::{super::features::create_physical_material_feature, prepass::create_p
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::render_command::{Blending, RenderPassHints},
+        rendering::render_command::{Blending, RenderPipelineHints},
         shader::{
             DiffuseMicrofacetShadingModel, MaterialShaderInput, MicrofacetShadingModel,
             MicrofacetTextureShaderInput, SpecularMicrofacetShadingModel,
@@ -711,7 +711,7 @@ pub fn setup_microfacet_material(
                 output_render_attachments,
                 None,
                 vec![feature_type_id],
-                RenderPassHints::AFFECTED_BY_LIGHT,
+                RenderPipelineHints::AFFECTED_BY_LIGHT,
                 MaterialShaderInput::Microfacet((
                     MicrofacetShadingModel {
                         diffuse: diffuse_shading_model,

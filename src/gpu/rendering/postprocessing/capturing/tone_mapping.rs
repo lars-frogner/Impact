@@ -4,7 +4,8 @@ use crate::{
     gpu::{
         push_constant::{PushConstant, PushConstantVariant},
         rendering::render_command::{
-            RenderCommandSpecification, RenderPassHints, RenderPassSpecification,
+            RenderCommandSpecification, RenderPassSpecification, RenderPipelineHints,
+            RenderPipelineSpecification, RenderSubpassSpecification, SurfaceModification,
         },
         shader::{template::SpecificShaderTemplate, ShaderManager},
         texture::attachment::{
@@ -96,20 +97,25 @@ fn create_tone_mapping_render_pass(
     let input_render_attachments =
         RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
 
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_shader_id: Some(shader_id),
-        input_render_attachments,
-        output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(), // We output directly to the surface
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
-        hints: RenderPassHints::NO_DEPTH_PREPASS
-            .union(RenderPassHints::NO_CAMERA)
-            .union(RenderPassHints::WRITES_TO_SURFACE),
-        label: format!("Tone mapping pass ({})", mapping),
-        ..Default::default()
+    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
+        pass: RenderPassSpecification {
+            surface_modification: SurfaceModification::Write,
+            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(), // We output directly to the surface
+            label: "Surface writing pass".to_string(),
+            ..Default::default()
+        },
+        pipeline: Some(RenderPipelineSpecification {
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_shader_id: Some(shader_id),
+            input_render_attachments,
+            push_constants: PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
+            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
+            label: format!("Tone mapping ({})", mapping),
+            ..Default::default()
+        }),
     })
 }

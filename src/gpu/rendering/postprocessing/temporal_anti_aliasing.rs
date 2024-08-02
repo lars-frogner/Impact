@@ -12,8 +12,8 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                Blending, DepthMapUsage, RenderCommandSpecification, RenderPassHints,
-                RenderPassSpecification,
+                Blending, DepthMapUsage, RenderCommandSpecification, RenderPipelineHints,
+                RenderPassSpecification, RenderPipelineSpecification, RenderSubpassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -220,24 +220,30 @@ fn create_temporal_anti_aliasing_render_pass(
             .with_sampling(OutputAttachmentSampling::Single),
     );
 
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_shader_id: Some(shader_id),
-        resource_group_id: Some(resource_group_id),
-        depth_map_usage: DepthMapUsage::StencilTest,
-        input_render_attachments,
-        output_render_attachments,
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
-        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        label: format!(
-            "Temporal anti-aliasing pass (current frame weight: {})",
-            current_frame_weight
-        ),
-        ..Default::default()
+    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
+        pass: RenderPassSpecification {
+            output_render_attachments,
+            depth_map_usage: DepthMapUsage::StencilTest,
+            label: "Temporal anti-aliasing pass".to_string(),
+            ..Default::default()
+        },
+        pipeline: Some(RenderPipelineSpecification {
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_shader_id: Some(shader_id),
+            resource_group_id: Some(resource_group_id),
+            input_render_attachments,
+            push_constants: PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
+            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
+            label: format!(
+                "Temporal anti-aliasing (current frame weight: {})",
+                current_frame_weight
+            ),
+            ..Default::default()
+        }),
     })
 }
 

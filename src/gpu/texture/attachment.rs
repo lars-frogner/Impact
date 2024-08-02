@@ -87,7 +87,7 @@ pub enum OutputAttachmentSampling {
 }
 
 /// A set of descriptions for render attachments.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderAttachmentDescriptionSet<D> {
     quantities: RenderAttachmentQuantitySet,
     descriptions: HashMap<RenderAttachmentQuantity, D>,

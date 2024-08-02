@@ -3,7 +3,7 @@
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::render_command::RenderPassHints,
+        rendering::render_command::RenderPipelineHints,
         shader::{
             BumpMappingTextureShaderInput, MaterialShaderInput, NormalMappingShaderInput,
             ParallaxMappingShaderInput, PrepassTextureShaderInput,
@@ -192,7 +192,7 @@ pub fn create_prepass_material(
                 output_render_attachments,
                 None,
                 vec![feature_type_id],
-                RenderPassHints::empty(),
+                RenderPipelineHints::empty(),
                 MaterialShaderInput::Prepass(texture_shader_input),
             )
         });

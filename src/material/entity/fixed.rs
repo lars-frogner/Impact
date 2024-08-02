@@ -4,7 +4,7 @@ use super::super::features::FixedColorMaterialFeature;
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::render_command::{Blending, RenderPassHints},
+        rendering::render_command::{Blending, RenderPipelineHints},
         shader::{FixedTextureShaderInput, MaterialShaderInput},
         texture::attachment::{
             RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
@@ -110,7 +110,7 @@ pub fn setup_fixed_color_material(
                 output_render_attachments,
                 None,
                 vec![FixedColorMaterialFeature::FEATURE_TYPE_ID],
-                RenderPassHints::empty(),
+                RenderPipelineHints::empty(),
                 MaterialShaderInput::Fixed(None),
             )
         });
@@ -141,7 +141,7 @@ pub fn setup_fixed_texture_material(
                 output_render_attachments,
                 None,
                 Vec::new(),
-                RenderPassHints::empty(),
+                RenderPipelineHints::empty(),
                 MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
                     color_texture_and_sampler_bindings:
                         MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(0),
