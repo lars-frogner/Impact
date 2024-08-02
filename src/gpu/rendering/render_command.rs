@@ -65,61 +65,83 @@ pub struct RenderCommandManager {
     postprocessing_passes: Vec<RenderCommandRecorder>,
 }
 
+/// Holds the information describing a specific render subpass, which is part of
+/// an overarching render pass.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RenderSubpassSpecification {
+    /// The render pass this subpass is part of.
+    pub pass: RenderPassSpecification,
+    /// The pipeline this subpass uses, or [`None`] if the subpass does not use
+    /// a pipeline.
+    pub pipeline: Option<RenderPipelineSpecification>,
+}
+
 /// Holds the information describing a specific render pass.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderPassSpecification {
-    /// Whether to clear the rendering surface.
-    pub clear_surface: bool,
+    /// Descriptions for the render attachments to use as outputs in the pass.
+    pub output_render_attachments: RenderAttachmentOutputDescriptionSet,
+    /// Whether and how the surface will be modified.
+    pub surface_modification: SurfaceModification,
+    /// Whether and how the depth map will be used.
+    pub depth_map_usage: DepthMapUsage,
+    /// Whether and how a shadow map will be modified.
+    pub shadow_map_modification: ShadowMapModification,
     /// Which non-depth render attachments to clear in this pass.
     pub color_attachments_to_clear: RenderAttachmentQuantitySet,
-    /// ID of the model type to render, or [`None`] if the pass does not render
-    /// a model (e.g. a clearing pass).
+    pub label: String,
+}
+
+/// Holds the information describing a specific render pipeline.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderPipelineSpecification {
+    /// ID of the model type to render, or [`None`] if the pipeline does not
+    /// involve drawing a defined model.
     pub model_id: Option<ModelID>,
+    /// Whether to use the prepass material associated with the model's material
+    /// rather than using the model's material.
+    pub use_prepass_material: bool,
+    /// Light source whose contribution is computed in this pipeline.
+    pub light: Option<LightInfo>,
+    /// Whether to bind the shadow map associated with the light to the
+    /// pipeline.
+    pub use_shadow_map: bool,
     /// If present, use this mesh rather than a mesh associated with a model.
     pub explicit_mesh_id: Option<MeshID>,
     /// If present, use this material rather than a material associated with a
     /// model.
     pub explicit_material_id: Option<MaterialID>,
-    /// If present, bind this GPU resource group for the pass.
+    /// If present, bind this GPU resource group to the pipeline.
     pub resource_group_id: Option<GPUResourceGroupID>,
-    /// If present, using this shader for the pass rather than generating one.
+    /// If present, using this shader for the pipeline rather than generating
+    /// one.
     pub explicit_shader_id: Option<ShaderID>,
-    /// Whether to use the prepass material associated with the model's material
-    /// rather than using the model's material.
-    pub use_prepass_material: bool,
-    /// Whether and how the depth map will be used.
-    pub depth_map_usage: DepthMapUsage,
-    /// Light source whose contribution is computed in this pass.
-    pub light: Option<LightInfo>,
-    /// Whether and how the shadow map will be used.
-    pub shadow_map_usage: ShadowMapUsage,
-    /// The vertex attributes to use in the pass.
+    /// The vertex attributes to use for the pipeline.
     pub vertex_attribute_requirements: VertexAttributeSet,
-    /// Descriptions for the render attachments to bind as inputs to the pass.
+    /// Descriptions for the render attachments to bind as inputs in the
+    /// pipeline.
     pub input_render_attachments: RenderAttachmentInputDescriptionSet,
-    /// Descriptions for the render attachments to use as outputs in the pass.
-    pub output_render_attachments: RenderAttachmentOutputDescriptionSet,
-    /// The group of push constants to use in the pass.
+    /// The group of push constants to use in the pipeline.
     pub push_constants: PushConstantGroup,
-    pub hints: RenderPassHints,
+    pub hints: RenderPipelineHints,
     pub label: String,
 }
 
 /// Holds the information describing a specific render command.
 #[derive(Clone, Debug)]
 pub enum RenderCommandSpecification {
-    RenderPass(RenderPassSpecification),
+    RenderSubpass(RenderSubpassSpecification),
     ComputePass(ComputePassSpecification),
     RenderAttachmentMipmappingPass { quantity: RenderAttachmentQuantity },
     StorageBufferResultCopyPass { buffer_id: StorageBufferID },
 }
 
-/// Recorder for a specific render pass.
+/// Recorder for a specific render subpass.
 #[derive(Debug)]
-pub struct RenderPassRecorder {
-    specification: RenderPassSpecification,
+pub struct RenderSubpassRecorder {
+    pass_spec: RenderPassSpecification,
+    pipeline: Option<(RenderPipelineSpecification, wgpu::RenderPipeline)>,
     attachments_to_resolve: RenderAttachmentQuantitySet,
-    pipeline: Option<wgpu::RenderPipeline>,
     state: RenderCommandState,
 }
 
@@ -139,7 +161,7 @@ pub struct StorageBufferResultCopyPassRecorder {
 
 #[derive(Debug)]
 pub enum RenderCommandRecorder {
-    RenderPass(RenderPassRecorder),
+    RenderSubpass(RenderSubpassRecorder),
     ComputePass(ComputePassRecorder),
     RenderAttachmentMipmappingPass(RenderAttachmentMipmappingPassRecorder),
     StorageBufferResultCopyPass(StorageBufferResultCopyPassRecorder),
@@ -161,8 +183,8 @@ pub enum RenderCommandOutcome {
 
 bitflags! {
     /// Bitflag encoding a set of hints for configuring a render pass.
-    #[derive(Debug, Clone, Copy)]
-    pub struct RenderPassHints: u8 {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct RenderPipelineHints: u8 {
         /// The appearance of the rendered material is affected by light
         /// sources.
         const AFFECTED_BY_LIGHT = 1 << 0;
@@ -170,8 +192,6 @@ bitflags! {
         const NO_DEPTH_PREPASS  = 1 << 1;
         /// The render pass does not make use of a camera.
         const NO_CAMERA         = 1 << 2;
-        /// The render pass writes directly to the rendering surface.
-        const WRITES_TO_SURFACE = 1 << 3;
     }
 }
 
@@ -186,10 +206,20 @@ struct LightShadedModelShadingPasses {
     shading_passes: Vec<RenderCommandRecorder>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct LightInfo {
     light_type: LightType,
     light_id: LightID,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SurfaceModification {
+    /// The surface is not used.
+    None,
+    /// Clear the surface.
+    Clear,
+    /// Write to the surface.
+    Write,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -212,7 +242,7 @@ pub enum DepthMapUsage {
 type WriteDepths = bool;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ShadowMapUsage {
+pub enum ShadowMapModification {
     /// No shadow map is used.
     None,
     /// Clear the specified shadow map with the maximum depth (1.0).
@@ -220,8 +250,6 @@ pub enum ShadowMapUsage {
     /// Fill the specified shadow map with model depths from the light's point
     /// of view.
     Update(ShadowMapIdentifier),
-    /// Make the shadow map texture available for sampling in the shader.
-    Use,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -418,9 +446,9 @@ impl RenderCommandManager {
                 .get_material_specification(model_id.material_handle().material_id())
                 .expect("Missing specification for material");
 
-            let hints = material_specification.render_pass_hints();
+            let hints = material_specification.render_pipeline_hints();
 
-            if hints.contains(RenderPassHints::AFFECTED_BY_LIGHT) {
+            if hints.contains(RenderPipelineHints::AFFECTED_BY_LIGHT) {
                 match self.light_shaded_model_index_mapper.try_push_key(model_id) {
                     // The model has no existing shading passes
                     Ok(_) => {
@@ -431,7 +459,7 @@ impl RenderCommandManager {
 
                             if ambient_light_ids.is_empty() {
                                 self.light_shaded_model_shading_prepasses.push(
-                                    RenderCommandRecorder::new_render_pass(
+                                    RenderCommandRecorder::new_render_subpass(
                                         config,
                                         graphics_device,
                                         rendering_surface,
@@ -440,7 +468,7 @@ impl RenderCommandManager {
                                         render_attachment_texture_manager,
                                         gpu_resource_group_manager,
                                         shader_manager,
-                                        RenderPassSpecification::shading_prepass(
+                                        RenderSubpassSpecification::shading_prepass(
                                             None,
                                             model_id,
                                             prepass_material_specification,
@@ -469,7 +497,7 @@ impl RenderCommandManager {
                                     // single prepass without a light is
                                     // actually needed.
                                     self.light_shaded_model_shading_prepasses.push(
-                                        RenderCommandRecorder::new_render_pass(
+                                        RenderCommandRecorder::new_render_subpass(
                                             config,
                                             graphics_device,
                                             rendering_surface,
@@ -478,7 +506,7 @@ impl RenderCommandManager {
                                             render_attachment_texture_manager,
                                             gpu_resource_group_manager,
                                             shader_manager,
-                                            RenderPassSpecification::shading_prepass(
+                                            RenderSubpassSpecification::shading_prepass(
                                                 Some(light),
                                                 model_id,
                                                 prepass_material_specification,
@@ -492,7 +520,7 @@ impl RenderCommandManager {
                             // If the new model has no prepass material, we
                             // create a pure depth prepass
                             self.light_shaded_model_shading_prepasses.push(
-                                RenderCommandRecorder::new_render_pass(
+                                RenderCommandRecorder::new_render_subpass(
                                     config,
                                     graphics_device,
                                     rendering_surface,
@@ -501,10 +529,11 @@ impl RenderCommandManager {
                                     render_attachment_texture_manager,
                                     gpu_resource_group_manager,
                                     shader_manager,
-                                    RenderPassSpecification::depth_prepass(model_id, hints),
+                                    RenderSubpassSpecification::depth_prepass(model_id, hints),
                                     RenderCommandState::disabled_if(
                                         no_visible_instances
-                                            || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                            || hints
+                                                .contains(RenderPipelineHints::NO_DEPTH_PREPASS),
                                     ),
                                 )?,
                             );
@@ -533,22 +562,20 @@ impl RenderCommandManager {
 
                                         for face in CubemapFace::all() {
                                             shadow_map_clearing_passes
-                                                .push(RenderCommandRecorder::new_render_pass(
-                                                config,
-                                                graphics_device,
-                                                rendering_surface,
-                                                material_library,
-                                                render_resources,
-                                                render_attachment_texture_manager,
-                                                gpu_resource_group_manager,
-                                                shader_manager,
-                                                RenderPassSpecification::shadow_map_clearing_pass(
-                                                    ShadowMapIdentifier::ForOmnidirectionalLight(
-                                                        face,
-                                                    ),
-                                                ),
-                                                RenderCommandState::Active,
-                                            )?);
+                                            .push(RenderCommandRecorder::new_render_subpass(
+                                            config,
+                                            graphics_device,
+                                            rendering_surface,
+                                            material_library,
+                                            render_resources,
+                                            render_attachment_texture_manager,
+                                            gpu_resource_group_manager,
+                                            shader_manager,
+                                            RenderSubpassSpecification::shadow_map_clearing_pass(
+                                                ShadowMapIdentifier::ForOmnidirectionalLight(face),
+                                            ),
+                                            RenderCommandState::Active,
+                                        )?);
                                         }
 
                                         entry.insert(LightShadedModelShadingPasses {
@@ -573,7 +600,7 @@ impl RenderCommandManager {
 
                             for face in CubemapFace::all() {
                                 shadow_map_update_passes_for_faces.push(
-                                    RenderCommandRecorder::new_render_pass(
+                                    RenderCommandRecorder::new_render_subpass(
                                         config,
                                         graphics_device,
                                         rendering_surface,
@@ -582,7 +609,7 @@ impl RenderCommandManager {
                                         render_attachment_texture_manager,
                                         gpu_resource_group_manager,
                                         shader_manager,
-                                        RenderPassSpecification::shadow_map_update_pass(
+                                        RenderSubpassSpecification::shadow_map_update_pass(
                                             light,
                                             model_id,
                                             ShadowMapIdentifier::ForOmnidirectionalLight(face),
@@ -600,7 +627,7 @@ impl RenderCommandManager {
                             // the new model
                             passes
                                 .shading_passes
-                                .push(RenderCommandRecorder::new_render_pass(
+                                .push(RenderCommandRecorder::new_render_subpass(
                                     config,
                                     graphics_device,
                                     rendering_surface,
@@ -609,7 +636,7 @@ impl RenderCommandManager {
                                     render_attachment_texture_manager,
                                     gpu_resource_group_manager,
                                     shader_manager,
-                                    RenderPassSpecification::model_shading_pass_with_shadow_map(
+                                    RenderSubpassSpecification::model_shading_pass_with_shadow_map(
                                         light,
                                         model_id,
                                         material_specification,
@@ -641,22 +668,22 @@ impl RenderCommandManager {
 
                                         for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
                                             shadow_map_clearing_passes
-                                                .push(RenderCommandRecorder::new_render_pass(
-                                                config,
-                                                graphics_device,
-                                                rendering_surface,
-                                                material_library,
-                                                render_resources,
-                                                render_attachment_texture_manager,
-                                                gpu_resource_group_manager,
-                                                shader_manager,
-                                                RenderPassSpecification::shadow_map_clearing_pass(
-                                                    ShadowMapIdentifier::ForUnidirectionalLight(
-                                                        cascade_idx,
-                                                    ),
+                                            .push(RenderCommandRecorder::new_render_subpass(
+                                            config,
+                                            graphics_device,
+                                            rendering_surface,
+                                            material_library,
+                                            render_resources,
+                                            render_attachment_texture_manager,
+                                            gpu_resource_group_manager,
+                                            shader_manager,
+                                            RenderSubpassSpecification::shadow_map_clearing_pass(
+                                                ShadowMapIdentifier::ForUnidirectionalLight(
+                                                    cascade_idx,
                                                 ),
-                                                RenderCommandState::Active,
-                                            )?);
+                                            ),
+                                            RenderCommandState::Active,
+                                        )?);
                                         }
 
                                         entry.insert(LightShadedModelShadingPasses {
@@ -683,7 +710,7 @@ impl RenderCommandManager {
 
                             for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
                                 shadow_map_update_passes_for_cascades.push(
-                                    RenderCommandRecorder::new_render_pass(
+                                    RenderCommandRecorder::new_render_subpass(
                                         config,
                                         graphics_device,
                                         rendering_surface,
@@ -692,7 +719,7 @@ impl RenderCommandManager {
                                         render_attachment_texture_manager,
                                         gpu_resource_group_manager,
                                         shader_manager,
-                                        RenderPassSpecification::shadow_map_update_pass(
+                                        RenderSubpassSpecification::shadow_map_update_pass(
                                             light,
                                             model_id,
                                             ShadowMapIdentifier::ForUnidirectionalLight(
@@ -712,7 +739,7 @@ impl RenderCommandManager {
                             // the new model
                             passes
                                 .shading_passes
-                                .push(RenderCommandRecorder::new_render_pass(
+                                .push(RenderCommandRecorder::new_render_subpass(
                                     config,
                                     graphics_device,
                                     rendering_surface,
@@ -721,7 +748,7 @@ impl RenderCommandManager {
                                     render_attachment_texture_manager,
                                     gpu_resource_group_manager,
                                     shader_manager,
-                                    RenderPassSpecification::model_shading_pass_with_shadow_map(
+                                    RenderSubpassSpecification::model_shading_pass_with_shadow_map(
                                         light,
                                         model_id,
                                         material_specification,
@@ -737,7 +764,7 @@ impl RenderCommandManager {
                         self.light_shaded_model_shading_prepasses[model_idx].set_disabled(
                             no_visible_instances
                                 || (model_id.prepass_material_handle().is_none()
-                                    && hints.contains(RenderPassHints::NO_DEPTH_PREPASS)),
+                                    && hints.contains(RenderPipelineHints::NO_DEPTH_PREPASS)),
                         );
 
                         self.light_shaded_model_shading_passes.iter_mut().for_each(
@@ -747,11 +774,11 @@ impl RenderCommandManager {
                                 {
                                     for recorder in recorders
                                         .iter_mut()
-                                        .filter_map(RenderCommandRecorder::as_render_pass_mut)
+                                        .filter_map(RenderCommandRecorder::as_render_subpass_mut)
                                     {
                                         let range_id =
-                                            if let ShadowMapUsage::Update(shadow_map_id) =
-                                                recorder.specification.shadow_map_usage
+                                            if let ShadowMapModification::Update(shadow_map_id) =
+                                                recorder.pass_spec().shadow_map_modification
                                             {
                                                 match shadow_map_id {
                                                 ShadowMapIdentifier::ForOmnidirectionalLight(
@@ -795,7 +822,7 @@ impl RenderCommandManager {
                     Ok(_) => {
                         // Create a depth prepass for the new model
                         self.non_light_shaded_model_depth_prepasses.push(
-                            RenderCommandRecorder::new_render_pass(
+                            RenderCommandRecorder::new_render_subpass(
                                 config,
                                 graphics_device,
                                 rendering_surface,
@@ -804,17 +831,17 @@ impl RenderCommandManager {
                                 render_attachment_texture_manager,
                                 gpu_resource_group_manager,
                                 shader_manager,
-                                RenderPassSpecification::depth_prepass(model_id, hints),
+                                RenderSubpassSpecification::depth_prepass(model_id, hints),
                                 RenderCommandState::disabled_if(
                                     no_visible_instances
-                                        || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                        || hints.contains(RenderPipelineHints::NO_DEPTH_PREPASS),
                                 ),
                             )?,
                         );
 
                         // Create a shading pass for the new model
                         self.non_light_shaded_model_shading_passes.push(
-                            RenderCommandRecorder::new_render_pass(
+                            RenderCommandRecorder::new_render_subpass(
                                 config,
                                 graphics_device,
                                 rendering_surface,
@@ -823,7 +850,7 @@ impl RenderCommandManager {
                                 render_attachment_texture_manager,
                                 gpu_resource_group_manager,
                                 shader_manager,
-                                RenderPassSpecification::model_shading_pass_without_shadow_map(
+                                RenderSubpassSpecification::model_shading_pass_without_shadow_map(
                                     None,
                                     model_id,
                                     material_specification,
@@ -838,7 +865,7 @@ impl RenderCommandManager {
 
                         self.non_light_shaded_model_depth_prepasses[model_idx].set_disabled(
                             no_visible_instances
-                                || hints.contains(RenderPassHints::NO_DEPTH_PREPASS),
+                                || hints.contains(RenderPipelineHints::NO_DEPTH_PREPASS),
                         );
 
                         self.non_light_shaded_model_shading_passes[model_idx]
@@ -889,7 +916,7 @@ impl RenderCommandManager {
                 RenderAttachmentQuantitySet::non_multisampling_quantities();
             if !non_multisampling_quantities.is_empty() {
                 self.clearing_passes
-                    .push(RenderCommandRecorder::clearing_render_pass(
+                    .extend(RenderCommandRecorder::clearing_render_passes(
                         false,
                         non_multisampling_quantities,
                     ));
@@ -898,14 +925,14 @@ impl RenderCommandManager {
             let multisampling_quantities = RenderAttachmentQuantitySet::multisampling_quantities();
             if !multisampling_quantities.is_empty() {
                 self.clearing_passes
-                    .push(RenderCommandRecorder::clearing_render_pass(
+                    .extend(RenderCommandRecorder::clearing_render_passes(
                         false,
                         multisampling_quantities,
                     ));
             }
         } else {
             self.clearing_passes
-                .push(RenderCommandRecorder::clearing_render_pass(
+                .extend(RenderCommandRecorder::clearing_render_passes(
                     false,
                     RenderAttachmentQuantitySet::all(),
                 ));
@@ -922,7 +949,7 @@ impl RenderCommandManager {
 
         for (idx, recorder) in self
             .recorders_mut()
-            .filter_map(RenderCommandRecorder::as_render_pass_mut)
+            .filter_map(RenderCommandRecorder::as_render_subpass_mut)
             .enumerate()
         {
             recorder.attachments_to_resolve = RenderAttachmentQuantitySet::empty();
@@ -931,7 +958,7 @@ impl RenderCommandManager {
                 for &quantity in RenderAttachmentQuantity::all() {
                     if quantity.supports_multisampling() {
                         if let Some(output_description) = recorder
-                            .specification
+                            .pass_spec()
                             .output_render_attachments
                             .get_description(quantity)
                         {
@@ -941,12 +968,12 @@ impl RenderCommandManager {
                             }
                         }
 
-                        if recorder
-                            .specification
-                            .input_render_attachments
-                            .quantities()
-                            .contains(quantity.flag())
-                        {
+                        if recorder.pipeline_spec().map_or(false, |pipeline_spec| {
+                            pipeline_spec
+                                .input_render_attachments
+                                .quantities()
+                                .contains(quantity.flag())
+                        }) {
                             let first_idx =
                                 &mut first_indices_of_input_attachments[quantity.index()];
                             if first_idx.is_none() {
@@ -972,9 +999,9 @@ impl RenderCommandManager {
                         last used as multisampled output in render pass {} ({}))",
                         quantity,
                         first_idx,
-                        &recorders[first_idx].specification.label,
+                        &recorders[first_idx].label(),
                         last_idx,
-                        &recorders[last_idx].specification.label
+                        &recorders[last_idx].label()
                     );
                 }
                 (Some(last_idx), _) => {
@@ -994,6 +1021,106 @@ impl Default for RenderCommandManager {
     }
 }
 
+impl RenderSubpassSpecification {
+    /// Creates the specification for the render subpass that will update the
+    /// depth map with the depths of the model with the given ID.
+    fn depth_prepass(model_id: ModelID, hints: RenderPipelineHints) -> Self {
+        Self {
+            pass: RenderPassSpecification::depth_prepass(),
+            pipeline: Some(RenderPipelineSpecification::depth_prepass_pipeline(
+                model_id, hints,
+            )),
+        }
+    }
+
+    /// Creates the specification for the render subpass that will render the
+    /// model with the given ID and prepass material.
+    fn shading_prepass(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        material_specification: &MaterialSpecification,
+    ) -> Self {
+        Self {
+            pass: RenderPassSpecification::shading_prepass(
+                material_specification.output_render_attachments().clone(),
+            ),
+            pipeline: Some(RenderPipelineSpecification::shading_prepass_pipeline(
+                light,
+                model_id,
+                material_specification,
+            )),
+        }
+    }
+
+    /// Creates the specification for the render subpass that will render the
+    /// model with the given ID and material without making use of a shadow map.
+    fn model_shading_pass_without_shadow_map(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        material_specification: &MaterialSpecification,
+    ) -> Self {
+        Self {
+            pass: RenderPassSpecification::model_shading_pass(
+                material_specification.output_render_attachments().clone(),
+            ),
+            pipeline: Some(
+                RenderPipelineSpecification::model_shading_pipeline_without_shadow_map(
+                    light,
+                    model_id,
+                    material_specification,
+                ),
+            ),
+        }
+    }
+
+    /// Creates the specification for the render subpass that will render the
+    /// model with the given ID and material, making use of a shadow map.
+    fn model_shading_pass_with_shadow_map(
+        light: LightInfo,
+        model_id: ModelID,
+        material_specification: &MaterialSpecification,
+    ) -> Self {
+        Self {
+            pass: RenderPassSpecification::model_shading_pass(
+                material_specification.output_render_attachments().clone(),
+            ),
+            pipeline: Some(
+                RenderPipelineSpecification::model_shading_pipeline_with_shadow_map(
+                    light,
+                    model_id,
+                    material_specification,
+                ),
+            ),
+        }
+    }
+
+    /// Creates the specification for the render subpass that will clear the
+    /// given shadow map.
+    fn shadow_map_clearing_pass(shadow_map_id: ShadowMapIdentifier) -> Self {
+        Self {
+            pass: RenderPassSpecification::shadow_map_clearing_pass(shadow_map_id),
+            pipeline: None,
+        }
+    }
+
+    /// Creates the specification for the render subpass that will update the
+    /// given shadow map with the depths of the model with the given ID from the
+    /// point of view of the given light.
+    fn shadow_map_update_pass(
+        light: LightInfo,
+        model_id: ModelID,
+        shadow_map_id: ShadowMapIdentifier,
+        hints: RenderPipelineHints,
+    ) -> Self {
+        Self {
+            pass: RenderPassSpecification::shadow_map_update_pass(shadow_map_id),
+            pipeline: Some(RenderPipelineSpecification::shadow_map_update_pipeline(
+                light, model_id, hints,
+            )),
+        }
+    }
+}
+
 impl RenderPassSpecification {
     /// Maximum z-value in clip space.
     const CLEAR_DEPTH: f32 = 1.0;
@@ -1001,220 +1128,92 @@ impl RenderPassSpecification {
     const CLEAR_STENCIL_VALUE: u32 = 0;
     const REFERENCE_STENCIL_VALUE: u32 = 1;
 
-    /// Creates the specification for the render pass that will clear the given
-    /// render attachments.
-    fn clearing_pass(
+    /// Creates the specifications for the render passes that will clear the
+    /// given render attachments (we may need multiple passes due to
+    /// resitrictions on the maximum number of bound render attachments).
+    fn clearing_passes(
         clear_surface: bool,
         render_attachment_quantities_to_clear: RenderAttachmentQuantitySet,
-    ) -> Self {
-        Self {
-            clear_surface,
-            color_attachments_to_clear: render_attachment_quantities_to_clear.color_only(),
-            depth_map_usage: if render_attachment_quantities_to_clear
+    ) -> Vec<Self> {
+        let color_attachments_to_clear =
+            render_attachment_quantities_to_clear.with_clear_color_only();
+
+        let mut depth_map_usage = Some(
+            if render_attachment_quantities_to_clear
                 .contains(RenderAttachmentQuantitySet::DEPTH_STENCIL)
             {
                 DepthMapUsage::Clear
             } else {
                 DepthMapUsage::None
             },
-            hints: if clear_surface {
-                RenderPassHints::WRITES_TO_SURFACE
-            } else {
-                RenderPassHints::empty()
-            },
-            label: "Clearing pass".to_string(),
-            ..Default::default()
+        );
+
+        if color_attachments_to_clear.is_empty() {
+            return vec![Self {
+                surface_modification: if clear_surface {
+                    SurfaceModification::Clear
+                } else {
+                    SurfaceModification::None
+                },
+                depth_map_usage: depth_map_usage.take().unwrap_or(DepthMapUsage::None),
+                color_attachments_to_clear: RenderAttachmentQuantitySet::empty(),
+                label: "Clearing pass".to_string(),
+                ..Default::default()
+            }];
         }
+
+        let each_color_attachment_to_clear: Vec<_> = color_attachments_to_clear.iter().collect();
+
+        each_color_attachment_to_clear
+            .chunks(8) // Only 8 render attachments can be bound at once
+            .map(|color_attachments_to_clear| Self {
+                surface_modification: if clear_surface {
+                    SurfaceModification::Clear
+                } else {
+                    SurfaceModification::None
+                },
+                depth_map_usage: depth_map_usage.take().unwrap_or(DepthMapUsage::None),
+                color_attachments_to_clear: color_attachments_to_clear
+                    .iter()
+                    .copied()
+                    .reduce(|a, b| a | b)
+                    .unwrap_or_else(RenderAttachmentQuantitySet::empty),
+                label: "Clearing pass".to_string(),
+                ..Default::default()
+            })
+            .collect()
     }
 
     /// Creates the specification for the render pass that will update the depth
-    /// map with the depths of the model with the given ID.
-    fn depth_prepass(model_id: ModelID, hints: RenderPassHints) -> Self {
-        let push_constants: PushConstantGroup = [
-            PushConstant::new(
-                PushConstantVariant::FrameCounter,
-                wgpu::ShaderStages::VERTEX,
-            ),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::VERTEX,
-            ),
-        ]
-        .into_iter()
-        .collect();
-
+    /// map in a prepass.
+    fn depth_prepass() -> Self {
         Self {
-            model_id: Some(model_id),
             depth_map_usage: DepthMapUsage::Prepass,
-            push_constants,
-            hints,
-            label: format!("Depth prepass for model {}", model_id),
+            label: "Depth prepass".to_string(),
             ..Default::default()
         }
     }
 
-    /// Creates the specification for the render pass that will render the model
-    /// with the given ID and prepass material.
-    fn shading_prepass(
-        light: Option<LightInfo>,
-        model_id: ModelID,
-        material_specification: &MaterialSpecification,
-    ) -> Self {
-        let mut push_constants: PushConstantGroup = [
-            PushConstant::new(
-                PushConstantVariant::FrameCounter,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
-            ),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
-            ),
-            PushConstant::new(
-                PushConstantVariant::Exposure,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
-            ),
-        ]
-        .into_iter()
-        .collect();
-
-        if matches!(
-            light,
-            Some(LightInfo {
-                light_type: LightType::AmbientLight,
-                light_id: _
-            })
-        ) {
-            push_constants.add_push_constant(PushConstant::new(
-                PushConstantVariant::LightIdx,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
-            ));
-        }
-
-        let label = if let Some(light) = light {
-            format!(
-                "Shading prepass for model {} with light {} ({:?})",
-                model_id, light.light_id, light.light_type
-            )
-        } else {
-            format!("Shading prepass for model {}", model_id)
-        };
-
+    /// Creates the specification for the render pass that will write to the
+    /// given render attachments while performing depth testing and updating the
+    /// depth map (which is what we need for shading prepasses).
+    fn shading_prepass(output_render_attachments: RenderAttachmentOutputDescriptionSet) -> Self {
         Self {
-            model_id: Some(model_id),
-            use_prepass_material: true,
             depth_map_usage: DepthMapUsage::use_readwrite(),
-            light,
-            vertex_attribute_requirements: material_specification
-                .vertex_attribute_requirements_for_shader(),
-            input_render_attachments: material_specification.input_render_attachments().clone(),
-            output_render_attachments: material_specification.output_render_attachments().clone(),
-            push_constants,
-            hints: material_specification.render_pass_hints(),
-            label,
+            output_render_attachments,
+            label: "Shading prepass".to_string(),
             ..Default::default()
         }
     }
 
-    /// Creates the specification for the render pass that will render the model
-    /// with the given ID and material without making use of a shadow map.
-    fn model_shading_pass_without_shadow_map(
-        light: Option<LightInfo>,
-        model_id: ModelID,
-        material_specification: &MaterialSpecification,
-    ) -> Self {
-        let mut push_constants: PushConstantGroup = [
-            PushConstant::new(
-                PushConstantVariant::FrameCounter,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
-            ),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
-            ),
-            PushConstant::new(
-                PushConstantVariant::Exposure,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
-            ),
-        ]
-        .into_iter()
-        .collect();
-
-        if light.is_some() {
-            push_constants.add_push_constant(PushConstant::new(
-                PushConstantVariant::LightIdx,
-                // FRAGMENT for AmbientLight or OmnidirectionalLight, VERTEX_FRAGMENT for UnidirectionalLight
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ));
-        }
-
-        let label = if let Some(light) = light {
-            format!(
-                "Shading of model {} for light {} ({:?}) without shadow map",
-                model_id, light.light_id, light.light_type
-            )
-        } else {
-            format!("Shading of model {}", model_id)
-        };
-
+    /// Creates the specification for the render pass that will write to the
+    /// given render attachments while performing depth testing without updating
+    /// the depth map (which is what we need for shading passes).
+    fn model_shading_pass(output_render_attachments: RenderAttachmentOutputDescriptionSet) -> Self {
         Self {
-            model_id: Some(model_id),
             depth_map_usage: DepthMapUsage::use_readonly(),
-            light,
-            vertex_attribute_requirements: material_specification
-                .vertex_attribute_requirements_for_shader(),
-            input_render_attachments: material_specification.input_render_attachments().clone(),
-            output_render_attachments: material_specification.output_render_attachments().clone(),
-            push_constants,
-            hints: material_specification.render_pass_hints(),
-            label,
-            ..Default::default()
-        }
-    }
-
-    /// Creates the specification for the render pass that will render the model
-    /// with the given ID and material, making use of a shadow map.
-    fn model_shading_pass_with_shadow_map(
-        light: LightInfo,
-        model_id: ModelID,
-        material_specification: &MaterialSpecification,
-    ) -> Self {
-        let push_constants: PushConstantGroup = [
-            PushConstant::new(
-                PushConstantVariant::FrameCounter,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
-            ),
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
-            ),
-            PushConstant::new(
-                PushConstantVariant::Exposure,
-                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
-            ),
-            PushConstant::new(
-                PushConstantVariant::LightIdx,
-                // FRAGMENT for AmbientLight or OmnidirectionalLight, VERTEX_FRAGMENT for UnidirectionalLight
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ),
-        ]
-        .into_iter()
-        .collect();
-
-        Self {
-            model_id: Some(model_id),
-            depth_map_usage: DepthMapUsage::use_readonly(),
-            light: Some(light),
-            shadow_map_usage: ShadowMapUsage::Use,
-            vertex_attribute_requirements: material_specification
-                .vertex_attribute_requirements_for_shader(),
-            input_render_attachments: material_specification.input_render_attachments().clone(),
-            output_render_attachments: material_specification.output_render_attachments().clone(),
-            push_constants,
-            hints: material_specification.render_pass_hints(),
-            label: format!(
-                "Shading of model {} for light {} ({:?}) with shadow map",
-                model_id, light.light_id, light.light_type
-            ),
+            output_render_attachments,
+            label: "Shading pass".to_string(),
             ..Default::default()
         }
     }
@@ -1223,444 +1222,54 @@ impl RenderPassSpecification {
     /// shadow map.
     fn shadow_map_clearing_pass(shadow_map_id: ShadowMapIdentifier) -> Self {
         Self {
-            shadow_map_usage: ShadowMapUsage::Clear(shadow_map_id),
-            hints: RenderPassHints::empty(),
+            shadow_map_modification: ShadowMapModification::Clear(shadow_map_id),
             label: format!("Shadow map clearing pass ({:?})", shadow_map_id),
             ..Default::default()
         }
     }
 
     /// Creates the specification for the render pass that will update the given
-    /// shadow map with the depths of the model with the given ID from the point
-    /// of view of the given light.
-    fn shadow_map_update_pass(
-        light: LightInfo,
-        model_id: ModelID,
-        shadow_map_id: ShadowMapIdentifier,
-        hints: RenderPassHints,
-    ) -> Self {
-        let light_idx_stages = match light.light_type {
-            LightType::AmbientLight | LightType::OmnidirectionalLight => {
-                wgpu::ShaderStages::FRAGMENT
-            }
-            LightType::UnidirectionalLight => wgpu::ShaderStages::VERTEX,
-        };
-        let mut push_constants: PushConstantGroup =
-            PushConstant::new(PushConstantVariant::LightIdx, light_idx_stages).into();
-
-        if matches!(
-            shadow_map_id,
-            ShadowMapIdentifier::ForUnidirectionalLight(_)
-        ) {
-            push_constants.add_push_constant(PushConstant::new(
-                PushConstantVariant::CascadeIdx,
-                wgpu::ShaderStages::VERTEX,
-            ));
-        }
-
+    /// shadow map.
+    fn shadow_map_update_pass(shadow_map_id: ShadowMapIdentifier) -> Self {
         Self {
-            model_id: Some(model_id),
-            light: Some(light),
-            shadow_map_usage: ShadowMapUsage::Update(shadow_map_id),
-            push_constants,
-            hints,
-            label: format!(
-                "Shadow map update for model {} and light {} ({:?})",
-                model_id, light.light_id, shadow_map_id
-            ),
+            shadow_map_modification: ShadowMapModification::Update(shadow_map_id),
+            label: format!("Shadow map update pass ({:?})", shadow_map_id),
             ..Default::default()
         }
     }
 
-    fn get_mesh_buffer_manager(
-        render_resources: &SynchronizedRenderResources,
-        mesh_id: MeshID,
-    ) -> Result<&MeshGPUBufferManager> {
-        render_resources
-            .get_mesh_buffer_manager(mesh_id)
-            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))
-    }
-
-    fn get_instance_feature_buffer_managers(
-        render_resources: &SynchronizedRenderResources,
-        model_id: ModelID,
-        use_prepass_material: bool,
-        depth_map_usage: DepthMapUsage,
-        shadow_map_usage: ShadowMapUsage,
-    ) -> Result<(
-        &InstanceFeatureGPUBufferManager,
-        Option<&InstanceFeatureGPUBufferManager>,
-    )> {
-        if let Some(buffers) = render_resources.get_instance_feature_buffer_managers(model_id) {
-            // Transform buffer is always present and always first
-            let transform_buffer_manager = &buffers[0];
-
-            let material_property_buffer_manager = if depth_map_usage.is_prepass()
-                || shadow_map_usage.is_update()
-            {
-                // For pure depth prepass or shadow map update we only need
-                // transforms
-                None
-            } else if use_prepass_material {
-                let prepass_material_handle = model_id
-                    .prepass_material_handle()
-                    .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?;
-
-                // We assume that if both the prepass material and main material
-                // have material property features, they are the same, so we can
-                // use the same instance feature buffer (which will be placed
-                // directly after the transform buffer)
-
-                match (
-                    prepass_material_handle.material_property_feature_id(),
-                    model_id.material_handle().material_property_feature_id(),
-                ) {
-                    (None, _) => None,
-                    (Some(_), None) => Some(&buffers[1]),
-                    (Some(prepass_feature_id), Some(main_feature_id)) => {
-                        assert_eq!(
-                            prepass_feature_id, main_feature_id,
-                            "Prepass material must use the same feature as main material"
-                        );
-                        Some(&buffers[1])
-                    }
-                }
-            } else {
-                // When using the main material we know its buffer, if it
-                // exists, will be directly after the transform buffer
-                if model_id
-                    .material_handle()
-                    .material_property_feature_id()
-                    .is_some()
-                {
-                    Some(&buffers[1])
-                } else {
-                    None
-                }
-            };
-
-            Ok((transform_buffer_manager, material_property_buffer_manager))
-        } else {
-            Err(anyhow!(
-                "Missing instance GPU buffer for model {}",
-                model_id
-            ))
-        }
-    }
-
-    fn get_material_specification(
-        material_library: &MaterialLibrary,
-        material_id: MaterialID,
-    ) -> Result<&MaterialSpecification> {
-        material_library
-            .get_material_specification(material_id)
-            .ok_or_else(|| anyhow!("Missing specification for material {}", material_id))
-    }
-
-    fn get_material_property_texture_group(
-        material_library: &MaterialLibrary,
-        texture_group_id: MaterialPropertyTextureGroupID,
-    ) -> Result<&MaterialPropertyTextureGroup> {
-        material_library
-            .get_material_property_texture_group(texture_group_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Missing material property texture group {}",
-                    texture_group_id
-                )
-            })
-    }
-
-    /// Obtains the vertex buffer layouts for the required mesh vertex
-    /// attributes and instance features involved in the render pass, as well as
-    /// the associated shader inputs.
-    ///
-    /// The order of the layouts is:
-    /// 1. Mesh vertex attribute buffers.
-    /// 2. Transform feature buffer.
-    /// 2. Material property feature buffer.
-    fn get_vertex_buffer_layouts_and_shader_inputs<'a>(
+    fn begin_render_pass<'a, 'b>(
         &self,
-        render_resources: &'a SynchronizedRenderResources,
-    ) -> Result<(
-        Vec<wgpu::VertexBufferLayout<'static>>,
-        Option<&'a MeshShaderInput>,
-        Vec<&'a InstanceFeatureShaderInput>,
-    )> {
-        let mut layouts = Vec::with_capacity(8);
-        let mut mesh_shader_input = None;
-        let mut instance_feature_shader_inputs = Vec::with_capacity(2);
+        surface_texture_view: &'a wgpu::TextureView,
+        render_resources: &'b SynchronizedRenderResources,
+        render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
+        attachments_to_resolve: RenderAttachmentQuantitySet,
+        command_encoder: &'a mut wgpu::CommandEncoder,
+    ) -> wgpu::RenderPass<'a>
+    where
+        'b: 'a,
+    {
+        let color_attachments = self.create_color_attachments(
+            surface_texture_view,
+            render_attachment_texture_manager,
+            attachments_to_resolve,
+        );
 
-        if let Some(mesh_id) = self
-            .explicit_mesh_id
-            .or_else(|| self.model_id.map(|model_id| model_id.mesh_id()))
-        {
-            let mesh_buffer_manager = Self::get_mesh_buffer_manager(render_resources, mesh_id)?;
+        let depth_stencil_attachment = self
+            .create_depth_stencil_attachment(render_resources, render_attachment_texture_manager);
 
-            layouts.extend(
-                mesh_buffer_manager.request_vertex_buffer_layouts_including_position(
-                    self.vertex_attribute_requirements,
-                )?,
-            );
-            mesh_shader_input = Some(mesh_buffer_manager.shader_input());
-        }
+        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            // A `@location(i)` directive in the fragment shader output targets color attachment `i` here
+            color_attachments: &color_attachments,
+            depth_stencil_attachment,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            label: Some(&self.label),
+        });
 
-        if let Some(model_id) = self.model_id {
-            let (transform_buffer_manager, material_property_buffer_manager) =
-                Self::get_instance_feature_buffer_managers(
-                    render_resources,
-                    model_id,
-                    self.use_prepass_material,
-                    self.depth_map_usage,
-                    self.shadow_map_usage,
-                )?;
+        render_pass.set_stencil_reference(RenderPassSpecification::REFERENCE_STENCIL_VALUE);
 
-            layouts.push(transform_buffer_manager.vertex_buffer_layout().clone());
-            instance_feature_shader_inputs.push(transform_buffer_manager.shader_input());
-
-            if let Some(material_property_buffer_manager) = material_property_buffer_manager {
-                layouts.push(
-                    material_property_buffer_manager
-                        .vertex_buffer_layout()
-                        .clone(),
-                );
-                instance_feature_shader_inputs
-                    .push(material_property_buffer_manager.shader_input());
-            }
-        }
-
-        Ok((layouts, mesh_shader_input, instance_feature_shader_inputs))
-    }
-
-    /// Obtains the bind group layouts for any camera, material or lights
-    /// involved in the render pass, as well as the associated shader inputs.
-    ///
-    /// The order of the bind groups is:
-    /// 1. Camera.
-    /// 2. Lights.
-    /// 3. Shadow map textures.
-    /// 4. Material-specific resources.
-    /// 5. Material property textures.
-    /// 6. Render attachment textures.
-    /// 7. Generic GPU resource group.
-    fn get_bind_group_layouts_and_shader_inputs<'a>(
-        &self,
-        graphics_device: &'a GraphicsDevice,
-        material_library: &'a MaterialLibrary,
-        render_resources: &'a SynchronizedRenderResources,
-        render_attachment_texture_manager: &'a mut RenderAttachmentTextureManager,
-        gpu_resource_group_manager: &'a GPUResourceGroupManager,
-    ) -> Result<(
-        Vec<&'a wgpu::BindGroupLayout>,
-        BindGroupRenderingShaderInput<'a>,
-    )> {
-        let mut layouts = Vec::with_capacity(8);
-
-        let mut shader_input = BindGroupRenderingShaderInput {
-            camera: None,
-            light: None,
-            material: None,
-        };
-
-        // We do not need a camera if we are updating shadow map
-        if !self.shadow_map_usage.is_update() && !self.hints.contains(RenderPassHints::NO_CAMERA) {
-            if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
-                layouts.push(camera_buffer_manager.bind_group_layout());
-                shader_input.camera = Some(CameraGPUBufferManager::shader_input());
-            }
-        }
-
-        if let Some(LightInfo { light_type, .. }) = self.light {
-            let light_buffer_manager = render_resources
-                .get_light_buffer_manager()
-                .expect("Missing light GPU buffer manager for shading pass with light");
-
-            layouts.push(light_buffer_manager.light_bind_group_layout());
-
-            if self.shadow_map_usage.is_use() {
-                layouts.push(
-                    light_buffer_manager
-                        .shadow_map_bind_group_layout_for_light_type(light_type)
-                        .expect("Missing shadow map bind group layout for shading with shadow map"),
-                );
-            }
-
-            shader_input.light = Some(light_buffer_manager.shader_input_for_light_type(light_type));
-        }
-
-        if let Some(material_id) = self.explicit_material_id {
-            let material_specification =
-                Self::get_material_specification(material_library, material_id)?;
-
-            if let Some(material_specific_resources) =
-                material_specification.material_specific_resources()
-            {
-                layouts.push(material_specific_resources.bind_group_layout());
-            }
-
-            shader_input.material = Some(material_specification.shader_input());
-        } else if let Some(model_id) = self.model_id {
-            // We do not need a material if we are doing a pure depth prepass or
-            // updating a shadow map
-            if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
-                let material_handle = if self.use_prepass_material {
-                    model_id
-                        .prepass_material_handle()
-                        .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?
-                } else {
-                    model_id.material_handle()
-                };
-
-                let material_specification = Self::get_material_specification(
-                    material_library,
-                    material_handle.material_id(),
-                )?;
-
-                if let Some(material_specific_resources) =
-                    material_specification.material_specific_resources()
-                {
-                    layouts.push(material_specific_resources.bind_group_layout());
-                }
-
-                shader_input.material = Some(material_specification.shader_input());
-
-                if let Some(texture_group_id) = material_handle.material_property_texture_group_id()
-                {
-                    let material_property_texture_group =
-                        Self::get_material_property_texture_group(
-                            material_library,
-                            texture_group_id,
-                        )?;
-
-                    layouts.push(material_property_texture_group.bind_group_layout());
-                }
-            }
-        }
-
-        if !self.input_render_attachments.is_empty() {
-            layouts.extend(
-                render_attachment_texture_manager
-                    .create_and_get_render_attachment_texture_bind_group_layouts(
-                        graphics_device,
-                        &self.input_render_attachments,
-                    ),
-            );
-        }
-
-        if let Some(resource_group_id) = self.resource_group_id {
-            let resource_group = gpu_resource_group_manager
-                .get_resource_group(resource_group_id)
-                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
-
-            layouts.push(resource_group.bind_group_layout());
-        }
-
-        Ok((layouts, shader_input))
-    }
-
-    /// Obtains all bind groups involved in the render pass.
-    ///
-    /// The order of the bind groups is:
-    /// 1. Camera.
-    /// 2. Lights.
-    /// 3. Shadow map textures.
-    /// 4. Material-specific resources.
-    /// 5. Material property textures.
-    /// 6. Render attachment textures.
-    /// 7. Generic GPU resource group.
-    fn get_bind_groups<'a>(
-        &self,
-        material_library: &'a MaterialLibrary,
-        render_resources: &'a SynchronizedRenderResources,
-        render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
-        gpu_resource_group_manager: &'a GPUResourceGroupManager,
-    ) -> Result<Vec<&'a wgpu::BindGroup>> {
-        let mut bind_groups = Vec::with_capacity(8);
-
-        // We do not need a camera if we are updating shadow map
-        if !self.shadow_map_usage.is_update() && !self.hints.contains(RenderPassHints::NO_CAMERA) {
-            if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
-                bind_groups.push(camera_buffer_manager.bind_group());
-            }
-        }
-
-        if let Some(LightInfo { light_type, .. }) = self.light {
-            let light_buffer_manager = render_resources
-                .get_light_buffer_manager()
-                .expect("Missing light GPU buffer manager for shading pass with light");
-
-            bind_groups.push(light_buffer_manager.light_bind_group());
-
-            if self.shadow_map_usage.is_use() {
-                bind_groups.push(
-                    light_buffer_manager
-                        .shadow_map_bind_group_for_light_type(light_type)
-                        .expect("Missing shadow map bind group for shading with shadow map"),
-                );
-            }
-        }
-
-        if let Some(material_id) = self.explicit_material_id {
-            let material_specification =
-                Self::get_material_specification(material_library, material_id)?;
-
-            if let Some(material_specific_resources) =
-                material_specification.material_specific_resources()
-            {
-                bind_groups.push(material_specific_resources.bind_group());
-            }
-        } else if let Some(model_id) = self.model_id {
-            // We do not need a material if we are doing a pure depth prepass or
-            // updating a shadow map
-            if !(self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_update()) {
-                let material_handle = if self.use_prepass_material {
-                    model_id
-                        .prepass_material_handle()
-                        .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?
-                } else {
-                    model_id.material_handle()
-                };
-
-                let material_specification = Self::get_material_specification(
-                    material_library,
-                    material_handle.material_id(),
-                )?;
-
-                if let Some(material_specific_resources) =
-                    material_specification.material_specific_resources()
-                {
-                    bind_groups.push(material_specific_resources.bind_group());
-                }
-
-                if let Some(texture_group_id) = material_handle.material_property_texture_group_id()
-                {
-                    let material_property_texture_group =
-                        Self::get_material_property_texture_group(
-                            material_library,
-                            texture_group_id,
-                        )?;
-
-                    bind_groups.push(material_property_texture_group.bind_group());
-                }
-            }
-        }
-
-        if !self.input_render_attachments.is_empty() {
-            bind_groups.extend(
-                render_attachment_texture_manager
-                    .get_render_attachment_texture_bind_groups(&self.input_render_attachments),
-            );
-        }
-
-        if let Some(resource_group_id) = self.resource_group_id {
-            let resource_group = gpu_resource_group_manager
-                .get_resource_group(resource_group_id)
-                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
-
-            bind_groups.push(resource_group.bind_group());
-        }
-
-        Ok(bind_groups)
+        render_pass
     }
 
     /// Obtains a view into the shadow map texture involved in the render pass.
@@ -1668,7 +1277,10 @@ impl RenderPassSpecification {
         &self,
         render_resources: &'a SynchronizedRenderResources,
     ) -> Option<&'a wgpu::TextureView> {
-        if let Some(shadow_map_id) = self.shadow_map_usage.get_shadow_map_to_clear_or_update() {
+        if let Some(shadow_map_id) = self
+            .shadow_map_modification
+            .get_shadow_map_to_clear_or_update()
+        {
             let light_buffer_manager = render_resources
                 .get_light_buffer_manager()
                 .expect("Missing light GPU buffer manager for shadow mapping render pass");
@@ -1710,7 +1322,7 @@ impl RenderPassSpecification {
         rendering_surface: &RenderingSurface,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
     ) -> Vec<Option<wgpu::ColorTargetState>> {
-        if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_clear_or_update() {
+        if self.depth_map_usage.is_prepass() || self.shadow_map_modification.is_clear_or_update() {
             // For pure depth prepasses and shadow map clearing or updates we
             // only work with depths, so we don't need a color target
             Vec::new()
@@ -1737,7 +1349,7 @@ impl RenderPassSpecification {
                 );
             }
 
-            if self.hints.contains(RenderPassHints::WRITES_TO_SURFACE) {
+            if !self.surface_modification.is_none() {
                 color_target_states.push(Some(wgpu::ColorTargetState {
                     format: rendering_surface.texture_format(),
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -1750,8 +1362,8 @@ impl RenderPassSpecification {
     }
 
     fn determine_front_face(&self) -> wgpu::FrontFace {
-        if let ShadowMapUsage::Update(ShadowMapIdentifier::ForOmnidirectionalLight(_)) =
-            self.shadow_map_usage
+        if let ShadowMapModification::Update(ShadowMapIdentifier::ForOmnidirectionalLight(_)) =
+            self.shadow_map_modification
         {
             // The cubemap projection does not flip the z-axis, so the front
             // faces will have the opposite winding order compared to normal
@@ -1762,7 +1374,7 @@ impl RenderPassSpecification {
     }
 
     fn determine_depth_stencil_state(&self) -> Option<wgpu::DepthStencilState> {
-        if self.shadow_map_usage.is_clear_or_update() {
+        if self.shadow_map_modification.is_clear_or_update() {
             // For modifying the shadow map we have to set it as the depth
             // map for the pipeline
             Some(wgpu::DepthStencilState {
@@ -1883,13 +1495,12 @@ impl RenderPassSpecification {
     }
 
     fn create_color_attachments<'a, 'b: 'a>(
-        &'a self,
+        &self,
         surface_texture_view: &'a wgpu::TextureView,
         render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
-        output_render_attachments: &RenderAttachmentOutputDescriptionSet,
         attachments_to_resolve: RenderAttachmentQuantitySet,
-    ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
-        if self.depth_map_usage.is_prepass() || self.shadow_map_usage.is_clear_or_update() {
+    ) -> Vec<Option<wgpu::RenderPassColorAttachment<'a>>> {
+        if self.depth_map_usage.is_prepass() || self.shadow_map_modification.is_clear_or_update() {
             // For pure depth prepasses and shadow map clearing or updates we
             // only work with depths, so we don't need any color attachments
             Vec::new()
@@ -1897,7 +1508,7 @@ impl RenderPassSpecification {
             let mut color_attachments = Vec::with_capacity(RenderAttachmentQuantity::count());
 
             let render_attachment_quantities = if self.color_attachments_to_clear.is_empty() {
-                output_render_attachments.quantities()
+                self.output_render_attachments.quantities()
             } else {
                 self.color_attachments_to_clear.with_clear_color_only()
             };
@@ -1910,7 +1521,8 @@ impl RenderPassSpecification {
                             let should_resolve =
                                 attachments_to_resolve.contains(texture.quantity().flag());
 
-                            let output_description = output_render_attachments
+                            let output_description = self
+                                .output_render_attachments
                                 .get_description(texture.quantity())
                                 .unwrap_or_default();
 
@@ -1937,17 +1549,12 @@ impl RenderPassSpecification {
                 );
             }
 
-            if self.hints.contains(RenderPassHints::WRITES_TO_SURFACE) {
-                let load = if self.clear_surface {
-                    wgpu::LoadOp::Load
-                } else {
-                    wgpu::LoadOp::Clear(wgpu::Color::BLACK)
-                };
+            if !self.surface_modification.is_none() {
                 color_attachments.push(Some(wgpu::RenderPassColorAttachment {
                     view: surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load,
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 }));
@@ -1957,12 +1564,12 @@ impl RenderPassSpecification {
         }
     }
 
-    fn create_depth_stencil_attachment<'a, 'b: 'a>(
-        &'a self,
-        render_resources: &'b SynchronizedRenderResources,
-        render_attachment_texture_manager: &'b RenderAttachmentTextureManager,
-    ) -> Option<wgpu::RenderPassDepthStencilAttachment<'_>> {
-        if self.shadow_map_usage.is_clear() {
+    fn create_depth_stencil_attachment<'a>(
+        &self,
+        render_resources: &'a SynchronizedRenderResources,
+        render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
+    ) -> Option<wgpu::RenderPassDepthStencilAttachment<'a>> {
+        if self.shadow_map_modification.is_clear() {
             // For modifying the shadow map we have to set it as the depth
             // map for the pipeline
             Some(wgpu::RenderPassDepthStencilAttachment {
@@ -1973,7 +1580,7 @@ impl RenderPassSpecification {
                 }),
                 stencil_ops: None,
             })
-        } else if self.shadow_map_usage.is_update() {
+        } else if self.shadow_map_modification.is_update() {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: self.get_shadow_map_texture_view(render_resources).unwrap(),
                 depth_ops: Some(wgpu::Operations {
@@ -2027,30 +1634,739 @@ impl RenderPassSpecification {
 impl Default for RenderPassSpecification {
     fn default() -> Self {
         Self {
-            clear_surface: false,
+            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(),
+            surface_modification: SurfaceModification::None,
+            depth_map_usage: DepthMapUsage::None,
+            shadow_map_modification: ShadowMapModification::None,
             color_attachments_to_clear: RenderAttachmentQuantitySet::empty(),
+            label: String::new(),
+        }
+    }
+}
+
+impl RenderPipelineSpecification {
+    /// Creates the specification for the render pipeline that will update the
+    /// depth map with the depths of the model with the given ID.
+    fn depth_prepass_pipeline(model_id: ModelID, hints: RenderPipelineHints) -> Self {
+        let push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX,
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX,
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        Self {
+            model_id: Some(model_id),
+            push_constants,
+            hints,
+            label: format!("Depth prepass for model {}", model_id),
+            ..Default::default()
+        }
+    }
+
+    /// Creates the specification for the render pipeline that will render the
+    /// model with the given ID and prepass material.
+    fn shading_prepass_pipeline(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        material_specification: &MaterialSpecification,
+    ) -> Self {
+        let mut push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
+            ),
+            PushConstant::new(
+                PushConstantVariant::Exposure,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        if matches!(
+            light,
+            Some(LightInfo {
+                light_type: LightType::AmbientLight,
+                light_id: _
+            })
+        ) {
+            push_constants.add_push_constant(PushConstant::new(
+                PushConstantVariant::LightIdx,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ));
+        }
+
+        let label = if let Some(light) = light {
+            format!(
+                "Shading prepass for model {} with light {} ({:?})",
+                model_id, light.light_id, light.light_type
+            )
+        } else {
+            format!("Shading prepass for model {}", model_id)
+        };
+
+        Self {
+            model_id: Some(model_id),
+            use_prepass_material: true,
+            light,
+            vertex_attribute_requirements: material_specification
+                .vertex_attribute_requirements_for_shader(),
+            input_render_attachments: material_specification.input_render_attachments().clone(),
+            push_constants,
+            hints: material_specification.render_pipeline_hints(),
+            label,
+            ..Default::default()
+        }
+    }
+
+    /// Creates the specification for the render pipeline that will render the
+    /// model with the given ID and material without making use of a shadow map.
+    fn model_shading_pipeline_without_shadow_map(
+        light: Option<LightInfo>,
+        model_id: ModelID,
+        material_specification: &MaterialSpecification,
+    ) -> Self {
+        let mut push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
+            ),
+            PushConstant::new(
+                PushConstantVariant::Exposure,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        if light.is_some() {
+            push_constants.add_push_constant(PushConstant::new(
+                PushConstantVariant::LightIdx,
+                // FRAGMENT for AmbientLight or OmnidirectionalLight, VERTEX_FRAGMENT for UnidirectionalLight
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ));
+        }
+
+        let label = if let Some(light) = light {
+            format!(
+                "Shading of model {} for light {} ({:?}) without shadow map",
+                model_id, light.light_id, light.light_type
+            )
+        } else {
+            format!("Shading of model {}", model_id)
+        };
+
+        Self {
+            model_id: Some(model_id),
+            light,
+            vertex_attribute_requirements: material_specification
+                .vertex_attribute_requirements_for_shader(),
+            input_render_attachments: material_specification.input_render_attachments().clone(),
+            push_constants,
+            hints: material_specification.render_pipeline_hints(),
+            label,
+            ..Default::default()
+        }
+    }
+
+    /// Creates the specification for the render pipeline that will render the
+    /// model with the given ID and material, making use of a shadow map.
+    fn model_shading_pipeline_with_shadow_map(
+        light: LightInfo,
+        model_id: ModelID,
+        material_specification: &MaterialSpecification,
+    ) -> Self {
+        let push_constants: PushConstantGroup = [
+            PushConstant::new(
+                PushConstantVariant::FrameCounter,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX
+            ),
+            PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // VERTEX, and also FRAGMENT if there are input attachments
+            ),
+            PushConstant::new(
+                PushConstantVariant::Exposure,
+                wgpu::ShaderStages::VERTEX_FRAGMENT, // FRAGMENT
+            ),
+            PushConstant::new(
+                PushConstantVariant::LightIdx,
+                // FRAGMENT for AmbientLight or OmnidirectionalLight, VERTEX_FRAGMENT for UnidirectionalLight
+                wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        Self {
+            model_id: Some(model_id),
+            light: Some(light),
+            use_shadow_map: true,
+            vertex_attribute_requirements: material_specification
+                .vertex_attribute_requirements_for_shader(),
+            input_render_attachments: material_specification.input_render_attachments().clone(),
+            push_constants,
+            hints: material_specification.render_pipeline_hints(),
+            label: format!(
+                "Shading of model {} for light {} ({:?}) with shadow map",
+                model_id, light.light_id, light.light_type
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// Creates the specification for the render pipeline that will update the
+    /// given shadow map with the depths of the model with the given ID from the
+    /// point of view of the given light.
+    fn shadow_map_update_pipeline(
+        light: LightInfo,
+        model_id: ModelID,
+        hints: RenderPipelineHints,
+    ) -> Self {
+        let light_idx_stages = match light.light_type {
+            LightType::AmbientLight | LightType::OmnidirectionalLight => {
+                wgpu::ShaderStages::FRAGMENT
+            }
+            LightType::UnidirectionalLight => wgpu::ShaderStages::VERTEX,
+        };
+        let mut push_constants: PushConstantGroup =
+            PushConstant::new(PushConstantVariant::LightIdx, light_idx_stages).into();
+
+        if light.light_type == LightType::UnidirectionalLight {
+            push_constants.add_push_constant(PushConstant::new(
+                PushConstantVariant::CascadeIdx,
+                wgpu::ShaderStages::VERTEX,
+            ));
+        }
+
+        Self {
+            model_id: Some(model_id),
+            light: Some(light),
+            push_constants,
+            hints,
+            label: format!(
+                "Shadow map update for model {} and light {}",
+                model_id, light.light_id,
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// Obtains the vertex buffer layouts for the required mesh vertex
+    /// attributes and instance features involved in the render pass, as well as
+    /// the associated shader inputs.
+    ///
+    /// The order of the layouts is:
+    /// 1. Mesh vertex attribute buffers.
+    /// 2. Transform feature buffer.
+    /// 2. Material property feature buffer.
+    fn get_vertex_buffer_layouts_and_shader_inputs<'a>(
+        &self,
+        pass: &RenderPassSpecification,
+        render_resources: &'a SynchronizedRenderResources,
+    ) -> Result<(
+        Vec<wgpu::VertexBufferLayout<'static>>,
+        Option<&'a MeshShaderInput>,
+        Vec<&'a InstanceFeatureShaderInput>,
+    )> {
+        let mut layouts = Vec::with_capacity(8);
+        let mut mesh_shader_input = None;
+        let mut instance_feature_shader_inputs = Vec::with_capacity(2);
+
+        if let Some(mesh_id) = self
+            .explicit_mesh_id
+            .or_else(|| self.model_id.map(|model_id| model_id.mesh_id()))
+        {
+            let mesh_buffer_manager = Self::get_mesh_buffer_manager(render_resources, mesh_id)?;
+
+            layouts.extend(
+                mesh_buffer_manager.request_vertex_buffer_layouts_including_position(
+                    self.vertex_attribute_requirements,
+                )?,
+            );
+            mesh_shader_input = Some(mesh_buffer_manager.shader_input());
+        }
+
+        if let Some(model_id) = self.model_id {
+            let (transform_buffer_manager, material_property_buffer_manager) =
+                Self::get_instance_feature_buffer_managers(
+                    render_resources,
+                    model_id,
+                    self.use_prepass_material,
+                    pass.depth_map_usage,
+                    pass.shadow_map_modification,
+                )?;
+
+            layouts.push(transform_buffer_manager.vertex_buffer_layout().clone());
+            instance_feature_shader_inputs.push(transform_buffer_manager.shader_input());
+
+            if let Some(material_property_buffer_manager) = material_property_buffer_manager {
+                layouts.push(
+                    material_property_buffer_manager
+                        .vertex_buffer_layout()
+                        .clone(),
+                );
+                instance_feature_shader_inputs
+                    .push(material_property_buffer_manager.shader_input());
+            }
+        }
+
+        Ok((layouts, mesh_shader_input, instance_feature_shader_inputs))
+    }
+
+    /// Obtains the bind group layouts for any camera, material or lights
+    /// involved in the render pass, as well as the associated shader inputs.
+    ///
+    /// The order of the bind groups is:
+    /// 1. Camera.
+    /// 2. Lights.
+    /// 3. Shadow map textures.
+    /// 4. Material-specific resources.
+    /// 5. Material property textures.
+    /// 6. Render attachment textures.
+    /// 7. Generic GPU resource group.
+    fn get_bind_group_layouts_and_shader_inputs<'a>(
+        &self,
+        pass: &RenderPassSpecification,
+        graphics_device: &'a GraphicsDevice,
+        material_library: &'a MaterialLibrary,
+        render_resources: &'a SynchronizedRenderResources,
+        render_attachment_texture_manager: &'a mut RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &'a GPUResourceGroupManager,
+    ) -> Result<(
+        Vec<&'a wgpu::BindGroupLayout>,
+        BindGroupRenderingShaderInput<'a>,
+    )> {
+        let mut layouts = Vec::with_capacity(8);
+
+        let mut shader_input = BindGroupRenderingShaderInput {
+            camera: None,
+            light: None,
+            material: None,
+        };
+
+        // We do not need a camera if we are updating shadow map
+        if !pass.shadow_map_modification.is_update()
+            && !self.hints.contains(RenderPipelineHints::NO_CAMERA)
+        {
+            if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
+                layouts.push(camera_buffer_manager.bind_group_layout());
+                shader_input.camera = Some(CameraGPUBufferManager::shader_input());
+            }
+        }
+
+        if let Some(LightInfo { light_type, .. }) = self.light {
+            let light_buffer_manager = render_resources
+                .get_light_buffer_manager()
+                .expect("Missing light GPU buffer manager for shading pass with light");
+
+            layouts.push(light_buffer_manager.light_bind_group_layout());
+
+            if self.use_shadow_map {
+                layouts.push(
+                    light_buffer_manager
+                        .shadow_map_bind_group_layout_for_light_type(light_type)
+                        .expect("Missing shadow map bind group layout for shading with shadow map"),
+                );
+            }
+
+            shader_input.light = Some(light_buffer_manager.shader_input_for_light_type(light_type));
+        }
+
+        if let Some(material_id) = self.explicit_material_id {
+            let material_specification =
+                Self::get_material_specification(material_library, material_id)?;
+
+            if let Some(material_specific_resources) =
+                material_specification.material_specific_resources()
+            {
+                layouts.push(material_specific_resources.bind_group_layout());
+            }
+
+            shader_input.material = Some(material_specification.shader_input());
+        } else if let Some(model_id) = self.model_id {
+            // We do not need a material if we are doing a pure depth prepass or
+            // updating a shadow map
+            if !(pass.depth_map_usage.is_prepass() || pass.shadow_map_modification.is_update()) {
+                let material_handle = if self.use_prepass_material {
+                    model_id
+                        .prepass_material_handle()
+                        .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?
+                } else {
+                    model_id.material_handle()
+                };
+
+                let material_specification = Self::get_material_specification(
+                    material_library,
+                    material_handle.material_id(),
+                )?;
+
+                if let Some(material_specific_resources) =
+                    material_specification.material_specific_resources()
+                {
+                    layouts.push(material_specific_resources.bind_group_layout());
+                }
+
+                shader_input.material = Some(material_specification.shader_input());
+
+                if let Some(texture_group_id) = material_handle.material_property_texture_group_id()
+                {
+                    let material_property_texture_group =
+                        Self::get_material_property_texture_group(
+                            material_library,
+                            texture_group_id,
+                        )?;
+
+                    layouts.push(material_property_texture_group.bind_group_layout());
+                }
+            }
+        }
+
+        if !self.input_render_attachments.is_empty() {
+            layouts.extend(
+                render_attachment_texture_manager
+                    .create_and_get_render_attachment_texture_bind_group_layouts(
+                        graphics_device,
+                        &self.input_render_attachments,
+                    ),
+            );
+        }
+
+        if let Some(resource_group_id) = self.resource_group_id {
+            let resource_group = gpu_resource_group_manager
+                .get_resource_group(resource_group_id)
+                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
+
+            layouts.push(resource_group.bind_group_layout());
+        }
+
+        Ok((layouts, shader_input))
+    }
+
+    /// Obtains all bind groups involved in the render pass.
+    ///
+    /// The order of the bind groups is:
+    /// 1. Camera.
+    /// 2. Lights.
+    /// 3. Shadow map textures.
+    /// 4. Material-specific resources.
+    /// 5. Material property textures.
+    /// 6. Render attachment textures.
+    /// 7. Generic GPU resource group.
+    fn get_bind_groups<'a>(
+        &self,
+        pass: &RenderPassSpecification,
+        material_library: &'a MaterialLibrary,
+        render_resources: &'a SynchronizedRenderResources,
+        render_attachment_texture_manager: &'a RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &'a GPUResourceGroupManager,
+    ) -> Result<Vec<&'a wgpu::BindGroup>> {
+        let mut bind_groups = Vec::with_capacity(8);
+
+        // We do not need a camera if we are updating shadow map
+        if !pass.shadow_map_modification.is_update()
+            && !self.hints.contains(RenderPipelineHints::NO_CAMERA)
+        {
+            if let Some(camera_buffer_manager) = render_resources.get_camera_buffer_manager() {
+                bind_groups.push(camera_buffer_manager.bind_group());
+            }
+        }
+
+        if let Some(LightInfo { light_type, .. }) = self.light {
+            let light_buffer_manager = render_resources
+                .get_light_buffer_manager()
+                .expect("Missing light GPU buffer manager for shading pass with light");
+
+            bind_groups.push(light_buffer_manager.light_bind_group());
+
+            if self.use_shadow_map {
+                bind_groups.push(
+                    light_buffer_manager
+                        .shadow_map_bind_group_for_light_type(light_type)
+                        .expect("Missing shadow map bind group for shading with shadow map"),
+                );
+            }
+        }
+
+        if let Some(material_id) = self.explicit_material_id {
+            let material_specification =
+                Self::get_material_specification(material_library, material_id)?;
+
+            if let Some(material_specific_resources) =
+                material_specification.material_specific_resources()
+            {
+                bind_groups.push(material_specific_resources.bind_group());
+            }
+        } else if let Some(model_id) = self.model_id {
+            // We do not need a material if we are doing a pure depth prepass or
+            // updating a shadow map
+            if !(pass.depth_map_usage.is_prepass() || pass.shadow_map_modification.is_update()) {
+                let material_handle = if self.use_prepass_material {
+                    model_id
+                        .prepass_material_handle()
+                        .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?
+                } else {
+                    model_id.material_handle()
+                };
+
+                let material_specification = Self::get_material_specification(
+                    material_library,
+                    material_handle.material_id(),
+                )?;
+
+                if let Some(material_specific_resources) =
+                    material_specification.material_specific_resources()
+                {
+                    bind_groups.push(material_specific_resources.bind_group());
+                }
+
+                if let Some(texture_group_id) = material_handle.material_property_texture_group_id()
+                {
+                    let material_property_texture_group =
+                        Self::get_material_property_texture_group(
+                            material_library,
+                            texture_group_id,
+                        )?;
+
+                    bind_groups.push(material_property_texture_group.bind_group());
+                }
+            }
+        }
+
+        if !self.input_render_attachments.is_empty() {
+            bind_groups.extend(
+                render_attachment_texture_manager
+                    .get_render_attachment_texture_bind_groups(&self.input_render_attachments),
+            );
+        }
+
+        if let Some(resource_group_id) = self.resource_group_id {
+            let resource_group = gpu_resource_group_manager
+                .get_resource_group(resource_group_id)
+                .ok_or_else(|| anyhow!("Missing GPU resource group {}", resource_group_id))?;
+
+            bind_groups.push(resource_group.bind_group());
+        }
+
+        Ok(bind_groups)
+    }
+
+    fn set_push_constants(
+        &self,
+        pass: &RenderPassSpecification,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        rendering_surface: &RenderingSurface,
+        render_resources: &SynchronizedRenderResources,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+    ) {
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::InverseWindowDimensions,
+                || rendering_surface.inverse_window_dimensions_push_constant(),
+            );
+
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::PixelCount,
+                || rendering_surface.pixel_count_push_constant(),
+            );
+
+        if let Some(LightInfo {
+            light_type,
+            light_id,
+        }) = self.light
+        {
+            self.push_constants
+                .set_push_constant_for_render_pass_if_present(
+                    render_pass,
+                    PushConstantVariant::LightIdx,
+                    || {
+                        render_resources
+                            .get_light_buffer_manager()
+                            .unwrap()
+                            .light_idx_push_constant(light_type, light_id)
+                    },
+                );
+        }
+
+        if let ShadowMapModification::Update(ShadowMapIdentifier::ForUnidirectionalLight(
+            cascade_idx,
+        )) = pass.shadow_map_modification
+        {
+            self.push_constants
+                .set_push_constant_for_render_pass_if_present(
+                    render_pass,
+                    PushConstantVariant::CascadeIdx,
+                    || cascade_idx,
+                );
+        }
+
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::Exposure,
+                || postprocessor.capturing_camera().exposure_push_constant(),
+            );
+
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::InverseExposure,
+                || {
+                    postprocessor
+                        .capturing_camera()
+                        .inverse_exposure_push_constant()
+                },
+            );
+
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::FrameCounter,
+                || frame_counter,
+            );
+    }
+
+    fn get_mesh_buffer_manager(
+        render_resources: &SynchronizedRenderResources,
+        mesh_id: MeshID,
+    ) -> Result<&MeshGPUBufferManager> {
+        render_resources
+            .get_mesh_buffer_manager(mesh_id)
+            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))
+    }
+
+    fn get_instance_feature_buffer_managers(
+        render_resources: &SynchronizedRenderResources,
+        model_id: ModelID,
+        use_prepass_material: bool,
+        depth_map_usage: DepthMapUsage,
+        shadow_map_usage: ShadowMapModification,
+    ) -> Result<(
+        &InstanceFeatureGPUBufferManager,
+        Option<&InstanceFeatureGPUBufferManager>,
+    )> {
+        if let Some(buffers) = render_resources.get_instance_feature_buffer_managers(model_id) {
+            // Transform buffer is always present and always first
+            let transform_buffer_manager = &buffers[0];
+
+            let material_property_buffer_manager = if depth_map_usage.is_prepass()
+                || shadow_map_usage.is_update()
+            {
+                // For pure depth prepass or shadow map update we only need
+                // transforms
+                None
+            } else if use_prepass_material {
+                let prepass_material_handle = model_id
+                    .prepass_material_handle()
+                    .ok_or_else(|| anyhow!("Missing prepass material for model {}", model_id))?;
+
+                // We assume that if both the prepass material and main material
+                // have material property features, they are the same, so we can
+                // use the same instance feature buffer (which will be placed
+                // directly after the transform buffer)
+
+                match (
+                    prepass_material_handle.material_property_feature_id(),
+                    model_id.material_handle().material_property_feature_id(),
+                ) {
+                    (None, _) => None,
+                    (Some(_), None) => Some(&buffers[1]),
+                    (Some(prepass_feature_id), Some(main_feature_id)) => {
+                        assert_eq!(
+                            prepass_feature_id, main_feature_id,
+                            "Prepass material must use the same feature as main material"
+                        );
+                        Some(&buffers[1])
+                    }
+                }
+            } else {
+                // When using the main material we know its buffer, if it
+                // exists, will be directly after the transform buffer
+                if model_id
+                    .material_handle()
+                    .material_property_feature_id()
+                    .is_some()
+                {
+                    Some(&buffers[1])
+                } else {
+                    None
+                }
+            };
+
+            Ok((transform_buffer_manager, material_property_buffer_manager))
+        } else {
+            Err(anyhow!(
+                "Missing instance GPU buffer for model {}",
+                model_id
+            ))
+        }
+    }
+
+    fn get_material_specification(
+        material_library: &MaterialLibrary,
+        material_id: MaterialID,
+    ) -> Result<&MaterialSpecification> {
+        material_library
+            .get_material_specification(material_id)
+            .ok_or_else(|| anyhow!("Missing specification for material {}", material_id))
+    }
+
+    fn get_material_property_texture_group(
+        material_library: &MaterialLibrary,
+        texture_group_id: MaterialPropertyTextureGroupID,
+    ) -> Result<&MaterialPropertyTextureGroup> {
+        material_library
+            .get_material_property_texture_group(texture_group_id)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Missing material property texture group {}",
+                    texture_group_id
+                )
+            })
+    }
+}
+
+impl Default for RenderPipelineSpecification {
+    fn default() -> Self {
+        Self {
             model_id: None,
             explicit_mesh_id: None,
             explicit_material_id: None,
             resource_group_id: None,
             explicit_shader_id: None,
             use_prepass_material: false,
-            depth_map_usage: DepthMapUsage::None,
             light: None,
-            shadow_map_usage: ShadowMapUsage::None,
+            use_shadow_map: false,
             vertex_attribute_requirements: VertexAttributeSet::empty(),
             input_render_attachments: RenderAttachmentInputDescriptionSet::empty(),
-            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(),
             push_constants: PushConstantGroup::new(),
-            hints: RenderPassHints::empty(),
+            hints: RenderPipelineHints::empty(),
             label: String::new(),
         }
     }
 }
 
-impl RenderPassRecorder {
-    /// Creates a new recorder for the render pass defined by the given
-    /// specification.
+impl RenderSubpassRecorder {
+    /// Creates a new render subpass defined by the given specification.
     ///
     /// Shader inputs extracted from the specification are used to build or
     /// fetch the appropriate shader.
@@ -2063,15 +2379,18 @@ impl RenderPassRecorder {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
-        specification: RenderPassSpecification,
+        specification: RenderSubpassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
-        let pipeline = if specification.model_id.is_some()
-            || specification.explicit_mesh_id.is_some()
-            || specification.explicit_material_id.is_some()
-        {
-            let (bind_group_layouts, bind_group_shader_input) = specification
+        let RenderSubpassSpecification {
+            pass: pass_spec,
+            pipeline: pipeline_spec,
+        } = specification;
+
+        let pipeline = if let Some(pipeline_spec) = pipeline_spec {
+            let (bind_group_layouts, bind_group_shader_input) = pipeline_spec
                 .get_bind_group_layouts_and_shader_inputs(
+                    &pass_spec,
                     graphics_device,
                     material_library,
                     render_resources,
@@ -2080,23 +2399,24 @@ impl RenderPassRecorder {
                 )?;
 
             let (vertex_buffer_layouts, mesh_shader_input, instance_feature_shader_inputs) =
-                specification.get_vertex_buffer_layouts_and_shader_inputs(render_resources)?;
+                pipeline_spec
+                    .get_vertex_buffer_layouts_and_shader_inputs(&pass_spec, render_resources)?;
 
-            let push_constant_ranges = specification.push_constants.create_ranges();
+            let push_constant_ranges = pipeline_spec.push_constants.create_ranges();
 
             assert!(
                 push_constant_ranges.len() < 2,
                 "Push constants don't work correctly with multiple ranges"
             );
 
-            let shader = if let Some(shader_id) = &specification.explicit_shader_id {
+            let shader = if let Some(shader_id) = &pipeline_spec.explicit_shader_id {
                 shader_manager
                     .rendering_shaders
                     .get(shader_id)
                     .ok_or_else(|| {
                         anyhow!(
                             "Missing explicit shader for render pass: {}",
-                            specification.label
+                            &pipeline_spec.label
                         )
                     })?
             } else {
@@ -2107,10 +2427,10 @@ impl RenderPassRecorder {
                     bind_group_shader_input.light,
                     &instance_feature_shader_inputs,
                     bind_group_shader_input.material,
-                    specification.vertex_attribute_requirements,
-                    specification.input_render_attachments.quantities(),
-                    specification.output_render_attachments.quantities(),
-                    specification.push_constants.clone(),
+                    pipeline_spec.vertex_attribute_requirements,
+                    pipeline_spec.input_render_attachments.quantities(),
+                    pass_spec.output_render_attachments.quantities(),
+                    pipeline_spec.push_constants.clone(),
                 )?
             };
 
@@ -2118,22 +2438,22 @@ impl RenderPassRecorder {
                 graphics_device.device(),
                 &bind_group_layouts,
                 &push_constant_ranges,
-                &format!("{} render pipeline layout", &specification.label),
+                &format!("{} render pipeline layout", &pipeline_spec.label),
             );
 
-            let color_target_states = specification.determine_color_target_states(
+            let color_target_states = pass_spec.determine_color_target_states(
                 rendering_surface,
                 render_attachment_texture_manager,
             );
 
-            let front_face = specification.determine_front_face();
+            let front_face = pass_spec.determine_front_face();
 
-            let depth_stencil_state = specification.determine_depth_stencil_state();
+            let depth_stencil_state = pass_spec.determine_depth_stencil_state();
 
-            let multisampling_sample_count = specification
-                .determine_multisampling_sample_count(render_attachment_texture_manager);
+            let multisampling_sample_count =
+                pass_spec.determine_multisampling_sample_count(render_attachment_texture_manager);
 
-            let pipeline = Some(Self::create_pipeline(
+            let pipeline = Self::create_pipeline(
                 graphics_device.device(),
                 &pipeline_layout,
                 shader,
@@ -2143,45 +2463,63 @@ impl RenderPassRecorder {
                 depth_stencil_state,
                 multisampling_sample_count,
                 config,
-                &format!("{} render pipeline", &specification.label),
-            ));
+                &format!("{} render pipeline", &pipeline_spec.label),
+            );
 
-            pipeline
+            Some((pipeline_spec, pipeline))
         } else {
             // If we don't have vertices and a material we don't need a pipeline
             None
         };
 
         Ok(Self {
-            specification,
+            pass_spec,
             attachments_to_resolve: RenderAttachmentQuantitySet::empty(),
             pipeline,
             state,
         })
     }
 
-    pub fn clearing_pass(
+    pub fn clearing_passes(
         clear_surface: bool,
         render_attachment_quantities_to_clear: RenderAttachmentQuantitySet,
-    ) -> Self {
-        let specification = RenderPassSpecification::clearing_pass(
+    ) -> impl Iterator<Item = Self> {
+        RenderPassSpecification::clearing_passes(
             clear_surface,
             render_attachment_quantities_to_clear,
-        );
-        Self {
-            specification,
+        )
+        .into_iter()
+        .map(|pass_spec| Self {
+            pass_spec,
             attachments_to_resolve: RenderAttachmentQuantitySet::empty(),
             pipeline: None,
             state: RenderCommandState::Active,
-        }
+        })
     }
 
-    /// Records the render pass to the given command encoder.
+    fn label(&self) -> impl std::fmt::Display {
+        self.pipeline.as_ref().map_or_else(
+            || self.pass_spec.label.clone(),
+            |(pipeline_spec, _)| format!("{}: {}", &self.pass_spec.label, pipeline_spec.label),
+        )
+    }
+
+    fn pass_spec(&self) -> &RenderPassSpecification {
+        &self.pass_spec
+    }
+
+    fn pipeline_spec(&self) -> Option<&RenderPipelineSpecification> {
+        self.pipeline
+            .as_ref()
+            .map(|(pipeline_spec, _)| pipeline_spec)
+    }
+
+    /// Records the render subpass to the given command encoder.
     ///
     /// # Errors
     /// Returns an error if any of the render resources used in this render pass
     /// are no longer available.
-    pub fn record_pass(
+    pub fn record_subpass(
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
@@ -2194,94 +2532,55 @@ impl RenderPassRecorder {
         frame_counter: u32,
     ) -> Result<RenderCommandOutcome> {
         if self.state().is_disabled() {
-            log::debug!("Skipping render pass: {}", &self.specification.label);
+            log::debug!("Skipping render subpass: {}", self.label());
             return Ok(RenderCommandOutcome::Skipped);
         }
 
-        log::debug!("Recording render pass: {}", &self.specification.label);
+        log::debug!("Recording render subpass: {}", self.label());
 
-        // Make sure all data is available before doing anything else
-
-        let bind_groups = self.specification.get_bind_groups(
-            material_library,
+        let mut render_pass = self.pass_spec.begin_render_pass(
+            surface_texture_view,
             render_resources,
             render_attachment_texture_manager,
-            gpu_resource_group_manager,
-        )?;
-
-        let mesh_buffer_manager = if let Some(mesh_id) =
-            self.specification.explicit_mesh_id.or_else(|| {
-                self.specification
-                    .model_id
-                    .map(|model_id| model_id.mesh_id())
-            }) {
-            Some(RenderPassSpecification::get_mesh_buffer_manager(
-                render_resources,
-                mesh_id,
-            )?)
-        } else {
-            None
-        };
-
-        let feature_buffer_managers = if let Some(model_id) = self.specification.model_id {
-            Some(
-                RenderPassSpecification::get_instance_feature_buffer_managers(
-                    render_resources,
-                    model_id,
-                    self.specification.use_prepass_material,
-                    self.specification.depth_map_usage,
-                    self.specification.shadow_map_usage,
-                )?,
-            )
-        } else {
-            None
-        };
-
-        let color_attachments = self.specification.create_color_attachments(
-            surface_texture_view,
-            render_attachment_texture_manager,
-            &self.specification.output_render_attachments,
             self.attachments_to_resolve,
+            command_encoder,
         );
 
-        let mut depth_stencil_attachment = self
-            .specification
-            .create_depth_stencil_attachment(render_resources, render_attachment_texture_manager);
+        if let Some((pipeline_spec, pipeline)) = self.pipeline.as_ref() {
+            let bind_groups = pipeline_spec.get_bind_groups(
+                &self.pass_spec,
+                material_library,
+                render_resources,
+                render_attachment_texture_manager,
+                gpu_resource_group_manager,
+            )?;
 
-        if self.pipeline.is_none() && !color_attachments.is_empty() {
-            // If we don't have a pipeline, it is safe to split up the
-            // attachments into chunks of 8 to avoid exceeding the maximum
-            // number of color attachments per render pass (this is probably
-            // only relevant for clearing passes)
-            for color_attachments in color_attachments.chunks(8) {
-                command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    color_attachments,
-                    depth_stencil_attachment: depth_stencil_attachment.take(), // Only include the depth attachment once
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    label: Some(&self.specification.label),
-                });
-            }
-            return Ok(RenderCommandOutcome::Recorded);
-        }
+            let mesh_id = pipeline_spec
+                .explicit_mesh_id
+                .or_else(|| pipeline_spec.model_id.map(|model_id| model_id.mesh_id()))
+                .expect("Has pipeline but no vertices");
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            // A `@location(i)` directive in the fragment shader output targets color attachment `i` here
-            color_attachments: &color_attachments,
-            depth_stencil_attachment,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some(&self.specification.label),
-        });
+            let mesh_buffer_manager =
+                RenderPipelineSpecification::get_mesh_buffer_manager(render_resources, mesh_id)?;
 
-        render_pass.set_stencil_reference(RenderPassSpecification::REFERENCE_STENCIL_VALUE);
-
-        if let Some(ref pipeline) = self.pipeline {
-            let mesh_buffer_manager = mesh_buffer_manager.expect("Has pipeline but no vertices");
+            let feature_buffer_managers = if let Some(model_id) = pipeline_spec.model_id {
+                Some(
+                    RenderPipelineSpecification::get_instance_feature_buffer_managers(
+                        render_resources,
+                        model_id,
+                        pipeline_spec.use_prepass_material,
+                        self.pass_spec.depth_map_usage,
+                        self.pass_spec.shadow_map_modification,
+                    )?,
+                )
+            } else {
+                None
+            };
 
             render_pass.set_pipeline(pipeline);
 
-            self.set_push_constants(
+            pipeline_spec.set_push_constants(
+                &self.pass_spec,
                 &mut render_pass,
                 rendering_surface,
                 render_resources,
@@ -2296,7 +2595,7 @@ impl RenderPassRecorder {
             let mut vertex_buffer_slot = 0;
 
             for vertex_buffer in mesh_buffer_manager.request_vertex_gpu_buffers_including_position(
-                self.specification.vertex_attribute_requirements,
+                pipeline_spec.vertex_attribute_requirements,
             )? {
                 render_pass
                     .set_vertex_buffer(vertex_buffer_slot, vertex_buffer.valid_buffer_slice());
@@ -2316,8 +2615,8 @@ impl RenderPassRecorder {
                     );
                     vertex_buffer_slot += 1;
 
-                    if let ShadowMapUsage::Update(shadow_map_id) =
-                        self.specification.shadow_map_usage
+                    if let ShadowMapModification::Update(shadow_map_id) =
+                        self.pass_spec.shadow_map_modification
                     {
                         // When updating the shadow map, we don't use model view
                         // transforms but rather the model to light space tranforms
@@ -2328,7 +2627,7 @@ impl RenderPassRecorder {
                                 // Offset the light index with the face index to get
                                 // the index for the range of transforms for the
                                 // specific cubemap face
-                                self.specification
+                                pipeline_spec
                                     .light
                                     .unwrap()
                                     .light_id
@@ -2339,7 +2638,7 @@ impl RenderPassRecorder {
                                 // Offset the light index with the cascade index to
                                 // get the index for the range of transforms for the
                                 // specific cascade
-                                self.specification
+                                pipeline_spec
                                     .light
                                     .unwrap()
                                     .light_id
@@ -2384,103 +2683,19 @@ impl RenderPassRecorder {
         Ok(RenderCommandOutcome::Recorded)
     }
 
-    /// Returns the state of the render pass.
+    /// Returns the state of the render subpass.
     pub fn state(&self) -> RenderCommandState {
         self.state
     }
 
-    /// Sets the state of the render pass.
+    /// Sets the state of the render subpass.
     pub fn set_state(&mut self, state: RenderCommandState) {
         self.state = state;
     }
 
-    /// Set whether the render pass should be skipped.
+    /// Set whether the render subpass should be skipped.
     pub fn set_disabled(&mut self, disabled: bool) {
         self.state = RenderCommandState::disabled_if(disabled);
-    }
-
-    fn set_push_constants(
-        &self,
-        render_pass: &mut wgpu::RenderPass<'_>,
-        rendering_surface: &RenderingSurface,
-        render_resources: &SynchronizedRenderResources,
-        postprocessor: &Postprocessor,
-        frame_counter: u32,
-    ) {
-        self.specification
-            .push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                PushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
-
-        self.specification
-            .push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                PushConstantVariant::PixelCount,
-                || rendering_surface.pixel_count_push_constant(),
-            );
-
-        if let Some(LightInfo {
-            light_type,
-            light_id,
-        }) = self.specification.light
-        {
-            self.specification
-                .push_constants
-                .set_push_constant_for_render_pass_if_present(
-                    render_pass,
-                    PushConstantVariant::LightIdx,
-                    || {
-                        render_resources
-                            .get_light_buffer_manager()
-                            .unwrap()
-                            .light_idx_push_constant(light_type, light_id)
-                    },
-                );
-        }
-
-        if let ShadowMapUsage::Update(ShadowMapIdentifier::ForUnidirectionalLight(cascade_idx)) =
-            self.specification.shadow_map_usage
-        {
-            self.specification
-                .push_constants
-                .set_push_constant_for_render_pass_if_present(
-                    render_pass,
-                    PushConstantVariant::CascadeIdx,
-                    || cascade_idx,
-                );
-        }
-
-        self.specification
-            .push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                PushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
-
-        self.specification
-            .push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                PushConstantVariant::InverseExposure,
-                || {
-                    postprocessor
-                        .capturing_camera()
-                        .inverse_exposure_push_constant()
-                },
-            );
-
-        self.specification
-            .push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                PushConstantVariant::FrameCounter,
-                || frame_counter,
-            );
     }
 
     fn create_pipeline_layout(
@@ -2672,7 +2887,7 @@ impl RenderCommandRecorder {
         state: RenderCommandState,
     ) -> Result<Self> {
         match specification {
-            RenderCommandSpecification::RenderPass(specification) => Self::new_render_pass(
+            RenderCommandSpecification::RenderSubpass(specification) => Self::new_render_subpass(
                 config,
                 graphics_device,
                 rendering_surface,
@@ -2706,7 +2921,7 @@ impl RenderCommandRecorder {
     ///
     /// Shader inputs extracted from the specification are used to build or
     /// fetch the appropriate shader.
-    pub fn new_render_pass(
+    pub fn new_render_subpass(
         config: &RenderingConfig,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
@@ -2715,10 +2930,10 @@ impl RenderCommandRecorder {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         shader_manager: &mut ShaderManager,
-        specification: RenderPassSpecification,
+        specification: RenderSubpassSpecification,
         state: RenderCommandState,
     ) -> Result<Self> {
-        Ok(Self::RenderPass(RenderPassRecorder::new(
+        Ok(Self::RenderSubpass(RenderSubpassRecorder::new(
             config,
             graphics_device,
             rendering_surface,
@@ -2732,14 +2947,12 @@ impl RenderCommandRecorder {
         )?))
     }
 
-    pub fn clearing_render_pass(
+    pub fn clearing_render_passes(
         clear_surface: bool,
         render_attachment_quantities_to_clear: RenderAttachmentQuantitySet,
-    ) -> Self {
-        Self::RenderPass(RenderPassRecorder::clearing_pass(
-            clear_surface,
-            render_attachment_quantities_to_clear,
-        ))
+    ) -> impl Iterator<Item = Self> {
+        RenderSubpassRecorder::clearing_passes(clear_surface, render_attachment_quantities_to_clear)
+            .map(Self::RenderSubpass)
     }
 
     /// Creates a new recorder for the compute pass defined by the given
@@ -2787,9 +3000,9 @@ impl RenderCommandRecorder {
         ))
     }
 
-    pub fn as_render_pass_mut(&mut self) -> Option<&mut RenderPassRecorder> {
+    pub fn as_render_subpass_mut(&mut self) -> Option<&mut RenderSubpassRecorder> {
         match self {
-            Self::RenderPass(recorder) => Some(recorder),
+            Self::RenderSubpass(recorder) => Some(recorder),
             _ => None,
         }
     }
@@ -2813,7 +3026,7 @@ impl RenderCommandRecorder {
         frame_counter: u32,
     ) -> Result<RenderCommandOutcome> {
         match self {
-            Self::RenderPass(recorder) => recorder.record_pass(
+            Self::RenderSubpass(recorder) => recorder.record_subpass(
                 rendering_surface,
                 surface_texture_view,
                 material_library,
@@ -2843,7 +3056,7 @@ impl RenderCommandRecorder {
     /// Returns the state of the command.
     pub fn state(&self) -> RenderCommandState {
         match self {
-            Self::RenderPass(recorder) => recorder.state(),
+            Self::RenderSubpass(recorder) => recorder.state(),
             Self::ComputePass(recorder) => recorder.state(),
             Self::RenderAttachmentMipmappingPass(recorder) => recorder.state(),
             Self::StorageBufferResultCopyPass(recorder) => recorder.state(),
@@ -2853,7 +3066,7 @@ impl RenderCommandRecorder {
     /// Sets the state of the command.
     pub fn set_state(&mut self, state: RenderCommandState) {
         match self {
-            Self::RenderPass(recorder) => recorder.set_state(state),
+            Self::RenderSubpass(recorder) => recorder.set_state(state),
             Self::ComputePass(recorder) => recorder.set_state(state),
             Self::RenderAttachmentMipmappingPass(recorder) => recorder.set_state(state),
             Self::StorageBufferResultCopyPass(recorder) => recorder.set_state(state),
@@ -2891,6 +3104,12 @@ impl RenderCommandState {
     }
 }
 
+impl SurfaceModification {
+    fn is_none(&self) -> bool {
+        *self == Self::None
+    }
+}
+
 impl DepthMapUsage {
     fn use_readonly() -> Self {
         Self::Use(false)
@@ -2925,17 +3144,13 @@ impl DepthMapUsage {
     }
 }
 
-impl ShadowMapUsage {
+impl ShadowMapModification {
     fn is_clear(&self) -> bool {
         matches!(*self, Self::Clear(_))
     }
 
     fn is_update(&self) -> bool {
         matches!(*self, Self::Update(_))
-    }
-
-    fn is_use(&self) -> bool {
-        *self == Self::Use
     }
 
     fn is_clear_or_update(&self) -> bool {
@@ -2945,7 +3160,7 @@ impl ShadowMapUsage {
     fn get_shadow_map_to_clear_or_update(&self) -> Option<ShadowMapIdentifier> {
         match self {
             Self::Update(shadow_map_id) | Self::Clear(shadow_map_id) => Some(*shadow_map_id),
-            _ => None,
+            Self::None => None,
         }
     }
 }

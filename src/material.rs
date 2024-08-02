@@ -9,7 +9,7 @@ pub use features::register_material_feature_types;
 use crate::{
     assets::Assets,
     gpu::{
-        rendering::{fre, render_command::RenderPassHints},
+        rendering::{fre, render_command::RenderPipelineHints},
         resource_group::GPUResourceGroup,
         shader::MaterialShaderInput,
         texture::{
@@ -75,7 +75,7 @@ pub struct MaterialSpecification {
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     material_specific_resources: Option<GPUResourceGroup>,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
-    render_pass_hints: RenderPassHints,
+    render_pipeline_hints: RenderPipelineHints,
     shader_input: MaterialShaderInput,
 }
 
@@ -116,7 +116,7 @@ impl MaterialSpecification {
         output_render_attachments: RenderAttachmentOutputDescriptionSet,
         material_specific_resources: Option<GPUResourceGroup>,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
-        render_pass_hints: RenderPassHints,
+        render_pipeline_hints: RenderPipelineHints,
         shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
@@ -126,7 +126,7 @@ impl MaterialSpecification {
             output_render_attachments,
             material_specific_resources,
             instance_feature_type_ids,
-            render_pass_hints,
+            render_pipeline_hints,
             shader_input,
         }
     }
@@ -170,9 +170,9 @@ impl MaterialSpecification {
         &self.instance_feature_type_ids
     }
 
-    /// Returns the render pass hints for the material.
-    pub fn render_pass_hints(&self) -> RenderPassHints {
-        self.render_pass_hints
+    /// Returns the render pipeline hints for the material.
+    pub fn render_pipeline_hints(&self) -> RenderPipelineHints {
+        self.render_pipeline_hints
     }
 
     /// Returns the input required for using the material in a shader.

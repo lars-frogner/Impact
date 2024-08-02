@@ -6,7 +6,7 @@ use crate::{
     gpu::{
         rendering::{
             fre,
-            render_command::{Blending, RenderPassHints},
+            render_command::{Blending, RenderPipelineHints},
         },
         resource_group::GPUResourceGroup,
         shader::{MaterialShaderInput, SkyboxShaderInput},
@@ -136,7 +136,7 @@ pub fn setup_skybox_material(
                 output_render_attachments,
                 Some(material_specific_resources),
                 Vec::new(),
-                RenderPassHints::NO_DEPTH_PREPASS,
+                RenderPipelineHints::NO_DEPTH_PREPASS,
                 MaterialShaderInput::Skybox(texture_shader_input),
             )
         });

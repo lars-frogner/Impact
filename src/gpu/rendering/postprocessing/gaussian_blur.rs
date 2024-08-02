@@ -7,7 +7,8 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                Blending, RenderCommandSpecification, RenderPassHints, RenderPassSpecification,
+                Blending, RenderCommandSpecification, RenderPipelineHints, RenderPassSpecification,
+                RenderPipelineSpecification, RenderSubpassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -243,23 +244,32 @@ pub(super) fn create_gaussian_blur_render_pass(
             .with_blending(blending),
     );
 
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_shader_id: Some(shader_id),
-        resource_group_id: Some(resource_group_id),
-        input_render_attachments,
-        output_render_attachments,
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
-        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        label: format!(
-            "{} Gaussian blur pass: {} -> {}",
-            direction, input_render_attachment_quantity, output_render_attachment_quantity
-        ),
-        ..Default::default()
+    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
+        pass: RenderPassSpecification {
+            output_render_attachments,
+            label: format!(
+                "Gaussian blur pass into {}",
+                output_render_attachment_quantity
+            ),
+            ..Default::default()
+        },
+        pipeline: Some(RenderPipelineSpecification {
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_shader_id: Some(shader_id),
+            resource_group_id: Some(resource_group_id),
+            input_render_attachments,
+            push_constants: PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
+            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
+            label: format!(
+                "{} Gaussian blur from {}",
+                direction, input_render_attachment_quantity
+            ),
+            ..Default::default()
+        }),
     })
 }
 

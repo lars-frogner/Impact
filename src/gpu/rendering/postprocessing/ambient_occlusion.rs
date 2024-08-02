@@ -8,8 +8,8 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                Blending, DepthMapUsage, RenderCommandSpecification, RenderPassHints,
-                RenderPassSpecification,
+                Blending, DepthMapUsage, RenderCommandSpecification, RenderPipelineHints,
+                RenderPassSpecification, RenderPipelineSpecification, RenderSubpassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -260,28 +260,34 @@ fn create_ambient_occlusion_computation_render_pass(
     let output_render_attachments =
         RenderAttachmentOutputDescriptionSet::with_defaults(RenderAttachmentQuantitySet::OCCLUSION);
 
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_shader_id: Some(shader_id),
-        resource_group_id: Some(resource_group_id),
-        depth_map_usage: DepthMapUsage::StencilTest,
-        input_render_attachments,
-        output_render_attachments,
-        push_constants: [
-            PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            ),
-            PushConstant::new(
-                PushConstantVariant::FrameCounter,
-                wgpu::ShaderStages::FRAGMENT,
-            ),
-        ]
-        .into_iter()
-        .collect(),
-        hints: RenderPassHints::NO_DEPTH_PREPASS,
-        label: "Ambient occlusion computation pass".to_string(),
-        ..Default::default()
+    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
+        pass: RenderPassSpecification {
+            output_render_attachments,
+            depth_map_usage: DepthMapUsage::StencilTest,
+            label: "Ambient occlusion computation pass".to_string(),
+            ..Default::default()
+        },
+        pipeline: Some(RenderPipelineSpecification {
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_shader_id: Some(shader_id),
+            resource_group_id: Some(resource_group_id),
+            input_render_attachments,
+            push_constants: [
+                PushConstant::new(
+                    PushConstantVariant::InverseWindowDimensions,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+                PushConstant::new(
+                    PushConstantVariant::FrameCounter,
+                    wgpu::ShaderStages::FRAGMENT,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            hints: RenderPipelineHints::NO_DEPTH_PREPASS,
+            label: "Ambient occlusion computation".to_string(),
+            ..Default::default()
+        }),
     })
 }
 
@@ -359,20 +365,26 @@ fn create_ambient_occlusion_application_render_pass(
         RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
     );
 
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_shader_id: Some(shader_id),
-        depth_map_usage: DepthMapUsage::StencilTest,
-        input_render_attachments,
-        output_render_attachments,
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
-        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        label: "Ambient occlusion application pass".to_string(),
-        ..Default::default()
+    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
+        pass: RenderPassSpecification {
+            output_render_attachments,
+            depth_map_usage: DepthMapUsage::StencilTest,
+            label: "Ambient occlusion application pass".to_string(),
+            ..Default::default()
+        },
+        pipeline: Some(RenderPipelineSpecification {
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_shader_id: Some(shader_id),
+            input_render_attachments,
+            push_constants: PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
+            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
+            label: "Ambient occlusion application".to_string(),
+            ..Default::default()
+        }),
     })
 }
 

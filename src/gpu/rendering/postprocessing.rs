@@ -10,7 +10,8 @@ use crate::{
         push_constant::{PushConstant, PushConstantVariant},
         rendering::render_command::{
             Blending, DepthMapUsage, RenderCommandSpecification, RenderCommandState,
-            RenderPassHints, RenderPassSpecification,
+            RenderPipelineHints, RenderPassSpecification, RenderPipelineSpecification,
+            RenderSubpassSpecification,
         },
         resource_group::GPUResourceGroupManager,
         shader::{template::SpecificShaderTemplate, ShaderManager},
@@ -193,22 +194,28 @@ fn create_passthrough_render_pass(
             .with_blending(blending),
     );
 
-    RenderCommandSpecification::RenderPass(RenderPassSpecification {
-        explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-        explicit_shader_id: Some(shader_id),
-        input_render_attachments,
-        output_render_attachments,
-        push_constants: PushConstant::new(
-            PushConstantVariant::InverseWindowDimensions,
-            wgpu::ShaderStages::FRAGMENT,
-        )
-        .into(),
-        hints: RenderPassHints::NO_DEPTH_PREPASS.union(RenderPassHints::NO_CAMERA),
-        label: format!(
-            "Passthrough pass: {} -> {}",
-            input_render_attachment_quantity, output_render_attachment_quantity
-        ),
-        depth_map_usage,
-        ..Default::default()
+    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
+        pass: RenderPassSpecification {
+            output_render_attachments,
+            label: format!(
+                "Passthrough pass into {}",
+                output_render_attachment_quantity
+            ),
+            depth_map_usage,
+            ..Default::default()
+        },
+        pipeline: Some(RenderPipelineSpecification {
+            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
+            explicit_shader_id: Some(shader_id),
+            input_render_attachments,
+            push_constants: PushConstant::new(
+                PushConstantVariant::InverseWindowDimensions,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .into(),
+            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
+            label: format!("Passthrough from {}", input_render_attachment_quantity),
+            ..Default::default()
+        }),
     })
 }
