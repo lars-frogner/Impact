@@ -1,6 +1,7 @@
 //! Voxels.
 
 mod appearance;
+mod chunks;
 pub mod components;
 pub mod entity;
 pub mod generation;
