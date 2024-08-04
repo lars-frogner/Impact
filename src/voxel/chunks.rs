@@ -4,7 +4,8 @@ use crate::{
     num::Float,
     voxel::{VoxelGenerator, VoxelType},
 };
-use std::ops::Range;
+use bitflags::bitflags;
+use std::{iter, ops::Range};
 
 #[derive(Clone, Debug)]
 pub struct ChunkedVoxelObject {
@@ -43,10 +44,24 @@ enum ChunkVoxels {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Voxel {
     property_id: PropertyID,
+    flags: VoxelFlags,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PropertyID(u8);
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+    pub struct VoxelFlags: u8 {
+        const IS_EMPTY          = 1 << 0;
+        const HAS_ADJACENT_X_DN = 1 << 2;
+        const HAS_ADJACENT_Y_DN = 1 << 3;
+        const HAS_ADJACENT_Z_DN = 1 << 4;
+        const HAS_ADJACENT_X_UP = 1 << 5;
+        const HAS_ADJACENT_Y_UP = 1 << 6;
+        const HAS_ADJACENT_Z_UP = 1 << 7;
+    }
+}
 
 const LOG2_CHUNK_SIZE: usize = 4;
 const CHUNK_SIZE: usize = 1 << LOG2_CHUNK_SIZE;
@@ -187,6 +202,69 @@ impl ChunkedVoxelObject {
         }
     }
 
+    pub fn update_adjacency(&mut self) {
+        for start_voxel_idx in self
+            .chunks
+            .iter()
+            .filter_map(VoxelChunk::start_voxel_idx_if_different)
+        {
+            Self::update_internal_adjacency_in_chunk(start_voxel_idx, &mut self.voxels);
+        }
+    }
+
+    fn update_internal_adjacency_in_chunk(start_voxel_idx: usize, voxels: &mut [Voxel]) {
+        // Extract the sub-slice of voxels for this chunk so that we get
+        // out-of-bounds when trying to access voxels outside the chunk
+        let chunk_voxels = &mut voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
+
+        for i in 0..CHUNK_SIZE {
+            for j in 0..CHUNK_SIZE {
+                for k in 0..CHUNK_SIZE {
+                    let idx = Self::linear_voxel_idx_within_chunk(&[i, j, k]);
+
+                    if chunk_voxels[idx].is_empty() {
+                        continue;
+                    }
+
+                    let mut flags = VoxelFlags::empty();
+
+                    // Since we will update the flag of the adjacent voxel in
+                    // addition to this one, we only need to look up the upper
+                    // adjacent voxels to cover every adjacency over the course
+                    // of the full loop
+                    for (adjacent_indices, flag_for_current, flag_for_adjacent) in [
+                        (
+                            [i + 1, j, k],
+                            VoxelFlags::HAS_ADJACENT_X_UP,
+                            VoxelFlags::HAS_ADJACENT_X_DN,
+                        ),
+                        (
+                            [i, j + 1, k],
+                            VoxelFlags::HAS_ADJACENT_Y_UP,
+                            VoxelFlags::HAS_ADJACENT_Y_DN,
+                        ),
+                        (
+                            [i, j, k + 1],
+                            VoxelFlags::HAS_ADJACENT_Z_UP,
+                            VoxelFlags::HAS_ADJACENT_Z_DN,
+                        ),
+                    ] {
+                        let adjacent_idx = Self::linear_voxel_idx_within_chunk(&adjacent_indices);
+                        match chunk_voxels.get_mut(adjacent_idx) {
+                            Some(adjacent_voxel) if !adjacent_voxel.is_empty() => {
+                                flags |= flag_for_current;
+                                adjacent_voxel.add_flags(flag_for_adjacent);
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    chunk_voxels[idx].add_flags(flags);
+                }
+            }
+        }
+    }
+
     fn linear_superchunk_idx_from_global_voxel_indices(
         &self,
         i: usize,
@@ -249,7 +327,7 @@ impl VoxelSuperchunk {
         let mut is_uniform = true;
 
         let start_chunk_idx = chunks.len();
-        chunks.reserve_exact(SUPERCHUNK_CHUNK_COUNT);
+        chunks.reserve(SUPERCHUNK_CHUNK_COUNT);
 
         // Note: These are global chunk indices, not the chunk indices within
         // the current superchunk
@@ -339,6 +417,15 @@ impl VoxelSuperchunk {
                 .sum(),
         }
     }
+
+    fn expand_same(&mut self, chunks: &mut Vec<VoxelChunk>) {
+        if let &SuperchunkChunks::Same(voxel) = &self.chunks {
+            let start_chunk_idx = chunks.len();
+            chunks.reserve(SUPERCHUNK_CHUNK_COUNT);
+            chunks.extend(iter::repeat(VoxelChunk::same(voxel)).take(SUPERCHUNK_CHUNK_COUNT));
+            self.chunks = SuperchunkChunks::Different { start_chunk_idx };
+        }
+    }
 }
 
 impl SuperchunkChunks {
@@ -374,27 +461,25 @@ impl VoxelChunk {
             };
         }
 
-        let first_voxel = Voxel::new(
-            generator
-                .voxel_at_indices(origin[0], origin[1], origin[2])
-                .map_or_else(PropertyID::empty, PropertyID::from_voxel_type),
-        );
+        let first_voxel = generator
+            .voxel_at_indices(origin[0], origin[1], origin[2])
+            .map_or_else(Voxel::empty, Voxel::new_from_type_without_flags);
         let mut is_uniform = true;
 
         let start_voxel_idx = voxels.len();
-        voxels.reserve_exact(CHUNK_VOXEL_COUNT);
+        voxels.reserve(CHUNK_VOXEL_COUNT);
 
         for i in origin[0]..origin[0] + CHUNK_SIZE {
             for j in origin[1]..origin[1] + CHUNK_SIZE {
                 for k in origin[2]..origin[2] + CHUNK_SIZE {
-                    let voxel = Voxel::new(
-                        generator
-                            .voxel_at_indices(i, j, k)
-                            .map_or_else(PropertyID::empty, PropertyID::from_voxel_type),
-                    );
+                    let voxel = generator
+                        .voxel_at_indices(i, j, k)
+                        .map_or_else(Voxel::empty, Voxel::new_from_type_without_flags);
+
                     if is_uniform && voxel != first_voxel {
                         is_uniform = false;
                     }
+
                     voxels.push(voxel);
                 }
             }
@@ -416,6 +501,20 @@ impl VoxelChunk {
         }
     }
 
+    fn same(voxel: Voxel) -> Self {
+        Self {
+            voxels: ChunkVoxels::Same(voxel),
+        }
+    }
+
+    fn start_voxel_idx_if_different(&self) -> Option<usize> {
+        if let ChunkVoxels::Different { start_voxel_idx } = &self.voxels {
+            Some(*start_voxel_idx)
+        } else {
+            None
+        }
+    }
+
     fn is_empty(&self) -> bool {
         self.voxels.is_empty()
     }
@@ -427,6 +526,15 @@ impl VoxelChunk {
             ChunkVoxels::Different { .. } => CHUNK_VOXEL_COUNT,
         }
     }
+
+    fn expand_same(&mut self, voxels: &mut Vec<Voxel>) {
+        if let &ChunkVoxels::Same(voxel) = &self.voxels {
+            let start_voxel_idx = voxels.len();
+            voxels.reserve(CHUNK_VOXEL_COUNT);
+            voxels.extend(iter::repeat(voxel).take(CHUNK_VOXEL_COUNT));
+            self.voxels = ChunkVoxels::Different { start_voxel_idx };
+        }
+    }
 }
 
 impl ChunkVoxels {
@@ -436,28 +544,45 @@ impl ChunkVoxels {
 }
 
 impl Voxel {
-    pub const fn new(property_id: PropertyID) -> Self {
-        Self { property_id }
+    pub const fn new(property_id: PropertyID, flags: VoxelFlags) -> Self {
+        Self { property_id, flags }
+    }
+
+    pub const fn new_without_flags(property_id: PropertyID) -> Self {
+        Self::new(property_id, VoxelFlags::empty())
+    }
+
+    pub const fn new_from_type_without_flags(voxel_type: VoxelType) -> Self {
+        Self::new_without_flags(PropertyID::from_voxel_type(voxel_type))
     }
 
     pub const fn empty() -> Self {
         Self {
-            property_id: PropertyID::empty(),
+            property_id: PropertyID::dummy(),
+            flags: VoxelFlags::IS_EMPTY,
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.property_id == PropertyID::empty()
+        self.flags.contains(VoxelFlags::IS_EMPTY)
+    }
+
+    pub fn flags(&self) -> VoxelFlags {
+        self.flags
+    }
+
+    pub fn add_flags(&mut self, flags: VoxelFlags) {
+        self.flags |= flags;
     }
 }
 
 impl PropertyID {
-    pub const fn empty() -> Self {
-        Self(u8::MAX)
-    }
-
     pub const fn from_voxel_type(voxel_type: VoxelType) -> Self {
         Self(voxel_type as u8)
+    }
+
+    const fn dummy() -> Self {
+        Self(u8::MAX)
     }
 }
 
@@ -730,5 +855,129 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn should_compute_correct_internal_adjacency_in_chunk() {
+        let generator = ManualVoxelGenerator::<3>::new([
+            [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+            [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
+            [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+        ]);
+
+        let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+        object.update_adjacency();
+
+        assert_eq!(
+            object.get_voxel(1, 1, 1).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_X_DN
+                | VoxelFlags::HAS_ADJACENT_X_UP
+                | VoxelFlags::HAS_ADJACENT_Y_DN
+                | VoxelFlags::HAS_ADJACENT_Y_UP
+                | VoxelFlags::HAS_ADJACENT_Z_DN
+                | VoxelFlags::HAS_ADJACENT_Z_UP
+        );
+        assert_eq!(
+            object.get_voxel(0, 1, 1).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_X_UP
+        );
+        assert_eq!(
+            object.get_voxel(2, 1, 1).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_X_DN
+        );
+        assert_eq!(
+            object.get_voxel(1, 0, 1).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_Y_UP
+        );
+        assert_eq!(
+            object.get_voxel(1, 2, 1).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_Y_DN
+        );
+        assert_eq!(
+            object.get_voxel(1, 1, 0).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_Z_UP
+        );
+        assert_eq!(
+            object.get_voxel(1, 1, 2).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_Z_DN
+        );
+    }
+
+    #[test]
+    fn should_compute_correct_internal_adjacency_in_lower_chunk_corner() {
+        let generator = ManualVoxelGenerator::<3>::new([
+            [[1, 1, 0], [1, 0, 0], [0, 0, 0]],
+            [[1, 0, 0], [0, 0, 0], [0, 0, 0]],
+            [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        ]);
+
+        let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+        object.update_adjacency();
+
+        assert_eq!(
+            object.get_voxel(0, 0, 0).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_X_UP
+                | VoxelFlags::HAS_ADJACENT_Y_UP
+                | VoxelFlags::HAS_ADJACENT_Z_UP
+        );
+        assert_eq!(
+            object.get_voxel(0, 0, 1).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_Z_DN
+        );
+        assert_eq!(
+            object.get_voxel(0, 1, 0).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_Y_DN
+        );
+        assert_eq!(
+            object.get_voxel(1, 0, 0).unwrap().flags(),
+            VoxelFlags::HAS_ADJACENT_X_DN
+        );
+    }
+
+    #[test]
+    fn should_compute_correct_internal_adjacency_in_upper_chunk_corner() {
+        let offset = [CHUNK_SIZE - 3; 3];
+        let generator = ManualVoxelGenerator::<3>::with_offset(
+            [
+                [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+                [[0, 0, 0], [0, 0, 0], [0, 0, 1]],
+                [[0, 0, 0], [0, 0, 1], [0, 1, 1]],
+            ],
+            offset,
+        );
+
+        let mut object = ChunkedVoxelObject::generate(&generator).unwrap();
+        object.update_adjacency();
+
+        assert_eq!(
+            object
+                .get_voxel(CHUNK_SIZE - 1, CHUNK_SIZE - 1, CHUNK_SIZE - 1)
+                .unwrap()
+                .flags(),
+            VoxelFlags::HAS_ADJACENT_X_DN
+                | VoxelFlags::HAS_ADJACENT_Y_DN
+                | VoxelFlags::HAS_ADJACENT_Z_DN
+        );
+        assert_eq!(
+            object
+                .get_voxel(CHUNK_SIZE - 1, CHUNK_SIZE - 1, CHUNK_SIZE - 2)
+                .unwrap()
+                .flags(),
+            VoxelFlags::HAS_ADJACENT_Z_UP
+        );
+        assert_eq!(
+            object
+                .get_voxel(CHUNK_SIZE - 1, CHUNK_SIZE - 2, CHUNK_SIZE - 1)
+                .unwrap()
+                .flags(),
+            VoxelFlags::HAS_ADJACENT_Y_UP
+        );
+        assert_eq!(
+            object
+                .get_voxel(CHUNK_SIZE - 2, CHUNK_SIZE - 1, CHUNK_SIZE - 1)
+                .unwrap()
+                .flags(),
+            VoxelFlags::HAS_ADJACENT_X_UP
+        );
     }
 }

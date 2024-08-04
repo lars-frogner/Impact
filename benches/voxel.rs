@@ -107,6 +107,18 @@ pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
     });
 }
 
+pub fn bench_chunked_voxel_object_update_adjacency(c: &mut Criterion) {
+    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    c.bench_function("chunked_voxel_object_update_adjacency", |b| {
+        b.iter(|| {
+            let mut object = object.clone();
+            object.update_adjacency();
+            black_box(object);
+        })
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
@@ -114,6 +126,7 @@ criterion_group!(
         bench_voxel_tree_construction,
         bench_voxel_transform_buffering,
         bench_chunked_voxel_object_construction,
-        bench_chunked_voxel_object_get_each_voxel
+        bench_chunked_voxel_object_get_each_voxel,
+        bench_chunked_voxel_object_update_adjacency
 );
 criterion_main!(benches);
