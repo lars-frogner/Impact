@@ -57,5 +57,9 @@ naga = { version = "0.20", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.4"
 
 [[bench]]
-name = "benchmark"
+name = "model"
+harness = false
+
+[[bench]]
+name = "voxel"
 harness = false

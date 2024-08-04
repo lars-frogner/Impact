@@ -1,45 +1,14 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use impact::{
     geometry::{Degrees, Frustum, PerspectiveTransform},
-    model::{
-        transform::InstanceModelViewTransform, DynamicInstanceFeatureBuffer, InstanceFeatureStorage,
-    },
+    model::{transform::InstanceModelViewTransform, DynamicInstanceFeatureBuffer},
     util::bounds::UpperExclusiveBounds,
-    voxel::{generation::UniformSphereVoxelGenerator, VoxelTree, VoxelType},
+    voxel::{generation::UniformSphereVoxelGenerator, ChunkedVoxelObject, VoxelTree, VoxelType},
 };
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector3};
 use num_traits::FloatConst;
 use pprof::criterion::{Output, PProfProfiler};
 use rand::{self, Rng};
-
-pub fn bench_dynamic_instance_feature_buffer_add_feature_from_storage(c: &mut Criterion) {
-    c.bench_function("instance_feature_buffer_add_feature_from_storage", |b| {
-        b.iter(|| {
-            let mut storage = InstanceFeatureStorage::new::<InstanceModelViewTransform>();
-            let id = storage.add_feature(&InstanceModelViewTransform::identity());
-            let mut buffer = DynamicInstanceFeatureBuffer::new_for_storage(&storage);
-            for _ in 0..200000 {
-                buffer.add_feature_from_storage(&storage, id);
-            }
-        })
-    });
-}
-
-pub fn bench_dynamic_instance_feature_buffer_add_feature_from_storage_repeatedly(
-    c: &mut Criterion,
-) {
-    c.bench_function(
-        "instance_feature_buffer_add_feature_from_storage_repeatedly",
-        |b| {
-            b.iter(|| {
-                let mut storage = InstanceFeatureStorage::new::<InstanceModelViewTransform>();
-                let id = storage.add_feature(&InstanceModelViewTransform::identity());
-                let mut buffer = DynamicInstanceFeatureBuffer::new_for_storage(&storage);
-                buffer.add_feature_from_storage_repeatedly(&storage, id, 200000);
-            })
-        },
-    );
-}
 
 pub fn bench_voxel_tree_construction(c: &mut Criterion) {
     c.bench_function("voxel_tree_construction", |b| {
@@ -113,13 +82,38 @@ pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
     );
 }
 
+pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
+    c.bench_function("chunked_voxel_object_construction", |b| {
+        b.iter(|| {
+            let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
+            ChunkedVoxelObject::generate(&generator).unwrap();
+        })
+    });
+}
+
+pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
+    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
+    let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    c.bench_function("chunked_voxel_object_get_each_voxel", |b| {
+        b.iter(|| {
+            for i in object.occupied_range(0) {
+                for j in object.occupied_range(1) {
+                    for k in object.occupied_range(2) {
+                        let _ = black_box(object.get_voxel(i, j, k));
+                    }
+                }
+            }
+        })
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
     targets =
-        bench_dynamic_instance_feature_buffer_add_feature_from_storage,
-        bench_dynamic_instance_feature_buffer_add_feature_from_storage_repeatedly,
         bench_voxel_tree_construction,
-        bench_voxel_transform_buffering
+        bench_voxel_transform_buffering,
+        bench_chunked_voxel_object_construction,
+        bench_chunked_voxel_object_get_each_voxel
 );
 criterion_main!(benches);
