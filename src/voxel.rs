@@ -7,6 +7,7 @@ pub mod entity;
 pub mod generation;
 mod tree;
 
+pub use chunks::ChunkedVoxelObject;
 pub use tree::{VoxelTree, VoxelTreeLODController};
 
 use crate::{
