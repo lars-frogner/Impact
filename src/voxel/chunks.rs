@@ -12,6 +12,8 @@ pub struct ChunkedVoxelObject {
     n_superchunks_per_axis: usize,
     occupied_chunks: [Range<usize>; 3],
     superchunks: Vec<VoxelSuperchunk>,
+    chunks: Vec<VoxelChunk>,
+    voxels: Vec<Voxel>,
 }
 
 #[derive(Clone, Debug)]
@@ -23,7 +25,7 @@ pub struct VoxelSuperchunk {
 enum SuperchunkChunks {
     None,
     Same(Voxel),
-    Different(Vec<VoxelChunk>),
+    Different { start_chunk_idx: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +37,7 @@ pub struct VoxelChunk {
 enum ChunkVoxels {
     None,
     Same(Voxel),
-    Different(Vec<Voxel>),
+    Different { start_voxel_idx: usize },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,8 +85,8 @@ impl ChunkedVoxelObject {
 
         let mut superchunks = Vec::with_capacity(n_superchunks_per_axis.pow(3));
 
-        let mut chunk_storage = Vec::new();
-        let mut voxel_storage = Vec::new();
+        let mut chunks = Vec::new();
+        let mut voxels = Vec::new();
 
         let mut occupied_chunks_i = REVERSED_MAX_RANGE;
         let mut occupied_chunks_j = REVERSED_MAX_RANGE;
@@ -93,13 +95,12 @@ impl ChunkedVoxelObject {
         for superchunk_i in 0..n_superchunks_per_axis {
             for superchunk_j in 0..n_superchunks_per_axis {
                 for superchunk_k in 0..n_superchunks_per_axis {
-                    let (superchunk, occupied_chunks, chunk_storage_, voxel_storage_) =
-                        VoxelSuperchunk::generate(
-                            generator,
-                            [superchunk_i, superchunk_j, superchunk_k],
-                            chunk_storage,
-                            voxel_storage,
-                        );
+                    let (superchunk, occupied_chunks) = VoxelSuperchunk::generate(
+                        generator,
+                        [superchunk_i, superchunk_j, superchunk_k],
+                        &mut chunks,
+                        &mut voxels,
+                    );
 
                     occupied_chunks_i.start = occupied_chunks_i.start.min(occupied_chunks[0].start);
                     occupied_chunks_i.end = occupied_chunks_i.end.max(occupied_chunks[0].end);
@@ -107,11 +108,6 @@ impl ChunkedVoxelObject {
                     occupied_chunks_j.end = occupied_chunks_j.end.max(occupied_chunks[1].end);
                     occupied_chunks_k.start = occupied_chunks_k.start.min(occupied_chunks[2].start);
                     occupied_chunks_k.end = occupied_chunks_k.end.max(occupied_chunks[2].end);
-
-                    // If the superchunk didn't need the storages, we can reuse
-                    // them for the next superchunk
-                    chunk_storage = chunk_storage_;
-                    voxel_storage = voxel_storage_;
 
                     superchunks.push(superchunk);
                 }
@@ -129,6 +125,8 @@ impl ChunkedVoxelObject {
             n_superchunks_per_axis,
             occupied_chunks,
             superchunks,
+            chunks,
+            voxels,
         })
     }
 
@@ -155,7 +153,7 @@ impl ChunkedVoxelObject {
     pub fn stored_voxel_count(&self) -> usize {
         self.superchunks
             .iter()
-            .map(VoxelSuperchunk::stored_voxel_count)
+            .map(|superchunk| superchunk.stored_voxel_count(&self.chunks))
             .sum()
     }
 
@@ -165,17 +163,19 @@ impl ChunkedVoxelObject {
         match &superchunk.chunks {
             SuperchunkChunks::None => None,
             SuperchunkChunks::Same(voxel) => Some(voxel),
-            SuperchunkChunks::Different(chunks) => {
-                let chunk_idx =
-                    Self::linear_chunk_idx_within_superchunk_from_global_voxel_indices(i, j, k);
-                let chunk = &chunks[chunk_idx];
+            SuperchunkChunks::Different { start_chunk_idx } => {
+                let chunk_idx = start_chunk_idx
+                    + Self::linear_chunk_idx_within_superchunk_from_global_voxel_indices(i, j, k);
+                let chunk = &self.chunks[chunk_idx];
                 match &chunk.voxels {
                     ChunkVoxels::None => None,
                     ChunkVoxels::Same(voxel) => Some(voxel),
-                    ChunkVoxels::Different(voxels) => {
-                        let voxel_idx =
-                            Self::linear_voxel_idx_within_chunk_from_global_voxel_indices(i, j, k);
-                        let voxel = &voxels[voxel_idx];
+                    ChunkVoxels::Different { start_voxel_idx } => {
+                        let voxel_idx = start_voxel_idx
+                            + Self::linear_voxel_idx_within_chunk_from_global_voxel_indices(
+                                i, j, k,
+                            );
+                        let voxel = &self.voxels[voxel_idx];
                         if voxel.is_empty() {
                             None
                         } else {
@@ -238,9 +238,9 @@ impl VoxelSuperchunk {
     fn generate<G, F>(
         generator: &G,
         superchunk_indices: [usize; 3],
-        mut chunk_storage: Vec<VoxelChunk>,
-        mut voxel_storage: Vec<Voxel>,
-    ) -> (Self, [Range<usize>; 3], Vec<VoxelChunk>, Vec<Voxel>)
+        chunks: &mut Vec<VoxelChunk>,
+        voxels: &mut Vec<Voxel>,
+    ) -> (Self, [Range<usize>; 3])
     where
         G: VoxelGenerator<F>,
         F: Float,
@@ -248,8 +248,8 @@ impl VoxelSuperchunk {
         let mut first_voxel: Option<Voxel> = None;
         let mut is_uniform = true;
 
-        chunk_storage.clear();
-        chunk_storage.reserve_exact(SUPERCHUNK_CHUNK_COUNT);
+        let start_chunk_idx = chunks.len();
+        chunks.reserve_exact(SUPERCHUNK_CHUNK_COUNT);
 
         // Note: These are global chunk indices, not the chunk indices within
         // the current superchunk
@@ -262,12 +262,8 @@ impl VoxelSuperchunk {
         for chunk_i in start_chunk_indices[0]..start_chunk_indices[0] + SUPERCHUNK_SIZE {
             for chunk_j in start_chunk_indices[1]..start_chunk_indices[1] + SUPERCHUNK_SIZE {
                 for chunk_k in start_chunk_indices[2]..start_chunk_indices[2] + SUPERCHUNK_SIZE {
-                    let (chunk, voxel_storage_) =
-                        VoxelChunk::generate(generator, [chunk_i, chunk_j, chunk_k], voxel_storage);
-
-                    // If the chunk didn't need the storage, we can reuse it for
-                    // the next chunk
-                    voxel_storage = voxel_storage_;
+                    let chunk =
+                        VoxelChunk::generate(generator, [chunk_i, chunk_j, chunk_k], voxels);
 
                     if is_uniform {
                         match (&first_voxel, &chunk.voxels) {
@@ -277,7 +273,7 @@ impl VoxelSuperchunk {
                             (Some(first_voxel), ChunkVoxels::Same(voxel)) => {
                                 is_uniform = first_voxel == voxel;
                             }
-                            (_, ChunkVoxels::Different(_)) => {
+                            (_, ChunkVoxels::Different { .. }) => {
                                 is_uniform = false;
                             }
                             (None, ChunkVoxels::None) => {
@@ -298,7 +294,7 @@ impl VoxelSuperchunk {
                         occupied_chunks_k.end = occupied_chunks_k.end.max(chunk_k + 1);
                     }
 
-                    chunk_storage.push(chunk);
+                    chunks.push(chunk);
                 }
             }
         }
@@ -306,6 +302,7 @@ impl VoxelSuperchunk {
         let occupied_chunks = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
 
         if is_uniform {
+            chunks.truncate(start_chunk_idx);
             let first_voxel = first_voxel.unwrap();
             (
                 Self {
@@ -316,17 +313,13 @@ impl VoxelSuperchunk {
                     },
                 },
                 occupied_chunks,
-                chunk_storage,
-                voxel_storage,
             )
         } else {
             (
                 Self {
-                    chunks: SuperchunkChunks::Different(chunk_storage),
+                    chunks: SuperchunkChunks::Different { start_chunk_idx },
                 },
                 occupied_chunks,
-                Vec::new(),
-                voxel_storage,
             )
         }
     }
@@ -335,13 +328,15 @@ impl VoxelSuperchunk {
         self.chunks.is_empty()
     }
 
-    fn stored_voxel_count(&self) -> usize {
+    fn stored_voxel_count(&self, chunks: &[VoxelChunk]) -> usize {
         match &self.chunks {
             SuperchunkChunks::None => 0,
             SuperchunkChunks::Same(_) => 1,
-            SuperchunkChunks::Different(chunks) => {
-                chunks.iter().map(VoxelChunk::stored_voxel_count).sum()
-            }
+            &SuperchunkChunks::Different { start_chunk_idx } => chunks
+                [start_chunk_idx..start_chunk_idx + SUPERCHUNK_CHUNK_COUNT]
+                .iter()
+                .map(VoxelChunk::stored_voxel_count)
+                .sum(),
         }
     }
 }
@@ -356,8 +351,8 @@ impl VoxelChunk {
     fn generate<G, F>(
         generator: &G,
         global_chunk_indices: [usize; 3],
-        mut voxel_storage: Vec<Voxel>,
-    ) -> (Self, Vec<Voxel>)
+        voxels: &mut Vec<Voxel>,
+    ) -> Self
     where
         G: VoxelGenerator<F>,
         F: Float,
@@ -374,12 +369,9 @@ impl VoxelChunk {
             .zip(generator.grid_shape())
             .any(|(&idx, size)| idx >= size)
         {
-            return (
-                Self {
-                    voxels: ChunkVoxels::None,
-                },
-                voxel_storage,
-            );
+            return Self {
+                voxels: ChunkVoxels::None,
+            };
         }
 
         let first_voxel = Voxel::new(
@@ -389,8 +381,8 @@ impl VoxelChunk {
         );
         let mut is_uniform = true;
 
-        voxel_storage.clear();
-        voxel_storage.reserve_exact(CHUNK_VOXEL_COUNT);
+        let start_voxel_idx = voxels.len();
+        voxels.reserve_exact(CHUNK_VOXEL_COUNT);
 
         for i in origin[0]..origin[0] + CHUNK_SIZE {
             for j in origin[1]..origin[1] + CHUNK_SIZE {
@@ -403,29 +395,24 @@ impl VoxelChunk {
                     if is_uniform && voxel != first_voxel {
                         is_uniform = false;
                     }
-                    voxel_storage.push(voxel);
+                    voxels.push(voxel);
                 }
             }
         }
 
         if is_uniform {
-            (
-                Self {
-                    voxels: if first_voxel.is_empty() {
-                        ChunkVoxels::None
-                    } else {
-                        ChunkVoxels::Same(first_voxel)
-                    },
+            voxels.truncate(start_voxel_idx);
+            Self {
+                voxels: if first_voxel.is_empty() {
+                    ChunkVoxels::None
+                } else {
+                    ChunkVoxels::Same(first_voxel)
                 },
-                voxel_storage,
-            )
+            }
         } else {
-            (
-                Self {
-                    voxels: ChunkVoxels::Different(voxel_storage),
-                },
-                Vec::new(),
-            )
+            Self {
+                voxels: ChunkVoxels::Different { start_voxel_idx },
+            }
         }
     }
 
@@ -437,7 +424,7 @@ impl VoxelChunk {
         match &self.voxels {
             ChunkVoxels::None => 0,
             ChunkVoxels::Same(_) => 1,
-            ChunkVoxels::Different(_) => CHUNK_VOXEL_COUNT,
+            ChunkVoxels::Different { .. } => CHUNK_VOXEL_COUNT,
         }
     }
 }
