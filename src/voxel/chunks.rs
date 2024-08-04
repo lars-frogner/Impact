@@ -55,10 +55,10 @@ const SUPERCHUNK_SIZE: usize = 1 << LOG2_SUPERCHUNK_SIZE;
 const SUPERCHUNK_SIZE_IN_VOXELS: usize = SUPERCHUNK_SIZE * CHUNK_SIZE;
 const SUPERCHUNK_CHUNK_COUNT: usize = SUPERCHUNK_SIZE.pow(3);
 
-const SUPERCHUNK_IDX_SHIFT: usize = 3 * (LOG2_CHUNK_SIZE + LOG2_SUPERCHUNK_SIZE);
-const CHUNK_IDX_SHIFT: usize = 3 * LOG2_CHUNK_SIZE;
-const CHUNK_IDX_MASK: usize = 1 << (3 * LOG2_SUPERCHUNK_SIZE - 1);
-const VOXEL_IDX_MASK: usize = 1 << (3 * LOG2_CHUNK_SIZE - 1);
+const SUPERCHUNK_IDX_SHIFT: usize = LOG2_CHUNK_SIZE + LOG2_SUPERCHUNK_SIZE;
+const CHUNK_IDX_SHIFT: usize = LOG2_CHUNK_SIZE;
+const CHUNK_IDX_MASK: usize = (1 << LOG2_SUPERCHUNK_SIZE) - 1;
+const VOXEL_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
 
 #[allow(clippy::reversed_empty_ranges)]
 const REVERSED_MAX_RANGE: Range<usize> = usize::MAX..usize::MIN;
@@ -90,9 +90,9 @@ impl ChunkedVoxelObject {
         let mut occupied_chunks_j = REVERSED_MAX_RANGE;
         let mut occupied_chunks_k = REVERSED_MAX_RANGE;
 
-        for superchunk_k in 0..n_superchunks_per_axis {
+        for superchunk_i in 0..n_superchunks_per_axis {
             for superchunk_j in 0..n_superchunks_per_axis {
-                for superchunk_i in 0..n_superchunks_per_axis {
+                for superchunk_k in 0..n_superchunks_per_axis {
                     let (superchunk, occupied_chunks, chunk_storage_, voxel_storage_) =
                         VoxelSuperchunk::generate(
                             generator,
@@ -158,6 +158,80 @@ impl ChunkedVoxelObject {
             .map(VoxelSuperchunk::stored_voxel_count)
             .sum()
     }
+
+    pub fn get_voxel(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
+        let superchunk_idx = self.linear_superchunk_idx_from_global_voxel_indices(i, j, k);
+        let superchunk = self.superchunks.get(superchunk_idx)?;
+        match &superchunk.chunks {
+            SuperchunkChunks::None => None,
+            SuperchunkChunks::Same(voxel) => Some(voxel),
+            SuperchunkChunks::Different(chunks) => {
+                let chunk_idx =
+                    Self::linear_chunk_idx_within_superchunk_from_global_voxel_indices(i, j, k);
+                let chunk = &chunks[chunk_idx];
+                match &chunk.voxels {
+                    ChunkVoxels::None => None,
+                    ChunkVoxels::Same(voxel) => Some(voxel),
+                    ChunkVoxels::Different(voxels) => {
+                        let voxel_idx =
+                            Self::linear_voxel_idx_within_chunk_from_global_voxel_indices(i, j, k);
+                        let voxel = &voxels[voxel_idx];
+                        if voxel.is_empty() {
+                            None
+                        } else {
+                            Some(voxel)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn linear_superchunk_idx_from_global_voxel_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> usize {
+        let superchunk_indices = superchunk_indices_from_global_voxel_indices(i, j, k);
+        self.linear_superchunk_idx(&superchunk_indices)
+    }
+
+    const fn linear_chunk_idx_within_superchunk_from_global_voxel_indices(
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> usize {
+        let chunk_indices = chunk_indices_within_superchunk_from_global_voxel_indices(i, j, k);
+        Self::linear_chunk_idx_within_superchunk(&chunk_indices)
+    }
+
+    const fn linear_voxel_idx_within_chunk_from_global_voxel_indices(
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> usize {
+        let voxel_indices = voxel_indices_within_chunk_from_global_voxel_indices(i, j, k);
+        Self::linear_voxel_idx_within_chunk(&voxel_indices)
+    }
+
+    fn linear_superchunk_idx(&self, superchunk_indices: &[usize; 3]) -> usize {
+        superchunk_indices[0] * self.n_superchunks_per_axis * self.n_superchunks_per_axis
+            + superchunk_indices[1] * self.n_superchunks_per_axis
+            + superchunk_indices[2]
+    }
+
+    const fn linear_chunk_idx_within_superchunk(chunk_indices: &[usize; 3]) -> usize {
+        chunk_indices[0] * SUPERCHUNK_SIZE * SUPERCHUNK_SIZE
+            + chunk_indices[1] * SUPERCHUNK_SIZE
+            + chunk_indices[2]
+    }
+
+    const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
+        voxel_indices[0] * CHUNK_SIZE * CHUNK_SIZE
+            + voxel_indices[1] * CHUNK_SIZE
+            + voxel_indices[2]
+    }
 }
 
 impl VoxelSuperchunk {
@@ -185,9 +259,9 @@ impl VoxelSuperchunk {
         let mut occupied_chunks_j = REVERSED_MAX_RANGE;
         let mut occupied_chunks_k = REVERSED_MAX_RANGE;
 
-        for chunk_k in start_chunk_indices[2]..start_chunk_indices[2] + SUPERCHUNK_SIZE {
+        for chunk_i in start_chunk_indices[0]..start_chunk_indices[0] + SUPERCHUNK_SIZE {
             for chunk_j in start_chunk_indices[1]..start_chunk_indices[1] + SUPERCHUNK_SIZE {
-                for chunk_i in start_chunk_indices[0]..start_chunk_indices[0] + SUPERCHUNK_SIZE {
+                for chunk_k in start_chunk_indices[2]..start_chunk_indices[2] + SUPERCHUNK_SIZE {
                     let (chunk, voxel_storage_) =
                         VoxelChunk::generate(generator, [chunk_i, chunk_j, chunk_k], voxel_storage);
 
@@ -318,9 +392,9 @@ impl VoxelChunk {
         voxel_storage.clear();
         voxel_storage.reserve_exact(CHUNK_VOXEL_COUNT);
 
-        for k in origin[2]..origin[2] + CHUNK_SIZE {
+        for i in origin[0]..origin[0] + CHUNK_SIZE {
             for j in origin[1]..origin[1] + CHUNK_SIZE {
-                for i in origin[0]..origin[0] + CHUNK_SIZE {
+                for k in origin[2]..origin[2] + CHUNK_SIZE {
                     let voxel = Voxel::new(
                         generator
                             .voxel_at_indices(i, j, k)
@@ -400,16 +474,32 @@ impl PropertyID {
     }
 }
 
-const fn superchunk_idx(global_voxel_idx: usize) -> usize {
-    global_voxel_idx >> SUPERCHUNK_IDX_SHIFT
+const fn superchunk_indices_from_global_voxel_indices(i: usize, j: usize, k: usize) -> [usize; 3] {
+    [
+        i >> SUPERCHUNK_IDX_SHIFT,
+        j >> SUPERCHUNK_IDX_SHIFT,
+        k >> SUPERCHUNK_IDX_SHIFT,
+    ]
 }
 
-const fn chunk_idx(global_voxel_idx: usize) -> usize {
-    (global_voxel_idx >> CHUNK_IDX_SHIFT) & CHUNK_IDX_MASK
+const fn chunk_indices_within_superchunk_from_global_voxel_indices(
+    i: usize,
+    j: usize,
+    k: usize,
+) -> [usize; 3] {
+    [
+        (i >> CHUNK_IDX_SHIFT) & CHUNK_IDX_MASK,
+        (j >> CHUNK_IDX_SHIFT) & CHUNK_IDX_MASK,
+        (k >> CHUNK_IDX_SHIFT) & CHUNK_IDX_MASK,
+    ]
 }
 
-const fn voxel_idx(global_voxel_idx: usize) -> usize {
-    global_voxel_idx & VOXEL_IDX_MASK
+const fn voxel_indices_within_chunk_from_global_voxel_indices(
+    i: usize,
+    j: usize,
+    k: usize,
+) -> [usize; 3] {
+    [i & VOXEL_IDX_MASK, j & VOXEL_IDX_MASK, k & VOXEL_IDX_MASK]
 }
 
 #[cfg(test)]
@@ -420,6 +510,11 @@ mod test {
         shape: [usize; 3],
         offset: [usize; 3],
         voxel_type: Option<VoxelType>,
+    }
+
+    struct ManualVoxelGenerator<const N: usize> {
+        voxels: [[[u8; N]; N]; N],
+        offset: [usize; 3],
     }
 
     impl BoxVoxelGenerator {
@@ -452,24 +547,63 @@ mod test {
         }
     }
 
+    impl<const N: usize> ManualVoxelGenerator<N> {
+        fn new(voxels: [[[u8; N]; N]; N]) -> Self {
+            Self::with_offset(voxels, [0; 3])
+        }
+
+        fn with_offset(voxels: [[[u8; N]; N]; N], offset: [usize; 3]) -> Self {
+            Self { voxels, offset }
+        }
+    }
+
     impl VoxelGenerator<f64> for BoxVoxelGenerator {
         fn voxel_extent(&self) -> f64 {
             0.25
         }
 
         fn grid_shape(&self) -> [usize; 3] {
-            self.shape
+            [
+                self.offset[0] + self.shape[0],
+                self.offset[1] + self.shape[1],
+                self.offset[2] + self.shape[2],
+            ]
         }
 
         fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
             if i >= self.offset[0]
-                && i < self.shape[0]
+                && i < self.offset[0] + self.shape[0]
                 && j >= self.offset[1]
-                && j < self.shape[1]
+                && j < self.offset[1] + self.shape[1]
                 && k >= self.offset[2]
-                && k < self.shape[2]
+                && k < self.offset[2] + self.shape[2]
             {
                 self.voxel_type
+            } else {
+                None
+            }
+        }
+    }
+
+    impl<const N: usize> VoxelGenerator<f64> for ManualVoxelGenerator<N> {
+        fn voxel_extent(&self) -> f64 {
+            0.25
+        }
+
+        fn grid_shape(&self) -> [usize; 3] {
+            [self.offset[0] + N, self.offset[1] + N, self.offset[2] + N]
+        }
+
+        fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+            if i >= self.offset[0]
+                && i < self.offset[0] + N
+                && j >= self.offset[1]
+                && j < self.offset[1] + N
+                && k >= self.offset[2]
+                && k < self.offset[2] + N
+                && self.voxels[i - self.offset[0]][j - self.offset[1]][k - self.offset[2]] != 0
+            {
+                Some(VoxelType::Default)
             } else {
                 None
             }
@@ -555,8 +689,7 @@ mod test {
 
     #[test]
     fn should_generate_object_with_single_offset_uniform_chunk() {
-        let generator =
-            BoxVoxelGenerator::offset_with_default([2 * CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
+        let generator = BoxVoxelGenerator::offset_with_default([CHUNK_SIZE; 3], [CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
@@ -564,5 +697,51 @@ mod test {
         assert_eq!(object.occupied_range(1), CHUNK_SIZE..2 * CHUNK_SIZE);
         assert_eq!(object.occupied_range(2), CHUNK_SIZE..2 * CHUNK_SIZE);
         assert_eq!(object.stored_voxel_count(), 1);
+    }
+
+    #[test]
+    fn should_get_correct_voxels_in_small_grid() {
+        let generator = ManualVoxelGenerator::<3>::new([
+            [[1, 1, 0], [1, 0, 1], [0, 1, 0]],
+            [[0, 1, 1], [1, 0, 0], [1, 0, 1]],
+            [[1, 1, 0], [1, 1, 1], [0, 0, 0]],
+        ]);
+        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        for i in 0..3 {
+            for j in 0..3 {
+                for k in 0..3 {
+                    assert_eq!(
+                        object.get_voxel(i, j, k).map_or(0, |_| 1),
+                        generator.voxels[i][j][k]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn should_get_correct_voxels_in_small_offset_grid() {
+        let offset = [SUPERCHUNK_SIZE_IN_VOXELS - 2; 3];
+        let generator = ManualVoxelGenerator::<3>::with_offset(
+            [
+                [[1, 1, 0], [1, 0, 1], [0, 1, 0]],
+                [[0, 1, 1], [1, 0, 0], [1, 0, 1]],
+                [[1, 1, 0], [1, 1, 1], [0, 0, 0]],
+            ],
+            offset,
+        );
+        let object = ChunkedVoxelObject::generate(&generator).unwrap();
+        for i in 0..3 {
+            for j in 0..3 {
+                for k in 0..3 {
+                    assert_eq!(
+                        object
+                            .get_voxel(offset[0] + i, offset[1] + j, offset[2] + k)
+                            .map_or(0, |_| 1),
+                        generator.voxels[i][j][k]
+                    );
+                }
+            }
+        }
     }
 }
