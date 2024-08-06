@@ -212,3 +212,61 @@ impl<F: Float> VoxelGenerator<F> for GradientNoiseVoxelGenerator<F> {
     }
 }
 
+#[cfg(feature = "fuzzing")]
+pub mod fuzzing {
+    use super::*;
+    use arbitrary::{Arbitrary, Result, Unstructured};
+
+    #[allow(clippy::large_enum_variant)]
+    #[derive(Clone, Debug, Arbitrary)]
+    pub enum ArbitraryVoxelGenerator {
+        UniformBox(UniformBoxVoxelGenerator<f64>),
+        UniformSphere(UniformSphereVoxelGenerator<f64>),
+        GradientNoise(GradientNoiseVoxelGenerator<f64>),
+    }
+
+    const MAX_SIZE: usize = 300;
+
+    impl<F: Float> Arbitrary<'_> for UniformBoxVoxelGenerator<F> {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let voxel_type = VoxelType::Default;
+            let voxel_extent = F::from_f64(0.25).unwrap();
+            let size_x = u.int_in_range(0..=MAX_SIZE)?;
+            let size_y = u.int_in_range(0..=MAX_SIZE)?;
+            let size_z = u.int_in_range(0..=MAX_SIZE)?;
+            Ok(Self::new(voxel_type, voxel_extent, size_x, size_y, size_z))
+        }
+    }
+
+    impl<F: Float> Arbitrary<'_> for UniformSphereVoxelGenerator<F> {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let voxel_type = VoxelType::Default;
+            let voxel_extent = F::from_f64(0.25).unwrap();
+            let n_voxels_across = u.int_in_range(1..=MAX_SIZE)?;
+            Ok(Self::new(voxel_type, voxel_extent, n_voxels_across, 0))
+        }
+    }
+
+    impl<'a, F: Float> Arbitrary<'a> for GradientNoiseVoxelGenerator<F> {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            let voxel_type = VoxelType::Default;
+            let voxel_extent = F::from_f64(0.25).unwrap();
+            let size_x = u.int_in_range(0..=MAX_SIZE)?;
+            let size_y = u.int_in_range(0..=MAX_SIZE)?;
+            let size_z = u.int_in_range(0..=MAX_SIZE)?;
+            let noise_frequency = 100.0 * f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
+            let noise_threshold = f64::from(u.int_in_range(0..=1000000)?) / 1000000.0;
+            let seed = u.arbitrary()?;
+            Ok(Self::new(
+                voxel_type,
+                voxel_extent,
+                size_x,
+                size_y,
+                size_z,
+                noise_frequency,
+                noise_threshold,
+                seed,
+            ))
+        }
+    }
+}
