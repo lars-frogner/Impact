@@ -28,6 +28,7 @@ log = "0.4"
 naga = { version = "0.20", features = ["wgsl-out"] }
 nalgebra = { version = "0.32", features = ["bytemuck"] }
 nohash-hasher = "0.2.0"
+noise = "0.9.0"
 num-derive = "0.4"
 num-traits = "0.2"
 ordered-float = "4.2"
