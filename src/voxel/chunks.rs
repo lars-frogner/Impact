@@ -23,7 +23,7 @@ use std::{iter, ops::Range};
 pub struct ChunkedVoxelObject {
     voxel_extent: f64,
     n_superchunks_per_axis: usize,
-    occupied_chunks: [Range<usize>; 3],
+    occupied_grid_ranges: [Range<usize>; 3],
     superchunks: Vec<VoxelSuperchunk>,
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
@@ -241,12 +241,16 @@ impl ChunkedVoxelObject {
             return None;
         }
 
-        let occupied_chunks = [occupied_chunks_i, occupied_chunks_j, occupied_chunks_k];
+        let occupied_grid_ranges = [
+            occupied_chunks_i.start * CHUNK_SIZE..occupied_chunks_i.end * CHUNK_SIZE,
+            occupied_chunks_j.start * CHUNK_SIZE..occupied_chunks_j.end * CHUNK_SIZE,
+            occupied_chunks_k.start * CHUNK_SIZE..occupied_chunks_k.end * CHUNK_SIZE,
+        ];
 
         Some(Self {
             voxel_extent: generator.voxel_extent().to_f64().unwrap(),
             n_superchunks_per_axis,
-            occupied_chunks,
+            occupied_grid_ranges,
             superchunks,
             chunks,
             voxels,
@@ -269,10 +273,10 @@ impl ChunkedVoxelObject {
         self.n_superchunks_per_axis * SUPERCHUNK_SIZE_IN_VOXELS
     }
 
-    /// Returns the range of indices along the given axis of the object's voxel
+    /// Returns the range of indices along the each axis of the object's voxel
     /// grid that may contain non-empty voxels.
-    pub fn occupied_range(&self, axis: usize) -> Range<usize> {
-        self.occupied_chunks[axis].start * CHUNK_SIZE..self.occupied_chunks[axis].end * CHUNK_SIZE
+    pub fn occupied_grid_ranges(&self) -> &[Range<usize>] {
+        &self.occupied_grid_ranges
     }
 
     /// Returns the number of voxels (potentially empty) actually stored in the
@@ -294,6 +298,12 @@ impl ChunkedVoxelObject {
     /// simple bit manipulations to determine the superchunk and chunk
     /// containing the voxel.
     pub fn get_voxel(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
+        if i >= self.occupied_grid_ranges[0].end
+            || j >= self.occupied_grid_ranges[1].end
+            || k >= self.occupied_grid_ranges[2].end
+        {
+            return None;
+        }
         let superchunk_idx = self.linear_superchunk_idx_from_object_voxel_indices(i, j, k);
         let superchunk = self.superchunks.get(superchunk_idx)?;
         match &superchunk {
@@ -342,9 +352,9 @@ impl ChunkedVoxelObject {
         let mut invalid_missing_flags = Vec::new();
         let mut invalid_present_flags = Vec::new();
 
-        for i in self.occupied_range(0) {
-            for j in self.occupied_range(1) {
-                for k in self.occupied_range(2) {
+        for i in self.occupied_grid_ranges[0].clone() {
+            for j in self.occupied_grid_ranges[1].clone() {
+                for k in self.occupied_grid_ranges[2].clone() {
                     let mut assert_has_flag = |voxel: &Voxel, flag| {
                         if !voxel.is_empty() && !voxel.flags().contains(flag) {
                             invalid_missing_flags.push(([i, j, k], flag));
@@ -400,8 +410,8 @@ impl ChunkedVoxelObject {
             }
         }
 
-        for j in self.occupied_range(1) {
-            for k in self.occupied_range(2) {
+        for j in self.occupied_grid_ranges[1].clone() {
+            for k in self.occupied_grid_ranges[2].clone() {
                 if let Some(voxel) = self.get_voxel(0, j, k) {
                     if voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_DN) {
                         invalid_present_flags.push(([0, j, k], VoxelFlags::HAS_ADJACENT_X_DN));
@@ -409,8 +419,8 @@ impl ChunkedVoxelObject {
                 }
             }
         }
-        for i in self.occupied_range(0) {
-            for k in self.occupied_range(2) {
+        for i in self.occupied_grid_ranges[0].clone() {
+            for k in self.occupied_grid_ranges[2].clone() {
                 if let Some(voxel) = self.get_voxel(i, 0, k) {
                     if voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_DN) {
                         invalid_present_flags.push(([i, 0, k], VoxelFlags::HAS_ADJACENT_Y_DN));
@@ -418,8 +428,8 @@ impl ChunkedVoxelObject {
                 }
             }
         }
-        for i in self.occupied_range(0) {
-            for j in self.occupied_range(1) {
+        for i in self.occupied_grid_ranges[0].clone() {
+            for j in self.occupied_grid_ranges[1].clone() {
                 if let Some(voxel) = self.get_voxel(i, j, 0) {
                     if voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_DN) {
                         invalid_present_flags.push(([i, j, 0], VoxelFlags::HAS_ADJACENT_Z_DN));
@@ -448,14 +458,14 @@ impl ChunkedVoxelObject {
                         ([superchunk_i, superchunk_j + 1, superchunk_k], Dimension::Y),
                         ([superchunk_i, superchunk_j, superchunk_k + 1], Dimension::Z),
                     ] {
-                        let adjacent_superchunk_idx =
-                            self.linear_superchunk_idx(&adjacent_superchunk_indices);
-
                         let lower_superchunk_idx = ChunkIndex::Present(superchunk_idx);
 
                         let upper_superchunk_idx = if adjacent_superchunk_indices[dim.idx()]
                             < self.n_superchunks_per_axis
                         {
+                            let adjacent_superchunk_idx =
+                                self.linear_superchunk_idx(&adjacent_superchunk_indices);
+
                             ChunkIndex::Present(adjacent_superchunk_idx)
                         } else {
                             ChunkIndex::AbsentEmpty
@@ -705,10 +715,10 @@ impl VoxelSuperchunk {
                         ([chunk_i, chunk_j + 1, chunk_k], Dimension::Y),
                         ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
                     ] {
-                        let adjacent_chunk_idx =
-                            linear_chunk_idx_within_superchunk(&adjacent_chunk_indices);
-
                         if adjacent_chunk_indices[dim.idx()] < SUPERCHUNK_SIZE {
+                            let adjacent_chunk_idx =
+                                linear_chunk_idx_within_superchunk(&adjacent_chunk_indices);
+
                             VoxelChunk::update_mutual_face_adjacencies(
                                 superchunk_chunks,
                                 voxels,
@@ -1134,7 +1144,7 @@ impl VoxelChunk {
         };
 
         // Extract the sub-slice of voxels for this chunk so that we get
-        // out-of-bounds when trying to access voxels outside the chunk
+        // out-of-bounds if trying to access voxels outside the chunk
         let chunk_voxels = &mut voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT];
 
         for i in 0..CHUNK_SIZE {
@@ -1152,30 +1162,33 @@ impl VoxelChunk {
                     // addition to this one, we only need to look up the upper
                     // adjacent voxels to cover every adjacency over the course
                     // of the full loop
-                    for (adjacent_indices, flag_for_current, flag_for_adjacent) in [
+                    for (adjacent_indices, flag_for_current, flag_for_adjacent, dim) in [
                         (
-                            [i, j, k + 1],
-                            VoxelFlags::HAS_ADJACENT_Z_UP,
-                            VoxelFlags::HAS_ADJACENT_Z_DN,
+                            [i + 1, j, k],
+                            VoxelFlags::HAS_ADJACENT_X_UP,
+                            VoxelFlags::HAS_ADJACENT_X_DN,
+                            Dimension::X,
                         ),
                         (
                             [i, j + 1, k],
                             VoxelFlags::HAS_ADJACENT_Y_UP,
                             VoxelFlags::HAS_ADJACENT_Y_DN,
+                            Dimension::Y,
                         ),
                         (
-                            [i + 1, j, k],
-                            VoxelFlags::HAS_ADJACENT_X_UP,
-                            VoxelFlags::HAS_ADJACENT_X_DN,
+                            [i, j, k + 1],
+                            VoxelFlags::HAS_ADJACENT_Z_UP,
+                            VoxelFlags::HAS_ADJACENT_Z_DN,
+                            Dimension::Z,
                         ),
                     ] {
-                        let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
-                        match chunk_voxels.get_mut(adjacent_idx) {
-                            Some(adjacent_voxel) if !adjacent_voxel.is_empty() => {
+                        if adjacent_indices[dim.idx()] < CHUNK_SIZE {
+                            let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                            let adjacent_voxel = &mut chunk_voxels[adjacent_idx];
+                            if !adjacent_voxel.is_empty() {
                                 flags |= flag_for_current;
                                 adjacent_voxel.add_flags(flag_for_adjacent);
                             }
-                            _ => {}
                         }
                     }
 
@@ -2029,9 +2042,9 @@ mod test {
         assert_eq!(object.voxel_extent(), generator.voxel_extent());
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(object.occupied_range(0), 0..CHUNK_SIZE);
-        assert_eq!(object.occupied_range(1), 0..CHUNK_SIZE);
-        assert_eq!(object.occupied_range(2), 0..CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[0], 0..CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[1], 0..CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[2], 0..CHUNK_SIZE);
         assert_eq!(object.stored_voxel_count(), CHUNK_VOXEL_COUNT);
     }
 
@@ -2041,9 +2054,18 @@ mod test {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(object.occupied_range(0), 0..SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(object.occupied_range(1), 0..SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(object.occupied_range(2), 0..SUPERCHUNK_SIZE_IN_VOXELS);
+        assert_eq!(
+            object.occupied_grid_ranges()[0],
+            0..SUPERCHUNK_SIZE_IN_VOXELS
+        );
+        assert_eq!(
+            object.occupied_grid_ranges()[1],
+            0..SUPERCHUNK_SIZE_IN_VOXELS
+        );
+        assert_eq!(
+            object.occupied_grid_ranges()[2],
+            0..SUPERCHUNK_SIZE_IN_VOXELS
+        );
         assert_eq!(object.stored_voxel_count(), 1);
     }
 
@@ -2054,15 +2076,15 @@ mod test {
         assert_eq!(object.n_superchunks_per_axis(), 2);
         assert_eq!(object.full_grid_size(), 2 * SUPERCHUNK_SIZE_IN_VOXELS);
         assert_eq!(
-            object.occupied_range(0),
+            object.occupied_grid_ranges()[0],
             0..SUPERCHUNK_SIZE_IN_VOXELS + CHUNK_SIZE
         );
         assert_eq!(
-            object.occupied_range(1),
+            object.occupied_grid_ranges()[1],
             0..SUPERCHUNK_SIZE_IN_VOXELS + CHUNK_SIZE
         );
         assert_eq!(
-            object.occupied_range(2),
+            object.occupied_grid_ranges()[2],
             0..SUPERCHUNK_SIZE_IN_VOXELS + CHUNK_SIZE
         );
         assert_eq!(
@@ -2082,9 +2104,9 @@ mod test {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(object.occupied_range(0), 0..CHUNK_SIZE);
-        assert_eq!(object.occupied_range(1), 0..CHUNK_SIZE);
-        assert_eq!(object.occupied_range(2), 0..CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[0], 0..CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[1], 0..CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[2], 0..CHUNK_SIZE);
         assert_eq!(object.stored_voxel_count(), 1);
     }
 
@@ -2094,9 +2116,9 @@ mod test {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
         assert_eq!(object.n_superchunks_per_axis(), 1);
         assert_eq!(object.full_grid_size(), SUPERCHUNK_SIZE_IN_VOXELS);
-        assert_eq!(object.occupied_range(0), CHUNK_SIZE..2 * CHUNK_SIZE);
-        assert_eq!(object.occupied_range(1), CHUNK_SIZE..2 * CHUNK_SIZE);
-        assert_eq!(object.occupied_range(2), CHUNK_SIZE..2 * CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[0], CHUNK_SIZE..2 * CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[1], CHUNK_SIZE..2 * CHUNK_SIZE);
+        assert_eq!(object.occupied_grid_ranges()[2], CHUNK_SIZE..2 * CHUNK_SIZE);
         assert_eq!(object.stored_voxel_count(), 1);
     }
 

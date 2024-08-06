@@ -94,11 +94,12 @@ pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
 pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
+    let ranges = object.occupied_grid_ranges();
     c.bench_function("chunked_voxel_object_get_each_voxel", |b| {
         b.iter(|| {
-            for i in object.occupied_range(0) {
-                for j in object.occupied_range(1) {
-                    for k in object.occupied_range(2) {
+            for i in ranges[0].clone() {
+                for j in ranges[1].clone() {
+                    for k in ranges[2].clone() {
                         let _ = black_box(object.get_voxel(i, j, k));
                     }
                 }
