@@ -9,9 +9,13 @@ members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+fuzzing = ["arbitrary"]
+
 [dependencies]
 anyhow = "1.0"
 approx = "0.5"
+arbitrary = { version = "1.3", features = ["derive"], optional = true }
 atomic_enum = "0.3"
 bitflags = "2.4"
 bytemuck = { version = "1.14", features = ["derive"] }
@@ -48,8 +52,11 @@ tobj = "4.0"
 wgpu = { version = "0.20", features = ["naga-ir"] }
 winit = { version = "0.30" }
 
-impact_ecs = { path = "impact_ecs" }
-impact_utils = { path = "impact_utils" }
+[dependencies.impact_ecs]
+path = "impact_ecs"
+
+[dependencies.impact_utils]
+path = "impact_utils"
 
 [dev-dependencies]
 criterion = "0.5.1"

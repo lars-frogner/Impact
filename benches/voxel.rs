@@ -113,7 +113,7 @@ pub fn bench_chunked_voxel_object_update_adjacency(c: &mut Criterion) {
     c.bench_function("chunked_voxel_object_update_adjacency", |b| {
         b.iter(|| {
             let mut object = object.clone();
-            object.update_adjacency();
+            object.update_adjacencies();
             black_box(object);
         })
     });
