@@ -42,7 +42,6 @@
     clippy::match_wild_err_arm,
     clippy::match_wildcard_for_single_variants,
     clippy::mem_forget,
-    clippy::mismatched_target_os,
     clippy::missing_enforced_import_renames,
     clippy::mut_mut,
     clippy::mutex_integer,
@@ -73,7 +72,8 @@
     future_incompatible,
     missing_debug_implementations,
     nonstandard_style,
-    rust_2018_idioms
+    rust_2018_idioms,
+    unexpected_cfgs
 )]
 #![allow(
     clippy::too_many_arguments,
