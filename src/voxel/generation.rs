@@ -3,6 +3,7 @@
 use super::{VoxelGenerator, VoxelType};
 use crate::num::Float;
 use nalgebra::{point, Point3};
+use noise::{NoiseFn, Simplex};
 
 /// Generator for a box configuration of identical voxels.
 #[derive(Clone, Debug)]
@@ -23,6 +24,22 @@ pub struct UniformSphereVoxelGenerator<F> {
     center: F,
     squared_radius: F,
     instance_group_height: u32,
+}
+
+/// Generator for a voxel configuration obtained by thresholding a gradient
+/// noise pattern.
+#[derive(Clone, Debug)]
+pub struct GradientNoiseVoxelGenerator<F> {
+    voxel_type: VoxelType,
+    voxel_extent: F,
+    size_x: usize,
+    size_y: usize,
+    size_z: usize,
+    noise_distance_scale_x: f64,
+    noise_distance_scale_y: f64,
+    noise_distance_scale_z: f64,
+    noise_threshold: f64,
+    noise: Simplex,
 }
 
 impl<F: Float> UniformBoxVoxelGenerator<F> {
@@ -129,3 +146,69 @@ impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
         self.instance_group_height
     }
 }
+
+impl<F: Float> GradientNoiseVoxelGenerator<F> {
+    /// Creates a new generator for a gradient noise voxel pattern with the
+    /// given voxel type, voxel extent and number of voxels in each direction.
+    /// The given frequency determines the spatial scale of the noise pattern,
+    /// while the given threshold specifies the value the noise pattern must
+    /// exceed at a given location to generate a voxel there.
+    pub fn new(
+        voxel_type: VoxelType,
+        voxel_extent: F,
+        size_x: usize,
+        size_y: usize,
+        size_z: usize,
+        noise_frequency: f64,
+        noise_threshold: f64,
+        seed: u32,
+    ) -> Self {
+        let noise_distance_scale_x = noise_frequency / usize::max(1, size_x) as f64;
+        let noise_distance_scale_y = noise_frequency / usize::max(1, size_y) as f64;
+        let noise_distance_scale_z = noise_frequency / usize::max(1, size_z) as f64;
+
+        let noise = Simplex::new(seed);
+
+        Self {
+            voxel_type,
+            voxel_extent,
+            size_x,
+            size_y,
+            size_z,
+            noise_distance_scale_x,
+            noise_distance_scale_y,
+            noise_distance_scale_z,
+            noise_threshold,
+            noise,
+        }
+    }
+}
+
+impl<F: Float> VoxelGenerator<F> for GradientNoiseVoxelGenerator<F> {
+    fn voxel_extent(&self) -> F {
+        self.voxel_extent
+    }
+
+    fn grid_shape(&self) -> [usize; 3] {
+        [self.size_x, self.size_y, self.size_z]
+    }
+
+    fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
+        if i < self.size_x && j < self.size_y && k < self.size_z {
+            let x = i as f64 * self.noise_distance_scale_x;
+            let y = j as f64 * self.noise_distance_scale_y;
+            let z = k as f64 * self.noise_distance_scale_z;
+
+            let noise_value = self.noise.get([x, y, z]);
+
+            if noise_value >= self.noise_threshold {
+                Some(self.voxel_type)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
