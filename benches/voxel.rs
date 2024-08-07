@@ -3,7 +3,10 @@ use impact::{
     geometry::{Degrees, Frustum, PerspectiveTransform},
     model::{transform::InstanceModelViewTransform, DynamicInstanceFeatureBuffer},
     util::bounds::UpperExclusiveBounds,
-    voxel::{generation::UniformSphereVoxelGenerator, ChunkedVoxelObject, VoxelTree, VoxelType},
+    voxel::{
+        generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
+        ChunkedVoxelObject, VoxelTree, VoxelType,
+    },
 };
 use nalgebra::{vector, Similarity3, UnitQuaternion, Vector3};
 use num_traits::FloatConst;
@@ -85,7 +88,8 @@ pub fn bench_voxel_transform_buffering(c: &mut Criterion) {
 pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
     c.bench_function("chunked_voxel_object_construction", |b| {
         b.iter(|| {
-            let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
+            let generator =
+                UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 200, 200);
             ChunkedVoxelObject::generate(&generator).unwrap();
         })
     });
