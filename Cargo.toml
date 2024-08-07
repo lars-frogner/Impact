@@ -64,6 +64,9 @@ pprof = { version = "0.13", features = ["criterion", "flamegraph"] }
 naga = { version = "0.20", features = ["wgsl-in", "wgsl-out"] }
 proptest = "1.4"
 
+[profile.release]
+debug = "limited"
+
 [[bench]]
 name = "model"
 harness = false
