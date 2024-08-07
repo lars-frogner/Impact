@@ -14,7 +14,9 @@ fuzz_target!(|generator: ArbitraryVoxelGenerator| {
         }
     };
     if let Some(mut object) = object {
-        object.update_adjacencies();
+        object.initialize_adjacencies();
         object.validate_adjacencies();
+        object.validate_chunk_obscuredness();
+        object.validate_superchunk_obscuredness();
     }
 });

@@ -98,7 +98,7 @@ pub fn bench_chunked_voxel_object_construction(c: &mut Criterion) {
 pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
-    let ranges = object.occupied_grid_ranges();
+    let ranges = object.occupied_voxel_ranges();
     c.bench_function("chunked_voxel_object_get_each_voxel", |b| {
         b.iter(|| {
             for i in ranges[0].clone() {
@@ -112,13 +112,13 @@ pub fn bench_chunked_voxel_object_get_each_voxel(c: &mut Criterion) {
     });
 }
 
-pub fn bench_chunked_voxel_object_update_adjacency(c: &mut Criterion) {
+pub fn bench_chunked_voxel_object_initialize_adjacencies(c: &mut Criterion) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
-    c.bench_function("chunked_voxel_object_update_adjacency", |b| {
+    c.bench_function("chunked_voxel_object_initialize_adjacencies", |b| {
         b.iter(|| {
             let mut object = object.clone();
-            object.update_adjacencies();
+            object.initialize_adjacencies();
             black_box(object);
         })
     });
@@ -132,6 +132,6 @@ criterion_group!(
         bench_voxel_transform_buffering,
         bench_chunked_voxel_object_construction,
         bench_chunked_voxel_object_get_each_voxel,
-        bench_chunked_voxel_object_update_adjacency
+        bench_chunked_voxel_object_initialize_adjacencies
 );
 criterion_main!(benches);

@@ -10,7 +10,7 @@ use std::{
 
 const TARGETS: [&str; 2] = [
     "chunked_voxel_object_construction",
-    "chunked_voxel_object_update_adjacency",
+    "chunked_voxel_object_initialize_adjacencies",
 ];
 
 fn main() {
@@ -30,8 +30,8 @@ fn main() {
 
     match target.as_str() {
         "chunked_voxel_object_construction" => profile_chunked_voxel_object_construction(duration),
-        "chunked_voxel_object_update_adjacency" => {
-            profile_chunked_voxel_object_update_adjacency(duration)
+        "chunked_voxel_object_initialize_adjacencies" => {
+            profile_chunked_voxel_object_initialize_adjacencies(duration)
         }
         _ => {
             exit_with_error(format!("Unknown target: {}", target), true);
@@ -59,13 +59,13 @@ fn profile_chunked_voxel_object_construction(duration: Duration) {
     }
 }
 
-fn profile_chunked_voxel_object_update_adjacency(duration: Duration) {
+fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration) {
     let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     let start = Instant::now();
     while start.elapsed() < duration {
         let mut object = object.clone();
-        object.update_adjacencies();
+        object.initialize_adjacencies();
         black_box(object);
     }
 }
