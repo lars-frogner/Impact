@@ -58,6 +58,29 @@ pub struct VoxelSphereComp {
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
+/// entities comprised of voxels in a gradient noise pattern.
+///
+/// The purpose of this component is to aid in constructing a
+/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// creation.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
+pub struct VoxelGradientNoisePatternComp {
+    /// The maximum number of voxels in the x-direction.
+    pub size_x: usize,
+    /// The maximum number of voxels in the y-direction.
+    pub size_y: usize,
+    /// The maximum number of voxels in the z-direction.
+    pub size_z: usize,
+    /// The spatial frequency of the noise pattern.
+    pub noise_frequency: f64,
+    /// The threshold noise value for generating a voxel.
+    pub noise_threshold: f64,
+    /// The seed for the noise pattern.
+    pub seed: u64,
+}
+
+/// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities with voxels represented by a
 /// [`VoxelTree`](crate::voxel::VoxelTree).
 ///
@@ -142,6 +165,29 @@ impl VoxelSphereComp {
     }
 }
 
+impl VoxelGradientNoisePatternComp {
+    /// Creates a new component for a gradient noise voxel pattern with the
+    /// given maximum number of voxels in each direction, spatial noise
+    /// frequency, noise threshold and seed.
+    pub fn new(
+        size_x: usize,
+        size_y: usize,
+        size_z: usize,
+        noise_frequency: f64,
+        noise_threshold: f64,
+        seed: u64,
+    ) -> Self {
+        Self {
+            size_x,
+            size_y,
+            size_z,
+            noise_frequency,
+            noise_threshold,
+            seed,
+        }
+    }
+}
+
 impl VoxelTreeNodeComp {
     pub fn new(
         voxel_tree_id: VoxelTreeID,
@@ -162,6 +208,7 @@ pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()>
     register_setup_component!(registry, VoxelTypeComp)?;
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
+    register_setup_component!(registry, VoxelGradientNoisePatternComp)?;
     register_setup_component!(registry, VoxelTreeComp)?;
     register_component!(registry, VoxelTreeNodeComp)
 }
