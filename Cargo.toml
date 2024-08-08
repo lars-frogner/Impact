@@ -2,6 +2,7 @@
 name = "impact"
 version = "0.1.0"
 edition = "2021"
+default-run = "impact"
 
 [workspace]
 members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
