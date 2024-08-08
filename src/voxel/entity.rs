@@ -3,8 +3,13 @@
 use crate::{
     gpu::rendering::fre,
     voxel::{
-        components::{VoxelBoxComp, VoxelSphereComp, VoxelTreeComp, VoxelTypeComp},
-        generation::{UniformBoxVoxelGenerator, UniformSphereVoxelGenerator},
+        components::{
+            VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelTreeComp,
+            VoxelTypeComp,
+        },
+        generation::{
+            GradientNoiseVoxelGenerator, UniformBoxVoxelGenerator, UniformSphereVoxelGenerator,
+        },
         VoxelManager, VoxelTree,
     },
 };
@@ -54,6 +59,35 @@ pub fn setup_voxel_tree_for_new_entity(
 
             let voxel_tree =
                 VoxelTree::build(&generator).expect("Tried to build tree for empty voxel sphere");
+
+            let voxel_tree_id = voxel_manager.add_voxel_tree(voxel_tree);
+
+            VoxelTreeComp { voxel_tree_id }
+        },
+        ![VoxelTreeComp]
+    );
+
+    setup!(
+        {
+            let mut voxel_manager = voxel_manager.write().unwrap();
+        },
+        components,
+        |voxel_noise_pattern: &VoxelGradientNoisePatternComp,
+         voxel_type: &VoxelTypeComp|
+         -> VoxelTreeComp {
+            let generator = GradientNoiseVoxelGenerator::new(
+                voxel_type.voxel_type(),
+                voxel_manager.config().voxel_extent,
+                voxel_noise_pattern.size_x,
+                voxel_noise_pattern.size_y,
+                voxel_noise_pattern.size_z,
+                voxel_noise_pattern.noise_frequency,
+                voxel_noise_pattern.noise_threshold,
+                u32::try_from(voxel_noise_pattern.seed).unwrap(),
+            );
+
+            let voxel_tree = VoxelTree::build(&generator)
+                .expect("Tried to build tree for empty voxel gradient noise pattern");
 
             let voxel_tree_id = voxel_manager.add_voxel_tree(voxel_tree);
 
