@@ -8,8 +8,8 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                Blending, DepthMapUsage, RenderCommandSpecification, RenderPipelineHints,
-                RenderPassSpecification, RenderPipelineSpecification, RenderSubpassSpecification,
+                Blending, DepthMapUsage, RenderCommandSpecification, RenderPassSpecification,
+                RenderPipelineHints, RenderPipelineSpecification, RenderSubpassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -208,6 +208,7 @@ fn create_ambient_occlusion_computation_render_pass(
         .get_or_create_rendering_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::AmbientOcclusionComputation,
+            &[],
             &[
                 (
                     "max_samples",
@@ -310,6 +311,7 @@ fn create_ambient_occlusion_application_render_pass(
         .get_or_create_rendering_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::AmbientOcclusionApplication,
+            &[],
             &[
                 (
                     "position_location",

@@ -12,8 +12,8 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                Blending, DepthMapUsage, RenderCommandSpecification, RenderPipelineHints,
-                RenderPassSpecification, RenderPipelineSpecification, RenderSubpassSpecification,
+                Blending, DepthMapUsage, RenderCommandSpecification, RenderPassSpecification,
+                RenderPipelineHints, RenderPipelineSpecification, RenderSubpassSpecification,
             },
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -155,6 +155,7 @@ fn create_temporal_anti_aliasing_render_pass(
         .get_or_create_rendering_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::TemporalAntiAliasing,
+            &[],
             &[
                 (
                     "position_location",

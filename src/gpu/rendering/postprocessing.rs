@@ -10,7 +10,7 @@ use crate::{
         push_constant::{PushConstant, PushConstantVariant},
         rendering::render_command::{
             Blending, DepthMapUsage, RenderCommandSpecification, RenderCommandState,
-            RenderPipelineHints, RenderPassSpecification, RenderPipelineSpecification,
+            RenderPassSpecification, RenderPipelineHints, RenderPipelineSpecification,
             RenderSubpassSpecification,
         },
         resource_group::GPUResourceGroupManager,
@@ -173,6 +173,7 @@ fn create_passthrough_render_pass(
         .get_or_create_rendering_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::Passthrough,
+            &[],
             &[
                 (
                     "position_location",
