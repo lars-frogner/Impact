@@ -307,9 +307,9 @@ impl ShaderManager {
         }
     }
 
-    /// Determines the shader ID for the given shader template and replacements,
-    /// resolves the template and stores it as a rendering shader if it does not
-    /// already exist and returns the shader ID.
+    /// Determines the shader ID for the given shader template, flags and
+    /// replacements, resolves the template and stores it as a rendering
+    /// shader if it does not already exist and returns the shader ID.
     ///
     /// # Errors
     /// Returns an error if the shader template can not be resolved or compiled.
@@ -317,19 +317,21 @@ impl ShaderManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         template: SpecificShaderTemplate,
+        flags_to_set: &[&str],
         replacements: &[(&str, String)],
     ) -> Result<ShaderID> {
         Self::get_or_create_shader_from_template(
             &mut self.rendering_shaders,
             graphics_device,
             template,
+            flags_to_set,
             replacements,
         )
     }
 
-    /// Determines the shader ID for the given shader template and replacements,
-    /// resolves the template and stores it as a compute shader if it does not
-    /// already exist and returns the shader ID.
+    /// Determines the shader ID for the given shader template, flags and
+    /// replacements, resolves the template and stores it as a compute
+    /// shader if it does not already exist and returns the shader ID.
     ///
     /// # Errors
     /// Returns an error if the shader template can not be resolved or compiled.
@@ -337,12 +339,14 @@ impl ShaderManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         template: SpecificShaderTemplate,
+        flags_to_set: &[&str],
         replacements: &[(&str, String)],
     ) -> Result<ShaderID> {
         Self::get_or_create_shader_from_template(
             &mut self.compute_shaders,
             graphics_device,
             template,
+            flags_to_set,
             replacements,
         )
     }
@@ -408,18 +412,23 @@ impl ShaderManager {
         shaders: &mut HashMap<ShaderID, Shader>,
         graphics_device: &GraphicsDevice,
         template: SpecificShaderTemplate,
+        flags_to_set: &[&str],
         replacements: &[(&str, String)],
     ) -> Result<ShaderID> {
         let template_name = template.to_string();
 
-        let shader_id =
-            template::create_shader_id_for_template(&template_name, replacements.iter().cloned());
+        let shader_id = template::create_shader_id_for_template(
+            &template_name,
+            flags_to_set.iter().copied(),
+            replacements.iter().cloned(),
+        );
 
         match shaders.entry(shader_id) {
             Entry::Occupied(_) => {}
             Entry::Vacant(entry) => {
                 entry.insert(template.template().resolve_and_compile_as_wgsl(
                     graphics_device,
+                    flags_to_set.iter().copied(),
                     replacements.iter().cloned(),
                     &template_name,
                 )?);
@@ -1633,7 +1642,8 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
 
                     // Map expressions
                     Statement::Emit(exprs) => {
-                        // Iterate once to add expressions that should NOT be part of the emit statement
+                        // Iterate once to add expressions that should NOT be part of the emit
+                        // statement
                         for expr in exprs.clone() {
                             self.import_expression(
                                 expr,
@@ -1644,7 +1654,8 @@ impl<'a, 'b> ModuleImporter<'a, 'b> {
                             );
                         }
                         let old_length = new_expressions.len();
-                        // Iterate again to add expressions that should be part of the emit statement
+                        // Iterate again to add expressions that should be part of the emit
+                        // statement
                         for expr in exprs.clone() {
                             map_expr!(&expr);
                         }

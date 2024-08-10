@@ -82,6 +82,7 @@ fn create_tone_mapping_render_pass(
         .get_or_create_rendering_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::ToneMapping,
+            &[],
             &[
                 ("tone_mapping_method", mapping.to_string()),
                 (
@@ -100,7 +101,7 @@ fn create_tone_mapping_render_pass(
     RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
         pass: RenderPassSpecification {
             surface_modification: SurfaceModification::Write,
-            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(), // We output directly to the surface
+            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(), /* We output directly to the surface */
             label: "Surface writing pass".to_string(),
             ..Default::default()
         },

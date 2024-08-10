@@ -7,7 +7,7 @@ use crate::{
         rendering::{
             fre,
             render_command::{
-                Blending, RenderCommandSpecification, RenderPipelineHints, RenderPassSpecification,
+                Blending, RenderCommandSpecification, RenderPassSpecification, RenderPipelineHints,
                 RenderPipelineSpecification, RenderSubpassSpecification,
             },
         },
@@ -218,6 +218,7 @@ pub(super) fn create_gaussian_blur_render_pass(
         .get_or_create_rendering_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::GaussianBlur,
+            &[],
             &[
                 ("direction", direction.to_string()),
                 ("max_samples", MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS.to_string()),

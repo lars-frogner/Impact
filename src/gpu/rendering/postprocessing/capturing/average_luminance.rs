@@ -241,6 +241,7 @@ pub(super) fn create_luminance_histogram_compute_pass(
         .get_or_create_compute_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::LuminanceHistogram,
+            &[],
             &[
                 ("threads_per_side", HISTOGRAM_THREADS_PER_SIDE.to_string()),
                 ("params_group", "0".to_string()),
@@ -343,6 +344,7 @@ fn create_luminance_histogram_average_compute_pass(
         .get_or_create_compute_shader_from_template(
             graphics_device,
             SpecificShaderTemplate::LuminanceHistogramAverage,
+            &[],
             &[
                 ("bin_count", HISTOGRAM_BIN_COUNT.to_string()),
                 ("params_group", "0".to_string()),
