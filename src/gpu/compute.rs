@@ -3,10 +3,7 @@
 use crate::gpu::{
     push_constant::PushConstantGroup,
     push_constant::PushConstantVariant,
-    rendering::{
-        postprocessing::Postprocessor, render_command::RenderCommandOutcome,
-        surface::RenderingSurface,
-    },
+    rendering::{postprocessing::Postprocessor, surface::RenderingSurface},
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{template::ComputeShaderTemplate, Shader, ShaderManager},
     texture::attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
@@ -106,7 +103,7 @@ impl ComputePass {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             timestamp_writes: None,
             label: Some(&format!("Compute pass ({})", self.label)),
@@ -138,7 +135,7 @@ impl ComputePass {
             .determine_workgroup_counts(rendering_surface);
         compute_pass.dispatch_workgroups(x, y, z);
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 0 })
+        Ok(())
     }
 
     fn set_push_constants(

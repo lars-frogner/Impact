@@ -56,13 +56,6 @@ use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
 };
 
-/// The outcome of a request to record a render command.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum RenderCommandOutcome {
-    Recorded { draw_calls: usize },
-    Skipped,
-}
-
 /// Manager of commands for rendering the scene. Postprocessing commands are
 /// managed by the [`Postprocessor`] but evoked by this manager.
 #[derive(Debug)]
@@ -359,7 +352,7 @@ impl RenderCommandManager {
         config: &RenderingConfig,
         frame_counter: u32,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         self.attachment_clearing_pass.record(
             surface_texture_view,
             render_attachment_texture_manager,
@@ -430,7 +423,7 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 0 })
+        Ok(())
     }
 }
 
@@ -513,12 +506,15 @@ impl AttachmentClearingPass {
         surface_texture_view: &wgpu::TextureView,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let color_attachments =
             self.color_attachments(surface_texture_view, render_attachment_texture_manager);
 
         let mut depth_stencil_attachment =
             self.depth_stencil_attachment(render_attachment_texture_manager);
+
+        let n_attachments =
+            color_attachments.len() + usize::from(depth_stencil_attachment.is_some());
 
         if color_attachments.len() < Self::MAX_ATTACHMENTS_PER_PASS {
             command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -544,7 +540,12 @@ impl AttachmentClearingPass {
             }
         }
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 0 })
+        log::debug!(
+            "Recorded clearing pass for {} render attachments",
+            n_attachments
+        );
+
+        Ok(())
     }
 }
 
@@ -664,9 +665,9 @@ impl DepthPrepass {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         frame_counter: u32,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         if self.models.is_empty() {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         }
 
         let depth_stencil_attachment =
@@ -736,9 +737,13 @@ impl DepthPrepass {
             );
         }
 
-        Ok(RenderCommandOutcome::Recorded {
-            draw_calls: self.models.len(),
-        })
+        log::debug!(
+            "Recorded depth prepass for {} models ({} draw calls)",
+            self.models.len(),
+            self.models.len()
+        );
+
+        Ok(())
     }
 }
 
@@ -1051,9 +1056,9 @@ impl GeometryPass {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         frame_counter: u32,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         if self.pipelines.is_empty() {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         }
 
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
@@ -1170,13 +1175,20 @@ impl GeometryPass {
             }
         }
 
-        Ok(RenderCommandOutcome::Recorded {
-            draw_calls: self
-                .pipelines
-                .values()
-                .map(|pipeline| pipeline.models.len())
-                .product(),
-        })
+        let n_models: usize = self
+            .pipelines
+            .values()
+            .map(|pipeline| pipeline.models.len())
+            .product();
+
+        log::debug!(
+            "Recorded geometry pass for {} models ({} pipelines, {} draw calls)",
+            n_models,
+            self.pipelines.len(),
+            n_models
+        );
+
+        Ok(())
     }
 }
 
@@ -1341,7 +1353,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         render_resources: &SynchronizedRenderResources,
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
@@ -1350,7 +1362,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let shadow_map_textures = shadow_map_manager.textures();
 
         if shadow_map_textures.is_empty() {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         }
 
         for (light_idx, (light_id, shadow_map_texture)) in light_buffer_manager
@@ -1453,9 +1465,18 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        Ok(RenderCommandOutcome::Recorded {
-            draw_calls: self.models.len() * 6 * shadow_map_textures.len(),
-        })
+        let n_passes = 6 * shadow_map_textures.len();
+        let n_draw_calls = self.models.len() * n_passes;
+
+        log::debug!(
+            "Recorded shadow map update passes for {} omnidirectional lights and {} models ({} passes, {} draw calls)",
+            shadow_map_textures.len(),
+            self.models.len(),
+            n_passes,
+            n_draw_calls
+        );
+
+        Ok(())
     }
 }
 
@@ -1630,7 +1651,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         render_resources: &SynchronizedRenderResources,
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
@@ -1639,7 +1660,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let shadow_map_textures = shadow_map_manager.textures();
 
         if shadow_map_textures.is_empty() {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         }
 
         for (light_idx, (light_id, shadow_map_texture)) in light_buffer_manager
@@ -1743,11 +1764,18 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             }
         }
 
-        Ok(RenderCommandOutcome::Recorded {
-            draw_calls: self.models.len()
-                * (MAX_SHADOW_MAP_CASCADES as usize)
-                * shadow_map_textures.len(),
-        })
+        let n_passes = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len();
+        let n_draw_calls = self.models.len() * n_passes;
+
+        log::debug!(
+            "Recorded shadow map update passes for {} unidirectional lights and {} models ({} passes, {} draw calls)",
+            shadow_map_textures.len(),
+            self.models.len(),
+            n_passes,
+            n_draw_calls
+        );
+
+        Ok(())
     }
 }
 
@@ -1954,13 +1982,13 @@ impl AmbientLightPass {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
 
         if light_buffer_manager.ambient_light_ids().is_empty() {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         }
 
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
@@ -2039,7 +2067,9 @@ impl AmbientLightPass {
             0..1,
         );
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 1 })
+        log::debug!("Recorded ambient light pass (1 draw call)");
+
+        Ok(())
     }
 }
 
@@ -2235,7 +2265,7 @@ impl DirectionalLightPass {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
@@ -2243,7 +2273,7 @@ impl DirectionalLightPass {
         if light_buffer_manager.omnidirectional_light_ids().is_empty()
             && light_buffer_manager.unidirectional_light_ids().is_empty()
         {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         }
 
         let color_attachment = self.color_attachment(render_attachment_texture_manager);
@@ -2380,10 +2410,15 @@ impl DirectionalLightPass {
             render_pass.draw_indexed(0..n_indices, 0, 0..1);
         }
 
-        Ok(RenderCommandOutcome::Recorded {
-            draw_calls: omnidirectional_light_shadow_map_textures.len()
-                + unidirectional_light_shadow_map_textures.len(),
-        })
+        log::debug!(
+            "Recorded lighting pass for {} omnidirectional lights and {} unidirectional lights ({} draw calls)",
+            omnidirectional_light_shadow_map_textures.len(),
+            unidirectional_light_shadow_map_textures.len(),
+            omnidirectional_light_shadow_map_textures.len()
+                + unidirectional_light_shadow_map_textures.len()
+        );
+
+        Ok(())
     }
 }
 
@@ -2690,11 +2725,11 @@ impl SkyboxPass {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let pipeline = if let Some(pipeline) = self.pipeline.as_ref() {
             pipeline
         } else {
-            return Ok(RenderCommandOutcome::Skipped);
+            return Ok(());
         };
 
         let color_attachment = self.color_attachment(render_attachment_texture_manager);
@@ -2752,7 +2787,9 @@ impl SkyboxPass {
             0..1,
         );
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 1 })
+        log::debug!("Recorded skybox pass (1 draw call)");
+
+        Ok(())
     }
 }
 
@@ -3017,7 +3054,7 @@ impl PostprocessingRenderPass {
         postprocessor: &Postprocessor,
         frame_counter: u32,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let color_attachments =
             self.color_attachments(surface_texture_view, render_attachment_texture_manager);
 
@@ -3101,7 +3138,7 @@ impl PostprocessingRenderPass {
             0..1,
         );
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 1 })
+        Ok(())
     }
 }
 
@@ -3163,6 +3200,12 @@ impl RenderAttachmentTextureCopyCommand {
             },
             source_texture.size(),
         );
+
+        log::debug!(
+            "Recorded texture copy command ({:?} to {:?})",
+            self.source,
+            self.destination
+        );
     }
 }
 
@@ -3182,14 +3225,19 @@ impl StorageBufferResultCopyCommand {
         &self,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         command_encoder: &mut wgpu::CommandEncoder,
-    ) -> Result<RenderCommandOutcome> {
+    ) -> Result<()> {
         let storage_buffer = storage_gpu_buffer_manager
             .get_storage_buffer(self.buffer_id)
             .ok_or_else(|| anyhow!("Missing storage buffer {}", self.buffer_id))?;
 
         storage_buffer.encode_copy_to_result_buffer(command_encoder)?;
 
-        Ok(RenderCommandOutcome::Recorded { draw_calls: 0 })
+        log::debug!(
+            "Recorded result copy command for storage buffer ({})",
+            self.buffer_id
+        );
+
+        Ok(())
     }
 }
 

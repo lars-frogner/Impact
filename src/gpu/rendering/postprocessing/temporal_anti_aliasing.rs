@@ -119,6 +119,7 @@ impl TemporalAntiAliasingRenderCommands {
                 frame_counter,
                 command_encoder,
             )?;
+            log::debug!("Recorded temporal anti-aliasing blending pass");
         }
         Ok(())
     }

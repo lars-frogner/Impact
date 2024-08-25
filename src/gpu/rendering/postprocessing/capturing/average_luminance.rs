@@ -162,6 +162,8 @@ impl AverageLuminanceComputeCommands {
                 postprocessor,
                 command_encoder,
             )?;
+            log::debug!("Recorded luminance histogram compute pass");
+
             self.average_compute_pass.record(
                 rendering_surface,
                 gpu_resource_group_manager,
@@ -169,6 +171,8 @@ impl AverageLuminanceComputeCommands {
                 postprocessor,
                 command_encoder,
             )?;
+            log::debug!("Recorded luminance histogram average compute pass");
+
             self.result_copy_command
                 .record(storage_gpu_buffer_manager, command_encoder)?;
         }
