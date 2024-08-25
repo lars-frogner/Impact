@@ -5,7 +5,7 @@ pub mod entity;
 pub mod tasks;
 
 use crate::{
-    assets::Assets,
+    assets::{lookup_table, Assets},
     component::ComponentRegistry,
     control::{
         self,
@@ -23,6 +23,7 @@ use crate::{
     model::{self, InstanceFeatureManager},
     physics::{rigid_body::schemes::SteppingScheme, PhysicsSimulator},
     scene::Scene,
+    skybox::Skybox,
     ui::UserInterface,
     voxel::{VoxelConfig, VoxelManager},
     window::Window,
@@ -78,9 +79,14 @@ impl Application {
             rendering_surface,
         )?;
 
-        let assets = Assets::new_with_default_lookup_tables(
+        let mut assets = Assets::new(
             Arc::clone(&graphics_device),
             Arc::clone(renderer.mipmapper_generator()),
+        );
+
+        lookup_table::initialize_default_lookup_tables(
+            &mut assets,
+            &mut renderer.gpu_resource_group_manager().write().unwrap(),
         )?;
 
         let mut material_library = MaterialLibrary::new();
@@ -187,10 +193,10 @@ impl Application {
             .save_render_attachment_quantity_if_requested(self.renderer())?;
 
         self.screen_capturer
-            .save_omnidirectional_light_shadow_map_if_requested(self.renderer())?;
+            .save_omnidirectional_light_shadow_maps_if_requested(self.renderer())?;
 
         self.screen_capturer
-            .save_unidirectional_light_shadow_map_if_requested(self.renderer())
+            .save_unidirectional_light_shadow_maps_if_requested(self.renderer())
     }
 
     /// Reads the Wavefront OBJ file at the given path and any associated MTL
@@ -217,9 +223,9 @@ impl Application {
         io::obj::load_models_from_obj_file(&mut assets, &mut mesh_repository, obj_file_path)
     }
 
-    /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
-    /// to the mesh repository if it does not already exist. If there are multiple
-    /// meshes in the file, they are merged into a single mesh.
+    /// Reads the Wavefront OBJ file at the given path and adds the contained
+    /// mesh to the mesh repository if it does not already exist. If there
+    /// are multiple meshes in the file, they are merged into a single mesh.
     ///
     /// # Returns
     /// The [`MeshComp`] representing the mesh.
@@ -235,10 +241,11 @@ impl Application {
         io::obj::load_mesh_from_obj_file(&mut mesh_repository, obj_file_path)
     }
 
-    /// Reads the Wavefront OBJ file at the given path and adds the contained mesh
-    /// to the mesh repository if it does not already exist, after generating
-    /// texture coordinates for the mesh using the given projection. If there are
-    /// multiple meshes in the file, they are merged into a single mesh.
+    /// Reads the Wavefront OBJ file at the given path and adds the contained
+    /// mesh to the mesh repository if it does not already exist, after
+    /// generating texture coordinates for the mesh using the given
+    /// projection. If there are multiple meshes in the file, they are
+    /// merged into a single mesh.
     ///
     /// # Returns
     /// The [`MeshComp`] representing the mesh.
@@ -280,10 +287,10 @@ impl Application {
         io::ply::load_mesh_from_ply_file(&mut mesh_repository, ply_file_path)
     }
 
-    /// Reads the PLY (Polygon File Format, also called Stanford Triangle Format)
-    /// file at the given path and adds the contained mesh to the mesh repository if
-    /// it does not already exist, after generating texture coordinates for the mesh
-    /// using the given projection.
+    /// Reads the PLY (Polygon File Format, also called Stanford Triangle
+    /// Format) file at the given path and adds the contained mesh to the
+    /// mesh repository if it does not already exist, after generating
+    /// texture coordinates for the mesh using the given projection.
     ///
     /// # Returns
     /// The [`MeshComp`] representing the mesh.
@@ -305,6 +312,22 @@ impl Application {
             ply_file_path,
             projection,
         )
+    }
+
+    /// Sets the given skybox as the skybox for the current scene.
+    pub fn set_skybox_for_current_scene(&self, skybox: Skybox) {
+        self.scene()
+            .read()
+            .unwrap()
+            .skybox()
+            .write()
+            .unwrap()
+            .replace(skybox);
+
+        self.renderer()
+            .read()
+            .unwrap()
+            .declare_render_resources_desynchronized();
     }
 
     /// Sets a new size for the rendering surface and updates

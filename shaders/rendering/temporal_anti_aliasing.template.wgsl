@@ -18,6 +18,11 @@ var linearDepthTexture: texture_2d<f32>;
 @group({{linear_depth_texture_group}}) @binding({{linear_depth_sampler_binding}})
 var linearDepthSampler: sampler;
 
+@group({{motion_vector_texture_group}}) @binding({{motion_vector_texture_binding}})
+var motionVectorTexture: texture_2d<f32>;
+@group({{motion_vector_texture_group}}) @binding({{motion_vector_sampler_binding}})
+var motionVectorSampler: sampler;
+
 @group({{luminance_texture_group}}) @binding({{luminance_texture_binding}})
 var luminanceTexture: texture_2d<f32>;
 @group({{luminance_texture_group}}) @binding({{luminance_sampler_binding}})
@@ -27,11 +32,6 @@ var luminanceSampler: sampler;
 var previousLuminanceTexture: texture_2d<f32>;
 @group({{previous_luminance_texture_group}}) @binding({{previous_luminance_sampler_binding}})
 var previousLuminanceSampler: sampler;
-
-@group({{motion_vector_texture_group}}) @binding({{motion_vector_texture_binding}})
-var motionVectorTexture: texture_2d<f32>;
-@group({{motion_vector_texture_group}}) @binding({{motion_vector_sampler_binding}})
-var motionVectorSampler: sampler;
 
 @group({{params_group}}) @binding({{params_binding}}) var<uniform> params: Parameters;
 
@@ -89,13 +89,13 @@ fn sampleTextureCatmullRom(
 }
 
 fn computeMitchellNetravaliFilterWeight(distanceFromCenter: f32) -> f32 {
-    // Scale the distance so that the filter effectively covers the range 
+    // Scale the distance so that the filter effectively covers the range
     // [-1, 1] rather than [-2, 2]
     let x = 2.0 * distanceFromCenter;
 
     let x2 = x * x;
     let x3 = x2 * x;
-    
+
     var y = 0.0;
 
     if (x < 1.0) {
@@ -150,7 +150,7 @@ fn computeToneMappingAdjustedWeights(
     return vec2f(toneMappedPreviousFrameWeight, toneMappedCurrentFrameWeight) * inverseWeightSum;
 }
 
-@vertex 
+@vertex
 fn mainVS(@location({{position_location}}) modelSpacePosition: vec3f) -> VertexOutput {
     var output: VertexOutput;
     output.projectedPosition = vec4f(modelSpacePosition, 1.0);
@@ -162,7 +162,7 @@ const MIN_F32: f32 = -3.40282e38;
 
 const ONE_OVER_NEIGHBORHOOD_SAMPLE_COUNT: f32 = 1.0 / 9.0;
 
-@fragment 
+@fragment
 fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
 
@@ -232,7 +232,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         output.luminance = vec4f(luminance, 1.0);
         return output;
     }
-    
+
     var previousLuminance = sampleTextureCatmullRom(
         previousLuminanceTexture,
         previousLuminanceSampler,
@@ -259,7 +259,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     currentFrameWeight = adjustedWeights.y;
 
     let blendedLuminance = (previousFrameWeight * previousLuminance + currentFrameWeight * luminance);
-    
+
     output.luminance = vec4f(blendedLuminance, 1.0);
     return output;
 }

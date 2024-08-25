@@ -5,11 +5,7 @@ pub mod transform;
 
 pub use transform::register_model_feature_types;
 
-use crate::{
-    gpu::{shader::InstanceFeatureShaderInput, GraphicsDevice},
-    material::MaterialHandle,
-    mesh::MeshID,
-};
+use crate::{gpu::GraphicsDevice, material::MaterialHandle, mesh::MeshID};
 use buffer::InstanceFeatureGPUBufferManager;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{self, AlignedByteVec, Alignment, Hash64, KeyIndexMapper};
@@ -39,9 +35,6 @@ pub trait InstanceFeature: Pod {
     /// feature to the GPU.
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
 
-    /// The input required for a shader to access this feature.
-    const SHADER_INPUT: InstanceFeatureShaderInput;
-
     /// Returns a slice with the raw bytes representing the feature.
     fn feature_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
@@ -59,7 +52,7 @@ pub trait InstanceFeature: Pod {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_InstanceFeature {
-    ($ty:ty, $vertex_attr_array:expr, $shader_input:expr) => {
+    ($ty:ty, $vertex_attr_array:expr) => {
         impl $crate::model::InstanceFeature for $ty {
             const FEATURE_TYPE_ID: $crate::model::InstanceFeatureTypeID =
                 impact_utils::ConstStringHash64::new(stringify!($ty)).into_hash();
@@ -68,8 +61,6 @@ macro_rules! impl_InstanceFeature {
                 $crate::mesh::buffer::create_vertex_buffer_layout_for_instance::<Self>(
                     &$vertex_attr_array,
                 );
-
-            const SHADER_INPUT: $crate::gpu::shader::InstanceFeatureShaderInput = $shader_input;
         }
     };
 }
@@ -82,7 +73,6 @@ macro_rules! impl_InstanceFeature {
 pub struct ModelID {
     mesh_id: MeshID,
     material_handle: MaterialHandle,
-    prepass_material_handle: Option<MaterialHandle>,
     hash: Hash64,
 }
 
@@ -137,7 +127,6 @@ pub struct InstanceFeatureID {
 pub struct InstanceFeatureStorage {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
     index_map: KeyIndexMapper<usize, BuildNoHashHasher<usize>>,
     feature_id_count: usize,
@@ -157,7 +146,6 @@ pub struct InstanceFeatureStorage {
 pub struct DynamicInstanceFeatureBuffer {
     type_descriptor: InstanceFeatureTypeDescriptor,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    shader_input: InstanceFeatureShaderInput,
     bytes: AlignedByteVec,
     n_valid_bytes: usize,
     range_manager: InstanceFeatureBufferRangeManager,
@@ -189,29 +177,16 @@ struct InstanceFeatureTypeDescriptor {
 }
 
 impl ModelID {
-    /// Creates a new [`ModelID`] for the model comprised of the mesh and
-    /// material with an optional prepass material.
-    pub fn for_mesh_and_material(
-        mesh_id: MeshID,
-        material_handle: MaterialHandle,
-        prepass_material_handle: Option<MaterialHandle>,
-    ) -> Self {
-        let mut hash = impact_utils::compute_hash_64_of_two_hash_64(
+    /// Creates a new [`ModelID`] for the model comprised of the given mesh and
+    /// material.
+    pub fn for_mesh_and_material(mesh_id: MeshID, material_handle: MaterialHandle) -> Self {
+        let hash = impact_utils::compute_hash_64_of_two_hash_64(
             mesh_id.0.hash(),
             material_handle.compute_hash(),
         );
-
-        if let Some(prepass_material_handle) = prepass_material_handle {
-            hash = impact_utils::compute_hash_64_of_two_hash_64(
-                hash,
-                prepass_material_handle.compute_hash(),
-            );
-        }
-
         Self {
             mesh_id,
             material_handle,
-            prepass_material_handle,
             hash,
         }
     }
@@ -225,26 +200,14 @@ impl ModelID {
     pub fn material_handle(&self) -> &MaterialHandle {
         &self.material_handle
     }
-
-    /// The handle for the prepass material associated with the model's
-    /// material.
-    pub fn prepass_material_handle(&self) -> Option<&MaterialHandle> {
-        self.prepass_material_handle.as_ref()
-    }
 }
 
 impl fmt::Display for ModelID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{{mesh: {}, material: {}{}}}",
-            self.mesh_id,
-            &self.material_handle,
-            if let Some(prepass_material_handle) = self.prepass_material_handle {
-                format!(", prepass_material: {}", prepass_material_handle)
-            } else {
-                String::new()
-            }
+            "{{mesh: {}, material: {}}}",
+            self.mesh_id, &self.material_handle,
         )
     }
 }
@@ -737,7 +700,6 @@ impl InstanceFeatureStorage {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::BUFFER_LAYOUT,
-            shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::new(Fe::FEATURE_ALIGNMENT),
             index_map: KeyIndexMapper::default(),
             feature_id_count: 0,
@@ -750,7 +712,6 @@ impl InstanceFeatureStorage {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::BUFFER_LAYOUT,
-            shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::with_capacity(
                 Fe::FEATURE_ALIGNMENT,
                 feature_count * Fe::FEATURE_SIZE,
@@ -774,11 +735,6 @@ impl InstanceFeatureStorage {
     /// stored features.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout
-    }
-
-    /// Returns the input required for accessing the features in a shader.
-    pub fn shader_input(&self) -> &InstanceFeatureShaderInput {
-        &self.shader_input
     }
 
     /// Returns the number of stored features.
@@ -941,7 +897,6 @@ impl DynamicInstanceFeatureBuffer {
         Self {
             type_descriptor: InstanceFeatureTypeDescriptor::for_type::<Fe>(),
             vertex_buffer_layout: Fe::BUFFER_LAYOUT,
-            shader_input: Fe::SHADER_INPUT,
             bytes: AlignedByteVec::copied_from_slice(
                 Fe::FEATURE_ALIGNMENT,
                 &vec![0; Fe::FEATURE_SIZE * Self::INITIAL_ALLOCATED_FEATURE_COUNT],
@@ -958,7 +913,6 @@ impl DynamicInstanceFeatureBuffer {
         Self {
             type_descriptor,
             vertex_buffer_layout: storage.vertex_buffer_layout().clone(),
-            shader_input: storage.shader_input().clone(),
             bytes: AlignedByteVec::copied_from_slice(
                 type_descriptor.alignment(),
                 &vec![0; type_descriptor.size() * Self::INITIAL_ALLOCATED_FEATURE_COUNT],
@@ -982,11 +936,6 @@ impl DynamicInstanceFeatureBuffer {
     /// stored features.
     pub fn vertex_buffer_layout(&self) -> &wgpu::VertexBufferLayout<'static> {
         &self.vertex_buffer_layout
-    }
-
-    /// Returns the input required for accessing the features in a shader.
-    pub fn shader_input(&self) -> &InstanceFeatureShaderInput {
-        &self.shader_input
     }
 
     /// Returns the current number of valid features in the buffer.
@@ -1429,9 +1378,9 @@ mod test {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Zeroable, Pod)]
     struct ZeroSizedFeature;
 
-    impl_InstanceFeature!(Feature, [], InstanceFeatureShaderInput::None);
-    impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
-    impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
+    impl_InstanceFeature!(Feature, []);
+    impl_InstanceFeature!(DifferentFeature, []);
+    impl_InstanceFeature!(ZeroSizedFeature, []);
 
     mod manager {
         use super::*;
@@ -1449,7 +1398,6 @@ mod test {
                     None,
                     None,
                 ),
-                None,
             )
         }
 
@@ -1865,8 +1813,8 @@ mod test {
         #[derive(Clone, Copy, Zeroable, Pod)]
         struct ZeroSizedFeature;
 
-        impl_InstanceFeature!(DifferentFeature, [], InstanceFeatureShaderInput::None);
-        impl_InstanceFeature!(ZeroSizedFeature, [], InstanceFeatureShaderInput::None);
+        impl_InstanceFeature!(DifferentFeature, []);
+        impl_InstanceFeature!(ZeroSizedFeature, []);
 
         #[test]
         fn creating_new_instance_feature_storage_works() {

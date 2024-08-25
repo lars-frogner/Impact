@@ -4,10 +4,6 @@ use crate::{
     assert_uniform_valid,
     gpu::{
         rendering::RenderingConfig,
-        shader::{
-            AmbientLightShaderInput, LightShaderInput, OmnidirectionalLightShaderInput,
-            UnidirectionalLightShaderInput,
-        },
         texture::shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{
             self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
@@ -21,27 +17,38 @@ use crate::{
     util::tracking::CollectionChange,
 };
 use impact_utils::ConstStringHash64;
-use std::mem;
+use std::{mem, sync::OnceLock};
 
 /// Manager of the set of uniform GPU buffers holding light source render
-/// data. Also manages the bind groups for these buffers and for associated
+/// data. Also manages the bind groups for these buffers and the associated
 /// shadow map textures.
 #[derive(Debug)]
 pub struct LightGPUBufferManager {
     ambient_light_gpu_buffer: UniformGPUBufferWithLightIDs,
     omnidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs,
     unidirectional_light_gpu_buffer: UniformGPUBufferWithLightIDs,
-    omnidirectional_light_shadow_map_texture: ShadowCubemapTexture,
-    unidirectional_light_shadow_map_texture: CascadedShadowMapTexture,
-    light_bind_group_layout: wgpu::BindGroupLayout,
-    light_bind_group: wgpu::BindGroup,
-    omnidirectional_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
-    omnidirectional_light_shadow_map_bind_group: wgpu::BindGroup,
-    unidirectional_light_shadow_map_bind_group_layout: wgpu::BindGroupLayout,
-    unidirectional_light_shadow_map_bind_group: wgpu::BindGroup,
-    ambient_light_shader_input: LightShaderInput,
-    omnidirectional_light_shader_input: LightShaderInput,
-    unidirectional_light_shader_input: LightShaderInput,
+    ambient_light_bind_group: wgpu::BindGroup,
+    omnidirectional_light_bind_group: wgpu::BindGroup,
+    unidirectional_light_bind_group: wgpu::BindGroup,
+    omnidirectional_light_shadow_map_manager: OmnidirectionalLightShadowMapManager,
+    unidirectional_light_shadow_map_manager: UnidirectionalLightShadowMapManager,
+}
+
+/// Manager of the [`ShadowCubemapTexture`]s used by all omnidirectional lights.
+#[derive(Debug)]
+pub struct OmnidirectionalLightShadowMapManager {
+    resolution: u32,
+    textures: Vec<ShadowCubemapTexture>,
+    light_count: usize,
+}
+
+/// Manager of the [`CascadedShadowMapTexture`]s used by all unidirectional
+/// lights.
+#[derive(Debug)]
+pub struct UnidirectionalLightShadowMapManager {
+    resolution: u32,
+    textures: Vec<CascadedShadowMapTexture>,
+    light_count: usize,
 }
 
 #[derive(Debug)]
@@ -50,20 +57,25 @@ struct UniformGPUBufferWithLightIDs {
     light_ids: Vec<LightID>,
 }
 
+static AMBIENT_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+static OMNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+static UNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> = OnceLock::new();
+
+static OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
+    OnceLock::new();
+static UNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
+    OnceLock::new();
+
 impl LightGPUBufferManager {
-    const AMBIENT_LIGHT_BINDING: u32 = 0;
+    const AMBIENT_LIGHT_VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::FRAGMENT;
+    const OMNIDIRECTIONAL_LIGHT_VISIBILITY: wgpu::ShaderStages =
+        wgpu::ShaderStages::VERTEX_FRAGMENT;
+    const UNIDIRECTIONAL_LIGHT_VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
 
-    const OMNIDIRECTIONAL_LIGHT_BINDING: u32 = 1;
-    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 2;
-    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 3;
-    const OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 4;
-
-    const UNIDIRECTIONAL_LIGHT_BINDING: u32 = 5;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING: u32 = 6;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING: u32 = 7;
-    const UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING: u32 = 8;
-
-    const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
+    /// The binding location of one of the light uniform buffers.
+    pub const fn light_binding() -> u32 {
+        0
+    }
 
     /// Creates a new manager with GPU buffers initialized from the given
     /// [`LightStorage`].
@@ -75,95 +87,66 @@ impl LightGPUBufferManager {
         let ambient_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
             light_storage.ambient_light_buffer(),
-            Self::VISIBILITY,
+            Self::AMBIENT_LIGHT_VISIBILITY,
         );
         let omnidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
             light_storage.omnidirectional_light_buffer(),
-            Self::VISIBILITY,
+            Self::OMNIDIRECTIONAL_LIGHT_VISIBILITY,
         );
         let unidirectional_light_gpu_buffer = UniformGPUBufferWithLightIDs::for_uniform_buffer(
             graphics_device,
             light_storage.unidirectional_light_buffer(),
-            Self::VISIBILITY,
+            Self::UNIDIRECTIONAL_LIGHT_VISIBILITY,
         );
 
-        let omnidirectional_light_shadow_map_texture = ShadowCubemapTexture::new(
-            graphics_device,
-            config.omnidirectional_light_shadow_map_resolution,
-            "Omnidirectional light shadow cubemap texture",
-        );
+        let ambient_light_bind_group_layout =
+            Self::get_or_create_ambient_light_bind_group_layout(graphics_device);
+        let omnidirectional_light_bind_group_layout =
+            Self::get_or_create_omnidirectional_light_bind_group_layout(graphics_device);
+        let unidirectional_light_bind_group_layout =
+            Self::get_or_create_unidirectional_light_bind_group_layout(graphics_device);
 
-        let unidirectional_light_shadow_map_texture = CascadedShadowMapTexture::new(
-            graphics_device,
-            config.unidirectional_light_shadow_map_resolution,
-            MAX_SHADOW_MAP_CASCADES,
-            "Unidirectional light cascaded shadow map texture",
-        );
-
-        let light_bind_group_layout = Self::create_light_bind_group_layout(
+        let ambient_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
             &ambient_light_gpu_buffer,
-            &omnidirectional_light_gpu_buffer,
-            &unidirectional_light_gpu_buffer,
+            ambient_light_bind_group_layout,
+            "Ambient light bind group",
         );
-
-        let light_bind_group = Self::create_light_bind_group(
+        let omnidirectional_light_bind_group = Self::create_light_bind_group(
             graphics_device.device(),
-            &ambient_light_gpu_buffer,
             &omnidirectional_light_gpu_buffer,
+            omnidirectional_light_bind_group_layout,
+            "Omnidirectional light bind group",
+        );
+        let unidirectional_light_bind_group = Self::create_light_bind_group(
+            graphics_device.device(),
             &unidirectional_light_gpu_buffer,
-            &light_bind_group_layout,
+            unidirectional_light_bind_group_layout,
+            "Unidirectional light bind group",
         );
 
-        let omnidirectional_light_shadow_map_bind_group_layout =
-            Self::create_omnidirectional_light_shadow_map_bind_group_layout(
-                graphics_device.device(),
-            );
+        let omnidirectional_light_shadow_map_manager = OmnidirectionalLightShadowMapManager::new(
+            graphics_device,
+            config,
+            omnidirectional_light_gpu_buffer.light_ids().len(),
+        );
 
-        let omnidirectional_light_shadow_map_bind_group =
-            Self::create_omnidirectional_light_shadow_map_bind_group(
-                graphics_device.device(),
-                &omnidirectional_light_shadow_map_texture,
-                &omnidirectional_light_shadow_map_bind_group_layout,
-            );
-
-        let unidirectional_light_shadow_map_bind_group_layout =
-            Self::create_unidirectional_light_shadow_map_bind_group_layout(
-                graphics_device.device(),
-            );
-
-        let unidirectional_light_shadow_map_bind_group =
-            Self::create_unidirectional_light_shadow_map_bind_group(
-                graphics_device.device(),
-                &unidirectional_light_shadow_map_texture,
-                &unidirectional_light_shadow_map_bind_group_layout,
-            );
-
-        let ambient_light_shader_input =
-            Self::create_ambient_light_shader_input(&ambient_light_gpu_buffer);
-
-        let omnidirectional_light_shader_input =
-            Self::create_omnidirectional_light_shader_input(&omnidirectional_light_gpu_buffer);
-
-        let unidirectional_light_shader_input =
-            Self::create_unidirectional_light_shader_input(&unidirectional_light_gpu_buffer);
+        let unidirectional_light_shadow_map_manager = UnidirectionalLightShadowMapManager::new(
+            graphics_device,
+            config,
+            unidirectional_light_gpu_buffer.light_ids().len(),
+        );
 
         Self {
             ambient_light_gpu_buffer,
             omnidirectional_light_gpu_buffer,
             unidirectional_light_gpu_buffer,
-            omnidirectional_light_shadow_map_texture,
-            unidirectional_light_shadow_map_texture,
-            light_bind_group_layout,
-            light_bind_group,
-            omnidirectional_light_shadow_map_bind_group_layout,
-            omnidirectional_light_shadow_map_bind_group,
-            unidirectional_light_shadow_map_bind_group_layout,
-            unidirectional_light_shadow_map_bind_group,
-            ambient_light_shader_input,
-            omnidirectional_light_shader_input,
-            unidirectional_light_shader_input,
+            ambient_light_bind_group,
+            omnidirectional_light_bind_group,
+            unidirectional_light_bind_group,
+            omnidirectional_light_shadow_map_manager,
+            unidirectional_light_shadow_map_manager,
         }
     }
 
@@ -173,8 +156,8 @@ impl LightGPUBufferManager {
         self.ambient_light_gpu_buffer.light_ids()
     }
 
-    /// Returns the slice of IDs of all the [`OmnidirectionalLight`]s currently residing
-    /// in the omnidirectional light GPU buffer.
+    /// Returns the slice of IDs of all the [`OmnidirectionalLight`]s currently
+    /// residing in the omnidirectional light GPU buffer.
     pub fn omnidirectional_light_ids(&self) -> &[LightID] {
         self.omnidirectional_light_gpu_buffer.light_ids()
     }
@@ -185,72 +168,66 @@ impl LightGPUBufferManager {
         self.unidirectional_light_gpu_buffer.light_ids()
     }
 
-    /// Returns a reference to the shadow cubemap texture for omnidirectional
-    /// lights.
-    pub fn omnidirectional_light_shadow_map_texture(&self) -> &ShadowCubemapTexture {
-        &self.omnidirectional_light_shadow_map_texture
+    /// Returns a reference to the bind group for the ambient light uniform
+    /// buffer.
+    pub fn ambient_light_bind_group(&self) -> &wgpu::BindGroup {
+        &self.ambient_light_bind_group
     }
 
-    /// Returns a reference to the cascaded shadow map texture for
-    /// unidirectional lights.
-    pub fn unidirectional_light_shadow_map_texture(&self) -> &CascadedShadowMapTexture {
-        &self.unidirectional_light_shadow_map_texture
+    /// Returns a reference to the bind group for the omnidirectional light
+    /// uniform buffer.
+    pub fn omnidirectional_light_bind_group(&self) -> &wgpu::BindGroup {
+        &self.omnidirectional_light_bind_group
     }
 
-    /// Returns a reference to the bind group layout for the set of light
-    /// uniform buffers.
-    pub fn light_bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.light_bind_group_layout
+    /// Returns a reference to the bind group for the unidirectional light
+    /// uniform buffer.
+    pub fn unidirectional_light_bind_group(&self) -> &wgpu::BindGroup {
+        &self.unidirectional_light_bind_group
     }
 
-    /// Returns a reference to the bind group for the set of light uniform
-    /// buffers.
-    pub fn light_bind_group(&self) -> &wgpu::BindGroup {
-        &self.light_bind_group
-    }
-
-    /// Returns the bind group layout for the shadow map texture for the given
-    /// light type, or [`None`] if the light type does not use shadow mapping.
-    pub fn shadow_map_bind_group_layout_for_light_type(
+    /// Returns a reference to the manager for the the omnidirectional light
+    /// shadow maps.
+    pub fn omnidirectional_light_shadow_map_manager(
         &self,
-        light_type: LightType,
-    ) -> Option<&wgpu::BindGroupLayout> {
+    ) -> &OmnidirectionalLightShadowMapManager {
+        &self.omnidirectional_light_shadow_map_manager
+    }
+
+    /// Returns a reference to the manager for the the unidirectional light
+    /// shadow maps.
+    pub fn unidirectional_light_shadow_map_manager(&self) -> &UnidirectionalLightShadowMapManager {
+        &self.unidirectional_light_shadow_map_manager
+    }
+
+    /// Returns the bind group for the uniform buffer for the given
+    /// light type.
+    pub fn bind_group_for_light_type(&self, light_type: LightType) -> &wgpu::BindGroup {
         match light_type {
-            LightType::AmbientLight => None,
-            LightType::OmnidirectionalLight => {
-                Some(&self.omnidirectional_light_shadow_map_bind_group_layout)
-            }
-            LightType::UnidirectionalLight => {
-                Some(&self.unidirectional_light_shadow_map_bind_group_layout)
-            }
+            LightType::AmbientLight => &self.ambient_light_bind_group,
+            LightType::OmnidirectionalLight => &self.omnidirectional_light_bind_group,
+            LightType::UnidirectionalLight => &self.unidirectional_light_bind_group,
         }
     }
 
-    /// Returns the bind group for the shadow map texture for the given light
-    /// type, or [`None`] if the light type does not use shadow mapping.
-    pub fn shadow_map_bind_group_for_light_type(
-        &self,
-        light_type: LightType,
-    ) -> Option<&wgpu::BindGroup> {
-        match light_type {
-            LightType::AmbientLight => None,
-            LightType::OmnidirectionalLight => {
-                Some(&self.omnidirectional_light_shadow_map_bind_group)
-            }
-            LightType::UnidirectionalLight => {
-                Some(&self.unidirectional_light_shadow_map_bind_group)
-            }
-        }
+    /// Returns the current capacity of the ambient light uniform buffer.
+    pub fn max_ambient_light_count(&self) -> usize {
+        self.ambient_light_gpu_buffer.buffer().max_uniform_count()
     }
 
-    /// Returns the input required for accessing light data of the given type in
-    /// a shader.
-    pub fn shader_input_for_light_type(&self, light_type: LightType) -> &LightShaderInput {
-        match light_type {
-            LightType::AmbientLight => &self.ambient_light_shader_input,
-            LightType::OmnidirectionalLight => &self.omnidirectional_light_shader_input,
-            LightType::UnidirectionalLight => &self.unidirectional_light_shader_input,
-        }
+    /// Returns the current capacity of the omnidirectional light uniform
+    /// buffer.
+    pub fn max_omnidirectional_light_count(&self) -> usize {
+        self.omnidirectional_light_gpu_buffer
+            .buffer()
+            .max_uniform_count()
+    }
+
+    /// Returns the current capacity of the unidirectional light uniform buffer.
+    pub fn max_unidirectional_light_count(&self) -> usize {
+        self.unidirectional_light_gpu_buffer
+            .buffer()
+            .max_uniform_count()
     }
 
     /// Returns the size of the push constant obtained by calling
@@ -289,6 +266,11 @@ impl LightGPUBufferManager {
         graphics_device: &GraphicsDevice,
         light_storage: &LightStorage,
     ) {
+        let omnidirectional_light_buffer_change =
+            light_storage.omnidirectional_light_buffer().change();
+        let unidirectional_light_buffer_change =
+            light_storage.unidirectional_light_buffer().change();
+
         let ambient_light_transfer_result = self
             .ambient_light_gpu_buffer
             .transfer_uniforms_to_gpu_buffer(graphics_device, light_storage.ambient_light_buffer());
@@ -307,206 +289,252 @@ impl LightGPUBufferManager {
                 light_storage.unidirectional_light_buffer(),
             );
 
-        if ambient_light_transfer_result == UniformTransferResult::CreatedNewBuffer
-            || omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
-            || unidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer
-        {
-            // Recreate light bind group and shader input
-            self.light_bind_group = Self::create_light_bind_group(
+        if ambient_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+            self.ambient_light_bind_group = Self::create_light_bind_group(
                 graphics_device.device(),
                 &self.ambient_light_gpu_buffer,
-                &self.omnidirectional_light_gpu_buffer,
-                &self.unidirectional_light_gpu_buffer,
-                &self.light_bind_group_layout,
+                Self::get_or_create_ambient_light_bind_group_layout(graphics_device),
+                "Ambient light bind group",
             );
+        }
 
-            if ambient_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
-                self.ambient_light_shader_input =
-                    Self::create_ambient_light_shader_input(&self.ambient_light_gpu_buffer);
-            }
+        if omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+            self.omnidirectional_light_bind_group = Self::create_light_bind_group(
+                graphics_device.device(),
+                &self.omnidirectional_light_gpu_buffer,
+                Self::get_or_create_omnidirectional_light_bind_group_layout(graphics_device),
+                "Omnidirectional light bind group",
+            );
+        }
 
-            if omnidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
-                self.omnidirectional_light_shader_input =
-                    Self::create_omnidirectional_light_shader_input(
-                        &self.omnidirectional_light_gpu_buffer,
-                    );
-            }
+        if unidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
+            self.unidirectional_light_bind_group = Self::create_light_bind_group(
+                graphics_device.device(),
+                &self.unidirectional_light_gpu_buffer,
+                Self::get_or_create_unidirectional_light_bind_group_layout(graphics_device),
+                "Unidirectional light bind group",
+            );
+        }
 
-            if unidirectional_light_transfer_result == UniformTransferResult::CreatedNewBuffer {
-                self.unidirectional_light_shader_input =
-                    Self::create_unidirectional_light_shader_input(
-                        &self.unidirectional_light_gpu_buffer,
-                    );
-            }
+        if omnidirectional_light_buffer_change == CollectionChange::Count {
+            self.omnidirectional_light_shadow_map_manager
+                .create_new_textures_if_required(
+                    graphics_device,
+                    self.omnidirectional_light_gpu_buffer.light_ids().len(),
+                );
+        }
+
+        if unidirectional_light_buffer_change == CollectionChange::Count {
+            self.unidirectional_light_shadow_map_manager
+                .create_new_textures_if_required(
+                    graphics_device,
+                    self.unidirectional_light_gpu_buffer.light_ids().len(),
+                );
         }
     }
 
-    fn create_light_bind_group_layout(
+    /// Returns the bind group layout for the ambient light uniform buffer,
+    /// or creates it if it has not already been created.
+    pub fn get_or_create_ambient_light_bind_group_layout(
+        graphics_device: &GraphicsDevice,
+    ) -> &wgpu::BindGroupLayout {
+        AMBIENT_LIGHT_BIND_GROUP_LAYOUT
+            .get_or_init(|| Self::create_ambient_light_bind_group_layout(graphics_device.device()))
+    }
+
+    /// Returns the bind group layout for the omnidirectional light uniform
+    /// buffer, or creates it if it has not already been created.
+    pub fn get_or_create_omnidirectional_light_bind_group_layout(
+        graphics_device: &GraphicsDevice,
+    ) -> &wgpu::BindGroupLayout {
+        OMNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT.get_or_init(|| {
+            Self::create_omnidirectional_light_bind_group_layout(graphics_device.device())
+        })
+    }
+
+    /// Returns the bind group layout for the unidirectional light uniform
+    /// buffer, or creates it if it has not already been created.
+    pub fn get_or_create_unidirectional_light_bind_group_layout(
+        graphics_device: &GraphicsDevice,
+    ) -> &wgpu::BindGroupLayout {
+        UNIDIRECTIONAL_LIGHT_BIND_GROUP_LAYOUT.get_or_init(|| {
+            Self::create_unidirectional_light_bind_group_layout(graphics_device.device())
+        })
+    }
+
+    fn create_ambient_light_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[AmbientLight::create_bind_group_layout_entry(
+                Self::light_binding(),
+                Self::AMBIENT_LIGHT_VISIBILITY,
+            )],
+            label: Some("Ambient light bind group layout"),
+        })
+    }
+
+    fn create_omnidirectional_light_bind_group_layout(
         device: &wgpu::Device,
-        ambient_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-        omnidirectional_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-        unidirectional_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
     ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                ambient_light_gpu_buffer
-                    .buffer()
-                    .create_bind_group_layout_entry(Self::AMBIENT_LIGHT_BINDING),
-                omnidirectional_light_gpu_buffer
-                    .buffer()
-                    .create_bind_group_layout_entry(Self::OMNIDIRECTIONAL_LIGHT_BINDING),
-                unidirectional_light_gpu_buffer
-                    .buffer()
-                    .create_bind_group_layout_entry(Self::UNIDIRECTIONAL_LIGHT_BINDING),
-            ],
-            label: Some("Light bind group layout"),
+            entries: &[OmnidirectionalLight::create_bind_group_layout_entry(
+                Self::light_binding(),
+                Self::OMNIDIRECTIONAL_LIGHT_VISIBILITY,
+            )],
+            label: Some("Omnidirectional light bind group layout"),
+        })
+    }
+
+    fn create_unidirectional_light_bind_group_layout(
+        device: &wgpu::Device,
+    ) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[UnidirectionalLight::create_bind_group_layout_entry(
+                Self::light_binding(),
+                Self::UNIDIRECTIONAL_LIGHT_VISIBILITY,
+            )],
+            label: Some("Unidirectional light bind group layout"),
         })
     }
 
     fn create_light_bind_group(
         device: &wgpu::Device,
-        ambient_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-        omnidirectional_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-        unidirectional_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
+        light_gpu_buffer: &UniformGPUBufferWithLightIDs,
         layout: &wgpu::BindGroupLayout,
+        label: &str,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            entries: &[
-                ambient_light_gpu_buffer
-                    .buffer()
-                    .create_bind_group_entry(Self::AMBIENT_LIGHT_BINDING),
-                omnidirectional_light_gpu_buffer
-                    .buffer()
-                    .create_bind_group_entry(Self::OMNIDIRECTIONAL_LIGHT_BINDING),
-                unidirectional_light_gpu_buffer
-                    .buffer()
-                    .create_bind_group_entry(Self::UNIDIRECTIONAL_LIGHT_BINDING),
-            ],
-            label: Some("Light bind group"),
-        })
-    }
-
-    fn create_omnidirectional_light_shadow_map_bind_group_layout(
-        device: &wgpu::Device,
-    ) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                ShadowCubemapTexture::create_texture_bind_group_layout_entry(
-                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                ),
-                ShadowCubemapTexture::create_sampler_bind_group_layout_entry(
-                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                ),
-                ShadowCubemapTexture::create_comparison_sampler_bind_group_layout_entry(
-                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
-                ),
-            ],
-            label: Some("Omnidirectional light shadow cubemap bind group layout"),
-        })
-    }
-
-    fn create_omnidirectional_light_shadow_map_bind_group(
-        device: &wgpu::Device,
-        omnidirectional_light_shadow_map_texture: &ShadowCubemapTexture,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[
-                omnidirectional_light_shadow_map_texture.create_texture_bind_group_entry(
-                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                ),
-                omnidirectional_light_shadow_map_texture.create_sampler_bind_group_entry(
-                    Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                ),
-                omnidirectional_light_shadow_map_texture
-                    .create_comparison_sampler_bind_group_entry(
-                        Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
-                    ),
-            ],
-            label: Some("Omnidirectional light shadow cubemap bind group"),
-        })
-    }
-
-    fn create_unidirectional_light_shadow_map_bind_group_layout(
-        device: &wgpu::Device,
-    ) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
-                CascadedShadowMapTexture::create_texture_bind_group_layout_entry(
-                    Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                ),
-                CascadedShadowMapTexture::create_sampler_bind_group_layout_entry(
-                    Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                ),
-                CascadedShadowMapTexture::create_comparison_sampler_bind_group_layout_entry(
-                    Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
-                ),
-            ],
-            label: Some("Unidirectional light shadow map bind group layout"),
-        })
-    }
-
-    fn create_unidirectional_light_shadow_map_bind_group(
-        device: &wgpu::Device,
-        unidirectional_light_shadow_map_texture: &CascadedShadowMapTexture,
-        layout: &wgpu::BindGroupLayout,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[
-                unidirectional_light_shadow_map_texture.create_texture_bind_group_entry(
-                    Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                ),
-                unidirectional_light_shadow_map_texture.create_sampler_bind_group_entry(
-                    Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                ),
-                unidirectional_light_shadow_map_texture.create_comparison_sampler_bind_group_entry(
-                    Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
-                ),
-            ],
-            label: Some("Unidirectional light shadow map bind group"),
-        })
-    }
-
-    fn create_ambient_light_shader_input(
-        ambient_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-    ) -> LightShaderInput {
-        LightShaderInput::AmbientLight(AmbientLightShaderInput {
-            uniform_binding: Self::AMBIENT_LIGHT_BINDING,
-            max_light_count: ambient_light_gpu_buffer.buffer().max_uniform_count() as u64,
-        })
-    }
-
-    fn create_omnidirectional_light_shader_input(
-        omnidirectional_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-    ) -> LightShaderInput {
-        LightShaderInput::OmnidirectionalLight(OmnidirectionalLightShaderInput {
-            uniform_binding: Self::OMNIDIRECTIONAL_LIGHT_BINDING,
-            max_light_count: omnidirectional_light_gpu_buffer
+            entries: &[light_gpu_buffer
                 .buffer()
-                .max_uniform_count() as u64,
-            shadow_map_texture_and_sampler_bindings: (
-                Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                Self::OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
-            ),
+                .create_bind_group_entry(Self::light_binding())],
+            label: Some(label),
+        })
+    }
+}
+
+impl OmnidirectionalLightShadowMapManager {
+    fn new(
+        graphics_device: &GraphicsDevice,
+        config: &RenderingConfig,
+        omnidirectional_light_count: usize,
+    ) -> Self {
+        let resolution = config.omnidirectional_light_shadow_map_resolution;
+
+        let mut manager = Self {
+            resolution,
+            textures: Vec::with_capacity(omnidirectional_light_count),
+            light_count: omnidirectional_light_count,
+        };
+        manager.create_new_textures_if_required(graphics_device, omnidirectional_light_count);
+
+        manager
+    }
+
+    /// Returns the slice of [`ShadowCubemapTexture`]s. The maps are not
+    /// inherently associated with any particular light, but the slice is
+    /// guaranteed to contain exactly one texture per omnidirectional light.
+    pub fn textures(&self) -> &[ShadowCubemapTexture] {
+        &self.textures[..self.light_count]
+    }
+
+    /// Returns the bind group layout for the shadow cubemap texture and
+    /// samplers, or creates it if it has not already been created.
+    pub fn get_or_create_bind_group_layout(
+        graphics_device: &GraphicsDevice,
+    ) -> &wgpu::BindGroupLayout {
+        OMNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT.get_or_init(|| {
+            ShadowCubemapTexture::create_bind_group_layout(graphics_device.device())
         })
     }
 
-    fn create_unidirectional_light_shader_input(
-        unidirectional_light_gpu_buffer: &UniformGPUBufferWithLightIDs,
-    ) -> LightShaderInput {
-        LightShaderInput::UnidirectionalLight(UnidirectionalLightShaderInput {
-            uniform_binding: Self::UNIDIRECTIONAL_LIGHT_BINDING,
-            max_light_count: unidirectional_light_gpu_buffer.buffer().max_uniform_count() as u64,
-            shadow_map_texture_and_sampler_bindings: (
-                Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_TEXTURE_BINDING,
-                Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_SAMPLER_BINDING,
-                Self::UNIDIRECTIONAL_LIGHT_SHADOW_MAP_COMPARISON_SAMPLER_BINDING,
-            ),
+    fn create_new_textures_if_required(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        light_count: usize,
+    ) {
+        if self.textures.len() < light_count {
+            let n_additional = light_count - self.textures.len();
+
+            self.textures.reserve(n_additional);
+            for _ in 0..n_additional {
+                self.textures
+                    .push(Self::create_texture(graphics_device, self.resolution));
+            }
+        }
+        self.light_count = light_count;
+    }
+
+    fn create_texture(graphics_device: &GraphicsDevice, resolution: u32) -> ShadowCubemapTexture {
+        ShadowCubemapTexture::new(
+            graphics_device,
+            resolution,
+            "Omnidirectional light shadow cubemap texture",
+        )
+    }
+}
+
+impl UnidirectionalLightShadowMapManager {
+    fn new(
+        graphics_device: &GraphicsDevice,
+        config: &RenderingConfig,
+        unidirectional_light_count: usize,
+    ) -> Self {
+        let resolution = config.unidirectional_light_shadow_map_resolution;
+
+        let mut manager = Self {
+            resolution,
+            textures: Vec::with_capacity(unidirectional_light_count),
+            light_count: unidirectional_light_count,
+        };
+        manager.create_new_textures_if_required(graphics_device, unidirectional_light_count);
+
+        manager
+    }
+
+    /// Returns the slice of [`CascadedShadowMapTexture`]s. The maps are not
+    /// inherently associated with any particular light, but the slice is
+    /// guaranteed to contain exactly one texture per unidirectional light.
+    pub fn textures(&self) -> &[CascadedShadowMapTexture] {
+        &self.textures[..self.light_count]
+    }
+
+    /// Returns the bind group layout for the cascaded shadow map texture and
+    /// samplers, or creates it if it has not already been created.
+    pub fn get_or_create_bind_group_layout(
+        graphics_device: &GraphicsDevice,
+    ) -> &wgpu::BindGroupLayout {
+        UNIDIRECTIONAL_LIGHT_SHADOW_MAP_BIND_GROUP_LAYOUT.get_or_init(|| {
+            CascadedShadowMapTexture::create_bind_group_layout(graphics_device.device())
         })
+    }
+
+    fn create_new_textures_if_required(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        light_count: usize,
+    ) {
+        if self.textures.len() < light_count {
+            let n_additional = light_count - self.textures.len();
+
+            self.textures.reserve(n_additional);
+            for _ in 0..n_additional {
+                self.textures
+                    .push(Self::create_texture(graphics_device, self.resolution));
+            }
+        }
+        self.light_count = light_count;
+    }
+
+    fn create_texture(
+        graphics_device: &GraphicsDevice,
+        resolution: u32,
+    ) -> CascadedShadowMapTexture {
+        CascadedShadowMapTexture::new(
+            graphics_device,
+            resolution,
+            MAX_SHADOW_MAP_CASCADES,
+            "Unidirectional light cascaded shadow map texture",
+        )
     }
 }
 

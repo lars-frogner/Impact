@@ -173,29 +173,57 @@ impl<F: Float> Frustum<F> {
     }
 
     /// Computes the 8 corners of the part of the frustum lying between the
-    /// given depths in clip space.
+    /// given linear (as opposed to clip space-) depths.
     pub fn compute_corners_of_subfrustum(
         &self,
         clip_space_depth_limits: UpperExclusiveBounds<F>,
     ) -> [Point3<F>; 8] {
-        let (lower_depth, upper_depth) = clip_space_depth_limits.bounds();
+        let (lower_linear_depth, upper_linear_depth) = clip_space_depth_limits.bounds();
+        let lower_clip_space_depth =
+            self.convert_linear_depth_to_clip_space_depth(lower_linear_depth);
+        let upper_clip_space_depth =
+            self.convert_linear_depth_to_clip_space_depth(upper_linear_depth);
         [
-            self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, -F::ONE, lower_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, -F::ONE, upper_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, F::ONE, lower_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, F::ONE, upper_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, -F::ONE, lower_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, -F::ONE, upper_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, F::ONE, lower_depth]),
-            self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, F::ONE, upper_depth]),
+            self.inverse_transform_matrix.transform_point(&point![
+                -F::ONE,
+                -F::ONE,
+                lower_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                -F::ONE,
+                -F::ONE,
+                upper_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                -F::ONE,
+                F::ONE,
+                lower_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                -F::ONE,
+                F::ONE,
+                upper_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                F::ONE,
+                -F::ONE,
+                lower_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                F::ONE,
+                -F::ONE,
+                upper_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                F::ONE,
+                F::ONE,
+                lower_clip_space_depth
+            ]),
+            self.inverse_transform_matrix.transform_point(&point![
+                F::ONE,
+                F::ONE,
+                upper_clip_space_depth
+            ]),
         ]
     }
 
@@ -207,6 +235,34 @@ impl<F: Float> Frustum<F> {
                 self.near_plane().unit_normal().as_ref() * distance,
             ))
             .z
+    }
+
+    /// Computes the view distance corresponding to the given clip space depth.
+    pub fn convert_clip_space_depth_to_view_distance(&self, clip_space_depth: F) -> F {
+        self.inverse_transform_matrix
+            .transform_point(&point![F::ZERO, F::ZERO, clip_space_depth])
+            .z
+    }
+
+    /// Computes the linear depth, which increases linearly with distance from 0
+    /// at the frustum apex to 1 at the base, corresponding to the given
+    /// distance from the frustum apex along the view direction.
+    pub fn convert_view_distance_to_linear_depth(&self, distance: F) -> F {
+        distance / self.far_distance()
+    }
+
+    /// Computes the distance from the frustum apex along the view direction
+    /// corresponding to the given linear depth (which increases linearly with
+    /// distance from 0 at the frustum apex to 1 at the base).
+    pub fn convert_linear_depth_to_view_distance(&self, linear_depth: F) -> F {
+        linear_depth * self.far_distance()
+    }
+
+    /// Computes the clip space depth corresponding to the given linear depth.
+    pub fn convert_linear_depth_to_clip_space_depth(&self, linear_depth: F) -> F {
+        self.convert_view_distance_to_clip_space_depth(
+            self.convert_linear_depth_to_view_distance(linear_depth),
+        )
     }
 
     /// Computes the center point of the frustum.
@@ -227,13 +283,13 @@ impl<F: Float> Frustum<F> {
     }
 
     /// Computes the axis-aligned bounding box for the part of the frustum lying
-    /// between the given depths in clip space.
+    /// between the given linear (as opposed to clip space-) depths.
     pub fn compute_aabb_for_subfrustum(
         &self,
-        clip_space_depth_limits: UpperExclusiveBounds<F>,
+        linear_depth_limits: UpperExclusiveBounds<F>,
     ) -> AxisAlignedBox<F> {
         AxisAlignedBox::aabb_for_point_array(
-            &self.compute_corners_of_subfrustum(clip_space_depth_limits),
+            &self.compute_corners_of_subfrustum(linear_depth_limits),
         )
     }
 
@@ -654,12 +710,12 @@ mod test {
 
         let (new_near, new_far) = (4.9, 5.2);
 
-        let new_near_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_near);
-        let new_far_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_far);
+        let new_near_linear_depth = frustum.convert_view_distance_to_linear_depth(new_near);
+        let new_far_linear_depth = frustum.convert_view_distance_to_linear_depth(new_far);
 
         let corners = frustum.compute_corners_of_subfrustum(UpperExclusiveBounds::new(
-            new_near_clip_space,
-            new_far_clip_space,
+            new_near_linear_depth,
+            new_far_linear_depth,
         ));
 
         assert_abs_diff_eq!(corners[0], point![left, bottom, new_near], epsilon = 1e-9);
@@ -722,12 +778,12 @@ mod test {
 
         let (new_near, new_far) = (4.9, 5.2);
 
-        let new_near_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_near);
-        let new_far_clip_space = frustum.convert_view_distance_to_clip_space_depth(new_far);
+        let new_near_linear_depth = frustum.convert_view_distance_to_linear_depth(new_near);
+        let new_far_linear_depth = frustum.convert_view_distance_to_linear_depth(new_far);
 
         let aabb = frustum.compute_aabb_for_subfrustum(UpperExclusiveBounds::new(
-            new_near_clip_space,
-            new_far_clip_space,
+            new_near_linear_depth,
+            new_far_linear_depth,
         ));
 
         assert_abs_diff_eq!(

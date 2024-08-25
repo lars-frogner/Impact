@@ -1,29 +1,113 @@
 //! Generation of shaders from templates.
 
+pub mod ambient_light;
+pub mod ambient_occlusion_application;
+pub mod ambient_occlusion_computation;
+pub mod gaussian_blur;
+pub mod luminance_histogram;
+pub mod luminance_histogram_average;
+pub mod model_depth_prepass;
+pub mod model_geometry;
+pub mod omnidirectional_light;
+pub mod omnidirectional_light_shadow_map;
+pub mod passthrough;
+pub mod skybox;
+pub mod temporal_anti_aliasing;
+pub mod tone_mapping;
+pub mod unidirectional_light;
+pub mod unidirectional_light_shadow_map;
+
 use crate::gpu::{
-    shader::{Shader, ShaderID},
-    GraphicsDevice,
+    push_constant::PushConstantGroup,
+    rendering::{render_command::StencilValue, surface::RenderingSurface},
+    resource_group::GPUResourceGroupID,
+    shader::ShaderID,
+    texture::attachment::{
+        RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+    },
 };
-use anyhow::{anyhow, bail, Result};
-use lazy_static::lazy_static;
+use anyhow::{bail, Result};
 use regex::Regex;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    iter,
+    fmt, iter,
+    sync::LazyLock,
 };
 
-/// Specific shader templates that can be resolved to generate shaders.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SpecificShaderTemplate {
-    Passthrough,
-    AmbientOcclusionComputation,
-    AmbientOcclusionApplication,
-    GaussianBlur,
-    LuminanceHistogram,
-    LuminanceHistogramAverage,
-    TemporalAntiAliasing,
-    ToneMapping,
+/// Specific shader template that can be resolved to generate a shader.
+pub trait SpecificShaderTemplate: fmt::Debug {
+    /// Resolves this instance of the specific shader template into WGSL source
+    /// code.
+    fn resolve(&self) -> String;
+
+    /// Returns a label describing this instance of the specific shader
+    /// template.
+    fn label(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("{:?}", self))
+    }
+
+    /// Returns a unique ID for this template instance (two instances of
+    /// specific shader templates should never have the same ID unless they
+    /// resolve to the same source code).
+    fn shader_id(&self) -> ShaderID {
+        ShaderID::from_identifier(&format!("{:?}", self))
+    }
+}
+
+/// Specific shader template that can be resolved to generate a compute shader.
+pub trait ComputeShaderTemplate: SpecificShaderTemplate + Send + Sync {
+    /// Returns the group of push constants used by the compute shader.
+    fn push_constants(&self) -> PushConstantGroup;
+
+    /// Returns the set of render attachments used as input by the compute
+    /// shader.
+    fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet;
+
+    /// Returns the ID of the GPU resource group used by the compute shader.
+    fn gpu_resource_group_id(&self) -> GPUResourceGroupID;
+
+    /// Returns the workgroup counts to use when invoking the compute shader
+    /// based on the dimensions of the rendering surface.
+    fn determine_workgroup_counts(&self, rendering_surface: &RenderingSurface) -> [u32; 3];
+}
+
+/// Specific shader template that can be resolved to generate a postprocessing
+/// shader.
+pub trait PostprocessingShaderTemplate: SpecificShaderTemplate {
+    /// Returns the group of push constants used by the shader.
+    fn push_constants(&self) -> PushConstantGroup;
+
+    /// Returns the set of render attachments used as input by the shader.
+    fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet;
+
+    /// Returns the descriptions of the render attachments that the shader will
+    /// write to.
+    fn output_render_attachments(&self) -> RenderAttachmentOutputDescriptionSet;
+
+    /// Whether the shader uses the camera projection uniform.
+    fn uses_camera(&self) -> bool {
+        false
+    }
+
+    /// Returns the ID of the GPU resource group used by the shader, or [`None`]
+    /// if the shader does not use a GPU resource group.
+    fn gpu_resource_group_id(&self) -> Option<GPUResourceGroupID> {
+        None
+    }
+
+    /// Returns the comparison function and stencil value to use for stencil
+    /// testing when using the shader, or [`None`] if stencil testing should not
+    /// be used.
+    fn stencil_test(&self) -> Option<(wgpu::CompareFunction, StencilValue)> {
+        None
+    }
+
+    /// Whether the shader writes to the actual surface texture that will be
+    /// displayed.
+    fn writes_to_surface(&self) -> bool {
+        false
+    }
 }
 
 /// A shader template that can be resolved to generate a shader.
@@ -55,37 +139,18 @@ struct Flag<'a> {
     name: &'a str,
 }
 
-lazy_static! {
-    static ref REPLACEMENT_LABEL_CAPTURE_REGEX: Regex = Regex::new(r"\{\{(.*?)\}\}").unwrap();
-    static ref CONDITIONAL_CAPTURE_REGEX: Regex = Regex::new(
-        r"#if\s*\((.*?)\)\s([\s\S]*?)[^\S\r\n]*(?:#elseif\s*\((.*?)\)\s([\s\S]*?))?[^\S\r\n]*(?:#else\s([\s\S]*?))?[^\S\r\n]*#endif\b"
-    )
-    .unwrap();
-    static ref PASSTHROUGH_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::Passthrough.wgsl_source()).unwrap();
-    static ref AMBIENT_OCCLUSION_COMPUTATION_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::AmbientOcclusionComputation.wgsl_source())
-            .unwrap();
-    static ref AMBIENT_OCCLUSION_APPLICATION_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::AmbientOcclusionApplication.wgsl_source())
-            .unwrap();
-    static ref GAUSSIAN_BLUR_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::GaussianBlur.wgsl_source()).unwrap();
-    static ref LUMINANCE_HISTOGRAM_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::LuminanceHistogram.wgsl_source()).unwrap();
-    static ref LUMINANCE_HISTOGRAM_AVERAGE_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::LuminanceHistogramAverage.wgsl_source())
-            .unwrap();
-    static ref TEMPORAL_ANTI_ALIASING_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::TemporalAntiAliasing.wgsl_source()).unwrap();
-    static ref TONE_MAPPING_TEMPLATE: ShaderTemplate<'static> =
-        ShaderTemplate::new(SpecificShaderTemplate::ToneMapping.wgsl_source()).unwrap();
-}
+static REPLACEMENT_LABEL_CAPTURE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{(.*?)\}\}").unwrap());
+static CONDITIONAL_CAPTURE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"#if\s*\((.*?)\)\s([\s\S]*?)[^\S\r\n]*(?:#elseif\s*\((.*?)\)\s([\s\S]*?))?[^\S\r\n]*(?:#else\s([\s\S]*?))?[^\S\r\n]*#endif\b").unwrap()
+});
 
+#[macro_export]
 macro_rules! template_source {
     ($type:expr, $name:expr) => {{
         include_str!(concat!(
-            "../../../shaders/",
+            env!("CARGO_MANIFEST_DIR"),
+            "/shaders/",
             $type,
             "/",
             $name,
@@ -94,68 +159,25 @@ macro_rules! template_source {
     }};
 }
 
+#[macro_export]
 macro_rules! rendering_template_source {
     ($name:expr) => {{
-        template_source!("rendering", $name)
+        $crate::template_source!("rendering", $name)
     }};
 }
 
+#[macro_export]
 macro_rules! compute_template_source {
     ($name:expr) => {{
-        template_source!("compute", $name)
+        $crate::template_source!("compute", $name)
     }};
 }
 
-impl SpecificShaderTemplate {
-    /// Returns the WGSL source code of the template.
-    pub const fn wgsl_source(&self) -> &'static str {
-        match self {
-            Self::Passthrough => {
-                rendering_template_source!("passthrough")
-            }
-            Self::AmbientOcclusionComputation => {
-                rendering_template_source!("ambient_occlusion_computation")
-            }
-            Self::AmbientOcclusionApplication => {
-                rendering_template_source!("ambient_occlusion_application")
-            }
-            Self::GaussianBlur => {
-                rendering_template_source!("gaussian_blur")
-            }
-            Self::LuminanceHistogram => {
-                compute_template_source!("luminance_histogram")
-            }
-            Self::LuminanceHistogramAverage => {
-                compute_template_source!("luminance_histogram_average")
-            }
-            Self::TemporalAntiAliasing => {
-                rendering_template_source!("temporal_anti_aliasing")
-            }
-            Self::ToneMapping => {
-                rendering_template_source!("tone_mapping")
-            }
-        }
-    }
-
-    /// Returns the [`ShaderTemplate`] for this specific shader template.
-    pub fn template(&self) -> &'static ShaderTemplate<'static> {
-        match self {
-            Self::Passthrough => &PASSTHROUGH_TEMPLATE,
-            Self::AmbientOcclusionComputation => &AMBIENT_OCCLUSION_COMPUTATION_TEMPLATE,
-            Self::AmbientOcclusionApplication => &AMBIENT_OCCLUSION_APPLICATION_TEMPLATE,
-            Self::GaussianBlur => &GAUSSIAN_BLUR_TEMPLATE,
-            Self::LuminanceHistogram => &LUMINANCE_HISTOGRAM_TEMPLATE,
-            Self::LuminanceHistogramAverage => &LUMINANCE_HISTOGRAM_AVERAGE_TEMPLATE,
-            Self::TemporalAntiAliasing => &TEMPORAL_ANTI_ALIASING_TEMPLATE,
-            Self::ToneMapping => &TONE_MAPPING_TEMPLATE,
-        }
-    }
-}
-
-impl std::fmt::Display for SpecificShaderTemplate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
+#[macro_export]
+macro_rules! template_replacements {
+    ($($label:literal => $replacement:expr),* $(,)?) => {
+        [$(($label, ($replacement).to_string())),*]
+    };
 }
 
 impl<'a> ShaderTemplate<'a> {
@@ -240,13 +262,16 @@ impl<'a> ShaderTemplate<'a> {
 
         let mut replaced_label_count = 0;
         for (label, replacement) in replacements {
-            let replacement_regex = replacement_regexes.get(label).ok_or_else(|| {
-                if self.replacement_regexes.contains_key(label) {
-                    anyhow!("Label `{}` to replace in template is not present after resolving conditional blocks", label)
-                } else {
-                    anyhow!("No label `{}` to replace in template", label)
-                }
-            })?;
+            let replacement_regex = if let Some(replacement_regex) = replacement_regexes.get(label)
+            {
+                replacement_regex
+            } else if self.replacement_regexes.contains_key(label) {
+                // The label to replace exists in an excluded conditional block, so we just skip
+                // it instead of returning an error
+                continue;
+            } else {
+                bail!("No label `{}` to replace in template", label)
+            };
 
             *resolved_source_code.to_mut() = replacement_regex
                 .replace_all(&resolved_source_code, replacement)
@@ -270,22 +295,6 @@ impl<'a> ShaderTemplate<'a> {
         }
 
         Ok(resolved_source_code.into_owned())
-    }
-
-    /// Resolves the template (see [`Self::resolve`]) and builds a [`Shader`]
-    /// from the resolved source code, assuming the code is WGSL.
-    ///
-    /// # Errors
-    /// See [`Self::resolve`] and [`Shader::from_wgsl_source`].
-    pub fn resolve_and_compile_as_wgsl<'b>(
-        &self,
-        graphics_device: &GraphicsDevice,
-        flags_to_set: impl IntoIterator<Item = &'b str>,
-        replacements: impl IntoIterator<Item = (&'b str, String)>,
-        label: &str,
-    ) -> Result<Shader> {
-        let resolved_source_code = self.resolve(flags_to_set, replacements)?;
-        Shader::from_wgsl_source(graphics_device, resolved_source_code, label)
     }
 }
 
@@ -458,6 +467,28 @@ fn is_valid_identifier(identifier: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use naga::{
+        front::wgsl,
+        valid::{Capabilities, ValidationFlags, Validator},
+        Module,
+    };
+
+    pub fn validate_template(template: &impl SpecificShaderTemplate) {
+        let source = template.resolve();
+        println!("{}\n", &source);
+        let module = wgsl::parse_str(&source).expect("Parsing resolved template failed");
+        validate_module(&module);
+    }
+
+    #[allow(clippy::dbg_macro)]
+    fn validate_module(module: &Module) {
+        let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+        if let Err(err) = validator.validate(module) {
+            dbg!(module);
+            eprintln!("{}", err.emit_to_string("test"));
+            panic!("Shader validation failed");
+        }
+    }
 
     #[test]
     fn should_find_no_flags_for_empty_template() {

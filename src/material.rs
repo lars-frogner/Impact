@@ -4,27 +4,19 @@ pub mod components;
 pub mod entity;
 mod features;
 
-pub use features::register_material_feature_types;
+pub use features::{
+    register_material_feature_types, MaterialInstanceFeatureFlags, MaterialInstanceFeatureLocation,
+};
 
 use crate::{
     assets::Assets,
-    gpu::{
-        rendering::{fre, render_command::RenderPipelineHints},
-        resource_group::GPUResourceGroup,
-        shader::MaterialShaderInput,
-        texture::{
-            attachment::{
-                RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
-            },
-            TextureID,
-        },
-        GraphicsDevice,
-    },
+    gpu::{rendering::fre, resource_group::GPUResourceGroup, texture::TextureID, GraphicsDevice},
     mesh::VertexAttributeSet,
     model::{InstanceFeatureID, InstanceFeatureTypeID},
 };
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
+use entity::{fixed::FixedMaterialTextureBindings, physical::PhysicalMaterialTextureBindings};
 use impact_utils::{hash64, stringhash64_newtype, Hash64, StringHash64};
 use nalgebra::Vector3;
 use std::{
@@ -69,13 +61,10 @@ pub struct MaterialHandle {
 /// and shader input.
 #[derive(Debug)]
 pub struct MaterialSpecification {
-    vertex_attribute_requirements_for_mesh: VertexAttributeSet,
-    vertex_attribute_requirements_for_shader: VertexAttributeSet,
-    input_render_attachments: RenderAttachmentInputDescriptionSet,
-    output_render_attachments: RenderAttachmentOutputDescriptionSet,
-    material_specific_resources: Option<GPUResourceGroup>,
+    vertex_attribute_requirements: VertexAttributeSet,
     instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
-    render_pipeline_hints: RenderPipelineHints,
+    instance_feature_flags: MaterialInstanceFeatureFlags,
+    material_specific_resources: Option<GPUResourceGroup>,
     shader_input: MaterialShaderInput,
 }
 
@@ -102,7 +91,12 @@ pub struct MaterialLibraryState {
     material_property_texture_group_ids: HashSet<MaterialPropertyTextureGroupID>,
 }
 
-const MATERIAL_VERTEX_BINDING_START: u32 = 20;
+/// Input required for using a material in a shader.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MaterialShaderInput {
+    Fixed(FixedMaterialTextureBindings),
+    Physical(PhysicalMaterialTextureBindings),
+}
 
 impl MaterialSpecification {
     /// Creates a new material specification with the given vertex attribute
@@ -110,58 +104,25 @@ impl MaterialSpecification {
     /// material-specific resources, untextured material property types, render
     /// pass hints and shader input.
     pub fn new(
-        vertex_attribute_requirements_for_mesh: VertexAttributeSet,
-        vertex_attribute_requirements_for_shader: VertexAttributeSet,
-        input_render_attachments: RenderAttachmentInputDescriptionSet,
-        output_render_attachments: RenderAttachmentOutputDescriptionSet,
-        material_specific_resources: Option<GPUResourceGroup>,
+        vertex_attribute_requirements: VertexAttributeSet,
         instance_feature_type_ids: Vec<InstanceFeatureTypeID>,
-        render_pipeline_hints: RenderPipelineHints,
+        instance_feature_flags: MaterialInstanceFeatureFlags,
+        material_specific_resources: Option<GPUResourceGroup>,
         shader_input: MaterialShaderInput,
     ) -> Self {
         Self {
-            vertex_attribute_requirements_for_mesh,
-            vertex_attribute_requirements_for_shader,
-            input_render_attachments,
-            output_render_attachments,
-            material_specific_resources,
+            vertex_attribute_requirements,
             instance_feature_type_ids,
-            render_pipeline_hints,
+            instance_feature_flags,
+            material_specific_resources,
             shader_input,
         }
     }
 
     /// Returns a [`VertexAttributeSet`] encoding the vertex attributes required
     /// to be available in any mesh using the material.
-    pub fn vertex_attribute_requirements_for_mesh(&self) -> VertexAttributeSet {
-        self.vertex_attribute_requirements_for_mesh
-    }
-
-    /// Returns a [`VertexAttributeSet`] encoding the vertex attributes that
-    /// will be used in the material's shader.
-    pub fn vertex_attribute_requirements_for_shader(&self) -> VertexAttributeSet {
-        self.vertex_attribute_requirements_for_shader
-    }
-
-    /// Returns a reference to the [`RenderAttachmentInputDescriptionSet`]
-    /// describing the render attachments required as input for rendering with
-    /// the material.
-    pub fn input_render_attachments(&self) -> &RenderAttachmentInputDescriptionSet {
-        &self.input_render_attachments
-    }
-
-    /// Returns a reference to the [`RenderAttachmentOutputDescriptionSet`]
-    /// describing the render attachments are written to when rendering with the
-    /// material.
-    pub fn output_render_attachments(&self) -> &RenderAttachmentOutputDescriptionSet {
-        &self.output_render_attachments
-    }
-
-    /// Returns a reference to the [`GPUResourceGroup`] of material-specific
-    /// resources of the material, or [`None`] if the material has no
-    /// material-specific resources.
-    pub fn material_specific_resources(&self) -> Option<&GPUResourceGroup> {
-        self.material_specific_resources.as_ref()
+    pub fn vertex_attribute_requirements(&self) -> VertexAttributeSet {
+        self.vertex_attribute_requirements
     }
 
     /// Returns the IDs of the material property types used
@@ -170,9 +131,16 @@ impl MaterialSpecification {
         &self.instance_feature_type_ids
     }
 
-    /// Returns the render pipeline hints for the material.
-    pub fn render_pipeline_hints(&self) -> RenderPipelineHints {
-        self.render_pipeline_hints
+    /// Returns the flags for the material's set of per-instance features.
+    pub fn instance_feature_flags(&self) -> MaterialInstanceFeatureFlags {
+        self.instance_feature_flags
+    }
+
+    /// Returns a reference to the [`GPUResourceGroup`] of material-specific
+    /// resources of the material, or [`None`] if the material has no
+    /// material-specific resources.
+    pub fn material_specific_resources(&self) -> Option<&GPUResourceGroup> {
+        self.material_specific_resources.as_ref()
     }
 
     /// Returns the input required for using the material in a shader.

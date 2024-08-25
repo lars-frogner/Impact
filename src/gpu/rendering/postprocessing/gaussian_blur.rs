@@ -3,26 +3,15 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
-        push_constant::{PushConstant, PushConstantVariant},
-        rendering::{
-            fre,
-            render_command::{
-                Blending, RenderCommandSpecification, RenderPassSpecification, RenderPipelineHints,
-                RenderPipelineSpecification, RenderSubpassSpecification,
-            },
-        },
+        rendering::{fre, render_command::PostprocessingRenderPass, surface::RenderingSurface},
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{template::SpecificShaderTemplate, ShaderManager},
-        texture::attachment::{
-            OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity,
-        },
+        shader::{template::gaussian_blur::GaussianBlurShaderTemplate, ShaderManager},
+        texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
-    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
 };
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{hash64, ConstStringHash64};
 use nalgebra::Vector4;
@@ -176,16 +165,21 @@ impl UniformBufferable for GaussianBlurSamples {
 }
 assert_uniform_valid!(GaussianBlurSamples);
 
+/// Creates a [`PostprocessingRenderPass`] that applies a Gaussian blur in the
+/// given direction to the given input attachment and writes the result to the
+/// given output attachment using the given blending.
 pub(super) fn create_gaussian_blur_render_pass(
     graphics_device: &GraphicsDevice,
+    rendering_surface: &RenderingSurface,
     shader_manager: &mut ShaderManager,
+    render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     blending: Blending,
     direction: GaussianBlurDirection,
     sample_uniform: &GaussianBlurSamples,
-) -> RenderCommandSpecification {
+) -> Result<PostprocessingRenderPass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "GaussianBlurSamples{{ sample_count: {}, truncated_tail_samples: {} }}",
         sample_uniform.sample_count(),
@@ -211,67 +205,26 @@ pub(super) fn create_gaussian_blur_render_pass(
             )
         });
 
-    let (input_texture_binding, input_sampler_binding) =
-        input_render_attachment_quantity.bindings();
-
-    let shader_id = shader_manager
-        .get_or_create_rendering_shader_from_template(
-            graphics_device,
-            SpecificShaderTemplate::GaussianBlur,
-            &[],
-            &[
-                ("direction", direction.to_string()),
-                ("max_samples", MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS.to_string()),
-                (
-                    "position_location",
-                    VertexPosition::BINDING_LOCATION.to_string(),
-                ),
-                ("input_texture_group", "0".to_string()),
-                ("input_texture_binding", input_texture_binding.to_string()),
-                ("input_sampler_binding", input_sampler_binding.to_string()),
-                ("samples_group", "1".to_string()),
-                ("samples_binding", "0".to_string()),
-            ],
-        )
-        .unwrap();
-
-    let input_render_attachments =
-        RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
-
-    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
+    let shader_template = GaussianBlurShaderTemplate::new(
+        resource_group_id,
+        input_render_attachment_quantity,
         output_render_attachment_quantity,
-        RenderAttachmentOutputDescription::default()
-            .with_sampling(OutputAttachmentSampling::Single)
-            .with_blending(blending),
+        blending,
+        direction,
     );
 
-    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
-        pass: RenderPassSpecification {
-            output_render_attachments,
-            label: format!(
-                "Gaussian blur pass into {}",
-                output_render_attachment_quantity
-            ),
-            ..Default::default()
-        },
-        pipeline: Some(RenderPipelineSpecification {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_shader_id: Some(shader_id),
-            resource_group_id: Some(resource_group_id),
-            input_render_attachments,
-            push_constants: PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
-            label: format!(
-                "{} Gaussian blur from {}",
-                direction, input_render_attachment_quantity
-            ),
-            ..Default::default()
-        }),
-    })
+    PostprocessingRenderPass::new(
+        graphics_device,
+        rendering_surface,
+        shader_manager,
+        render_attachment_texture_manager,
+        gpu_resource_group_manager,
+        &shader_template,
+        Cow::Owned(format!(
+            "Gaussian blur pass from {} into {}",
+            input_render_attachment_quantity, output_render_attachment_quantity
+        )),
+    )
 }
 
 /// Computes the `k`'th row of Pascal's triangle, which contains the binomial

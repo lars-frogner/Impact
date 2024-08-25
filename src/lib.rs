@@ -102,6 +102,7 @@ pub mod physics;
 pub mod run;
 pub mod scene;
 pub mod scheduling;
+pub mod skybox;
 pub mod thread;
 pub mod ui;
 pub mod util;

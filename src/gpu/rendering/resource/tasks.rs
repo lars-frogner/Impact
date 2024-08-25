@@ -18,12 +18,12 @@ define_task!(
     /// updates for keeping the [`World`]s render resources in sync with
     /// the source data.
     ///
-    /// GPU buffers whose source data no longer exists will
+    /// GPU resources whose source data no longer exists will
     /// be removed, and missing render resources for new source
     /// data will be created.
     [pub] SyncRenderResources,
     depends_on = [
-        SyncCameraGPUBuffer,
+        SyncMinorResources,
         SyncMeshGPUBuffers,
         SyncLightGPUBuffers,
         SyncInstanceFeatureBuffers
@@ -40,12 +40,13 @@ define_task!(
 );
 
 define_task!(
-    SyncCameraGPUBuffer,
+    SyncMinorResources,
     depends_on = [SyncSceneCameraViewTransform],
     execute_on = [RenderingTag],
     |app: &Application| {
-        with_debug_logging!("Synchronizing camera GPU buffer"; {
+        with_debug_logging!("Synchronizing camera and skybox GPU resources"; {
             let renderer = app.renderer().read().unwrap();
+            let scene = app.scene().read().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             if render_resource_manager.is_desynchronized() {
                 DesynchronizedRenderResources::sync_camera_buffer_with_scene_camera(
@@ -56,15 +57,27 @@ define_task!(
                         .lock()
                         .unwrap()
                         .as_mut(),
-                        app
-                            .scene()
-                            .read()
-                            .unwrap()
+                        scene
                             .scene_camera()
                             .read()
                             .unwrap()
                             .as_ref(),
                 );
+                DesynchronizedRenderResources::sync_skybox_resources_with_scene_skybox(
+                    renderer.graphics_device(),
+                    &app.assets().read().unwrap(),
+                    render_resource_manager
+                        .desynchronized()
+                        .skybox_resource_manager
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    scene
+                        .skybox()
+                        .read()
+                        .unwrap()
+                        .as_ref(),
+                )?;
 
             }
             Ok(())
@@ -166,7 +179,7 @@ define_task!(
 /// Registers tasks for synchronizing render resources in the given task
 /// scheduler.
 pub fn register_render_resource_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
-    task_scheduler.register_task(SyncCameraGPUBuffer)?;
+    task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncMeshGPUBuffers)?;
     task_scheduler.register_task(SyncLightGPUBuffers)?;
     task_scheduler.register_task(SyncInstanceFeatureBuffers)?;

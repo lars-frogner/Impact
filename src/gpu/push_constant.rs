@@ -1,6 +1,7 @@
 //! Management of push constants.
 
 use crate::{
+    camera::buffer::CameraGPUBufferManager,
     gpu::rendering::{
         postprocessing::capturing::CapturingCamera, surface::RenderingSurface, RenderingSystem,
     },
@@ -18,6 +19,7 @@ pub enum PushConstantVariant {
     Exposure,
     InverseExposure,
     FrameCounter,
+    CameraRotationQuaternion,
 }
 
 /// Specification for a push constant that can be passed to the GPU.
@@ -58,6 +60,9 @@ impl PushConstantVariant {
             Self::Exposure => CapturingCamera::exposure_push_constant_size(),
             Self::InverseExposure => CapturingCamera::inverse_exposure_push_constant_size(),
             Self::FrameCounter => RenderingSystem::frame_counter_push_constant_size(),
+            Self::CameraRotationQuaternion => {
+                CameraGPUBufferManager::camera_rotation_quaternion_push_constant_size()
+            }
         }
     }
 }
@@ -79,6 +84,30 @@ impl PushConstant {
         Self { variant, stages }
     }
 
+    /// Defines a new push constant with the given variant visible in the vertex
+    /// shader stage.
+    pub fn new_for_vertex(variant: PushConstantVariant) -> Self {
+        Self::new(variant, wgpu::ShaderStages::VERTEX)
+    }
+
+    /// Defines a new push constant with the given variant visible in the
+    /// fragment shader stage.
+    pub fn new_for_fragment(variant: PushConstantVariant) -> Self {
+        Self::new(variant, wgpu::ShaderStages::FRAGMENT)
+    }
+
+    /// Defines a new push constant with the given variant visible in the vertex
+    /// and fragment shader stages.
+    pub fn new_for_vertex_fragment(variant: PushConstantVariant) -> Self {
+        Self::new(variant, wgpu::ShaderStages::VERTEX_FRAGMENT)
+    }
+
+    /// Defines a new push constant with the given variant visible in a compute
+    /// shader.
+    pub fn new_for_compute(variant: PushConstantVariant) -> Self {
+        Self::new(variant, wgpu::ShaderStages::COMPUTE)
+    }
+
     /// Returns the meaning of the push constant data.
     pub const fn variant(&self) -> PushConstantVariant {
         self.variant
@@ -96,6 +125,70 @@ impl PushConstantGroup {
         Self {
             push_constants: Vec::new(),
         }
+    }
+
+    /// Creates a push constant group for the given variants visible in the
+    /// vertex shader stage.
+    ///
+    /// # Note
+    /// The order of the variants must match the order in the shader. Also be
+    /// careful with alignment: implicit padding requirements between fields
+    /// in the push constant struct in the shader may cause the fields to be
+    /// mapped to unexpected push constant ranges. In a double-push constant
+    /// struct, this can be avoided by putting the larger push constant first.
+    pub fn for_vertex(variants: impl IntoIterator<Item = PushConstantVariant>) -> Self {
+        variants
+            .into_iter()
+            .map(PushConstant::new_for_vertex)
+            .collect()
+    }
+
+    /// Creates a push constant group for the given variants visible in the
+    /// fragment shader stage.
+    ///
+    /// # Note
+    /// The order of the variants must match the order in the shader. Also be
+    /// careful with alignment: implicit padding requirements between fields
+    /// in the push constant struct in the shader may cause the fields to be
+    /// mapped to unexpected push constant ranges. In a double-push constant
+    /// struct, this can be avoided by putting the larger push constant first.
+    pub fn for_fragment(variants: impl IntoIterator<Item = PushConstantVariant>) -> Self {
+        variants
+            .into_iter()
+            .map(PushConstant::new_for_fragment)
+            .collect()
+    }
+
+    /// Creates a push constant group for the given variants visible in the
+    /// vertex and fragment shader stages.
+    ///
+    /// # Note
+    /// The order of the variants must match the order in the shader. Also be
+    /// careful with alignment: implicit padding requirements between fields
+    /// in the push constant struct in the shader may cause the fields to be
+    /// mapped to unexpected push constant ranges. In a double-push constant
+    /// struct, this can be avoided by putting the larger push constant first.
+    pub fn for_vertex_fragment(variants: impl IntoIterator<Item = PushConstantVariant>) -> Self {
+        variants
+            .into_iter()
+            .map(PushConstant::new_for_vertex_fragment)
+            .collect()
+    }
+
+    /// Creates a push constant group for the given variants visible in a
+    /// compute shader.
+    ///
+    /// # Note
+    /// The order of the variants must match the order in the shader. Also be
+    /// careful with alignment: implicit padding requirements between fields
+    /// in the push constant struct in the shader may cause the fields to be
+    /// mapped to unexpected push constant ranges. In a double-push constant
+    /// struct, this can be avoided by putting the larger push constant first.
+    pub fn for_compute(variants: impl IntoIterator<Item = PushConstantVariant>) -> Self {
+        variants
+            .into_iter()
+            .map(PushConstant::new_for_compute)
+            .collect()
     }
 
     /// Returns all push constants present the group.

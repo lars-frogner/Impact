@@ -89,8 +89,8 @@ impl SceneGraphParentNodeComp {
 }
 
 impl<ID: SceneGraphNodeID> SceneGraphNodeComp<ID> {
-    /// Creates a new component representing a [`SceneGraph`](crate::scene::SceneGraph)
-    /// node with the given ID.
+    /// Creates a new component representing a
+    /// [`SceneGraph`](crate::scene::SceneGraph) node with the given ID.
     pub fn new(node_id: ID) -> Self {
         Self { id: node_id }
     }

@@ -1,40 +1,42 @@
 //! Render passes for applying tone mapping.
 
-use crate::{
-    gpu::{
-        push_constant::{PushConstant, PushConstantVariant},
-        rendering::render_command::{
-            RenderCommandSpecification, RenderPassSpecification, RenderPipelineHints,
-            RenderPipelineSpecification, RenderSubpassSpecification, SurfaceModification,
-        },
-        shader::{template::SpecificShaderTemplate, ShaderManager},
-        texture::attachment::{
-            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity,
-        },
-        GraphicsDevice,
+use crate::gpu::{
+    rendering::{
+        postprocessing::Postprocessor, render_command::PostprocessingRenderPass,
+        resource::SynchronizedRenderResources, surface::RenderingSurface,
     },
-    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
+    resource_group::GPUResourceGroupManager,
+    shader::{template::tone_mapping::ToneMappingShaderTemplate, ShaderManager},
+    texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    GraphicsDevice,
 };
-use std::fmt::Display;
+use anyhow::Result;
+use std::{borrow::Cow, fmt::Display};
 
 /// The method to use for tone mapping.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum ToneMapping {
+pub enum ToneMappingMethod {
     None,
     #[default]
     ACES,
     KhronosPBRNeutral,
 }
 
-impl ToneMapping {
+#[derive(Debug)]
+pub(super) struct ToneMappingRenderCommands {
+    disabled_pass: PostprocessingRenderPass,
+    aces_pass: PostprocessingRenderPass,
+    khronos_pbr_neutral_pass: PostprocessingRenderPass,
+}
+
+impl ToneMappingMethod {
     /// Returns all available tone mapping methods.
     pub fn all() -> [Self; 3] {
         [Self::None, Self::ACES, Self::KhronosPBRNeutral]
     }
 }
 
-impl Display for ToneMapping {
+impl Display for ToneMappingMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -48,75 +50,129 @@ impl Display for ToneMapping {
     }
 }
 
-pub(super) fn create_tone_mapping_render_commands(
-    graphics_device: &GraphicsDevice,
-    shader_manager: &mut ShaderManager,
-) -> Vec<RenderCommandSpecification> {
-    ToneMapping::all()
-        .map(|mapping| {
-            create_tone_mapping_render_pass(
-                graphics_device,
-                shader_manager,
-                // The last shader before tone mapping (the TAA shader) writes
-                // to the auxiliary luminance attachment
-                RenderAttachmentQuantity::LuminanceAux,
-                mapping,
-            )
+impl ToneMappingRenderCommands {
+    pub(super) fn new(
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+    ) -> Result<Self> {
+        // The last shader before tone mapping (the TAA shader) writes
+        // to the auxiliary luminance attachment
+        let input_render_attachment_quantity = RenderAttachmentQuantity::LuminanceAux;
+
+        let disabled_pass = create_tone_mapping_render_pass(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            input_render_attachment_quantity,
+            ToneMappingMethod::None,
+        )?;
+
+        let aces_pass = create_tone_mapping_render_pass(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            input_render_attachment_quantity,
+            ToneMappingMethod::ACES,
+        )?;
+
+        let khronos_pbr_neutral_pass = create_tone_mapping_render_pass(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            input_render_attachment_quantity,
+            ToneMappingMethod::KhronosPBRNeutral,
+        )?;
+
+        Ok(Self {
+            disabled_pass,
+            aces_pass,
+            khronos_pbr_neutral_pass,
         })
-        .to_vec()
+    }
+
+    pub(super) fn record(
+        &self,
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+        method: ToneMappingMethod,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        match method {
+            ToneMappingMethod::ACES => {
+                self.aces_pass.record(
+                    rendering_surface,
+                    surface_texture_view,
+                    render_resources,
+                    render_attachment_texture_manager,
+                    gpu_resource_group_manager,
+                    postprocessor,
+                    frame_counter,
+                    command_encoder,
+                )?;
+            }
+            ToneMappingMethod::KhronosPBRNeutral => {
+                self.khronos_pbr_neutral_pass.record(
+                    rendering_surface,
+                    surface_texture_view,
+                    render_resources,
+                    render_attachment_texture_manager,
+                    gpu_resource_group_manager,
+                    postprocessor,
+                    frame_counter,
+                    command_encoder,
+                )?;
+            }
+            ToneMappingMethod::None => {
+                self.disabled_pass.record(
+                    rendering_surface,
+                    surface_texture_view,
+                    render_resources,
+                    render_attachment_texture_manager,
+                    gpu_resource_group_manager,
+                    postprocessor,
+                    frame_counter,
+                    command_encoder,
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
-/// Creates a [`RenderCommandSpecification`] for a render pass that applies the
-/// given tone mapping to the input attachment and writes the result to the
-/// surface attachment.
+/// Creates a [`PostprocessingRenderPass`] that applies the given tone mapping
+/// to the input attachment and writes the result to the surface attachment.
 fn create_tone_mapping_render_pass(
     graphics_device: &GraphicsDevice,
+    rendering_surface: &RenderingSurface,
     shader_manager: &mut ShaderManager,
+    render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+    gpu_resource_group_manager: &GPUResourceGroupManager,
     input_render_attachment_quantity: RenderAttachmentQuantity,
-    mapping: ToneMapping,
-) -> RenderCommandSpecification {
-    let (input_texture_binding, input_sampler_binding) =
-        input_render_attachment_quantity.bindings();
+    method: ToneMappingMethod,
+) -> Result<PostprocessingRenderPass> {
+    let shader_template = ToneMappingShaderTemplate::new(input_render_attachment_quantity, method);
 
-    let shader_id = shader_manager
-        .get_or_create_rendering_shader_from_template(
-            graphics_device,
-            SpecificShaderTemplate::ToneMapping,
-            &[],
-            &[
-                ("tone_mapping_method", mapping.to_string()),
-                (
-                    "position_location",
-                    VertexPosition::BINDING_LOCATION.to_string(),
-                ),
-                ("input_texture_binding", input_texture_binding.to_string()),
-                ("input_sampler_binding", input_sampler_binding.to_string()),
-            ],
-        )
-        .unwrap();
-
-    let input_render_attachments =
-        RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
-
-    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
-        pass: RenderPassSpecification {
-            surface_modification: SurfaceModification::Write,
-            output_render_attachments: RenderAttachmentOutputDescriptionSet::empty(), /* We output directly to the surface */
-            label: "Surface writing pass".to_string(),
-            ..Default::default()
-        },
-        pipeline: Some(RenderPipelineSpecification {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_shader_id: Some(shader_id),
-            input_render_attachments,
-            push_constants: PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
-            label: format!("Tone mapping ({})", mapping),
-            ..Default::default()
-        }),
-    })
+    PostprocessingRenderPass::new(
+        graphics_device,
+        rendering_surface,
+        shader_manager,
+        render_attachment_texture_manager,
+        gpu_resource_group_manager,
+        &shader_template,
+        Cow::Owned(format!("Tone mapping ({})", method)),
+    )
 }

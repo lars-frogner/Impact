@@ -8,14 +8,13 @@ use crate::{
     },
     material::{
         components::{
-            AlbedoComp, AlbedoTextureComp, NormalMapComp, RoughnessComp, SpecularReflectanceComp,
-            SpecularReflectanceTextureComp, VertexColorComp,
+            NormalMapComp, TexturedColorComp, TexturedSpecularReflectanceComp, UniformColorComp,
         },
         RGBColor,
     },
     mesh::{
         components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
-        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
+        TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
 };
 use anyhow::{bail, Result};
@@ -63,8 +62,6 @@ where
     for model in models {
         let material_id = model.mesh.material_id;
 
-        let mesh_has_vertex_colors = !model.mesh.vertex_color.is_empty();
-
         let mesh_id = MeshID(hash64!(format!(
             "{} @ {}",
             &model.name, &obj_file_path_string
@@ -96,14 +93,6 @@ where
             SingleInstance::<ArchetypeComponentStorage>::try_from_vec_of_single_instances(
                 components,
             )
-            .unwrap()
-        } else if mesh_has_vertex_colors {
-            let material_component = ComponentStorage::from_single_instance_view(&VertexColorComp);
-
-            SingleInstance::<ArchetypeComponentStorage>::try_from_array_of_single_instances([
-                mesh_component,
-                material_component,
-            ])
             .unwrap()
         } else {
             SingleInstance::<ArchetypeComponentStorage>::try_from_array_of_single_instances([
@@ -239,8 +228,6 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
 
     let positions = aggregate_3(&mesh.positions, |x, y, z| VertexPosition(point![x, y, z]));
 
-    let colors = aggregate_3(&mesh.vertex_color, |r, g, b| VertexColor(vector![r, g, b]));
-
     let normal_vectors = aggregate_3(&mesh.normals, |nx, ny, nz| {
         VertexNormalVector(UnitVector3::new_normalize(vector![nx, ny, nz]))
     });
@@ -249,7 +236,6 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<fre> {
 
     TriangleMesh::new(
         positions,
-        colors,
         normal_vectors,
         texture_coords,
         Vec::new(),
@@ -330,12 +316,14 @@ fn create_material_components_from_tobj_material(
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
-            &AlbedoTextureComp(albedo_texture_id),
+            &TexturedColorComp(albedo_texture_id),
         ));
     } else {
-        components.push(ComponentStorage::from_single_instance_view(&AlbedoComp(
-            RGBColor::from_row_slice(&material.diffuse.unwrap_or([0.0; 3])),
-        )));
+        components.push(ComponentStorage::from_single_instance_view(
+            &UniformColorComp(RGBColor::from_row_slice(
+                &material.diffuse.unwrap_or([0.0; 3]),
+            )),
+        ));
     }
 
     if let Some(specular_reflectance_path) = &material.specular_texture {
@@ -352,13 +340,7 @@ fn create_material_components_from_tobj_material(
         )?;
 
         components.push(ComponentStorage::from_single_instance_view(
-            &SpecularReflectanceTextureComp(specular_reflectance_id),
-        ));
-    } else {
-        components.push(ComponentStorage::from_single_instance_view(
-            &SpecularReflectanceComp(RGBColor::from_row_slice(
-                &material.specular.unwrap_or([0.0; 3]),
-            )),
+            &TexturedSpecularReflectanceComp::unscaled(specular_reflectance_id),
         ));
     }
 
@@ -379,10 +361,6 @@ fn create_material_components_from_tobj_material(
             normal_texture_id,
         )));
     }
-
-    components.push(ComponentStorage::from_single_instance_view(
-        &RoughnessComp::from_blinn_phong_shininess(material.shininess.unwrap_or(0.0)),
-    ));
 
     Ok(components)
 }

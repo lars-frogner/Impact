@@ -3,6 +3,7 @@
 pub mod tasks;
 
 use crate::{
+    assets::Assets,
     camera::{buffer::CameraGPUBufferManager, SceneCamera},
     gpu::{
         rendering::{fre, RenderingConfig},
@@ -11,7 +12,9 @@ use crate::{
     light::{buffer::LightGPUBufferManager, LightStorage},
     mesh::{buffer::MeshGPUBufferManager, MeshID, TriangleMesh},
     model::{buffer::InstanceFeatureGPUBufferManager, InstanceFeatureManager, ModelID},
+    skybox::{resource::SkyboxGPUResourceManager, Skybox},
 };
+use anyhow::Result;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, HashMap},
@@ -46,6 +49,7 @@ pub struct RenderResourceManager {
 #[derive(Debug)]
 pub struct SynchronizedRenderResources {
     camera_buffer_manager: Box<Option<CameraGPUBufferManager>>,
+    skybox_resource_manager: Box<Option<SkyboxGPUResourceManager>>,
     mesh_buffer_managers: Box<MeshGPUBufferManagerMap>,
     light_buffer_manager: Box<Option<LightGPUBufferManager>>,
     instance_feature_buffer_managers: Box<InstanceFeatureGPUBufferManagerMap>,
@@ -57,6 +61,7 @@ pub struct SynchronizedRenderResources {
 #[derive(Debug)]
 struct DesynchronizedRenderResources {
     camera_buffer_manager: Mutex<Box<Option<CameraGPUBufferManager>>>,
+    skybox_resource_manager: Mutex<Box<Option<SkyboxGPUResourceManager>>>,
     mesh_buffer_managers: Mutex<Box<MeshGPUBufferManagerMap>>,
     light_buffer_manager: Mutex<Box<Option<LightGPUBufferManager>>>,
     instance_feature_buffer_managers: Mutex<Box<InstanceFeatureGPUBufferManagerMap>>,
@@ -146,6 +151,12 @@ impl SynchronizedRenderResources {
         self.camera_buffer_manager.as_ref().as_ref()
     }
 
+    /// Returns the GPU resource manager for skybox data, or [`None`] if it has
+    /// not been created.
+    pub fn get_skybox_resource_manager(&self) -> Option<&SkyboxGPUResourceManager> {
+        self.skybox_resource_manager.as_ref().as_ref()
+    }
+
     /// Returns the GPU buffer manager for the given mesh identifier if the
     /// mesh exists, otherwise returns [`None`].
     pub fn get_mesh_buffer_manager(&self, mesh_id: MeshID) -> Option<&MeshGPUBufferManager> {
@@ -162,9 +173,9 @@ impl SynchronizedRenderResources {
     /// identifier if the model exists, otherwise returns [`None`].
     pub fn get_instance_feature_buffer_managers(
         &self,
-        model_id: ModelID,
+        model_id: &ModelID,
     ) -> Option<&Vec<InstanceFeatureGPUBufferManager>> {
-        self.instance_feature_buffer_managers.get(&model_id)
+        self.instance_feature_buffer_managers.get(model_id)
     }
 
     /// Returns a reference to the map of instance feature GPU buffer managers.
@@ -177,6 +188,7 @@ impl DesynchronizedRenderResources {
     fn new() -> Self {
         Self {
             camera_buffer_manager: Mutex::new(Box::new(None)),
+            skybox_resource_manager: Mutex::new(Box::new(None)),
             mesh_buffer_managers: Mutex::new(Box::default()),
             light_buffer_manager: Mutex::new(Box::new(None)),
             instance_feature_buffer_managers: Mutex::new(Box::default()),
@@ -186,12 +198,14 @@ impl DesynchronizedRenderResources {
     fn from_synchronized(render_resources: SynchronizedRenderResources) -> Self {
         let SynchronizedRenderResources {
             camera_buffer_manager,
+            skybox_resource_manager,
             mesh_buffer_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
         } = render_resources;
         Self {
             camera_buffer_manager: Mutex::new(camera_buffer_manager),
+            skybox_resource_manager: Mutex::new(skybox_resource_manager),
             mesh_buffer_managers: Mutex::new(mesh_buffer_managers),
             light_buffer_manager: Mutex::new(light_buffer_manager),
             instance_feature_buffer_managers: Mutex::new(instance_feature_buffer_managers),
@@ -201,12 +215,14 @@ impl DesynchronizedRenderResources {
     fn into_synchronized(self) -> SynchronizedRenderResources {
         let DesynchronizedRenderResources {
             camera_buffer_manager,
+            skybox_resource_manager,
             mesh_buffer_managers,
             light_buffer_manager,
             instance_feature_buffer_managers,
         } = self;
         SynchronizedRenderResources {
             camera_buffer_manager: camera_buffer_manager.into_inner().unwrap(),
+            skybox_resource_manager: skybox_resource_manager.into_inner().unwrap(),
             mesh_buffer_managers: mesh_buffer_managers.into_inner().unwrap(),
             light_buffer_manager: light_buffer_manager.into_inner().unwrap(),
             instance_feature_buffer_managers: instance_feature_buffer_managers
@@ -236,6 +252,32 @@ impl DesynchronizedRenderResources {
         } else {
             camera_buffer_manager.take();
         }
+    }
+
+    /// Performs any required updates for keeping the skybox data in the given
+    /// GPU resource manager in sync with the given scene skybox.
+    fn sync_skybox_resources_with_scene_skybox(
+        graphics_device: &GraphicsDevice,
+        assets: &Assets,
+        skybox_resource_manager: &mut Option<SkyboxGPUResourceManager>,
+        skybox: Option<&Skybox>,
+    ) -> Result<()> {
+        if let Some(skybox) = skybox {
+            if let Some(skybox_resource_manager) = skybox_resource_manager {
+                skybox_resource_manager.sync_with_skybox(graphics_device, assets, skybox)?;
+            } else {
+                // We initialize the skybox resource manager the first time this
+                // method is called
+                *skybox_resource_manager = Some(SkyboxGPUResourceManager::for_skybox(
+                    graphics_device,
+                    assets,
+                    skybox.clone(),
+                )?);
+            }
+        } else {
+            skybox_resource_manager.take();
+        }
+        Ok(())
     }
 
     /// Performs any required updates for keeping the given map

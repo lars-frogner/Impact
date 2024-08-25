@@ -46,10 +46,7 @@ pub enum KeyboardInputAction {
     MoveUp,
     MoveDown,
     ToggleInteractionMode,
-    ToggleBackFaceCulling,
-    ToggleTriangleFill,
     ToggleShadowMapping,
-    CycleMSAA,
     ToggleAmbientOcclusion,
     ToggleTemporalAntiAliasing,
     ToggleBloom,
@@ -165,27 +162,9 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
-                    KeyboardInputAction::ToggleBackFaceCulling => {
-                        if state == &ElementState::Released {
-                            app.renderer().write().unwrap().toggle_back_face_culling();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::ToggleTriangleFill => {
-                        if state == &ElementState::Released {
-                            app.renderer().write().unwrap().toggle_triangle_fill();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
                     KeyboardInputAction::ToggleShadowMapping => {
                         if state == &ElementState::Released {
                             app.renderer().write().unwrap().toggle_shadow_mapping();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::CycleMSAA => {
-                        if state == &ElementState::Released {
-                            app.renderer().write().unwrap().cycle_msaa();
                         }
                         Ok(HandlingResult::Handled)
                     }
@@ -331,10 +310,7 @@ impl Default for KeyActionMap {
             MoveUp => KeyQ,
             MoveDown => KeyE,
             ToggleInteractionMode => Tab,
-            ToggleBackFaceCulling => KeyB,
-            ToggleTriangleFill => KeyF,
             ToggleShadowMapping => KeyI,
-            // CycleMSAA => KeyY,
             ToggleAmbientOcclusion => KeyO,
             ToggleTemporalAntiAliasing => KeyY,
             ToggleBloom => KeyU,

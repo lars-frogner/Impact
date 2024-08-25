@@ -2,14 +2,21 @@
 
 use crate::gpu::{
     rendering::{
-        postprocessing::gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
-        render_command::{Blending, DepthMapUsage, RenderCommandSpecification},
+        postprocessing::{
+            gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
+            Postprocessor,
+        },
+        render_command::PostprocessingRenderPass,
+        resource::SynchronizedRenderResources,
+        surface::RenderingSurface,
     },
     resource_group::GPUResourceGroupManager,
-    shader::ShaderManager,
-    texture::attachment::{OutputAttachmentSampling, RenderAttachmentQuantity},
+    shader::{template::passthrough::PassthroughShaderTemplate, ShaderManager},
+    texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
     GraphicsDevice,
 };
+use anyhow::Result;
+use std::borrow::Cow;
 
 /// Configuration options for bloom.
 #[derive(Clone, Debug)]
@@ -27,6 +34,12 @@ pub struct BloomConfig {
     pub tail_samples_to_truncate: u32,
 }
 
+#[derive(Debug)]
+pub(super) struct BloomRenderCommands {
+    disabled_pass: PostprocessingRenderPass,
+    passes: Vec<PostprocessingRenderPass>,
+}
+
 impl Default for BloomConfig {
     fn default() -> Self {
         Self {
@@ -38,73 +51,132 @@ impl Default for BloomConfig {
     }
 }
 
-pub(super) fn create_bloom_render_commands(
-    graphics_device: &GraphicsDevice,
-    shader_manager: &mut ShaderManager,
-    gpu_resource_group_manager: &mut GPUResourceGroupManager,
-    bloom_config: &BloomConfig,
-) -> Vec<RenderCommandSpecification> {
-    let mut render_passes = Vec::with_capacity(1 + 2 * bloom_config.n_iterations);
-
-    render_passes.push(super::super::create_passthrough_render_pass(
-        graphics_device,
-        shader_manager,
-        RenderAttachmentQuantity::EmissiveLuminance,
-        RenderAttachmentQuantity::Luminance,
-        OutputAttachmentSampling::Single,
-        Blending::Additive,
-        DepthMapUsage::None,
-    ));
-
-    if bloom_config.n_iterations > 0 {
-        let bloom_sample_uniform = GaussianBlurSamples::new(
-            bloom_config.samples_per_side,
-            bloom_config.tail_samples_to_truncate,
+impl BloomRenderCommands {
+    pub(super) fn new(
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &mut GPUResourceGroupManager,
+        config: &BloomConfig,
+    ) -> Result<Self> {
+        let shader_template = PassthroughShaderTemplate::new(
+            RenderAttachmentQuantity::EmissiveLuminance,
+            RenderAttachmentQuantity::Luminance,
+            Blending::Additive,
+            None,
         );
-        for _ in 1..bloom_config.n_iterations {
-            render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
+        let disabled_pass = PostprocessingRenderPass::new(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            &shader_template,
+            Cow::Borrowed("Copy emissive luminance to luminance"),
+        )?;
+
+        let mut passes = Vec::with_capacity(2 * config.n_iterations);
+
+        if config.n_iterations > 0 {
+            let bloom_sample_uniform =
+                GaussianBlurSamples::new(config.samples_per_side, config.tail_samples_to_truncate);
+            for _ in 1..config.n_iterations {
+                passes.push(gaussian_blur::create_gaussian_blur_render_pass(
+                    graphics_device,
+                    rendering_surface,
+                    shader_manager,
+                    render_attachment_texture_manager,
+                    gpu_resource_group_manager,
+                    RenderAttachmentQuantity::EmissiveLuminance,
+                    RenderAttachmentQuantity::LuminanceAux,
+                    Blending::Replace,
+                    GaussianBlurDirection::Horizontal,
+                    &bloom_sample_uniform,
+                )?);
+                passes.push(gaussian_blur::create_gaussian_blur_render_pass(
+                    graphics_device,
+                    rendering_surface,
+                    shader_manager,
+                    render_attachment_texture_manager,
+                    gpu_resource_group_manager,
+                    RenderAttachmentQuantity::LuminanceAux,
+                    RenderAttachmentQuantity::EmissiveLuminance,
+                    Blending::Replace,
+                    GaussianBlurDirection::Vertical,
+                    &bloom_sample_uniform,
+                )?);
+            }
+            passes.push(gaussian_blur::create_gaussian_blur_render_pass(
                 graphics_device,
+                rendering_surface,
                 shader_manager,
+                render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 RenderAttachmentQuantity::EmissiveLuminance,
                 RenderAttachmentQuantity::LuminanceAux,
                 Blending::Replace,
                 GaussianBlurDirection::Horizontal,
                 &bloom_sample_uniform,
-            ));
-            render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
+            )?);
+            // For the last pass, we add to the luminance attachment
+            passes.push(gaussian_blur::create_gaussian_blur_render_pass(
                 graphics_device,
+                rendering_surface,
                 shader_manager,
+                render_attachment_texture_manager,
                 gpu_resource_group_manager,
                 RenderAttachmentQuantity::LuminanceAux,
-                RenderAttachmentQuantity::EmissiveLuminance,
-                Blending::Replace,
+                RenderAttachmentQuantity::Luminance,
+                Blending::Additive,
                 GaussianBlurDirection::Vertical,
                 &bloom_sample_uniform,
-            ));
+            )?);
         }
-        render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
-            graphics_device,
-            shader_manager,
-            gpu_resource_group_manager,
-            RenderAttachmentQuantity::EmissiveLuminance,
-            RenderAttachmentQuantity::LuminanceAux,
-            Blending::Replace,
-            GaussianBlurDirection::Horizontal,
-            &bloom_sample_uniform,
-        ));
-        // For the last pass, we add to the luminance attachment
-        render_passes.push(gaussian_blur::create_gaussian_blur_render_pass(
-            graphics_device,
-            shader_manager,
-            gpu_resource_group_manager,
-            RenderAttachmentQuantity::LuminanceAux,
-            RenderAttachmentQuantity::Luminance,
-            Blending::Additive,
-            GaussianBlurDirection::Vertical,
-            &bloom_sample_uniform,
-        ));
+
+        Ok(Self {
+            disabled_pass,
+            passes,
+        })
     }
 
-    render_passes
+    pub(super) fn record(
+        &self,
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+        enabled: bool,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        if enabled {
+            for pass in &self.passes {
+                pass.record(
+                    rendering_surface,
+                    surface_texture_view,
+                    render_resources,
+                    render_attachment_texture_manager,
+                    gpu_resource_group_manager,
+                    postprocessor,
+                    frame_counter,
+                    command_encoder,
+                )?;
+            }
+        } else {
+            self.disabled_pass.record(
+                rendering_surface,
+                surface_texture_view,
+                render_resources,
+                render_attachment_texture_manager,
+                gpu_resource_group_manager,
+                postprocessor,
+                frame_counter,
+                command_encoder,
+            )?;
+        }
+        Ok(())
+    }
 }

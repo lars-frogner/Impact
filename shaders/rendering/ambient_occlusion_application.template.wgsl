@@ -1,12 +1,12 @@
 struct VertexOutput {
-    @builtin(position) projectedPosition: vec4<f32>,
+    @builtin(position) projectedPosition: vec4f,
 }
 
 struct FragmentOutput {
-    @location(0) luminance: vec4<f32>,
+    @location(0) luminance: vec4f,
 }
 
-var<push_constant> inverseWindowDimensions: vec2<f32>;
+var<push_constant> inverseWindowDimensions: vec2f;
 
 @group({{linear_depth_texture_group}}) @binding({{linear_depth_texture_binding}})
 var linearDepthTexture: texture_2d<f32>;
@@ -23,14 +23,14 @@ var occlusionTexture: texture_2d<f32>;
 @group({{occlusion_texture_group}}) @binding({{occlusion_sampler_binding}})
 var occlusionSampler: sampler;
 
-fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4<f32>) -> vec2<f32> {
+fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
     return (framebufferPosition.xy * inverseWindowDimensions);
 }
 
 fn computeOccludedAmbientReflectedLuminance(
-    centerTextureCoords: vec2<f32>,
-    ambientReflectedLuminance: vec3<f32>,
-) -> vec3<f32> {
+    centerTextureCoords: vec2f,
+    ambientReflectedLuminance: vec3f,
+) -> vec3f {
     // This should be odd so that the center is included
     let sqrtTotalSampleCount = 5u;
 
@@ -48,10 +48,10 @@ fn computeOccludedAmbientReflectedLuminance(
         let u = lowerTextureCoords.x + f32(i) * inverseWindowDimensions.x;
         for (var j: u32 = 0u; j < sqrtTotalSampleCount; j++) {
             let v = lowerTextureCoords.y + f32(j) * inverseWindowDimensions.y;
-            let textureCoords = vec2<f32>(u, v);
+            let textureCoords = vec2f(u, v);
 
             let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).x;
-            
+
             if abs(depth - centerDepth) < maxDepthDifference {
                 summedOcclusion += textureSampleLevel(occlusionTexture, occlusionSampler, textureCoords, 0.0).r;
                 acceptedSampleCount += 1u;
@@ -64,19 +64,19 @@ fn computeOccludedAmbientReflectedLuminance(
     return occlusion * ambientReflectedLuminance;
 }
 
-@vertex 
-fn mainVS(@location({{position_location}}) modelSpacePosition: vec3<f32>) -> VertexOutput {
+@vertex
+fn mainVS(@location({{position_location}}) modelSpacePosition: vec3f) -> VertexOutput {
     var output: VertexOutput;
-    output.projectedPosition = vec4<f32>(modelSpacePosition, 1.0);
+    output.projectedPosition = vec4f(modelSpacePosition, 1.0);
     return output;
 }
 
-@fragment 
+@fragment
 fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
     let textureCoords = convertFramebufferPositionToScreenTextureCoords(input.projectedPosition);
     let ambientReflectedLuminance = textureSampleLevel(ambientReflectedLuminanceTexture, ambientReflectedLuminanceSampler, textureCoords, 0.0);
     let occludedAmbientReflectedLuminance = computeOccludedAmbientReflectedLuminance(textureCoords, ambientReflectedLuminance.rgb);
-    output.luminance = vec4<f32>(occludedAmbientReflectedLuminance, 1.0);
+    output.luminance = vec4f(occludedAmbientReflectedLuminance, 1.0);
     return output;
 }

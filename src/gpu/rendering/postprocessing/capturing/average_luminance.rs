@@ -3,19 +3,21 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
-        compute::ComputePassSpecification,
-        push_constant::{PushConstant, PushConstantVariant},
-        rendering::{fre, render_command::RenderCommandSpecification},
-        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{template::SpecificShaderTemplate, ShaderManager},
-        storage::{StorageBufferID, StorageGPUBuffer, StorageGPUBufferManager},
-        texture::{
-            attachment::{
-                RenderAttachmentInputDescription, RenderAttachmentInputDescriptionSet,
-                RenderAttachmentQuantity, RenderAttachmentTextureManager,
-            },
-            Texture,
+        compute::ComputePass,
+        rendering::{
+            fre, postprocessing::Postprocessor, render_command::StorageBufferResultCopyCommand,
+            surface::RenderingSurface,
         },
+        resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
+        shader::{
+            template::{
+                luminance_histogram::LuminanceHistogramShaderTemplate,
+                luminance_histogram_average::LuminanceHistogramAverageShaderTemplate,
+            },
+            ShaderManager,
+        },
+        storage::{StorageBufferID, StorageGPUBuffer, StorageGPUBufferManager},
+        texture::attachment::RenderAttachmentTextureManager,
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
@@ -43,6 +45,13 @@ pub struct AverageLuminanceComputationConfig {
     /// modification, while a value of 1.0 uses the current luminance without
     /// any contribution from the previous frame.
     pub current_frame_weight: fre,
+}
+
+#[derive(Debug)]
+pub(super) struct AverageLuminanceComputeCommands {
+    histogram_compute_pass: ComputePass,
+    average_compute_pass: ComputePass,
+    result_copy_command: StorageBufferResultCopyCommand,
 }
 
 /// Uniform holding parameters needed in the shader for computing the luminance
@@ -91,9 +100,79 @@ lazy_static! {
 impl Default for AverageLuminanceComputationConfig {
     fn default() -> Self {
         Self {
-            luminance_bounds: UpperExclusiveBounds::new(1.0, 1e9),
+            luminance_bounds: UpperExclusiveBounds::new(1e-2, 1e9),
             current_frame_weight: 0.5,
         }
+    }
+}
+
+impl AverageLuminanceComputeCommands {
+    pub(super) fn new(
+        graphics_device: &GraphicsDevice,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &mut GPUResourceGroupManager,
+        storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
+        config: &AverageLuminanceComputationConfig,
+    ) -> Result<Self> {
+        let histogram_compute_pass = create_luminance_histogram_compute_pass(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            storage_gpu_buffer_manager,
+            &config.luminance_bounds,
+        )?;
+
+        let average_compute_pass = create_luminance_histogram_average_compute_pass(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            storage_gpu_buffer_manager,
+            &config.luminance_bounds,
+            config.current_frame_weight,
+        )?;
+
+        let result_copy_command =
+            StorageBufferResultCopyCommand::new(*AVERAGE_LUMINANCE_STORAGE_BUFFER_ID);
+
+        Ok(Self {
+            histogram_compute_pass,
+            average_compute_pass,
+            result_copy_command,
+        })
+    }
+
+    pub(super) fn record(
+        &self,
+        rendering_surface: &RenderingSurface,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        storage_gpu_buffer_manager: &StorageGPUBufferManager,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        postprocessor: &Postprocessor,
+        enabled: bool,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        if enabled {
+            self.histogram_compute_pass.record(
+                rendering_surface,
+                gpu_resource_group_manager,
+                render_attachment_texture_manager,
+                postprocessor,
+                command_encoder,
+            )?;
+            self.average_compute_pass.record(
+                rendering_surface,
+                gpu_resource_group_manager,
+                render_attachment_texture_manager,
+                postprocessor,
+                command_encoder,
+            )?;
+            self.result_copy_command
+                .record(storage_gpu_buffer_manager, command_encoder)?;
+        }
+        Ok(())
     }
 }
 
@@ -159,51 +238,16 @@ pub(super) fn load_computed_average_luminance(
         })
 }
 
-pub(super) fn setup_average_luminance_computations_and_render_commands(
+/// Creates a [`ComputePass`] that computes the histogram of the luminances in
+/// the luminance attachment.
+fn create_luminance_histogram_compute_pass(
     graphics_device: &GraphicsDevice,
     shader_manager: &mut ShaderManager,
-    render_attachment_texture_manager: &RenderAttachmentTextureManager,
-    gpu_resource_group_manager: &mut GPUResourceGroupManager,
-    storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-    config: &AverageLuminanceComputationConfig,
-) -> Vec<RenderCommandSpecification> {
-    vec![
-        create_luminance_histogram_compute_pass(
-            graphics_device,
-            shader_manager,
-            render_attachment_texture_manager,
-            gpu_resource_group_manager,
-            storage_gpu_buffer_manager,
-            &config.luminance_bounds,
-        ),
-        create_luminance_histogram_average_compute_pass(
-            graphics_device,
-            shader_manager,
-            gpu_resource_group_manager,
-            storage_gpu_buffer_manager,
-            &config.luminance_bounds,
-            config.current_frame_weight,
-        ),
-        RenderCommandSpecification::StorageBufferResultCopyPass {
-            buffer_id: *AVERAGE_LUMINANCE_STORAGE_BUFFER_ID,
-        },
-    ]
-}
-
-pub(super) fn create_luminance_histogram_compute_pass(
-    graphics_device: &GraphicsDevice,
-    shader_manager: &mut ShaderManager,
-    render_attachment_texture_manager: &RenderAttachmentTextureManager,
+    render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
     luminance_bounds: &UpperExclusiveBounds<fre>,
-) -> RenderCommandSpecification {
-    let luminance_texture = render_attachment_texture_manager
-        .render_attachment_texture(RenderAttachmentQuantity::Luminance);
-
-    let workgroup_counts =
-        determine_luminance_histogram_workgroup_counts(luminance_texture.regular.texture());
-
+) -> Result<ComputePass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "LuminanceHistogramResources{{ luminance_range: [{}, {}) }}",
         luminance_bounds.lower(),
@@ -236,59 +280,36 @@ pub(super) fn create_luminance_histogram_compute_pass(
             )
         });
 
-    let (texture_binding, _) = RenderAttachmentQuantity::Luminance.bindings();
-    let shader_id = shader_manager
-        .get_or_create_compute_shader_from_template(
-            graphics_device,
-            SpecificShaderTemplate::LuminanceHistogram,
-            &[],
-            &[
-                ("threads_per_side", HISTOGRAM_THREADS_PER_SIDE.to_string()),
-                ("params_group", "0".to_string()),
-                ("params_binding", "0".to_string()),
-                ("histogram_group", "0".to_string()),
-                ("histogram_binding", "1".to_string()),
-                ("texture_group", "1".to_string()),
-                ("texture_binding", texture_binding.to_string()),
-            ],
-        )
-        .unwrap();
+    let shader_template =
+        LuminanceHistogramShaderTemplate::new(LOG2_HISTOGRAM_THREADS_PER_SIDE, resource_group_id);
 
-    let push_constants = PushConstant::new(
-        PushConstantVariant::InverseExposure,
-        wgpu::ShaderStages::COMPUTE,
-    )
-    .into();
-
-    let input_render_attachments = RenderAttachmentInputDescriptionSet::single(
-        RenderAttachmentQuantity::Luminance,
-        RenderAttachmentInputDescription::default().with_visibility(wgpu::ShaderStages::COMPUTE),
-    );
-
-    RenderCommandSpecification::ComputePass(ComputePassSpecification {
-        shader_id,
-        workgroup_counts,
-        push_constants,
-        resource_group_id: Some(resource_group_id),
-        input_render_attachments,
-        label: format!(
-            "Luminance histogram compute pass (luminance range: [{}, {}), bin count: {}, workgroup counts: {:?})",
+    ComputePass::new(
+        graphics_device,
+        shader_manager,
+        gpu_resource_group_manager,
+        render_attachment_texture_manager,
+        shader_template,
+        Cow::Owned(format!(
+            "Luminance histogram compute pass (luminance range: [{}, {}), bin count: {})",
             luminance_bounds.lower(),
             luminance_bounds.upper(),
             HISTOGRAM_BIN_COUNT,
-            workgroup_counts
-        ),
-    })
+        )),
+    )
 }
 
+/// Creates a [`ComputePass`] that computes the weighted average of the
+/// luminances in the luminance attachment using the histogram computed by the
+/// previous pass.
 fn create_luminance_histogram_average_compute_pass(
     graphics_device: &GraphicsDevice,
     shader_manager: &mut ShaderManager,
+    render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
     luminance_bounds: &UpperExclusiveBounds<fre>,
     current_frame_weight: fre,
-) -> RenderCommandSpecification {
+) -> Result<ComputePass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "LuminanceHistogramAverageResources{{ luminance_range: [{}, {}), current_frame_weight: {} }}",
         luminance_bounds.lower(),
@@ -340,57 +361,23 @@ fn create_luminance_histogram_average_compute_pass(
             )
         });
 
-    let shader_id = shader_manager
-        .get_or_create_compute_shader_from_template(
+    let shader_template =
+        LuminanceHistogramAverageShaderTemplate::new(HISTOGRAM_BIN_COUNT, resource_group_id);
+
+    ComputePass::new(
             graphics_device,
-            SpecificShaderTemplate::LuminanceHistogramAverage,
-            &[],
-            &[
-                ("bin_count", HISTOGRAM_BIN_COUNT.to_string()),
-                ("params_group", "0".to_string()),
-                ("params_binding", "0".to_string()),
-                ("histogram_group", "0".to_string()),
-                ("histogram_binding", "1".to_string()),
-                ("average_group", "0".to_string()),
-                ("average_binding", "2".to_string()),
-            ],
+            shader_manager,
+            gpu_resource_group_manager,
+            render_attachment_texture_manager,
+            shader_template,
+            Cow::Owned(format!(
+                "Luminance histogram average compute pass (luminance range: [{}, {}), current frame weight: {}, bin count: {})",
+                luminance_bounds.lower(),
+                luminance_bounds.upper(),
+                current_frame_weight,
+                HISTOGRAM_BIN_COUNT,
+            )),
         )
-        .unwrap();
-
-    let push_constants =
-        PushConstant::new(PushConstantVariant::PixelCount, wgpu::ShaderStages::COMPUTE).into();
-
-    RenderCommandSpecification::ComputePass(ComputePassSpecification {
-        shader_id,
-        workgroup_counts: [1; 3],
-        push_constants,
-        resource_group_id: Some(resource_group_id),
-        input_render_attachments: RenderAttachmentInputDescriptionSet::empty(),
-        label: format!(
-            "Luminance histogram average compute pass (luminance range: [{}, {}), current frame weight: {}, bin count: {})",
-            luminance_bounds.lower(),
-            luminance_bounds.upper(),
-            current_frame_weight,
-            HISTOGRAM_BIN_COUNT,
-        ),
-    })
-}
-
-fn determine_luminance_histogram_workgroup_counts(luminance_texture: &Texture) -> [u32; 3] {
-    let size = luminance_texture.texture().size();
-
-    let workgroup_count_across_width = min_workgroups_to_cover_texture_extent(size.width);
-    let workgroup_count_across_height = min_workgroups_to_cover_texture_extent(size.height);
-
-    [
-        workgroup_count_across_width,
-        workgroup_count_across_height,
-        1,
-    ]
-}
-
-fn min_workgroups_to_cover_texture_extent(extent: u32) -> u32 {
-    (f64::from(extent) / HISTOGRAM_THREADS_PER_SIDE as f64).ceil() as u32
 }
 
 fn get_or_create_histogram_storage_buffer<'a>(

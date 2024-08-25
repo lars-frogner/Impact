@@ -1,16 +1,12 @@
 //! Management of materials for entities.
 
-pub mod blinn_phong;
 pub mod fixed;
-pub mod microfacet;
-mod prepass;
-pub mod skybox;
-pub mod vertex_color;
+pub mod physical;
 
 use crate::{
     assets::Assets,
     gpu::GraphicsDevice,
-    material::{components::MaterialComp, MaterialHandle, MaterialLibrary},
+    material::{components::MaterialComp, MaterialLibrary},
     model::InstanceFeatureManager,
     scene::RenderResourcesDesynchronized,
 };
@@ -31,8 +27,6 @@ pub fn setup_material_for_new_entity(
     components: &mut ArchetypeComponentStorage,
     desynchronized: &mut RenderResourcesDesynchronized,
 ) {
-    vertex_color::setup_vertex_color_material_for_new_entity(material_library, components);
-
     fixed::setup_fixed_color_material_for_new_entity(
         material_library,
         instance_feature_manager,
@@ -47,29 +41,13 @@ pub fn setup_material_for_new_entity(
         components,
     );
 
-    blinn_phong::setup_blinn_phong_material_for_new_entity(
+    physical::setup_physical_material_for_new_entity(
         graphics_device,
         assets,
         material_library,
         instance_feature_manager,
         components,
         desynchronized,
-    );
-
-    microfacet::setup_microfacet_material_for_new_entity(
-        graphics_device,
-        assets,
-        material_library,
-        instance_feature_manager,
-        components,
-        desynchronized,
-    );
-
-    skybox::setup_skybox_material_for_new_entity(
-        graphics_device,
-        assets,
-        material_library,
-        components,
     );
 }
 
@@ -89,19 +67,6 @@ pub fn cleanup_material_for_removed_entity(
                 .unwrap()
                 .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
                 .expect("Missing storage for material feature")
-                .remove_feature(feature_id);
-            desynchronized.set_yes();
-        }
-
-        if let Some(feature_id) = material
-            .prepass_material_handle()
-            .and_then(MaterialHandle::material_property_feature_id)
-        {
-            instance_feature_manager
-                .write()
-                .unwrap()
-                .get_storage_mut_for_feature_type_id(feature_id.feature_type_id())
-                .expect("Missing storage for prepass material feature")
                 .remove_feature(feature_id);
             desynchronized.set_yes();
         }

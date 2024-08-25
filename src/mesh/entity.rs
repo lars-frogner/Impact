@@ -413,8 +413,7 @@ pub fn generate_missing_vertex_properties_for_new_entity_mesh(
             .get_material_specification(material.material_handle().material_id())
             .expect("Missing material in library for material component");
 
-        let vertex_attribute_requirements =
-            material_specification.vertex_attribute_requirements_for_mesh();
+        let vertex_attribute_requirements = material_specification.vertex_attribute_requirements();
 
         if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR) {
             let mesh_repository_readonly = mesh_repository.read().unwrap();

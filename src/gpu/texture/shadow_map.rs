@@ -21,6 +21,8 @@ pub struct ShadowCubemapTexture {
     face_views: [wgpu::TextureView; 6],
     sampler: wgpu::Sampler,
     comparison_sampler: wgpu::Sampler,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
 /// Texture array for storing the depths of the closest vertices to a
@@ -34,9 +36,24 @@ pub struct CascadedShadowMapTexture {
     cascade_views: Vec<wgpu::TextureView>,
     sampler: wgpu::Sampler,
     comparison_sampler: wgpu::Sampler,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
 }
 
 impl ShadowCubemapTexture {
+    /// The binding location of the shadow cubemap texture.
+    pub const fn texture_binding() -> u32 {
+        0
+    }
+    /// The binding location of the shadow cubemap sampler.
+    pub const fn sampler_binding() -> u32 {
+        1
+    }
+    /// The binding location of the shadow cubemap comparison sampler.
+    pub const fn comparison_sampler_binding() -> u32 {
+        2
+    }
+
     /// Creates a new shadow cubemap texture array using the given resolution as
     /// the width and height in texels of each cube face texture.
     pub fn new(graphics_device: &GraphicsDevice, resolution: u32, label: &str) -> Self {
@@ -64,12 +81,23 @@ impl ShadowCubemapTexture {
         let sampler = create_shadow_map_sampler(device);
         let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
+        let bind_group_layout = Self::create_bind_group_layout(device);
+        let bind_group = Self::create_bind_group(
+            device,
+            &bind_group_layout,
+            &view,
+            &sampler,
+            &comparison_sampler,
+        );
+
         Self {
             texture,
             view,
             face_views,
             sampler,
             comparison_sampler,
+            bind_group_layout,
+            bind_group,
         }
     }
 
@@ -93,77 +121,16 @@ impl ShadowCubemapTexture {
         &self.comparison_sampler
     }
 
-    /// Creates the bind group layout entry for this texture type, assigned to
-    /// the given binding.
-    pub const fn create_texture_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Depth,
-                view_dimension: wgpu::TextureViewDimension::Cube,
-                multisampled: false,
-            },
-            count: None,
-        }
+    /// Returns a reference to the bind group layout for the shadow map texture
+    /// and its samplers.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
     }
 
-    /// Creates the bind group layout entry for this texture's sampler type,
-    /// assigned to the given binding.
-    pub const fn create_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-            count: None,
-        }
-    }
-
-    /// Creates the bind group layout entry for this texture's comparison sampler type,
-    /// assigned to the given binding.
-    pub const fn create_comparison_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-            count: None,
-        }
-    }
-
-    /// Creates the bind group entry for this texture, assigned to the given
-    /// binding.
-    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::TextureView(self.view()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's sampler, assigned to the
-    /// given binding.
-    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.sampler()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's comparison sampler, assigned to the
-    /// given binding.
-    pub fn create_comparison_sampler_bind_group_entry(
-        &self,
-        binding: u32,
-    ) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.comparison_sampler()),
-        }
+    /// Returns a reference to the bind group for the shadow map texture
+    /// and its samplers.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 
     /// Saves the specified face texture as a grayscale image at the given
@@ -184,6 +151,95 @@ impl ShadowCubemapTexture {
         )
     }
 
+    /// Creates the bind group layout for the shadow cubemap texture and
+    /// samplers.
+    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                Self::create_texture_bind_group_layout_entry(Self::texture_binding()),
+                Self::create_sampler_bind_group_layout_entry(Self::sampler_binding()),
+                Self::create_comparison_sampler_bind_group_layout_entry(
+                    Self::comparison_sampler_binding(),
+                ),
+            ],
+            label: Some("Shadow cubemap bind group layout"),
+        })
+    }
+
+    fn create_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        texture_view: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
+        comparison_sampler: &wgpu::Sampler,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[
+                Self::create_texture_bind_group_entry(Self::texture_binding(), texture_view),
+                Self::create_sampler_bind_group_entry(Self::sampler_binding(), sampler),
+                Self::create_sampler_bind_group_entry(
+                    Self::comparison_sampler_binding(),
+                    comparison_sampler,
+                ),
+            ],
+            label: Some("Shadow cubemap bind group"),
+        })
+    }
+
+    const fn create_texture_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::Cube,
+                multisampled: false,
+            },
+            count: None,
+        }
+    }
+
+    const fn create_sampler_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            count: None,
+        }
+    }
+
+    const fn create_comparison_sampler_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+            count: None,
+        }
+    }
+
+    fn create_texture_bind_group_entry(
+        binding: u32,
+        texture_view: &wgpu::TextureView,
+    ) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(texture_view),
+        }
+    }
+
+    fn create_sampler_bind_group_entry(
+        binding: u32,
+        sampler: &wgpu::Sampler,
+    ) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(sampler),
+        }
+    }
+
     fn create_view(texture: &wgpu::Texture) -> wgpu::TextureView {
         texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(wgpu::TextureViewDimension::Cube),
@@ -202,6 +258,19 @@ impl ShadowCubemapTexture {
 }
 
 impl CascadedShadowMapTexture {
+    /// The binding location of the shadow map texture array.
+    pub const fn texture_binding() -> u32 {
+        0
+    }
+    /// The binding location of the shadow map sampler.
+    pub const fn sampler_binding() -> u32 {
+        1
+    }
+    /// The binding location of the shadow map comparison sampler.
+    pub const fn comparison_sampler_binding() -> u32 {
+        2
+    }
+
     /// Creates a new cascaded shadow map texture array using the given
     /// resolution as the width and height in texels of each of the `n_cascades`
     /// cascade textures.
@@ -232,12 +301,23 @@ impl CascadedShadowMapTexture {
         let sampler = create_shadow_map_sampler(device);
         let comparison_sampler = create_shadow_map_comparison_sampler(device);
 
+        let bind_group_layout = Self::create_bind_group_layout(device);
+        let bind_group = Self::create_bind_group(
+            device,
+            &bind_group_layout,
+            &view,
+            &sampler,
+            &comparison_sampler,
+        );
+
         Self {
             texture,
             view,
             cascade_views,
             sampler,
             comparison_sampler,
+            bind_group_layout,
+            bind_group,
         }
     }
 
@@ -266,77 +346,16 @@ impl CascadedShadowMapTexture {
         &self.comparison_sampler
     }
 
-    /// Creates the bind group layout entry for this texture type, assigned to
-    /// the given binding.
-    pub const fn create_texture_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Depth,
-                view_dimension: wgpu::TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
-        }
+    /// Returns a reference to the bind group layout for the shadow map texture
+    /// and its samplers.
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
     }
 
-    /// Creates the bind group layout entry for this texture's sampler type,
-    /// assigned to the given binding.
-    pub const fn create_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-            count: None,
-        }
-    }
-
-    /// Creates the bind group layout entry for this texture's comparison
-    /// sampler type, assigned to the given binding.
-    pub const fn create_comparison_sampler_bind_group_layout_entry(
-        binding: u32,
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-            count: None,
-        }
-    }
-
-    /// Creates the bind group entry for this texture, assigned to the given
-    /// binding.
-    pub fn create_texture_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::TextureView(self.view()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's sampler, assigned to the
-    /// given binding.
-    pub fn create_sampler_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.sampler()),
-        }
-    }
-
-    /// Creates the bind group entry for this texture's comparison sampler,
-    /// assigned to the given binding.
-    pub fn create_comparison_sampler_bind_group_entry(
-        &self,
-        binding: u32,
-    ) -> wgpu::BindGroupEntry<'_> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: wgpu::BindingResource::Sampler(self.comparison_sampler()),
-        }
+    /// Returns a reference to the bind group for the shadow map texture
+    /// and its samplers.
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 
     /// Saves the specified cascade texture as a grayscale image at the given
@@ -355,6 +374,95 @@ impl CascadedShadowMapTexture {
             cascade_idx,
             output_path,
         )
+    }
+
+    /// Creates the bind group layout for the cascaded shadow map texture and
+    /// samplers.
+    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                Self::create_texture_bind_group_layout_entry(Self::texture_binding()),
+                Self::create_sampler_bind_group_layout_entry(Self::sampler_binding()),
+                Self::create_comparison_sampler_bind_group_layout_entry(
+                    Self::comparison_sampler_binding(),
+                ),
+            ],
+            label: Some("Cascaded shadow map bind group layout"),
+        })
+    }
+
+    fn create_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        texture_view: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
+        comparison_sampler: &wgpu::Sampler,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout,
+            entries: &[
+                Self::create_texture_bind_group_entry(Self::texture_binding(), texture_view),
+                Self::create_sampler_bind_group_entry(Self::sampler_binding(), sampler),
+                Self::create_sampler_bind_group_entry(
+                    Self::comparison_sampler_binding(),
+                    comparison_sampler,
+                ),
+            ],
+            label: Some("Cascaded shadow map bind group"),
+        })
+    }
+
+    const fn create_texture_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Depth,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        }
+    }
+
+    const fn create_sampler_bind_group_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            count: None,
+        }
+    }
+
+    const fn create_comparison_sampler_bind_group_layout_entry(
+        binding: u32,
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+            count: None,
+        }
+    }
+
+    fn create_texture_bind_group_entry(
+        binding: u32,
+        texture_view: &wgpu::TextureView,
+    ) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(texture_view),
+        }
+    }
+
+    fn create_sampler_bind_group_entry(
+        binding: u32,
+        sampler: &wgpu::Sampler,
+    ) -> wgpu::BindGroupEntry<'_> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(sampler),
+        }
     }
 
     fn create_view(texture: &wgpu::Texture) -> wgpu::TextureView {

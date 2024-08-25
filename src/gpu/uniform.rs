@@ -177,6 +177,7 @@ where
 
     /// Returns a mutable slice with the valid uniforms in the buffer.
     pub fn valid_uniforms_mut(&mut self) -> &mut [U] {
+        self.change_tracker.notify_content_change();
         let n_valid_uniforms = self.n_valid_uniforms();
         &mut self.raw_buffer[0..n_valid_uniforms]
     }
@@ -190,6 +191,7 @@ where
     /// Returns an iterator over the valid uniforms where each item contains the
     /// uniform ID and a mutable reference to the uniform.
     pub fn valid_uniforms_with_ids_mut(&mut self) -> impl Iterator<Item = (ID, &'_ mut U)> {
+        self.change_tracker.notify_content_change();
         let n_valid_uniforms = self.n_valid_uniforms();
         let ids = &self.index_map.keys_at_indices()[0..n_valid_uniforms];
         let uniforms = &mut self.raw_buffer[0..n_valid_uniforms];

@@ -1,16 +1,6 @@
 //! Model instance transforms.
 
-use crate::{
-    gpu::{
-        rendering::fre,
-        shader::{
-            InstanceFeatureShaderInput, ModelViewTransformShaderInput,
-            SingleModelViewTransformShaderInput,
-        },
-    },
-    impl_InstanceFeature,
-    model::InstanceFeatureManager,
-};
+use crate::{gpu::rendering::fre, impl_InstanceFeature, model::InstanceFeatureManager};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Similarity3, UnitQuaternion, Vector3};
 
@@ -41,6 +31,18 @@ pub struct InstanceModelViewTransformWithPrevious {
 const INSTANCE_VERTEX_BINDING_START: u32 = 0;
 
 impl InstanceModelViewTransform {
+    /// Returns the binding location of the transform's rotation quaternion in
+    /// the instance buffer.
+    pub const fn rotation_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START
+    }
+
+    /// Returns the binding location of the transform's translation and scaling
+    /// in the instance buffer.
+    pub const fn translation_and_scaling_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START + 1
+    }
+
     /// Creates a new identity transform.
     pub fn identity() -> Self {
         Self {
@@ -76,6 +78,30 @@ impl Default for InstanceModelViewTransform {
 }
 
 impl InstanceModelViewTransformWithPrevious {
+    /// Returns the binding location of the current frame's transform's rotation
+    /// quaternion in the instance buffer.
+    pub const fn current_rotation_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START
+    }
+
+    /// Returns the binding location of the current frame's transform's
+    /// translation and scaling in the instance buffer.
+    pub const fn current_translation_and_scaling_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START + 1
+    }
+
+    /// Returns the binding location of the previous frame's transform's
+    /// rotation quaternion in the instance buffer.
+    pub const fn previous_rotation_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START + 2
+    }
+
+    /// Returns the binding location of the previous frame's transform's
+    /// translation and scaling in the instance buffer.
+    pub const fn previous_translation_and_scaling_location() -> u32 {
+        INSTANCE_VERTEX_BINDING_START + 3
+    }
+
     /// Uses the identity transform for the previous frame.
     pub fn current_only(transform: InstanceModelViewTransform) -> Self {
         Self {
@@ -106,14 +132,7 @@ impl_InstanceFeature!(
     wgpu::vertex_attr_array![
         INSTANCE_VERTEX_BINDING_START => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
-    ],
-    InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-        current: SingleModelViewTransformShaderInput {
-            rotation_location: INSTANCE_VERTEX_BINDING_START,
-            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
-        },
-        previous: None
-    })
+    ]
 );
 
 impl_InstanceFeature!(
@@ -123,17 +142,7 @@ impl_InstanceFeature!(
         INSTANCE_VERTEX_BINDING_START + 1 => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 2 => Float32x4,
         INSTANCE_VERTEX_BINDING_START + 3 => Float32x4,
-    ],
-    InstanceFeatureShaderInput::ModelViewTransform(ModelViewTransformShaderInput {
-        current: SingleModelViewTransformShaderInput {
-            rotation_location: INSTANCE_VERTEX_BINDING_START,
-            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 1,
-        },
-        previous: Some(SingleModelViewTransformShaderInput {
-            rotation_location: INSTANCE_VERTEX_BINDING_START + 2,
-            translation_and_scaling_location: INSTANCE_VERTEX_BINDING_START + 3,
-        })
-    })
+    ]
 );
 
 pub fn register_model_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {

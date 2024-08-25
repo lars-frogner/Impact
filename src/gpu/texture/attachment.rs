@@ -1,7 +1,7 @@
 //! Textures used as render attachments.
 
 use crate::gpu::{
-    rendering::{render_command::Blending, surface::RenderingSurface},
+    rendering::surface::RenderingSurface,
     texture::{
         mipmap::{Mipmapper, MipmapperGenerator},
         Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig,
@@ -25,15 +25,16 @@ bitflags! {
     pub struct RenderAttachmentQuantitySet: u16 {
         const DEPTH_STENCIL               = 1 << 0;
         const LINEAR_DEPTH                = 1 << 1;
-        const LUMINANCE                   = 1 << 2;
-        const LUMINANCE_AUX               = 1 << 3;
-        const PREVIOUS_LUMINANCE_AUX      = 1 << 4;
-        const NORMAL_VECTOR               = 1 << 5;
-        const TEXTURE_COORDS              = 1 << 6;
-        const MOTION_VECTOR               = 1 << 7;
-        const AMBIENT_REFLECTED_LUMINANCE = 1 << 8;
-        const EMISSIVE_LUMINANCE          = 1 << 9;
+        const NORMAL_VECTOR               = 1 << 2;
+        const MOTION_VECTOR               = 1 << 3;
+        const MATERIAL_COLOR              = 1 << 4;
+        const MATERIAL_PROPERTIES         = 1 << 5;
+        const LUMINANCE                   = 1 << 6;
+        const LUMINANCE_AUX               = 1 << 7;
+        const PREVIOUS_LUMINANCE_AUX      = 1 << 8;
+        const AMBIENT_REFLECTED_LUMINANCE = 1 << 9;
         const OCCLUSION                   = 1 << 10;
+        const EMISSIVE_LUMINANCE          = 1 << 11;
     }
 }
 
@@ -42,15 +43,16 @@ bitflags! {
 pub enum RenderAttachmentQuantity {
     DepthStencil = 0,
     LinearDepth = 1,
-    Luminance = 2,
-    LuminanceAux = 3,
-    PreviousLuminanceAux = 4,
-    NormalVector = 5,
-    TextureCoords = 6,
-    MotionVector = 7,
-    AmbientReflectedLuminance = 8,
-    EmissiveLuminance = 9,
+    NormalVector = 2,
+    MotionVector = 3,
+    MaterialColor = 4,
+    MaterialProperties = 5,
+    Luminance = 6,
+    LuminanceAux = 7,
+    PreviousLuminanceAux = 8,
+    AmbientReflectedLuminance = 9,
     Occlusion = 10,
+    EmissiveLuminance = 11,
 }
 
 /// A sampler variant for render attachment textures.
@@ -72,6 +74,13 @@ pub struct RenderAttachmentInputDescription {
 pub struct RenderAttachmentOutputDescription {
     blending: Blending,
     sampling: OutputAttachmentSampling,
+}
+
+/// The blending mode to use when writing to a render attachment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Blending {
+    Replace,
+    Additive,
 }
 
 /// Whether to write to the multisampled versions of an output render attachment
@@ -130,7 +139,7 @@ struct FullRenderAttachmentInputDescription {
 }
 
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 11;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 12;
 
 /// Each individual render attachment quantity.
 ///
@@ -139,92 +148,99 @@ const N_RENDER_ATTACHMENT_QUANTITIES: usize = 11;
 const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantity::DepthStencil,
     RenderAttachmentQuantity::LinearDepth,
+    RenderAttachmentQuantity::NormalVector,
+    RenderAttachmentQuantity::MotionVector,
+    RenderAttachmentQuantity::MaterialColor,
+    RenderAttachmentQuantity::MaterialProperties,
     RenderAttachmentQuantity::Luminance,
     RenderAttachmentQuantity::LuminanceAux,
     RenderAttachmentQuantity::PreviousLuminanceAux,
-    RenderAttachmentQuantity::NormalVector,
-    RenderAttachmentQuantity::TextureCoords,
-    RenderAttachmentQuantity::MotionVector,
     RenderAttachmentQuantity::AmbientReflectedLuminance,
-    RenderAttachmentQuantity::EmissiveLuminance,
     RenderAttachmentQuantity::Occlusion,
+    RenderAttachmentQuantity::EmissiveLuminance,
 ];
 
 /// The bitflag of each individual render attachment quantity.
 const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT_QUANTITIES] = [
     RenderAttachmentQuantitySet::DEPTH_STENCIL,
     RenderAttachmentQuantitySet::LINEAR_DEPTH,
+    RenderAttachmentQuantitySet::NORMAL_VECTOR,
+    RenderAttachmentQuantitySet::MOTION_VECTOR,
+    RenderAttachmentQuantitySet::MATERIAL_COLOR,
+    RenderAttachmentQuantitySet::MATERIAL_PROPERTIES,
     RenderAttachmentQuantitySet::LUMINANCE,
     RenderAttachmentQuantitySet::LUMINANCE_AUX,
     RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE_AUX,
-    RenderAttachmentQuantitySet::NORMAL_VECTOR,
-    RenderAttachmentQuantitySet::TEXTURE_COORDS,
-    RenderAttachmentQuantitySet::MOTION_VECTOR,
     RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-    RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE,
     RenderAttachmentQuantitySet::OCCLUSION,
+    RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE,
 ];
 
 /// The name of each individual render attachment quantity.
 const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "depth_stencil",
     "linear_depth",
+    "normal_vector",
+    "motion_vector",
+    "material_color",
+    "material_properties",
     "luminance",
     "luminance_aux",
     // We use the same name for the previous auxiliary luminance attachment so
     // that their `BindGroupLayout`s can be used interchangeably
     "luminance_aux",
-    "normal_vector",
-    "texture_coords",
-    "motion_vector",
     "ambient_reflected_luminance",
-    "emissive_luminance",
     "occlusion",
+    "emissive_luminance",
 ];
 
 /// The texture format used for each render attachment quantity.
 const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANTITIES] = [
     wgpu::TextureFormat::Depth32FloatStencil8, // Depth-stencil
     wgpu::TextureFormat::R32Float,             // Linear depth
+    wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
+    wgpu::TextureFormat::Rg32Float,            // Motion vector
+    wgpu::TextureFormat::Rgba8Unorm,           // Material color
+    wgpu::TextureFormat::Rgba16Float,          // Material properties
     wgpu::TextureFormat::Rgba16Float,          // Luminance
     wgpu::TextureFormat::Rgba16Float,          // Auxiliary luminance
     wgpu::TextureFormat::Rgba16Float,          // Previous auxiliary luminance
-    wgpu::TextureFormat::Rgba8Unorm,           // Normal vector
-    wgpu::TextureFormat::Rg32Float,            // Texture coordinates
-    wgpu::TextureFormat::Rg32Float,            // Motion vector
     wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
-    wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
     wgpu::TextureFormat::R16Float,             // Occlusion
+    wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
 ];
 
-/// Whether multisampling will be used when requested for each render attachment quantity.
+/// Whether multisampling will be used when requested for each render attachment
+/// quantity.
 const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     true, // Depth-stencil
     true, // Linear depth
+    true, // Normal vector
+    true, // Motion vector
+    true, // Material color
+    true, // Material properties
     true, // Luminance
     true, // Auxiliary luminance
     true, // Previous auxiliary luminance
-    true, // Normal vector
-    true, // Texture coordinates
-    true, // Motion vector
     true, // Ambient reflected luminance
-    true, // Emissive luminance
     true, // Occlusion
+    true, // Emissive luminance
 ];
 
 /// Whether the texture for each render attachment quantity will have mipmaps.
 const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
     false, // Depth-stencil
     false, // Linear depth
+    false, // Normal vector
+    false, // Motion vector
+    false, // Material color
+    false, // Material properties
     false, // Luminance
     false, // Auxiliary luminance
     false, // Previous auxiliary luminance
-    false, // Normal vector
-    false, // Texture coordinates
-    false, // Motion vector
     false, // Ambient reflected luminance
-    false, // Emissive luminance
     false, // Occlusion
+    false, // Emissive luminance
 ];
 
 /// The clear color used for each render attachment quantity, or [`None`] if the
@@ -232,15 +248,16 @@ const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
 const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_QUANTITIES] = [
     None,                     // Depth-stencil
     Some(wgpu::Color::BLACK), // Linear depth
+    Some(wgpu::Color::BLACK), // Normal vector
+    Some(wgpu::Color::BLACK), // Motion vector
+    Some(wgpu::Color::BLACK), // Material color
+    Some(wgpu::Color::BLACK), // Material properties
     Some(wgpu::Color::BLACK), // Luminance
     Some(wgpu::Color::BLACK), // Auxiliary luminance
     None,                     // Previous auxiliary luminance
-    Some(wgpu::Color::BLACK), // Normal vector
-    Some(wgpu::Color::BLACK), // Texture coordinates
-    Some(wgpu::Color::BLACK), // Motion vector
     Some(wgpu::Color::BLACK), // Ambient reflected luminance
-    Some(wgpu::Color::BLACK), // Emissive luminance
     Some(wgpu::Color::WHITE), // Occlusion
+    Some(wgpu::Color::BLACK), // Emissive luminance
 ];
 
 /// The texture and sampler bind group bindings used for each render attachment
@@ -248,15 +265,16 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_
 const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] = [
     (0, 1), // Depth-stencil
     (0, 1), // Linear depth
+    (0, 1), // Normal vector
+    (0, 1), // Motion vector
+    (0, 1), // Material color
+    (0, 1), // Material properties
     (0, 1), // Luminance
     (0, 1), // Auxiliary luminance
     (0, 1), // Previous auxiliary luminance
-    (0, 1), // Normal vector
-    (0, 1), // Texture coordinates
-    (0, 1), // Motion vector
     (0, 1), // Ambient reflected luminance
-    (0, 1), // Emissive luminance
     (0, 1), // Occlusion
+    (0, 1), // Emissive luminance
 ];
 
 impl RenderAttachmentQuantity {
@@ -295,8 +313,8 @@ impl RenderAttachmentQuantity {
         &RENDER_ATTACHMENT_CLEAR_COLORS
     }
 
-    /// The texture and sampler bind group bindings used for each render attachment
-    /// quantity.
+    /// The texture and sampler bind group bindings used for each render
+    /// attachment quantity.
     pub const fn all_bindings() -> &'static [(u32, u32); Self::count()] {
         &RENDER_ATTACHMENT_BINDINGS
     }
@@ -344,10 +362,16 @@ impl RenderAttachmentQuantity {
         Self::clear_colors()[self.index()]
     }
 
-    /// The texture and sampler bind group bindings used for this render
-    /// attachment quantity.
-    pub const fn bindings(&self) -> (u32, u32) {
-        Self::all_bindings()[self.index()]
+    /// The bind group binding used for this render attachment quantity's
+    /// texture.
+    pub const fn texture_binding(&self) -> u32 {
+        Self::all_bindings()[self.index()].0
+    }
+
+    /// The bind group binding used for this render attachment quantity's
+    /// sampler.
+    pub const fn sampler_binding(&self) -> u32 {
+        Self::all_bindings()[self.index()].1
     }
 }
 
@@ -358,6 +382,16 @@ impl Display for RenderAttachmentQuantity {
 }
 
 impl RenderAttachmentQuantitySet {
+    /// Returns the set of render attachment quantities comprising the G-buffer
+    /// for deferred rendering.
+    pub const fn g_buffer() -> Self {
+        RenderAttachmentQuantitySet::LINEAR_DEPTH
+            .union(RenderAttachmentQuantitySet::NORMAL_VECTOR)
+            .union(RenderAttachmentQuantitySet::MOTION_VECTOR)
+            .union(RenderAttachmentQuantitySet::MATERIAL_COLOR)
+            .union(RenderAttachmentQuantitySet::MATERIAL_PROPERTIES)
+    }
+
     /// Returns the set of render attachment quantities that support
     /// multisampling.
     pub fn multisampling_quantities() -> Self {
@@ -575,7 +609,8 @@ where
         )
     }
 
-    /// Inserts the given quantities in the set, using the default description for all of them.
+    /// Inserts the given quantities in the set, using the default description
+    /// for all of them.
     pub fn insert_with_defaults(&mut self, quantities: RenderAttachmentQuantitySet) {
         self.quantities |= quantities;
     }
@@ -614,7 +649,7 @@ impl RenderAttachmentTextureManager {
 
         let mut manager = Self {
             quantity_textures: [
-                None, None, None, None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None, None, None, None, None, None, None,
             ],
             samplers,
             bind_groups_and_layouts: HashMap::new(),
@@ -761,7 +796,6 @@ impl RenderAttachmentTextureManager {
         mipmapper_generator: &MipmapperGenerator,
         sample_count: u32,
     ) {
-        self.bind_groups_and_layouts.clear();
         for &quantity in RenderAttachmentQuantity::all() {
             self.recreate_render_attachment_texture(
                 graphics_device,
@@ -771,6 +805,7 @@ impl RenderAttachmentTextureManager {
                 sample_count,
             );
         }
+        self.recreate_bind_groups(graphics_device);
     }
 
     /// Swaps the current and previous render attachment for each render
@@ -807,6 +842,33 @@ impl RenderAttachmentTextureManager {
         );
 
         self.quantity_textures[quantity.index()] = Some(quantity_texture);
+    }
+
+    fn recreate_bind_groups(&mut self, graphics_device: &GraphicsDevice) {
+        for (full_description, (bind_group_layout, bind_group)) in &mut self.bind_groups_and_layouts
+        {
+            let quantity = full_description.quantity;
+
+            let quantity_texture = self.quantity_textures[quantity.index()].as_ref().unwrap();
+            let sampler = &self.samplers[full_description.description.sampler as usize];
+
+            let label = format!(
+                "{} render attachment with {:?} sampler in stages {:?}",
+                quantity,
+                full_description.description.sampler(),
+                full_description.description.visibility()
+            );
+
+            *bind_group = Self::create_bind_group(
+                graphics_device.device(),
+                quantity.texture_binding(),
+                quantity.sampler_binding(),
+                bind_group_layout,
+                quantity_texture.regular.texture(),
+                sampler,
+                &label,
+            );
+        }
     }
 
     fn create_missing_bind_groups_and_layouts(
@@ -946,7 +1008,8 @@ impl RenderAttachmentTextureManager {
 
         let sampler = &samplers[full_description.description.sampler as usize];
 
-        let (texture_binding, sampler_binding) = full_description.quantity.bindings();
+        let texture_binding = full_description.quantity.texture_binding();
+        let sampler_binding = full_description.quantity.sampler_binding();
 
         let label = format!(
             "{} render attachment with {:?} sampler in stages {:?}",
@@ -1161,7 +1224,8 @@ impl RenderAttachmentTexture {
             format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST,
             label: Some(label),
             view_formats: &[],
         })

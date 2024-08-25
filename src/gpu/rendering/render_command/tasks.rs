@@ -9,12 +9,8 @@ use anyhow::Result;
 
 define_task!(
     /// This [`Task`](crate::scheduling::Task) ensures that all render commands
-    /// required for rendering the entities present in the render resources
-    /// exist.
-    ///
-    /// Render commands whose entities are no longer present in the render
-    /// resources will be removed, and missing render commands for new entities
-    /// will be created.
+    /// required for rendering the entities are up to date with the current
+    /// render resources.
     [pub] SyncRenderCommands,
     depends_on = [SyncRenderResources],
     execute_on = [RenderingTag],
@@ -24,22 +20,14 @@ define_task!(
             let mut shader_manager = renderer.shader_manager().write().unwrap();
             let render_resource_manager = renderer.render_resource_manager().read().unwrap();
             let mut render_command_manager = renderer.render_command_manager().write().unwrap();
-            let mut render_attachment_texture_manager = renderer.render_attachment_texture_manager().write().unwrap();
-            let gpu_resource_group_manager = renderer.gpu_resource_group_manager().read().unwrap();
             let scene = app.scene().read().unwrap();
             let material_library = scene.material_library().read().unwrap();
-            let postprocessor = renderer.postprocessor().read().unwrap();
 
             render_command_manager.sync_with_render_resources(
-                renderer.config(),
                 renderer.graphics_device(),
-                renderer.rendering_surface(),
+                &mut shader_manager,
                 &material_library,
                 render_resource_manager.synchronized(),
-                &mut render_attachment_texture_manager,
-                &gpu_resource_group_manager,
-                &mut shader_manager,
-                &postprocessor,
             )
         })
     }
