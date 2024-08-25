@@ -961,10 +961,19 @@ impl GeometryPass {
                     .quantities()
                     .contains(quantity.flag())
                 {
+                    let description = output_render_attachments
+                        .get_description(*quantity)
+                        .unwrap();
+
+                    let blend_state = match description.blending() {
+                        Blending::Replace => wgpu::BlendState::REPLACE,
+                        Blending::Additive => additive_blend_state(),
+                    };
+
                     Some(Some(wgpu::ColorTargetState {
                         format: quantity.texture_format(),
-                        blend: Some(wgpu::BlendState::REPLACE),
-                        write_mask: wgpu::ColorWrites::all(),
+                        blend: Some(blend_state),
+                        write_mask: description.write_mask(),
                     }))
                 } else {
                     None
@@ -1858,11 +1867,11 @@ impl AmbientLightPass {
                     .quantities()
                     .contains(quantity.flag())
                 {
-                    let blend_state = match output_render_attachments
+                    let description = output_render_attachments
                         .get_description(*quantity)
-                        .unwrap()
-                        .blending()
-                    {
+                        .unwrap();
+
+                    let blend_state = match description.blending() {
                         Blending::Replace => wgpu::BlendState::REPLACE,
                         Blending::Additive => additive_blend_state(),
                     };
@@ -1870,7 +1879,7 @@ impl AmbientLightPass {
                     Some(Some(wgpu::ColorTargetState {
                         format: quantity.texture_format(),
                         blend: Some(blend_state),
-                        write_mask: wgpu::ColorWrites::COLOR,
+                        write_mask: description.write_mask(),
                     }))
                 } else {
                     None
@@ -2857,11 +2866,11 @@ impl PostprocessingRenderPass {
                     .quantities()
                     .contains(quantity.flag())
                 {
-                    let blend_state = match output_render_attachments
+                    let description = output_render_attachments
                         .get_description(*quantity)
-                        .unwrap()
-                        .blending()
-                    {
+                        .unwrap();
+
+                    let blend_state = match description.blending() {
                         Blending::Replace => wgpu::BlendState::REPLACE,
                         Blending::Additive => additive_blend_state(),
                     };
@@ -2869,7 +2878,7 @@ impl PostprocessingRenderPass {
                     Some(Some(wgpu::ColorTargetState {
                         format: quantity.texture_format(),
                         blend: Some(blend_state),
-                        write_mask: wgpu::ColorWrites::all(),
+                        write_mask: description.write_mask(),
                     }))
                 } else {
                     None
@@ -2881,7 +2890,7 @@ impl PostprocessingRenderPass {
             color_target_states.push(Some(wgpu::ColorTargetState {
                 format: rendering_surface.texture_format(),
                 blend: Some(wgpu::BlendState::REPLACE),
-                write_mask: wgpu::ColorWrites::COLOR,
+                write_mask: wgpu::ColorWrites::all(),
             }));
         }
 

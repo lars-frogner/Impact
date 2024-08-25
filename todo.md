@@ -26,8 +26,6 @@
 
 - Investigate ways to improve shadow map update performance.
 
-- Move occlusion to the alpha channel of the ambient reflected luminance attachment.
-
 ## Misc
 
 - Add render pass logging and timings.

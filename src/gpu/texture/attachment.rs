@@ -73,6 +73,7 @@ pub struct RenderAttachmentInputDescription {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderAttachmentOutputDescription {
     blending: Blending,
+    write_mask: wgpu::ColorWrites,
 }
 
 /// The blending mode to use when writing to a render attachment.
@@ -442,10 +443,23 @@ impl RenderAttachmentOutputDescription {
         self
     }
 
+    /// Sets the color write mask that should be used when rendering to the
+    /// render attachment.
+    pub fn with_write_mask(mut self, write_mask: wgpu::ColorWrites) -> Self {
+        self.write_mask = write_mask;
+        self
+    }
+
     /// Returns the blending mode that should be used when rendering to the
     /// render attachment.
     pub fn blending(&self) -> Blending {
         self.blending
+    }
+
+    /// Returns the color write mask that should be used when rendering to the
+    /// render attachment.
+    pub fn write_mask(&self) -> wgpu::ColorWrites {
+        self.write_mask
     }
 }
 
@@ -453,6 +467,7 @@ impl Default for RenderAttachmentOutputDescription {
     fn default() -> Self {
         Self {
             blending: Blending::Replace,
+            write_mask: wgpu::ColorWrites::ALL,
         }
     }
 }
