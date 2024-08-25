@@ -1,20 +1,15 @@
-struct VertexOutput {
-    @builtin(position) projectedPosition: vec4<f32>,
-    @location(0) frustumFarPlanePoint: vec3<f32>,
-}
-
 struct PushConstants {
-    inverseWindowDimensions: vec2<f32>,
+    inverseWindowDimensions: vec2f,
     frameCounter: u32,
 }
 
 struct ProjectionUniform {
-    projectionMatrix: mat4x4<f32>,
-    frustumFarPlaneCorners: array<vec4<f32>, 4>,
+    projectionMatrix: mat4x4f,
+    frustumFarPlaneCorners: array<vec4f, 4>,
 }
 
 struct AmbientOcclusionSamples {
-    sampleOffsets: array<vec4<f32>, {{max_samples}}>,
+    sampleOffsets: array<vec4f, {{max_samples}}>,
     sampleCount: u32,
     sampleRadius: f32,
     sampleNormalization: f32,
@@ -24,6 +19,11 @@ struct AmbientOcclusionSamples {
 struct SampleRotation {
     cosRandomAngle: f32,
     sinRandomAngle: f32,
+}
+
+struct VertexOutput {
+    @builtin(position) projectedPosition: vec4f,
+    @location(0) frustumFarPlanePoint: vec3f,
 }
 
 struct FragmentOutput {
@@ -42,17 +42,17 @@ var<push_constant> pushConstants: PushConstants;
 
 @group({{samples_group}}) @binding({{samples_binding}}) var<uniform> ambientOcclusionSamples: AmbientOcclusionSamples;
 
-fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4<f32>) -> vec2<f32> {
+fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
     return (framebufferPosition.xy * pushConstants.inverseWindowDimensions);
 }
 
 // From [0, 1] to [-1, 1]
-fn convertNormalColorToNormalizedNormalVector(color: vec3<f32>) -> vec3<f32> {
+fn convertNormalColorToNormalizedNormalVector(color: vec3f) -> vec3f {
     return normalize(convertNormalColorToNormalVector(color));
 }
 
 // From [0, 1] to [-1, 1]
-fn convertNormalColorToNormalVector(color: vec3<f32>) -> vec3<f32> {
+fn convertNormalColorToNormalVector(color: vec3f) -> vec3f {
     // May require normalization depending on filtering
     return 2.0 * (color - 0.5);
 }
@@ -64,29 +64,29 @@ fn computeSampleRotation(randomAngle: f32) -> SampleRotation {
     return rotation;
 }
 
-fn generateRandomAngle(cameraFramebufferPosition: vec4<f32>) -> f32 {
+fn generateRandomAngle(cameraFramebufferPosition: vec4f) -> f32 {
     // Multiply noise factor with 2 * pi to get random angle
     return 6.283185307 * generateInterleavedGradientNoiseFactor(cameraFramebufferPosition);
 }
 
 // Returns a random number between 0 and 1 based on the pixel coordinates and
 // the current frame counter
-fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4<f32>) -> f32 {
+fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4f) -> f32 {
     let timeOffset = pushConstants.frameCounter % 8u;
-    let timeOffsetPosition = vec2<f32>(cameraFramebufferPosition.x + f32(timeOffset), cameraFramebufferPosition.y);
-    let magic = vec3<f32>(0.06711056, 0.00583715, 52.9829189);
+    let timeOffsetPosition = vec2f(cameraFramebufferPosition.x + f32(timeOffset), cameraFramebufferPosition.y);
+    let magic = vec3f(0.06711056, 0.00583715, 52.9829189);
     return fract(magic.z * fract(dot(magic.xy, timeOffsetPosition)));
 }
 
 fn computeAmbientOcclusionSampleValue(
     squaredSampleRadius: f32,
-    position: vec3<f32>,
-    normalVector: vec3<f32>,
+    position: vec3f,
+    normalVector: vec3f,
     rotation: SampleRotation,
-    sample: vec4<f32>,
+    sample: vec4f,
 ) -> f32 {
     // Rotate horizontal sample offset by random angle
-    let rotatedSampleOffset = vec2<f32>(
+    let rotatedSampleOffset = vec2f(
         sample.x * rotation.cosRandomAngle - sample.y * rotation.sinRandomAngle,
         sample.x * rotation.sinRandomAngle + sample.y * rotation.cosRandomAngle,
     );
@@ -94,7 +94,7 @@ fn computeAmbientOcclusionSampleValue(
     // Calculate view space sampling position (using depth of sphere center as
     // sample depth, which is only needed for the projection to texture
     // coordinates)
-    let samplingPosition = vec3<f32>(position.xy + rotatedSampleOffset, position.z);
+    let samplingPosition = vec3f(position.xy + rotatedSampleOffset, position.z);
 
     // Convert sampling position to texture coordinates for the render
     // attachment textures by projecting to clip space with the camera
@@ -123,8 +123,8 @@ fn computeAmbientOcclusionSampleValue(
     return max(0.0, (sampledOccluderDisplacementAlongNormal + biasDistance) * isWithinSampleRadius) / (squaredSampledOccluderDistance + 1e-4);
 }
 
-fn computeTextureCoordsForAmbientOcclusionSample(samplingPosition: vec3<f32>) -> vec2<f32> {
-    let undividedClipSpaceSamplingPosition = projectionUniform.projectionMatrix * vec4<f32>(samplingPosition, 1.0);
+fn computeTextureCoordsForAmbientOcclusionSample(samplingPosition: vec3f) -> vec2f {
+    let undividedClipSpaceSamplingPosition = projectionUniform.projectionMatrix * vec4f(samplingPosition, 1.0);
     let horizontalClipSpaceSamplingPosition = undividedClipSpaceSamplingPosition.xy / max(undividedClipSpaceSamplingPosition.w, 1e-6);
     var sampleTextureCoords = 0.5 * (horizontalClipSpaceSamplingPosition + 1.0);
     sampleTextureCoords.y = 1.0 - sampleTextureCoords.y;
@@ -137,11 +137,11 @@ fn computeOcclusion(summedSampleValues: f32) -> f32 {
     return pow(max(0.0, 1.0 - ambientOcclusionSamples.sampleNormalization * summedSampleValues), ambientOcclusionSamples.contrast);
 }
 
-fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3<f32>) -> vec3<f32> {
+fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3f) -> vec3f {
     return linearDepth * frustumFarPlanePoint;
 }
 
-fn computePositionFromLinearDepthAtScreenTextureCoords(linearDepth: f32, textureCoords: vec2<f32>) -> vec3<f32> {
+fn computePositionFromLinearDepthAtScreenTextureCoords(linearDepth: f32, textureCoords: vec2f) -> vec3f {
     let frustumFarPlanePoint = mix(
         mix(projectionUniform.frustumFarPlaneCorners[3].xyz, projectionUniform.frustumFarPlaneCorners[2].xyz, textureCoords.x),
         mix(projectionUniform.frustumFarPlaneCorners[0].xyz, projectionUniform.frustumFarPlaneCorners[1].xyz, textureCoords.x),
@@ -150,18 +150,18 @@ fn computePositionFromLinearDepthAtScreenTextureCoords(linearDepth: f32, texture
     return computePositionFromLinearDepth(linearDepth, frustumFarPlanePoint);
 }
 
-@vertex 
+@vertex
 fn mainVS(
     @builtin(vertex_index) vertexIndex: u32,
-    @location({{position_location}}) modelSpacePosition: vec3<f32>
+    @location({{position_location}}) modelSpacePosition: vec3f
 ) -> VertexOutput {
     var output: VertexOutput;
-    output.projectedPosition = vec4<f32>(modelSpacePosition, 1.0);
+    output.projectedPosition = vec4f(modelSpacePosition, 1.0);
     output.frustumFarPlanePoint = projectionUniform.frustumFarPlaneCorners[vertexIndex].xyz;
     return output;
 }
 
-@fragment 
+@fragment
 fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
 

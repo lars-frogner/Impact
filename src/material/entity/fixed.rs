@@ -3,19 +3,12 @@
 use super::super::features::FixedColorMaterialFeature;
 use crate::{
     assets::Assets,
-    gpu::{
-        rendering::render_command::{Blending, RenderPipelineHints},
-        shader::{FixedTextureShaderInput, MaterialShaderInput},
-        texture::attachment::{
-            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
-            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
-        },
-        GraphicsDevice,
-    },
+    gpu::GraphicsDevice,
     material::{
         components::{FixedColorComp, FixedTextureComp, MaterialComp},
-        MaterialHandle, MaterialID, MaterialLibrary, MaterialPropertyTextureGroup,
-        MaterialPropertyTextureGroupID, MaterialSpecification,
+        MaterialHandle, MaterialID, MaterialInstanceFeatureFlags, MaterialLibrary,
+        MaterialPropertyTextureGroup, MaterialPropertyTextureGroupID, MaterialShaderInput,
+        MaterialSpecification,
     },
     mesh::VertexAttributeSet,
     model::{InstanceFeature, InstanceFeatureManager},
@@ -25,6 +18,12 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_utils::hash64;
 use lazy_static::lazy_static;
 use std::sync::RwLock;
+
+/// Binding locations for textures used in a fixed material.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FixedMaterialTextureBindings {
+    pub color_texture_and_sampler_bindings: Option<(u32, u32)>,
+}
 
 lazy_static! {
     static ref FIXED_COLOR_MATERIAL_ID: MaterialID = MaterialID(hash64!("FixedColorMaterial"));
@@ -86,7 +85,7 @@ pub fn setup_fixed_texture_material_for_new_entity(
     );
 }
 
-pub fn setup_fixed_color_material(
+fn setup_fixed_color_material(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     fixed_color: &FixedColorComp,
@@ -99,29 +98,25 @@ pub fn setup_fixed_color_material(
     material_library
         .material_specification_entry(*FIXED_COLOR_MATERIAL_ID)
         .or_insert_with(|| {
-            let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-                RenderAttachmentQuantity::Luminance,
-                RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
-            );
             MaterialSpecification::new(
                 VertexAttributeSet::empty(),
-                VertexAttributeSet::empty(),
-                RenderAttachmentInputDescriptionSet::empty(),
-                output_render_attachments,
-                None,
                 vec![FixedColorMaterialFeature::FEATURE_TYPE_ID],
-                RenderPipelineHints::empty(),
-                MaterialShaderInput::Fixed(None),
+                MaterialInstanceFeatureFlags::HAS_COLOR,
+                None,
+                MaterialShaderInput::Fixed(FixedMaterialTextureBindings {
+                    color_texture_and_sampler_bindings: None,
+                }),
             )
         });
 
-    MaterialComp::new(
-        MaterialHandle::new(*FIXED_COLOR_MATERIAL_ID, Some(feature_id), None),
+    MaterialComp::new(MaterialHandle::new(
+        *FIXED_COLOR_MATERIAL_ID,
+        Some(feature_id),
         None,
-    )
+    ))
 }
 
-pub fn setup_fixed_texture_material(
+fn setup_fixed_texture_material(
     graphics_device: &GraphicsDevice,
     assets: &Assets,
     material_library: &mut MaterialLibrary,
@@ -130,22 +125,16 @@ pub fn setup_fixed_texture_material(
     material_library
         .material_specification_entry(*FIXED_TEXTURE_MATERIAL_ID)
         .or_insert_with(|| {
-            let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-                RenderAttachmentQuantity::Luminance,
-                RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
-            );
             MaterialSpecification::new(
                 VertexAttributeSet::TEXTURE_COORDS,
-                VertexAttributeSet::TEXTURE_COORDS,
-                RenderAttachmentInputDescriptionSet::empty(),
-                output_render_attachments,
-                None,
                 Vec::new(),
-                RenderPipelineHints::empty(),
-                MaterialShaderInput::Fixed(Some(FixedTextureShaderInput {
-                    color_texture_and_sampler_bindings:
+                MaterialInstanceFeatureFlags::empty(),
+                None,
+                MaterialShaderInput::Fixed(FixedMaterialTextureBindings {
+                    color_texture_and_sampler_bindings: Some(
                         MaterialPropertyTextureGroup::get_texture_and_sampler_bindings(0),
-                })),
+                    ),
+                }),
             )
         });
 
@@ -165,8 +154,9 @@ pub fn setup_fixed_texture_material(
             .expect("Missing textures from assets")
         });
 
-    MaterialComp::new(
-        MaterialHandle::new(*FIXED_TEXTURE_MATERIAL_ID, None, Some(texture_group_id)),
+    MaterialComp::new(MaterialHandle::new(
+        *FIXED_TEXTURE_MATERIAL_ID,
         None,
-    )
+        Some(texture_group_id),
+    ))
 }

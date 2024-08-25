@@ -8,27 +8,23 @@ use impact_utils::{hash64, ConstStringHash64};
 use crate::{
     assert_uniform_valid,
     gpu::{
-        push_constant::{PushConstant, PushConstantVariant},
         rendering::{
             fre,
-            render_command::{
-                Blending, DepthMapUsage, RenderCommandSpecification, RenderPassSpecification,
-                RenderPipelineHints, RenderPipelineSpecification, RenderSubpassSpecification,
-            },
+            postprocessing::Postprocessor,
+            render_command::{PostprocessingRenderPass, RenderAttachmentTextureCopyCommand},
+            resource::SynchronizedRenderResources,
+            surface::RenderingSurface,
         },
         resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
-        shader::{template::SpecificShaderTemplate, ShaderManager},
-        texture::attachment::{
-            OutputAttachmentSampling, RenderAttachmentInputDescription,
-            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
-            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
-            RenderAttachmentQuantitySet, RenderAttachmentSampler,
+        shader::{
+            template::temporal_anti_aliasing::TemporalAntiAliasingShaderTemplate, ShaderManager,
         },
+        texture::attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
         uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
         GraphicsDevice,
     },
-    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
 };
+use anyhow::Result;
 
 /// Configuration options for temporal anti-aliasing.
 #[derive(Clone, Debug)]
@@ -39,6 +35,12 @@ pub struct TemporalAntiAliasingConfig {
     /// to the luminance reprojected from the previous frame.
     pub current_frame_weight: fre,
     pub variance_clipping_threshold: fre,
+}
+
+#[derive(Debug)]
+pub(super) struct TemporalAntiAliasingRenderCommands {
+    copy_command: RenderAttachmentTextureCopyCommand,
+    blending_pass: PostprocessingRenderPass,
 }
 
 /// Uniform holding parameters needed in the shader for applying temporal
@@ -64,6 +66,64 @@ impl Default for TemporalAntiAliasingConfig {
     }
 }
 
+impl TemporalAntiAliasingRenderCommands {
+    pub(super) fn new(
+        graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
+        shader_manager: &mut ShaderManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &mut GPUResourceGroupManager,
+        config: &TemporalAntiAliasingConfig,
+    ) -> Result<Self> {
+        let copy_command = create_temporal_anti_aliasing_texture_copy_command();
+
+        let blending_pass = create_temporal_anti_aliasing_blending_render_pass(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            config.current_frame_weight,
+            config.variance_clipping_threshold,
+        )?;
+
+        Ok(Self {
+            copy_command,
+            blending_pass,
+        })
+    }
+
+    pub(super) fn record(
+        &self,
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+        enabled: bool,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.copy_command
+            .record(render_attachment_texture_manager, command_encoder);
+
+        if enabled {
+            self.blending_pass.record(
+                rendering_surface,
+                surface_texture_view,
+                render_resources,
+                render_attachment_texture_manager,
+                gpu_resource_group_manager,
+                postprocessor,
+                frame_counter,
+                command_encoder,
+            )?;
+        }
+        Ok(())
+    }
+}
+
 impl TemporalAntiAliasingParameters {
     fn new(current_frame_weight: fre, variance_clipping_threshold: fre) -> Self {
         Self {
@@ -86,31 +146,27 @@ impl UniformBufferable for TemporalAntiAliasingParameters {
 }
 assert_uniform_valid!(TemporalAntiAliasingParameters);
 
-pub(super) fn create_temporal_anti_aliasing_render_commands(
-    graphics_device: &GraphicsDevice,
-    shader_manager: &mut ShaderManager,
-    gpu_resource_group_manager: &mut GPUResourceGroupManager,
-    config: &TemporalAntiAliasingConfig,
-) -> Vec<RenderCommandSpecification> {
-    vec![
-        create_temporal_anti_aliasing_render_prepass(graphics_device, shader_manager),
-        create_temporal_anti_aliasing_render_pass(
-            graphics_device,
-            shader_manager,
-            gpu_resource_group_manager,
-            config.current_frame_weight,
-            config.variance_clipping_threshold,
-        ),
-    ]
+/// Creates a [`RenderAttachmentTextureCopyCommand`] that copies the luminance
+/// attachment to the auxiliary luminance attachment.
+fn create_temporal_anti_aliasing_texture_copy_command() -> RenderAttachmentTextureCopyCommand {
+    RenderAttachmentTextureCopyCommand::new(
+        RenderAttachmentQuantity::Luminance,
+        RenderAttachmentQuantity::LuminanceAux,
+    )
 }
 
-fn create_temporal_anti_aliasing_render_pass(
+/// Creates a [`PostprocessingRenderPass`] that applies temporal anti-aliasing
+/// by blending the previous auxiliary luminance with the current luminance,
+/// writing the result to the auxiliary luminance attachment.
+fn create_temporal_anti_aliasing_blending_render_pass(
     graphics_device: &GraphicsDevice,
+    rendering_surface: &RenderingSurface,
     shader_manager: &mut ShaderManager,
+    render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
     gpu_resource_group_manager: &mut GPUResourceGroupManager,
     current_frame_weight: fre,
     variance_clipping_threshold: fre,
-) -> RenderCommandSpecification {
+) -> Result<PostprocessingRenderPass> {
     let resource_group_id = GPUResourceGroupID(hash64!(format!(
         "TemporalAntiAliasingParameters{{ current_frame_weight: {} }}",
         current_frame_weight
@@ -142,123 +198,18 @@ fn create_temporal_anti_aliasing_render_pass(
             )
         });
 
-    let (linear_depth_texture_binding, linear_depth_sampler_binding) =
-        RenderAttachmentQuantity::LinearDepth.bindings();
-    let (luminance_texture_binding, luminance_sampler_binding) =
-        RenderAttachmentQuantity::Luminance.bindings();
-    let (previous_luminance_texture_binding, previous_luminance_sampler_binding) =
-        RenderAttachmentQuantity::PreviousLuminanceAux.bindings();
-    let (motion_vector_texture_binding, motion_vector_sampler_binding) =
-        RenderAttachmentQuantity::MotionVector.bindings();
+    let shader_template = TemporalAntiAliasingShaderTemplate::new(resource_group_id);
 
-    let shader_id = shader_manager
-        .get_or_create_rendering_shader_from_template(
-            graphics_device,
-            SpecificShaderTemplate::TemporalAntiAliasing,
-            &[],
-            &[
-                (
-                    "position_location",
-                    VertexPosition::BINDING_LOCATION.to_string(),
-                ),
-                ("linear_depth_texture_group", "0".to_string()),
-                (
-                    "linear_depth_texture_binding",
-                    linear_depth_texture_binding.to_string(),
-                ),
-                (
-                    "linear_depth_sampler_binding",
-                    linear_depth_sampler_binding.to_string(),
-                ),
-                ("luminance_texture_group", "1".to_string()),
-                (
-                    "luminance_texture_binding",
-                    luminance_texture_binding.to_string(),
-                ),
-                (
-                    "luminance_sampler_binding",
-                    luminance_sampler_binding.to_string(),
-                ),
-                ("previous_luminance_texture_group", "2".to_string()),
-                (
-                    "previous_luminance_texture_binding",
-                    previous_luminance_texture_binding.to_string(),
-                ),
-                (
-                    "previous_luminance_sampler_binding",
-                    previous_luminance_sampler_binding.to_string(),
-                ),
-                ("motion_vector_texture_group", "3".to_string()),
-                (
-                    "motion_vector_texture_binding",
-                    motion_vector_texture_binding.to_string(),
-                ),
-                (
-                    "motion_vector_sampler_binding",
-                    motion_vector_sampler_binding.to_string(),
-                ),
-                ("params_group", "4".to_string()),
-                ("params_binding", "0".to_string()),
-            ],
-        )
-        .unwrap();
-
-    let mut input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
-        RenderAttachmentQuantitySet::LINEAR_DEPTH
-            | RenderAttachmentQuantitySet::LUMINANCE
-            | RenderAttachmentQuantitySet::MOTION_VECTOR,
-    );
-
-    input_render_attachments.insert_description(
-        RenderAttachmentQuantity::PreviousLuminanceAux,
-        RenderAttachmentInputDescription::default()
-            .with_sampler(RenderAttachmentSampler::Filtering),
-    );
-
-    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-        RenderAttachmentQuantity::LuminanceAux,
-        RenderAttachmentOutputDescription::default()
-            .with_sampling(OutputAttachmentSampling::Single),
-    );
-
-    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
-        pass: RenderPassSpecification {
-            output_render_attachments,
-            depth_map_usage: DepthMapUsage::StencilTest,
-            label: "Temporal anti-aliasing pass".to_string(),
-            ..Default::default()
-        },
-        pipeline: Some(RenderPipelineSpecification {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_shader_id: Some(shader_id),
-            resource_group_id: Some(resource_group_id),
-            input_render_attachments,
-            push_constants: PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
-            label: format!(
-                "Temporal anti-aliasing (current frame weight: {})",
-                current_frame_weight
-            ),
-            ..Default::default()
-        }),
-    })
-}
-
-fn create_temporal_anti_aliasing_render_prepass(
-    graphics_device: &GraphicsDevice,
-    shader_manager: &mut ShaderManager,
-) -> RenderCommandSpecification {
-    super::create_passthrough_render_pass(
+    PostprocessingRenderPass::new(
         graphics_device,
+        rendering_surface,
         shader_manager,
-        RenderAttachmentQuantity::Luminance,
-        RenderAttachmentQuantity::LuminanceAux,
-        OutputAttachmentSampling::Single,
-        Blending::Replace,
-        DepthMapUsage::None,
+        render_attachment_texture_manager,
+        gpu_resource_group_manager,
+        &shader_template,
+        Cow::Owned(format!(
+            "Temporal anti-aliasing (current frame weight: {})",
+            current_frame_weight
+        )),
     )
 }

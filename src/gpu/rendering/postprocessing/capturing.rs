@@ -6,8 +6,8 @@ pub mod tone_mapping;
 
 use crate::gpu::{
     rendering::{
-        fre,
-        render_command::{RenderCommandSpecification, RenderCommandState},
+        fre, postprocessing::Postprocessor, resource::SynchronizedRenderResources,
+        surface::RenderingSurface,
     },
     resource_group::GPUResourceGroupManager,
     shader::ShaderManager,
@@ -16,10 +16,10 @@ use crate::gpu::{
     GraphicsDevice,
 };
 use anyhow::Result;
-use average_luminance::AverageLuminanceComputationConfig;
-use bloom::BloomConfig;
-use std::{iter, mem};
-use tone_mapping::ToneMapping;
+use average_luminance::{AverageLuminanceComputationConfig, AverageLuminanceComputeCommands};
+use bloom::{BloomConfig, BloomRenderCommands};
+use std::mem;
+use tone_mapping::{ToneMappingMethod, ToneMappingRenderCommands};
 
 /// Configuration options for a capturing camera.
 #[derive(Clone, Debug, Default)]
@@ -32,7 +32,7 @@ pub struct CapturingCameraConfig {
     /// automatic sensitivity.
     pub average_luminance_computation: AverageLuminanceComputationConfig,
     /// The initial tone mapping method to use.
-    pub initial_tone_mapping: ToneMapping,
+    pub initial_tone_mapping: ToneMappingMethod,
 }
 
 /// Capturing settings for a camera.
@@ -51,6 +51,10 @@ pub struct CameraSettings {
     shutter_speed: fre,
     /// The sensitivity of the camera sensor.
     sensitivity: SensorSensitivity,
+    /// The maximum exposure of the camera sensor. This corresponds to the
+    /// reciprocal of the minimum incident luminance in cd/m² that can saturate
+    /// the sensor.
+    max_exposure: fre,
 }
 
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
@@ -63,16 +67,15 @@ pub enum SensorSensitivity {
 }
 
 /// A camera capturing the incident scene luminance.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CapturingCamera {
     settings: CameraSettings,
     produces_bloom: bool,
     exposure: fre,
-    tone_mapping: ToneMapping,
-    bloom_commands: Vec<RenderCommandSpecification>,
-    average_luminance_commands: Vec<RenderCommandSpecification>,
-    tone_mapping_commands: Vec<RenderCommandSpecification>,
-    average_luminance_computation_config: AverageLuminanceComputationConfig,
+    tone_mapping_method: ToneMappingMethod,
+    bloom_commands: BloomRenderCommands,
+    average_luminance_commands: AverageLuminanceComputeCommands,
+    tone_mapping_commands: ToneMappingRenderCommands,
 }
 
 impl Default for CameraSettings {
@@ -83,6 +86,7 @@ impl Default for CameraSettings {
             sensitivity: SensorSensitivity::Auto {
                 ev_compensation: 0.0,
             },
+            max_exposure: 1e-1,
         }
     }
 }
@@ -95,11 +99,17 @@ impl CameraSettings {
     const CALIBRATION_CONSTANT: fre = 12.5;
 
     /// Groups the given camera settings.
-    pub fn new(relative_aperture: fre, shutter_speed: fre, sensitivity: SensorSensitivity) -> Self {
+    pub fn new(
+        relative_aperture: fre,
+        shutter_speed: fre,
+        sensitivity: SensorSensitivity,
+        max_exposure: fre,
+    ) -> Self {
         Self {
             relative_aperture,
             shutter_speed,
             sensitivity,
+            max_exposure,
         }
     }
 
@@ -130,6 +140,8 @@ impl CameraSettings {
     /// obtain the average luminance incident from the scene, which is used to
     /// determine the highest exposure that does not lead to an overly clipped
     /// output using the Saturation Based Sensitivity method.
+    ///
+    /// The exposure is clamped to the maximum exposure of the camera.
     pub fn compute_exposure(
         &self,
         obtain_average_luminance: impl FnOnce() -> Result<fre>,
@@ -145,7 +157,9 @@ impl CameraSettings {
 
         let max_luminance = Self::compute_maximum_luminance_to_saturate_sensor(ev_100);
 
-        Ok(max_luminance.recip())
+        let exposure = max_luminance.recip();
+
+        Ok(f32::min(self.max_exposure, exposure))
     }
 
     fn compute_exposure_value_at_100_iso(&self, iso: fre) -> fre {
@@ -171,35 +185,42 @@ impl SensorSensitivity {
 }
 
 impl CapturingCamera {
-    /// Creates a new capturing camera along with the required ender commands
+    /// Creates a new capturing camera along with the required render commands
     /// according to the given configuration.
     pub(super) fn new(
         graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
         config: &CapturingCameraConfig,
-    ) -> Self {
-        let bloom_commands = bloom::create_bloom_render_commands(
+    ) -> Result<Self> {
+        let bloom_commands = BloomRenderCommands::new(
             graphics_device,
+            rendering_surface,
             shader_manager,
+            render_attachment_texture_manager,
             gpu_resource_group_manager,
             &config.bloom,
-        );
+        )?;
 
-        let average_luminance_commands =
-            average_luminance::setup_average_luminance_computations_and_render_commands(
-                graphics_device,
-                shader_manager,
-                render_attachment_texture_manager,
-                gpu_resource_group_manager,
-                storage_gpu_buffer_manager,
-                &config.average_luminance_computation,
-            );
+        let average_luminance_commands = AverageLuminanceComputeCommands::new(
+            graphics_device,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            storage_gpu_buffer_manager,
+            &config.average_luminance_computation,
+        )?;
 
-        let tone_mapping_commands =
-            tone_mapping::create_tone_mapping_render_commands(graphics_device, shader_manager);
+        let tone_mapping_commands = ToneMappingRenderCommands::new(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+        )?;
 
         let settings = config.initial_settings.clone();
 
@@ -208,16 +229,15 @@ impl CapturingCamera {
             SensorSensitivity::Manual { iso } => settings.compute_exposure_value_at_100_iso(iso),
         };
 
-        Self {
+        Ok(Self {
             settings,
             produces_bloom: config.bloom.initially_enabled,
             exposure: initial_exposure,
-            tone_mapping: config.initial_tone_mapping,
+            tone_mapping_method: config.initial_tone_mapping,
             bloom_commands,
             average_luminance_commands,
             tone_mapping_commands,
-            average_luminance_computation_config: config.average_luminance_computation.clone(),
-        }
+        })
     }
 
     /// Returns the size of the push constant obtained by calling
@@ -242,54 +262,72 @@ impl CapturingCamera {
         self.exposure.recip()
     }
 
-    /// Returns an iterator over the specifications for all capturing render
-    /// commands that should be performed before tone mapping, in the order in
-    /// which they are to be performed.
-    pub fn render_commands_before_tone_mapping(
+    /// Records the render commands that should be performed before tone mapping
+    /// into the given command encoder.
+    ///
+    /// # Errors
+    /// Returns an error if any of the required GPU resources are missing.
+    pub fn record_commands_before_tone_mapping(
         &self,
-    ) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
-        self.bloom_commands
-            .iter()
-            .cloned()
-            .chain(self.average_luminance_commands.iter().cloned())
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        storage_gpu_buffer_manager: &StorageGPUBufferManager,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.bloom_commands.record(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            postprocessor,
+            frame_counter,
+            self.produces_bloom,
+            command_encoder,
+        )?;
+        self.average_luminance_commands.record(
+            rendering_surface,
+            gpu_resource_group_manager,
+            storage_gpu_buffer_manager,
+            render_attachment_texture_manager,
+            postprocessor,
+            self.settings.sensitivity().is_auto(),
+            command_encoder,
+        )
     }
 
-    /// Returns an iterator over the specifications for the capturing render
-    /// commands starting at tone mapping command and onwards, in the order in
-    /// which they are to be performed.
-    pub fn render_commands_from_tone_mapping(
+    /// Records the render commands for tone mapping into the given command
+    /// encoder.
+    ///
+    /// # Errors
+    /// Returns an error if any of the required GPU resources are missing.
+    pub fn record_tone_mapping_render_commands(
         &self,
-    ) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
-        assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
-        self.tone_mapping_commands.iter().cloned()
-    }
-
-    /// Returns an iterator over the current states of all capturing render
-    /// commands that should be performed before tone mapping, in the same order
-    /// as from [`Self::render_commands_before_tone_mapping`].
-    pub fn render_command_states_before_tone_mapping(
-        &self,
-    ) -> impl Iterator<Item = RenderCommandState> + '_ {
-        iter::once(!self.produces_bloom)
-            .chain(iter::repeat(self.produces_bloom).take(self.bloom_commands.len() - 1))
-            .chain(
-                iter::repeat(self.settings.sensitivity().is_auto())
-                    .take(self.average_luminance_commands.len()),
-            )
-            .map(RenderCommandState::active_if)
-    }
-
-    /// Returns an iterator over the current states of the capturing render
-    /// commands starting at tone mapping command and onwards, in the same order
-    /// as from [`Self::render_commands_from_tone_mapping`].
-    pub fn render_command_states_from_tone_mapping(
-        &self,
-    ) -> impl Iterator<Item = RenderCommandState> + '_ {
-        assert_eq!(self.tone_mapping_commands.len(), ToneMapping::all().len());
-        ToneMapping::all()
-            .map(|mapping| mapping == self.tone_mapping)
-            .into_iter()
-            .map(RenderCommandState::active_if)
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        postprocessor: &Postprocessor,
+        frame_counter: u32,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.tone_mapping_commands.record(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            postprocessor,
+            frame_counter,
+            self.tone_mapping_method,
+            command_encoder,
+        )
     }
 
     /// Updates the exposure based on the current settings and potentially the
@@ -309,27 +347,6 @@ impl CapturingCamera {
         Ok(())
     }
 
-    /// Updates the required resources used by the capturing camera to account
-    /// for the render attachment textures being recreated.
-    pub fn handle_new_render_attachment_textures(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        shader_manager: &mut ShaderManager,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
-        gpu_resource_group_manager: &mut GPUResourceGroupManager,
-        storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
-    ) {
-        self.average_luminance_commands[0] =
-            average_luminance::create_luminance_histogram_compute_pass(
-                graphics_device,
-                shader_manager,
-                render_attachment_texture_manager,
-                gpu_resource_group_manager,
-                storage_gpu_buffer_manager,
-                &self.average_luminance_computation_config.luminance_bounds,
-            );
-    }
-
     /// Toggles bloom.
     pub fn toggle_bloom(&mut self) {
         self.produces_bloom = !self.produces_bloom;
@@ -337,10 +354,10 @@ impl CapturingCamera {
 
     /// Cycles tone mapping.
     pub fn cycle_tone_mapping(&mut self) {
-        self.tone_mapping = match self.tone_mapping {
-            ToneMapping::None => ToneMapping::ACES,
-            ToneMapping::ACES => ToneMapping::KhronosPBRNeutral,
-            ToneMapping::KhronosPBRNeutral => ToneMapping::None,
+        self.tone_mapping_method = match self.tone_mapping_method {
+            ToneMappingMethod::None => ToneMappingMethod::ACES,
+            ToneMappingMethod::ACES => ToneMappingMethod::KhronosPBRNeutral,
+            ToneMappingMethod::KhronosPBRNeutral => ToneMappingMethod::None,
         };
     }
 

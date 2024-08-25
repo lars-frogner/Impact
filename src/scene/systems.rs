@@ -73,8 +73,7 @@ pub fn sync_lights_in_storage(
         ecs_world,
         |ambient_light: &AmbientLightComp, ambient_emission: &AmbientEmissionComp| {
             light_storage
-                .ambient_light_mut(ambient_light.id)
-                .set_illuminance(ambient_emission.illuminance);
+                .set_ambient_light_illuminance(ambient_light.id, ambient_emission.illuminance);
         }
     );
 

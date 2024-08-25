@@ -22,9 +22,9 @@ use crate::{
     material::{
         self,
         components::{
-            AlbedoComp, AlbedoTextureComp, EmissiveLuminanceComp, MicrofacetDiffuseReflectionComp,
-            MicrofacetSpecularReflectionComp, NormalMapComp, ParallaxMapComp, RoughnessComp,
-            RoughnessTextureComp, SkyboxComp, SpecularReflectanceComp,
+            NormalMapComp, ParallaxMapComp, TexturedColorComp, TexturedRoughnessComp,
+            UniformColorComp, UniformEmissiveLuminanceComp, UniformMetalnessComp,
+            UniformRoughnessComp, UniformSpecularReflectanceComp,
         },
         MaterialLibrary,
     },
@@ -62,9 +62,10 @@ use crate::{
         components::{ParentComp, SceneGraphGroupComp, UncullableComp},
         Scene,
     },
+    skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
-        components::{VoxelSphereComp, VoxelTypeComp},
+        components::{VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelTypeComp},
         VoxelConfig, VoxelManager, VoxelTreeLODController, VoxelType,
     },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
@@ -211,6 +212,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     drop(assets);
 
+    app.set_skybox_for_current_scene(Skybox::new(skybox_texture_id, 1e6));
+
     app.create_entity((
         // &CylinderMeshComp::new(1.8, 0.25, 30),
         // &SphereMeshComp::new(15),
@@ -230,32 +233,24 @@ fn init_app(window: Window) -> Result<Application> {
     ))?;
 
     app.create_entity((
-        &BoxMeshComp::SKYBOX,
-        &ReferenceFrameComp::default(),
-        &SkyboxComp::new(skybox_texture_id, 1e6),
-        &UncullableComp,
-    ))?;
-
-    app.create_entity((
         &app.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
         &ReferenceFrameComp::new(
             Point3::new(0.0, 1.5, 11.0),
             Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
             0.06,
         ),
-        &AlbedoComp(vector![0.1, 0.2, 0.6]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 50.0),
-        &RoughnessComp(0.4),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
+        &UniformColorComp(vector![0.1, 0.2, 0.6]),
+        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 50.0),
+        &UniformRoughnessComp(0.4),
     ))?;
 
     app.create_entity((
         &CylinderMeshComp::new(10.0, 0.6, 100),
         &ReferenceFrameComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
-        &SpecularReflectanceComp::IRON,
-        &RoughnessComp(0.5),
-        &MicrofacetSpecularReflectionComp,
+        &UniformColorComp::IRON,
+        &UniformSpecularReflectanceComp::METAL,
+        &UniformMetalnessComp::METAL,
+        &UniformRoughnessComp(0.5),
     ))?;
 
     app.create_entity((
@@ -266,9 +261,10 @@ fn init_app(window: Window) -> Result<Application> {
             Orientation::from_axis_angle(&Vector3::y_axis(), 0.0),
             AngularVelocity::new(Vector3::y_axis(), Degrees(50.0)),
         ),
-        &SpecularReflectanceComp::COPPER,
-        &RoughnessComp(0.35),
-        &MicrofacetSpecularReflectionComp,
+        &UniformColorComp::COPPER,
+        &UniformSpecularReflectanceComp::METAL,
+        &UniformMetalnessComp::METAL,
+        &UniformRoughnessComp(0.35),
     ))?;
 
     app.create_entity((
@@ -279,29 +275,24 @@ fn init_app(window: Window) -> Result<Application> {
             Orientation::from_axis_angle(&Vector3::x_axis(), 0.4),
             AngularVelocity::new(Vector3::y_axis(), Degrees(-60.0)),
         ),
-        &AlbedoComp(vector![0.7, 0.3, 0.2]),
-        &RoughnessComp(0.95),
-        &MicrofacetDiffuseReflectionComp,
+        &UniformColorComp(vector![0.7, 0.3, 0.2]),
+        &UniformRoughnessComp(0.95),
     ))?;
 
     app.create_entity((
         &BoxMeshComp::UNIT_CUBE,
         &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0), 2.0),
-        &AlbedoComp(vector![0.1, 0.7, 0.3]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 0.0),
-        &RoughnessComp(0.55),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
+        &UniformColorComp(vector![0.1, 0.7, 0.3]),
+        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 0.0),
+        &UniformRoughnessComp(0.55),
     ))?;
 
     app.create_entity((
         &SphereMeshComp::new(100),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, 2.0, 5.0), 4.0),
-        &AlbedoComp(vector![0.3, 0.2, 0.7]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::STONE, 0.5),
-        &RoughnessComp(0.7),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
+        &UniformColorComp(vector![0.3, 0.2, 0.7]),
+        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::STONE, 0.5),
+        &UniformRoughnessComp(0.7),
     ))?;
 
     app.create_entity((
@@ -312,9 +303,10 @@ fn init_app(window: Window) -> Result<Application> {
             Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
             AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
         ),
-        &SpecularReflectanceComp::GOLD,
-        &RoughnessComp(0.4),
-        &MicrofacetSpecularReflectionComp,
+        &UniformColorComp::GOLD,
+        &UniformSpecularReflectanceComp::METAL,
+        &UniformMetalnessComp::METAL,
+        &UniformRoughnessComp(0.4),
     ))?;
 
     app.create_entity((
@@ -325,12 +317,13 @@ fn init_app(window: Window) -> Result<Application> {
             Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
             50.0,
         ),
-        &AlbedoTextureComp(wood_floor_color_texture_id),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::LIVING_TISSUE, 100.0),
-        &RoughnessTextureComp::unscaled(wood_floor_roughness_texture_id),
+        &TexturedColorComp(wood_floor_color_texture_id),
+        &UniformSpecularReflectanceComp::in_range_of(
+            UniformSpecularReflectanceComp::LIVING_TISSUE,
+            100.0,
+        ),
+        &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
         &NormalMapComp(wood_floor_normal_texture_id),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
     ))?;
 
     app.create_entity((
@@ -342,16 +335,14 @@ fn init_app(window: Window) -> Result<Application> {
                 * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
             50.0,
         ),
-        &AlbedoTextureComp(bricks_color_texture_id),
-        &SpecularReflectanceComp(vector![1.0, 1.0, 1.0] * 0.02),
-        &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
+        &TexturedColorComp(bricks_color_texture_id),
+        &UniformSpecularReflectanceComp(0.02),
+        &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
         &ParallaxMapComp::new(
             bricks_height_texture_id,
             0.02,
             vector![1.0 / 25.0, 1.0 / 25.0],
         ),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
     ))?;
 
     app.create_entity((
@@ -363,16 +354,14 @@ fn init_app(window: Window) -> Result<Application> {
                 * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
             50.0,
         ),
-        &AlbedoTextureComp(bricks_color_texture_id),
-        &SpecularReflectanceComp(vector![1.0, 1.0, 1.0] * 0.02),
-        &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
+        &TexturedColorComp(bricks_color_texture_id),
+        &UniformSpecularReflectanceComp(0.02),
+        &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
         &ParallaxMapComp::new(
             bricks_height_texture_id,
             0.02,
             vector![1.0 / 25.0, 1.0 / 25.0],
         ),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
     ))?;
 
     app.create_entity((
@@ -383,23 +372,21 @@ fn init_app(window: Window) -> Result<Application> {
             Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
             50.0,
         ),
-        &AlbedoTextureComp(bricks_color_texture_id),
-        &SpecularReflectanceComp(vector![1.0, 1.0, 1.0] * 0.02),
-        &RoughnessTextureComp::unscaled(bricks_roughness_texture_id),
+        &TexturedColorComp(bricks_color_texture_id),
+        &UniformSpecularReflectanceComp(0.02),
+        &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
         &ParallaxMapComp::new(
             bricks_height_texture_id,
             0.02,
             vector![1.0 / 25.0, 1.0 / 25.0],
         ),
-        &MicrofacetDiffuseReflectionComp,
-        &MicrofacetSpecularReflectionComp,
     ))?;
 
     app.create_entity((
         &SphereMeshComp::new(25),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
-        &AlbedoComp(Vector3::zeros()),
-        &EmissiveLuminanceComp(vector![1.0, 1.0, 1.0] * 1e5),
+        &UniformColorComp(vector![1.0, 1.0, 1.0]),
+        &UniformEmissiveLuminanceComp(1e5),
         &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
     ))?;
 
@@ -412,181 +399,187 @@ fn init_app(window: Window) -> Result<Application> {
     app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
 
     // app.create_entity((
-    //     &VoxelSphereComp::new(500, 4),
+    //     // &VoxelSphereComp::new(500, 4),
+    //     &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 0),
     //     &VoxelTypeComp::new(VoxelType::Default),
-    //     &ReferenceFrameComp::unoriented(point![-100.0, -100.0, -4.0]),
+    //     // &ReferenceFrameComp::unoriented(point![-100.0, -100.0, -4.0]),
+    //     &ReferenceFrameComp::unoriented(point![-25.0, -25.0, -5.0]),
     // ))?;
 
-    // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0), 1.0, 10.0, 3.0);
-    // create_free_rotation_experiment(&world, Point3::new(0.0, 7.0, 2.0), 5.0, 1e-3);
-    // create_drag_drop_experiment(&world, Point3::new(0.0, 20.0, 4.0));
+    // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0),
+    // 1.0, 10.0, 3.0); create_free_rotation_experiment(&world, Point3::new(0.0,
+    // 7.0, 2.0), 5.0, 1e-3); create_drag_drop_experiment(&world,
+    // Point3::new(0.0, 20.0, 4.0));
 
     Ok(app)
 }
 
-fn create_harmonic_oscillation_experiment(
-    app: &Application,
-    position: Position,
-    mass: fph,
-    spring_constant: fph,
-    amplitude: fph,
-) -> Result<()> {
-    let angular_frequency = fph::sqrt(spring_constant / mass);
-    let period = fph::TWO_PI / angular_frequency;
+// fn create_harmonic_oscillation_experiment(
+//     app: &Application,
+//     position: Position,
+//     mass: fph,
+//     spring_constant: fph,
+//     amplitude: fph,
+// ) -> Result<()> {
+//     let angular_frequency = fph::sqrt(spring_constant / mass);
+//     let period = fph::TWO_PI / angular_frequency;
 
-    let attachment_position = position;
-    let mass_position = attachment_position + vector![0.0, -2.0 * amplitude - 0.5, 0.0];
+//     let attachment_position = position;
+//     let mass_position = attachment_position + vector![0.0, -2.0 * amplitude -
+// 0.5, 0.0];
 
-    let reference_position = attachment_position + vector![-2.0, -amplitude - 0.5, 0.0];
+//     let reference_position = attachment_position + vector![-2.0, -amplitude -
+// 0.5, 0.0];
 
-    let attachment_point_entity = app.create_entity((
-        &SphereMeshComp::new(15),
-        &ReferenceFrameComp::unoriented_scaled(attachment_position, 0.2),
-        &AlbedoComp(vector![0.8, 0.1, 0.1]),
-    ))?;
+//     let attachment_point_entity = app.create_entity((
+//         &SphereMeshComp::new(15),
+//         &ReferenceFrameComp::unoriented_scaled(attachment_position, 0.2),
+//         &AlbedoComp(vector![0.8, 0.1, 0.1]),
+//     ))?;
 
-    let cube_body_entity = app.create_entity((
-        &BoxMeshComp::UNIT_CUBE,
-        &UniformRigidBodyComp { mass_density: mass },
-        &ReferenceFrameComp::for_unoriented_rigid_body(mass_position),
-        &VelocityComp::stationary(),
-        &AlbedoComp(vector![0.1, 0.1, 0.7]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-        &LogsKineticEnergy,
-        &LogsMomentum,
-    ))?;
+//     let cube_body_entity = app.create_entity((
+//         &BoxMeshComp::UNIT_CUBE,
+//         &UniformRigidBodyComp { mass_density: mass },
+//         &ReferenceFrameComp::for_unoriented_rigid_body(mass_position),
+//         &VelocityComp::stationary(),
+//         &AlbedoComp(vector![0.1, 0.1, 0.7]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//         &LogsKineticEnergy,
+//         &LogsMomentum,
+//     ))?;
 
-    app.create_entity((
-        &ReferenceFrameComp::default(),
-        &SpringComp::new(
-            attachment_point_entity,
-            cube_body_entity,
-            Position::origin(),
-            Position::origin(),
-            Spring::standard(spring_constant, 0.0, amplitude + 0.5),
-        ),
-    ))?;
+//     app.create_entity((
+//         &ReferenceFrameComp::default(),
+//         &SpringComp::new(
+//             attachment_point_entity,
+//             cube_body_entity,
+//             Position::origin(),
+//             Position::origin(),
+//             Spring::standard(spring_constant, 0.0, amplitude + 0.5),
+//         ),
+//     ))?;
 
-    app.create_entity((
-        &BoxMeshComp::UNIT_CUBE,
-        &ReferenceFrameComp::for_driven_trajectory(Orientation::identity()),
-        &VelocityComp::stationary(),
-        &HarmonicOscillatorTrajectoryComp::new(
-            0.25 * period,
-            reference_position,
-            Vector3::y_axis(),
-            amplitude,
-            period,
-        ),
-        &AlbedoComp(vector![0.1, 0.7, 0.1]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-    ))?;
+//     app.create_entity((
+//         &BoxMeshComp::UNIT_CUBE,
+//         &ReferenceFrameComp::for_driven_trajectory(Orientation::identity()),
+//         &VelocityComp::stationary(),
+//         &HarmonicOscillatorTrajectoryComp::new(
+//             0.25 * period,
+//             reference_position,
+//             Vector3::y_axis(),
+//             amplitude,
+//             period,
+//         ),
+//         &AlbedoComp(vector![0.1, 0.7, 0.1]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//     ))?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-fn create_free_rotation_experiment(
-    app: &Application,
-    position: Position,
-    angular_speed: fph,
-    angular_velocity_perturbation_fraction: fph,
-) -> Result<()> {
-    let major_axis_body_position = position + vector![5.0, 0.0, 0.0];
-    let intermediate_axis_body_position = position;
-    let minor_axis_body_position = position - vector![5.0, 0.0, 0.0];
+// fn create_free_rotation_experiment(
+//     app: &Application,
+//     position: Position,
+//     angular_speed: fph,
+//     angular_velocity_perturbation_fraction: fph,
+// ) -> Result<()> {
+//     let major_axis_body_position = position + vector![5.0, 0.0, 0.0];
+//     let intermediate_axis_body_position = position;
+//     let minor_axis_body_position = position - vector![5.0, 0.0, 0.0];
 
-    let angular_velocity_perturbation = angular_speed * angular_velocity_perturbation_fraction;
+//     let angular_velocity_perturbation = angular_speed *
+// angular_velocity_perturbation_fraction;
 
-    app.create_entity((
-        &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
-        &UniformRigidBodyComp {
-            mass_density: 1.0 / 6.0,
-        },
-        &ReferenceFrameComp::for_unoriented_rigid_body(major_axis_body_position),
-        &VelocityComp::angular(AngularVelocity::from_vector(vector![
-            angular_velocity_perturbation,
-            angular_velocity_perturbation,
-            angular_speed
-        ])),
-        &AlbedoComp(vector![0.1, 0.1, 0.7]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-        &LogsKineticEnergy,
-        &LogsMomentum,
-    ))?;
+//     app.create_entity((
+//         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
+//         &UniformRigidBodyComp {
+//             mass_density: 1.0 / 6.0,
+//         },
+//         &ReferenceFrameComp::for_unoriented_rigid_body(major_axis_body_position),
+//         &VelocityComp::angular(AngularVelocity::from_vector(vector![
+//             angular_velocity_perturbation,
+//             angular_velocity_perturbation,
+//             angular_speed
+//         ])),
+//         &AlbedoComp(vector![0.1, 0.1, 0.7]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//         &LogsKineticEnergy,
+//         &LogsMomentum,
+//     ))?;
 
-    app.create_entity((
-        &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
-        &UniformRigidBodyComp {
-            mass_density: 1.0 / 6.0,
-        },
-        &ReferenceFrameComp::for_unoriented_rigid_body(intermediate_axis_body_position),
-        &VelocityComp::angular(AngularVelocity::from_vector(vector![
-            angular_velocity_perturbation,
-            angular_speed,
-            angular_velocity_perturbation
-        ])),
-        &AlbedoComp(vector![0.1, 0.1, 0.7]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-        &LogsKineticEnergy,
-        &LogsMomentum,
-    ))?;
+//     app.create_entity((
+//         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
+//         &UniformRigidBodyComp {
+//             mass_density: 1.0 / 6.0,
+//         },
+//         &ReferenceFrameComp::for_unoriented_rigid_body(intermediate_axis_body_position),
+//         &VelocityComp::angular(AngularVelocity::from_vector(vector![
+//             angular_velocity_perturbation,
+//             angular_speed,
+//             angular_velocity_perturbation
+//         ])),
+//         &AlbedoComp(vector![0.1, 0.1, 0.7]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//         &LogsKineticEnergy,
+//         &LogsMomentum,
+//     ))?;
 
-    app.create_entity((
-        &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
-        &UniformRigidBodyComp {
-            mass_density: 1.0 / 6.0,
-        },
-        &ReferenceFrameComp::for_unoriented_rigid_body(minor_axis_body_position),
-        &VelocityComp::angular(AngularVelocity::from_vector(vector![
-            angular_speed,
-            angular_velocity_perturbation,
-            angular_velocity_perturbation
-        ])),
-        &AlbedoComp(vector![0.1, 0.1, 0.7]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-        &LogsKineticEnergy,
-        &LogsMomentum,
-    ))?;
+//     app.create_entity((
+//         &BoxMeshComp::new(3.0, 2.0, 1.0, FrontFaceSide::Outside),
+//         &UniformRigidBodyComp {
+//             mass_density: 1.0 / 6.0,
+//         },
+//         &ReferenceFrameComp::for_unoriented_rigid_body(minor_axis_body_position),
+//         &VelocityComp::angular(AngularVelocity::from_vector(vector![
+//             angular_speed,
+//             angular_velocity_perturbation,
+//             angular_velocity_perturbation
+//         ])),
+//         &AlbedoComp(vector![0.1, 0.1, 0.7]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//         &LogsKineticEnergy,
+//         &LogsMomentum,
+//     ))?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-fn create_drag_drop_experiment(app: &Application, position: Position) -> Result<()> {
-    app.simulator()
-        .write()
-        .unwrap()
-        .set_medium(UniformMedium::moving_air(vector![0.0, 3.0, 0.0]));
+// fn create_drag_drop_experiment(app: &Application, position: Position) ->
+// Result<()> {     app.simulator()
+//         .write()
+//         .unwrap()
+//         .set_medium(UniformMedium::moving_air(vector![0.0, 3.0, 0.0]));
 
-    app.create_entity((
-        // &SphereMeshComp::new(100),
-        &ConeMeshComp::new(2.0, 1.0, 100),
-        // &BoxMeshComp::new(3.0, 0.4, 1.0, FrontFaceSide::Outside),
-        &UniformRigidBodyComp { mass_density: 10.0 },
-        &ReferenceFrameComp::for_rigid_body(
-            position,
-            Orientation::from_axis_angle(&Vector3::z_axis(), 3.0),
-        ),
-        &VelocityComp::angular(AngularVelocity::zero()),
-        &AlbedoComp(vector![0.1, 0.1, 0.7]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-        &UniformGravityComp::earth(),
-        &DetailedDragComp::new(1.0),
-        &LogsKineticEnergy,
-        &LogsMomentum,
-    ))?;
+//     app.create_entity((
+//         // &SphereMeshComp::new(100),
+//         &ConeMeshComp::new(2.0, 1.0, 100),
+//         // &BoxMeshComp::new(3.0, 0.4, 1.0, FrontFaceSide::Outside),
+//         &UniformRigidBodyComp { mass_density: 10.0 },
+//         &ReferenceFrameComp::for_rigid_body(
+//             position,
+//             Orientation::from_axis_angle(&Vector3::z_axis(), 3.0),
+//         ),
+//         &VelocityComp::angular(AngularVelocity::zero()),
+//         &AlbedoComp(vector![0.1, 0.1, 0.7]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//         &UniformGravityComp::earth(),
+//         &DetailedDragComp::new(1.0),
+//         &LogsKineticEnergy,
+//         &LogsMomentum,
+//     ))?;
 
-    app.create_entity((
-        &ConeMeshComp::new(2.0, 1.0, 100),
-        &UniformRigidBodyComp { mass_density: 10.0 },
-        &ReferenceFrameComp::for_rigid_body(
-            position + vector![-5.0, 0.0, 0.0],
-            Orientation::from_axis_angle(&Vector3::z_axis(), 3.0),
-        ),
-        &VelocityComp::angular(AngularVelocity::zero()),
-        &AlbedoComp(vector![0.7, 0.1, 0.1]),
-        &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
-        &UniformGravityComp::earth(),
-    ))?;
+//     app.create_entity((
+//         &ConeMeshComp::new(2.0, 1.0, 100),
+//         &UniformRigidBodyComp { mass_density: 10.0 },
+//         &ReferenceFrameComp::for_rigid_body(
+//             position + vector![-5.0, 0.0, 0.0],
+//             Orientation::from_axis_angle(&Vector3::z_axis(), 3.0),
+//         ),
+//         &VelocityComp::angular(AngularVelocity::zero()),
+//         &AlbedoComp(vector![0.7, 0.1, 0.1]),
+//         &SpecularReflectanceComp::in_range_of(SpecularReflectanceComp::PLASTIC, 80.0),
+//         &UniformGravityComp::earth(),
+//     ))?;
 
-    Ok(())
-}
+//     Ok(())
+// }

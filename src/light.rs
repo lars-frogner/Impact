@@ -63,7 +63,8 @@ pub struct AmbientLight {
 /// RGB luminous intensity and an extent. The struct also includes a rotation
 /// quaternion that defines the orientation of the light's local coordinate
 /// system with respect to camera space, and a near and far distance restricting
-/// the distance range in which the light can cast shadows.
+/// the distance range in which the light can illuminate objects and cast
+/// shadows.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -90,7 +91,7 @@ pub struct OmnidirectionalLight {
     inverse_distance_span: fre,
     // Padding to make size multiple of 16-bytes
     far_distance: fre,
-    _padding_2: fre,
+    max_far_distance: fre,
 }
 
 /// Maximum number of cascades supported in a cascaded shadow map for
@@ -109,7 +110,8 @@ const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
 /// transformations that map the light's space to clip space in such a way as to
 /// include all objects in the scene that may cast shadows inside or into
 /// specific cascades (partitions) of the camera view frustum, and the camera
-/// clip space depths representing the boundaries between the cascades.
+/// linear depths (not the non-linear clip space depths) representing the
+/// boundaries between the cascades.
 ///
 /// This struct is intended to be stored in a [`LightStorage`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
@@ -160,6 +162,7 @@ pub struct LightStorage {
     omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer,
     unidirectional_light_buffer: UnidirectionalLightUniformBuffer,
     light_id_counter: u32,
+    total_ambient_luminance: Illumninance,
 }
 
 impl LightID {
@@ -180,7 +183,7 @@ impl std::fmt::Display for LightID {
 impl LightStorage {
     /// By creating light uniform buffers with a small initial capacity, we
     /// avoid excessive buffer reallocation when the first few lights are added.
-    const INITIAL_LIGHT_CAPACITY: usize = 5;
+    pub const INITIAL_LIGHT_CAPACITY: usize = 5;
 
     /// Creates a new empty light storage.
     pub fn new() -> Self {
@@ -192,6 +195,7 @@ impl LightStorage {
             unidirectional_light_buffer: UnidirectionalLightUniformBuffer::with_capacity(
                 Self::INITIAL_LIGHT_CAPACITY,
             ),
+            total_ambient_luminance: Luminance::zeros(),
             light_id_counter: 0,
         }
     }
@@ -222,6 +226,10 @@ impl LightStorage {
         let light_id = self.create_new_light_id();
         self.ambient_light_buffer
             .add_uniform(light_id, ambient_light);
+
+        self.total_ambient_luminance += ambient_light.luminance;
+        self.update_max_far_distance_for_omnidirectional_lights();
+
         light_id
     }
 
@@ -258,7 +266,9 @@ impl LightStorage {
     /// # Panics
     /// If no ambient light with the given ID exists.
     pub fn remove_ambient_light(&mut self, light_id: LightID) {
+        self.total_ambient_luminance -= self.ambient_light_buffer.uniform(light_id).luminance;
         self.ambient_light_buffer.remove_uniform(light_id);
+        self.update_max_far_distance_for_omnidirectional_lights();
     }
 
     /// Removes the [`OmnidirectionalLight`] with the given ID from the storage.
@@ -277,17 +287,26 @@ impl LightStorage {
         self.unidirectional_light_buffer.remove_uniform(light_id);
     }
 
-    /// Returns a mutable reference to the [`AmbientLight`] with the given ID.
+    /// Sets the uniform illuminance of the [`AmbientLight`] with the given ID
+    /// to the given value.
     ///
     /// # Panics
     /// If no ambient light with the given ID exists.
-    pub fn ambient_light_mut(&mut self, light_id: LightID) -> &mut AmbientLight {
-        self.ambient_light_buffer
+    pub fn set_ambient_light_illuminance(&mut self, light_id: LightID, illuminance: Illumninance) {
+        let light = self
+            .ambient_light_buffer
             .get_uniform_mut(light_id)
-            .expect("Requested missing ambient light")
+            .expect("Requested missing ambient light");
+
+        self.total_ambient_luminance -= light.luminance;
+        light.set_illuminance(illuminance);
+
+        self.total_ambient_luminance += light.luminance;
+        self.update_max_far_distance_for_omnidirectional_lights();
     }
 
-    /// Returns a mutable reference to the [`OmnidirectionalLight`] with the given ID.
+    /// Returns a mutable reference to the [`OmnidirectionalLight`] with the
+    /// given ID.
     ///
     /// # Panics
     /// If no omnidirectional light with the given ID exists.
@@ -297,8 +316,8 @@ impl LightStorage {
             .expect("Requested missing omnidirectional light")
     }
 
-    /// Returns a mutable reference to the [`UnidirectionalLight`] with the given
-    /// ID.
+    /// Returns a mutable reference to the [`UnidirectionalLight`] with the
+    /// given ID.
     ///
     /// # Panics
     /// If no unidirectional light with the given ID exists.
@@ -306,14 +325,6 @@ impl LightStorage {
         self.unidirectional_light_buffer
             .get_uniform_mut(light_id)
             .expect("Requested missing unidirectional light")
-    }
-
-    /// Returns an iterator over the ambient lights in the storage where each
-    /// item contains the light ID and a mutable reference to the light.
-    pub fn ambient_lights_with_ids_mut(
-        &mut self,
-    ) -> impl Iterator<Item = (LightID, &mut AmbientLight)> {
-        self.ambient_light_buffer.valid_uniforms_with_ids_mut()
     }
 
     /// Returns an iterator over the omnidirectional lights in the storage where
@@ -339,6 +350,25 @@ impl LightStorage {
         self.ambient_light_buffer.remove_all_uniforms();
         self.omnidirectional_light_buffer.remove_all_uniforms();
         self.unidirectional_light_buffer.remove_all_uniforms();
+        self.total_ambient_luminance = Luminance::zeros();
+    }
+
+    /// Uses the total ambient luminance to compute the maximum far distance for
+    /// all omnidirectional lights, based on the heuristic that the maximum far
+    /// distance (where the light contribution should be insignificant) is where
+    /// the incident luminance from the light equals some fixed number times the
+    /// total ambient luminance.
+    fn update_max_far_distance_for_omnidirectional_lights(&mut self) {
+        let total_ambient_luminance =
+            compute_scalar_luminance_from_rgb_luminance(&self.total_ambient_luminance);
+        let min_incident_luminance = fre::max(
+            OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_FLOOR,
+            total_ambient_luminance
+                * OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO,
+        );
+        for light in self.omnidirectional_light_buffer.valid_uniforms_mut() {
+            light.update_max_far_distance_based_on_min_incident_luminance(min_incident_luminance);
+        }
     }
 
     fn create_new_light_id(&mut self) -> LightID {
@@ -370,13 +400,19 @@ impl AmbientLight {
 
 impl OmnidirectionalLight {
     const MIN_NEAR_DISTANCE: fre = 1e-2;
-    const MAX_FAR_DISTANCE: fre = fre::INFINITY;
+
+    const MIN_INCIDENT_LUMINANCE_FLOOR: fre = 0.1;
+    const MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO: fre = 0.1;
 
     fn new(
         camera_space_position: Point3<fre>,
         luminous_intensity: LuminousIntensity,
         emission_extent: f32,
     ) -> Self {
+        let max_far_distance = Self::compute_max_far_distance_from_min_incident_luminance(
+            &luminous_intensity,
+            Self::MIN_INCIDENT_LUMINANCE_FLOOR,
+        );
         Self {
             camera_to_light_space_rotation: UnitQuaternion::identity(),
             camera_space_position,
@@ -386,7 +422,7 @@ impl OmnidirectionalLight {
             near_distance: 0.0,
             inverse_distance_span: 0.0,
             far_distance: 0.0,
-            _padding_2: 0.0,
+            max_far_distance,
         }
     }
 
@@ -482,17 +518,11 @@ impl OmnidirectionalLight {
 
         // The near distance must never be farther than the closest model to the
         // light source
-        self.near_distance = fre::clamp(
-            bounding_sphere_center_distance - camera_space_bounding_sphere.radius(),
-            Self::MIN_NEAR_DISTANCE,
-            Self::MAX_FAR_DISTANCE - 1e-9,
-        );
+        self.near_distance = (bounding_sphere_center_distance
+            - camera_space_bounding_sphere.radius())
+        .clamp(Self::MIN_NEAR_DISTANCE, self.max_far_distance - 1e-9);
 
-        self.far_distance = fre::clamp(
-            far_distance,
-            Self::MIN_NEAR_DISTANCE,
-            Self::MAX_FAR_DISTANCE - 1e-9,
-        );
+        self.far_distance = far_distance.clamp(self.near_distance + 1e-9, self.max_far_distance);
 
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
@@ -520,6 +550,31 @@ impl OmnidirectionalLight {
             // In this case no models are visible
             false
         }
+    }
+
+    /// Sets `self.max_far_distance` to the distance at which the incident
+    /// luminance from the light equals `min_incident_luminance`.
+    fn update_max_far_distance_based_on_min_incident_luminance(
+        &mut self,
+        min_incident_luminance: fre,
+    ) {
+        self.max_far_distance = Self::compute_max_far_distance_from_min_incident_luminance(
+            &self.luminous_intensity,
+            min_incident_luminance,
+        );
+    }
+
+    /// Computes the distance at which the incident scalar luminance from an
+    /// omnidirectional light with the given luminous intensity equals
+    /// `min_incident_luminance`.
+    fn compute_max_far_distance_from_min_incident_luminance(
+        luminous_intensity: &LuminousIntensity,
+        min_incident_luminance: fre,
+    ) -> fre {
+        let scalar_luminuous_intensity =
+            compute_scalar_luminance_from_rgb_luminance(luminous_intensity);
+
+        fre::sqrt(scalar_luminuous_intensity / min_incident_luminance)
     }
 
     fn create_camera_to_light_space_transform(&self) -> Similarity3<fre> {
@@ -655,13 +710,13 @@ impl UnidirectionalLight {
                 + (1.0 - EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT) * linear_distance;
 
             *partition_depth =
-                camera_space_view_frustum.convert_view_distance_to_clip_space_depth(distance);
+                camera_space_view_frustum.convert_view_distance_to_linear_depth(distance);
         }
 
         self.near_partition_depth =
-            camera_space_view_frustum.convert_view_distance_to_clip_space_depth(near_distance);
+            camera_space_view_frustum.convert_view_distance_to_linear_depth(near_distance);
         self.far_partition_depth =
-            camera_space_view_frustum.convert_view_distance_to_clip_space_depth(far_distance);
+            camera_space_view_frustum.convert_view_distance_to_linear_depth(far_distance);
     }
 
     /// Updates the light's orthographic transforms so that all objects in the
@@ -803,4 +858,8 @@ impl OrthographicTranslationAndScaling {
 /// with the given uniform illuminance.
 pub fn compute_luminance_for_uniform_illuminance(illuminance: &Illumninance) -> Luminance {
     illuminance * fre::FRAC_1_PI
+}
+
+fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> fre {
+    0.2125 * rgb_luminance.x + 0.7154 * rgb_luminance.y + 0.0721 * rgb_luminance.z
 }

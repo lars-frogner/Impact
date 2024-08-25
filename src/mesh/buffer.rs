@@ -4,11 +4,10 @@ use crate::{
     gpu::{
         buffer::{GPUBuffer, GPUBufferType},
         rendering::fre,
-        shader::MeshShaderInput,
         GraphicsDevice,
     },
     mesh::{
-        MeshID, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexColor, VertexNormalVector,
+        MeshID, TriangleMesh, VertexAttribute, VertexAttributeSet, VertexNormalVector,
         VertexPosition, VertexTangentSpaceQuaternion, VertexTextureCoords, N_VERTEX_ATTRIBUTES,
         VERTEX_ATTRIBUTE_FLAGS,
     },
@@ -20,9 +19,6 @@ use std::{borrow::Cow, mem};
 
 /// Represents types that can be written to a vertex buffer.
 pub trait VertexBufferable: Pod {
-    /// The location index of the vertex attribute binding.
-    const BINDING_LOCATION: u32;
-
     /// The layout of buffers made up of this vertex type.
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static>;
 }
@@ -47,7 +43,6 @@ pub struct MeshGPUBufferManager {
     available_attributes: VertexAttributeSet,
     vertex_buffers: [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
     vertex_buffer_layouts: [Option<wgpu::VertexBufferLayout<'static>>; N_VERTEX_ATTRIBUTES],
-    shader_input: MeshShaderInput,
     index_buffer: GPUBuffer,
     index_format: wgpu::IndexFormat,
     n_indices: usize,
@@ -55,6 +50,16 @@ pub struct MeshGPUBufferManager {
 }
 
 const MESH_VERTEX_BINDING_START: u32 = 10;
+
+/// Binding location of a specific type of mesh vertex attribute.
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MeshVertexAttributeLocation {
+    Position = MESH_VERTEX_BINDING_START,
+    NormalVector = (MESH_VERTEX_BINDING_START + 1),
+    TextureCoords = (MESH_VERTEX_BINDING_START + 2),
+    TangentSpaceQuaternion = (MESH_VERTEX_BINDING_START + 3),
+}
 
 impl MeshGPUBufferManager {
     /// Creates a new manager with GPU buffers initialized
@@ -70,11 +75,8 @@ impl MeshGPUBufferManager {
         );
 
         let mut available_attributes = VertexAttributeSet::empty();
-        let mut vertex_buffers = [None, None, None, None, None];
-        let mut vertex_buffer_layouts = [None, None, None, None, None];
-        let mut shader_input = MeshShaderInput {
-            locations: [None, None, None, None, None],
-        };
+        let mut vertex_buffers = [None, None, None, None];
+        let mut vertex_buffer_layouts = [None, None, None, None];
 
         let indices = mesh.indices();
         let n_indices = indices.len();
@@ -86,7 +88,6 @@ impl MeshGPUBufferManager {
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            &mut shader_input,
             mesh_id,
             mesh.positions(),
         );
@@ -95,16 +96,6 @@ impl MeshGPUBufferManager {
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            &mut shader_input,
-            mesh_id,
-            mesh.colors(),
-        );
-        Self::add_vertex_attribute_if_available(
-            graphics_device,
-            &mut available_attributes,
-            &mut vertex_buffers,
-            &mut vertex_buffer_layouts,
-            &mut shader_input,
             mesh_id,
             mesh.normal_vectors(),
         );
@@ -113,7 +104,6 @@ impl MeshGPUBufferManager {
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            &mut shader_input,
             mesh_id,
             mesh.texture_coords(),
         );
@@ -122,7 +112,6 @@ impl MeshGPUBufferManager {
             &mut available_attributes,
             &mut vertex_buffers,
             &mut vertex_buffer_layouts,
-            &mut shader_input,
             mesh_id,
             mesh.tangent_space_quaternions(),
         );
@@ -131,7 +120,6 @@ impl MeshGPUBufferManager {
             available_attributes,
             vertex_buffers,
             vertex_buffer_layouts,
-            shader_input,
             index_buffer,
             index_format,
             n_indices,
@@ -142,7 +130,6 @@ impl MeshGPUBufferManager {
     /// Ensures that the GPU buffers are in sync with the given mesh.
     pub fn sync_with_mesh(&mut self, graphics_device: &GraphicsDevice, mesh: &TriangleMesh<fre>) {
         self.sync_vertex_buffer(graphics_device, mesh.positions(), mesh.position_change());
-        self.sync_vertex_buffer(graphics_device, mesh.colors(), mesh.color_change());
         self.sync_vertex_buffer(
             graphics_device,
             mesh.normal_vectors(),
@@ -247,12 +234,6 @@ impl MeshGPUBufferManager {
         self.request_vertex_gpu_buffers(requested_attributes | VertexAttributeSet::POSITION)
     }
 
-    /// The input required for accessing the vertex attributes
-    /// in a shader.
-    pub fn shader_input(&self) -> &MeshShaderInput {
-        &self.shader_input
-    }
-
     /// Returns the GPU buffer of indices.
     pub fn index_gpu_buffer(&self) -> &GPUBuffer {
         &self.index_buffer
@@ -274,7 +255,6 @@ impl MeshGPUBufferManager {
         vertex_buffers: &mut [Option<GPUBuffer>; N_VERTEX_ATTRIBUTES],
         vertex_buffer_layouts: &mut [Option<wgpu::VertexBufferLayout<'static>>;
                  N_VERTEX_ATTRIBUTES],
-        shader_input: &mut MeshShaderInput,
         mesh_id: MeshID,
         data: &[V],
     ) where
@@ -290,8 +270,6 @@ impl MeshGPUBufferManager {
             ));
 
             vertex_buffer_layouts[V::GLOBAL_INDEX] = Some(V::BUFFER_LAYOUT);
-
-            shader_input.locations[V::GLOBAL_INDEX] = Some(V::BINDING_LOCATION);
         }
     }
 
@@ -302,7 +280,6 @@ impl MeshGPUBufferManager {
         self.available_attributes -= V::FLAG;
         self.vertex_buffers[V::GLOBAL_INDEX] = None;
         self.vertex_buffer_layouts[V::GLOBAL_INDEX] = None;
-        self.shader_input.locations[V::GLOBAL_INDEX] = None;
     }
 
     fn create_index_buffer<I>(
@@ -358,7 +335,6 @@ impl MeshGPUBufferManager {
                     &mut self.available_attributes,
                     &mut self.vertex_buffers,
                     &mut self.vertex_buffer_layouts,
-                    &mut self.shader_input,
                     self.mesh_id,
                     data,
                 );
@@ -510,47 +486,30 @@ impl GPUBuffer {
 }
 
 impl VertexBufferable for VertexPosition<fre> {
-    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START;
-
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            Self::BINDING_LOCATION => Float32x3,
-        ]);
-}
-
-impl VertexBufferable for VertexColor<fre> {
-    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 1;
-
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
-        create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            Self::BINDING_LOCATION => Float32x3,
+            MeshVertexAttributeLocation::Position as u32 => Float32x3,
         ]);
 }
 
 impl VertexBufferable for VertexNormalVector<fre> {
-    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 2;
-
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            Self::BINDING_LOCATION => Float32x3,
+            MeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
         ]);
 }
 
 impl VertexBufferable for VertexTextureCoords<fre> {
-    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 3;
-
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            Self::BINDING_LOCATION => Float32x2,
+            MeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
         ]);
 }
 
 impl VertexBufferable for VertexTangentSpaceQuaternion<fre> {
-    const BINDING_LOCATION: u32 = MESH_VERTEX_BINDING_START + 4;
-
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
-            Self::BINDING_LOCATION => Float32x4,
+            MeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
         ]);
 }
 

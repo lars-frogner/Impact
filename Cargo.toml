@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 default-run = "impact"
 
+build = "build.rs"
+
 [workspace]
 members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 

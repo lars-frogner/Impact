@@ -36,14 +36,7 @@ impl<F: Float> TriangleMesh<F> {
 
         let indices = vec![1, 3, 0, 2, 3, 1];
 
-        Self::new(
-            positions,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            indices,
-        )
+        Self::new(positions, Vec::new(), Vec::new(), Vec::new(), indices)
     }
 
     /// Creates a mesh representing a rectangle centered at the origin with the
@@ -77,14 +70,7 @@ impl<F: Float> TriangleMesh<F> {
 
         let indices = vec![0, 3, 1, 1, 3, 2];
 
-        Self::new(
-            positions,
-            Vec::new(),
-            normal_vectors,
-            Vec::new(),
-            Vec::new(),
-            indices,
-        )
+        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
     }
 
     /// Creates a mesh representing a box with the given extents, centered at
@@ -196,14 +182,7 @@ impl<F: Float> TriangleMesh<F> {
         normal_vectors.extend_from_slice(&[normal![Vector3::z_axis()]; 4]);
         add_face_indices();
 
-        Self::new(
-            positions,
-            Vec::new(),
-            normal_vectors,
-            Vec::new(),
-            Vec::new(),
-            indices,
-        )
+        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
     }
 
     /// Creates a mesh representing a cylinder with the given length and
@@ -420,14 +399,7 @@ impl<F: Float> TriangleMesh<F> {
             create_horizontal_disk(top_radius, half_length, true);
         }
 
-        Self::new(
-            positions,
-            Vec::new(),
-            normal_vectors,
-            Vec::new(),
-            Vec::new(),
-            indices,
-        )
+        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
     }
 
     /// Creates a mesh representing a sphere with diameter 1.0, centered at the
@@ -537,14 +509,7 @@ impl<F: Float> TriangleMesh<F> {
         }
         indices.extend_from_slice(&[1, idx, idx - n_circumference_vertices + 1]);
 
-        Self::new(
-            positions,
-            Vec::new(),
-            normal_vectors,
-            Vec::new(),
-            Vec::new(),
-            indices,
-        )
+        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
     }
 
     /// Creates a mesh representing a hemisphere with diameter 1.0, with the
@@ -663,13 +628,34 @@ impl<F: Float> TriangleMesh<F> {
         }
         indices.extend_from_slice(&[1, idx, idx - n_circumference_vertices + 1]);
 
-        Self::new(
-            positions,
-            Vec::new(),
-            normal_vectors,
-            Vec::new(),
-            Vec::new(),
-            indices,
-        )
+        Self::new(positions, normal_vectors, Vec::new(), Vec::new(), indices)
+    }
+
+    /// Creates a mesh representing a sphere with radius 1.0, centered at the
+    /// origin, with triangle front faces pointing inward. `n_rings` is the
+    /// number of horizontal circular cross-sections that vertices will be
+    /// generated around. The number of vertices that will be generated
+    /// around each ring increases in proportion to `n_rings` to maintain an
+    /// approximately uniform resolution.
+    ///
+    /// The generated mesh will only contain positions.
+    ///
+    /// # Panics
+    /// - If `n_rings` is zero.
+    pub fn create_spherical_light_volume(n_rings: usize) -> TriangleMesh<F> {
+        let mut mesh = Self::create_sphere(n_rings);
+
+        // Normal vectors are not needed for light volumes
+        mesh.normal_vectors.clear();
+
+        // Scale to unit radius
+        mesh.scale(F::TWO);
+
+        // Flip triangle winding order to make the front faces point inward
+        for triangle in mesh.indices.chunks_exact_mut(3) {
+            triangle.swap(1, 2);
+        }
+
+        mesh
     }
 }

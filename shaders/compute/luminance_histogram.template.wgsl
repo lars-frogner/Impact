@@ -13,9 +13,9 @@ struct Parameters {
 
 var<push_constant> inverseExposure: f32;
 
+@group({{texture_group}}) @binding({{texture_binding}}) var preExposedLuminanceTexture: texture_2d<f32>;
 @group({{params_group}}) @binding({{params_binding}}) var<uniform> params: Parameters;
 @group({{histogram_group}}) @binding({{histogram_binding}}) var<storage, read_write> histogram: array<atomic<u32>>;
-@group({{texture_group}}) @binding({{texture_binding}}) var preExposedLuminanceTexture: texture_2d<f32>;
 
 // Shared histogram buffer used for storing intermediate sums for each workgroup
 var<workgroup> workgroupHistogram: array<atomic<u32>, BIN_COUNT>;
@@ -47,18 +47,18 @@ fn determineBinIndexForPreExposedLuminanceColor(preExposedLuminanceColor: vec3f)
 
 @compute @workgroup_size(THREADS_PER_SIDE, THREADS_PER_SIDE, 1)
 fn main(
-    @builtin(global_invocation_id) globalID: vec3<u32>,
+    @builtin(global_invocation_id) globalID: vec3u,
     @builtin(local_invocation_index) localIndex: u32,
 ) {
     // Initialize the bin for this thread to 0
     workgroupHistogram[localIndex] = 0u;
     workgroupBarrier();
 
-    let dim = vec2<u32>(textureDimensions(preExposedLuminanceTexture));
+    let dim = vec2u(textureDimensions(preExposedLuminanceTexture));
 
     // Ignore threads that map to areas beyond the bounds the texture
     if (globalID.x < dim.x && globalID.y < dim.y) {
-        let preExposedLuminanceColor = textureLoad(preExposedLuminanceTexture, vec2<i32>(globalID.xy), 0).rgb;
+        let preExposedLuminanceColor = textureLoad(preExposedLuminanceTexture, vec2i(globalID.xy), 0).rgb;
         let binIndex = determineBinIndexForPreExposedLuminanceColor(preExposedLuminanceColor);
 
         // We use an atomic add to ensure we don't write to the same bin in our

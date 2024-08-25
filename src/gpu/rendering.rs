@@ -31,7 +31,6 @@ use postprocessing::{
     temporal_anti_aliasing::TemporalAntiAliasingConfig, Postprocessor,
 };
 use render_command::RenderCommandManager;
-use render_command::RenderCommandOutcome;
 use resource::RenderResourceManager;
 use std::{
     mem,
@@ -72,10 +71,6 @@ pub struct RenderingSystem {
 /// Global rendering configuration options.
 #[derive(Clone, Debug)]
 pub struct RenderingConfig {
-    /// The face culling mode.
-    pub cull_mode: Option<wgpu::Face>,
-    /// Controls the way each polygon is rasterized.
-    pub polygon_mode: wgpu::PolygonMode,
     /// The width and height of each face of the omnidirectional light shadow
     /// cubemap in number of texels.
     pub omnidirectional_light_shadow_map_resolution: u32,
@@ -84,8 +79,6 @@ pub struct RenderingConfig {
     pub unidirectional_light_shadow_map_resolution: u32,
     /// Whether shadow mapping is enabled.
     pub shadow_mapping_enabled: bool,
-    /// The number of samples to use for multisampling anti-aliasing.
-    pub multisampling_sample_count: u32,
     pub ambient_occlusion: AmbientOcclusionConfig,
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     pub capturing_camera: CapturingCameraConfig,
@@ -116,11 +109,17 @@ impl RenderingSystem {
 
         let mut shader_manager = ShaderManager::new();
 
-        let render_attachment_texture_manager = RenderAttachmentTextureManager::new(
+        let mut render_attachment_texture_manager = RenderAttachmentTextureManager::new(
             &graphics_device,
             &rendering_surface,
             &mipmapper_generator,
-            config.multisampling_sample_count,
+            1,
+        );
+
+        let render_command_manager = RenderCommandManager::new(
+            &graphics_device,
+            &mut shader_manager,
+            &mut render_attachment_texture_manager,
         );
 
         let mut gpu_resource_group_manager = GPUResourceGroupManager::new();
@@ -129,14 +128,15 @@ impl RenderingSystem {
 
         let postprocessor = Postprocessor::new(
             &graphics_device,
+            &rendering_surface,
             &mut shader_manager,
-            &render_attachment_texture_manager,
+            &mut render_attachment_texture_manager,
             &mut gpu_resource_group_manager,
             &mut storage_gpu_buffer_manager,
             &config.ambient_occlusion,
             &config.temporal_anti_aliasing,
             &config.capturing_camera,
-        );
+        )?;
 
         Ok(Self {
             config,
@@ -146,7 +146,7 @@ impl RenderingSystem {
             mipmapper_generator,
             shader_manager: RwLock::new(shader_manager),
             render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            render_command_manager: RwLock::new(RenderCommandManager::new()),
+            render_command_manager: RwLock::new(render_command_manager),
             render_attachment_texture_manager: RwLock::new(render_attachment_texture_manager),
             gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
@@ -192,8 +192,8 @@ impl RenderingSystem {
         &self.render_command_manager
     }
 
-    /// Returns a reference to the [`RenderAttachmentTextureManager`], guarded by a
-    /// [`RwLock`].
+    /// Returns a reference to the [`RenderAttachmentTextureManager`], guarded
+    /// by a [`RwLock`].
     pub fn render_attachment_texture_manager(&self) -> &RwLock<RenderAttachmentTextureManager> {
         &self.render_attachment_texture_manager
     }
@@ -255,48 +255,9 @@ impl RenderingSystem {
             .declare_desynchronized();
     }
 
-    /// Toggles culling of triangle back faces in all render passes.
-    pub fn toggle_back_face_culling(&mut self) {
-        if self.config.cull_mode.is_some() {
-            self.config.cull_mode = None;
-        } else {
-            self.config.cull_mode = Some(wgpu::Face::Back);
-        }
-        // Remove all render pass recorders so that they will be recreated with
-        // the updated configuration
-        self.render_command_manager
-            .write()
-            .unwrap()
-            .clear_recorders();
-    }
-
-    /// Toggles rendering of triangle fill in all render passes. Only triangle
-    /// edges will be rendered if fill is turned off.
-    pub fn toggle_triangle_fill(&mut self) {
-        if self.config.polygon_mode != wgpu::PolygonMode::Fill {
-            self.config.polygon_mode = wgpu::PolygonMode::Fill;
-        } else {
-            self.config.polygon_mode = wgpu::PolygonMode::Line;
-        }
-        // Remove all render pass recorders so that they will be recreated with
-        // the updated configuration
-        self.render_command_manager
-            .write()
-            .unwrap()
-            .clear_recorders();
-    }
-
     /// Toggles shadow mapping.
     pub fn toggle_shadow_mapping(&mut self) {
         self.config.shadow_mapping_enabled = !self.config.shadow_mapping_enabled;
-    }
-
-    pub fn cycle_msaa(&mut self) {
-        let sample_count = match self.config.multisampling_sample_count {
-            1 => 4,
-            _ => 1,
-        };
-        self.set_multisampling_sample_count(sample_count);
     }
 
     /// Toggles ambient occlusion.
@@ -347,30 +308,19 @@ impl RenderingSystem {
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
-        let mut n_recorded_passes = 0;
-
-        {
-            let render_resources_guard = self.render_resource_manager.read().unwrap();
-            for render_pass_recorder in self.render_command_manager.read().unwrap().recorders() {
-                let outcome = render_pass_recorder.record(
-                    &self.rendering_surface,
-                    &surface_texture_view,
-                    material_library,
-                    render_resources_guard.synchronized(),
-                    &self.render_attachment_texture_manager.read().unwrap(),
-                    &self.gpu_resource_group_manager.read().unwrap(),
-                    &self.storage_gpu_buffer_manager.read().unwrap(),
-                    &self.postprocessor.read().unwrap(),
-                    &mut command_encoder,
-                    self.frame_counter,
-                )?;
-                if outcome == RenderCommandOutcome::Recorded {
-                    n_recorded_passes += 1;
-                }
-            }
-        } // <- Render resource guard is released here
-
-        log::info!("Performing {} render passes", n_recorded_passes);
+        self.render_command_manager.read().unwrap().record(
+            &self.rendering_surface,
+            &surface_texture_view,
+            material_library,
+            self.render_resource_manager.read().unwrap().synchronized(),
+            &self.render_attachment_texture_manager.read().unwrap(),
+            &self.gpu_resource_group_manager.read().unwrap(),
+            &self.storage_gpu_buffer_manager.read().unwrap(),
+            &self.postprocessor.read().unwrap(),
+            &self.config,
+            self.frame_counter,
+            &mut command_encoder,
+        )?;
 
         self.graphics_device
             .queue()
@@ -402,23 +352,6 @@ impl RenderingSystem {
         })
     }
 
-    fn set_multisampling_sample_count(&mut self, sample_count: u32) {
-        if self.config.multisampling_sample_count != sample_count {
-            log::info!("MSAA sample count changed to {}", sample_count);
-
-            self.config.multisampling_sample_count = sample_count;
-
-            self.recreate_render_attachment_textures();
-
-            // Remove all render command recorders so that they will be
-            // recreated with the updated configuration
-            self.render_command_manager
-                .write()
-                .unwrap()
-                .clear_recorders();
-        }
-    }
-
     fn recreate_render_attachment_textures(&mut self) {
         self.render_attachment_texture_manager
             .write()
@@ -427,37 +360,17 @@ impl RenderingSystem {
                 &self.graphics_device,
                 &self.rendering_surface,
                 &self.mipmapper_generator,
-                self.config.multisampling_sample_count,
+                1,
             );
-
-        self.postprocessor
-            .write()
-            .unwrap()
-            .capturing_camera_mut()
-            .handle_new_render_attachment_textures(
-                &self.graphics_device,
-                &mut self.shader_manager.write().unwrap(),
-                &self.render_attachment_texture_manager.read().unwrap(),
-                &mut self.gpu_resource_group_manager.write().unwrap(),
-                &mut self.storage_gpu_buffer_manager.write().unwrap(),
-            );
-
-        self.render_command_manager
-            .write()
-            .unwrap()
-            .clear_recorders();
     }
 }
 
 impl Default for RenderingConfig {
     fn default() -> Self {
         Self {
-            cull_mode: Some(wgpu::Face::Back),
-            polygon_mode: wgpu::PolygonMode::Fill,
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
             shadow_mapping_enabled: true,
-            multisampling_sample_count: 1,
             ambient_occlusion: AmbientOcclusionConfig::default(),
             temporal_anti_aliasing: TemporalAntiAliasingConfig::default(),
             capturing_camera: CapturingCameraConfig::default(),
@@ -577,9 +490,9 @@ impl ScreenCapturer {
 
     /// Checks if a omnidirectional light shadow map capture was scheduled with
     /// [`Self::request_omnidirectional_light_shadow_map_save`], and if so,
-    /// captures the texture and saves it as a timestamped PNG file in the
+    /// captures the textures and saves them as timestamped PNG files in the
     /// current directory.
-    pub fn save_omnidirectional_light_shadow_map_if_requested(
+    pub fn save_omnidirectional_light_shadow_maps_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
     ) -> Result<()> {
@@ -595,18 +508,24 @@ impl ScreenCapturer {
                 .synchronized()
                 .get_light_buffer_manager()
             {
-                for face in CubemapFace::all() {
-                    light_buffer_manager
-                        .omnidirectional_light_shadow_map_texture()
-                        .save_face_as_image_file(
+                for (light_idx, texture) in light_buffer_manager
+                    .omnidirectional_light_shadow_map_manager()
+                    .textures()
+                    .iter()
+                    .enumerate()
+                {
+                    for face in CubemapFace::all() {
+                        texture.save_face_as_image_file(
                             renderer.graphics_device(),
                             face,
                             format!(
-                                "omnidirectional_light_shadow_map_{}_{:?}.png",
+                                "omnidirectional_light_{}_shadow_map_{:?}_{}.png",
+                                light_idx,
+                                face,
                                 Utc::now().to_rfc3339(),
-                                face
                             ),
                         )?;
+                    }
                 }
                 Ok(())
             } else {
@@ -619,9 +538,9 @@ impl ScreenCapturer {
 
     /// Checks if a unidirectional light shadow map capture was scheduled with
     /// [`Self::request_unidirectional_light_shadow_map_save`], and if so,
-    /// captures the texture and saves it as a timestamped PNG file in the
+    /// captures the textures and saves them as timestamped PNG files in the
     /// current directory.
-    pub fn save_unidirectional_light_shadow_map_if_requested(
+    pub fn save_unidirectional_light_shadow_maps_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
     ) -> Result<()> {
@@ -637,18 +556,24 @@ impl ScreenCapturer {
                 .synchronized()
                 .get_light_buffer_manager()
             {
-                for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
-                    light_buffer_manager
-                        .unidirectional_light_shadow_map_texture()
-                        .save_cascade_as_image_file(
+                for (light_idx, texture) in light_buffer_manager
+                    .unidirectional_light_shadow_map_manager()
+                    .textures()
+                    .iter()
+                    .enumerate()
+                {
+                    for cascade_idx in 0..MAX_SHADOW_MAP_CASCADES {
+                        texture.save_cascade_as_image_file(
                             renderer.graphics_device(),
                             cascade_idx,
                             format!(
-                                "unidirectional_light_shadow_map_{}_{}.png",
+                                "unidirectional_light_{}_shadow_map_{}_{}.png",
+                                light_idx,
+                                cascade_idx,
                                 Utc::now().to_rfc3339(),
-                                cascade_idx
                             ),
                         )?;
+                    }
                 }
                 Ok(())
             } else {

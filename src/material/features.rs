@@ -1,25 +1,44 @@
 //! Instance features representing material properties.
 
-use super::MATERIAL_VERTEX_BINDING_START;
 use crate::{
-    gpu::{
-        rendering::fre,
-        shader::{
-            FixedColorFeatureShaderInput, InstanceFeatureShaderInput,
-            LightMaterialFeatureShaderInput,
-        },
-    },
+    gpu::rendering::fre,
     impl_InstanceFeature,
     material::{
-        components::{AlbedoComp, EmissiveLuminanceComp, ParallaxMapComp, SpecularReflectanceComp},
+        components::{ParallaxMapComp, UniformColorComp},
         RGBColor,
     },
     model::{InstanceFeature, InstanceFeatureID, InstanceFeatureManager, InstanceFeatureTypeID},
 };
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector2;
 
-/// Fixed material properties for a non-physical material with a uniform color
+const MATERIAL_VERTEX_BINDING_START: u32 = 20;
+
+/// Vertex attribute location of a specific type of material instance feature.
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MaterialInstanceFeatureLocation {
+    SpecularReflectance = MATERIAL_VERTEX_BINDING_START,
+    Roughness = (MATERIAL_VERTEX_BINDING_START + 1),
+    Metalness = (MATERIAL_VERTEX_BINDING_START + 2),
+    EmissiveLuminance = (MATERIAL_VERTEX_BINDING_START + 3),
+    Color = (MATERIAL_VERTEX_BINDING_START + 4),
+    ParallaxDisplacementScale = (MATERIAL_VERTEX_BINDING_START + 5),
+    ParallaxUVPerDistance = (MATERIAL_VERTEX_BINDING_START + 6),
+}
+
+bitflags! {
+    /// Bitflags encoding information related to a material's per-instance
+    /// features.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct MaterialInstanceFeatureFlags: u8 {
+        const HAS_COLOR = 1 << 0;
+        const USES_PARALLAX_MAPPING = 1 << 1;
+    }
+}
+
+/// Fixed material information for a non-physical material with a uniform color
 /// that is independent of lighting.
 ///
 /// This type stores the material's per-instance data that will be sent to the
@@ -31,233 +50,88 @@ pub struct FixedColorMaterialFeature {
     color: RGBColor,
 }
 
-/// Fixed material properties for a physical material with no uniform
-/// reflectance.
+/// Fixed material information for a physical material with a uniform
+/// base color.
+///
+/// Each of the other material properties may either be uniform, in which case
+/// the value in this object is used directly, or textured, in which case the
+/// value in this object is used as a scale factor for the value sampled from
+/// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct TexturedMaterialFeature {
+pub struct UniformColorPhysicalMaterialFeature {
+    specular_reflectance: fre,
     roughness: fre,
+    metalness: fre,
+    emissive_luminance: fre,
+    color: RGBColor,
 }
 
-/// Fixed material properties for a physical material with a uniform albedo.
+/// Fixed material information for a physical material with a textured
+/// base color.
+///
+/// Each of the other material properties may either be uniform, in which case
+/// the value in this object is used directly, or textured, in which case the
+/// value in this object is used as a scale factor for the value sampled from
+/// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseMaterialFeature {
-    albedo: RGBColor,
+pub struct TexturedColorPhysicalMaterialFeature {
+    specular_reflectance: fre,
     roughness: fre,
+    metalness: fre,
+    emissive_luminance: fre,
 }
 
-/// Fixed material properties for a physical material with a uniform specular
-/// reflectance.
+/// Fixed material information for a physical material with a uniform
+/// base color and parallax mapping.
+///
+/// Each of the other material properties may either be uniform, in which case
+/// the value in this object is used directly, or textured, in which case the
+/// value in this object is used as a scale factor for the value sampled from
+/// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformSpecularMaterialFeature {
-    specular_reflectance: RGBColor,
+pub struct UniformColorParallaxMappedPhysicalMaterialFeature {
+    specular_reflectance: fre,
     roughness: fre,
-}
-
-/// Fixed material properties for a physical material with a uniform albedo and
-/// specular reflectance.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseUniformSpecularMaterialFeature {
-    albedo: RGBColor,
-    specular_reflectance: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a physical material with no uniform
-/// reflectance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct TexturedParallaxMappingMaterialFeature {
-    roughness: fre,
+    metalness: fre,
+    emissive_luminance: fre,
+    color: RGBColor,
     parallax_displacement_scale: fre,
     parallax_uv_per_distance: Vector2<fre>,
 }
 
-/// Fixed material properties for a physical material with a uniform albedo
-/// using parallax mapping.
+/// Fixed material information for a physical material with a textured
+/// base color and parallax mapping.
+///
+/// Each of the other material properties may either be uniform, in which case
+/// the value in this object is used directly, or textured, in which case the
+/// value in this object is used as a scale factor for the value sampled from
+/// the texture.
 ///
 /// This type stores the material's per-instance data that will be sent to the
 /// GPU. It implements [`InstanceFeature`], and can thus be stored in an
 /// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseParallaxMappingMaterialFeature {
-    albedo: RGBColor,
+pub struct TexturedColorParallaxMappedPhysicalMaterialFeature {
+    specular_reflectance: fre,
     roughness: fre,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a physical material with a uniform specular
-/// reflectance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformSpecularParallaxMappingMaterialFeature {
-    specular_reflectance: RGBColor,
-    roughness: fre,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a physical material with a uniform albedo and
-/// specular reflectance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseUniformSpecularParallaxMappingMaterialFeature {
-    albedo: RGBColor,
-    specular_reflectance: RGBColor,
-    roughness: fre,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a physical material with only an emissive
-/// uniform luminance.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct TexturedEmissiveMaterialFeature {
-    emissive_luminance: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a physical material with a uniform albedo and
-/// emissive luminance.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseEmissiveMaterialFeature {
-    albedo: RGBColor,
-    emissive_luminance: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a physical material with a uniform specular
-/// reflectance and emissive luminance.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformSpecularEmissiveMaterialFeature {
-    specular_reflectance: RGBColor,
-    emissive_luminance: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a physical material with a uniform albedo,
-/// specular reflectance and emissive luminance.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseUniformSpecularEmissiveMaterialFeature {
-    albedo: RGBColor,
-    specular_reflectance: RGBColor,
-    emissive_luminance: RGBColor,
-    roughness: fre,
-}
-
-/// Fixed material properties for a physical material with a uniform emissive
-/// luminance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct TexturedParallaxMappingEmissiveMaterialFeature {
-    emissive_luminance: RGBColor,
-    roughness: fre,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a physical material with a uniform albedo and
-/// emissive luminance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseParallaxMappingEmissiveMaterialFeature {
-    albedo: RGBColor,
-    emissive_luminance: RGBColor,
-    roughness: fre,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a physical material with a uniform specular
-/// reflectance and emissive luminance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformSpecularParallaxMappingEmissiveMaterialFeature {
-    specular_reflectance: RGBColor,
-    emissive_luminance: RGBColor,
-    roughness: fre,
-    parallax_displacement_scale: fre,
-    parallax_uv_per_distance: Vector2<fre>,
-}
-
-/// Fixed material properties for a physical material with a uniform albedo,
-/// specular reflectance and emissive luminance using parallax mapping.
-///
-/// This type stores the material's per-instance data that will be sent to the
-/// GPU. It implements [`InstanceFeature`], and can thus be stored in an
-/// [`InstanceFeatureStorage`](crate::model::InstanceFeatureStorage).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature {
-    albedo: RGBColor,
-    specular_reflectance: RGBColor,
-    emissive_luminance: RGBColor,
-    roughness: fre,
+    metalness: fre,
+    emissive_luminance: fre,
     parallax_displacement_scale: fre,
     parallax_uv_per_distance: Vector2<fre>,
 }
@@ -270,552 +144,173 @@ impl FixedColorMaterialFeature {
 
 pub fn register_material_feature_types(instance_feature_manager: &mut InstanceFeatureManager) {
     instance_feature_manager.register_feature_type::<FixedColorMaterialFeature>();
-    instance_feature_manager.register_feature_type::<TexturedMaterialFeature>();
-    instance_feature_manager.register_feature_type::<UniformDiffuseMaterialFeature>();
-    instance_feature_manager.register_feature_type::<UniformSpecularMaterialFeature>();
+    instance_feature_manager.register_feature_type::<UniformColorPhysicalMaterialFeature>();
+    instance_feature_manager.register_feature_type::<TexturedColorPhysicalMaterialFeature>();
     instance_feature_manager
-        .register_feature_type::<UniformDiffuseUniformSpecularMaterialFeature>();
-    instance_feature_manager.register_feature_type::<TexturedParallaxMappingMaterialFeature>();
+        .register_feature_type::<UniformColorParallaxMappedPhysicalMaterialFeature>();
     instance_feature_manager
-        .register_feature_type::<UniformDiffuseParallaxMappingMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<UniformSpecularParallaxMappingMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingMaterialFeature>();
-    instance_feature_manager.register_feature_type::<TexturedEmissiveMaterialFeature>();
-    instance_feature_manager.register_feature_type::<UniformDiffuseEmissiveMaterialFeature>();
-    instance_feature_manager.register_feature_type::<UniformSpecularEmissiveMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<UniformDiffuseUniformSpecularEmissiveMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<TexturedParallaxMappingEmissiveMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<UniformDiffuseParallaxMappingEmissiveMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<UniformSpecularParallaxMappingEmissiveMaterialFeature>();
-    instance_feature_manager
-        .register_feature_type::<UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature>();
+        .register_feature_type::<TexturedColorParallaxMappedPhysicalMaterialFeature>();
 }
 
 /// Creates the appropriate physical material feature for the given set of
-/// components and adds it to the instance feature manager. A tag identifying
-/// the feature type is appended to the given list of name parts.
+/// components and properties and adds it to the instance feature manager.
 ///
 /// # Returns
 /// The ID of the created feature type and the ID of the created feature.
 pub fn create_physical_material_feature(
     instance_feature_manager: &mut InstanceFeatureManager,
-    material_name_parts: &mut Vec<&str>,
-    albedo: Option<&AlbedoComp>,
-    specular_reflectance: Option<&SpecularReflectanceComp>,
-    emissive_luminance: Option<&EmissiveLuminanceComp>,
+    uniform_color: Option<&UniformColorComp>,
+    specular_reflectance: fre,
     roughness: fre,
+    metalness: fre,
+    emissive_luminance: fre,
     parallax_map: Option<&ParallaxMapComp>,
-) -> (InstanceFeatureTypeID, InstanceFeatureID) {
-    match (
-        albedo,
-        specular_reflectance,
-        emissive_luminance,
-        parallax_map,
-    ) {
-        (None, None, None, None) => (
-            TexturedMaterialFeature::FEATURE_TYPE_ID,
-            TexturedMaterialFeature::add_feature(instance_feature_manager, roughness),
+) -> (
+    InstanceFeatureTypeID,
+    InstanceFeatureID,
+    MaterialInstanceFeatureFlags,
+) {
+    match (uniform_color, parallax_map) {
+        (Some(color), None) => (
+            UniformColorPhysicalMaterialFeature::FEATURE_TYPE_ID,
+            UniformColorPhysicalMaterialFeature::add_feature(
+                instance_feature_manager,
+                color,
+                specular_reflectance,
+                roughness,
+                metalness,
+                emissive_luminance,
+            ),
+            MaterialInstanceFeatureFlags::HAS_COLOR,
         ),
-        (Some(albedo), None, None, None) => {
-            material_name_parts.push("UniformDiffuse");
-
-            (
-                UniformDiffuseMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    roughness,
-                ),
-            )
-        }
-        (None, Some(specular_reflectance), None, None) => {
-            material_name_parts.push("UniformSpecular");
-
-            (
-                UniformSpecularMaterialFeature::FEATURE_TYPE_ID,
-                UniformSpecularMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    specular_reflectance,
-                    roughness,
-                ),
-            )
-        }
-        (Some(albedo), Some(specular_reflectance), None, None) => {
-            material_name_parts.push("UniformDiffuseUniformSpecular");
-
-            (
-                UniformDiffuseUniformSpecularMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseUniformSpecularMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    specular_reflectance,
-                    roughness,
-                ),
-            )
-        }
-        (None, None, None, Some(parallax_map)) => {
-            material_name_parts.push("ParallaxMapping");
-            (
-                TexturedParallaxMappingMaterialFeature::FEATURE_TYPE_ID,
-                TexturedParallaxMappingMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (Some(albedo), None, None, Some(parallax_map)) => {
-            material_name_parts.push("UniformDiffuseParallaxMapping");
-
-            (
-                UniformDiffuseParallaxMappingMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseParallaxMappingMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (None, Some(specular_reflectance), None, Some(parallax_map)) => {
-            material_name_parts.push("UniformSpecularParallaxMapping");
-
-            (
-                UniformSpecularParallaxMappingMaterialFeature::FEATURE_TYPE_ID,
-                UniformSpecularParallaxMappingMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    specular_reflectance,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (Some(albedo), Some(specular_reflectance), None, Some(parallax_map)) => {
-            material_name_parts.push("UniformDiffuseUniformSpecularParallaxMapping");
-
-            (
-                UniformDiffuseUniformSpecularParallaxMappingMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseUniformSpecularParallaxMappingMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    specular_reflectance,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (None, None, Some(emissive_luminance), None) => {
-            material_name_parts.push("Emissive");
-            (
-                TexturedEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                TexturedEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    emissive_luminance,
-                    roughness,
-                ),
-            )
-        }
-        (Some(albedo), None, Some(emissive_luminance), None) => {
-            material_name_parts.push("UniformDiffuseEmissive");
-
-            (
-                UniformDiffuseEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    emissive_luminance,
-                    roughness,
-                ),
-            )
-        }
-        (None, Some(specular_reflectance), Some(emissive_luminance), None) => {
-            material_name_parts.push("UniformSpecularEmissive");
-
-            (
-                UniformSpecularEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                UniformSpecularEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    specular_reflectance,
-                    emissive_luminance,
-                    roughness,
-                ),
-            )
-        }
-        (Some(albedo), Some(specular_reflectance), Some(emissive_luminance), None) => {
-            material_name_parts.push("UniformDiffuseUniformSpecularEmissive");
-
-            (
-                UniformDiffuseUniformSpecularEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseUniformSpecularEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    specular_reflectance,
-                    emissive_luminance,
-                    roughness,
-                ),
-            )
-        }
-        (None, None, Some(emissive_luminance), Some(parallax_map)) => {
-            material_name_parts.push("ParallaxMappingEmissive");
-            (
-                TexturedParallaxMappingEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                TexturedParallaxMappingEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    emissive_luminance,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (Some(albedo), None, Some(emissive_luminance), Some(parallax_map)) => {
-            material_name_parts.push("UniformDiffuseParallaxMappingEmissive");
-
-            (
-                UniformDiffuseParallaxMappingEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseParallaxMappingEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    emissive_luminance,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (None, Some(specular_reflectance), Some(emissive_luminance), Some(parallax_map)) => {
-            material_name_parts.push("UniformSpecularParallaxMappingEmissive");
-
-            (
-                UniformSpecularParallaxMappingEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                UniformSpecularParallaxMappingEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    specular_reflectance,
-                    emissive_luminance,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-        (
-            Some(albedo),
-            Some(specular_reflectance),
-            Some(emissive_luminance),
-            Some(parallax_map),
-        ) => {
-            material_name_parts.push("UniformDiffuseUniformSpecularParallaxMappingEmissive");
-
-            (
-                UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature::FEATURE_TYPE_ID,
-                UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature::add_feature(
-                    instance_feature_manager,
-                    albedo,
-                    specular_reflectance,
-                    emissive_luminance,
-                    roughness,
-                    parallax_map,
-                ),
-            )
-        }
-    }
-}
-
-impl TexturedMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for TexturedMaterialFeature features")
-            .add_feature(&Self { roughness })
-    }
-}
-
-impl UniformDiffuseMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseMaterialFeature features")
-            .add_feature(&Self {
-                albedo: albedo.0,
+        (None, None) => (
+            TexturedColorPhysicalMaterialFeature::FEATURE_TYPE_ID,
+            TexturedColorPhysicalMaterialFeature::add_feature(
+                instance_feature_manager,
+                specular_reflectance,
                 roughness,
+                metalness,
+                emissive_luminance,
+            ),
+            MaterialInstanceFeatureFlags::empty(),
+        ),
+        (Some(color), Some(parallax_map)) => (
+            UniformColorParallaxMappedPhysicalMaterialFeature::FEATURE_TYPE_ID,
+            UniformColorParallaxMappedPhysicalMaterialFeature::add_feature(
+                instance_feature_manager,
+                color,
+                specular_reflectance,
+                roughness,
+                metalness,
+                emissive_luminance,
+                parallax_map,
+            ),
+            MaterialInstanceFeatureFlags::HAS_COLOR
+                | MaterialInstanceFeatureFlags::USES_PARALLAX_MAPPING,
+        ),
+        (None, Some(parallax_map)) => (
+            TexturedColorParallaxMappedPhysicalMaterialFeature::FEATURE_TYPE_ID,
+            TexturedColorParallaxMappedPhysicalMaterialFeature::add_feature(
+                instance_feature_manager,
+                specular_reflectance,
+                roughness,
+                metalness,
+                emissive_luminance,
+                parallax_map,
+            ),
+            MaterialInstanceFeatureFlags::USES_PARALLAX_MAPPING,
+        ),
+    }
+}
+
+impl UniformColorPhysicalMaterialFeature {
+    fn add_feature(
+        instance_feature_manager: &mut InstanceFeatureManager,
+        color: &UniformColorComp,
+        specular_reflectance: fre,
+        roughness: fre,
+        metalness: fre,
+        emissive_luminance: fre,
+    ) -> InstanceFeatureID {
+        instance_feature_manager
+            .get_storage_mut::<Self>()
+            .expect("Missing storage for UniformColorPhysicalMaterialFeature features")
+            .add_feature(&Self {
+                color: color.0,
+                specular_reflectance,
+                roughness,
+                metalness,
+                emissive_luminance,
             })
     }
 }
 
-impl UniformSpecularMaterialFeature {
+impl TexturedColorPhysicalMaterialFeature {
     fn add_feature(
         instance_feature_manager: &mut InstanceFeatureManager,
-        specular_reflectance: &SpecularReflectanceComp,
+        specular_reflectance: fre,
         roughness: fre,
+        metalness: fre,
+        emissive_luminance: fre,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformSpecularMaterialFeature features")
+            .expect("Missing storage for TexturedColorPhysicalMaterialFeature features")
             .add_feature(&Self {
-                specular_reflectance: specular_reflectance.0,
+                specular_reflectance,
                 roughness,
+                metalness,
+                emissive_luminance,
             })
     }
 }
 
-impl UniformDiffuseUniformSpecularMaterialFeature {
+impl UniformColorParallaxMappedPhysicalMaterialFeature {
     fn add_feature(
         instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        specular_reflectance: &SpecularReflectanceComp,
+        color: &UniformColorComp,
+        specular_reflectance: fre,
         roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseUniformSpecularMaterialFeature features")
-            .add_feature(&Self {
-                albedo: albedo.0,
-                specular_reflectance: specular_reflectance.0,
-                roughness,
-            })
-    }
-}
-
-impl TexturedParallaxMappingMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        roughness: fre,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for TexturedParallaxMappingMaterialFeature features")
-            .add_feature(&Self {
-                roughness,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl UniformDiffuseParallaxMappingMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        roughness: fre,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseParallaxMappingMaterialFeature features")
-            .add_feature(&Self {
-                albedo: albedo.0,
-                roughness,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl UniformSpecularParallaxMappingMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        specular_reflectance: &SpecularReflectanceComp,
-        roughness: fre,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformSpecularParallaxMappingMaterialFeature features")
-            .add_feature(&Self {
-                specular_reflectance: specular_reflectance.0,
-                roughness,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl UniformDiffuseUniformSpecularParallaxMappingMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        specular_reflectance: &SpecularReflectanceComp,
-        roughness: fre,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseUniformSpecularParallaxMappingMaterialFeature features")
-            .add_feature(&Self {
-                albedo: albedo.0,
-                specular_reflectance: specular_reflectance.0,
-                roughness,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl TexturedEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for TexturedEmissiveMaterialFeature features")
-            .add_feature(&Self {
-                emissive_luminance: emissive_luminance.0,
-                roughness,
-            })
-    }
-}
-
-impl UniformDiffuseEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseEmissiveMaterialFeature features")
-            .add_feature(&Self {
-                albedo: albedo.0,
-                emissive_luminance: emissive_luminance.0,
-                roughness,
-            })
-    }
-}
-
-impl UniformSpecularEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        specular_reflectance: &SpecularReflectanceComp,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformSpecularEmissiveMaterialFeature features")
-            .add_feature(&Self {
-                specular_reflectance: specular_reflectance.0,
-                emissive_luminance: emissive_luminance.0,
-                roughness,
-            })
-    }
-}
-
-impl UniformDiffuseUniformSpecularEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        specular_reflectance: &SpecularReflectanceComp,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect(
-                "Missing storage for UniformDiffuseUniformSpecularEmissiveMaterialFeature features",
-            )
-            .add_feature(&Self {
-                albedo: albedo.0,
-                specular_reflectance: specular_reflectance.0,
-                emissive_luminance: emissive_luminance.0,
-                roughness,
-            })
-    }
-}
-
-impl TexturedParallaxMappingEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for TexturedParallaxMappingEmissiveMaterialFeature features")
-            .add_feature(&Self {
-                emissive_luminance: emissive_luminance.0,
-                roughness,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl UniformDiffuseParallaxMappingEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
+        metalness: fre,
+        emissive_luminance: fre,
         parallax_map: &ParallaxMapComp,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
             .expect(
-                "Missing storage for UniformDiffuseParallaxMappingEmissiveMaterialFeature features",
+                "Missing storage for UniformColorParallaxMappedPhysicalMaterialFeature features",
             )
             .add_feature(&Self {
-                albedo: albedo.0,
-                emissive_luminance: emissive_luminance.0,
+                color: color.0,
+                specular_reflectance,
                 roughness,
+                metalness,
+                emissive_luminance,
                 parallax_displacement_scale: parallax_map.displacement_scale,
                 parallax_uv_per_distance: parallax_map.uv_per_distance,
             })
     }
 }
 
-impl UniformSpecularParallaxMappingEmissiveMaterialFeature {
+impl TexturedColorParallaxMappedPhysicalMaterialFeature {
     fn add_feature(
         instance_feature_manager: &mut InstanceFeatureManager,
-        specular_reflectance: &SpecularReflectanceComp,
-        emissive_luminance: &EmissiveLuminanceComp,
+        specular_reflectance: fre,
         roughness: fre,
+        metalness: fre,
+        emissive_luminance: fre,
         parallax_map: &ParallaxMapComp,
     ) -> InstanceFeatureID {
         instance_feature_manager
             .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformSpecularParallaxMappingEmissiveMaterialFeature features")
+            .expect(
+                "Missing storage for TexturedColorParallaxMappedPhysicalMaterialFeature features",
+            )
             .add_feature(&Self {
-                specular_reflectance: specular_reflectance.0,
-                emissive_luminance: emissive_luminance.0,
+                specular_reflectance,
                 roughness,
-                parallax_displacement_scale: parallax_map.displacement_scale,
-                parallax_uv_per_distance: parallax_map.uv_per_distance,
-            })
-    }
-}
-
-impl UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature {
-    fn add_feature(
-        instance_feature_manager: &mut InstanceFeatureManager,
-        albedo: &AlbedoComp,
-        specular_reflectance: &SpecularReflectanceComp,
-        emissive_luminance: &EmissiveLuminanceComp,
-        roughness: fre,
-        parallax_map: &ParallaxMapComp,
-    ) -> InstanceFeatureID {
-        instance_feature_manager
-            .get_storage_mut::<Self>()
-            .expect("Missing storage for UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature features")
-            .add_feature(&Self {
-                albedo: albedo.0,
-                specular_reflectance: specular_reflectance.0,
-                emissive_luminance: emissive_luminance.0,
-                roughness,
+                metalness,
+                emissive_luminance,
                 parallax_displacement_scale: parallax_map.displacement_scale,
                 parallax_uv_per_distance: parallax_map.uv_per_distance,
             })
@@ -824,288 +319,51 @@ impl UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature {
 
 impl_InstanceFeature!(
     FixedColorMaterialFeature,
-    wgpu::vertex_attr_array![MATERIAL_VERTEX_BINDING_START => Float32x3],
-    InstanceFeatureShaderInput::FixedColorMaterial(FixedColorFeatureShaderInput {
-        color_location: MATERIAL_VERTEX_BINDING_START,
-    })
+    wgpu::vertex_attr_array![MaterialInstanceFeatureLocation::Color as u32 => Float32x3]
 );
 
 impl_InstanceFeature!(
-    TexturedMaterialFeature,
+    UniformColorPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: None,
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
+        MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
+        MaterialInstanceFeatureLocation::Roughness as u32 => Float32,
+        MaterialInstanceFeatureLocation::Metalness as u32 => Float32,
+        MaterialInstanceFeatureLocation::EmissiveLuminance as u32 => Float32,
+        MaterialInstanceFeatureLocation::Color as u32 => Float32x3,
+    ]
 );
 
 impl_InstanceFeature!(
-    UniformDiffuseMaterialFeature,
+    TexturedColorPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: None,
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
+        MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
+        MaterialInstanceFeatureLocation::Roughness as u32 => Float32,
+        MaterialInstanceFeatureLocation::Metalness as u32 => Float32,
+        MaterialInstanceFeatureLocation::EmissiveLuminance as u32 => Float32,
+    ]
 );
 
 impl_InstanceFeature!(
-    UniformSpecularMaterialFeature,
+    UniformColorParallaxMappedPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START),
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
+        MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
+        MaterialInstanceFeatureLocation::Roughness as u32 => Float32,
+        MaterialInstanceFeatureLocation::Metalness as u32 => Float32,
+        MaterialInstanceFeatureLocation::EmissiveLuminance as u32 => Float32,
+        MaterialInstanceFeatureLocation::Color as u32 => Float32x3,
+        MaterialInstanceFeatureLocation::ParallaxDisplacementScale as u32 => Float32,
+        MaterialInstanceFeatureLocation::ParallaxUVPerDistance as u32 => Float32x2,
+    ]
 );
 
 impl_InstanceFeature!(
-    UniformDiffuseUniformSpecularMaterialFeature,
+    TexturedColorParallaxMappedPhysicalMaterialFeature,
     wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    TexturedParallaxMappingMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: None,
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseParallaxMappingMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: None,
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformSpecularParallaxMappingMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START),
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseUniformSpecularParallaxMappingMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 4 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        emissive_luminance_location: None,
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 4),
-    })
-);
-
-impl_InstanceFeature!(
-    TexturedEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: None,
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: None,
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformSpecularEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START),
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseUniformSpecularEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-        parallax_displacement_scale_location: None,
-        parallax_uv_per_distance_location: None,
-    })
-);
-
-impl_InstanceFeature!(
-    TexturedParallaxMappingEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: None,
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseParallaxMappingEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 4 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: None,
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 4),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformSpecularParallaxMappingEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 4 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: None,
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START),
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 4),
-    })
-);
-
-impl_InstanceFeature!(
-    UniformDiffuseUniformSpecularParallaxMappingEmissiveMaterialFeature,
-    wgpu::vertex_attr_array![
-        MATERIAL_VERTEX_BINDING_START => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 1 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 2 => Float32x3,
-        MATERIAL_VERTEX_BINDING_START + 3 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 4 => Float32,
-        MATERIAL_VERTEX_BINDING_START + 5 => Float32x2
-    ],
-    InstanceFeatureShaderInput::LightMaterial(LightMaterialFeatureShaderInput {
-        albedo_location: Some(MATERIAL_VERTEX_BINDING_START),
-        specular_reflectance_location: Some(MATERIAL_VERTEX_BINDING_START + 1),
-        emissive_luminance_location: Some(MATERIAL_VERTEX_BINDING_START + 2),
-        roughness_location: Some(MATERIAL_VERTEX_BINDING_START + 3),
-        parallax_displacement_scale_location: Some(MATERIAL_VERTEX_BINDING_START + 4),
-        parallax_uv_per_distance_location: Some(MATERIAL_VERTEX_BINDING_START + 5),
-    })
+        MaterialInstanceFeatureLocation::SpecularReflectance as u32 => Float32,
+        MaterialInstanceFeatureLocation::Roughness as u32 => Float32,
+        MaterialInstanceFeatureLocation::Metalness as u32 => Float32,
+        MaterialInstanceFeatureLocation::EmissiveLuminance as u32 => Float32,
+        MaterialInstanceFeatureLocation::ParallaxDisplacementScale as u32 => Float32,
+        MaterialInstanceFeatureLocation::ParallaxUVPerDistance as u32 => Float32x2,
+    ]
 );

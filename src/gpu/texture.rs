@@ -176,7 +176,8 @@ impl TexelDescription {
         }
     }
 
-    fn texture_format(&self) -> wgpu::TextureFormat {
+    /// Returns the texture format that will be used for this texel description.
+    pub fn texture_format(&self) -> wgpu::TextureFormat {
         match self {
             Self::Rgba8(ColorSpace::Linear) => wgpu::TextureFormat::Rgba8Unorm,
             Self::Rgba8(ColorSpace::Srgb) => wgpu::TextureFormat::Rgba8UnormSrgb,
@@ -683,23 +684,12 @@ impl Texture {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
+        create_texture_bind_group_layout_entry(
             binding,
             visibility,
-            ty: wgpu::BindingType::Texture {
-                sample_type: self
-                    .texture
-                    .format()
-                    .sample_type(
-                        Some(wgpu::TextureAspect::DepthOnly),
-                        Some(wgpu::Features::FLOAT32_FILTERABLE),
-                    )
-                    .unwrap(),
-                view_dimension: self.view_dimension,
-                multisampled: false,
-            },
-            count: None,
-        }
+            self.texture.format(),
+            self.view_dimension,
+        )
     }
 
     /// Creates the bind group entry for this texture, assigned to the given
@@ -811,12 +801,7 @@ impl Sampler {
         binding: u32,
         visibility: wgpu::ShaderStages,
     ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility,
-            ty: wgpu::BindingType::Sampler(self.binding_type),
-            count: None,
-        }
+        create_sampler_bind_group_layout_entry(binding, visibility, self.binding_type)
     }
 
     /// Creates the bind group entry for this sampler, assigned to the given
@@ -970,6 +955,46 @@ impl DepthOrArrayLayers {
             Self::Depth(depth) => *depth,
             Self::ArrayLayers(n_array_layers) => *n_array_layers,
         }
+    }
+}
+
+/// Creates a [`wgpu::BindGroupLayoutEntry`] for a [`Texture`] with the given
+/// binding, visibility, format and view dimension.
+pub fn create_texture_bind_group_layout_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+    format: wgpu::TextureFormat,
+    view_dimension: wgpu::TextureViewDimension,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Texture {
+            sample_type: format
+                .sample_type(
+                    Some(wgpu::TextureAspect::DepthOnly),
+                    Some(wgpu::Features::FLOAT32_FILTERABLE),
+                )
+                .unwrap(),
+            view_dimension,
+            multisampled: false,
+        },
+        count: None,
+    }
+}
+
+/// Creates a [`wgpu::BindGroupLayoutEntry`] for a [`Sampler`] with the given
+/// binding, visibility and binding type.
+pub fn create_sampler_bind_group_layout_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+    binding_type: wgpu::SamplerBindingType,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Sampler(binding_type),
+        count: None,
     }
 }
 

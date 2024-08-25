@@ -5,37 +5,26 @@ pub mod capturing;
 pub mod gaussian_blur;
 pub mod temporal_anti_aliasing;
 
-use crate::{
-    gpu::{
-        push_constant::{PushConstant, PushConstantVariant},
-        rendering::render_command::{
-            Blending, DepthMapUsage, RenderCommandSpecification, RenderCommandState,
-            RenderPassSpecification, RenderPipelineHints, RenderPipelineSpecification,
-            RenderSubpassSpecification,
-        },
-        resource_group::GPUResourceGroupManager,
-        shader::{template::SpecificShaderTemplate, ShaderManager},
-        storage::StorageGPUBufferManager,
-        texture::attachment::{
-            OutputAttachmentSampling, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity, RenderAttachmentTextureManager,
-        },
-        GraphicsDevice,
-    },
-    mesh::{buffer::VertexBufferable, VertexPosition, SCREEN_FILLING_QUAD_MESH_ID},
+use crate::gpu::{
+    rendering::{resource::SynchronizedRenderResources, surface::RenderingSurface},
+    resource_group::GPUResourceGroupManager,
+    shader::ShaderManager,
+    storage::StorageGPUBufferManager,
+    texture::attachment::RenderAttachmentTextureManager,
+    GraphicsDevice,
 };
-use ambient_occlusion::AmbientOcclusionConfig;
+use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
+use anyhow::Result;
 use capturing::{CapturingCamera, CapturingCameraConfig};
-use temporal_anti_aliasing::TemporalAntiAliasingConfig;
+use temporal_anti_aliasing::{TemporalAntiAliasingConfig, TemporalAntiAliasingRenderCommands};
 
-/// Manager of materials and render commands for postprocessing effects.
-#[derive(Clone, Debug)]
+/// Manager of GPU resources and render commands for postprocessing effects.
+#[derive(Debug)]
 pub struct Postprocessor {
     ambient_occlusion_enabled: bool,
-    ambient_occlusion_commands: Vec<RenderCommandSpecification>,
+    ambient_occlusion_commands: AmbientOcclusionRenderCommands,
     temporal_anti_aliasing_enabled: bool,
-    temporal_anti_aliasing_commands: Vec<RenderCommandSpecification>,
+    temporal_anti_aliasing_commands: TemporalAntiAliasingRenderCommands,
     capturing_camera: CapturingCamera,
 }
 
@@ -44,86 +33,112 @@ impl Postprocessor {
     /// according to the given configuration.
     pub fn new(
         graphics_device: &GraphicsDevice,
+        rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
-        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         gpu_resource_group_manager: &mut GPUResourceGroupManager,
         storage_gpu_buffer_manager: &mut StorageGPUBufferManager,
         ambient_occlusion_config: &AmbientOcclusionConfig,
         temporal_anti_aliasing_config: &TemporalAntiAliasingConfig,
         capturing_camera_settings: &CapturingCameraConfig,
-    ) -> Self {
-        let ambient_occlusion_commands =
-            ambient_occlusion::create_ambient_occlusion_render_commands(
-                graphics_device,
-                shader_manager,
-                gpu_resource_group_manager,
-                ambient_occlusion_config,
-            );
+    ) -> Result<Self> {
+        let ambient_occlusion_commands = AmbientOcclusionRenderCommands::new(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            ambient_occlusion_config,
+        )?;
 
-        let temporal_anti_aliasing_commands =
-            temporal_anti_aliasing::create_temporal_anti_aliasing_render_commands(
-                graphics_device,
-                shader_manager,
-                gpu_resource_group_manager,
-                temporal_anti_aliasing_config,
-            );
+        let temporal_anti_aliasing_commands = TemporalAntiAliasingRenderCommands::new(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            temporal_anti_aliasing_config,
+        )?;
 
         let capturing_camera = CapturingCamera::new(
             graphics_device,
+            rendering_surface,
             shader_manager,
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             storage_gpu_buffer_manager,
             capturing_camera_settings,
-        );
+        )?;
 
-        Self {
+        Ok(Self {
             ambient_occlusion_enabled: ambient_occlusion_config.initially_enabled,
             ambient_occlusion_commands,
             temporal_anti_aliasing_enabled: temporal_anti_aliasing_config.initially_enabled,
             temporal_anti_aliasing_commands,
             capturing_camera,
-        }
+        })
     }
 
-    /// Returns an iterator over the specifications for all postprocessing
-    /// render commands, in the order in which they are to be performed.
-    pub fn render_commands(&self) -> impl Iterator<Item = RenderCommandSpecification> + '_ {
-        assert_eq!(self.ambient_occlusion_commands.len(), 3);
-        assert_eq!(self.temporal_anti_aliasing_commands.len(), 2);
-        self.ambient_occlusion_commands
-            .iter()
-            .cloned()
-            .chain(self.capturing_camera.render_commands_before_tone_mapping())
-            .chain(self.temporal_anti_aliasing_commands.iter().cloned())
-            .chain(self.capturing_camera.render_commands_from_tone_mapping())
-    }
-
-    /// Returns an iterator over the current states of all postprocessing render
-    /// commands, in the same order as from [`Self::render_commands`].
-    pub fn render_command_states(&self) -> impl Iterator<Item = RenderCommandState> + '_ {
-        assert_eq!(self.ambient_occlusion_commands.len(), 3);
-        assert_eq!(self.temporal_anti_aliasing_commands.len(), 2);
-        [
-            !self.ambient_occlusion_enabled,
+    /// Records all postprocessing render commands into the given command
+    /// encoder.
+    ///
+    /// # Errors
+    /// Returns an error if any of the required GPU resources are missing.
+    pub fn record_commands(
+        &self,
+        rendering_surface: &RenderingSurface,
+        surface_texture_view: &wgpu::TextureView,
+        render_resources: &SynchronizedRenderResources,
+        render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        gpu_resource_group_manager: &GPUResourceGroupManager,
+        storage_gpu_buffer_manager: &StorageGPUBufferManager,
+        frame_counter: u32,
+        command_encoder: &mut wgpu::CommandEncoder,
+    ) -> Result<()> {
+        self.ambient_occlusion_commands.record(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            self,
+            frame_counter,
             self.ambient_occlusion_enabled,
-            self.ambient_occlusion_enabled,
-        ]
-        .into_iter()
-        .map(RenderCommandState::active_if)
-        .chain(
-            self.capturing_camera
-                .render_command_states_before_tone_mapping(),
-        )
-        .chain(
-            [true, self.temporal_anti_aliasing_enabled]
-                .into_iter()
-                .map(RenderCommandState::active_if),
-        )
-        .chain(
-            self.capturing_camera
-                .render_command_states_from_tone_mapping(),
-        )
+            command_encoder,
+        )?;
+        self.capturing_camera.record_commands_before_tone_mapping(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            storage_gpu_buffer_manager,
+            self,
+            frame_counter,
+            command_encoder,
+        )?;
+        self.temporal_anti_aliasing_commands.record(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            self,
+            frame_counter,
+            self.temporal_anti_aliasing_enabled,
+            command_encoder,
+        )?;
+        self.capturing_camera.record_tone_mapping_render_commands(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            self,
+            frame_counter,
+            command_encoder,
+        )?;
+        Ok(())
     }
 
     /// Returns a reference to the capturing camera.
@@ -155,68 +170,4 @@ impl Postprocessor {
     pub fn toggle_temporal_anti_aliasing(&mut self) {
         self.temporal_anti_aliasing_enabled = !self.temporal_anti_aliasing_enabled;
     }
-}
-
-fn create_passthrough_render_pass(
-    graphics_device: &GraphicsDevice,
-    shader_manager: &mut ShaderManager,
-    input_render_attachment_quantity: RenderAttachmentQuantity,
-    output_render_attachment_quantity: RenderAttachmentQuantity,
-    output_attachment_sampling: OutputAttachmentSampling,
-    blending: Blending,
-    depth_map_usage: DepthMapUsage,
-) -> RenderCommandSpecification {
-    let (input_texture_binding, input_sampler_binding) =
-        input_render_attachment_quantity.bindings();
-
-    let shader_id = shader_manager
-        .get_or_create_rendering_shader_from_template(
-            graphics_device,
-            SpecificShaderTemplate::Passthrough,
-            &[],
-            &[
-                (
-                    "position_location",
-                    VertexPosition::BINDING_LOCATION.to_string(),
-                ),
-                ("input_texture_binding", input_texture_binding.to_string()),
-                ("input_sampler_binding", input_sampler_binding.to_string()),
-            ],
-        )
-        .unwrap();
-
-    let input_render_attachments =
-        RenderAttachmentInputDescriptionSet::with_defaults(input_render_attachment_quantity.flag());
-
-    let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-        output_render_attachment_quantity,
-        RenderAttachmentOutputDescription::default()
-            .with_sampling(output_attachment_sampling)
-            .with_blending(blending),
-    );
-
-    RenderCommandSpecification::RenderSubpass(RenderSubpassSpecification {
-        pass: RenderPassSpecification {
-            output_render_attachments,
-            label: format!(
-                "Passthrough pass into {}",
-                output_render_attachment_quantity
-            ),
-            depth_map_usage,
-            ..Default::default()
-        },
-        pipeline: Some(RenderPipelineSpecification {
-            explicit_mesh_id: Some(*SCREEN_FILLING_QUAD_MESH_ID),
-            explicit_shader_id: Some(shader_id),
-            input_render_attachments,
-            push_constants: PushConstant::new(
-                PushConstantVariant::InverseWindowDimensions,
-                wgpu::ShaderStages::FRAGMENT,
-            )
-            .into(),
-            hints: RenderPipelineHints::NO_DEPTH_PREPASS.union(RenderPipelineHints::NO_CAMERA),
-            label: format!("Passthrough from {}", input_render_attachment_quantity),
-            ..Default::default()
-        }),
-    })
 }

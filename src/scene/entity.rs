@@ -5,7 +5,7 @@ use crate::{
     camera,
     gpu::{rendering::RenderingSystem, GraphicsDevice},
     light,
-    material::{self, components::MaterialComp, MaterialHandle},
+    material::{self, components::MaterialComp},
     mesh::{self, components::MeshComp},
     model::{transform::InstanceModelViewTransformWithPrevious, InstanceFeature, ModelID},
     physics::motion::components::ReferenceFrameComp,
@@ -204,11 +204,7 @@ impl Scene {
              frame: Option<&ReferenceFrameComp>,
              parent: Option<&SceneGraphParentNodeComp>|
              -> SceneGraphModelInstanceNodeComp {
-                let model_id = ModelID::for_mesh_and_material(
-                    mesh.id,
-                    *material.material_handle(),
-                    material.prepass_material_handle().cloned(),
-                );
+                let model_id = ModelID::for_mesh_and_material(mesh.id, *material.material_handle());
 
                 let mut feature_type_ids = Vec::with_capacity(2);
 
@@ -240,24 +236,10 @@ impl Scene {
                 // The first feature is expected to be the transform
                 feature_ids.push(model_view_transform_feature_id);
 
-                match (
-                    material.material_handle().material_property_feature_id(),
-                    material
-                        .prepass_material_handle()
-                        .and_then(MaterialHandle::material_property_feature_id),
-                ) {
-                    (None, None) => {}
-                    (Some(feature_id), None) | (None, Some(feature_id)) => {
-                        feature_ids.push(feature_id);
-                    }
-                    (Some(feature_id), Some(prepass_feature_id)) => {
-                        assert_eq!(
-                            prepass_feature_id, feature_id,
-                            "Prepass material must use the same feature as main material"
-                        );
-                        feature_ids.push(feature_id);
-                    }
-                };
+                if let Some(feature_id) = material.material_handle().material_property_feature_id()
+                {
+                    feature_ids.push(feature_id);
+                }
 
                 let bounding_sphere = if components.has_component_type::<UncullableComp>() {
                     // The scene graph will not cull models with no bounding sphere

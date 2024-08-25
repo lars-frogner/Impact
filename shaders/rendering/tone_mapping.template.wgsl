@@ -1,25 +1,25 @@
 struct VertexOutput {
-    @builtin(position) projectedPosition: vec4<f32>,
+    @builtin(position) projectedPosition: vec4f,
 }
 
 struct FragmentOutput {
-    @location(0) color: vec4<f32>,
+    @location(0) color: vec4f,
 }
 
-var<push_constant> inverseWindowDimensions: vec2<f32>;
+var<push_constant> inverseWindowDimensions: vec2f;
 
 @group(0) @binding({{input_texture_binding}}) var inputColorTexture: texture_2d<f32>;
 @group(0) @binding({{input_sampler_binding}}) var inputColorSampler: sampler;
 
-fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4<f32>) -> vec2<f32> {
+fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
     return (framebufferPosition.xy * inverseWindowDimensions);
 }
 
-fn toneMapNone(rgbaColor: vec4<f32>) -> vec4<f32> {
+fn toneMapNone(rgbaColor: vec4f) -> vec4f {
     return rgbaColor;
 }
 
-fn toneMapACES(rgbaColor: vec4<f32>) -> vec4<f32> {
+fn toneMapACES(rgbaColor: vec4f) -> vec4f {
     let a = 2.51;
     let b = 0.03;
     let c = 2.43;
@@ -28,10 +28,10 @@ fn toneMapACES(rgbaColor: vec4<f32>) -> vec4<f32> {
     var color = rgbaColor.rgb;
     color *= 0.6;
     color = saturate((color * (a * color + b)) / (color * (c * color + d) + e));
-    return vec4<f32>(color, rgbaColor.a);
+    return vec4f(color, rgbaColor.a);
 }
 
-fn toneMapKhronosPBRNeutral(rgbaColor: vec4<f32>) -> vec4<f32> {
+fn toneMapKhronosPBRNeutral(rgbaColor: vec4f) -> vec4f {
     let startCompression = 0.8 - 0.04;
     let desaturation = 0.15;
 
@@ -43,7 +43,7 @@ fn toneMapKhronosPBRNeutral(rgbaColor: vec4<f32>) -> vec4<f32> {
 
     let peak = max(color.r, max(color.g, color.b));
     if (peak < startCompression) {
-        return vec4<f32>(color, rgbaColor.a);
+        return vec4f(color, rgbaColor.a);
     }
 
     let d = 1.0 - startCompression;
@@ -53,17 +53,17 @@ fn toneMapKhronosPBRNeutral(rgbaColor: vec4<f32>) -> vec4<f32> {
     let g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
     color = mix(color, newPeak * vec3(1.0, 1.0, 1.0), g);
 
-    return vec4<f32>(color, rgbaColor.a);
+    return vec4f(color, rgbaColor.a);
 }
 
-@vertex 
-fn mainVS(@location({{position_location}}) modelSpacePosition: vec3<f32>) -> VertexOutput {
+@vertex
+fn mainVS(@location({{position_location}}) modelSpacePosition: vec3f) -> VertexOutput {
     var output: VertexOutput;
-    output.projectedPosition = vec4<f32>(modelSpacePosition, 1.0);
+    output.projectedPosition = vec4f(modelSpacePosition, 1.0);
     return output;
 }
 
-@fragment 
+@fragment
 fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
     let textureCoords = convertFramebufferPositionToScreenTextureCoords(input.projectedPosition);

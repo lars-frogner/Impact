@@ -18,6 +18,7 @@ use crate::{
     material::{MaterialLibrary, MaterialLibraryState},
     mesh::{MeshRepository, MeshRepositoryState},
     model::InstanceFeatureManager,
+    skybox::Skybox,
     voxel::VoxelManager,
     window,
 };
@@ -36,6 +37,7 @@ pub struct Scene {
     voxel_manager: RwLock<VoxelManager<fre>>,
     scene_graph: RwLock<SceneGraph<fre>>,
     scene_camera: RwLock<Option<SceneCamera<fre>>>,
+    skybox: RwLock<Option<Skybox>>,
 }
 
 /// Indicates whether the render resources are out of sync with its source scene
@@ -66,6 +68,7 @@ impl Scene {
             voxel_manager: RwLock::new(voxel_manager),
             scene_graph: RwLock::new(SceneGraph::new()),
             scene_camera: RwLock::new(None),
+            skybox: RwLock::new(None),
         }
     }
 
@@ -104,6 +107,12 @@ impl Scene {
     /// camera has been set, guarded by a [`RwLock`].
     pub fn scene_camera(&self) -> &RwLock<Option<SceneCamera<fre>>> {
         &self.scene_camera
+    }
+
+    /// Returns a reference to the [`Skybox`], or [`None`] if no skybox has
+    /// been set, guarded by a [`RwLock`].
+    pub fn skybox(&self) -> &RwLock<Option<Skybox>> {
+        &self.skybox
     }
 
     pub fn handle_window_resized(
@@ -155,6 +164,8 @@ impl Scene {
         self.scene_graph.write().unwrap().clear_nodes();
 
         self.scene_camera.write().unwrap().take();
+
+        self.skybox.write().unwrap().take();
     }
 }
 

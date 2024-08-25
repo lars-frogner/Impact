@@ -1,7 +1,7 @@
 //! Buffering of model instance data for rendering.
 
 use crate::{
-    gpu::{buffer::GPUBuffer, shader::InstanceFeatureShaderInput, GraphicsDevice},
+    gpu::{buffer::GPUBuffer, GraphicsDevice},
     model::{
         DynamicInstanceFeatureBuffer, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
         InstanceFeatureTypeID,
@@ -15,7 +15,6 @@ use std::{borrow::Cow, ops::Range};
 pub struct InstanceFeatureGPUBufferManager {
     feature_gpu_buffer: GPUBuffer,
     vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    shader_input: InstanceFeatureShaderInput,
     feature_type_id: InstanceFeatureTypeID,
     n_features: u32,
     range_map: InstanceFeatureBufferRangeMap,
@@ -46,7 +45,6 @@ impl InstanceFeatureGPUBufferManager {
         Self {
             feature_gpu_buffer,
             vertex_buffer_layout: feature_buffer.vertex_buffer_layout().clone(),
-            shader_input: feature_buffer.shader_input().clone(),
             feature_type_id: feature_buffer.feature_type_id(),
             n_features: u32::try_from(feature_buffer.n_valid_features()).unwrap(),
             range_map: feature_buffer.create_range_map(),
@@ -61,12 +59,6 @@ impl InstanceFeatureGPUBufferManager {
     /// Returns the vertex GPU buffer of instance features.
     pub fn vertex_gpu_buffer(&self) -> &GPUBuffer {
         &self.feature_gpu_buffer
-    }
-
-    /// Returns the input required for accessing the features
-    /// in a shader.
-    pub fn shader_input(&self) -> &InstanceFeatureShaderInput {
-        &self.shader_input
     }
 
     /// Returns the number of features in the GPU buffer.
@@ -91,6 +83,16 @@ impl InstanceFeatureGPUBufferManager {
     /// information.
     pub fn initial_feature_range(&self) -> Range<u32> {
         self.feature_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+    }
+
+    /// Whether the buffer has features in the initial feature range.
+    pub fn has_features_in_initial_range(&self) -> bool {
+        !self.initial_feature_range().is_empty()
+    }
+
+    /// Whether the buffer has features after the initial feature range.
+    pub fn has_features_after_initial_range(&self) -> bool {
+        self.n_features > self.initial_feature_range().end
     }
 
     /// Writes the valid features in the given model instance feature

@@ -215,6 +215,8 @@ impl World {
         for table in &self.archetype_tables {
             table.write().unwrap().remove_all_entities();
         }
+        self.archetype_tables.clear();
+        self.archetype_index_mapper.clear();
         self.n_removed_entities += self.entity_count();
     }
 

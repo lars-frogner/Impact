@@ -4,7 +4,7 @@ use crate::{
     gpu::rendering::fre,
     mesh::{
         components::MeshComp, texture_projection::TextureProjection, MeshID, MeshRepository,
-        TriangleMesh, VertexColor, VertexNormalVector, VertexPosition, VertexTextureCoords,
+        TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords,
     },
 };
 use anyhow::{bail, Result};
@@ -141,7 +141,6 @@ fn convert_ply_vertices_and_faces_to_mesh(
     let mut prop_idx = 0;
 
     let mut vertex_positions = Vec::new();
-    let mut vertex_colors = Vec::new();
     let mut vertex_normal_vectors = Vec::new();
     let mut vertex_texture_coords = Vec::new();
 
@@ -172,17 +171,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
             vertex_property_names[prop_idx + 1].as_str(),
             vertex_property_names[prop_idx + 2].as_str(),
         ) {
-            vertex_colors = vertex_list
-                .iter()
-                .map(|PlyVertex { property_values }| {
-                    VertexColor(vector![
-                        property_values[prop_idx],
-                        property_values[prop_idx + 1],
-                        property_values[prop_idx + 2]
-                    ])
-                })
-                .collect();
-
+            // Ignore vertex colors
             prop_idx += 3;
         }
     }
@@ -233,7 +222,6 @@ fn convert_ply_vertices_and_faces_to_mesh(
 
     TriangleMesh::new(
         vertex_positions,
-        vertex_colors,
         vertex_normal_vectors,
         vertex_texture_coords,
         Vec::new(),
@@ -244,7 +232,8 @@ fn convert_ply_vertices_and_faces_to_mesh(
 impl PropertyAccess for PlyVertex {
     fn new() -> Self {
         Self {
-            property_values: Vec::with_capacity(8), // 8 = position + normal vector + texture coordinates
+            property_values: Vec::with_capacity(8), /* 8 = position + normal vector + texture
+                                                     * coordinates */
         }
     }
 

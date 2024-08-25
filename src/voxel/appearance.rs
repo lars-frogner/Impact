@@ -3,13 +3,12 @@
 use super::VOXEL_MESH_ID;
 use crate::{
     assets::Assets,
-    gpu::{
-        shader::{DiffuseMicrofacetShadingModel, SpecularMicrofacetShadingModel},
-        GraphicsDevice,
-    },
+    gpu::GraphicsDevice,
     material::{
         self,
-        components::{AlbedoComp, MaterialComp, RoughnessComp, SpecularReflectanceComp},
+        components::{
+            MaterialComp, UniformColorComp, UniformRoughnessComp, UniformSpecularReflectanceComp,
+        },
         MaterialHandle, MaterialLibrary, RGBColor,
     },
     model::{
@@ -26,8 +25,6 @@ pub struct VoxelAppearance {
     pub model_id: ModelID,
     /// The handle for the voxel's material.
     pub material_handle: MaterialHandle,
-    /// The handle for the voxel's prepass material, if applicable.
-    pub prepass_material_handle: Option<MaterialHandle>,
 }
 
 impl VoxelAppearance {
@@ -47,13 +44,8 @@ impl VoxelAppearance {
         );
 
         let material_handle = *material.material_handle();
-        let prepass_material_handle = material.prepass_material_handle().cloned();
 
-        let model_id = ModelID::for_mesh_and_material(
-            *VOXEL_MESH_ID,
-            material_handle,
-            prepass_material_handle,
-        );
+        let model_id = ModelID::for_mesh_and_material(*VOXEL_MESH_ID, material_handle);
 
         let mut feature_type_ids = Vec::with_capacity(2);
 
@@ -71,7 +63,6 @@ impl VoxelAppearance {
         Self {
             model_id,
             material_handle,
-            prepass_material_handle,
         }
     }
 }
@@ -90,8 +81,8 @@ fn setup_voxel_material(
             material_library,
             instance_feature_manager,
             vector![0.5, 0.5, 0.5],
-            Some(SpecularReflectanceComp::in_range_of(
-                SpecularReflectanceComp::STONE,
+            Some(UniformSpecularReflectanceComp::in_range_of(
+                UniformSpecularReflectanceComp::STONE,
                 0.5,
             )),
             Some(0.7),
@@ -105,32 +96,27 @@ fn setup_microfacet_material_for_voxel(
     material_library: &mut MaterialLibrary,
     instance_feature_manager: &mut InstanceFeatureManager,
     albedo: RGBColor,
-    specular_reflectance: Option<SpecularReflectanceComp>,
+    specular_reflectance: Option<UniformSpecularReflectanceComp>,
     roughness: Option<f32>,
 ) -> MaterialComp {
-    let roughness = roughness.map(RoughnessComp);
+    let roughness = roughness.map(UniformRoughnessComp);
 
-    let specular_shading_model = if specular_reflectance.is_some() {
-        SpecularMicrofacetShadingModel::GGX
-    } else {
-        SpecularMicrofacetShadingModel::None
-    };
-
-    material::entity::microfacet::setup_microfacet_material(
+    material::entity::physical::setup_physical_material(
         graphics_device,
         assets,
         material_library,
         instance_feature_manager,
-        Some(&AlbedoComp(albedo)),
+        Some(&UniformColorComp(albedo)),
+        None,
         specular_reflectance.as_ref(),
-        None,
-        None,
         None,
         roughness.as_ref(),
         None,
         None,
         None,
-        DiffuseMicrofacetShadingModel::GGX,
-        specular_shading_model,
+        None,
+        None,
+        None,
+        None,
     )
 }

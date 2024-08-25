@@ -7,15 +7,18 @@ use crate::{
     gpu::{
         buffer::GPUBuffer,
         rendering::fre,
-        shader::CameraShaderInput,
         uniform::{self, UniformBufferable},
         GraphicsDevice,
     },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_utils::{ConstStringHash64, HaltonSequence};
-use nalgebra::{Projective3, Vector4};
-use std::{borrow::Cow, sync::LazyLock};
+use nalgebra::{Projective3, Similarity3, UnitQuaternion, Vector4};
+use std::{
+    borrow::Cow,
+    mem,
+    sync::{LazyLock, OnceLock},
+};
 
 /// Length of the sequence of jitter offsets to apply to the projection for
 /// temporal anti-aliasing.
@@ -24,14 +27,11 @@ pub const JITTER_COUNT: usize = 8;
 /// Bases for the Halton sequence used to generate the jitter offsets.
 const JITTER_BASES: (u64, u64) = (2, 3);
 
-static JITTER_OFFSETS: LazyLock<[Vector4<fre>; JITTER_COUNT]> =
-    LazyLock::new(CameraProjectionUniform::generate_jitter_offsets);
-
-/// Owner and manager of a GPU buffer for a camera projection transformation.
+/// Owner and manager of a GPU resources for a camera.
 #[derive(Debug)]
 pub struct CameraGPUBufferManager {
+    view_transform: Similarity3<fre>,
     projection_uniform_gpu_buffer: GPUBuffer,
-    bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     jitter_enabled: bool,
 }
@@ -45,7 +45,7 @@ pub struct CameraGPUBufferManager {
 /// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-struct CameraProjectionUniform {
+pub struct CameraProjectionUniform {
     transform: Projective3<fre>,
     /// The corners are listed in the order consistent with
     /// [`TriangleMesh::create_screen_filling_quad`](`crate::mesh::TriangleMesh::create_screen_filling_quad`),
@@ -63,49 +63,53 @@ struct CameraProjectionUniform {
     jitter_offsets: [Vector4<fre>; JITTER_COUNT],
 }
 
-impl CameraGPUBufferManager {
-    const BINDING: u32 = 0;
-    const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
-    const SHADER_INPUT: CameraShaderInput = CameraShaderInput {
-        projection_binding: Self::BINDING,
-    };
+static JITTER_OFFSETS: LazyLock<[Vector4<fre>; JITTER_COUNT]> =
+    LazyLock::new(CameraProjectionUniform::generate_jitter_offsets);
 
-    /// Creates a new manager with a GPU buffer initialized from the projection
-    /// transform of the given camera.
+static CAMERA_PROJECTION_UNIFORM_BIND_GROUP_LAYOUT: OnceLock<wgpu::BindGroupLayout> =
+    OnceLock::new();
+
+impl CameraGPUBufferManager {
+    const VISIBILITY: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX_FRAGMENT;
+
+    /// Creates a new manager with GPU resources initialized from the given
+    /// camera.
     pub fn for_camera(graphics_device: &GraphicsDevice, camera: &SceneCamera<fre>) -> Self {
-        let label = Cow::Borrowed("Camera");
+        let view_transform = *camera.view_transform();
 
         let projection_uniform = CameraProjectionUniform::new(camera);
 
         let projection_uniform_gpu_buffer = GPUBuffer::new_buffer_for_single_uniform(
             graphics_device,
             &projection_uniform,
-            label.clone(),
+            Cow::Borrowed("Camera"),
         );
 
-        let bind_group_layout =
-            Self::create_bind_group_layout(graphics_device.device(), Self::VISIBILITY, &label);
+        let bind_group_layout = Self::get_or_create_bind_group_layout(graphics_device);
 
         let bind_group = Self::create_bind_group(
             graphics_device.device(),
             &projection_uniform_gpu_buffer,
-            &bind_group_layout,
-            &label,
+            bind_group_layout,
         );
 
         Self {
+            view_transform,
             projection_uniform_gpu_buffer,
-            bind_group_layout,
             bind_group,
             jitter_enabled: camera.jitter_enabled(),
         }
     }
 
-    /// Returns the layout of the bind group for the camera projection uniform.
+    /// Returns the layout of the bind group for the camera projection uniform,
+    /// after creating and caching it if it has not already been created.
     ///
     /// The layout will remain valid even though the projection may change.
-    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.bind_group_layout
+    pub fn get_or_create_bind_group_layout(
+        graphics_device: &GraphicsDevice,
+    ) -> &wgpu::BindGroupLayout {
+        CAMERA_PROJECTION_UNIFORM_BIND_GROUP_LAYOUT
+            .get_or_init(|| Self::create_bind_group_layout(graphics_device.device()))
     }
 
     /// Returns the bind group for the camera projection uniform.
@@ -115,19 +119,14 @@ impl CameraGPUBufferManager {
         &self.bind_group
     }
 
-    /// Returns the input required for accessing the camera projection uniform
-    /// in a shader.
-    pub const fn shader_input() -> &'static CameraShaderInput {
-        &Self::SHADER_INPUT
-    }
-
-    /// Ensures that the GPU buffer is in sync with the projection transform of
-    /// the given camera.
+    /// Ensures that the GPU buffer is in sync with the given camera.
     pub fn sync_with_camera(
         &mut self,
         graphics_device: &GraphicsDevice,
         camera: &SceneCamera<fre>,
     ) {
+        self.view_transform = *camera.view_transform();
+
         if camera.camera().projection_transform_changed()
             || camera.jitter_enabled() != self.jitter_enabled
         {
@@ -135,6 +134,17 @@ impl CameraGPUBufferManager {
             camera.camera().reset_projection_change_tracking();
             self.jitter_enabled = camera.jitter_enabled();
         }
+    }
+
+    /// Returns the size of the push constant obtained by calling
+    /// [`Self::camera_rotation_quaternion_push_constant`].
+    pub const fn camera_rotation_quaternion_push_constant_size() -> u32 {
+        mem::size_of::<UnitQuaternion<fre>>() as u32
+    }
+
+    /// Returns the camera rotation quaternion push constant.
+    pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternion<fre> {
+        self.view_transform.isometry.rotation
     }
 
     /// Creates the bind group layout entry for the camera projection uniform,
@@ -146,17 +156,13 @@ impl CameraGPUBufferManager {
         CameraProjectionUniform::create_bind_group_layout_entry(binding, visibility)
     }
 
-    fn create_bind_group_layout(
-        device: &wgpu::Device,
-        visibility: wgpu::ShaderStages,
-        label: &str,
-    ) -> wgpu::BindGroupLayout {
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[Self::create_bind_group_layout_entry(
-                Self::BINDING,
-                visibility,
+                CameraProjectionUniform::binding(),
+                Self::VISIBILITY,
             )],
-            label: Some(&format!("{} bind group layout", label)),
+            label: Some("Camera bind group layout"),
         })
     }
 
@@ -164,15 +170,14 @@ impl CameraGPUBufferManager {
         device: &wgpu::Device,
         projection_uniform_gpu_buffer: &GPUBuffer,
         layout: &wgpu::BindGroupLayout,
-        label: &str,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[uniform::create_single_uniform_bind_group_entry(
-                Self::BINDING,
+                CameraProjectionUniform::binding(),
                 projection_uniform_gpu_buffer,
             )],
-            label: Some(&format!("{} bind group", label)),
+            label: Some("Camera bind group"),
         })
     }
 
@@ -184,6 +189,17 @@ impl CameraGPUBufferManager {
 }
 
 impl CameraProjectionUniform {
+    /// The binding location of the projection uniform.
+    pub const fn binding() -> u32 {
+        0
+    }
+
+    /// Length of the sequence of jitter offsets to apply to the projection for
+    /// temporal anti-aliasing.
+    pub const fn jitter_count() -> usize {
+        JITTER_COUNT
+    }
+
     fn new(camera: &SceneCamera<fre>) -> Self {
         let transform = *camera.camera().projection_transform();
 

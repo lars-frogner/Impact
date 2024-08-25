@@ -975,10 +975,6 @@ impl SceneGraph<fre> {
                     let range_id =
                         light_id.as_instance_feature_buffer_range_id() + face.as_idx_u32();
                     instance_feature_manager.begin_range_in_feature_buffers(
-                        InstanceModelViewTransform::FEATURE_TYPE_ID,
-                        range_id,
-                    );
-                    instance_feature_manager.begin_range_in_feature_buffers(
                         InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
                         range_id,
                     );
@@ -1055,10 +1051,6 @@ impl SceneGraph<fre> {
                     // by the light's ID plus a cascade index offset
                     let range_id = light_id.as_instance_feature_buffer_range_id() + cascade_idx;
                     instance_feature_manager.begin_range_in_feature_buffers(
-                        InstanceModelViewTransform::FEATURE_TYPE_ID,
-                        range_id,
-                    );
-                    instance_feature_manager.begin_range_in_feature_buffers(
                         InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
                         range_id,
                     );
@@ -1129,6 +1121,8 @@ impl SceneGraph<fre> {
                 if camera_space_face_frustum
                     .could_contain_part_of_sphere(&model_instance_camera_space_bounding_sphere)
                 {
+                    // TODO: avoid using `InstanceModelViewTransformWithPrevious` for lights (they
+                    // don't need a previous transform)
                     let instance_model_light_transform =
                         InstanceModelViewTransformWithPrevious::current_only(
                             InstanceModelViewTransform::with_model_light_transform(
@@ -1802,7 +1796,6 @@ mod test {
                 None,
                 None,
             ),
-            None,
         )
     }
 
