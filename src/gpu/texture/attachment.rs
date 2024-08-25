@@ -73,7 +73,6 @@ pub struct RenderAttachmentInputDescription {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderAttachmentOutputDescription {
     blending: Blending,
-    sampling: OutputAttachmentSampling,
 }
 
 /// The blending mode to use when writing to a render attachment.
@@ -81,14 +80,6 @@ pub struct RenderAttachmentOutputDescription {
 pub enum Blending {
     Replace,
     Additive,
-}
-
-/// Whether to write to the multisampled versions of an output render attachment
-/// texture if available, or only use the regular version.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum OutputAttachmentSampling {
-    Single,
-    MultiIfAvailable,
 }
 
 /// A set of descriptions for render attachments.
@@ -109,8 +100,7 @@ pub type RenderAttachmentOutputDescriptionSet =
 /// Manager for textures used as render attachments.
 #[derive(Debug)]
 pub struct RenderAttachmentTextureManager {
-    quantity_textures:
-        [Option<MaybeWithMultisampling<RenderAttachmentTexture>>; N_RENDER_ATTACHMENT_QUANTITIES],
+    quantity_textures: [Option<RenderAttachmentTexture>; N_RENDER_ATTACHMENT_QUANTITIES],
     samplers: [Sampler; 2],
     bind_groups_and_layouts:
         HashMap<FullRenderAttachmentInputDescription, (wgpu::BindGroupLayout, wgpu::BindGroup)>,
@@ -124,12 +114,6 @@ pub struct RenderAttachmentTexture {
     texture: Texture,
     attachment_view: wgpu::TextureView,
     mipmapper: Option<Mipmapper>,
-}
-
-#[derive(Debug)]
-pub struct MaybeWithMultisampling<T> {
-    pub regular: T,
-    pub multisampled: Option<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -208,23 +192,6 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
     wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
     wgpu::TextureFormat::R16Float,             // Occlusion
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
-];
-
-/// Whether multisampling will be used when requested for each render attachment
-/// quantity.
-const RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    true, // Depth-stencil
-    true, // Linear depth
-    true, // Normal vector
-    true, // Motion vector
-    true, // Material color
-    true, // Material properties
-    true, // Luminance
-    true, // Auxiliary luminance
-    true, // Previous auxiliary luminance
-    true, // Ambient reflected luminance
-    true, // Occlusion
-    true, // Emissive luminance
 ];
 
 /// Whether the texture for each render attachment quantity will have mipmaps.
@@ -345,11 +312,6 @@ impl RenderAttachmentQuantity {
         RENDER_ATTACHMENT_FORMATS[self.index()]
     }
 
-    /// Whether multisampling is supported for this render attachment quantity.
-    pub const fn supports_multisampling(&self) -> bool {
-        RENDER_ATTACHMENT_MULTISAMPLING_SUPPORT[self.index()]
-    }
-
     /// Whether the texture used for this render attachment quantity will have
     /// mipmaps.
     pub const fn is_mipmapped(&self) -> bool {
@@ -390,24 +352,6 @@ impl RenderAttachmentQuantitySet {
             .union(RenderAttachmentQuantitySet::MOTION_VECTOR)
             .union(RenderAttachmentQuantitySet::MATERIAL_COLOR)
             .union(RenderAttachmentQuantitySet::MATERIAL_PROPERTIES)
-    }
-
-    /// Returns the set of render attachment quantities that support
-    /// multisampling.
-    pub fn multisampling_quantities() -> Self {
-        let mut quantities = Self::empty();
-        for quantity in RenderAttachmentQuantity::all() {
-            if quantity.supports_multisampling() {
-                quantities |= quantity.flag();
-            }
-        }
-        quantities
-    }
-
-    /// Returns the set of render attachment quantities that do not support
-    /// multisampling.
-    pub fn non_multisampling_quantities() -> Self {
-        Self::all() - Self::multisampling_quantities()
     }
 
     /// Returns this set without the depth quantity.
@@ -498,23 +442,10 @@ impl RenderAttachmentOutputDescription {
         self
     }
 
-    /// Sets whether the multisampled version of the render attachment should be
-    /// writted to if available.
-    pub fn with_sampling(mut self, sampling: OutputAttachmentSampling) -> Self {
-        self.sampling = sampling;
-        self
-    }
-
     /// Returns the blending mode that should be used when rendering to the
     /// render attachment.
     pub fn blending(&self) -> Blending {
         self.blending
-    }
-
-    /// Returns whether the multisampled version of the render attachment should
-    /// be writted to if available.
-    pub fn sampling(&self) -> OutputAttachmentSampling {
-        self.sampling
     }
 }
 
@@ -522,18 +453,7 @@ impl Default for RenderAttachmentOutputDescription {
     fn default() -> Self {
         Self {
             blending: Blending::Replace,
-            sampling: OutputAttachmentSampling::MultiIfAvailable,
         }
-    }
-}
-
-impl OutputAttachmentSampling {
-    pub fn is_single(&self) -> bool {
-        *self == Self::Single
-    }
-
-    pub fn is_multi_if_available(&self) -> bool {
-        *self == Self::MultiIfAvailable
     }
 }
 
@@ -631,13 +551,11 @@ where
 
 impl RenderAttachmentTextureManager {
     /// Creates a new manager for render attachment textures, initializing
-    /// render attachment textures for the given set of quantities with the
-    /// given sample count.
+    /// all render attachment textures.
     pub fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         mipmapper_generator: &MipmapperGenerator,
-        sample_count: u32,
     ) -> Self {
         let samplers = [
             Sampler::create(
@@ -655,12 +573,7 @@ impl RenderAttachmentTextureManager {
             bind_groups_and_layouts: HashMap::new(),
         };
 
-        manager.recreate_textures(
-            graphics_device,
-            rendering_surface,
-            mipmapper_generator,
-            sample_count,
-        );
+        manager.recreate_textures(graphics_device, rendering_surface, mipmapper_generator);
 
         manager
     }
@@ -672,7 +585,7 @@ impl RenderAttachmentTextureManager {
     pub fn render_attachment_texture(
         &self,
         quantity: RenderAttachmentQuantity,
-    ) -> &MaybeWithMultisampling<RenderAttachmentTexture> {
+    ) -> &RenderAttachmentTexture {
         self.quantity_textures[quantity.index()]
             .as_ref()
             .expect("Requested missing render attachment quantity")
@@ -684,7 +597,7 @@ impl RenderAttachmentTextureManager {
     pub fn request_render_attachment_textures(
         &self,
         requested_quantities: RenderAttachmentQuantitySet,
-    ) -> impl Iterator<Item = &MaybeWithMultisampling<RenderAttachmentTexture>> {
+    ) -> impl Iterator<Item = &RenderAttachmentTexture> {
         RenderAttachmentQuantity::flags()
             .iter()
             .zip(self.quantity_textures.iter())
@@ -780,7 +693,7 @@ impl RenderAttachmentTextureManager {
 
         super::save_texture_as_image_file(
             graphics_device,
-            texture.regular.texture().texture(),
+            texture.texture().texture(),
             mip_level,
             0,
             output_path,
@@ -788,13 +701,12 @@ impl RenderAttachmentTextureManager {
     }
 
     /// Recreates all render attachment textures for the current state of the
-    /// core system, using the given sample count.
+    /// core system.
     pub fn recreate_textures(
         &mut self,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         mipmapper_generator: &MipmapperGenerator,
-        sample_count: u32,
     ) {
         for &quantity in RenderAttachmentQuantity::all() {
             self.recreate_render_attachment_texture(
@@ -802,7 +714,6 @@ impl RenderAttachmentTextureManager {
                 rendering_surface,
                 mipmapper_generator,
                 quantity,
-                sample_count,
             );
         }
         self.recreate_bind_groups(graphics_device);
@@ -828,17 +739,12 @@ impl RenderAttachmentTextureManager {
         rendering_surface: &RenderingSurface,
         mipmapper_generator: &MipmapperGenerator,
         quantity: RenderAttachmentQuantity,
-        sample_count: u32,
     ) {
-        let texture_format = quantity.texture_format();
-
-        let quantity_texture = MaybeWithMultisampling::new(
+        let quantity_texture = RenderAttachmentTexture::new(
             graphics_device,
             rendering_surface,
             mipmapper_generator,
             quantity,
-            texture_format,
-            sample_count,
         );
 
         self.quantity_textures[quantity.index()] = Some(quantity_texture);
@@ -864,7 +770,7 @@ impl RenderAttachmentTextureManager {
                 quantity.texture_binding(),
                 quantity.sampler_binding(),
                 bind_group_layout,
-                quantity_texture.regular.texture(),
+                quantity_texture.texture(),
                 sampler,
                 &label,
             );
@@ -997,8 +903,7 @@ impl RenderAttachmentTextureManager {
 
     fn create_bind_group_and_layout_from_description(
         graphics_device: &GraphicsDevice,
-        quantity_textures: &[Option<MaybeWithMultisampling<RenderAttachmentTexture>>;
-             RenderAttachmentQuantity::count()],
+        quantity_textures: &[Option<RenderAttachmentTexture>; RenderAttachmentQuantity::count()],
         samplers: &[Sampler; 2],
         full_description: &FullRenderAttachmentInputDescription,
     ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
@@ -1022,7 +927,7 @@ impl RenderAttachmentTextureManager {
             graphics_device.device(),
             texture_binding,
             sampler_binding,
-            quantity_texture.regular.texture(),
+            quantity_texture.texture(),
             sampler,
             full_description.description.visibility,
             &label,
@@ -1033,7 +938,7 @@ impl RenderAttachmentTextureManager {
             texture_binding,
             sampler_binding,
             &bind_group_layout,
-            quantity_texture.regular.texture(),
+            quantity_texture.texture(),
             sampler,
             &label,
         );
@@ -1081,17 +986,17 @@ impl RenderAttachmentTextureManager {
 
 impl RenderAttachmentTexture {
     /// Creates a new render attachment texture of the same size as the given
-    /// rendering surface and with the given texture format and sample count.
+    /// rendering surface for the given render attachment quantity.
     pub fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         mipmapper_generator: &MipmapperGenerator,
         quantity: RenderAttachmentQuantity,
-        format: wgpu::TextureFormat,
-        sample_count: u32,
     ) -> Self {
         let device = graphics_device.device();
         let (width, height) = rendering_surface.surface_dimensions();
+
+        let format = quantity.texture_format();
 
         let texture_size = wgpu::Extent3d {
             width: width.into(),
@@ -1099,7 +1004,7 @@ impl RenderAttachmentTexture {
             depth_or_array_layers: 1,
         };
 
-        let mip_level_count = if quantity.is_mipmapped() && sample_count == 1 {
+        let mip_level_count = if quantity.is_mipmapped() {
             texture_size.max_mips(wgpu::TextureDimension::D2)
         } else {
             1
@@ -1110,7 +1015,7 @@ impl RenderAttachmentTexture {
             texture_size,
             format,
             mip_level_count,
-            sample_count,
+            1,
             &format!(
                 "Render attachment texture for {} (format = {:?})",
                 quantity, format
@@ -1164,11 +1069,6 @@ impl RenderAttachmentTexture {
         self.texture.texture().format()
     }
 
-    /// Returns the render attachment texture sample count.
-    pub fn sample_count(&self) -> u32 {
-        self.texture.texture().sample_count()
-    }
-
     /// Returns a view into the texture for use as a render attachment.
     pub fn attachment_view(&self) -> &wgpu::TextureView {
         &self.attachment_view
@@ -1190,11 +1090,6 @@ impl RenderAttachmentTexture {
             self.format(),
             other.format(),
             "Cannot swap render attachments with different formats"
-        );
-        assert_eq!(
-            self.sample_count(),
-            other.sample_count(),
-            "Cannot swap render attachments with different sample counts"
         );
         assert_eq!(
             self.mipmapper().is_some(),
@@ -1229,105 +1124,5 @@ impl RenderAttachmentTexture {
             label: Some(label),
             view_formats: &[],
         })
-    }
-}
-
-impl<T> MaybeWithMultisampling<T> {
-    pub fn multisampled_if_available_and(&self, use_multisampling: bool) -> &T {
-        if use_multisampling {
-            self.multisampled.as_ref().unwrap_or(&self.regular)
-        } else {
-            &self.regular
-        }
-    }
-}
-
-impl MaybeWithMultisampling<RenderAttachmentTexture> {
-    fn new(
-        graphics_device: &GraphicsDevice,
-        rendering_surface: &RenderingSurface,
-        mipmapper_generator: &MipmapperGenerator,
-        quantity: RenderAttachmentQuantity,
-        format: wgpu::TextureFormat,
-        sample_count: u32,
-    ) -> Self {
-        let regular = RenderAttachmentTexture::new(
-            graphics_device,
-            rendering_surface,
-            mipmapper_generator,
-            quantity,
-            format,
-            1,
-        );
-
-        let multisampled = if sample_count > 1 && quantity.supports_multisampling() {
-            Some(RenderAttachmentTexture::new(
-                graphics_device,
-                rendering_surface,
-                mipmapper_generator,
-                quantity,
-                format,
-                sample_count,
-            ))
-        } else {
-            None
-        };
-
-        Self {
-            regular,
-            multisampled,
-        }
-    }
-
-    /// Returns the render attachment quantity.
-    pub fn quantity(&self) -> RenderAttachmentQuantity {
-        self.regular.quantity()
-    }
-
-    /// Returns the render attachment texture format.
-    pub fn format(&self) -> wgpu::TextureFormat {
-        self.regular.format()
-    }
-
-    /// Returns the sample count for the multisampled texture, or 1 if there is
-    /// no multisampled texture.
-    pub fn multisampling_sample_count(&self) -> u32 {
-        self.multisampled
-            .as_ref()
-            .map_or(1, |texture| texture.sample_count())
-    }
-
-    /// Returns the appropriate `view` and `resolve_target` for
-    /// [`wgpu::RenderPassColorAttachment`] based on whether the multisampled
-    /// texture should be used if available and whether it should be resolved
-    /// into the regular texture.
-    pub fn view_and_resolve_target(
-        &self,
-        should_be_multisampled_if_available: bool,
-        should_resolve: bool,
-    ) -> (&wgpu::TextureView, Option<&wgpu::TextureView>) {
-        match &self.multisampled {
-            Some(multisampled) if should_be_multisampled_if_available => (
-                multisampled.attachment_view(),
-                if should_resolve {
-                    Some(self.regular.attachment_view())
-                } else {
-                    None
-                },
-            ),
-            _ => (self.regular.attachment_view(), None),
-        }
-    }
-
-    fn swap(&mut self, other: &mut Self) {
-        self.regular.swap(&mut other.regular);
-
-        match (&mut self.multisampled, &mut other.multisampled) {
-            (Some(ref mut multisampled), Some(ref mut other_multisampled)) => {
-                multisampled.swap(other_multisampled);
-            }
-            (None, None) => {}
-            _ => panic!("Cannot swap render attachments with and without multisampling"),
-        }
     }
 }

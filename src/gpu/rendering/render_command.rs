@@ -458,7 +458,7 @@ impl AttachmentClearingPass {
                 .request_render_attachment_textures(self.attachments.with_clear_color_only())
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
-                        view: texture.regular.attachment_view(),
+                        view: texture.attachment_view(),
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(texture.quantity().clear_color().unwrap()),
@@ -493,7 +493,6 @@ impl AttachmentClearingPass {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                    .regular
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
@@ -625,7 +624,6 @@ impl DepthPrepass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .regular
                 .attachment_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -985,7 +983,7 @@ impl GeometryPass {
                 .request_render_attachment_textures(self.output_render_attachments.quantities())
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
-                        view: texture.regular.attachment_view(),
+                        view: texture.attachment_view(),
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(texture.quantity().clear_color().unwrap()),
@@ -1003,7 +1001,6 @@ impl GeometryPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .regular
                 .attachment_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -1890,7 +1887,7 @@ impl AmbientLightPass {
             .request_render_attachment_textures(self.output_render_attachments.quantities())
             .map(|texture| {
                 Some(wgpu::RenderPassColorAttachment {
-                    view: texture.regular.attachment_view(),
+                    view: texture.attachment_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -1907,7 +1904,6 @@ impl AmbientLightPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .regular
                 .attachment_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2166,7 +2162,7 @@ impl DirectionalLightPass {
         let texture = render_attachment_texture_manager
             .render_attachment_texture(self.output_render_attachment_quantity);
         wgpu::RenderPassColorAttachment {
-            view: texture.regular.attachment_view(),
+            view: texture.attachment_view(),
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2181,7 +2177,6 @@ impl DirectionalLightPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .regular
                 .attachment_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2632,7 +2627,7 @@ impl SkyboxPass {
         let texture = render_attachment_texture_manager
             .render_attachment_texture(self.output_render_attachment_quantity);
         wgpu::RenderPassColorAttachment {
-            view: texture.regular.attachment_view(),
+            view: texture.attachment_view(),
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2647,7 +2642,6 @@ impl SkyboxPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .regular
                 .attachment_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2906,7 +2900,7 @@ impl PostprocessingRenderPass {
                 .request_render_attachment_textures(self.output_render_attachments.quantities())
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
-                        view: texture.regular.attachment_view(),
+                        view: texture.attachment_view(),
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -2938,7 +2932,6 @@ impl PostprocessingRenderPass {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                    .regular
                     .attachment_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -3139,12 +3132,10 @@ impl RenderAttachmentTextureCopyCommand {
     ) {
         let source_texture = render_attachment_texture_manager
             .render_attachment_texture(self.source)
-            .regular
             .texture()
             .texture();
         let destination_texture = render_attachment_texture_manager
             .render_attachment_texture(self.destination)
-            .regular
             .texture()
             .texture();
 
