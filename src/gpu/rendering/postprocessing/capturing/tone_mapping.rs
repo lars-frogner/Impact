@@ -123,6 +123,7 @@ impl ToneMappingRenderCommands {
                     frame_counter,
                     command_encoder,
                 )?;
+                log::debug!("Recorded tone mapping pass (ACES)");
             }
             ToneMappingMethod::KhronosPBRNeutral => {
                 self.khronos_pbr_neutral_pass.record(
@@ -135,6 +136,7 @@ impl ToneMappingRenderCommands {
                     frame_counter,
                     command_encoder,
                 )?;
+                log::debug!("Recorded tone mapping pass (Khronos PBR neutral)");
             }
             ToneMappingMethod::None => {
                 self.disabled_pass.record(
@@ -147,6 +149,7 @@ impl ToneMappingRenderCommands {
                     frame_counter,
                     command_encoder,
                 )?;
+                log::debug!("Recorded tone mapping pass (clipping)");
             }
         }
         Ok(())

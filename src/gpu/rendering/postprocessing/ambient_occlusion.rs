@@ -152,6 +152,8 @@ impl AmbientOcclusionRenderCommands {
                 frame_counter,
                 command_encoder,
             )?;
+            log::debug!("Recorded ambient occlusion computation pass");
+
             self.application_pass.record(
                 rendering_surface,
                 surface_texture_view,
@@ -162,6 +164,7 @@ impl AmbientOcclusionRenderCommands {
                 frame_counter,
                 command_encoder,
             )?;
+            log::debug!("Recorded ambient occlusion application pass");
         } else {
             self.disabled_pass.record(
                 rendering_surface,
@@ -173,6 +176,7 @@ impl AmbientOcclusionRenderCommands {
                 frame_counter,
                 command_encoder,
             )?;
+            log::debug!("Recorded ambient reflected luminance application pass");
         }
         Ok(())
     }

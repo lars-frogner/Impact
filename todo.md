@@ -28,6 +28,6 @@
 
 ## Misc
 
-- Add render pass logging and timings.
+- Add render pass timings.
 
 - Add support for switching to viewing specific render attachments.
