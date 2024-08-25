@@ -113,7 +113,6 @@ impl RenderingSystem {
             &graphics_device,
             &rendering_surface,
             &mipmapper_generator,
-            1,
         );
 
         let render_command_manager = RenderCommandManager::new(
@@ -360,7 +359,6 @@ impl RenderingSystem {
                 &self.graphics_device,
                 &self.rendering_surface,
                 &self.mipmapper_generator,
-                1,
             );
     }
 }

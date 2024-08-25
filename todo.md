@@ -30,8 +30,6 @@
 
 ## Misc
 
-- Remove obsolete multisampling support.
-
 - Add render pass logging and timings.
 
 - Add support for switching to viewing specific render attachments.
