@@ -3298,6 +3298,7 @@ fn create_render_pipeline(
             alpha_to_coverage_enabled: false,
         },
         multiview: None,
+        cache: None,
         label: Some(label),
     })
 }

@@ -79,6 +79,7 @@ impl MipmapperGenerator {
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
                     multiview: None,
+                    cache: None,
                     label: Some("Mipmap pipeline"),
                 });
 

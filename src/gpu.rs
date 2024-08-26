@@ -42,6 +42,7 @@ pub fn initialize_for_rendering(
             max_color_attachment_bytes_per_sample: 64,
             ..wgpu::Limits::default()
         },
+        wgpu::MemoryHints::Performance,
         Some(rendering_surface.surface()),
     ))?;
 

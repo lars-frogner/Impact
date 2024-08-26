@@ -202,6 +202,7 @@ fn create_compute_pipeline(
         module: shader.compute_module(),
         entry_point: shader.compute_entry_point_name().unwrap(),
         compilation_options: wgpu::PipelineCompilationOptions::default(),
+        cache: None,
         label: Some(label),
     })
 }
