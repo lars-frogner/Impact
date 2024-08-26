@@ -26,6 +26,7 @@ impl GraphicsDevice {
         wgpu_instance: &wgpu::Instance,
         required_features: wgpu::Features,
         required_limits: wgpu::Limits,
+        memory_hints: wgpu::MemoryHints,
         compatible_surface: Option<&wgpu::Surface<'_>>,
     ) -> Result<Self> {
         let adapter = Self::create_adapter(wgpu_instance, compatible_surface).await?;
@@ -35,6 +36,7 @@ impl GraphicsDevice {
                 &wgpu::DeviceDescriptor {
                     required_features,
                     required_limits,
+                    memory_hints,
                     label: None,
                 },
                 None,
