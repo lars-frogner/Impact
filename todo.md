@@ -26,8 +26,8 @@
 
 - Investigate ways to improve shadow map update performance.
 
-## Misc
+- Consider using `slotmap` instead of custom types: https://github.com/orlp/slotmap
 
-- Add render pass timings.
+## Misc
 
 - Add support for switching to viewing specific render attachments.

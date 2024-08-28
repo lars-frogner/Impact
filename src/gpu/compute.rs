@@ -1,8 +1,8 @@
 //! GPU compute passes.
 
 use crate::gpu::{
-    push_constant::PushConstantGroup,
-    push_constant::PushConstantVariant,
+    push_constant::{PushConstantGroup, PushConstantVariant},
+    query::TimestampQueryRegistry,
     rendering::{postprocessing::Postprocessor, surface::RenderingSurface},
     resource_group::{GPUResourceGroupID, GPUResourceGroupManager},
     shader::{template::ComputeShaderTemplate, Shader, ShaderManager},
@@ -102,10 +102,14 @@ impl ComputePass {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
+        let timestamp_writes = timestamp_recorder
+            .register_timestamp_writes_for_single_compute_pass(self.label.clone());
+
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            timestamp_writes: None,
+            timestamp_writes,
             label: Some(&format!("Compute pass ({})", self.label)),
         });
 

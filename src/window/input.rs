@@ -53,6 +53,7 @@ pub enum KeyboardInputAction {
     CycleToneMapping,
     IncreaseExposure,
     DecreaseExposure,
+    ToggleRenderPassTimings,
     IncrementSimulationSubstepCount,
     DecrementSimulationSubstepCount,
     IncreaseSimulationSpeed,
@@ -204,6 +205,12 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::ToggleRenderPassTimings => {
+                        if state == &ElementState::Released {
+                            app.renderer().write().unwrap().toggle_timings();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::IncrementSimulationSubstepCount => {
                         if state == &ElementState::Released {
                             app.simulator().write().unwrap().increment_n_substeps();
@@ -317,6 +324,7 @@ impl Default for KeyActionMap {
             CycleToneMapping => KeyT,
             IncreaseExposure => KeyX,
             DecreaseExposure => KeyZ,
+            ToggleRenderPassTimings => KeyP,
             IncrementSimulationSubstepCount => KeyM,
             DecrementSimulationSubstepCount => KeyN,
             IncreaseSimulationSpeed => Period,

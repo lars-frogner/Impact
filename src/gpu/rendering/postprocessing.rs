@@ -6,6 +6,7 @@ pub mod gaussian_blur;
 pub mod temporal_anti_aliasing;
 
 use crate::gpu::{
+    query::TimestampQueryRegistry,
     rendering::{resource::SynchronizedRenderResources, surface::RenderingSurface},
     resource_group::GPUResourceGroupManager,
     shader::ShaderManager,
@@ -93,6 +94,7 @@ impl Postprocessor {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.ambient_occlusion_commands.record(
@@ -103,6 +105,7 @@ impl Postprocessor {
             gpu_resource_group_manager,
             self,
             frame_counter,
+            timestamp_recorder,
             self.ambient_occlusion_enabled,
             command_encoder,
         )?;
@@ -115,6 +118,7 @@ impl Postprocessor {
             storage_gpu_buffer_manager,
             self,
             frame_counter,
+            timestamp_recorder,
             command_encoder,
         )?;
         self.temporal_anti_aliasing_commands.record(
@@ -125,6 +129,7 @@ impl Postprocessor {
             gpu_resource_group_manager,
             self,
             frame_counter,
+            timestamp_recorder,
             self.temporal_anti_aliasing_enabled,
             command_encoder,
         )?;
@@ -136,6 +141,7 @@ impl Postprocessor {
             gpu_resource_group_manager,
             self,
             frame_counter,
+            timestamp_recorder,
             command_encoder,
         )?;
         Ok(())

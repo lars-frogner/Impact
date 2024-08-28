@@ -1,6 +1,7 @@
 //! Render passes for applying tone mapping.
 
 use crate::gpu::{
+    query::TimestampQueryRegistry,
     rendering::{
         postprocessing::Postprocessor, render_command::PostprocessingRenderPass,
         resource::SynchronizedRenderResources, surface::RenderingSurface,
@@ -108,6 +109,7 @@ impl ToneMappingRenderCommands {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         method: ToneMappingMethod,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -121,9 +123,9 @@ impl ToneMappingRenderCommands {
                     gpu_resource_group_manager,
                     postprocessor,
                     frame_counter,
+                    timestamp_recorder,
                     command_encoder,
                 )?;
-                log::debug!("Recorded tone mapping pass (ACES)");
             }
             ToneMappingMethod::KhronosPBRNeutral => {
                 self.khronos_pbr_neutral_pass.record(
@@ -134,9 +136,9 @@ impl ToneMappingRenderCommands {
                     gpu_resource_group_manager,
                     postprocessor,
                     frame_counter,
+                    timestamp_recorder,
                     command_encoder,
                 )?;
-                log::debug!("Recorded tone mapping pass (Khronos PBR neutral)");
             }
             ToneMappingMethod::None => {
                 self.disabled_pass.record(
@@ -147,9 +149,9 @@ impl ToneMappingRenderCommands {
                     gpu_resource_group_manager,
                     postprocessor,
                     frame_counter,
+                    timestamp_recorder,
                     command_encoder,
                 )?;
-                log::debug!("Recorded tone mapping pass (clipping)");
             }
         }
         Ok(())
@@ -176,6 +178,6 @@ fn create_tone_mapping_render_pass(
         render_attachment_texture_manager,
         gpu_resource_group_manager,
         &shader_template,
-        Cow::Owned(format!("Tone mapping ({})", method)),
+        Cow::Owned(format!("Tone mapping pass ({})", method)),
     )
 }

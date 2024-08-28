@@ -1,6 +1,7 @@
 //! Render passes for applying bloom.
 
 use crate::gpu::{
+    query::TimestampQueryRegistry,
     rendering::{
         postprocessing::{
             gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
@@ -149,6 +150,7 @@ impl BloomRenderCommands {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -162,6 +164,7 @@ impl BloomRenderCommands {
                     gpu_resource_group_manager,
                     postprocessor,
                     frame_counter,
+                    timestamp_recorder,
                     command_encoder,
                 )?;
             }
@@ -174,6 +177,7 @@ impl BloomRenderCommands {
                 gpu_resource_group_manager,
                 postprocessor,
                 frame_counter,
+                timestamp_recorder,
                 command_encoder,
             )?;
         }

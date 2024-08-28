@@ -185,16 +185,7 @@ impl StorageGPUBuffer {
         process_bytes: impl FnOnce(&[u8]) -> T,
     ) -> Option<Result<T>> {
         self.result_buffer.as_ref().map(|result_buffer| {
-            buffer::map_buffer_slice_to_cpu(
-                graphics_device.device(),
-                result_buffer.valid_buffer_slice(),
-            )
-            .map(|view| {
-                let processed = process_bytes(&view);
-                drop(view);
-                result_buffer.buffer().unmap();
-                processed
-            })
+            result_buffer.map_and_process_buffer_bytes(graphics_device, process_bytes)
         })
     }
 }

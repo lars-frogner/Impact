@@ -8,6 +8,7 @@ use impact_utils::{hash64, ConstStringHash64};
 use crate::{
     assert_uniform_valid,
     gpu::{
+        query::TimestampQueryRegistry,
         rendering::{
             fre,
             postprocessing::Postprocessor,
@@ -102,6 +103,7 @@ impl TemporalAntiAliasingRenderCommands {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -117,9 +119,9 @@ impl TemporalAntiAliasingRenderCommands {
                 gpu_resource_group_manager,
                 postprocessor,
                 frame_counter,
+                timestamp_recorder,
                 command_encoder,
             )?;
-            log::debug!("Recorded temporal anti-aliasing blending pass");
         }
         Ok(())
     }
@@ -208,9 +210,6 @@ fn create_temporal_anti_aliasing_blending_render_pass(
         render_attachment_texture_manager,
         gpu_resource_group_manager,
         &shader_template,
-        Cow::Owned(format!(
-            "Temporal anti-aliasing (current frame weight: {})",
-            current_frame_weight
-        )),
+        Cow::Borrowed("Temporal anti-aliasing blend pass"),
     )
 }
