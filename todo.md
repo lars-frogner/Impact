@@ -28,6 +28,4 @@
 
 - Consider using `slotmap` instead of custom types: https://github.com/orlp/slotmap
 
-## Misc
-
-- Add support for switching to viewing specific render attachments.
+- Consider replacing all `HashMap`s with `FxHashMap`s from `rustc-hash`: https://github.com/rust-lang/rustc-hash

@@ -14,11 +14,7 @@ use crate::{
         resource_group::GPUResourceGroupManager,
         shader::ShaderManager,
         storage::StorageGPUBufferManager,
-        texture::{
-            self,
-            attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-            mipmap::MipmapperGenerator,
-        },
+        texture::{self, attachment::RenderAttachmentTextureManager, mipmap::MipmapperGenerator},
         GraphicsDevice,
     },
     light::MAX_SHADOW_MAP_CASCADES,
@@ -37,7 +33,7 @@ use std::{
     mem,
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicBool, AtomicU8, Ordering},
+        atomic::{AtomicBool, Ordering},
         Arc, RwLock,
     },
 };
@@ -91,8 +87,6 @@ pub struct RenderingConfig {
 #[derive(Debug)]
 pub struct ScreenCapturer {
     screenshot_save_requested: AtomicBool,
-    render_attachment_save_requested: AtomicBool,
-    render_attachment_quantity: AtomicU8,
     omnidirectional_light_shadow_map_save_requested: AtomicBool,
     unidirectional_light_shadow_map_save_requested: AtomicBool,
 }
@@ -295,6 +289,32 @@ impl RenderingSystem {
             .cycle_tone_mapping();
     }
 
+    /// Toggles visualization of render attachments.
+    pub fn toggle_render_attachment_visualization(&self) {
+        self.postprocessor
+            .write()
+            .unwrap()
+            .toggle_render_attachment_visualization();
+    }
+
+    /// Changes the visualized render attachment quantity to the next quantity
+    /// in the list, or wraps around.
+    pub fn cycle_visualized_render_attachment_quantity_forward(&self) {
+        self.postprocessor
+            .write()
+            .unwrap()
+            .cycle_visualized_render_attachment_quantity_forward();
+    }
+
+    /// Changes the visualized render attachment quantity to the previous
+    /// quantity in the list, or wraps around.
+    pub fn cycle_visualized_render_attachment_quantity_backward(&self) {
+        self.postprocessor
+            .write()
+            .unwrap()
+            .cycle_visualized_render_attachment_quantity_backward();
+    }
+
     /// Toggle render pass timings.
     pub fn toggle_timings(&mut self) {
         self.config.timings_enabled = !self.config.timings_enabled;
@@ -416,8 +436,6 @@ impl ScreenCapturer {
     pub fn new() -> Self {
         Self {
             screenshot_save_requested: AtomicBool::new(false),
-            render_attachment_save_requested: AtomicBool::new(false),
-            render_attachment_quantity: AtomicU8::new(0),
             omnidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
             unidirectional_light_shadow_map_save_requested: AtomicBool::new(false),
         }
@@ -428,17 +446,6 @@ impl ScreenCapturer {
     pub fn request_screenshot_save(&self) {
         self.screenshot_save_requested
             .store(true, Ordering::Release);
-    }
-
-    /// Schedule a capture of the render attachment texture for the given
-    /// quantity for the next
-    /// [`Self::save_render_attachment_quantity_if_requested`]
-    /// call.
-    pub fn request_render_attachment_quantity_save(&self, quantity: RenderAttachmentQuantity) {
-        self.render_attachment_save_requested
-            .store(true, Ordering::Release);
-        self.render_attachment_quantity
-            .store(quantity as u8, Ordering::Release);
     }
 
     /// Schedule a capture of the omnidirectional light shadow map texture for
@@ -481,39 +488,6 @@ impl ScreenCapturer {
             )?;
         }
 
-        Ok(())
-    }
-
-    /// Checks if a render attachment capture was scheduled with
-    /// [`Self::request_render_attachment_quantity_save`], and if so, captures
-    /// the requested render attachment texture and saves it as a timestamped
-    /// PNG file in the current directory.
-    pub fn save_render_attachment_quantity_if_requested(
-        &self,
-        renderer: &RwLock<RenderingSystem>,
-    ) -> Result<()> {
-        if self
-            .render_attachment_save_requested
-            .swap(false, Ordering::Acquire)
-        {
-            let quantity = RenderAttachmentQuantity::from_index(
-                self.render_attachment_quantity.load(Ordering::Acquire),
-            )
-            .unwrap();
-
-            let renderer = renderer.read().unwrap();
-
-            renderer
-                .render_attachment_texture_manager()
-                .read()
-                .unwrap()
-                .save_render_attachment_texture_as_image_file(
-                    renderer.graphics_device(),
-                    quantity,
-                    0,
-                    format!("{}_{}.png", quantity, Utc::now().to_rfc3339()),
-                )?;
-        }
         Ok(())
     }
 
