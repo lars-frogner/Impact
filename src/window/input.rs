@@ -3,7 +3,6 @@
 use crate::{
     application::Application,
     control::motion::{MotionDirection, MotionState},
-    gpu::texture::attachment::RenderAttachmentQuantity,
     window::EventLoopController,
 };
 use anyhow::Result;
@@ -53,6 +52,9 @@ pub enum KeyboardInputAction {
     CycleToneMapping,
     IncreaseExposure,
     DecreaseExposure,
+    ToggleRenderAttachmentVisualization,
+    CycleVisualizedRenderAttachmentQuantityForward,
+    CycleVisualizedRenderAttachmentQuantityBackward,
     ToggleRenderPassTimings,
     IncrementSimulationSubstepCount,
     DecrementSimulationSubstepCount,
@@ -60,7 +62,6 @@ pub enum KeyboardInputAction {
     DecreaseSimulationSpeed,
     CycleSimulationSteppingScheme,
     SaveScreenshot,
-    SaveDepthMap,
     SaveOmnidirectionalLightShadowMap,
     SaveUnidirectionalLightShadowMap,
     Exit,
@@ -205,6 +206,33 @@ impl KeyInputHandler {
                         }
                         Ok(HandlingResult::Handled)
                     }
+                    KeyboardInputAction::ToggleRenderAttachmentVisualization => {
+                        if state == &ElementState::Released {
+                            app.renderer()
+                                .read()
+                                .unwrap()
+                                .toggle_render_attachment_visualization();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::CycleVisualizedRenderAttachmentQuantityForward => {
+                        if state == &ElementState::Released {
+                            app.renderer()
+                                .read()
+                                .unwrap()
+                                .cycle_visualized_render_attachment_quantity_forward();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
+                    KeyboardInputAction::CycleVisualizedRenderAttachmentQuantityBackward => {
+                        if state == &ElementState::Released {
+                            app.renderer()
+                                .read()
+                                .unwrap()
+                                .cycle_visualized_render_attachment_quantity_backward();
+                        }
+                        Ok(HandlingResult::Handled)
+                    }
                     KeyboardInputAction::ToggleRenderPassTimings => {
                         if state == &ElementState::Released {
                             app.renderer().write().unwrap().toggle_timings();
@@ -246,15 +274,6 @@ impl KeyInputHandler {
                     KeyboardInputAction::SaveScreenshot => {
                         if state == &ElementState::Released {
                             app.screen_capturer().request_screenshot_save();
-                        }
-                        Ok(HandlingResult::Handled)
-                    }
-                    KeyboardInputAction::SaveDepthMap => {
-                        if state == &ElementState::Released {
-                            app.screen_capturer()
-                                .request_render_attachment_quantity_save(
-                                    RenderAttachmentQuantity::LinearDepth,
-                                );
                         }
                         Ok(HandlingResult::Handled)
                     }
@@ -324,6 +343,9 @@ impl Default for KeyActionMap {
             CycleToneMapping => KeyT,
             IncreaseExposure => KeyX,
             DecreaseExposure => KeyZ,
+            ToggleRenderAttachmentVisualization => KeyV,
+            CycleVisualizedRenderAttachmentQuantityForward => KeyB,
+            CycleVisualizedRenderAttachmentQuantityBackward => KeyC,
             ToggleRenderPassTimings => KeyP,
             IncrementSimulationSubstepCount => KeyM,
             DecrementSimulationSubstepCount => KeyN,
@@ -331,7 +353,6 @@ impl Default for KeyActionMap {
             DecreaseSimulationSpeed => Comma,
             CycleSimulationSteppingScheme => KeyL,
             SaveScreenshot => F12,
-            SaveDepthMap => F11,
             SaveOmnidirectionalLightShadowMap => F10,
             SaveUnidirectionalLightShadowMap => F9,
             Exit => Escape

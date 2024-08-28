@@ -3,6 +3,7 @@
 pub mod ambient_occlusion;
 pub mod capturing;
 pub mod gaussian_blur;
+pub mod render_attachment_visualization;
 pub mod temporal_anti_aliasing;
 
 use crate::gpu::{
@@ -17,6 +18,7 @@ use crate::gpu::{
 use ambient_occlusion::{AmbientOcclusionConfig, AmbientOcclusionRenderCommands};
 use anyhow::Result;
 use capturing::{CapturingCamera, CapturingCameraConfig};
+use render_attachment_visualization::RenderAttachmentVisualizationPasses;
 use temporal_anti_aliasing::{TemporalAntiAliasingConfig, TemporalAntiAliasingRenderCommands};
 
 /// Manager of GPU resources and render commands for postprocessing effects.
@@ -27,6 +29,7 @@ pub struct Postprocessor {
     temporal_anti_aliasing_enabled: bool,
     temporal_anti_aliasing_commands: TemporalAntiAliasingRenderCommands,
     capturing_camera: CapturingCamera,
+    render_attachment_visualization_passes: RenderAttachmentVisualizationPasses,
 }
 
 impl Postprocessor {
@@ -71,12 +74,21 @@ impl Postprocessor {
             capturing_camera_settings,
         )?;
 
+        let render_attachment_visualization_passes = RenderAttachmentVisualizationPasses::new(
+            graphics_device,
+            rendering_surface,
+            shader_manager,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+        )?;
+
         Ok(Self {
             ambient_occlusion_enabled: ambient_occlusion_config.initially_enabled,
             ambient_occlusion_commands,
             temporal_anti_aliasing_enabled: temporal_anti_aliasing_config.initially_enabled,
             temporal_anti_aliasing_commands,
             capturing_camera,
+            render_attachment_visualization_passes,
         })
     }
 
@@ -144,6 +156,17 @@ impl Postprocessor {
             timestamp_recorder,
             command_encoder,
         )?;
+        self.render_attachment_visualization_passes.record(
+            rendering_surface,
+            surface_texture_view,
+            render_resources,
+            render_attachment_texture_manager,
+            gpu_resource_group_manager,
+            self,
+            frame_counter,
+            timestamp_recorder,
+            command_encoder,
+        )?;
         Ok(())
     }
 
@@ -175,5 +198,24 @@ impl Postprocessor {
     /// Toggles temporal anti-aliasing.
     pub fn toggle_temporal_anti_aliasing(&mut self) {
         self.temporal_anti_aliasing_enabled = !self.temporal_anti_aliasing_enabled;
+    }
+
+    /// Toggles visualization of render attachments.
+    pub fn toggle_render_attachment_visualization(&mut self) {
+        self.render_attachment_visualization_passes.toggle_enabled();
+    }
+
+    /// Changes the visualized render attachment quantity to the next quantity
+    /// in the list, or wraps around.
+    pub fn cycle_visualized_render_attachment_quantity_forward(&mut self) {
+        self.render_attachment_visualization_passes
+            .cycle_quantity_forward();
+    }
+
+    /// Changes the visualized render attachment quantity to the previous
+    /// quantity in the list, or wraps around.
+    pub fn cycle_visualized_render_attachment_quantity_backward(&mut self) {
+        self.render_attachment_visualization_passes
+            .cycle_quantity_backward();
     }
 }

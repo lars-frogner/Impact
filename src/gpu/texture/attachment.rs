@@ -8,14 +8,12 @@ use crate::gpu::{
     },
     GraphicsDevice,
 };
-use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Display,
-    path::Path,
 };
 
 bitflags! {
@@ -679,40 +677,6 @@ impl RenderAttachmentTextureManager {
 
                 Some(bind_group)
             })
-    }
-
-    /// Saves the given mip level of the texture for the given render attachment
-    /// quantity as a color or grayscale image at the given output path. The
-    /// image file format is automatically determined from the file extension.
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - The requested quantity is missing.
-    /// - The format of the given texture is not supported.
-    /// - The mip level is invalid.
-    pub fn save_render_attachment_texture_as_image_file<P: AsRef<Path>>(
-        &self,
-        graphics_device: &GraphicsDevice,
-        quantity: RenderAttachmentQuantity,
-        mip_level: u32,
-        output_path: P,
-    ) -> Result<()> {
-        let texture = self.quantity_textures[quantity.index()]
-            .as_ref()
-            .ok_or_else(|| {
-                anyhow!(
-                    "Tried to save image for missing render attachment quantity: {}",
-                    quantity
-                )
-            })?;
-
-        super::save_texture_as_image_file(
-            graphics_device,
-            texture.texture().texture(),
-            mip_level,
-            0,
-            output_path,
-        )
     }
 
     /// Recreates all render attachment textures for the current state of the

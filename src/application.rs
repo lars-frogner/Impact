@@ -190,9 +190,6 @@ impl Application {
             .save_screenshot_if_requested(self.renderer())?;
 
         self.screen_capturer
-            .save_render_attachment_quantity_if_requested(self.renderer())?;
-
-        self.screen_capturer
             .save_omnidirectional_light_shadow_maps_if_requested(self.renderer())?;
 
         self.screen_capturer
