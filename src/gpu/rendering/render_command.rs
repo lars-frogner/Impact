@@ -8,6 +8,7 @@ use crate::{
     geometry::CubemapFace,
     gpu::{
         push_constant::{PushConstantGroup, PushConstantVariant},
+        query::TimestampQueryRegistry,
         rendering::{
             postprocessing::Postprocessor, resource::SynchronizedRenderResources,
             surface::RenderingSurface, RenderingConfig,
@@ -351,11 +352,13 @@ impl RenderCommandManager {
         postprocessor: &Postprocessor,
         config: &RenderingConfig,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.attachment_clearing_pass.record(
             surface_texture_view,
             render_attachment_texture_manager,
+            timestamp_recorder,
             command_encoder,
         )?;
 
@@ -364,6 +367,7 @@ impl RenderCommandManager {
             render_resources,
             render_attachment_texture_manager,
             frame_counter,
+            timestamp_recorder,
             command_encoder,
         )?;
 
@@ -373,17 +377,20 @@ impl RenderCommandManager {
             render_resources,
             render_attachment_texture_manager,
             frame_counter,
+            timestamp_recorder,
             command_encoder,
         )?;
 
         self.omnidirectional_light_shadow_map_update_passes.record(
             render_resources,
+            timestamp_recorder,
             config.shadow_mapping_enabled,
             command_encoder,
         )?;
 
         self.unidirectional_light_shadow_map_update_passes.record(
             render_resources,
+            timestamp_recorder,
             config.shadow_mapping_enabled,
             command_encoder,
         )?;
@@ -394,6 +401,7 @@ impl RenderCommandManager {
             render_attachment_texture_manager,
             gpu_resource_group_manager,
             postprocessor,
+            timestamp_recorder,
             command_encoder,
         )?;
 
@@ -402,6 +410,7 @@ impl RenderCommandManager {
             render_resources,
             render_attachment_texture_manager,
             postprocessor,
+            timestamp_recorder,
             command_encoder,
         )?;
 
@@ -409,6 +418,7 @@ impl RenderCommandManager {
             render_resources,
             render_attachment_texture_manager,
             postprocessor,
+            timestamp_recorder,
             command_encoder,
         )?;
 
@@ -420,6 +430,7 @@ impl RenderCommandManager {
             gpu_resource_group_manager,
             storage_gpu_buffer_manager,
             frame_counter,
+            timestamp_recorder,
             command_encoder,
         )?;
 
@@ -505,6 +516,7 @@ impl AttachmentClearingPass {
         &self,
         surface_texture_view: &wgpu::TextureView,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let color_attachments =
@@ -517,13 +529,13 @@ impl AttachmentClearingPass {
             color_attachments.len() + usize::from(depth_stencil_attachment.is_some());
 
         if color_attachments.len() < Self::MAX_ATTACHMENTS_PER_PASS {
-            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &color_attachments,
+            begin_single_render_pass(
+                command_encoder,
+                timestamp_recorder,
+                &color_attachments,
                 depth_stencil_attachment,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                label: Some("Clearing pass"),
-            });
+                Cow::Borrowed("Clearing pass"),
+            );
         } else {
             // Chunk up the passes to avoid exceeding the maximum number of color
             // attachments
@@ -664,6 +676,7 @@ impl DepthPrepass {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         if self.models.is_empty() {
@@ -673,13 +686,13 @@ impl DepthPrepass {
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[],
-            depth_stencil_attachment: Some(depth_stencil_attachment),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some("Depth prepass"),
-        });
+        let mut render_pass = begin_single_render_pass(
+            command_encoder,
+            timestamp_recorder,
+            &[],
+            Some(depth_stencil_attachment),
+            Cow::Borrowed("Depth prepass"),
+        );
 
         render_pass.set_pipeline(&self.pipeline);
 
@@ -1055,6 +1068,7 @@ impl GeometryPass {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         if self.pipelines.is_empty() {
@@ -1066,13 +1080,13 @@ impl GeometryPass {
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &color_attachments,
-            depth_stencil_attachment: Some(depth_stencil_attachment),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some("Geometry pass"),
-        });
+        let mut render_pass = begin_single_render_pass(
+            command_encoder,
+            timestamp_recorder,
+            &color_attachments,
+            Some(depth_stencil_attachment),
+            Cow::Borrowed("Geometry pass"),
+        );
 
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
 
@@ -1351,6 +1365,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     fn record(
         &self,
         render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -1365,6 +1380,14 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             return Ok(());
         }
 
+        let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
+            .register_timestamp_writes_for_first_and_last_of_render_passes(Cow::Borrowed(
+                "Omnidirectional light shadow map update passes",
+            ));
+
+        let last_pass_idx = 6 * shadow_map_textures.len() - 1;
+        let mut pass_idx = 0;
+
         for (light_idx, (light_id, shadow_map_texture)) in light_buffer_manager
             .omnidirectional_light_ids()
             .iter()
@@ -1377,11 +1400,20 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 let depth_stencil_attachment =
                     Self::depth_stencil_attachment(shadow_cubemap_face_texture_view);
 
+                let timestamp_writes = if pass_idx == 0 {
+                    first_timestamp_writes.clone()
+                } else if pass_idx == last_pass_idx {
+                    last_timestamp_writes.clone()
+                } else {
+                    None
+                };
+                pass_idx += 1;
+
                 let mut render_pass =
                     command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         color_attachments: &[],
                         depth_stencil_attachment: Some(depth_stencil_attachment),
-                        timestamp_writes: None,
+                        timestamp_writes,
                         occlusion_query_set: None,
                         label: Some(&format!(
                             "Update pass for shadow cubemap face {:?} for light {}",
@@ -1649,6 +1681,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     fn record(
         &self,
         render_resources: &SynchronizedRenderResources,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -1663,6 +1696,14 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             return Ok(());
         }
 
+        let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
+            .register_timestamp_writes_for_first_and_last_of_render_passes(Cow::Borrowed(
+                "Unidirectional light shadow map update passes",
+            ));
+
+        let last_pass_idx = MAX_SHADOW_MAP_CASCADES as usize * shadow_map_textures.len() - 1;
+        let mut pass_idx = 0;
+
         for (light_idx, (light_id, shadow_map_texture)) in light_buffer_manager
             .unidirectional_light_ids()
             .iter()
@@ -1675,11 +1716,20 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 let depth_stencil_attachment =
                     Self::depth_stencil_attachment(shadow_map_cascade_texture_view);
 
+                let timestamp_writes = if pass_idx == 0 {
+                    first_timestamp_writes.clone()
+                } else if pass_idx == last_pass_idx {
+                    last_timestamp_writes.clone()
+                } else {
+                    None
+                };
+                pass_idx += 1;
+
                 let mut render_pass =
                     command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         color_attachments: &[],
                         depth_stencil_attachment: Some(depth_stencil_attachment),
-                        timestamp_writes: None,
+                        timestamp_writes,
                         occlusion_query_set: None,
                         label: Some(&format!(
                             "Update pass for shadow map cascade {} for light {}",
@@ -1981,6 +2031,7 @@ impl AmbientLightPass {
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
@@ -1996,13 +2047,13 @@ impl AmbientLightPass {
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &color_attachments,
-            depth_stencil_attachment: Some(depth_stencil_attachment),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some("Ambient light pass"),
-        });
+        let mut render_pass = begin_single_render_pass(
+            command_encoder,
+            timestamp_recorder,
+            &color_attachments,
+            Some(depth_stencil_attachment),
+            Cow::Borrowed("Ambient light pass"),
+        );
 
         render_pass.set_pipeline(&self.pipeline);
 
@@ -2264,6 +2315,7 @@ impl DirectionalLightPass {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let light_buffer_manager = render_resources
@@ -2281,13 +2333,13 @@ impl DirectionalLightPass {
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[Some(color_attachment)],
-            depth_stencil_attachment: Some(depth_stencil_attachment),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some("Directional light pass"),
-        });
+        let mut render_pass = begin_single_render_pass(
+            command_encoder,
+            timestamp_recorder,
+            &[Some(color_attachment)],
+            Some(depth_stencil_attachment),
+            Cow::Borrowed("Directional light pass"),
+        );
 
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
 
@@ -2724,6 +2776,7 @@ impl SkyboxPass {
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let pipeline = if let Some(pipeline) = self.pipeline.as_ref() {
@@ -2737,13 +2790,13 @@ impl SkyboxPass {
         let depth_stencil_attachment =
             Self::depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[Some(color_attachment)],
-            depth_stencil_attachment: Some(depth_stencil_attachment),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some("Skybox pass"),
-        });
+        let mut render_pass = begin_single_render_pass(
+            command_encoder,
+            timestamp_recorder,
+            &[Some(color_attachment)],
+            Some(depth_stencil_attachment),
+            Cow::Borrowed("Skybox pass"),
+        );
 
         render_pass.set_pipeline(pipeline);
 
@@ -2787,7 +2840,7 @@ impl SkyboxPass {
             0..1,
         );
 
-        log::debug!("Recorded skybox pass (1 draw call)");
+        log::debug!("Recorded skybox pass");
 
         Ok(())
     }
@@ -3053,6 +3106,7 @@ impl PostprocessingRenderPass {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         let color_attachments =
@@ -3061,13 +3115,13 @@ impl PostprocessingRenderPass {
         let depth_stencil_attachment =
             self.depth_stencil_attachment(render_attachment_texture_manager);
 
-        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &color_attachments,
+        let mut render_pass = begin_single_render_pass(
+            command_encoder,
+            timestamp_recorder,
+            &color_attachments,
             depth_stencil_attachment,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            label: Some(&format!("Postprocessing pass ({})", self.label)),
-        });
+            self.label.clone(),
+        );
 
         render_pass.set_pipeline(&self.pipeline);
 
@@ -3137,6 +3191,8 @@ impl PostprocessingRenderPass {
             0,
             0..1,
         );
+
+        log::debug!("Recorded postprocessing pass: {}", &self.label);
 
         Ok(())
     }
@@ -3374,4 +3430,23 @@ fn additive_blend_state() -> wgpu::BlendState {
         },
         alpha: wgpu::BlendComponent::default(),
     }
+}
+
+fn begin_single_render_pass<'a>(
+    command_encoder: &'a mut wgpu::CommandEncoder,
+    timestamp_recorder: &mut TimestampQueryRegistry<'_>,
+    color_attachments: &[Option<wgpu::RenderPassColorAttachment<'_>>],
+    depth_stencil_attachment: Option<wgpu::RenderPassDepthStencilAttachment<'_>>,
+    label: Cow<'static, str>,
+) -> wgpu::RenderPass<'a> {
+    let timestamp_writes =
+        timestamp_recorder.register_timestamp_writes_for_single_render_pass(label.clone());
+
+    command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        color_attachments,
+        depth_stencil_attachment,
+        timestamp_writes,
+        occlusion_query_set: None,
+        label: Some(&label),
+    })
 }

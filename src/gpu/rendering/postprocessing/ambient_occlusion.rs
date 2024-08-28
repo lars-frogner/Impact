@@ -3,6 +3,7 @@
 use crate::{
     assert_uniform_valid,
     gpu::{
+        query::TimestampQueryRegistry,
         rendering::{
             fre,
             postprocessing::Postprocessor,
@@ -138,6 +139,7 @@ impl AmbientOcclusionRenderCommands {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -150,9 +152,9 @@ impl AmbientOcclusionRenderCommands {
                 gpu_resource_group_manager,
                 postprocessor,
                 frame_counter,
+                timestamp_recorder,
                 command_encoder,
             )?;
-            log::debug!("Recorded ambient occlusion computation pass");
 
             self.application_pass.record(
                 rendering_surface,
@@ -162,9 +164,9 @@ impl AmbientOcclusionRenderCommands {
                 gpu_resource_group_manager,
                 postprocessor,
                 frame_counter,
+                timestamp_recorder,
                 command_encoder,
             )?;
-            log::debug!("Recorded ambient occlusion application pass");
         } else {
             self.disabled_pass.record(
                 rendering_surface,
@@ -174,9 +176,9 @@ impl AmbientOcclusionRenderCommands {
                 gpu_resource_group_manager,
                 postprocessor,
                 frame_counter,
+                timestamp_recorder,
                 command_encoder,
             )?;
-            log::debug!("Recorded ambient reflected luminance application pass");
         }
         Ok(())
     }
@@ -290,7 +292,7 @@ fn create_ambient_occlusion_computation_render_pass(
         render_attachment_texture_manager,
         gpu_resource_group_manager,
         &shader_template,
-        Cow::Borrowed("Ambient occlusion computation"),
+        Cow::Borrowed("Ambient occlusion computation pass"),
     )
 }
 
@@ -311,7 +313,7 @@ fn create_ambient_occlusion_application_render_pass(
         render_attachment_texture_manager,
         gpu_resource_group_manager,
         &AmbientOcclusionApplicationShaderTemplate::new(),
-        Cow::Borrowed("Ambient occlusion application"),
+        Cow::Borrowed("Ambient occlusion application pass"),
     )
 }
 
@@ -335,6 +337,6 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
         render_attachment_texture_manager,
         gpu_resource_group_manager,
         &shader_template,
-        Cow::Borrowed("Ambient light application with occlusion"),
+        Cow::Borrowed("Ambient light application pass without occlusion"),
     )
 }

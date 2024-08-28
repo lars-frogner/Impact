@@ -10,6 +10,7 @@ pub mod tasks;
 use crate::{
     geometry::CubemapFace,
     gpu::{
+        query::{self, TimestampQueryManager},
         resource_group::GPUResourceGroupManager,
         shader::ShaderManager,
         storage::StorageGPUBufferManager,
@@ -66,6 +67,7 @@ pub struct RenderingSystem {
     storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
     frame_counter: u32,
+    timestamp_query_manager: TimestampQueryManager,
 }
 
 /// Global rendering configuration options.
@@ -82,6 +84,7 @@ pub struct RenderingConfig {
     pub ambient_occlusion: AmbientOcclusionConfig,
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     pub capturing_camera: CapturingCameraConfig,
+    pub timings_enabled: bool,
 }
 
 /// Helper for capturing screenshots and related textures.
@@ -137,6 +140,12 @@ impl RenderingSystem {
             &config.capturing_camera,
         )?;
 
+        let timestamp_query_manager = TimestampQueryManager::new(
+            &graphics_device,
+            NonZeroU32::new(64).unwrap(),
+            config.timings_enabled,
+        );
+
         Ok(Self {
             config,
             graphics_device,
@@ -151,6 +160,7 @@ impl RenderingSystem {
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
             frame_counter: 1,
+            timestamp_query_manager,
         })
     }
 
@@ -285,6 +295,13 @@ impl RenderingSystem {
             .cycle_tone_mapping();
     }
 
+    /// Toggle render pass timings.
+    pub fn toggle_timings(&mut self) {
+        self.config.timings_enabled = !self.config.timings_enabled;
+        self.timestamp_query_manager
+            .set_enabled(self.config.timings_enabled);
+    }
+
     /// Returns the size of the push constant containing `self.frame_counter`.
     pub const fn frame_counter_push_constant_size() -> u32 {
         mem::size_of::<u32>() as u32
@@ -304,6 +321,10 @@ impl RenderingSystem {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        let mut timestamp_recorder = self
+            .timestamp_query_manager
+            .create_timestamp_query_registry();
+
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
@@ -318,12 +339,21 @@ impl RenderingSystem {
             &self.postprocessor.read().unwrap(),
             &self.config,
             self.frame_counter,
+            &mut timestamp_recorder,
             &mut command_encoder,
         )?;
+
+        timestamp_recorder.finish(&mut command_encoder);
 
         self.graphics_device
             .queue()
             .submit(std::iter::once(command_encoder.finish()));
+
+        let timing_results = self
+            .timestamp_query_manager
+            .load_recorded_timing_results(&self.graphics_device)?;
+
+        query::print_timing_results(&timing_results);
 
         self.postprocessor
             .write()
@@ -372,6 +402,7 @@ impl Default for RenderingConfig {
             ambient_occlusion: AmbientOcclusionConfig::default(),
             temporal_anti_aliasing: TemporalAntiAliasingConfig::default(),
             capturing_camera: CapturingCameraConfig::default(),
+            timings_enabled: false,
         }
     }
 }

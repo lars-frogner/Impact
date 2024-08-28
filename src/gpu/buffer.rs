@@ -47,14 +47,16 @@ pub enum GPUBufferType {
     Uniform,
     Storage,
     Result,
+    Query,
 }
 
 impl GPUBuffer {
     /// Creates a GPU buffer of the given type from the given slice of
     /// bytes. Only the first `n_valid_bytes` in the slice are considered
     /// to actually represent valid data, the rest is just buffer filling
-    /// that gives room for writing a larger number of bytes than `n_valid_bytes`
-    /// into the buffer at a later point without reallocating.
+    /// that gives room for writing a larger number of bytes than
+    /// `n_valid_bytes` into the buffer at a later point without
+    /// reallocating.
     ///
     /// # Panics
     /// - If `bytes` is empty.
@@ -213,7 +215,28 @@ impl GPUBuffer {
         &self.buffer
     }
 
-    fn set_n_valid_bytes(&self, n_valid_bytes: usize) {
+    /// Maps the buffer from the to the CPU, calls the given closure with the
+    /// mapped bytes, unmaps the buffer and returns the result of the closure.
+    ///
+    /// # Errors
+    /// Returns an error if the mapping operation fails.
+    pub fn map_and_process_buffer_bytes<T>(
+        &self,
+        graphics_device: &GraphicsDevice,
+        process_bytes: impl FnOnce(&[u8]) -> T,
+    ) -> Result<T> {
+        let view = map_buffer_slice_to_cpu(graphics_device.device(), self.valid_buffer_slice())?;
+        let processed = process_bytes(&view);
+        drop(view);
+        self.buffer().unmap();
+        Ok(processed)
+    }
+
+    /// Marks the given number of bytes from the start of the buffer as valid.
+    ///
+    /// # Panics
+    /// If `n_valid_bytes` is larger than the buffer size.
+    pub fn set_n_valid_bytes(&self, n_valid_bytes: usize) {
         assert!(n_valid_bytes <= self.buffer_size);
         self.n_valid_bytes.store(n_valid_bytes, Ordering::Release);
     }
@@ -266,8 +289,8 @@ impl CountedGPUBuffer {
     ///
     /// # Panics
     /// - If `bytes` is empty.
-    /// - If `n_valid_bytes` exceeds the combined size of the padded count and the
-    ///   `bytes` slice.
+    /// - If `n_valid_bytes` exceeds the combined size of the padded count and
+    ///   the `bytes` slice.
     pub fn new(
         graphics_device: &GraphicsDevice,
         buffer_type: GPUBufferType,
@@ -412,7 +435,8 @@ impl CountedGPUBuffer {
             label: Some(label),
         });
 
-        // Block to make `buffer_slice` and `mapped_memory` drop after we are done with them
+        // Block to make `buffer_slice` and `mapped_memory` drop after we are done with
+        // them
         {
             let buffer_slice = buffer.slice(..);
             let mut mapped_memory = buffer_slice.get_mapped_range_mut();
@@ -457,6 +481,7 @@ impl GPUBufferType {
                     | wgpu::BufferUsages::COPY_DST
             }
             Self::Result => wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            Self::Query => wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
         }
     }
 }
@@ -472,6 +497,7 @@ impl Display for GPUBufferType {
                 Self::Uniform => "uniform",
                 Self::Storage => "storage",
                 Self::Result => "result",
+                Self::Query => "query",
             }
         )
     }
@@ -520,7 +546,7 @@ pub fn map_buffer_slice_to_cpu<'a>(
         *map_result_sender.lock().unwrap() = Some(result);
     });
 
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::Maintain::Wait).panic_on_timeout();
 
     map_result_receiver.lock().unwrap().take().unwrap()?;
 

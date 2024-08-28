@@ -4,6 +4,7 @@ use crate::{
     assert_uniform_valid,
     gpu::{
         compute::ComputePass,
+        query::TimestampQueryRegistry,
         rendering::{
             fre, postprocessing::Postprocessor, render_command::StorageBufferResultCopyCommand,
             surface::RenderingSurface,
@@ -151,6 +152,7 @@ impl AverageLuminanceComputeCommands {
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
@@ -160,18 +162,18 @@ impl AverageLuminanceComputeCommands {
                 gpu_resource_group_manager,
                 render_attachment_texture_manager,
                 postprocessor,
+                timestamp_recorder,
                 command_encoder,
             )?;
-            log::debug!("Recorded luminance histogram compute pass");
 
             self.average_compute_pass.record(
                 rendering_surface,
                 gpu_resource_group_manager,
                 render_attachment_texture_manager,
                 postprocessor,
+                timestamp_recorder,
                 command_encoder,
             )?;
-            log::debug!("Recorded luminance histogram average compute pass");
 
             self.result_copy_command
                 .record(storage_gpu_buffer_manager, command_encoder)?;
@@ -293,12 +295,7 @@ fn create_luminance_histogram_compute_pass(
         gpu_resource_group_manager,
         render_attachment_texture_manager,
         shader_template,
-        Cow::Owned(format!(
-            "Luminance histogram compute pass (luminance range: [{}, {}), bin count: {})",
-            luminance_bounds.lower(),
-            luminance_bounds.upper(),
-            HISTOGRAM_BIN_COUNT,
-        )),
+        Cow::Borrowed("Luminance histogram compute pass"),
     )
 }
 
@@ -369,19 +366,13 @@ fn create_luminance_histogram_average_compute_pass(
         LuminanceHistogramAverageShaderTemplate::new(HISTOGRAM_BIN_COUNT, resource_group_id);
 
     ComputePass::new(
-            graphics_device,
-            shader_manager,
-            gpu_resource_group_manager,
-            render_attachment_texture_manager,
-            shader_template,
-            Cow::Owned(format!(
-                "Luminance histogram average compute pass (luminance range: [{}, {}), current frame weight: {}, bin count: {})",
-                luminance_bounds.lower(),
-                luminance_bounds.upper(),
-                current_frame_weight,
-                HISTOGRAM_BIN_COUNT,
-            )),
-        )
+        graphics_device,
+        shader_manager,
+        gpu_resource_group_manager,
+        render_attachment_texture_manager,
+        shader_template,
+        Cow::Borrowed("Luminance histogram average compute pass"),
+    )
 }
 
 fn get_or_create_histogram_storage_buffer<'a>(

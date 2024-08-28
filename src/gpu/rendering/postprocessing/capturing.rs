@@ -5,6 +5,7 @@ pub mod bloom;
 pub mod tone_mapping;
 
 use crate::gpu::{
+    query::TimestampQueryRegistry,
     rendering::{
         fre, postprocessing::Postprocessor, resource::SynchronizedRenderResources,
         surface::RenderingSurface,
@@ -277,6 +278,7 @@ impl CapturingCamera {
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.bloom_commands.record(
@@ -287,6 +289,7 @@ impl CapturingCamera {
             gpu_resource_group_manager,
             postprocessor,
             frame_counter,
+            timestamp_recorder,
             self.produces_bloom,
             command_encoder,
         )?;
@@ -296,6 +299,7 @@ impl CapturingCamera {
             storage_gpu_buffer_manager,
             render_attachment_texture_manager,
             postprocessor,
+            timestamp_recorder,
             self.settings.sensitivity().is_auto(),
             command_encoder,
         )
@@ -315,6 +319,7 @@ impl CapturingCamera {
         gpu_resource_group_manager: &GPUResourceGroupManager,
         postprocessor: &Postprocessor,
         frame_counter: u32,
+        timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.tone_mapping_commands.record(
@@ -325,6 +330,7 @@ impl CapturingCamera {
             gpu_resource_group_manager,
             postprocessor,
             frame_counter,
+            timestamp_recorder,
             self.tone_mapping_method,
             command_encoder,
         )
