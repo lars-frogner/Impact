@@ -462,7 +462,7 @@ impl AttachmentClearingPass {
                 .request_render_attachment_textures(self.attachments.with_clear_color_only())
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
-                        view: texture.attachment_view(),
+                        view: texture.base_texture_view(),
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(texture.quantity().clear_color().unwrap()),
@@ -497,7 +497,7 @@ impl AttachmentClearingPass {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                    .attachment_view(),
+                    .base_texture_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(Self::CLEAR_DEPTH),
                     store: wgpu::StoreOp::Store,
@@ -637,7 +637,7 @@ impl DepthPrepass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .attachment_view(),
+                .base_texture_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
@@ -1010,7 +1010,7 @@ impl GeometryPass {
                 .request_render_attachment_textures(self.output_render_attachments.quantities())
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
-                        view: texture.attachment_view(),
+                        view: texture.base_texture_view(),
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(texture.quantity().clear_color().unwrap()),
@@ -1028,7 +1028,7 @@ impl GeometryPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .attachment_view(),
+                .base_texture_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
@@ -1974,7 +1974,7 @@ impl AmbientLightPass {
             .request_render_attachment_textures(self.output_render_attachments.quantities())
             .map(|texture| {
                 Some(wgpu::RenderPassColorAttachment {
-                    view: texture.attachment_view(),
+                    view: texture.base_texture_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -1991,7 +1991,7 @@ impl AmbientLightPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .attachment_view(),
+                .base_texture_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
@@ -2252,7 +2252,7 @@ impl DirectionalLightPass {
         let texture = render_attachment_texture_manager
             .render_attachment_texture(self.output_render_attachment_quantity);
         wgpu::RenderPassColorAttachment {
-            view: texture.attachment_view(),
+            view: texture.base_texture_view(),
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2267,7 +2267,7 @@ impl DirectionalLightPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .attachment_view(),
+                .base_texture_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
@@ -2723,7 +2723,7 @@ impl SkyboxPass {
         let texture = render_attachment_texture_manager
             .render_attachment_texture(self.output_render_attachment_quantity);
         wgpu::RenderPassColorAttachment {
-            view: texture.attachment_view(),
+            view: texture.base_texture_view(),
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,
@@ -2738,7 +2738,7 @@ impl SkyboxPass {
         wgpu::RenderPassDepthStencilAttachment {
             view: render_attachment_texture_manager
                 .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                .attachment_view(),
+                .base_texture_view(),
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
@@ -2999,7 +2999,7 @@ impl PostprocessingRenderPass {
                 .request_render_attachment_textures(self.output_render_attachments.quantities())
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
-                        view: texture.attachment_view(),
+                        view: texture.base_texture_view(),
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -3031,7 +3031,7 @@ impl PostprocessingRenderPass {
             Some(wgpu::RenderPassDepthStencilAttachment {
                 view: render_attachment_texture_manager
                     .render_attachment_texture(RenderAttachmentQuantity::DepthStencil)
-                    .attachment_view(),
+                    .base_texture_view(),
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,

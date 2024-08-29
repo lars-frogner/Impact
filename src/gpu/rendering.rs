@@ -106,11 +106,8 @@ impl RenderingSystem {
 
         let mut shader_manager = ShaderManager::new();
 
-        let mut render_attachment_texture_manager = RenderAttachmentTextureManager::new(
-            &graphics_device,
-            &rendering_surface,
-            &mipmapper_generator,
-        );
+        let mut render_attachment_texture_manager =
+            RenderAttachmentTextureManager::new(&graphics_device, &rendering_surface);
 
         let render_command_manager = RenderCommandManager::new(
             &graphics_device,
@@ -405,11 +402,7 @@ impl RenderingSystem {
         self.render_attachment_texture_manager
             .write()
             .unwrap()
-            .recreate_textures(
-                &self.graphics_device,
-                &self.rendering_surface,
-                &self.mipmapper_generator,
-            );
+            .recreate_textures(&self.graphics_device, &self.rendering_surface);
     }
 }
 
