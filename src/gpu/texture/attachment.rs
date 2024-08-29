@@ -2,10 +2,7 @@
 
 use crate::gpu::{
     rendering::surface::RenderingSurface,
-    texture::{
-        mipmap::{Mipmapper, MipmapperGenerator},
-        Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig,
-    },
+    texture::{Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig},
     GraphicsDevice,
 };
 use bitflags::bitflags;
@@ -65,6 +62,7 @@ pub enum RenderAttachmentSampler {
 pub struct RenderAttachmentInputDescription {
     sampler: RenderAttachmentSampler,
     visibility: wgpu::ShaderStages,
+    mip_level: u32,
 }
 
 /// Specifies how a render attachment should be used when bound as an output.
@@ -72,6 +70,7 @@ pub struct RenderAttachmentInputDescription {
 pub struct RenderAttachmentOutputDescription {
     blending: Blending,
     write_mask: wgpu::ColorWrites,
+    mip_level: u32,
 }
 
 /// The blending mode to use when writing to a render attachment.
@@ -99,7 +98,7 @@ pub type RenderAttachmentOutputDescriptionSet =
 /// Manager for textures used as render attachments.
 #[derive(Debug)]
 pub struct RenderAttachmentTextureManager {
-    quantity_textures: [Option<RenderAttachmentTexture>; N_RENDER_ATTACHMENT_QUANTITIES],
+    quantity_textures: [RenderAttachmentTexture; N_RENDER_ATTACHMENT_QUANTITIES],
     samplers: [Sampler; 2],
     bind_groups_and_layouts:
         HashMap<FullRenderAttachmentInputDescription, (wgpu::BindGroupLayout, wgpu::BindGroup)>,
@@ -111,8 +110,11 @@ pub struct RenderAttachmentTextureManager {
 pub struct RenderAttachmentTexture {
     quantity: RenderAttachmentQuantity,
     texture: Texture,
-    attachment_view: wgpu::TextureView,
-    mipmapper: Option<Mipmapper>,
+    mip_texture_views: Vec<wgpu::TextureView>,
+}
+
+pub trait RenderAttachmentDescription {
+    fn is_supported_by_quantity(&self, quantity: RenderAttachmentQuantity) -> bool;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -193,20 +195,20 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
     wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
 ];
 
-/// Whether the texture for each render attachment quantity will have mipmaps.
-const RENDER_ATTACHMENT_MIPMAPPED: [bool; N_RENDER_ATTACHMENT_QUANTITIES] = [
-    false, // Depth-stencil
-    false, // Linear depth
-    false, // Normal vector
-    false, // Motion vector
-    false, // Material color
-    false, // Material properties
-    false, // Luminance
-    false, // Auxiliary luminance
-    false, // Previous auxiliary luminance
-    false, // Ambient reflected luminance
-    false, // Occlusion
-    false, // Emissive luminance
+/// The maximum mip level for each render attachment quantity.
+const RENDER_ATTACHMENT_MAX_MIP_LEVEL: [u32; N_RENDER_ATTACHMENT_QUANTITIES] = [
+    0, // Depth-stencil
+    0, // Linear depth
+    0, // Normal vector
+    0, // Motion vector
+    0, // Material color
+    0, // Material properties
+    0, // Luminance
+    0, // Auxiliary luminance
+    0, // Previous auxiliary luminance
+    0, // Ambient reflected luminance
+    0, // Occlusion
+    0, // Emissive luminance
 ];
 
 /// The clear color used for each render attachment quantity, or [`None`] if the
@@ -311,10 +313,9 @@ impl RenderAttachmentQuantity {
         RENDER_ATTACHMENT_FORMATS[self.index()]
     }
 
-    /// Whether the texture used for this render attachment quantity will have
-    /// mipmaps.
-    pub const fn is_mipmapped(&self) -> bool {
-        RENDER_ATTACHMENT_MIPMAPPED[self.index()]
+    /// The maximum mip level for this render attachment quantity.
+    pub const fn max_mip_level(&self) -> u32 {
+        RENDER_ATTACHMENT_MAX_MIP_LEVEL[self.index()]
     }
 
     /// The clear color of this render attachment quantity, or [`None`] if this
@@ -412,6 +413,12 @@ impl RenderAttachmentInputDescription {
         self
     }
 
+    /// Sets the mip level of the render attachment that should be used.
+    pub fn with_mip_level(mut self, mip_level: u32) -> Self {
+        self.mip_level = mip_level;
+        self
+    }
+
     /// Returns how the render attachment should be sampled.
     pub fn sampler(&self) -> RenderAttachmentSampler {
         self.sampler
@@ -422,6 +429,17 @@ impl RenderAttachmentInputDescription {
     pub fn visibility(&self) -> wgpu::ShaderStages {
         self.visibility
     }
+
+    /// Returns the mip level of the render attachment that should be used.
+    pub fn mip_level(&self) -> u32 {
+        self.mip_level
+    }
+}
+
+impl RenderAttachmentDescription for RenderAttachmentInputDescription {
+    fn is_supported_by_quantity(&self, quantity: RenderAttachmentQuantity) -> bool {
+        self.mip_level() <= quantity.max_mip_level()
+    }
 }
 
 impl Default for RenderAttachmentInputDescription {
@@ -429,6 +447,7 @@ impl Default for RenderAttachmentInputDescription {
         Self {
             sampler: RenderAttachmentSampler::NonFiltering,
             visibility: wgpu::ShaderStages::FRAGMENT,
+            mip_level: 0,
         }
     }
 }
@@ -448,6 +467,12 @@ impl RenderAttachmentOutputDescription {
         self
     }
 
+    /// Sets the mip level of the render attachment that should be rendered to.
+    pub fn with_mip_level(mut self, mip_level: u32) -> Self {
+        self.mip_level = mip_level;
+        self
+    }
+
     /// Returns the blending mode that should be used when rendering to the
     /// render attachment.
     pub fn blending(&self) -> Blending {
@@ -459,6 +484,18 @@ impl RenderAttachmentOutputDescription {
     pub fn write_mask(&self) -> wgpu::ColorWrites {
         self.write_mask
     }
+
+    /// Returns the mip level of the render attachment that should be rendered
+    /// to.
+    pub fn mip_level(&self) -> u32 {
+        self.mip_level
+    }
+}
+
+impl RenderAttachmentDescription for RenderAttachmentOutputDescription {
+    fn is_supported_by_quantity(&self, quantity: RenderAttachmentQuantity) -> bool {
+        self.mip_level() <= quantity.max_mip_level()
+    }
 }
 
 impl Default for RenderAttachmentOutputDescription {
@@ -466,25 +503,30 @@ impl Default for RenderAttachmentOutputDescription {
         Self {
             blending: Blending::Replace,
             write_mask: wgpu::ColorWrites::ALL,
+            mip_level: 0,
         }
     }
 }
 
-impl<D> RenderAttachmentDescriptionSet<D> {
+impl<D> RenderAttachmentDescriptionSet<D>
+where
+    D: Clone + Default + RenderAttachmentDescription,
+{
     /// Creates a new set of descriptions for the render attachments for the
     /// given quantities. Descriptions that are not specified will use the
     /// default description.
+    ///
+    /// # Panics
+    /// - If any of the descriptions does not support their associated quantity.
+    /// - If there are descriptions for missing quantities.
     pub fn new(
         quantities: RenderAttachmentQuantitySet,
         descriptions: HashMap<RenderAttachmentQuantity, D>,
     ) -> Self {
-        let described_quantities = descriptions
-            .keys()
-            .cloned()
-            .fold(RenderAttachmentQuantitySet::empty(), |set, quantity| {
-                set | quantity.flag()
-            });
-        assert!(quantities.contains(described_quantities));
+        for (quantity, description) in &descriptions {
+            assert!(description.is_supported_by_quantity(*quantity));
+            assert!(quantities.contains(quantity.flag()));
+        }
         Self {
             quantities,
             descriptions,
@@ -505,6 +547,14 @@ impl<D> RenderAttachmentDescriptionSet<D> {
         Self::new(quantities, HashMap::new())
     }
 
+    /// Creates a set of descriptions for a single render attachment quantity.
+    pub fn single(quantity: RenderAttachmentQuantity, description: D) -> Self {
+        Self::new(
+            quantity.flag(),
+            [(quantity, description)].into_iter().collect(),
+        )
+    }
+
     /// Whether the set is empty.
     pub fn is_empty(&self) -> bool {
         self.quantities.is_empty()
@@ -513,19 +563,6 @@ impl<D> RenderAttachmentDescriptionSet<D> {
     /// Returns the render attachment quantities in the set.
     pub fn quantities(&self) -> RenderAttachmentQuantitySet {
         self.quantities
-    }
-}
-
-impl<D> RenderAttachmentDescriptionSet<D>
-where
-    D: Clone + Default,
-{
-    /// Creates a set of descriptions for a single render attachment quantity.
-    pub fn single(quantity: RenderAttachmentQuantity, description: D) -> Self {
-        Self::new(
-            quantity.flag(),
-            [(quantity, description)].into_iter().collect(),
-        )
     }
 
     /// Returns the description for the given quantity, or the default
@@ -551,8 +588,13 @@ where
     /// Inserts the given quantity in the set, using the given description.
     ///
     /// # Panics
-    /// If the quantity is already in the set.
+    /// - If the description is not supported by the quantity.
+    /// - If the quantity is already in the set.
     pub fn insert_description(&mut self, quantity: RenderAttachmentQuantity, description: D) {
+        assert!(
+            description.is_supported_by_quantity(quantity),
+            "Tried to insert a description not supported by the quantity"
+        );
         assert!(
             !self.quantities.contains(quantity.flag()),
             "Tried to insert a description for an existing quantity"
@@ -565,11 +607,7 @@ where
 impl RenderAttachmentTextureManager {
     /// Creates a new manager for render attachment textures, initializing
     /// all render attachment textures.
-    pub fn new(
-        graphics_device: &GraphicsDevice,
-        rendering_surface: &RenderingSurface,
-        mipmapper_generator: &MipmapperGenerator,
-    ) -> Self {
+    pub fn new(graphics_device: &GraphicsDevice, rendering_surface: &RenderingSurface) -> Self {
         let samplers = [
             Sampler::create(
                 graphics_device,
@@ -578,15 +616,17 @@ impl RenderAttachmentTextureManager {
             Sampler::create(graphics_device, RenderAttachmentSampler::Filtering.config()),
         ];
 
+        let quantity_textures = RenderAttachmentQuantity::all().map(|quantity| {
+            RenderAttachmentTexture::new(graphics_device, rendering_surface, quantity)
+        });
+
         let mut manager = Self {
-            quantity_textures: [
-                None, None, None, None, None, None, None, None, None, None, None, None,
-            ],
+            quantity_textures,
             samplers,
             bind_groups_and_layouts: HashMap::new(),
         };
 
-        manager.recreate_textures(graphics_device, rendering_surface, mipmapper_generator);
+        manager.recreate_bind_groups(graphics_device);
 
         manager
     }
@@ -599,9 +639,7 @@ impl RenderAttachmentTextureManager {
         &self,
         quantity: RenderAttachmentQuantity,
     ) -> &RenderAttachmentTexture {
-        self.quantity_textures[quantity.index()]
-            .as_ref()
-            .expect("Requested missing render attachment quantity")
+        &self.quantity_textures[quantity.index()]
     }
 
     /// Returns an iterator over the render attachment textures for the
@@ -616,7 +654,7 @@ impl RenderAttachmentTextureManager {
             .zip(self.quantity_textures.iter())
             .filter_map(move |(&quantity_flag, quantity_texture)| {
                 if requested_quantities.contains(quantity_flag) {
-                    Some(quantity_texture.as_ref().unwrap())
+                    Some(quantity_texture)
                 } else {
                     None
                 }
@@ -685,14 +723,12 @@ impl RenderAttachmentTextureManager {
         &mut self,
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
-        mipmapper_generator: &MipmapperGenerator,
     ) {
-        for &quantity in RenderAttachmentQuantity::all() {
-            self.recreate_render_attachment_texture(
+        for quantity_texture in self.quantity_textures.iter_mut() {
+            *quantity_texture = RenderAttachmentTexture::new(
                 graphics_device,
                 rendering_surface,
-                mipmapper_generator,
-                quantity,
+                quantity_texture.quantity(),
             );
         }
         self.recreate_bind_groups(graphics_device);
@@ -712,34 +748,22 @@ impl RenderAttachmentTextureManager {
         );
     }
 
-    fn recreate_render_attachment_texture(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        rendering_surface: &RenderingSurface,
-        mipmapper_generator: &MipmapperGenerator,
-        quantity: RenderAttachmentQuantity,
-    ) {
-        let quantity_texture = RenderAttachmentTexture::new(
-            graphics_device,
-            rendering_surface,
-            mipmapper_generator,
-            quantity,
-        );
-
-        self.quantity_textures[quantity.index()] = Some(quantity_texture);
-    }
-
     fn recreate_bind_groups(&mut self, graphics_device: &GraphicsDevice) {
         for (full_description, (bind_group_layout, bind_group)) in &mut self.bind_groups_and_layouts
         {
             let quantity = full_description.quantity;
 
-            let quantity_texture = self.quantity_textures[quantity.index()].as_ref().unwrap();
+            let quantity_texture = &self.quantity_textures[quantity.index()];
+            let texture_view = quantity_texture
+                .texture_view(full_description.description.mip_level())
+                .unwrap();
+
             let sampler = &self.samplers[full_description.description.sampler as usize];
 
             let label = format!(
-                "{} render attachment with {:?} sampler in stages {:?}",
+                "{} render attachment (mip level {}) with {:?} sampler in stages {:?}",
                 quantity,
+                full_description.description.mip_level(),
                 full_description.description.sampler(),
                 full_description.description.visibility()
             );
@@ -749,8 +773,8 @@ impl RenderAttachmentTextureManager {
                 quantity.texture_binding(),
                 quantity.sampler_binding(),
                 bind_group_layout,
-                quantity_texture.texture(),
-                sampler,
+                texture_view,
+                sampler.sampler(),
                 &label,
             );
         }
@@ -873,24 +897,25 @@ impl RenderAttachmentTextureManager {
                     .insert(description_for_first, bind_group_and_layout_for_second);
             });
 
-        let mut first_attachment = self.quantity_textures[first.index()].take().unwrap();
-        let mut second_attachment = self.quantity_textures[second.index()].take().unwrap();
-        first_attachment.swap(&mut second_attachment);
-        self.quantity_textures[first.index()] = Some(first_attachment);
-        self.quantity_textures[second.index()] = Some(second_attachment);
+        // First we swap the locations of the textures, then we update the quantities
+        // assigned to the textures to make the quantities and indices match
+        self.quantity_textures.swap(first.index(), second.index());
+        self.quantity_textures[first.index()].set_quantity(first);
+        self.quantity_textures[second.index()].set_quantity(second);
     }
 
     fn create_bind_group_and_layout_from_description(
         graphics_device: &GraphicsDevice,
-        quantity_textures: &[Option<RenderAttachmentTexture>; RenderAttachmentQuantity::count()],
+        quantity_textures: &[RenderAttachmentTexture; RenderAttachmentQuantity::count()],
         samplers: &[Sampler; 2],
         full_description: &FullRenderAttachmentInputDescription,
     ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let quantity_texture = quantity_textures[full_description.quantity.index()]
-            .as_ref()
+        let quantity_texture = &quantity_textures[full_description.quantity.index()];
+        let texture_view = quantity_texture
+            .texture_view(full_description.description.mip_level())
             .unwrap();
 
-        let sampler = &samplers[full_description.description.sampler as usize];
+        let sampler = &samplers[full_description.description.sampler() as usize];
 
         let texture_binding = full_description.quantity.texture_binding();
         let sampler_binding = full_description.quantity.sampler_binding();
@@ -908,7 +933,7 @@ impl RenderAttachmentTextureManager {
             sampler_binding,
             quantity_texture.texture(),
             sampler,
-            full_description.description.visibility,
+            full_description.description.visibility(),
             &label,
         );
 
@@ -917,8 +942,8 @@ impl RenderAttachmentTextureManager {
             texture_binding,
             sampler_binding,
             &bind_group_layout,
-            quantity_texture.texture(),
-            sampler,
+            texture_view,
+            sampler.sampler(),
             &label,
         );
 
@@ -948,15 +973,21 @@ impl RenderAttachmentTextureManager {
         texture_binding: u32,
         sampler_binding: u32,
         layout: &wgpu::BindGroupLayout,
-        texture: &Texture,
-        sampler: &Sampler,
+        texture_view: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
         label: &str,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
-                texture.create_bind_group_entry(texture_binding),
-                sampler.create_bind_group_entry(sampler_binding),
+                wgpu::BindGroupEntry {
+                    binding: texture_binding,
+                    resource: wgpu::BindingResource::TextureView(texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: sampler_binding,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
             ],
             label: Some(&format!("{} bind group", label)),
         })
@@ -969,7 +1000,6 @@ impl RenderAttachmentTexture {
     pub fn new(
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
-        mipmapper_generator: &MipmapperGenerator,
         quantity: RenderAttachmentQuantity,
     ) -> Self {
         let device = graphics_device.device();
@@ -983,11 +1013,10 @@ impl RenderAttachmentTexture {
             depth_or_array_layers: 1,
         };
 
-        let mip_level_count = if quantity.is_mipmapped() {
-            texture_size.max_mips(wgpu::TextureDimension::D2)
-        } else {
-            1
-        };
+        let mip_level_count = u32::min(
+            1 + quantity.max_mip_level(),
+            texture_size.max_mips(wgpu::TextureDimension::D2),
+        );
 
         let texture = Self::create_empty_render_attachment_texture(
             device,
@@ -995,41 +1024,36 @@ impl RenderAttachmentTexture {
             format,
             mip_level_count,
             1,
-            &format!(
-                "Render attachment texture for {} (format = {:?})",
-                quantity, format
-            ),
+            &format!("Render attachment texture (format = {:?})", format),
         );
 
-        let mipmapper = mipmapper_generator.generate_mipmapper(
-            graphics_device,
-            &texture,
-            Cow::Owned(format!("{} render attachment", quantity)),
-        );
-
-        let attachment_view = texture.create_view(&wgpu::TextureViewDescriptor {
+        let base_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            base_mip_level: 0,
             mip_level_count: Some(1),
             ..Default::default()
         });
 
-        // When using a depth texture as a binding, we must exclude the stencil
-        // aspect
-        let binding_view = texture.create_view(&wgpu::TextureViewDescriptor {
-            aspect: if format.has_depth_aspect() {
-                wgpu::TextureAspect::DepthOnly
-            } else {
-                wgpu::TextureAspect::All
-            },
+        let mip_texture_views: Vec<_> = (1..mip_level_count)
+            .map(|mip_level| {
+                texture.create_view(&wgpu::TextureViewDescriptor {
+                    base_mip_level: mip_level,
+                    mip_level_count: Some(1),
             ..Default::default()
-        });
+                })
+            })
+            .collect();
 
-        let texture = Texture::new(texture, binding_view, wgpu::TextureViewDimension::D2, None);
+        let texture = Texture::new(
+            texture,
+            base_texture_view,
+            wgpu::TextureViewDimension::D2,
+            None,
+        );
 
         Self {
             quantity,
             texture,
-            attachment_view,
-            mipmapper,
+            mip_texture_views,
         }
     }
 
@@ -1048,36 +1072,31 @@ impl RenderAttachmentTexture {
         self.texture.texture().format()
     }
 
-    /// Returns a view into the texture for use as a render attachment.
-    pub fn attachment_view(&self) -> &wgpu::TextureView {
-        &self.attachment_view
+    /// Returns a view into the given mip level of the render attachment
+    /// texture, or [`None`] if the texture does not have the given mip
+    /// level.
+    pub fn texture_view(&self, mip_level: u32) -> Option<&wgpu::TextureView> {
+        if mip_level == 0 {
+            Some(self.base_texture_view())
+        } else {
+            self.mip_texture_views.get(mip_level as usize - 1)
+        }
     }
 
-    /// Returns a view into the texture for use as a binding.
-    pub fn binding_view(&self) -> &wgpu::TextureView {
+    /// Returns a view into the base (mip level 0) render attachment texture.
+    pub fn base_texture_view(&self) -> &wgpu::TextureView {
         self.texture.view()
     }
 
-    /// Returns a reference to the mipmapper for the render attachment texture,
-    /// or [`None`] if the texture has no mipmaps.
-    pub fn mipmapper(&self) -> Option<&Mipmapper> {
-        self.mipmapper.as_ref()
-    }
-
-    fn swap(&mut self, other: &mut Self) {
+    fn set_quantity(&mut self, quantity: RenderAttachmentQuantity) {
+        // As long as the associated texture format and mip level count match, we can
+        // safely assign another quantity to the attachment (useful for swapping)
+        assert_eq!(self.format(), quantity.texture_format());
         assert_eq!(
-            self.format(),
-            other.format(),
-            "Cannot swap render attachments with different formats"
+            self.texture().texture().mip_level_count(),
+            1 + quantity.max_mip_level()
         );
-        assert_eq!(
-            self.mipmapper().is_some(),
-            other.mipmapper().is_some(),
-            "Cannot swap render attachments with and without mipmapping"
-        );
-        std::mem::swap(self, other);
-        // We want to keep the old quantity, so we swap it back
-        std::mem::swap(&mut self.quantity, &mut other.quantity);
+        self.quantity = quantity;
     }
 
     /// Creates a new 2D [`wgpu::Texture`] with the given size and format for

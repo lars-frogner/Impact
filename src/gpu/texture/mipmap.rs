@@ -125,14 +125,9 @@ impl MipmapperGenerator {
         let texture_views_for_mip_levels: Vec<_> = (0..texture.mip_level_count())
             .map(|mip_level| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: None,
-                    dimension: None,
-                    aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip_level,
                     mip_level_count: Some(1),
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                    label: Some(&format!("{} mipmap texture view", label)),
+                    ..Default::default()
                 })
             })
             .collect();
