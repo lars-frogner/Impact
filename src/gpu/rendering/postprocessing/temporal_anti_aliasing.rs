@@ -149,12 +149,13 @@ impl UniformBufferable for TemporalAntiAliasingParameters {
 }
 assert_uniform_valid!(TemporalAntiAliasingParameters);
 
-/// Creates a [`RenderAttachmentTextureCopyCommand`] that copies the luminance
-/// attachment to the auxiliary luminance attachment.
+/// Creates a [`RenderAttachmentTextureCopyCommand`] that copies the auxiliary
+/// luminance attachment to the luminance history attachment.
 fn create_temporal_anti_aliasing_texture_copy_command() -> RenderAttachmentTextureCopyCommand {
     RenderAttachmentTextureCopyCommand::new(
-        RenderAttachmentQuantity::Luminance,
+        // The previous pass (bloom) writes to this attachment
         RenderAttachmentQuantity::LuminanceAux,
+        RenderAttachmentQuantity::LuminanceHistory,
     )
 }
 

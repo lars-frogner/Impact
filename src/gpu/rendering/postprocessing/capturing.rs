@@ -199,10 +199,8 @@ impl CapturingCamera {
     ) -> Result<Self> {
         let bloom_commands = BloomRenderCommands::new(
             graphics_device,
-            rendering_surface,
             shader_manager,
             render_attachment_texture_manager,
-            gpu_resource_group_manager,
             &config.bloom,
         )?;
 
@@ -271,24 +269,17 @@ impl CapturingCamera {
     pub fn record_commands_before_tone_mapping(
         &self,
         rendering_surface: &RenderingSurface,
-        surface_texture_view: &wgpu::TextureView,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
         storage_gpu_buffer_manager: &StorageGPUBufferManager,
         postprocessor: &Postprocessor,
-        frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
         self.bloom_commands.record(
-            rendering_surface,
-            surface_texture_view,
             render_resources,
             render_attachment_texture_manager,
-            gpu_resource_group_manager,
-            postprocessor,
-            frame_counter,
             timestamp_recorder,
             self.produces_bloom,
             command_encoder,

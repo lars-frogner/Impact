@@ -6,10 +6,11 @@ use crate::{
         rendering::render_command::StencilValue,
         shader::template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            Blending, RenderAttachmentInputDescription, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity::{self, AmbientReflectedLuminance, LinearDepth, Occlusion},
-            RenderAttachmentQuantitySet, RenderAttachmentSampler,
+            Blending, RenderAttachmentDescription, RenderAttachmentInputDescription,
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity::{LinearDepth, Luminance, LuminanceAux, Occlusion},
+            RenderAttachmentSampler,
         },
     },
     mesh::buffer::MeshVertexAttributeLocation,
@@ -38,23 +39,17 @@ impl AmbientOcclusionApplicationShaderTemplate {
         let push_constants =
             PushConstantGroup::for_fragment([PushConstantVariant::InverseWindowDimensions]);
 
-        let mut input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
-            RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
-        );
-        input_render_attachments.insert_description(
-            RenderAttachmentQuantity::LinearDepth,
-            RenderAttachmentInputDescription::default()
+        let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
+            RenderAttachmentInputDescription::default_for(LinearDepth)
                 .with_sampler(RenderAttachmentSampler::Filtering),
-        );
-        input_render_attachments.insert_description(
-            RenderAttachmentQuantity::Occlusion,
-            RenderAttachmentInputDescription::default()
+            RenderAttachmentInputDescription::default_for(LuminanceAux),
+            RenderAttachmentInputDescription::default_for(Occlusion)
                 .with_sampler(RenderAttachmentSampler::Filtering),
-        );
+        ]);
 
         let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-            RenderAttachmentQuantity::Luminance,
-            RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            RenderAttachmentOutputDescription::default_for(Luminance)
+                .with_blending(Blending::Additive),
         );
 
         Self {
@@ -81,8 +76,8 @@ impl SpecificShaderTemplate for AmbientOcclusionApplicationShaderTemplate {
                     "linear_depth_texture_binding" => LinearDepth.texture_binding(),
                     "linear_depth_sampler_binding" => LinearDepth.sampler_binding(),
                     "ambient_reflected_luminance_texture_group" => 1,
-                    "ambient_reflected_luminance_texture_binding" => AmbientReflectedLuminance.texture_binding(),
-                    "ambient_reflected_luminance_sampler_binding" => AmbientReflectedLuminance.sampler_binding(),
+                    "ambient_reflected_luminance_texture_binding" => LuminanceAux.texture_binding(),
+                    "ambient_reflected_luminance_sampler_binding" => LuminanceAux.sampler_binding(),
                     "occlusion_texture_group" => 2,
                     "occlusion_texture_binding" => Occlusion.texture_binding(),
                     "occlusion_sampler_binding" => Occlusion.sampler_binding(),

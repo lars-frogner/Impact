@@ -8,8 +8,8 @@ use crate::{
         resource_group::GPUResourceGroupID,
         shader::template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            RenderAttachmentInputDescription, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentQuantity,
+            RenderAttachmentDescription, RenderAttachmentInputDescription,
+            RenderAttachmentInputDescriptionSet, RenderAttachmentQuantity,
         },
     },
     template_replacements,
@@ -41,8 +41,8 @@ impl LuminanceHistogramShaderTemplate {
         let push_constants = PushConstantGroup::for_compute([PushConstantVariant::InverseExposure]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::single(
-            RenderAttachmentQuantity::Luminance,
-            RenderAttachmentInputDescription::default()
+            // The previous pass (bloom) writes to this attachment
+            RenderAttachmentInputDescription::default_for(RenderAttachmentQuantity::LuminanceAux)
                 .with_visibility(wgpu::ShaderStages::COMPUTE),
         );
 

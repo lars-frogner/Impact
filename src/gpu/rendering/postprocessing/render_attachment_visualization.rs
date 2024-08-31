@@ -26,18 +26,17 @@ pub struct RenderAttachmentVisualizationPasses {
 }
 
 impl RenderAttachmentVisualizationPasses {
-    const SUPPRTED_QUANTITIES: [RenderAttachmentQuantity; 11] = [
+    const SUPPRTED_QUANTITIES: [RenderAttachmentQuantity; 10] = [
         RenderAttachmentQuantity::LinearDepth,
         RenderAttachmentQuantity::NormalVector,
         RenderAttachmentQuantity::MotionVector,
         RenderAttachmentQuantity::MaterialColor,
         RenderAttachmentQuantity::MaterialProperties,
         RenderAttachmentQuantity::Luminance,
+        RenderAttachmentQuantity::LuminanceHistory,
+        RenderAttachmentQuantity::PreviousLuminanceHistory,
         RenderAttachmentQuantity::LuminanceAux,
-        RenderAttachmentQuantity::PreviousLuminanceAux,
-        RenderAttachmentQuantity::AmbientReflectedLuminance,
         RenderAttachmentQuantity::Occlusion,
-        RenderAttachmentQuantity::EmissiveLuminance,
     ];
 
     pub(super) fn new(

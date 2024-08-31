@@ -386,7 +386,7 @@ fn init_app(window: Window) -> Result<Application> {
         &SphereMeshComp::new(25),
         &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
         &UniformColorComp(vector![1.0, 1.0, 1.0]),
-        &UniformEmissiveLuminanceComp(1e5),
+        &UniformEmissiveLuminanceComp(1e6),
         &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
     ))?;
 

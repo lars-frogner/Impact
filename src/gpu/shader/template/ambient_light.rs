@@ -6,11 +6,11 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
-            RenderAttachmentOutputDescriptionSet,
+            Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
             RenderAttachmentQuantity::{
-                AmbientReflectedLuminance, LinearDepth, Luminance, MaterialColor,
-                MaterialProperties, NormalVector,
+                LinearDepth, Luminance, LuminanceAux, MaterialColor, MaterialProperties,
+                NormalVector,
             },
             RenderAttachmentQuantitySet,
         },
@@ -22,8 +22,8 @@ use crate::{
 use std::sync::LazyLock;
 
 /// Shader template for the ambient light pass, which computes the reflected
-/// luminance due to ambient light and writes it to the ambient reflected
-/// luminance attachment.
+/// luminance due to ambient light and writes it to the auxiliary luminance
+/// attachment.
 ///
 /// This shader is also responsible for writing the emissive luminance to the
 /// luminance attachment (simply because it happens to have access to all the
@@ -69,16 +69,12 @@ impl AmbientLightShaderTemplate {
     /// Returns the descriptions of the render attachments that the shader will
     /// write to.
     pub fn output_render_attachments() -> RenderAttachmentOutputDescriptionSet {
-        let mut output_render_attachments = RenderAttachmentOutputDescriptionSet::empty();
-        output_render_attachments.insert_description(
-            Luminance,
-            RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
-        );
-        output_render_attachments.insert_description(
-            AmbientReflectedLuminance,
-            RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
-        );
-        output_render_attachments
+        RenderAttachmentOutputDescriptionSet::new(vec![
+            RenderAttachmentOutputDescription::default_for(Luminance)
+                .with_blending(Blending::Additive),
+            RenderAttachmentOutputDescription::default_for(LuminanceAux)
+                .with_blending(Blending::Additive),
+        ])
     }
 
     /// Returns the ID of the light volume mesh used by the shader (a

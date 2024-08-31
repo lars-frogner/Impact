@@ -11,9 +11,9 @@ use crate::{
         resource_group::GPUResourceGroupID,
         shader::template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            RenderAttachmentInputDescription, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity::{self, LinearDepth, NormalVector},
+            RenderAttachmentDescription, RenderAttachmentInputDescription,
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity::{LinearDepth, NormalVector},
             RenderAttachmentQuantitySet, RenderAttachmentSampler,
         },
     },
@@ -46,14 +46,11 @@ impl AmbientOcclusionComputationShaderTemplate {
             PushConstantVariant::FrameCounter,
         ]);
 
-        let mut input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
-            RenderAttachmentQuantitySet::NORMAL_VECTOR,
-        );
-        input_render_attachments.insert_description(
-            RenderAttachmentQuantity::LinearDepth,
-            RenderAttachmentInputDescription::default()
+        let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
+            RenderAttachmentInputDescription::default_for(LinearDepth)
                 .with_sampler(RenderAttachmentSampler::Filtering),
-        );
+            RenderAttachmentInputDescription::default_for(NormalVector),
+        ]);
 
         let output_render_attachments = RenderAttachmentOutputDescriptionSet::with_defaults(
             RenderAttachmentQuantitySet::OCCLUSION,

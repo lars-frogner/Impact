@@ -376,6 +376,7 @@ impl RenderCommandManager {
             material_library,
             render_resources,
             render_attachment_texture_manager,
+            postprocessor,
             frame_counter,
             timestamp_recorder,
             command_encoder,
@@ -980,7 +981,7 @@ impl GeometryPass {
                     .contains(quantity.flag())
                 {
                     let description = output_render_attachments
-                        .get_description(*quantity)
+                        .only_description_for_quantity(*quantity)
                         .unwrap();
 
                     let blend_state = match description.blending() {
@@ -1044,6 +1045,7 @@ impl GeometryPass {
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
+        postprocessor: &Postprocessor,
         frame_counter: u32,
     ) {
         self.push_constants
@@ -1059,6 +1061,13 @@ impl GeometryPass {
                 PushConstantVariant::FrameCounter,
                 || frame_counter,
             );
+
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::Exposure,
+                || postprocessor.capturing_camera().exposure_push_constant(),
+            );
     }
 
     fn record(
@@ -1067,6 +1076,7 @@ impl GeometryPass {
         material_library: &MaterialLibrary,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
+        postprocessor: &Postprocessor,
         frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -1099,7 +1109,12 @@ impl GeometryPass {
         for pipeline in self.pipelines.values() {
             render_pass.set_pipeline(&pipeline.pipeline);
 
-            self.set_push_constants(&mut render_pass, rendering_surface, frame_counter);
+            self.set_push_constants(
+                &mut render_pass,
+                rendering_surface,
+                postprocessor,
+                frame_counter,
+            );
 
             for model_id in &pipeline.models {
                 let instance_feature_buffer_managers = render_resources
@@ -1946,7 +1961,7 @@ impl AmbientLightPass {
                     .contains(quantity.flag())
                 {
                     let description = output_render_attachments
-                        .get_description(*quantity)
+                        .only_description_for_quantity(*quantity)
                         .unwrap();
 
                     let blend_state = match description.blending() {
@@ -2037,10 +2052,6 @@ impl AmbientLightPass {
         let light_buffer_manager = render_resources
             .get_light_buffer_manager()
             .ok_or_else(|| anyhow!("Missing GPU buffer for lights"))?;
-
-        if light_buffer_manager.ambient_light_ids().is_empty() {
-            return Ok(());
-        }
 
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
 
@@ -2957,7 +2968,7 @@ impl PostprocessingRenderPass {
                     .contains(quantity.flag())
                 {
                     let description = output_render_attachments
-                        .get_description(*quantity)
+                        .only_description_for_quantity(*quantity)
                         .unwrap();
 
                     let blend_state = match description.blending() {
@@ -3297,6 +3308,55 @@ impl StorageBufferResultCopyCommand {
     }
 }
 
+pub fn create_postprocessing_render_pipeline_layout(
+    device: &wgpu::Device,
+    bind_group_layouts: &[&wgpu::BindGroupLayout],
+    push_constant_ranges: &[wgpu::PushConstantRange],
+    label: &str,
+) -> wgpu::PipelineLayout {
+    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        bind_group_layouts,
+        push_constant_ranges,
+        label: Some(&format!(
+            "Postprocessing pass render pipeline layout ({})",
+            label
+        )),
+    })
+}
+
+pub fn create_postprocessing_render_pipeline(
+    graphics_device: &GraphicsDevice,
+    pipeline_layout: &wgpu::PipelineLayout,
+    shader: &Shader,
+    color_target_states: &[Option<wgpu::ColorTargetState>],
+    depth_stencil_state: Option<wgpu::DepthStencilState>,
+    label: &str,
+) -> wgpu::RenderPipeline {
+    create_render_pipeline(
+        graphics_device.device(),
+        pipeline_layout,
+        shader,
+        &[VertexPosition::BUFFER_LAYOUT],
+        color_target_states,
+        STANDARD_FRONT_FACE,
+        Some(wgpu::Face::Back),
+        wgpu::PolygonMode::Fill,
+        depth_stencil_state,
+        &format!("Postprocessing pass render pipeline ({})", label),
+    )
+}
+
+pub fn additive_blend_state() -> wgpu::BlendState {
+    wgpu::BlendState {
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        },
+        alpha: wgpu::BlendComponent::default(),
+    }
+}
+
 fn create_render_pipeline_layout(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
@@ -3418,17 +3478,6 @@ fn depth_stencil_state_for_stencil_testing(
             ..Default::default()
         },
         bias: wgpu::DepthBiasState::default(),
-    }
-}
-
-fn additive_blend_state() -> wgpu::BlendState {
-    wgpu::BlendState {
-        color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::One,
-            dst_factor: wgpu::BlendFactor::One,
-            operation: wgpu::BlendOperation::Add,
-        },
-        alpha: wgpu::BlendComponent::default(),
     }
 }
 

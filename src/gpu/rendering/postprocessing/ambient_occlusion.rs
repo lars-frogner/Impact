@@ -325,7 +325,7 @@ fn create_unoccluded_ambient_reflected_luminance_application_render_pass(
     gpu_resource_group_manager: &GPUResourceGroupManager,
 ) -> Result<PostprocessingRenderPass> {
     let shader_template = PassthroughShaderTemplate::new(
-        RenderAttachmentQuantity::AmbientReflectedLuminance,
+        RenderAttachmentQuantity::LuminanceAux,
         RenderAttachmentQuantity::Luminance,
         Blending::Additive,
         Some((wgpu::CompareFunction::Equal, StencilValue::PhysicalModel)),

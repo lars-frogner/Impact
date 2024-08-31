@@ -177,7 +177,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let albedo = computeRGBAlbedo(materialColor, materialProperties);
     let normalIncidenceSpecularReflectance = computeRGBSpecularReflectance(materialColor, materialProperties);
     let roughness = materialProperties.y;
-    let emissiveLuminance = computeRGBEmissiveLuminance(materialColor, materialProperties);
+    // Emissive luminance is already pre-exposed from the geometry pass
+    let preExposedEmissiveLuminance = computeRGBEmissiveLuminance(materialColor, materialProperties);
 
     var ambientLuminance = vec3f(0.0);
     for (var lightIdx: u32 = 0u; lightIdx < ambientLights.numLights; lightIdx++) {
@@ -199,7 +200,6 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let ambientReflectedLuminance = ambientDiffuseReflectedLuminance + ambientSpecularReflectedLuminance;
 
-    let preExposedEmissiveLuminance = emissiveLuminance * pushConstants.exposure;
     let preExposedAmbientReflectedLuminance = ambientReflectedLuminance * pushConstants.exposure;
 
     output.preExposedEmissiveLuminance = vec4f(preExposedEmissiveLuminance, 1.0);

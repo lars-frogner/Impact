@@ -7,10 +7,10 @@ use crate::{
         resource_group::GPUResourceGroupID,
         shader::template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            RenderAttachmentInputDescription, RenderAttachmentInputDescriptionSet,
-            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentDescription, RenderAttachmentInputDescription,
+            RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
             RenderAttachmentQuantity::{
-                LinearDepth, Luminance, LuminanceAux, MotionVector, PreviousLuminanceAux,
+                LinearDepth, LuminanceAux, MotionVector, PreviousLuminanceHistory,
             },
             RenderAttachmentQuantitySet, RenderAttachmentSampler,
         },
@@ -21,8 +21,8 @@ use crate::{
 use std::sync::LazyLock;
 
 /// Shader template for the temporal anti-aliasing blending pass, which blends
-/// the previous auxiliary luminance with the current luminance and writes the
-/// result to the auxiliary luminance attachment.
+/// the previous luminance history with the current luminance and writes the
+/// result to the luminance history attachment.
 #[derive(Clone, Debug)]
 pub struct TemporalAntiAliasingShaderTemplate {
     params_resource_group_id: GPUResourceGroupID,
@@ -42,21 +42,17 @@ impl TemporalAntiAliasingShaderTemplate {
         let push_constants =
             PushConstantGroup::for_fragment([PushConstantVariant::InverseWindowDimensions]);
 
-        let mut input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
-            RenderAttachmentQuantitySet::LINEAR_DEPTH
-                | RenderAttachmentQuantitySet::MOTION_VECTOR
-                | RenderAttachmentQuantitySet::LUMINANCE,
-        );
-
-        input_render_attachments.insert_description(
-            PreviousLuminanceAux,
-            RenderAttachmentInputDescription::default()
+        let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
+            RenderAttachmentInputDescription::default_for(LinearDepth),
+            RenderAttachmentInputDescription::default_for(MotionVector),
+            // The previous pass (bloom) writes to this attachment
+            RenderAttachmentInputDescription::default_for(LuminanceAux),
+            RenderAttachmentInputDescription::default_for(PreviousLuminanceHistory)
                 .with_sampler(RenderAttachmentSampler::Filtering),
-        );
+        ]);
 
-        let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-            LuminanceAux,
-            RenderAttachmentOutputDescription::default(),
+        let output_render_attachments = RenderAttachmentOutputDescriptionSet::with_defaults(
+            RenderAttachmentQuantitySet::LUMINANCE_HISTORY,
         );
 
         Self {
@@ -81,11 +77,11 @@ impl SpecificShaderTemplate for TemporalAntiAliasingShaderTemplate {
                     "motion_vector_texture_binding" => MotionVector.texture_binding(),
                     "motion_vector_sampler_binding" => MotionVector.sampler_binding(),
                     "luminance_texture_group" => 2,
-                    "luminance_texture_binding" => Luminance.texture_binding(),
-                    "luminance_sampler_binding" => Luminance.sampler_binding(),
+                    "luminance_texture_binding" => LuminanceAux.texture_binding(),
+                    "luminance_sampler_binding" => LuminanceAux.sampler_binding(),
                     "previous_luminance_texture_group" => 3,
-                    "previous_luminance_texture_binding" => PreviousLuminanceAux.texture_binding(),
-                    "previous_luminance_sampler_binding" => PreviousLuminanceAux.sampler_binding(),
+                    "previous_luminance_texture_binding" => PreviousLuminanceHistory.texture_binding(),
+                    "previous_luminance_sampler_binding" => PreviousLuminanceHistory.sampler_binding(),
                     "params_group" => 4,
                     "params_binding" => 0,
                     "position_location" => MeshVertexAttributeLocation::Position as u32,

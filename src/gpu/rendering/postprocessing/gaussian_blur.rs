@@ -39,7 +39,7 @@ pub enum GaussianBlurDirection {
 /// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub(super) struct GaussianBlurSamples {
+pub struct GaussianBlurSamples {
     /// Each entry stores an offset as the first vector component and a weight
     /// as the second component. The remaining vector components are ignored.
     /// The reason we need to use a `Vector4` is that arrays in uniforms must
@@ -168,7 +168,7 @@ assert_uniform_valid!(GaussianBlurSamples);
 /// Creates a [`PostprocessingRenderPass`] that applies a Gaussian blur in the
 /// given direction to the given input attachment and writes the result to the
 /// given output attachment using the given blending.
-pub(super) fn create_gaussian_blur_render_pass(
+pub fn create_gaussian_blur_render_pass(
     graphics_device: &GraphicsDevice,
     rendering_surface: &RenderingSurface,
     shader_manager: &mut ShaderManager,
