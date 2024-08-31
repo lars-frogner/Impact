@@ -8,7 +8,6 @@ use crate::gpu::{
 use bitflags::bitflags;
 use num_traits::AsPrimitive;
 use std::{
-    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Display,
 };
@@ -18,18 +17,17 @@ bitflags! {
     /// render attachment textures.
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
     pub struct RenderAttachmentQuantitySet: u16 {
-        const DEPTH_STENCIL               = 1 << 0;
-        const LINEAR_DEPTH                = 1 << 1;
-        const NORMAL_VECTOR               = 1 << 2;
-        const MOTION_VECTOR               = 1 << 3;
-        const MATERIAL_COLOR              = 1 << 4;
-        const MATERIAL_PROPERTIES         = 1 << 5;
-        const LUMINANCE                   = 1 << 6;
-        const LUMINANCE_AUX               = 1 << 7;
-        const PREVIOUS_LUMINANCE_AUX      = 1 << 8;
-        const AMBIENT_REFLECTED_LUMINANCE = 1 << 9;
-        const OCCLUSION                   = 1 << 10;
-        const EMISSIVE_LUMINANCE          = 1 << 11;
+        const DEPTH_STENCIL              = 1 << 0;
+        const LINEAR_DEPTH               = 1 << 1;
+        const NORMAL_VECTOR              = 1 << 2;
+        const MOTION_VECTOR              = 1 << 3;
+        const MATERIAL_COLOR             = 1 << 4;
+        const MATERIAL_PROPERTIES        = 1 << 5;
+        const LUMINANCE                  = 1 << 6;
+        const LUMINANCE_AUX              = 1 << 7;
+        const LUMINANCE_HISTORY          = 1 << 8;
+        const PREVIOUS_LUMINANCE_HISTORY = 1 << 9;
+        const OCCLUSION                  = 1 << 10;
     }
 }
 
@@ -44,10 +42,9 @@ pub enum RenderAttachmentQuantity {
     MaterialProperties = 5,
     Luminance = 6,
     LuminanceAux = 7,
-    PreviousLuminanceAux = 8,
-    AmbientReflectedLuminance = 9,
+    LuminanceHistory = 8,
+    PreviousLuminanceHistory = 9,
     Occlusion = 10,
-    EmissiveLuminance = 11,
 }
 
 /// A sampler variant for render attachment textures.
@@ -60,6 +57,7 @@ pub enum RenderAttachmentSampler {
 /// Specifies how a render attachment should be used when bound as an input.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderAttachmentInputDescription {
+    quantity: RenderAttachmentQuantity,
     sampler: RenderAttachmentSampler,
     visibility: wgpu::ShaderStages,
     mip_level: u32,
@@ -68,6 +66,7 @@ pub struct RenderAttachmentInputDescription {
 /// Specifies how a render attachment should be used when bound as an output.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RenderAttachmentOutputDescription {
+    quantity: RenderAttachmentQuantity,
     blending: Blending,
     write_mask: wgpu::ColorWrites,
     mip_level: u32,
@@ -84,7 +83,7 @@ pub enum Blending {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderAttachmentDescriptionSet<D> {
     quantities: RenderAttachmentQuantitySet,
-    descriptions: HashMap<RenderAttachmentQuantity, D>,
+    descriptions: Vec<D>,
 }
 
 /// A set of input descriptions for render attachments.
@@ -101,7 +100,7 @@ pub struct RenderAttachmentTextureManager {
     quantity_textures: [RenderAttachmentTexture; N_RENDER_ATTACHMENT_QUANTITIES],
     samplers: [Sampler; 2],
     bind_groups_and_layouts:
-        HashMap<FullRenderAttachmentInputDescription, (wgpu::BindGroupLayout, wgpu::BindGroup)>,
+        HashMap<RenderAttachmentInputDescription, (wgpu::BindGroupLayout, wgpu::BindGroup)>,
 }
 
 /// A texture that can be used as a color attachment for rendering a specific
@@ -114,17 +113,16 @@ pub struct RenderAttachmentTexture {
 }
 
 pub trait RenderAttachmentDescription {
-    fn is_supported_by_quantity(&self, quantity: RenderAttachmentQuantity) -> bool;
-}
+    /// Creates a new default render attachment description for the given
+    /// quantity.
+    fn default_for(quantity: RenderAttachmentQuantity) -> Self;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct FullRenderAttachmentInputDescription {
-    quantity: RenderAttachmentQuantity,
-    description: RenderAttachmentInputDescription,
+    /// Returns the render attachment quantity for this description.
+    fn quantity(&self) -> RenderAttachmentQuantity;
 }
 
 /// The total number of separate render attachment quantities.
-const N_RENDER_ATTACHMENT_QUANTITIES: usize = 12;
+const N_RENDER_ATTACHMENT_QUANTITIES: usize = 11;
 
 /// Each individual render attachment quantity.
 ///
@@ -139,10 +137,9 @@ const RENDER_ATTACHMENT_QUANTITIES: [RenderAttachmentQuantity; N_RENDER_ATTACHME
     RenderAttachmentQuantity::MaterialProperties,
     RenderAttachmentQuantity::Luminance,
     RenderAttachmentQuantity::LuminanceAux,
-    RenderAttachmentQuantity::PreviousLuminanceAux,
-    RenderAttachmentQuantity::AmbientReflectedLuminance,
+    RenderAttachmentQuantity::LuminanceHistory,
+    RenderAttachmentQuantity::PreviousLuminanceHistory,
     RenderAttachmentQuantity::Occlusion,
-    RenderAttachmentQuantity::EmissiveLuminance,
 ];
 
 /// The bitflag of each individual render attachment quantity.
@@ -155,10 +152,9 @@ const RENDER_ATTACHMENT_FLAGS: [RenderAttachmentQuantitySet; N_RENDER_ATTACHMENT
     RenderAttachmentQuantitySet::MATERIAL_PROPERTIES,
     RenderAttachmentQuantitySet::LUMINANCE,
     RenderAttachmentQuantitySet::LUMINANCE_AUX,
-    RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE_AUX,
-    RenderAttachmentQuantitySet::AMBIENT_REFLECTED_LUMINANCE,
+    RenderAttachmentQuantitySet::LUMINANCE_HISTORY,
+    RenderAttachmentQuantitySet::PREVIOUS_LUMINANCE_HISTORY,
     RenderAttachmentQuantitySet::OCCLUSION,
-    RenderAttachmentQuantitySet::EMISSIVE_LUMINANCE,
 ];
 
 /// The name of each individual render attachment quantity.
@@ -170,13 +166,12 @@ const RENDER_ATTACHMENT_NAMES: [&str; N_RENDER_ATTACHMENT_QUANTITIES] = [
     "material_color",
     "material_properties",
     "luminance",
-    "luminance_aux",
-    // We use the same name for the previous auxiliary luminance attachment so
+    "auxiliary_luminance",
+    "luminance_history",
+    // We use the same name for the previous luminance history attachment so
     // that their `BindGroupLayout`s can be used interchangeably
-    "luminance_aux",
-    "ambient_reflected_luminance",
+    "luminance_history",
     "occlusion",
-    "emissive_luminance",
 ];
 
 /// The texture format used for each render attachment quantity.
@@ -189,10 +184,9 @@ const RENDER_ATTACHMENT_FORMATS: [wgpu::TextureFormat; N_RENDER_ATTACHMENT_QUANT
     wgpu::TextureFormat::Rgba16Float,          // Material properties
     wgpu::TextureFormat::Rgba16Float,          // Luminance
     wgpu::TextureFormat::Rgba16Float,          // Auxiliary luminance
-    wgpu::TextureFormat::Rgba16Float,          // Previous auxiliary luminance
-    wgpu::TextureFormat::Rgba16Float,          // Ambient reflected luminance
+    wgpu::TextureFormat::Rgba16Float,          // Luminance history
+    wgpu::TextureFormat::Rgba16Float,          // Previous luminance history
     wgpu::TextureFormat::R16Float,             // Occlusion
-    wgpu::TextureFormat::Rgba16Float,          // Emissive luminance
 ];
 
 /// The maximum mip level for each render attachment quantity.
@@ -204,11 +198,10 @@ const RENDER_ATTACHMENT_MAX_MIP_LEVEL: [u32; N_RENDER_ATTACHMENT_QUANTITIES] = [
     0, // Material color
     0, // Material properties
     0, // Luminance
-    0, // Auxiliary luminance
-    0, // Previous auxiliary luminance
-    0, // Ambient reflected luminance
+    6, // Auxiliary luminance
+    0, // Luminance history
+    0, // Previous luminance history
     0, // Occlusion
-    0, // Emissive luminance
 ];
 
 /// The clear color used for each render attachment quantity, or [`None`] if the
@@ -222,10 +215,9 @@ const RENDER_ATTACHMENT_CLEAR_COLORS: [Option<wgpu::Color>; N_RENDER_ATTACHMENT_
     Some(wgpu::Color::BLACK), // Material properties
     Some(wgpu::Color::BLACK), // Luminance
     Some(wgpu::Color::BLACK), // Auxiliary luminance
-    None,                     // Previous auxiliary luminance
-    Some(wgpu::Color::BLACK), // Ambient reflected luminance
+    Some(wgpu::Color::BLACK), // Luminance history
+    None,                     // Previous luminance history
     Some(wgpu::Color::WHITE), // Occlusion
-    Some(wgpu::Color::BLACK), // Emissive luminance
 ];
 
 /// The texture and sampler bind group bindings used for each render attachment
@@ -239,10 +231,9 @@ const RENDER_ATTACHMENT_BINDINGS: [(u32, u32); N_RENDER_ATTACHMENT_QUANTITIES] =
     (0, 1), // Material properties
     (0, 1), // Luminance
     (0, 1), // Auxiliary luminance
-    (0, 1), // Previous auxiliary luminance
-    (0, 1), // Ambient reflected luminance
+    (0, 1), // Luminance history
+    (0, 1), // Previous luminance history
     (0, 1), // Occlusion
-    (0, 1), // Emissive luminance
 ];
 
 impl RenderAttachmentQuantity {
@@ -400,6 +391,32 @@ impl RenderAttachmentSampler {
 }
 
 impl RenderAttachmentInputDescription {
+    /// Creates a new render attachment input description.
+    ///
+    /// # Panics
+    /// If `mip_level` is larger than the maximum mip level for the render
+    /// attachment quantity.
+    pub fn new(
+        quantity: RenderAttachmentQuantity,
+        sampler: RenderAttachmentSampler,
+        visibility: wgpu::ShaderStages,
+        mip_level: u32,
+    ) -> Self {
+        assert!(mip_level <= quantity.max_mip_level());
+        Self {
+            quantity,
+            sampler,
+            visibility,
+            mip_level,
+        }
+    }
+
+    /// Sets the render attachment quantity.
+    pub fn with_quantity(mut self, quantity: RenderAttachmentQuantity) -> Self {
+        self.quantity = quantity;
+        self
+    }
+
     /// Sets how the render attachment should be sampled.
     pub fn with_sampler(mut self, sampler: RenderAttachmentSampler) -> Self {
         self.sampler = sampler;
@@ -414,7 +431,12 @@ impl RenderAttachmentInputDescription {
     }
 
     /// Sets the mip level of the render attachment that should be used.
+    ///
+    /// # Panics
+    /// If `mip_level` is larger than the maximum mip level for the render
+    /// attachment quantity.
     pub fn with_mip_level(mut self, mip_level: u32) -> Self {
+        assert!(mip_level <= self.quantity.max_mip_level());
         self.mip_level = mip_level;
         self
     }
@@ -437,22 +459,47 @@ impl RenderAttachmentInputDescription {
 }
 
 impl RenderAttachmentDescription for RenderAttachmentInputDescription {
-    fn is_supported_by_quantity(&self, quantity: RenderAttachmentQuantity) -> bool {
-        self.mip_level() <= quantity.max_mip_level()
-    }
-}
-
-impl Default for RenderAttachmentInputDescription {
-    fn default() -> Self {
+    fn default_for(quantity: RenderAttachmentQuantity) -> Self {
         Self {
+            quantity,
             sampler: RenderAttachmentSampler::NonFiltering,
             visibility: wgpu::ShaderStages::FRAGMENT,
             mip_level: 0,
         }
     }
+
+    fn quantity(&self) -> RenderAttachmentQuantity {
+        self.quantity
+    }
 }
 
 impl RenderAttachmentOutputDescription {
+    /// Creates a new render attachment output description.
+    ///
+    /// # Panics
+    /// If `mip_level` is larger than the maximum mip level for the render
+    /// attachment quantity.
+    pub fn new(
+        quantity: RenderAttachmentQuantity,
+        blending: Blending,
+        write_mask: wgpu::ColorWrites,
+        mip_level: u32,
+    ) -> Self {
+        assert!(mip_level <= quantity.max_mip_level());
+        Self {
+            quantity,
+            blending,
+            write_mask,
+            mip_level,
+        }
+    }
+
+    /// Sets the render attachment quantity.
+    pub fn with_quantity(mut self, quantity: RenderAttachmentQuantity) -> Self {
+        self.quantity = quantity;
+        self
+    }
+
     /// Sets the blending mode that should be used when rendering to the render
     /// attachment.
     pub fn with_blending(mut self, blending: Blending) -> Self {
@@ -493,39 +540,29 @@ impl RenderAttachmentOutputDescription {
 }
 
 impl RenderAttachmentDescription for RenderAttachmentOutputDescription {
-    fn is_supported_by_quantity(&self, quantity: RenderAttachmentQuantity) -> bool {
-        self.mip_level() <= quantity.max_mip_level()
-    }
-}
-
-impl Default for RenderAttachmentOutputDescription {
-    fn default() -> Self {
+    fn default_for(quantity: RenderAttachmentQuantity) -> Self {
         Self {
+            quantity,
             blending: Blending::Replace,
             write_mask: wgpu::ColorWrites::ALL,
             mip_level: 0,
         }
     }
+
+    fn quantity(&self) -> RenderAttachmentQuantity {
+        self.quantity
+    }
 }
 
 impl<D> RenderAttachmentDescriptionSet<D>
 where
-    D: Clone + Default + RenderAttachmentDescription,
+    D: RenderAttachmentDescription,
 {
-    /// Creates a new set of descriptions for the render attachments for the
-    /// given quantities. Descriptions that are not specified will use the
-    /// default description.
-    ///
-    /// # Panics
-    /// - If any of the descriptions does not support their associated quantity.
-    /// - If there are descriptions for missing quantities.
-    pub fn new(
-        quantities: RenderAttachmentQuantitySet,
-        descriptions: HashMap<RenderAttachmentQuantity, D>,
-    ) -> Self {
-        for (quantity, description) in &descriptions {
-            assert!(description.is_supported_by_quantity(*quantity));
-            assert!(quantities.contains(quantity.flag()));
+    /// Gathers the given list of descriptions into a description set.
+    pub fn new(descriptions: Vec<D>) -> Self {
+        let mut quantities = RenderAttachmentQuantitySet::empty();
+        for description in &descriptions {
+            quantities |= description.quantity().flag();
         }
         Self {
             quantities,
@@ -537,22 +574,37 @@ where
     pub fn empty() -> Self {
         Self {
             quantities: RenderAttachmentQuantitySet::empty(),
-            descriptions: HashMap::new(),
+            descriptions: Vec::new(),
+        }
+    }
+
+    /// Creates a new empty set of descriptions for render attachments, with
+    /// the given capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            quantities: RenderAttachmentQuantitySet::empty(),
+            descriptions: Vec::with_capacity(capacity),
         }
     }
 
     /// Creates a new set of descriptions for the render attachments for the
     /// given quantities, using the default description for all of them.
     pub fn with_defaults(quantities: RenderAttachmentQuantitySet) -> Self {
-        Self::new(quantities, HashMap::new())
+        let mut descriptions = Vec::with_capacity(quantities.bits().count_ones() as usize);
+        for quantity in RenderAttachmentQuantity::all() {
+            if quantities.contains(quantity.flag()) {
+                descriptions.push(D::default_for(*quantity));
+            }
+        }
+        Self {
+            quantities,
+            descriptions,
+        }
     }
 
-    /// Creates a set of descriptions for a single render attachment quantity.
-    pub fn single(quantity: RenderAttachmentQuantity, description: D) -> Self {
-        Self::new(
-            quantity.flag(),
-            [(quantity, description)].into_iter().collect(),
-        )
+    /// Creates a set comprised only of the given description.
+    pub fn single(description: D) -> Self {
+        Self::new(vec![description])
     }
 
     /// Whether the set is empty.
@@ -565,42 +617,39 @@ where
         self.quantities
     }
 
-    /// Returns the description for the given quantity, or the default
-    /// description if the quantity does not have a specific description.
-    /// Returns [`None`] if the quantity is not in the set.
-    pub fn get_description(&self, quantity: RenderAttachmentQuantity) -> Option<Cow<'_, D>> {
-        if !self.quantities.contains(quantity.flag()) {
-            return None;
+    /// Returns the descriptions for the render attachments in the set in the
+    /// order in which they were added.
+    pub fn descriptions(&self) -> &[D] {
+        &self.descriptions
+    }
+
+    /// Returns an iterator over the descriptions for the given quantity.
+    pub fn descriptions_for_quantity(
+        &self,
+        quantity: RenderAttachmentQuantity,
+    ) -> impl Iterator<Item = &D> + '_ {
+        self.descriptions
+            .iter()
+            .filter(move |description| description.quantity() == quantity)
+    }
+
+    /// Returns the description for the given quantity, or [`None`] if the
+    /// quantity has none or multiple descriptions.
+    pub fn only_description_for_quantity(&self, quantity: RenderAttachmentQuantity) -> Option<&D> {
+        let mut descriptions = self.descriptions_for_quantity(quantity);
+        let description = descriptions.next();
+        if descriptions.next().is_none() {
+            description
+        } else {
+            None
         }
-        Some(
-            self.descriptions
-                .get(&quantity)
-                .map_or_else(|| Cow::Owned(D::default()), Cow::Borrowed),
-        )
     }
 
-    /// Inserts the given quantities in the set, using the default description
-    /// for all of them.
-    pub fn insert_with_defaults(&mut self, quantities: RenderAttachmentQuantitySet) {
-        self.quantities |= quantities;
-    }
-
-    /// Inserts the given quantity in the set, using the given description.
-    ///
-    /// # Panics
-    /// - If the description is not supported by the quantity.
-    /// - If the quantity is already in the set.
-    pub fn insert_description(&mut self, quantity: RenderAttachmentQuantity, description: D) {
-        assert!(
-            description.is_supported_by_quantity(quantity),
-            "Tried to insert a description not supported by the quantity"
-        );
-        assert!(
-            !self.quantities.contains(quantity.flag()),
-            "Tried to insert a description for an existing quantity"
-        );
-        self.quantities |= quantity.flag();
-        self.descriptions.insert(quantity, description);
+    /// Inserts the given description in the set. This will not overwrite any
+    /// existing descriptions even if they are equal.
+    pub fn insert_description(&mut self, description: D) {
+        self.quantities |= description.quantity().flag();
+        self.descriptions.push(description);
     }
 }
 
@@ -665,19 +714,61 @@ impl RenderAttachmentTextureManager {
     /// group layouts for the requested set of input descriptions, in the order
     /// in which the quantities are returned from the
     /// [`RenderAttachmentQuantity`] methods. Any layout that does not already
-    /// exist will be created.
-    pub fn create_and_get_render_attachment_texture_bind_group_layouts(
-        &mut self,
+    /// exist will be created (regardless of whether the returned iterator is
+    /// consumed).
+    pub fn create_and_get_render_attachment_texture_bind_group_layouts<'a, 'b>(
+        &'a mut self,
         graphics_device: &GraphicsDevice,
-        input_descriptions: &RenderAttachmentInputDescriptionSet,
-    ) -> impl Iterator<Item = &wgpu::BindGroupLayout> {
-        let descriptions =
-            self.create_missing_bind_groups_and_layouts(graphics_device, input_descriptions);
+        input_descriptions: &'b RenderAttachmentInputDescriptionSet,
+    ) -> impl Iterator<Item = &wgpu::BindGroupLayout> + 'b
+    where
+        'a: 'b,
+    {
+        self.create_missing_bind_groups_and_layouts(graphics_device, input_descriptions);
+        self.get_render_attachment_texture_bind_group_layouts(input_descriptions)
+    }
 
-        descriptions.into_iter().map(|description| {
-            let (layout, _) = self.bind_groups_and_layouts.get(&description).unwrap();
-            layout
+    /// Returns an iterator over the render attachment texture and sampler bind
+    /// group layouts for the requested set of input descriptions, in the order
+    /// in which the quantities are returned from the
+    /// [`RenderAttachmentQuantity`] methods.
+    ///
+    /// This method should only be called after
+    /// [`Self::create_and_get_render_attachment_texture_bind_group_layouts`] or
+    /// [`Self::create_missing_bind_groups_and_layouts`] has been called
+    /// with the same input descriptions, otherwise the requested bind
+    /// group layouts may not exist yet.
+    ///
+    /// # Panics
+    /// If the bind group layout for any of the input descriptions has not been
+    /// created.
+    pub fn get_render_attachment_texture_bind_group_layouts<'a, 'b>(
+        &'a self,
+        input_descriptions: &'b RenderAttachmentInputDescriptionSet,
+    ) -> impl Iterator<Item = &'a wgpu::BindGroupLayout> + 'b
+    where
+        'a: 'b,
+    {
+        RenderAttachmentQuantity::all().iter().flat_map(|quantity| {
+            input_descriptions
+                .descriptions_for_quantity(*quantity)
+                .map(|description| {
+                    let (layout, _) = self.bind_groups_and_layouts.get(description).unwrap();
+                    layout
+                })
         })
+    }
+
+    /// Returns the render attachment texture and sampler bind group layout for
+    /// the requested input description, or [`None`] if the bind group
+    /// layout for the input description has not been created.
+    pub fn get_render_attachment_texture_bind_group_layout(
+        &self,
+        input_description: &RenderAttachmentInputDescription,
+    ) -> Option<&wgpu::BindGroupLayout> {
+        self.bind_groups_and_layouts
+            .get(input_description)
+            .map(|(bind_group_layout, _)| bind_group_layout)
     }
 
     /// Returns an iterator over the render attachment texture and sampler bind
@@ -686,9 +777,10 @@ impl RenderAttachmentTextureManager {
     /// methods.
     ///
     /// This method should only be called after
-    /// [`Self::create_and_get_render_attachment_texture_bind_group_layouts`]
-    /// has been called with the same input descriptions, otherwise the
-    /// requested bind groups may not exist yet.
+    /// [`Self::create_and_get_render_attachment_texture_bind_group_layouts`] or
+    /// [`Self::create_missing_bind_groups_and_layouts`] has been called
+    /// with the same input descriptions, otherwise the requested bind
+    /// groups may not exist yet.
     ///
     /// # Panics
     /// If the bind group for any of the input descriptions has not been
@@ -700,21 +792,29 @@ impl RenderAttachmentTextureManager {
     where
         'a: 'b,
     {
-        RenderAttachmentQuantity::all()
-            .iter()
-            .filter_map(|&quantity| {
-                let full_description = FullRenderAttachmentInputDescription {
-                    quantity,
-                    description: input_descriptions.get_description(quantity)?.into_owned(),
-                };
+        RenderAttachmentQuantity::all().iter().flat_map(|quantity| {
+            input_descriptions
+                .descriptions_for_quantity(*quantity)
+                .map(|description| {
+                    let (_, bind_group) = self
+                        .bind_groups_and_layouts
+                        .get(description)
+                        .expect("Missing bind group for render attachment input description");
+                    bind_group
+                })
+        })
+    }
 
-                let (_, bind_group) = self
-                    .bind_groups_and_layouts
-                    .get(&full_description)
-                    .expect("Missing bind group for render attachment input description");
-
-                Some(bind_group)
-            })
+    /// Returns the render attachment texture and sampler bind group for the
+    /// requested input description, or [`None`] if the bind group for the
+    /// input description has not been created.
+    pub fn get_render_attachment_texture_bind_group(
+        &self,
+        input_description: &RenderAttachmentInputDescription,
+    ) -> Option<&wgpu::BindGroup> {
+        self.bind_groups_and_layouts
+            .get(input_description)
+            .map(|(_, bind_group)| bind_group)
     }
 
     /// Recreates all render attachment textures for the current state of the
@@ -743,29 +843,49 @@ impl RenderAttachmentTextureManager {
     ) {
         self.swap_two_attachments(
             graphics_device,
-            RenderAttachmentQuantity::LuminanceAux,
-            RenderAttachmentQuantity::PreviousLuminanceAux,
+            RenderAttachmentQuantity::LuminanceHistory,
+            RenderAttachmentQuantity::PreviousLuminanceHistory,
         );
     }
 
+    /// Creates any bind group layouts and bind groups represented in the given
+    /// input description set that have not already been created.
+    pub fn create_missing_bind_groups_and_layouts(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        input_descriptions: &RenderAttachmentInputDescriptionSet,
+    ) {
+        for description in input_descriptions.descriptions() {
+            self.bind_groups_and_layouts
+                .entry(*description)
+                .or_insert_with(|| {
+                    Self::create_bind_group_and_layout_from_description(
+                        graphics_device,
+                        &self.quantity_textures,
+                        &self.samplers,
+                        description,
+                    )
+                });
+        }
+    }
+
     fn recreate_bind_groups(&mut self, graphics_device: &GraphicsDevice) {
-        for (full_description, (bind_group_layout, bind_group)) in &mut self.bind_groups_and_layouts
-        {
-            let quantity = full_description.quantity;
+        for (description, (bind_group_layout, bind_group)) in &mut self.bind_groups_and_layouts {
+            let quantity = description.quantity;
 
             let quantity_texture = &self.quantity_textures[quantity.index()];
             let texture_view = quantity_texture
-                .texture_view(full_description.description.mip_level())
+                .texture_view(description.mip_level())
                 .unwrap();
 
-            let sampler = &self.samplers[full_description.description.sampler as usize];
+            let sampler = &self.samplers[description.sampler as usize];
 
             let label = format!(
                 "{} render attachment (mip level {}) with {:?} sampler in stages {:?}",
                 quantity,
-                full_description.description.mip_level(),
-                full_description.description.sampler(),
-                full_description.description.visibility()
+                description.mip_level(),
+                description.sampler(),
+                description.visibility()
             );
 
             *bind_group = Self::create_bind_group(
@@ -780,35 +900,6 @@ impl RenderAttachmentTextureManager {
         }
     }
 
-    fn create_missing_bind_groups_and_layouts(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        input_descriptions: &RenderAttachmentInputDescriptionSet,
-    ) -> Vec<FullRenderAttachmentInputDescription> {
-        RenderAttachmentQuantity::all()
-            .iter()
-            .filter_map(|&quantity| {
-                let full_description = FullRenderAttachmentInputDescription {
-                    quantity,
-                    description: input_descriptions.get_description(quantity)?.into_owned(),
-                };
-
-                self.bind_groups_and_layouts
-                    .entry(full_description.clone())
-                    .or_insert_with(|| {
-                        Self::create_bind_group_and_layout_from_description(
-                            graphics_device,
-                            &self.quantity_textures,
-                            &self.samplers,
-                            &full_description,
-                        )
-                    });
-
-                Some(full_description)
-            })
-            .collect()
-    }
-
     fn swap_two_attachments(
         &mut self,
         graphics_device: &GraphicsDevice,
@@ -818,9 +909,9 @@ impl RenderAttachmentTextureManager {
         let input_descriptions_for_first: HashSet<_> = self
             .bind_groups_and_layouts
             .keys()
-            .filter_map(|full_description| {
-                if full_description.quantity == first {
-                    Some(full_description.description)
+            .filter_map(|description| {
+                if description.quantity == first {
+                    Some(*description)
                 } else {
                     None
                 }
@@ -830,9 +921,14 @@ impl RenderAttachmentTextureManager {
         let input_descriptions_for_second: HashSet<_> = self
             .bind_groups_and_layouts
             .keys()
-            .filter_map(|full_description| {
-                if full_description.quantity == second {
-                    Some(full_description.description)
+            .filter_map(|description| {
+                if description.quantity == second {
+                    // Since we don't care abount the quantity field when comparing descriptions
+                    // between the two quantities, we make sure it is set to the first quantity also
+                    // for the second quantity's descriptions. This way, when we take the difference
+                    // between the two sets of descriptions, only differences in the non-quantity
+                    // fields will be detected.
+                    Some(description.with_quantity(first))
                 } else {
                     None
                 }
@@ -852,19 +948,16 @@ impl RenderAttachmentTextureManager {
             ),
         ] {
             for description in missing_descriptions {
-                let missing_full_description = FullRenderAttachmentInputDescription {
-                    quantity,
-                    description: *description,
-                };
+                let missing_description = description.with_quantity(quantity);
                 let missing_bind_group_and_layout =
                     Self::create_bind_group_and_layout_from_description(
                         graphics_device,
                         &self.quantity_textures,
                         &self.samplers,
-                        &missing_full_description,
+                        &missing_description,
                     );
                 self.bind_groups_and_layouts
-                    .insert(missing_full_description, missing_bind_group_and_layout);
+                    .insert(missing_description, missing_bind_group_and_layout);
             }
         }
 
@@ -873,14 +966,8 @@ impl RenderAttachmentTextureManager {
         input_descriptions_for_first
             .union(&input_descriptions_for_second)
             .for_each(|description| {
-                let description_for_first = FullRenderAttachmentInputDescription {
-                    quantity: first,
-                    description: *description,
-                };
-                let description_for_second = FullRenderAttachmentInputDescription {
-                    quantity: second,
-                    description: *description,
-                };
+                let description_for_first = description.with_quantity(first);
+                let description_for_second = description.with_quantity(second);
 
                 let bind_group_and_layout_for_first = self
                     .bind_groups_and_layouts
@@ -908,23 +995,23 @@ impl RenderAttachmentTextureManager {
         graphics_device: &GraphicsDevice,
         quantity_textures: &[RenderAttachmentTexture; RenderAttachmentQuantity::count()],
         samplers: &[Sampler; 2],
-        full_description: &FullRenderAttachmentInputDescription,
+        description: &RenderAttachmentInputDescription,
     ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let quantity_texture = &quantity_textures[full_description.quantity.index()];
+        let quantity_texture = &quantity_textures[description.quantity.index()];
         let texture_view = quantity_texture
-            .texture_view(full_description.description.mip_level())
+            .texture_view(description.mip_level())
             .unwrap();
 
-        let sampler = &samplers[full_description.description.sampler() as usize];
+        let sampler = &samplers[description.sampler() as usize];
 
-        let texture_binding = full_description.quantity.texture_binding();
-        let sampler_binding = full_description.quantity.sampler_binding();
+        let texture_binding = description.quantity.texture_binding();
+        let sampler_binding = description.quantity.sampler_binding();
 
         let label = format!(
             "{} render attachment with {:?} sampler in stages {:?}",
-            full_description.quantity,
-            full_description.description.sampler(),
-            full_description.description.visibility()
+            description.quantity,
+            description.sampler(),
+            description.visibility()
         );
 
         let bind_group_layout = Self::create_bind_group_layout(
@@ -933,7 +1020,7 @@ impl RenderAttachmentTextureManager {
             sampler_binding,
             quantity_texture.texture(),
             sampler,
-            full_description.description.visibility(),
+            description.visibility(),
             &label,
         );
 
@@ -1024,7 +1111,10 @@ impl RenderAttachmentTexture {
             format,
             mip_level_count,
             1,
-            &format!("Render attachment texture (format = {:?})", format),
+            &format!(
+                "Render attachment texture (quantity = {:?}, format = {:?})",
+                quantity, format
+            ),
         );
 
         let base_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -1038,7 +1128,7 @@ impl RenderAttachmentTexture {
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     base_mip_level: mip_level,
                     mip_level_count: Some(1),
-            ..Default::default()
+                    ..Default::default()
                 })
             })
             .collect();

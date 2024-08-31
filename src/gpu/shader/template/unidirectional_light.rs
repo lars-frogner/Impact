@@ -7,8 +7,8 @@ use crate::{
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
         texture::{
             attachment::{
-                Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
-                RenderAttachmentOutputDescriptionSet,
+                Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
+                RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
                 RenderAttachmentQuantity::{
                     self, LinearDepth, Luminance, MaterialColor, MaterialProperties, NormalVector,
                 },
@@ -78,8 +78,10 @@ impl UnidirectionalLightShaderTemplate {
     /// write to.
     pub fn output_render_attachments() -> RenderAttachmentOutputDescriptionSet {
         RenderAttachmentOutputDescriptionSet::single(
-            Self::output_render_attachment_quantity(),
-            RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            RenderAttachmentOutputDescription::default_for(
+                Self::output_render_attachment_quantity(),
+            )
+            .with_blending(Blending::Additive),
         )
     }
 

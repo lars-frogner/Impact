@@ -3,6 +3,9 @@
 pub mod ambient_light;
 pub mod ambient_occlusion_application;
 pub mod ambient_occlusion_computation;
+pub mod bloom_blending;
+pub mod bloom_downsampling;
+pub mod bloom_upsampling_blur;
 pub mod gaussian_blur;
 pub mod luminance_histogram;
 pub mod luminance_histogram_average;

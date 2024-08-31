@@ -1,186 +1,510 @@
 //! Render passes for applying bloom.
 
-use crate::gpu::{
-    query::TimestampQueryRegistry,
-    rendering::{
-        postprocessing::{
-            gaussian_blur::{self, GaussianBlurDirection, GaussianBlurSamples},
-            Postprocessor,
+use crate::{
+    gpu::{
+        push_constant::{PushConstantGroup, PushConstantVariant},
+        query::TimestampQueryRegistry,
+        rendering::{
+            fre,
+            render_command::{
+                additive_blend_state, create_postprocessing_render_pipeline,
+                create_postprocessing_render_pipeline_layout, RenderAttachmentTextureCopyCommand,
+            },
+            resource::SynchronizedRenderResources,
         },
-        render_command::PostprocessingRenderPass,
-        resource::SynchronizedRenderResources,
-        surface::RenderingSurface,
+        shader::{
+            template::{
+                bloom_blending::BloomBlendingShaderTemplate,
+                bloom_downsampling::BloomDownsamplingShaderTemplate,
+                bloom_upsampling_blur::BloomUpsamplingBlurShaderTemplate,
+            },
+            ShaderManager,
+        },
+        texture::attachment::{
+            RenderAttachmentDescription, RenderAttachmentInputDescription,
+            RenderAttachmentInputDescriptionSet,
+            RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
+            RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
+        },
+        GraphicsDevice,
     },
-    resource_group::GPUResourceGroupManager,
-    shader::{template::passthrough::PassthroughShaderTemplate, ShaderManager},
-    texture::attachment::{Blending, RenderAttachmentQuantity, RenderAttachmentTextureManager},
-    GraphicsDevice,
+    mesh::{self, VertexAttributeSet},
 };
-use anyhow::Result;
-use std::borrow::Cow;
+use anyhow::{anyhow, Result};
+use std::{borrow::Cow, num::NonZeroU32};
 
 /// Configuration options for bloom.
 #[derive(Clone, Debug)]
 pub struct BloomConfig {
     /// Whether bloom should be enabled when the scene loads.
     pub initially_enabled: bool,
-    /// The number of successive applications of Gaussian blur to perform.
-    pub n_iterations: usize,
-    /// The number of samples to use on each side of the center of the 1D
-    /// Gaussian filtering kernel. Higher values will result in a wider blur.
-    pub samples_per_side: u32,
-    /// The number of samples to truncate from each tail of the 1D Gaussian
-    /// distribution (this can be used to avoid computing samples with very
-    /// small weights).
-    pub tail_samples_to_truncate: u32,
+    /// The number of downsamplings to perform during blurring. More
+    /// downsamplings will result in stronger blurring.
+    pub n_downsamplings: NonZeroU32,
+    /// The radius of the blur filter to apply during upsampling. A larger
+    /// radius will result in stronger blurring. This should probably be left at
+    /// the default value.
+    pub blur_filter_radius: fre,
+    /// How strongly the blurred luminance should be weighted when blending with
+    /// the original luminance. A value of zero will result in no blending,
+    /// effectively disabling bloom. A value of one will replace the original
+    /// luminance with the blurred luminance. Use a small value for convincing
+    /// bloom.
+    pub blurred_luminance_weight: fre,
 }
 
 #[derive(Debug)]
 pub(super) struct BloomRenderCommands {
-    disabled_pass: PostprocessingRenderPass,
-    passes: Vec<PostprocessingRenderPass>,
+    n_downsamplings: usize,
+    n_upsamplings: usize,
+    push_constants: PushConstantGroup,
+    input_descriptions: RenderAttachmentInputDescriptionSet,
+    downsampling_pipeline: wgpu::RenderPipeline,
+    upsampling_blur_pipeline: wgpu::RenderPipeline,
+    blending_pipeline: wgpu::RenderPipeline,
+    disabled_command: RenderAttachmentTextureCopyCommand,
 }
 
 impl Default for BloomConfig {
     fn default() -> Self {
         Self {
             initially_enabled: true,
-            n_iterations: 3,
-            samples_per_side: 4,
-            tail_samples_to_truncate: 2,
+            n_downsamplings: NonZeroU32::new(4).unwrap(),
+            blur_filter_radius: 0.005,
+            blurred_luminance_weight: 0.04,
         }
     }
 }
 
+const _: () = assert!(LuminanceAux.max_mip_level() > 0);
+
 impl BloomRenderCommands {
     pub(super) fn new(
         graphics_device: &GraphicsDevice,
-        rendering_surface: &RenderingSurface,
         shader_manager: &mut ShaderManager,
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
-        gpu_resource_group_manager: &mut GPUResourceGroupManager,
         config: &BloomConfig,
     ) -> Result<Self> {
-        let shader_template = PassthroughShaderTemplate::new(
-            RenderAttachmentQuantity::EmissiveLuminance,
-            RenderAttachmentQuantity::Luminance,
-            Blending::Additive,
-            None,
+        let n_downsamplings = u32::min(config.n_downsamplings.get(), LuminanceAux.max_mip_level());
+        let n_upsamplings = n_downsamplings - 1; // We don't upsample from mip level 1 to 0
+
+        // We will first downsample progressively down to the highest mip level, then
+        // progressively upsample back up the mip chain. On every upsample, we add the
+        // blurred upsampled luminances to the existing downsampled luminances at that
+        // mip level. This should really be a energy-preserving blend, but we don't
+        // bother weighting the blends since the blurred image will be blended with
+        // the unblurred luminance texture at the end. We instead normalize the blurred
+        // luminance during this final bend.
+        let blurred_luminance_normalization = 1.0 / n_downsamplings as fre;
+
+        // This is not necessarily the full window dimensions, but the dimensions of the
+        // mip level we are outputting to
+        let push_constants =
+            PushConstantGroup::for_fragment([PushConstantVariant::InverseWindowDimensions]);
+        let push_constant_ranges = push_constants.create_ranges();
+
+        let mut input_descriptions =
+            RenderAttachmentInputDescriptionSet::with_capacity(n_downsamplings as usize + 1);
+
+        // The first input for downsampling will be the luminance attachment, which will
+        // also be an input for the final blending
+        input_descriptions.insert_description(
+            RenderAttachmentInputDescription::default_for(RenderAttachmentQuantity::Luminance)
+                .with_sampler(RenderAttachmentSampler::Filtering),
         );
-        let disabled_pass = PostprocessingRenderPass::new(
-            graphics_device,
-            rendering_surface,
-            shader_manager,
-            render_attachment_texture_manager,
-            gpu_resource_group_manager,
-            &shader_template,
-            Cow::Borrowed("Copy emissive luminance to luminance"),
-        )?;
 
-        let mut passes = Vec::with_capacity(2 * config.n_iterations);
-
-        if config.n_iterations > 0 {
-            let bloom_sample_uniform =
-                GaussianBlurSamples::new(config.samples_per_side, config.tail_samples_to_truncate);
-            for _ in 1..config.n_iterations {
-                passes.push(gaussian_blur::create_gaussian_blur_render_pass(
-                    graphics_device,
-                    rendering_surface,
-                    shader_manager,
-                    render_attachment_texture_manager,
-                    gpu_resource_group_manager,
-                    RenderAttachmentQuantity::EmissiveLuminance,
-                    RenderAttachmentQuantity::LuminanceAux,
-                    Blending::Replace,
-                    GaussianBlurDirection::Horizontal,
-                    &bloom_sample_uniform,
-                )?);
-                passes.push(gaussian_blur::create_gaussian_blur_render_pass(
-                    graphics_device,
-                    rendering_surface,
-                    shader_manager,
-                    render_attachment_texture_manager,
-                    gpu_resource_group_manager,
-                    RenderAttachmentQuantity::LuminanceAux,
-                    RenderAttachmentQuantity::EmissiveLuminance,
-                    Blending::Replace,
-                    GaussianBlurDirection::Vertical,
-                    &bloom_sample_uniform,
-                )?);
-            }
-            passes.push(gaussian_blur::create_gaussian_blur_render_pass(
-                graphics_device,
-                rendering_surface,
-                shader_manager,
-                render_attachment_texture_manager,
-                gpu_resource_group_manager,
-                RenderAttachmentQuantity::EmissiveLuminance,
-                RenderAttachmentQuantity::LuminanceAux,
-                Blending::Replace,
-                GaussianBlurDirection::Horizontal,
-                &bloom_sample_uniform,
-            )?);
-            // For the last pass, we add to the luminance attachment
-            passes.push(gaussian_blur::create_gaussian_blur_render_pass(
-                graphics_device,
-                rendering_surface,
-                shader_manager,
-                render_attachment_texture_manager,
-                gpu_resource_group_manager,
-                RenderAttachmentQuantity::LuminanceAux,
-                RenderAttachmentQuantity::Luminance,
-                Blending::Additive,
-                GaussianBlurDirection::Vertical,
-                &bloom_sample_uniform,
-            )?);
+        // We will be working within the mip chain of the auxiliary luminance attachment
+        for mip_level in 1..(n_downsamplings + 1) {
+            input_descriptions.insert_description(
+                RenderAttachmentInputDescription::default_for(LuminanceAux)
+                    .with_sampler(RenderAttachmentSampler::Filtering)
+                    .with_mip_level(mip_level),
+            );
         }
 
+        render_attachment_texture_manager
+            .create_missing_bind_groups_and_layouts(graphics_device, &input_descriptions);
+
+        // Since all input textures will have the same format, we can use the same
+        // layout for all the bind groups (mip level does not affect the layout)
+        let texture_format = LuminanceAux.texture_format();
+        assert_eq!(Luminance.texture_format(), texture_format);
+        let bind_group_layout = render_attachment_texture_manager
+            .get_render_attachment_texture_bind_group_layout(&input_descriptions.descriptions()[0])
+            .unwrap();
+
+        let blurring_pipeline_layout = create_postprocessing_render_pipeline_layout(
+            graphics_device.device(),
+            &[bind_group_layout],
+            &push_constant_ranges,
+            "bloom blurring",
+        );
+
+        // For the final blending pass we need two bind groups, one for the
+        // original luminance and one for the blurred luminance
+        let blending_pipeline_layout = create_postprocessing_render_pipeline_layout(
+            graphics_device.device(),
+            &[bind_group_layout; 2],
+            &push_constant_ranges,
+            "bloom blending",
+        );
+
+        let replace_color_target_state = wgpu::ColorTargetState {
+            format: texture_format,
+            blend: Some(wgpu::BlendState::REPLACE),
+            write_mask: wgpu::ColorWrites::COLOR,
+        };
+
+        let additive_color_target_state = wgpu::ColorTargetState {
+            format: texture_format,
+            blend: Some(additive_blend_state()),
+            write_mask: wgpu::ColorWrites::COLOR,
+        };
+
+        let downsampling_shader_template = BloomDownsamplingShaderTemplate::new(LuminanceAux);
+
+        let (_, downsampling_shader) = shader_manager.get_or_create_rendering_shader_from_template(
+            graphics_device,
+            &downsampling_shader_template,
+        );
+
+        let downsampling_pipeline = create_postprocessing_render_pipeline(
+            graphics_device,
+            &blurring_pipeline_layout,
+            downsampling_shader,
+            &[Some(replace_color_target_state.clone())],
+            None,
+            "bloom downsampling",
+        );
+
+        let upsampling_blur_shader_template =
+            BloomUpsamplingBlurShaderTemplate::new(LuminanceAux, config.blur_filter_radius);
+
+        let (_, upsampling_blur_shader) = shader_manager
+            .get_or_create_rendering_shader_from_template(
+                graphics_device,
+                &upsampling_blur_shader_template,
+            );
+
+        let upsampling_blur_pipeline = create_postprocessing_render_pipeline(
+            graphics_device,
+            &blurring_pipeline_layout,
+            upsampling_blur_shader,
+            &[Some(additive_color_target_state)],
+            None,
+            "bloom upsampling and blur",
+        );
+
+        let blending_shader_template = BloomBlendingShaderTemplate::new(
+            Luminance,
+            LuminanceAux,
+            blurred_luminance_normalization,
+            config.blurred_luminance_weight,
+        );
+
+        let (_, blending_shader) = shader_manager.get_or_create_rendering_shader_from_template(
+            graphics_device,
+            &blending_shader_template,
+        );
+
+        let blending_pipeline = create_postprocessing_render_pipeline(
+            graphics_device,
+            &blending_pipeline_layout,
+            blending_shader,
+            &[Some(replace_color_target_state)],
+            None,
+            "bloom blending",
+        );
+
+        let disabled_command = RenderAttachmentTextureCopyCommand::new(
+            RenderAttachmentQuantity::Luminance,
+            RenderAttachmentQuantity::LuminanceAux,
+        );
+
         Ok(Self {
-            disabled_pass,
-            passes,
+            n_downsamplings: n_downsamplings as usize,
+            n_upsamplings: n_upsamplings as usize,
+            push_constants,
+            input_descriptions,
+            downsampling_pipeline,
+            upsampling_blur_pipeline,
+            blending_pipeline,
+            disabled_command,
         })
     }
 
     pub(super) fn record(
         &self,
-        rendering_surface: &RenderingSurface,
-        surface_texture_view: &wgpu::TextureView,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
-        gpu_resource_group_manager: &GPUResourceGroupManager,
-        postprocessor: &Postprocessor,
-        frame_counter: u32,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        if enabled {
-            for pass in &self.passes {
-                pass.record(
-                    rendering_surface,
-                    surface_texture_view,
-                    render_resources,
-                    render_attachment_texture_manager,
-                    gpu_resource_group_manager,
-                    postprocessor,
-                    frame_counter,
-                    timestamp_recorder,
-                    command_encoder,
-                )?;
-            }
-        } else {
-            self.disabled_pass.record(
-                rendering_surface,
-                surface_texture_view,
-                render_resources,
-                render_attachment_texture_manager,
-                gpu_resource_group_manager,
-                postprocessor,
-                frame_counter,
-                timestamp_recorder,
-                command_encoder,
-            )?;
+        if !enabled {
+            self.disabled_command
+                .record(render_attachment_texture_manager, command_encoder);
+            return Ok(());
         }
+
+        let [first_timestamp_writes, last_timestamp_writes] = timestamp_recorder
+            .register_timestamp_writes_for_first_and_last_of_render_passes(Cow::Borrowed(
+                "Bloom passes",
+            ));
+
+        let blurred_luminance_texture =
+            render_attachment_texture_manager.render_attachment_texture(LuminanceAux);
+
+        // **** Downsampling ****
+
+        for (input_mip_level, input_description) in self
+            .input_descriptions
+            .descriptions()
+            .iter()
+            .take(self.n_downsamplings)
+            .enumerate()
+        {
+            let output_mip_level = input_mip_level as u32 + 1;
+
+            let color_attachment = wgpu::RenderPassColorAttachment {
+                view: blurred_luminance_texture
+                    .texture_view(output_mip_level)
+                    .unwrap(),
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            };
+
+            let timestamp_writes = if input_mip_level == 0 {
+                first_timestamp_writes.clone()
+            } else {
+                None
+            };
+
+            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[Some(color_attachment)],
+                depth_stencil_attachment: None,
+                timestamp_writes,
+                occlusion_query_set: None,
+                label: Some(&format!(
+                    "Bloom downsampling pass from mip level {} to {}",
+                    input_mip_level, output_mip_level
+                )),
+            });
+
+            render_pass.set_pipeline(&self.downsampling_pipeline);
+
+            self.set_push_constants(
+                &mut render_pass,
+                blurred_luminance_texture,
+                output_mip_level,
+            );
+
+            let bind_group = render_attachment_texture_manager
+                .get_render_attachment_texture_bind_group(input_description)
+                .unwrap();
+            render_pass.set_bind_group(0, bind_group, &[]);
+
+            let mesh_id = mesh::screen_filling_quad_mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            let position_buffer = mesh_buffer_manager
+                .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+                .next()
+                .unwrap();
+
+            render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
+
+            render_pass.draw_indexed(
+                0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                0,
+                0..1,
+            );
+
+            log::debug!(
+                "Recorded bloom downsampling pass from mip level {} to {}",
+                input_mip_level,
+                output_mip_level
+            );
+        }
+
+        // **** Upsampling ****
+
+        for (input_mip_level, input_description) in self
+            .input_descriptions
+            .descriptions()
+            .iter()
+            .enumerate()
+            .rev()
+            .take(self.n_upsamplings)
+        {
+            let output_mip_level = input_mip_level as u32 - 1;
+
+            let color_attachment = wgpu::RenderPassColorAttachment {
+                view: blurred_luminance_texture
+                    .texture_view(output_mip_level)
+                    .unwrap(),
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            };
+
+            let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[Some(color_attachment)],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                label: Some(&format!(
+                    "Bloom upsampling and blur pass from mip level {} to {}",
+                    input_mip_level, output_mip_level
+                )),
+            });
+
+            render_pass.set_pipeline(&self.upsampling_blur_pipeline);
+
+            self.set_push_constants(
+                &mut render_pass,
+                blurred_luminance_texture,
+                output_mip_level,
+            );
+
+            let bind_group = render_attachment_texture_manager
+                .get_render_attachment_texture_bind_group(input_description)
+                .unwrap();
+            render_pass.set_bind_group(0, bind_group, &[]);
+
+            let mesh_id = mesh::screen_filling_quad_mesh_id();
+
+            let mesh_buffer_manager = render_resources
+                .get_mesh_buffer_manager(mesh_id)
+                .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+            let position_buffer = mesh_buffer_manager
+                .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+                .next()
+                .unwrap();
+
+            render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+            render_pass.set_index_buffer(
+                mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+                mesh_buffer_manager.index_format(),
+            );
+
+            render_pass.draw_indexed(
+                0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+                0,
+                0..1,
+            );
+
+            log::debug!(
+                "Recorded bloom upsampling and blur pass from mip level {} to {}",
+                input_mip_level,
+                output_mip_level
+            );
+        }
+
+        // **** Blending ****
+
+        let color_attachment = wgpu::RenderPassColorAttachment {
+            view: blurred_luminance_texture.base_texture_view(),
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        };
+
+        let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(color_attachment)],
+            depth_stencil_attachment: None,
+            timestamp_writes: last_timestamp_writes,
+            occlusion_query_set: None,
+            label: Some("Bloom blending pass"),
+        });
+
+        render_pass.set_pipeline(&self.blending_pipeline);
+
+        self.set_push_constants(&mut render_pass, blurred_luminance_texture, 0);
+
+        let luminance_bind_group = render_attachment_texture_manager
+            .get_render_attachment_texture_bind_group(&self.input_descriptions.descriptions()[0])
+            .unwrap();
+        render_pass.set_bind_group(0, luminance_bind_group, &[]);
+
+        let blurred_luminance_bind_group = render_attachment_texture_manager
+            .get_render_attachment_texture_bind_group(&self.input_descriptions.descriptions()[1])
+            .unwrap();
+        render_pass.set_bind_group(1, blurred_luminance_bind_group, &[]);
+
+        let mesh_id = mesh::screen_filling_quad_mesh_id();
+
+        let mesh_buffer_manager = render_resources
+            .get_mesh_buffer_manager(mesh_id)
+            .ok_or_else(|| anyhow!("Missing GPU buffer for mesh {}", mesh_id))?;
+
+        let position_buffer = mesh_buffer_manager
+            .request_vertex_gpu_buffers(VertexAttributeSet::POSITION)?
+            .next()
+            .unwrap();
+
+        render_pass.set_vertex_buffer(0, position_buffer.valid_buffer_slice());
+
+        render_pass.set_index_buffer(
+            mesh_buffer_manager.index_gpu_buffer().valid_buffer_slice(),
+            mesh_buffer_manager.index_format(),
+        );
+
+        render_pass.draw_indexed(
+            0..u32::try_from(mesh_buffer_manager.n_indices()).unwrap(),
+            0,
+            0..1,
+        );
+
+        log::debug!("Recorded bloom blending pass");
+
         Ok(())
+    }
+
+    fn set_push_constants(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        texture: &RenderAttachmentTexture,
+        output_mip_level: u32,
+    ) {
+        self.push_constants
+            .set_push_constant_for_render_pass_if_present(
+                render_pass,
+                PushConstantVariant::InverseWindowDimensions,
+                || Self::compute_inverse_output_view_size(texture, output_mip_level),
+            );
+    }
+
+    fn compute_inverse_output_view_size(
+        texture: &RenderAttachmentTexture,
+        output_mip_level: u32,
+    ) -> [fre; 2] {
+        let output_view_size = texture
+            .texture()
+            .texture()
+            .size()
+            .mip_level_size(output_mip_level, wgpu::TextureDimension::D2);
+
+        [
+            1.0 / (output_view_size.width as fre),
+            1.0 / (output_view_size.height as fre),
+        ]
     }
 }

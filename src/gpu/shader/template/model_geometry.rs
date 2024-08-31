@@ -74,6 +74,7 @@ impl ModelGeometryShaderTemplate {
         PushConstantGroup::for_vertex_fragment([
             PushConstantVariant::InverseWindowDimensions,
             PushConstantVariant::FrameCounter,
+            PushConstantVariant::Exposure,
         ])
     }
 

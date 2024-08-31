@@ -838,7 +838,7 @@ impl TextureFilteringConfig {
     pub const BASIC: Self = Self {
         filtering_enabled: true,
         mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,

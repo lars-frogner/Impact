@@ -60,8 +60,8 @@ impl ToneMappingRenderCommands {
         gpu_resource_group_manager: &GPUResourceGroupManager,
     ) -> Result<Self> {
         // The last shader before tone mapping (the TAA shader) writes
-        // to the auxiliary luminance attachment
-        let input_render_attachment_quantity = RenderAttachmentQuantity::LuminanceAux;
+        // to the luminance history attachment
+        let input_render_attachment_quantity = RenderAttachmentQuantity::LuminanceHistory;
 
         let disabled_pass = create_tone_mapping_render_pass(
             graphics_device,

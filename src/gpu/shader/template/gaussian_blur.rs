@@ -9,8 +9,9 @@ use crate::{
         resource_group::GPUResourceGroupID,
         shader::template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            Blending, RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescription,
-            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
+            Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
+            RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
+            RenderAttachmentQuantity,
         },
     },
     mesh::buffer::MeshVertexAttributeLocation,
@@ -54,8 +55,8 @@ impl GaussianBlurShaderTemplate {
         );
 
         let output_render_attachments = RenderAttachmentOutputDescriptionSet::single(
-            output_render_attachment_quantity,
-            RenderAttachmentOutputDescription::default().with_blending(blending),
+            RenderAttachmentOutputDescription::default_for(output_render_attachment_quantity)
+                .with_blending(blending),
         );
 
         Self {
@@ -117,7 +118,7 @@ mod test {
     fn should_resolve_to_valid_wgsl() {
         validate_template(&GaussianBlurShaderTemplate::new(
             GPUResourceGroupID(hash64!("test".to_string())),
-            RenderAttachmentQuantity::LuminanceAux,
+            RenderAttachmentQuantity::LuminanceHistory,
             RenderAttachmentQuantity::Luminance,
             Blending::Replace,
             GaussianBlurDirection::Horizontal,

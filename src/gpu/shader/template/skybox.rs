@@ -6,8 +6,8 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         shader::template::{ShaderTemplate, SpecificShaderTemplate},
         texture::attachment::{
-            Blending, RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
-            RenderAttachmentQuantity,
+            Blending, RenderAttachmentDescription, RenderAttachmentOutputDescription,
+            RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
         },
     },
     mesh::{buffer::MeshVertexAttributeLocation, VertexAttributeSet},
@@ -49,8 +49,10 @@ impl SkyboxShaderTemplate {
     /// write to.
     pub fn output_render_attachments() -> RenderAttachmentOutputDescriptionSet {
         RenderAttachmentOutputDescriptionSet::single(
-            Self::output_render_attachment_quantity(),
-            RenderAttachmentOutputDescription::default().with_blending(Blending::Additive),
+            RenderAttachmentOutputDescription::default_for(
+                Self::output_render_attachment_quantity(),
+            )
+            .with_blending(Blending::Additive),
         )
     }
 }
