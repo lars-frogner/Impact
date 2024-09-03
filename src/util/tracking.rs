@@ -127,7 +127,7 @@ impl Default for CollectionChangeTracker {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

@@ -32,9 +32,9 @@ impl<F: Float> OrientedBox<F> {
         }
     }
 
-    /// Creates a new box with the given half extents, centered at the origin and
-    /// with the width, height and depth axes aligned with the x-, y- and z-axis
-    /// respectively.
+    /// Creates a new box with the given half extents, centered at the origin
+    /// and with the width, height and depth axes aligned with the x-, y-
+    /// and z-axis respectively.
     pub fn aligned_at_origin(half_width: F, half_height: F, half_depth: F) -> Self {
         Self::new(
             Point3::origin(),
@@ -125,7 +125,7 @@ impl<F: Float> OrientedBox<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use std::f64::consts::PI;

@@ -76,7 +76,7 @@ impl<F> Default for HaltonSequence<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

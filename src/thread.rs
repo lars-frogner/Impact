@@ -606,7 +606,7 @@ impl Worker {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use anyhow::anyhow;
     use std::iter;
@@ -646,7 +646,8 @@ mod test {
             .register_executed_tasks(WorkerID(0), 1);
         assert_eq!(comm.execution_progress().pending_task_count(), 0);
 
-        comm.execution_progress().wait_for_no_pending_tasks(); // Should return immediately
+        comm.execution_progress().wait_for_no_pending_tasks(); // Should return
+                                                               // immediately
     }
 
     #[test]

@@ -175,7 +175,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use nalgebra::{point, vector, Vector3};

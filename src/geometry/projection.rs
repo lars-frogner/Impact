@@ -537,19 +537,21 @@ impl CubemapFace {
         ]
     }
 
-    /// Returns the index of the face according the conventional ordering as a [`u32`].
+    /// Returns the index of the face according the conventional ordering as a
+    /// [`u32`].
     pub const fn as_idx_u32(&self) -> u32 {
         *self as u32
     }
 
-    /// Returns the index of the face according the conventional ordering as a [`usize`].
+    /// Returns the index of the face according the conventional ordering as a
+    /// [`usize`].
     pub const fn as_idx_usize(&self) -> usize {
         *self as usize
     }
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::geometry::Degrees;
     use approx::assert_abs_diff_eq;

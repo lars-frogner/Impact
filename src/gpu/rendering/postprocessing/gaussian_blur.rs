@@ -255,7 +255,7 @@ fn compute_pascal_triangle_row(k: u32) -> Vec<u64> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
 

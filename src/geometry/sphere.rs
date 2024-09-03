@@ -185,7 +185,7 @@ impl<F: Float> Sphere<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use na::vector;

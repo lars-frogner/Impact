@@ -320,7 +320,7 @@ impl<F: Float> Camera<F> for OrthographicCamera<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::geometry::Degrees;
     use approx::assert_abs_diff_eq;

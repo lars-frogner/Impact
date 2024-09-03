@@ -408,7 +408,7 @@ fn shader_stages_order(stages: wgpu::ShaderStages) -> u8 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use PushConstantVariant::*;
 

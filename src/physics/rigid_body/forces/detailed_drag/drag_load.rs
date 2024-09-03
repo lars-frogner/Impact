@@ -312,7 +312,7 @@ fn compute_golden_angle() -> Radians<fph> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::abs_diff_eq;
     use proptest::prelude::*;

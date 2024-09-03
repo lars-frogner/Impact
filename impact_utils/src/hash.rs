@@ -245,7 +245,7 @@ impl Hash for ConstStringHash64 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

@@ -39,7 +39,7 @@ impl HarmonicOscillatorTrajectoryComp {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{num::Float, physics::motion::Direction};
     use approx::abs_diff_eq;

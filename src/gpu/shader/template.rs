@@ -20,8 +20,8 @@ pub mod temporal_anti_aliasing;
 pub mod tone_mapping;
 pub mod unidirectional_light;
 pub mod unidirectional_light_shadow_map;
-pub mod voxel_geometry;
 pub mod voxel_chunk_culling;
+pub mod voxel_geometry;
 
 use crate::gpu::{
     push_constant::PushConstantGroup,
@@ -471,7 +471,7 @@ fn is_valid_identifier(identifier: &str) -> bool {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use naga::{
         front::wgsl,

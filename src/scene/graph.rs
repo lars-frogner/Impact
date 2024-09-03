@@ -1271,7 +1271,7 @@ impl_node_id_idx_traits!(ModelInstanceNodeID);
 impl_node_id_idx_traits!(CameraNodeID);
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{
         material::{MaterialHandle, MaterialID},

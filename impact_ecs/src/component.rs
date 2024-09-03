@@ -749,7 +749,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::{super::Component, *};
     use bytemuck::Zeroable;
 

@@ -2802,7 +2802,7 @@ fn extract_slice_segments_mut<T>(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::voxel::generation::UniformBoxVoxelGenerator;
     use approx::assert_abs_diff_eq;

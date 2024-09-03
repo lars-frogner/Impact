@@ -176,9 +176,10 @@ impl AlignedByteVec {
     /// Modifying the vector may cause its buffer to be reallocated,
     /// which would also make any pointers to it invalid.
     ///
-    /// The caller must also ensure that the memory the pointer (non-transitively) points to
-    /// is never written to (except inside an `UnsafeCell`) using this pointer or any pointer
-    /// derived from it. If you need to mutate the contents of the slice, use [`as_mut_ptr`].
+    /// The caller must also ensure that the memory the pointer
+    /// (non-transitively) points to is never written to (except inside an
+    /// `UnsafeCell`) using this pointer or any pointer derived from it. If
+    /// you need to mutate the contents of the slice, use [`as_mut_ptr`].
     pub fn as_ptr(&self) -> *const u8 {
         // We shadow the slice method of the same name to avoid going through
         // `deref`, which creates an intermediate reference.
@@ -401,7 +402,7 @@ impl PartialEq for AlignedByteVec {
 impl Eq for AlignedByteVec {}
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     const BYTES: [u8; 32] = [

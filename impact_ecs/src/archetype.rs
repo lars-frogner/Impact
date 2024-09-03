@@ -416,10 +416,9 @@ where
     ///
     /// # Errors
     /// Returns an error if:
-    /// - The type of the given component instances is already
-    ///   present.
-    /// - The number of component instances differs between
-    ///   the new and the existing component types.
+    /// - The type of the given component instances is already present.
+    /// - The number of component instances differs between the new and the
+    ///   existing component types.
     pub fn add_new_component_type(&mut self, component_array: A) -> Result<()> {
         self.add_new_component_type_without_updating_archetype(component_array)?;
         self.archetype = Self::find_archetype(&self.component_arrays);
@@ -736,8 +735,8 @@ impl ArchetypeTable {
     /// given data, one row per entity.
     ///
     /// # Panics
-    /// - If the number of entities differs from the number of instances
-    ///   of each component type.
+    /// - If the number of entities differs from the number of instances of each
+    ///   component type.
     /// - If any of the entity IDs are equal.
     pub(crate) fn new_with_entities(
         entity_ids: impl IntoIterator<Item = EntityID>,
@@ -759,7 +758,8 @@ impl ArchetypeTable {
         self.entity_index_mapper.is_empty()
     }
 
-    /// Whether the [`Entity`](crate::world::Entity) with the given [`EntityID`] is present in the table.
+    /// Whether the [`Entity`](crate::world::Entity) with the given [`EntityID`]
+    /// is present in the table.
     pub fn has_entity(&self, entity_id: EntityID) -> bool {
         self.entity_index_mapper.contains_key(entity_id)
     }
@@ -777,10 +777,10 @@ impl ArchetypeTable {
     /// the given data to the table, one row per entity.
     ///
     /// # Panics
-    /// - If the number of entities differs from the number of instances
-    ///   of each component type.
-    /// - If any of the given entity IDs are equal to a new or existing
-    ///   entity ID.
+    /// - If the number of entities differs from the number of instances of each
+    ///   component type.
+    /// - If any of the given entity IDs are equal to a new or existing entity
+    ///   ID.
     pub(crate) fn add_entities(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
@@ -1408,7 +1408,7 @@ impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C
 impl_archetype_conversion!((C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16));
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::component::ComponentInstance;
 
     use super::{
