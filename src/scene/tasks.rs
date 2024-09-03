@@ -126,6 +126,22 @@ define_task!(
 );
 
 define_task!(
+    /// This [`Task`](crate::scheduling::Task) clears any previously buffered
+    /// instance features in the
+    /// [`InstanceFeatureManager`](crate::model::InstanceFeatureManager).
+    [pub] ClearModelInstanceBuffers,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |app: &Application| {
+        with_debug_logging!("Clearing model instance buffers"; {
+            let scene = app.scene().read().unwrap();
+            scene.instance_feature_manager().write().unwrap().clear_buffer_contents();
+            Ok(())
+        })
+    }
+);
+
+define_task!(
     /// This [`Task`](crate::scheduling::Task) uses the
     /// [`SceneGraph`](crate::scene::SceneGraph) to determine which
     /// model instances are visible with the scene camera, update
@@ -134,7 +150,8 @@ define_task!(
     [pub] BufferVisibleModelInstances,
     depends_on = [
         UpdateSceneObjectBoundingSpheres,
-        SyncSceneCameraViewTransform
+        SyncSceneCameraViewTransform,
+        ClearModelInstanceBuffers
     ],
     execute_on = [RenderingTag],
     |app: &Application| {
@@ -147,7 +164,6 @@ define_task!(
                     .unwrap()
                     .buffer_transforms_of_visible_model_instances(
                         &mut scene.instance_feature_manager().write().unwrap(),
-                        &scene.voxel_manager().read().unwrap(),
                         scene_camera,
                     );
 
@@ -172,6 +188,7 @@ define_task!(
     [pub] BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
         SyncLightsInStorage,
+        ClearModelInstanceBuffers,
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
@@ -187,7 +204,6 @@ define_task!(
                         .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                             &mut scene.light_storage().write().unwrap(),
                             &mut scene.instance_feature_manager().write().unwrap(),
-                            &scene.voxel_manager().read().unwrap(),
                             scene_camera,
                         );
 
@@ -212,6 +228,7 @@ define_task!(
     [pub] BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
         SyncLightsInStorage,
+        ClearModelInstanceBuffers,
         BufferVisibleModelInstances
     ],
     execute_on = [RenderingTag],
@@ -227,7 +244,6 @@ define_task!(
                         .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                             &mut scene.light_storage().write().unwrap(),
                             &mut scene.instance_feature_manager().write().unwrap(),
-                            &scene.voxel_manager().read().unwrap(),
                             scene_camera,
                         );
 
@@ -265,6 +281,7 @@ pub fn register_scene_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()>
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;
     task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
+    task_scheduler.register_task(ClearModelInstanceBuffers)?;
     task_scheduler.register_task(BufferVisibleModelInstances)?;
     task_scheduler.register_task(SyncLightsInStorage)?;
     task_scheduler.register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;

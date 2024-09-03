@@ -27,8 +27,7 @@ define_task!(
     |app: &Application| {
         with_debug_logging!("Rendering"; {
             let scene = app.scene().read().unwrap();
-            let material_library = scene.material_library().read().unwrap();
-            app.renderer().write().unwrap().render_to_surface(&material_library)?;
+            app.renderer().write().unwrap().render_to_surface(&scene)?;
             app.capture_screenshots()
         })
     }

@@ -182,7 +182,7 @@ impl ComputePass {
     }
 }
 
-fn create_compute_pipeline_layout(
+pub fn create_compute_pipeline_layout(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
     push_constant_ranges: &[wgpu::PushConstantRange],
@@ -195,7 +195,7 @@ fn create_compute_pipeline_layout(
     })
 }
 
-fn create_compute_pipeline(
+pub fn create_compute_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     shader: &Shader,

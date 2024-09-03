@@ -6,7 +6,10 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         rendering::surface::RenderingSurface,
         resource_group::GPUResourceGroupID,
-        shader::template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+        shader::{
+            template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+            ShaderID,
+        },
         texture::attachment::RenderAttachmentInputDescriptionSet,
     },
     template_replacements,
@@ -59,6 +62,13 @@ impl SpecificShaderTemplate for LuminanceHistogramAverageShaderTemplate {
                 ),
             )
             .expect("Shader template resolution failed")
+    }
+
+    fn shader_id(&self) -> ShaderID {
+        ShaderID::from_identifier(&format!(
+            "LuminanceHistogramShaderTemplate{{ bin_count = {} }}",
+            self.bin_count
+        ))
     }
 }
 

@@ -8,7 +8,7 @@ pub mod tasks;
 
 pub use graph::{
     CameraNodeID, GroupNodeID, ModelInstanceNodeID, NodeStorage, NodeTransform, SceneGraph,
-    SceneGraphNodeID, VoxelTreeNode, VoxelTreeNodeID,
+    SceneGraphNodeID,
 };
 
 use crate::{
@@ -22,7 +22,6 @@ use crate::{
     voxel::VoxelManager,
     window,
 };
-use num_traits::FromPrimitive;
 use std::{num::NonZeroU32, sync::RwLock};
 
 /// Container for data needed to render a scene.
@@ -34,7 +33,7 @@ pub struct Scene {
     initial_material_library_state: MaterialLibraryState,
     light_storage: RwLock<LightStorage>,
     instance_feature_manager: RwLock<InstanceFeatureManager>,
-    voxel_manager: RwLock<VoxelManager<fre>>,
+    voxel_manager: RwLock<VoxelManager>,
     scene_graph: RwLock<SceneGraph<fre>>,
     scene_camera: RwLock<Option<SceneCamera<fre>>>,
     skybox: RwLock<Option<Skybox>>,
@@ -54,7 +53,7 @@ impl Scene {
         mesh_repository: MeshRepository<fre>,
         material_library: MaterialLibrary,
         instance_feature_manager: InstanceFeatureManager,
-        voxel_manager: VoxelManager<fre>,
+        voxel_manager: VoxelManager,
     ) -> Self {
         let initial_mesh_repository_state = mesh_repository.record_state();
         let initial_material_library_state = material_library.record_state();
@@ -94,7 +93,7 @@ impl Scene {
     }
 
     /// Returns a reference to the [`VoxelManager`], guarded by a [`RwLock`].
-    pub fn voxel_manager(&self) -> &RwLock<VoxelManager<fre>> {
+    pub fn voxel_manager(&self) -> &RwLock<VoxelManager> {
         &self.voxel_manager
     }
 
@@ -118,7 +117,7 @@ impl Scene {
     pub fn handle_window_resized(
         &self,
         _old_width: NonZeroU32,
-        old_height: NonZeroU32,
+        _old_height: NonZeroU32,
         new_width: NonZeroU32,
         new_height: NonZeroU32,
     ) -> RenderResourcesDesynchronized {
@@ -128,14 +127,6 @@ impl Scene {
             scene_camera.set_aspect_ratio(window::calculate_aspect_ratio(new_width, new_height));
             desynchronized = RenderResourcesDesynchronized::Yes;
         }
-
-        self.voxel_manager()
-            .write()
-            .unwrap()
-            .scale_min_angular_voxel_extent_for_lod(
-                fre::from_u32(old_height.into()).unwrap()
-                    / fre::from_u32(new_height.into()).unwrap(),
-            );
 
         desynchronized
     }
@@ -159,7 +150,10 @@ impl Scene {
             .unwrap()
             .clear_storages_and_buffers();
 
-        self.voxel_manager.write().unwrap().remove_all_voxel_trees();
+        self.voxel_manager
+            .write()
+            .unwrap()
+            .remove_all_voxel_objects();
 
         self.scene_graph.write().unwrap().clear_nodes();
 

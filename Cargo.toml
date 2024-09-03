@@ -13,7 +13,7 @@ members = ["impact_utils", "impact_ecs", "impact_ecs/impact_ecs_macros"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-fuzzing = ["arbitrary"]
+fuzzing = ["dep:arbitrary"]
 
 [dependencies]
 anyhow = "1.0"

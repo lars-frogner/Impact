@@ -25,6 +25,7 @@ define_task!(
     depends_on = [
         SyncMinorResources,
         SyncMeshGPUBuffers,
+        SyncVoxelObjectGPUBuffers,
         SyncLightGPUBuffers,
         SyncInstanceFeatureBuffers
     ],
@@ -114,6 +115,34 @@ define_task!(
 );
 
 define_task!(
+    SyncVoxelObjectGPUBuffers,
+    depends_on = [],
+    execute_on = [RenderingTag],
+    |app: &Application| {
+        with_debug_logging!("Synchronizing voxel object GPU buffers"; {
+            let renderer = app.renderer().read().unwrap();
+            let render_resource_manager = renderer.render_resource_manager().read().unwrap();
+            if render_resource_manager.is_desynchronized() {
+                DesynchronizedRenderResources::sync_voxel_object_buffers_with_voxel_objects(
+                    renderer.graphics_device(),
+                    render_resource_manager
+                        .desynchronized()
+                        .voxel_object_buffer_managers
+                        .lock()
+                        .unwrap()
+                        .as_mut(),
+                    app
+                        .scene().read().unwrap()
+                        .voxel_manager().read().unwrap()
+                        .voxel_objects(),
+                );
+            }
+            Ok(())
+        })
+    }
+);
+
+define_task!(
     SyncLightGPUBuffers,
     depends_on = [
         SyncLightsInStorage,
@@ -181,6 +210,7 @@ define_task!(
 pub fn register_render_resource_tasks(task_scheduler: &mut AppTaskScheduler) -> Result<()> {
     task_scheduler.register_task(SyncMinorResources)?;
     task_scheduler.register_task(SyncMeshGPUBuffers)?;
+    task_scheduler.register_task(SyncVoxelObjectGPUBuffers)?;
     task_scheduler.register_task(SyncLightGPUBuffers)?;
     task_scheduler.register_task(SyncInstanceFeatureBuffers)?;
     task_scheduler.register_task(SyncRenderResources)

@@ -4,7 +4,7 @@ use crate::{
     assert_uniform_valid,
     gpu::{
         rendering::RenderingConfig,
-        texture::shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture},
+        texture::shadow_map::{CascadedShadowMapTexture, ShadowCubemapTexture},
         uniform::{
             self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
         },
@@ -17,7 +17,7 @@ use crate::{
     util::tracking::CollectionChange,
 };
 use impact_utils::ConstStringHash64;
-use std::{mem, sync::OnceLock};
+use std::sync::OnceLock;
 
 /// Manager of the set of uniform GPU buffers holding light source render
 /// data. Also manages the bind groups for these buffers and the associated
@@ -230,12 +230,6 @@ impl LightGPUBufferManager {
             .max_uniform_count()
     }
 
-    /// Returns the size of the push constant obtained by calling
-    /// [`Self::light_idx_push_constant`].
-    pub const fn light_idx_push_constant_size() -> u32 {
-        mem::size_of::<u32>() as u32
-    }
-
     /// Finds and returns the index of the light with the given ID in the light
     /// type's uniform buffer, for use as a push constant.
     ///
@@ -251,11 +245,6 @@ impl LightGPUBufferManager {
         .expect("Tried to set light index push constant for missing light");
 
         u32::try_from(light_idx).unwrap()
-    }
-
-    /// Returns the size of the push constant obtained holding a [`CascadeIdx`].
-    pub const fn cascade_idx_push_constant_size() -> u32 {
-        mem::size_of::<CascadeIdx>() as u32
     }
 
     /// Ensures that the light uniform buffers are in sync with the light data

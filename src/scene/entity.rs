@@ -17,10 +17,7 @@ use crate::{
         },
         ModelInstanceNodeID, RenderResourcesDesynchronized, Scene,
     },
-    voxel::{
-        self,
-        components::{VoxelTreeComp, VoxelTreeNodeComp, VoxelTypeComp},
-    },
+    voxel,
     window::Window,
 };
 use anyhow::Result;
@@ -65,7 +62,7 @@ impl Scene {
             desynchronized,
         );
 
-        voxel::entity::setup_voxel_tree_for_new_entity(&self.voxel_manager, components);
+        voxel::entity::setup_voxel_object_for_new_entity(&self.voxel_manager, components);
 
         mesh::entity::generate_missing_vertex_properties_for_new_entity_mesh(
             self.mesh_repository(),
@@ -100,7 +97,13 @@ impl Scene {
         )?;
 
         self.add_model_instance_node_component_for_new_entity(components);
-        self.add_voxel_tree_node_component_for_new_entity(components);
+
+        voxel::entity::add_model_instance_node_component_for_new_voxel_object_entity(
+            self.voxel_manager(),
+            self.instance_feature_manager(),
+            self.scene_graph(),
+            components,
+        );
 
         Ok(())
     }
@@ -266,56 +269,6 @@ impl Scene {
                 ))
             },
             ![SceneGraphModelInstanceNodeComp]
-        );
-    }
-
-    fn add_voxel_tree_node_component_for_new_entity(
-        &self,
-        components: &mut ArchetypeComponentStorage,
-    ) {
-        setup!(
-            {
-                let voxel_manager = self.voxel_manager().read().unwrap();
-                let mut scene_graph = self.scene_graph().write().unwrap();
-            },
-            components,
-            |voxel_tree: &VoxelTreeComp,
-             voxel_type: &VoxelTypeComp,
-             frame: Option<&ReferenceFrameComp>,
-             parent: Option<&SceneGraphParentNodeComp>|
-             -> VoxelTreeNodeComp {
-                let voxel_tree_id = voxel_tree.voxel_tree_id;
-                let voxel_tree = voxel_manager
-                    .get_voxel_tree(voxel_tree_id)
-                    .expect(
-                    "Tried to create voxel tree node entity with voxel tree not present in voxel manager",
-                );
-
-                let voxel_tree_to_parent_transform = frame
-                    .cloned()
-                    .unwrap_or_default()
-                    .create_transform_to_parent_space();
-
-                let voxel_tree_bounding_sphere = voxel_tree.compute_bounding_sphere(0);
-
-                let appearance = voxel_manager.voxel_appearance(voxel_type.voxel_type());
-
-                let parent_node_id =
-                    parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
-
-                let group_node_id =
-                    scene_graph.create_group_node(parent_node_id, voxel_tree_to_parent_transform);
-
-                let voxel_tree_node_id = scene_graph.create_voxel_tree_node(
-                    group_node_id,
-                    appearance.model_id,
-                    voxel_tree_id,
-                    voxel_tree_bounding_sphere,
-                );
-
-                VoxelTreeNodeComp::new(voxel_tree_id, group_node_id, voxel_tree_node_id)
-            },
-            ![VoxelTreeNodeComp]
         );
     }
 

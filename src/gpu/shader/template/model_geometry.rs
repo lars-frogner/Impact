@@ -1,4 +1,4 @@
-//! Shader template for model geometry passes.
+//! Shader template for the model geometry pass.
 
 use crate::{
     camera::buffer::CameraProjectionUniform,
@@ -32,9 +32,9 @@ pub struct ModelGeometryShaderInput {
     pub material_texture_bindings: PhysicalMaterialTextureBindings,
 }
 
-/// Shader template for model geometry passes, which extract the relevant
+/// Shader template for the model geometry pass, which extracts the relevant
 /// geometrical information and material properties from the visible model
-/// instances and write them to the corresponding render attachments (the
+/// instances and writes them to the corresponding render attachments (the
 /// G-buffer).
 #[derive(Clone, Debug)]
 pub struct ModelGeometryShaderTemplate {

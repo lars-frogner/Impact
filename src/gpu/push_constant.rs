@@ -1,11 +1,10 @@
 //! Management of push constants.
 
+use std::mem;
+
 use crate::{
     camera::buffer::CameraGPUBufferManager,
-    gpu::rendering::{
-        postprocessing::capturing::CapturingCamera, surface::RenderingSurface, RenderingSystem,
-    },
-    light::buffer::LightGPUBufferManager,
+    gpu::rendering::{postprocessing::capturing::CapturingCamera, surface::RenderingSurface},
 };
 use bytemuck::Pod;
 
@@ -20,6 +19,8 @@ pub enum PushConstantVariant {
     InverseExposure,
     FrameCounter,
     CameraRotationQuaternion,
+    InstanceIdx,
+    ChunkCount,
 }
 
 /// Specification for a push constant that can be passed to the GPU.
@@ -51,15 +52,17 @@ impl PushConstantVariant {
     /// Returns the size in bytes of the push constant of this variant.
     pub const fn size(&self) -> u32 {
         match self {
+            Self::FrameCounter
+            | Self::LightIdx
+            | Self::CascadeIdx
+            | Self::PixelCount
+            | Self::InstanceIdx
+            | Self::ChunkCount => mem::size_of::<u32>() as u32,
             Self::InverseWindowDimensions => {
                 RenderingSurface::inverse_window_dimensions_push_constant_size()
             }
-            Self::PixelCount => RenderingSurface::pixel_count_push_constant_size(),
-            Self::LightIdx => LightGPUBufferManager::light_idx_push_constant_size(),
-            Self::CascadeIdx => LightGPUBufferManager::cascade_idx_push_constant_size(),
             Self::Exposure => CapturingCamera::exposure_push_constant_size(),
             Self::InverseExposure => CapturingCamera::inverse_exposure_push_constant_size(),
-            Self::FrameCounter => RenderingSystem::frame_counter_push_constant_size(),
             Self::CameraRotationQuaternion => {
                 CameraGPUBufferManager::camera_rotation_quaternion_push_constant_size()
             }

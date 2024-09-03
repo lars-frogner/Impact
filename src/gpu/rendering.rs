@@ -18,7 +18,7 @@ use crate::{
         GraphicsDevice,
     },
     light::MAX_SHADOW_MAP_CASCADES,
-    material::MaterialLibrary,
+    scene::Scene,
     window::EventLoopController,
 };
 use anyhow::{anyhow, Error, Result};
@@ -30,7 +30,6 @@ use postprocessing::{
 use render_command::RenderCommandManager;
 use resource::RenderResourceManager;
 use std::{
-    mem,
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -231,9 +230,9 @@ impl RenderingSystem {
     /// Returns an error if:
     /// - The surface texture to render to can not be obtained.
     /// - Recording a render pass fails.
-    pub fn render_to_surface(&mut self, material_library: &MaterialLibrary) -> Result<()> {
+    pub fn render_to_surface(&mut self, scene: &Scene) -> Result<()> {
         with_timing_info_logging!("Rendering"; {
-            self.surface_texture_to_present = Some(self.render_surface(material_library)?);
+            self.surface_texture_to_present = Some(self.render_surface(scene)?);
         });
         Ok(())
     }
@@ -319,15 +318,7 @@ impl RenderingSystem {
             .set_enabled(self.config.timings_enabled);
     }
 
-    /// Returns the size of the push constant containing `self.frame_counter`.
-    pub const fn frame_counter_push_constant_size() -> u32 {
-        mem::size_of::<u32>() as u32
-    }
-
-    fn render_surface(
-        &mut self,
-        material_library: &MaterialLibrary,
-    ) -> Result<wgpu::SurfaceTexture> {
+    fn render_surface(&mut self, scene: &Scene) -> Result<wgpu::SurfaceTexture> {
         self.render_attachment_texture_manager
             .write()
             .unwrap()
@@ -348,7 +339,7 @@ impl RenderingSystem {
         self.render_command_manager.read().unwrap().record(
             &self.rendering_surface,
             &surface_texture_view,
-            material_library,
+            scene,
             self.render_resource_manager.read().unwrap().synchronized(),
             &self.render_attachment_texture_manager.read().unwrap(),
             &self.gpu_resource_group_manager.read().unwrap(),

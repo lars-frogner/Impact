@@ -62,8 +62,11 @@ impl StorageGPUBuffer {
             "Tried to create storage buffer with zero-sized type"
         );
 
-        let storage_buffer =
-            GPUBuffer::new_storage_buffer(graphics_device, bytemuck::cast_slice(values), label);
+        let storage_buffer = GPUBuffer::new_storage_buffer_with_bytes(
+            graphics_device,
+            bytemuck::cast_slice(values),
+            label,
+        );
 
         Self {
             storage_buffer,
@@ -88,8 +91,11 @@ impl StorageGPUBuffer {
     ) -> Self {
         assert_ne!(n_bytes, 0, "Tried to create empty storage buffer");
 
-        let storage_buffer =
-            GPUBuffer::new_storage_buffer(graphics_device, vec![0; n_bytes].as_slice(), label);
+        let storage_buffer = GPUBuffer::new_storage_buffer_with_bytes(
+            graphics_device,
+            vec![0; n_bytes].as_slice(),
+            label,
+        );
 
         Self {
             storage_buffer,
@@ -115,7 +121,7 @@ impl StorageGPUBuffer {
     ) -> Self {
         assert_ne!(n_bytes, 0, "Tried to create empty storage buffer");
 
-        let storage_buffer = GPUBuffer::new_storage_buffer(
+        let storage_buffer = GPUBuffer::new_storage_buffer_with_bytes(
             graphics_device,
             vec![0; n_bytes].as_slice(),
             label.clone(),
@@ -232,11 +238,24 @@ impl Default for StorageGPUBufferManager {
 }
 
 impl GPUBuffer {
+    /// Creates a storage GPU buffer initialized with the given values.
+    ///
+    /// # Panics
+    /// - If `values` is empty.
+    pub fn new_storage_buffer<T: Pod>(
+        graphics_device: &GraphicsDevice,
+        values: &[T],
+        label: Cow<'static, str>,
+    ) -> Self {
+        let bytes = bytemuck::cast_slice(values);
+        Self::new_storage_buffer_with_bytes(graphics_device, bytes, label)
+    }
+
     /// Creates a storage GPU buffer initialized with the given bytes.
     ///
     /// # Panics
     /// - If `bytes` is empty.
-    pub fn new_storage_buffer(
+    pub fn new_storage_buffer_with_bytes(
         graphics_device: &GraphicsDevice,
         bytes: &[u8],
         label: Cow<'static, str>,

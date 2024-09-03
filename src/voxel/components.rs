@@ -2,8 +2,7 @@
 
 use crate::{
     component::ComponentRegistry,
-    scene::{GroupNodeID, VoxelTreeNodeID},
-    voxel::{VoxelTreeID, VoxelType},
+    voxel::{VoxelObjectID, VoxelType},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -14,20 +13,22 @@ use num_traits::{FromPrimitive, ToPrimitive};
 /// entities comprised of identical voxels.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelTypeComp {
     /// The index of the voxel type.
     voxel_type_idx: usize,
+    /// The extent of a single voxel.
+    voxel_extent: f64,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities comprised of voxels in a box configuration.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
@@ -44,24 +45,20 @@ pub struct VoxelBoxComp {
 /// entities comprised of voxels in a spherical configuration.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
 pub struct VoxelSphereComp {
     /// The number of voxels along the diameter of the sphere.
     n_voxels_across: usize,
-    /// The height above the bottom of the voxel tree below which decisions on
-    /// whether to pass voxel instances to the GPU should be made for entire
-    /// octants at once.
-    instance_group_height: usize,
 }
 
 /// Setup [`Component`](impact_ecs::component::Component) for initializing
 /// entities comprised of voxels in a gradient noise pattern.
 ///
 /// The purpose of this component is to aid in constructing a
-/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
+/// [`VoxelObjectComp`] for the entity. It is therefore not kept after entity
 /// creation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
@@ -80,49 +77,34 @@ pub struct VoxelGradientNoisePatternComp {
     pub seed: u64,
 }
 
-/// Setup [`Component`](impact_ecs::component::Component) for initializing
-/// entities with voxels represented by a
-/// [`VoxelTree`](crate::voxel::VoxelTree).
-///
-/// The purpose of this component is to aid in constructing a
-/// [`VoxelTreeNodeComp`] for the entity. It is therefore not kept after entity
-/// creation.
+/// [`Component`](impact_ecs::component::Component) for entities that have a
+/// [`ChunkedVoxelObject`](crate::voxel::ChunkedVoxelObject).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct VoxelTreeComp {
-    /// The ID of the entity's [`VoxelTree`](crate::voxel::VoxelTree).
-    pub voxel_tree_id: VoxelTreeID,
-}
-
-/// [`Component`](impact_ecs::component::Component) for entities representing a
-/// [`VoxelTreeNodeID`] in the [`SceneGraph`](crate::scene::SceneGraph).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod, Component)]
-pub struct VoxelTreeNodeComp {
-    /// The group node in the [`SceneGraph`](crate::scene::SceneGraph) holding
-    /// the transform to the parent space of the tree.
-    pub group_node_id: GroupNodeID,
-    /// The voxel tree node in the [`SceneGraph`](crate::scene::SceneGraph)
-    /// holding the transforms locating each voxel instance to render in the
-    /// tree's reference frame.
-    pub voxel_tree_node_id: VoxelTreeNodeID,
-    /// The ID of the [`VoxelTree`](crate::voxel::VoxelTree).
-    pub voxel_tree_id: VoxelTreeID,
-    _pad: [u8; 4],
+pub struct VoxelObjectComp {
+    /// The ID of the entity's
+    /// [`ChunkedVoxelObject`](crate::voxel::ChunkedVoxelObject).
+    pub voxel_object_id: VoxelObjectID,
 }
 
 impl VoxelTypeComp {
     /// Creates a new component for an entity comprised of voxels of the given
-    /// type.
-    pub fn new(voxel_type: VoxelType) -> Self {
+    /// type and extent.
+    pub fn new(voxel_type: VoxelType, voxel_extent: f64) -> Self {
         Self {
             voxel_type_idx: voxel_type.to_usize().unwrap(),
+            voxel_extent,
         }
     }
 
     /// Returns the voxel type.
     pub fn voxel_type(&self) -> VoxelType {
         VoxelType::from_usize(self.voxel_type_idx).unwrap()
+    }
+
+    /// Returns the extent of a single voxel.
+    pub fn voxel_extent(&self) -> f64 {
+        self.voxel_extent
     }
 }
 
@@ -144,24 +126,14 @@ impl VoxelSphereComp {
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
-    pub fn new(n_voxels_across: usize, instance_group_height: u32) -> Self {
+    pub fn new(n_voxels_across: usize) -> Self {
         assert_ne!(n_voxels_across, 0);
-        Self {
-            n_voxels_across,
-            instance_group_height: instance_group_height as usize,
-        }
+        Self { n_voxels_across }
     }
 
     /// Returns the number of voxels across the sphere's diameter.
     pub fn n_voxels_across(&self) -> usize {
         self.n_voxels_across
-    }
-
-    /// Returns the height above the bottom of the voxel tree below which
-    /// decisions on whether to pass voxel instances to the GPU should be made
-    /// for entire octants at once.
-    pub fn instance_group_height(&self) -> u32 {
-        self.instance_group_height as u32
     }
 }
 
@@ -188,27 +160,11 @@ impl VoxelGradientNoisePatternComp {
     }
 }
 
-impl VoxelTreeNodeComp {
-    pub fn new(
-        voxel_tree_id: VoxelTreeID,
-        group_node_id: GroupNodeID,
-        voxel_tree_node_id: VoxelTreeNodeID,
-    ) -> Self {
-        Self {
-            group_node_id,
-            voxel_tree_node_id,
-            voxel_tree_id,
-            _pad: [0; 4],
-        }
-    }
-}
-
 /// Registers all voxel [`Component`](impact_ecs::component::Component)s.
 pub fn register_voxel_components(registry: &mut ComponentRegistry) -> Result<()> {
     register_setup_component!(registry, VoxelTypeComp)?;
     register_setup_component!(registry, VoxelBoxComp)?;
     register_setup_component!(registry, VoxelSphereComp)?;
     register_setup_component!(registry, VoxelGradientNoisePatternComp)?;
-    register_setup_component!(registry, VoxelTreeComp)?;
-    register_component!(registry, VoxelTreeNodeComp)
+    register_setup_component!(registry, VoxelObjectComp)
 }
