@@ -842,7 +842,7 @@ impl<S> OrderedTask<S> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use impact_utils::ConstStringHash64;
     use std::{iter, sync::Mutex, thread, time::Duration};

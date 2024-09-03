@@ -236,7 +236,7 @@ impl OrbitalTrajectoryComp {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{
         num::Float,

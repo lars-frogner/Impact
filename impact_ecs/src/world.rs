@@ -149,11 +149,10 @@ impl World {
     ///
     /// # Errors
     /// Returns an error if:
-    /// - The given set of components does not have a valid
-    ///   [`Archetype`], which happens if there are multiple
-    ///   components of the same type.
-    /// - If the number of component instances provided for each
-    ///   component type is not the same.
+    /// - The given set of components does not have a valid [`Archetype`], which
+    ///   happens if there are multiple components of the same type.
+    /// - If the number of component instances provided for each component type
+    ///   is not the same.
     ///
     /// # Examples
     /// ```
@@ -303,8 +302,8 @@ impl World {
     /// # Errors
     /// Returns an error if:
     /// - The entity does not exist.
-    /// - The entity does not have a components of the specified
-    ///   component type to remove.
+    /// - The entity does not have a components of the specified component type
+    ///   to remove.
     pub fn remove_component_for_entity<C: Component>(&mut self, entity: &mut Entity) -> Result<()> {
         self.remove_component_id_for_entity(entity, C::component_id())
     }
@@ -553,7 +552,7 @@ impl<'a> EntityEntry<'a> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::{
         super::{archetype_of, Component},
         *,

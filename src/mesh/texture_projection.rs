@@ -87,7 +87,7 @@ impl<F: Float> TextureProjection<F> for PlanarTextureProjection<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use nalgebra::point;

@@ -24,7 +24,7 @@ impl ConstantAccelerationTrajectoryComp {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::physics::motion::Acceleration;
 
     use super::*;

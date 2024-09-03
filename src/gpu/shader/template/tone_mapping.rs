@@ -88,8 +88,8 @@ impl PostprocessingShaderTemplate for ToneMappingShaderTemplate {
 }
 
 #[cfg(test)]
-mod test {
-    use super::super::test::validate_template;
+mod tests {
+    use super::super::tests::validate_template;
     use super::*;
 
     #[test]

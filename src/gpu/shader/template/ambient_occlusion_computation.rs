@@ -123,9 +123,9 @@ impl PostprocessingShaderTemplate for AmbientOcclusionComputationShaderTemplate 
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 
-    use super::super::test::validate_template;
+    use super::super::tests::validate_template;
     use super::*;
     use impact_utils::hash64;
 

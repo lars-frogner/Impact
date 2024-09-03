@@ -1377,7 +1377,7 @@ impl InstanceFeatureTypeDescriptor {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[repr(transparent)]

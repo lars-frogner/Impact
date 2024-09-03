@@ -477,7 +477,7 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::geometry::{Degrees, OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;

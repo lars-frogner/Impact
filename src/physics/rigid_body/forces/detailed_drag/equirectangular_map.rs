@@ -86,7 +86,8 @@ impl<V: Clone + Default> EquirectangularMap<V> {
         &mut self.values[idx]
     }
 
-    /// Computes the index corresponding to the given phi (azimuthal) angle. Any value for the
+    /// Computes the index corresponding to the given phi (azimuthal) angle. Any
+    /// value for the
     pub fn compute_phi_idx<A: Angle<fph>>(&self, phi: A) -> usize {
         self.compute_idx(phi.radians().rem_euclid(fph::TWO_PI))
     }
@@ -219,7 +220,7 @@ impl<D: Serialize + DeserializeOwned> EquirectangularMap<D> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

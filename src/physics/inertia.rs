@@ -622,7 +622,7 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::mesh::FrontFaceSide;
     use approx::abs_diff_eq;

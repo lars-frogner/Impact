@@ -463,7 +463,7 @@ impl RigidBodyIntermediateStates {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{geometry::Degrees, num::Float};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};

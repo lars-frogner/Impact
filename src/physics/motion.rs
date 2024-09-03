@@ -178,7 +178,7 @@ pub fn advance_orientation(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::geometry::{Degrees, Radians};
     use approx::assert_abs_diff_eq;

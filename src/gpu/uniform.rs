@@ -639,7 +639,7 @@ pub fn create_single_uniform_bind_group_entry(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use bytemuck::Zeroable;
 

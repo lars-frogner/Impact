@@ -21,7 +21,7 @@ impl ConstantRotationComp {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{geometry::Radians, num::Float, physics::motion::Direction};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};

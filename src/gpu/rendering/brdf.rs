@@ -245,7 +245,7 @@ fn integrate_hundred_point_gauss_legendre(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
 

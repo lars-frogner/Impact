@@ -116,7 +116,7 @@ impl Default for SpringState {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
 
