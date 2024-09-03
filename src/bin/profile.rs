@@ -51,7 +51,7 @@ fn exit_with_error(message: impl Display, list_targets: bool) -> ! {
 }
 
 fn profile_chunked_voxel_object_construction(duration: Duration) {
-    let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 200, 200);
+    let generator = UniformBoxVoxelGenerator::new(VoxelType::Default, 0.25, 200, 200, 200);
     let start = Instant::now();
     while start.elapsed() < duration {
         let object = ChunkedVoxelObject::generate(&generator).unwrap();
@@ -60,7 +60,7 @@ fn profile_chunked_voxel_object_construction(duration: Duration) {
 }
 
 fn profile_chunked_voxel_object_initialize_adjacencies(duration: Duration) {
-    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25_f32, 200, 0);
+    let generator = UniformSphereVoxelGenerator::new(VoxelType::Default, 0.25, 200);
     let object = ChunkedVoxelObject::generate(&generator).unwrap();
     let start = Instant::now();
     while start.elapsed() < duration {

@@ -47,6 +47,7 @@ pub enum GPUBufferType {
     Uniform,
     Storage,
     Result,
+    Indirect,
     Query,
 }
 
@@ -481,6 +482,7 @@ impl GPUBufferType {
                     | wgpu::BufferUsages::COPY_DST
             }
             Self::Result => wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            Self::Indirect => wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
             Self::Query => wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
         }
     }
@@ -497,6 +499,7 @@ impl Display for GPUBufferType {
                 Self::Uniform => "uniform",
                 Self::Storage => "storage",
                 Self::Result => "result",
+                Self::Indirect => "indirect",
                 Self::Query => "query",
             }
         )

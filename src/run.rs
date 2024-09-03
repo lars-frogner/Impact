@@ -65,8 +65,8 @@ use crate::{
     skybox::Skybox,
     util::bounds::UpperExclusiveBounds,
     voxel::{
-        components::{VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelTypeComp},
-        VoxelConfig, VoxelManager, VoxelTreeLODController, VoxelType,
+        components::{VoxelBoxComp, VoxelGradientNoisePatternComp, VoxelSphereComp, VoxelTypeComp},
+        VoxelManager, VoxelType,
     },
     window::{GameHandler, InputHandler, KeyActionMap, Window},
 };
@@ -97,16 +97,6 @@ fn init_app(window: Window) -> Result<Application> {
 
     let vertical_field_of_view = Degrees(70.0);
 
-    let voxel_config = VoxelConfig {
-        initial_min_angular_voxel_extent_for_lod:
-            VoxelTreeLODController::compute_min_angular_voxel_extent(
-                window.dimensions().1,
-                vertical_field_of_view,
-                3.0,
-            ),
-        ..VoxelConfig::default()
-    };
-
     let simulator = PhysicsSimulator::new(SimulatorConfig::default(), UniformMedium::vacuum())?;
 
     let motion_controller = SemiDirectionalMotionController::new(8.0, true);
@@ -116,7 +106,6 @@ fn init_app(window: Window) -> Result<Application> {
     let app = Application::new(
         Arc::new(window),
         rendering_config,
-        voxel_config,
         simulator,
         Some(Box::new(motion_controller)),
         Some(Box::new(orientation_controller)),
@@ -232,163 +221,163 @@ fn init_app(window: Window) -> Result<Application> {
         // &UniformGravityComp::downward(9.81),
     ))?;
 
-    app.create_entity((
-        &app.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
-        &ReferenceFrameComp::new(
-            Point3::new(0.0, 1.5, 11.0),
-            Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
-            0.06,
-        ),
-        &UniformColorComp(vector![0.1, 0.2, 0.6]),
-        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 50.0),
-        &UniformRoughnessComp(0.4),
-    ))?;
+    // app.create_entity((
+    //     &app.load_mesh_from_obj_file("assets/Dragon_1.obj")?,
+    //     &ReferenceFrameComp::new(
+    //         Point3::new(0.0, 1.5, 11.0),
+    //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
+    //         0.06,
+    //     ),
+    //     &UniformColorComp(vector![0.1, 0.2, 0.6]),
+    //     &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 50.0),
+    //     &UniformRoughnessComp(0.4),
+    // ))?;
 
-    app.create_entity((
-        &CylinderMeshComp::new(10.0, 0.6, 100),
-        &ReferenceFrameComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
-        &UniformColorComp::IRON,
-        &UniformSpecularReflectanceComp::METAL,
-        &UniformMetalnessComp::METAL,
-        &UniformRoughnessComp(0.5),
-    ))?;
+    // app.create_entity((
+    //     &CylinderMeshComp::new(10.0, 0.6, 100),
+    //     &ReferenceFrameComp::unoriented(Point3::new(7.0, 0.5, 5.0)),
+    //     &UniformColorComp::IRON,
+    //     &UniformSpecularReflectanceComp::METAL,
+    //     &UniformMetalnessComp::METAL,
+    //     &UniformRoughnessComp(0.5),
+    // ))?;
 
-    app.create_entity((
-        &app.load_mesh_from_obj_file("assets/abstract_object.obj")?,
-        &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(7.0, 7.7, 5.0), 0.02),
-        &ConstantRotationComp::new(
-            0.0,
-            Orientation::from_axis_angle(&Vector3::y_axis(), 0.0),
-            AngularVelocity::new(Vector3::y_axis(), Degrees(50.0)),
-        ),
-        &UniformColorComp::COPPER,
-        &UniformSpecularReflectanceComp::METAL,
-        &UniformMetalnessComp::METAL,
-        &UniformRoughnessComp(0.35),
-    ))?;
+    // app.create_entity((
+    //     &app.load_mesh_from_obj_file("assets/abstract_object.obj")?,
+    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(7.0, 7.7, 5.0), 0.02),
+    //     &ConstantRotationComp::new(
+    //         0.0,
+    //         Orientation::from_axis_angle(&Vector3::y_axis(), 0.0),
+    //         AngularVelocity::new(Vector3::y_axis(), Degrees(50.0)),
+    //     ),
+    //     &UniformColorComp::COPPER,
+    //     &UniformSpecularReflectanceComp::METAL,
+    //     &UniformMetalnessComp::METAL,
+    //     &UniformRoughnessComp(0.35),
+    // ))?;
 
-    app.create_entity((
-        &app.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
-        &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-1.0, 9.0, 9.0), 0.035),
-        &ConstantRotationComp::new(
-            0.0,
-            Orientation::from_axis_angle(&Vector3::x_axis(), 0.4),
-            AngularVelocity::new(Vector3::y_axis(), Degrees(-60.0)),
-        ),
-        &UniformColorComp(vector![0.7, 0.3, 0.2]),
-        &UniformRoughnessComp(0.95),
-    ))?;
+    // app.create_entity((
+    //     &app.load_mesh_from_obj_file("assets/abstract_pyramid.obj")?,
+    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-1.0, 9.0, 9.0), 0.035),
+    //     &ConstantRotationComp::new(
+    //         0.0,
+    //         Orientation::from_axis_angle(&Vector3::x_axis(), 0.4),
+    //         AngularVelocity::new(Vector3::y_axis(), Degrees(-60.0)),
+    //     ),
+    //     &UniformColorComp(vector![0.7, 0.3, 0.2]),
+    //     &UniformRoughnessComp(0.95),
+    // ))?;
 
-    app.create_entity((
-        &BoxMeshComp::UNIT_CUBE,
-        &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0), 2.0),
-        &UniformColorComp(vector![0.1, 0.7, 0.3]),
-        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 0.0),
-        &UniformRoughnessComp(0.55),
-    ))?;
+    // app.create_entity((
+    //     &BoxMeshComp::UNIT_CUBE,
+    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, -1.0, 5.0), 2.0),
+    //     &UniformColorComp(vector![0.1, 0.7, 0.3]),
+    //     &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::PLASTIC, 0.0),
+    //     &UniformRoughnessComp(0.55),
+    // ))?;
 
-    app.create_entity((
-        &SphereMeshComp::new(100),
-        &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, 2.0, 5.0), 4.0),
-        &UniformColorComp(vector![0.3, 0.2, 0.7]),
-        &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::STONE, 0.5),
-        &UniformRoughnessComp(0.7),
-    ))?;
+    // app.create_entity((
+    //     &SphereMeshComp::new(100),
+    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(-9.0, 2.0, 5.0), 4.0),
+    //     &UniformColorComp(vector![0.3, 0.2, 0.7]),
+    //     &UniformSpecularReflectanceComp::in_range_of(UniformSpecularReflectanceComp::STONE, 0.5),
+    //     &UniformRoughnessComp(0.7),
+    // ))?;
 
-    app.create_entity((
-        &app.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
-        &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8, 5.0), 0.016),
-        &ConstantRotationComp::new(
-            0.0,
-            Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
-            AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
-        ),
-        &UniformColorComp::GOLD,
-        &UniformSpecularReflectanceComp::METAL,
-        &UniformMetalnessComp::METAL,
-        &UniformRoughnessComp(0.4),
-    ))?;
+    // app.create_entity((
+    //     &app.load_mesh_from_obj_file("assets/abstract_cube.obj")?,
+    //     &ReferenceFrameComp::for_scaled_driven_rotation(Point3::new(-9.0, 5.8, 5.0), 0.016),
+    //     &ConstantRotationComp::new(
+    //         0.0,
+    //         Orientation::from_axis_angle(&Vector3::y_axis(), 0.7),
+    //         AngularVelocity::new(Vector3::x_axis(), Degrees(30.0)),
+    //     ),
+    //     &UniformColorComp::GOLD,
+    //     &UniformSpecularReflectanceComp::METAL,
+    //     &UniformMetalnessComp::METAL,
+    //     &UniformRoughnessComp(0.4),
+    // ))?;
 
-    app.create_entity((
-        &RectangleMeshComp::UNIT_SQUARE,
-        &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-        &ReferenceFrameComp::new(
-            Point3::new(0.0, -2.0, 0.0),
-            Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
-            50.0,
-        ),
-        &TexturedColorComp(wood_floor_color_texture_id),
-        &UniformSpecularReflectanceComp::in_range_of(
-            UniformSpecularReflectanceComp::LIVING_TISSUE,
-            100.0,
-        ),
-        &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
-        &NormalMapComp(wood_floor_normal_texture_id),
-    ))?;
+    // app.create_entity((
+    //     &RectangleMeshComp::UNIT_SQUARE,
+    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+    //     &ReferenceFrameComp::new(
+    //         Point3::new(0.0, -2.0, 0.0),
+    //         Orientation::from_axis_angle(&Vector3::z_axis(), 0.0),
+    //         50.0,
+    //     ),
+    //     &TexturedColorComp(wood_floor_color_texture_id),
+    //     &UniformSpecularReflectanceComp::in_range_of(
+    //         UniformSpecularReflectanceComp::LIVING_TISSUE,
+    //         100.0,
+    //     ),
+    //     &TexturedRoughnessComp::unscaled(wood_floor_roughness_texture_id),
+    //     &NormalMapComp(wood_floor_normal_texture_id),
+    // ))?;
 
-    app.create_entity((
-        &RectangleMeshComp::UNIT_SQUARE,
-        &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-        &ReferenceFrameComp::new(
-            Point3::new(25.0, 5.0, 0.0),
-            Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
-                * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
-            50.0,
-        ),
-        &TexturedColorComp(bricks_color_texture_id),
-        &UniformSpecularReflectanceComp(0.02),
-        &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
-        &ParallaxMapComp::new(
-            bricks_height_texture_id,
-            0.02,
-            vector![1.0 / 25.0, 1.0 / 25.0],
-        ),
-    ))?;
+    // app.create_entity((
+    //     &RectangleMeshComp::UNIT_SQUARE,
+    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+    //     &ReferenceFrameComp::new(
+    //         Point3::new(25.0, 5.0, 0.0),
+    //         Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
+    //             * Orientation::from_axis_angle(&Vector3::z_axis(), PI / 2.0),
+    //         50.0,
+    //     ),
+    //     &TexturedColorComp(bricks_color_texture_id),
+    //     &UniformSpecularReflectanceComp(0.02),
+    //     &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
+    //     &ParallaxMapComp::new(
+    //         bricks_height_texture_id,
+    //         0.02,
+    //         vector![1.0 / 25.0, 1.0 / 25.0],
+    //     ),
+    // ))?;
 
-    app.create_entity((
-        &RectangleMeshComp::UNIT_SQUARE,
-        &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-        &ReferenceFrameComp::new(
-            Point3::new(-25.0, 5.0, 0.0),
-            Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
-                * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
-            50.0,
-        ),
-        &TexturedColorComp(bricks_color_texture_id),
-        &UniformSpecularReflectanceComp(0.02),
-        &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
-        &ParallaxMapComp::new(
-            bricks_height_texture_id,
-            0.02,
-            vector![1.0 / 25.0, 1.0 / 25.0],
-        ),
-    ))?;
+    // app.create_entity((
+    //     &RectangleMeshComp::UNIT_SQUARE,
+    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+    //     &ReferenceFrameComp::new(
+    //         Point3::new(-25.0, 5.0, 0.0),
+    //         Orientation::from_axis_angle(&Vector3::x_axis(), PI / 2.0)
+    //             * Orientation::from_axis_angle(&Vector3::z_axis(), -PI / 2.0),
+    //         50.0,
+    //     ),
+    //     &TexturedColorComp(bricks_color_texture_id),
+    //     &UniformSpecularReflectanceComp(0.02),
+    //     &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
+    //     &ParallaxMapComp::new(
+    //         bricks_height_texture_id,
+    //         0.02,
+    //         vector![1.0 / 25.0, 1.0 / 25.0],
+    //     ),
+    // ))?;
 
-    app.create_entity((
-        &RectangleMeshComp::UNIT_SQUARE,
-        &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
-        &ReferenceFrameComp::new(
-            Point3::new(0.0, 5.0, 25.0),
-            Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
-            50.0,
-        ),
-        &TexturedColorComp(bricks_color_texture_id),
-        &UniformSpecularReflectanceComp(0.02),
-        &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
-        &ParallaxMapComp::new(
-            bricks_height_texture_id,
-            0.02,
-            vector![1.0 / 25.0, 1.0 / 25.0],
-        ),
-    ))?;
+    // app.create_entity((
+    //     &RectangleMeshComp::UNIT_SQUARE,
+    //     &PlanarTextureProjectionComp::for_rectangle(&RectangleMeshComp::UNIT_SQUARE, 2.0, 2.0),
+    //     &ReferenceFrameComp::new(
+    //         Point3::new(0.0, 5.0, 25.0),
+    //         Orientation::from_axis_angle(&Vector3::x_axis(), -PI / 2.0),
+    //         50.0,
+    //     ),
+    //     &TexturedColorComp(bricks_color_texture_id),
+    //     &UniformSpecularReflectanceComp(0.02),
+    //     &TexturedRoughnessComp::unscaled(bricks_roughness_texture_id),
+    //     &ParallaxMapComp::new(
+    //         bricks_height_texture_id,
+    //         0.02,
+    //         vector![1.0 / 25.0, 1.0 / 25.0],
+    //     ),
+    // ))?;
 
-    app.create_entity((
-        &SphereMeshComp::new(25),
-        &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
-        &UniformColorComp(vector![1.0, 1.0, 1.0]),
-        &UniformEmissiveLuminanceComp(1e6),
-        &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
-    ))?;
+    // app.create_entity((
+    //     &SphereMeshComp::new(25),
+    //     &ReferenceFrameComp::unoriented_scaled(Point3::new(0.0, 15.0, 2.0), 0.7),
+    //     &UniformColorComp(vector![1.0, 1.0, 1.0]),
+    //     &UniformEmissiveLuminanceComp(1e6),
+    //     &OmnidirectionalEmissionComp::new(vector![1.0, 1.0, 1.0] * 2e7, 0.7),
+    // ))?;
 
     app.create_entity(&UnidirectionalEmissionComp::new(
         vector![1.0, 1.0, 1.0] * 100000.0,
@@ -398,13 +387,29 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.create_entity(&AmbientEmissionComp::new(vector![1.0, 1.0, 1.0] * 5000.0))?;
 
-    // app.create_entity((
-    //     // &VoxelSphereComp::new(500, 4),
-    //     &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 0),
-    //     &VoxelTypeComp::new(VoxelType::Default),
-    //     // &ReferenceFrameComp::unoriented(point![-100.0, -100.0, -4.0]),
-    //     &ReferenceFrameComp::unoriented(point![-25.0, -25.0, -5.0]),
-    // ))?;
+    app.create_entity((
+        // &VoxelSphereComp::new(32),
+        &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 1),
+        &VoxelTypeComp::new(VoxelType::Default, 0.25),
+        // &ReferenceFrameComp::unoriented(point![-4.0, -4.0, -24.0]),
+        &ReferenceFrameComp::unoriented(point![25.0, -25.0, 45.0]),
+    ))?;
+
+    app.create_entity((
+        // &VoxelBoxComp::new(64, 32, 1),
+        &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 0),
+        &VoxelTypeComp::new(VoxelType::Default, 0.25),
+        // &ReferenceFrameComp::unoriented(point![9.0, -12.0, -5.0]),
+        &ReferenceFrameComp::unoriented(point![-25.0, -25.0, -5.0]),
+    ))?;
+
+    app.create_entity((
+        // &VoxelBoxComp::new(64, 32, 1),
+        &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 2),
+        &VoxelTypeComp::new(VoxelType::Default, 0.25),
+        // &ReferenceFrameComp::unoriented(point![9.0, -12.0, -5.0]),
+        &ReferenceFrameComp::unoriented(point![-45.0, 55.0, 25.0]),
+    ))?;
 
     // create_harmonic_oscillation_experiment(&world, Point3::new(0.0, 10.0, 2.0),
     // 1.0, 10.0, 3.0); create_free_rotation_experiment(&world, Point3::new(0.0,

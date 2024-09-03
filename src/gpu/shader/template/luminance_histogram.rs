@@ -6,7 +6,10 @@ use crate::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         rendering::surface::RenderingSurface,
         resource_group::GPUResourceGroupID,
-        shader::template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+        shader::{
+            template::{ComputeShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+            ShaderID,
+        },
         texture::attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,
             RenderAttachmentInputDescriptionSet, RenderAttachmentQuantity,
@@ -75,6 +78,13 @@ impl SpecificShaderTemplate for LuminanceHistogramShaderTemplate {
                 ),
             )
             .expect("Shader template resolution failed")
+    }
+
+    fn shader_id(&self) -> ShaderID {
+        ShaderID::from_identifier(&format!(
+            "LuminanceHistogramShaderTemplate{{ threads_per_side = {} }}",
+            self.threads_per_side
+        ))
     }
 }
 

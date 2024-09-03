@@ -9,7 +9,10 @@ use crate::{
             render_command::StencilValue,
         },
         resource_group::GPUResourceGroupID,
-        shader::template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+        shader::{
+            template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+            ShaderID,
+        },
         texture::attachment::{
             RenderAttachmentDescription, RenderAttachmentInputDescription,
             RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
@@ -86,6 +89,10 @@ impl SpecificShaderTemplate for AmbientOcclusionComputationShaderTemplate {
                 ),
             )
             .expect("Shader template resolution failed")
+    }
+
+    fn shader_id(&self) -> ShaderID {
+        ShaderID::from_identifier("AmbientOcclusionComputationShaderTemplate")
     }
 }
 

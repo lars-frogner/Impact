@@ -1,15 +1,14 @@
 //! Generation of spatial voxel distributions.
 
 use super::{VoxelGenerator, VoxelType};
-use crate::num::Float;
 use nalgebra::{point, Point3};
 use noise::{NoiseFn, Simplex};
 
 /// Generator for a box configuration of identical voxels.
 #[derive(Clone, Debug)]
-pub struct UniformBoxVoxelGenerator<F> {
+pub struct UniformBoxVoxelGenerator {
     voxel_type: VoxelType,
-    voxel_extent: F,
+    voxel_extent: f64,
     size_x: usize,
     size_y: usize,
     size_z: usize,
@@ -17,21 +16,20 @@ pub struct UniformBoxVoxelGenerator<F> {
 
 /// Generator for a spherical configuration of identical voxels.
 #[derive(Clone, Debug)]
-pub struct UniformSphereVoxelGenerator<F> {
+pub struct UniformSphereVoxelGenerator {
     voxel_type: VoxelType,
-    voxel_extent: F,
+    voxel_extent: f64,
     n_voxels_across: usize,
-    center: F,
-    squared_radius: F,
-    instance_group_height: u32,
+    center: f64,
+    squared_radius: f64,
 }
 
 /// Generator for a voxel configuration obtained by thresholding a gradient
 /// noise pattern.
 #[derive(Clone, Debug)]
-pub struct GradientNoiseVoxelGenerator<F> {
+pub struct GradientNoiseVoxelGenerator {
     voxel_type: VoxelType,
-    voxel_extent: F,
+    voxel_extent: f64,
     size_x: usize,
     size_y: usize,
     size_z: usize,
@@ -42,12 +40,12 @@ pub struct GradientNoiseVoxelGenerator<F> {
     noise: Simplex,
 }
 
-impl<F: Float> UniformBoxVoxelGenerator<F> {
+impl UniformBoxVoxelGenerator {
     /// Creates a new generator for a uniform box with the given voxel type,
     /// voxel extent and number of voxels in each direction.
     pub fn new(
         voxel_type: VoxelType,
-        voxel_extent: F,
+        voxel_extent: f64,
         size_x: usize,
         size_y: usize,
         size_z: usize,
@@ -62,8 +60,8 @@ impl<F: Float> UniformBoxVoxelGenerator<F> {
     }
 }
 
-impl<F: Float> VoxelGenerator<F> for UniformBoxVoxelGenerator<F> {
-    fn voxel_extent(&self) -> F {
+impl VoxelGenerator for UniformBoxVoxelGenerator {
+    fn voxel_extent(&self) -> f64 {
         self.voxel_extent
     }
 
@@ -80,22 +78,17 @@ impl<F: Float> VoxelGenerator<F> for UniformBoxVoxelGenerator<F> {
     }
 }
 
-impl<F: Float> UniformSphereVoxelGenerator<F> {
+impl UniformSphereVoxelGenerator {
     /// Creates a new generator for a uniform sphere with the given voxel type,
     /// voxel extent and number of voxels across the diameter.
     ///
     /// # Panics
     /// If the given number of voxels across is zero.
-    pub fn new(
-        voxel_type: VoxelType,
-        voxel_extent: F,
-        n_voxels_across: usize,
-        instance_group_height: u32,
-    ) -> Self {
+    pub fn new(voxel_type: VoxelType, voxel_extent: f64, n_voxels_across: usize) -> Self {
         assert_ne!(n_voxels_across, 0);
 
-        let center = F::ONE_HALF * F::from_usize(n_voxels_across - 1).unwrap();
-        let radius = center + F::ONE_HALF;
+        let center = 0.5 * (n_voxels_across - 1) as f64;
+        let radius = center + 0.5;
         let squared_radius = radius.powi(2);
 
         Self {
@@ -104,25 +97,24 @@ impl<F: Float> UniformSphereVoxelGenerator<F> {
             n_voxels_across,
             center,
             squared_radius,
-            instance_group_height,
         }
     }
 
     /// Returns the position of the sphere center relative to the position of
     /// the origin of the voxel grid.
-    pub fn center(&self) -> Point3<F> {
+    pub fn center(&self) -> Point3<f64> {
         let center_coord = self.center * self.voxel_extent;
         point![center_coord, center_coord, center_coord]
     }
 
     /// Returns the radius of the sphere.
-    pub fn radius(&self) -> F {
-        F::sqrt(self.squared_radius) * self.voxel_extent
+    pub fn radius(&self) -> f64 {
+        f64::sqrt(self.squared_radius) * self.voxel_extent
     }
 }
 
-impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
-    fn voxel_extent(&self) -> F {
+impl VoxelGenerator for UniformSphereVoxelGenerator {
+    fn voxel_extent(&self) -> f64 {
         self.voxel_extent
     }
 
@@ -131,9 +123,9 @@ impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
     }
 
     fn voxel_at_indices(&self, i: usize, j: usize, k: usize) -> Option<VoxelType> {
-        let squared_dist_from_center = (F::from_usize(i).unwrap() - self.center).powi(2)
-            + (F::from_usize(j).unwrap() - self.center).powi(2)
-            + (F::from_usize(k).unwrap() - self.center).powi(2);
+        let squared_dist_from_center = (i as f64 - self.center).powi(2)
+            + (j as f64 - self.center).powi(2)
+            + (k as f64 - self.center).powi(2);
 
         if squared_dist_from_center <= self.squared_radius {
             Some(self.voxel_type)
@@ -141,13 +133,9 @@ impl<F: Float> VoxelGenerator<F> for UniformSphereVoxelGenerator<F> {
             None
         }
     }
-
-    fn instance_group_height(&self) -> u32 {
-        self.instance_group_height
-    }
 }
 
-impl<F: Float> GradientNoiseVoxelGenerator<F> {
+impl GradientNoiseVoxelGenerator {
     /// Creates a new generator for a gradient noise voxel pattern with the
     /// given voxel type, voxel extent and number of voxels in each direction.
     /// The given frequency determines the spatial scale of the noise pattern,
@@ -155,7 +143,7 @@ impl<F: Float> GradientNoiseVoxelGenerator<F> {
     /// exceed at a given location to generate a voxel there.
     pub fn new(
         voxel_type: VoxelType,
-        voxel_extent: F,
+        voxel_extent: f64,
         size_x: usize,
         size_y: usize,
         size_z: usize,
@@ -184,8 +172,8 @@ impl<F: Float> GradientNoiseVoxelGenerator<F> {
     }
 }
 
-impl<F: Float> VoxelGenerator<F> for GradientNoiseVoxelGenerator<F> {
-    fn voxel_extent(&self) -> F {
+impl VoxelGenerator for GradientNoiseVoxelGenerator {
+    fn voxel_extent(&self) -> f64 {
         self.voxel_extent
     }
 
@@ -216,41 +204,52 @@ impl<F: Float> VoxelGenerator<F> for GradientNoiseVoxelGenerator<F> {
 pub mod fuzzing {
     use super::*;
     use arbitrary::{Arbitrary, Result, Unstructured};
+    use std::mem;
 
     #[allow(clippy::large_enum_variant)]
     #[derive(Clone, Debug, Arbitrary)]
     pub enum ArbitraryVoxelGenerator {
-        UniformBox(UniformBoxVoxelGenerator<f64>),
-        UniformSphere(UniformSphereVoxelGenerator<f64>),
-        GradientNoise(GradientNoiseVoxelGenerator<f64>),
+        UniformBox(UniformBoxVoxelGenerator),
+        UniformSphere(UniformSphereVoxelGenerator),
+        GradientNoise(GradientNoiseVoxelGenerator),
     }
 
     const MAX_SIZE: usize = 300;
 
-    impl<F: Float> Arbitrary<'_> for UniformBoxVoxelGenerator<F> {
+    impl Arbitrary<'_> for UniformBoxVoxelGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let voxel_type = VoxelType::Default;
-            let voxel_extent = F::from_f64(0.25).unwrap();
+            let voxel_extent = 0.25;
             let size_x = u.int_in_range(0..=MAX_SIZE)?;
             let size_y = u.int_in_range(0..=MAX_SIZE)?;
             let size_z = u.int_in_range(0..=MAX_SIZE)?;
             Ok(Self::new(voxel_type, voxel_extent, size_x, size_y, size_z))
         }
-    }
 
-    impl<F: Float> Arbitrary<'_> for UniformSphereVoxelGenerator<F> {
-        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let voxel_type = VoxelType::Default;
-            let voxel_extent = F::from_f64(0.25).unwrap();
-            let n_voxels_across = u.int_in_range(1..=MAX_SIZE)?;
-            Ok(Self::new(voxel_type, voxel_extent, n_voxels_across, 0))
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 3 * mem::size_of::<usize>();
+            (size, Some(size))
         }
     }
 
-    impl<'a, F: Float> Arbitrary<'a> for GradientNoiseVoxelGenerator<F> {
-        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+    impl Arbitrary<'_> for UniformSphereVoxelGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let voxel_type = VoxelType::Default;
-            let voxel_extent = F::from_f64(0.25).unwrap();
+            let voxel_extent = 0.25;
+            let n_voxels_across = u.int_in_range(1..=MAX_SIZE)?;
+            Ok(Self::new(voxel_type, voxel_extent, n_voxels_across))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = mem::size_of::<usize>();
+            (size, Some(size))
+        }
+    }
+
+    impl Arbitrary<'_> for GradientNoiseVoxelGenerator {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let voxel_type = VoxelType::Default;
+            let voxel_extent = 0.25;
             let size_x = u.int_in_range(0..=MAX_SIZE)?;
             let size_y = u.int_in_range(0..=MAX_SIZE)?;
             let size_z = u.int_in_range(0..=MAX_SIZE)?;
@@ -267,6 +266,12 @@ pub mod fuzzing {
                 noise_threshold,
                 seed,
             ))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size =
+                3 * mem::size_of::<usize>() + 2 * mem::size_of::<f64>() + mem::size_of::<u32>();
+            (size, Some(size))
         }
     }
 }

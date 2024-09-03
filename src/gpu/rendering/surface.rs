@@ -111,12 +111,6 @@ impl RenderingSurface {
         ]
     }
 
-    /// Returns the size of the push constant obtained by calling
-    /// [`Self::pixel_count_push_constant`].
-    pub const fn pixel_count_push_constant_size() -> u32 {
-        mem::size_of::<f32>() as u32
-    }
-
     /// Returns the data for the push constant containing the total surface
     /// pixel count.
     pub fn pixel_count_push_constant(&self) -> f32 {

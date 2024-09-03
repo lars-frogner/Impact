@@ -441,6 +441,14 @@ impl InstanceFeatureManager {
         }
     }
 
+    /// Clears any previously buffered feature values from all instance feature
+    /// buffers.
+    pub fn clear_buffer_contents(&mut self) {
+        for instance_buffer in self.instance_buffers.values_mut() {
+            instance_buffer.clear_buffer_contents();
+        }
+    }
+
     /// Clears all instance feature buffers and removes all features from the
     /// storages.
     pub fn clear_storages_and_buffers(&mut self) {
@@ -507,15 +515,15 @@ impl ModelInstanceBuffer {
     }
 
     /// Creates a new GPU buffer manager for each feature type associated with
-    /// the model and moves the buffered feature values to the new GPU buffers
-    /// (clearing the source buffers). The buffer managers are returned in the
-    /// same order as the feature types passed to the
-    /// [`InstanceFeatureManager::register_instance`] calls for this model.
+    /// the model and copies the buffered feature values to the new GPU buffers
+    /// The buffer managers are returned in the same order as the feature types
+    /// passed to the [`InstanceFeatureManager::register_instance`] calls
+    /// for this model.
     ///
-    /// Call [`Self::move_buffered_instance_features_to_gpu_buffers`] with the
+    /// Call [`Self::copy_buffered_instance_features_to_gpu_buffers`] with the
     /// same list of GPU buffer managers for subsequent moves of buffered
     /// feature values to the GPU buffers.
-    pub fn move_buffered_instance_features_to_new_gpu_buffers(
+    pub fn copy_buffered_instance_features_to_new_gpu_buffers(
         &mut self,
         graphics_device: &GraphicsDevice,
         label: Cow<'static, str>,
@@ -523,26 +531,17 @@ impl ModelInstanceBuffer {
         self.feature_buffers
             .iter_mut()
             .map(|feature_buffer| {
-                let gpu_buffer_manager = InstanceFeatureGPUBufferManager::new(
-                    graphics_device,
-                    feature_buffer,
-                    label.clone(),
-                );
-
-                feature_buffer.clear();
-
-                gpu_buffer_manager
+                InstanceFeatureGPUBufferManager::new(graphics_device, feature_buffer, label.clone())
             })
             .collect()
     }
 
-    /// Copies all buffered feature values to the given GPU buffers and then
-    /// clears the source buffers.
+    /// Copies all buffered feature values to the given GPU buffers.
     ///
     /// # Panics
     /// If the GPU buffer managers are not given in the same order as returned
-    /// from [`Self::move_buffered_instance_features_to_new_gpu_buffers`].
-    pub fn move_buffered_instance_features_to_gpu_buffers(
+    /// from [`Self::copy_buffered_instance_features_to_new_gpu_buffers`].
+    pub fn copy_buffered_instance_features_to_gpu_buffers(
         &mut self,
         graphics_device: &GraphicsDevice,
         gpu_buffer_managers: &mut [InstanceFeatureGPUBufferManager],
@@ -552,8 +551,6 @@ impl ModelInstanceBuffer {
         {
             gpu_buffer_manager
                 .copy_instance_features_to_gpu_buffer(graphics_device, feature_buffer);
-
-            feature_buffer.clear();
         }
     }
 
@@ -671,6 +668,12 @@ impl ModelInstanceBuffer {
             .expect("Missing second instance feature buffer");
 
         (first_buffer, second_buffer)
+    }
+
+    fn clear_buffer_contents(&mut self) {
+        for buffer in &mut self.feature_buffers {
+            buffer.clear();
+        }
     }
 }
 
@@ -996,6 +999,17 @@ impl DynamicInstanceFeatureBuffer {
         } else {
             bytemuck::cast_slice(valid_bytes)
         }
+    }
+
+    /// Returns a slice with the currently valid features added before defining
+    /// any explicit ranges with [`begin_range`]
+    ///
+    /// # Panics
+    /// - If `Fe` is not the feature type the buffer was initialized with.
+    /// - If `Fe` is a zero-sized type.
+    pub fn valid_features_in_initial_range<Fe: InstanceFeature>(&self) -> &[Fe] {
+        let range = self.initial_valid_feature_range();
+        &self.valid_features()[range.start as usize..range.end as usize]
     }
 
     /// Returns a slice with the currently valid bytes in the buffer.

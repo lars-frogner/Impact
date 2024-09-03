@@ -25,7 +25,7 @@ use crate::{
     scene::Scene,
     skybox::Skybox,
     ui::UserInterface,
-    voxel::{VoxelConfig, VoxelManager},
+    voxel::{self, VoxelManager},
     window::Window,
 };
 use anyhow::Result;
@@ -61,7 +61,6 @@ impl Application {
     pub fn new(
         window: Arc<Window>,
         rendering_config: RenderingConfig,
-        voxel_config: VoxelConfig<fre>,
         simulator: PhysicsSimulator,
         motion_controller: Option<Box<dyn MotionController>>,
         orientation_controller: Option<Box<dyn OrientationController>>,
@@ -89,7 +88,7 @@ impl Application {
             &mut renderer.gpu_resource_group_manager().write().unwrap(),
         )?;
 
-        let mut material_library = MaterialLibrary::new();
+        let material_library = MaterialLibrary::new();
 
         let mut mesh_repository = MeshRepository::new();
         mesh_repository.create_default_meshes();
@@ -97,15 +96,9 @@ impl Application {
         let mut instance_feature_manager = InstanceFeatureManager::new();
         model::register_model_feature_types(&mut instance_feature_manager);
         material::register_material_feature_types(&mut instance_feature_manager);
+        voxel::register_voxel_feature_types(&mut instance_feature_manager);
 
-        let voxel_manager = VoxelManager::create(
-            voxel_config,
-            &graphics_device,
-            &assets,
-            &mut mesh_repository,
-            &mut material_library,
-            &mut instance_feature_manager,
-        );
+        let voxel_manager = VoxelManager::new();
 
         let scene = Scene::new(
             mesh_repository,

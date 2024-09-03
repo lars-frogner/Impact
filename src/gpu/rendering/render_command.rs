@@ -48,8 +48,13 @@ use crate::{
     },
     material::{MaterialLibrary, MaterialShaderInput},
     mesh::{self, buffer::VertexBufferable, VertexAttributeSet, VertexPosition},
-    model::{transform::InstanceModelViewTransformWithPrevious, InstanceFeature, ModelID},
+    model::{
+        transform::InstanceModelViewTransformWithPrevious, InstanceFeature, InstanceFeatureManager,
+        ModelID,
+    },
+    scene::Scene,
     skybox::Skybox,
+    voxel::render_commands::{VoxelGeometryPipeline, VoxelPreRenderCommands},
 };
 use anyhow::{anyhow, Result};
 use std::{
@@ -62,6 +67,7 @@ use std::{
 #[derive(Debug)]
 pub struct RenderCommandManager {
     attachment_clearing_pass: AttachmentClearingPass,
+    voxel_pre_render_commands: VoxelPreRenderCommands,
     non_physical_model_depth_prepass: DepthPrepass,
     geometry_pass: GeometryPass,
     omnidirectional_light_shadow_map_update_passes: OmnidirectionalLightShadowMapUpdatePasses,
@@ -104,7 +110,8 @@ struct GeometryPass {
     push_constant_ranges: Vec<wgpu::PushConstantRange>,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     depth_stencil_state: wgpu::DepthStencilState,
-    pipelines: HashMap<ModelGeometryShaderInput, GeometryPassPipeline>,
+    model_pipelines: HashMap<ModelGeometryShaderInput, GeometryPassPipeline>,
+    voxel_pipeline: VoxelGeometryPipeline,
 }
 
 #[derive(Debug)]
@@ -218,7 +225,7 @@ pub struct StorageBufferResultCopyCommand {
     buffer_id: StorageBufferID,
 }
 
-const STANDARD_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Ccw;
+pub const STANDARD_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Ccw;
 const INVERTED_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Cw;
 
 impl RenderCommandManager {
@@ -236,13 +243,16 @@ impl RenderCommandManager {
             false,
         );
 
+        let voxel_pre_render_commands =
+            VoxelPreRenderCommands::new(graphics_device, shader_manager);
+
         let non_physical_model_depth_prepass = DepthPrepass::new(
             graphics_device,
             shader_manager,
             StencilValue::NonPhysicalModel,
         );
 
-        let geometry_pass = GeometryPass::new();
+        let geometry_pass = GeometryPass::new(graphics_device, shader_manager);
 
         let omnidirectional_light_shadow_map_update_passes =
             OmnidirectionalLightShadowMapUpdatePasses::new(graphics_device, shader_manager);
@@ -266,6 +276,7 @@ impl RenderCommandManager {
 
         Self {
             attachment_clearing_pass,
+            voxel_pre_render_commands,
             non_physical_model_depth_prepass,
             geometry_pass,
             omnidirectional_light_shadow_map_update_passes,
@@ -344,7 +355,7 @@ impl RenderCommandManager {
         &self,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        material_library: &MaterialLibrary,
+        scene: &Scene,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         gpu_resource_group_manager: &GPUResourceGroupManager,
@@ -362,6 +373,13 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
+        self.voxel_pre_render_commands.record(
+            &scene.instance_feature_manager().read().unwrap(),
+            render_resources,
+            timestamp_recorder,
+            command_encoder,
+        )?;
+
         self.non_physical_model_depth_prepass.record(
             rendering_surface,
             render_resources,
@@ -373,7 +391,8 @@ impl RenderCommandManager {
 
         self.geometry_pass.record(
             rendering_surface,
-            material_library,
+            &scene.material_library().read().unwrap(),
+            &scene.instance_feature_manager().read().unwrap(),
             render_resources,
             render_attachment_texture_manager,
             postprocessor,
@@ -762,7 +781,7 @@ impl DepthPrepass {
 }
 
 impl GeometryPass {
-    fn new() -> Self {
+    fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
         let push_constants = ModelGeometryShaderTemplate::push_constants();
         let output_render_attachments = ModelGeometryShaderTemplate::output_render_attachments();
 
@@ -772,13 +791,21 @@ impl GeometryPass {
 
         let depth_stencil_state = depth_stencil_state_for_depth_stencil_write();
 
+        let voxel_pipeline = VoxelGeometryPipeline::new(
+            graphics_device,
+            shader_manager,
+            &color_target_states,
+            Some(depth_stencil_state.clone()),
+        );
+
         Self {
             push_constants,
             output_render_attachments,
             push_constant_ranges,
             color_target_states,
             depth_stencil_state,
-            pipelines: HashMap::new(),
+            model_pipelines: HashMap::new(),
+            voxel_pipeline,
         }
     }
 
@@ -791,7 +818,7 @@ impl GeometryPass {
     ) -> Result<()> {
         let instance_feature_buffer_managers = render_resources.instance_feature_buffer_managers();
 
-        for pipeline in self.pipelines.values_mut() {
+        for pipeline in self.model_pipelines.values_mut() {
             pipeline
                 .models
                 .retain(|model_id| instance_feature_buffer_managers.contains_key(model_id));
@@ -800,7 +827,7 @@ impl GeometryPass {
         let added_models: Vec<_> = instance_feature_buffer_managers
             .iter()
             .filter_map(|(model_id, instance_feature_buffer_manager)| {
-                for pipeline in self.pipelines.values() {
+                for pipeline in self.model_pipelines.values() {
                     if pipeline.models.contains(model_id) {
                         return None;
                     }
@@ -846,7 +873,7 @@ impl GeometryPass {
             {
                 if let Some(input) = ModelGeometryShaderInput::for_material(material_specification)
                 {
-                    match self.pipelines.entry(input.clone()) {
+                    match self.model_pipelines.entry(input.clone()) {
                         Entry::Occupied(mut entry) => {
                             entry.get_mut().models.insert(*model_id);
                         }
@@ -1074,6 +1101,7 @@ impl GeometryPass {
         &self,
         rendering_surface: &RenderingSurface,
         material_library: &MaterialLibrary,
+        instance_feature_manager: &InstanceFeatureManager,
         render_resources: &SynchronizedRenderResources,
         render_attachment_texture_manager: &RenderAttachmentTextureManager,
         postprocessor: &Postprocessor,
@@ -1081,10 +1109,6 @@ impl GeometryPass {
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) -> Result<()> {
-        if self.pipelines.is_empty() {
-            return Ok(());
-        }
-
         let color_attachments = self.color_attachments(render_attachment_texture_manager);
 
         let depth_stencil_attachment =
@@ -1106,7 +1130,7 @@ impl GeometryPass {
 
         render_pass.set_bind_group(0, camera_buffer_manager.bind_group(), &[]);
 
-        for pipeline in self.pipelines.values() {
+        for pipeline in self.model_pipelines.values() {
             render_pass.set_pipeline(&pipeline.pipeline);
 
             self.set_push_constants(
@@ -1205,7 +1229,7 @@ impl GeometryPass {
         }
 
         let n_models: usize = self
-            .pipelines
+            .model_pipelines
             .values()
             .map(|pipeline| pipeline.models.len())
             .product();
@@ -1213,9 +1237,18 @@ impl GeometryPass {
         log::debug!(
             "Recorded geometry pass for {} models ({} pipelines, {} draw calls)",
             n_models,
-            self.pipelines.len(),
+            self.model_pipelines.len(),
             n_models
         );
+
+        self.voxel_pipeline.record(
+            rendering_surface,
+            instance_feature_manager,
+            render_resources,
+            postprocessor,
+            frame_counter,
+            &mut render_pass,
+        )?;
 
         Ok(())
     }
@@ -3346,18 +3379,7 @@ pub fn create_postprocessing_render_pipeline(
     )
 }
 
-pub fn additive_blend_state() -> wgpu::BlendState {
-    wgpu::BlendState {
-        color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::One,
-            dst_factor: wgpu::BlendFactor::One,
-            operation: wgpu::BlendOperation::Add,
-        },
-        alpha: wgpu::BlendComponent::default(),
-    }
-}
-
-fn create_render_pipeline_layout(
+pub fn create_render_pipeline_layout(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
     push_constant_ranges: &[wgpu::PushConstantRange],
@@ -3370,7 +3392,7 @@ fn create_render_pipeline_layout(
     })
 }
 
-fn create_render_pipeline(
+pub fn create_render_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     shader: &Shader,
@@ -3419,7 +3441,7 @@ fn create_render_pipeline(
     })
 }
 
-fn depth_stencil_state_for_depth_stencil_write() -> wgpu::DepthStencilState {
+pub fn depth_stencil_state_for_depth_stencil_write() -> wgpu::DepthStencilState {
     wgpu::DepthStencilState {
         format: RenderAttachmentQuantity::depth_texture_format(),
         depth_write_enabled: true,
@@ -3441,7 +3463,7 @@ fn depth_stencil_state_for_depth_stencil_write() -> wgpu::DepthStencilState {
     }
 }
 
-fn depth_stencil_state_for_shadow_map_update() -> wgpu::DepthStencilState {
+pub fn depth_stencil_state_for_shadow_map_update() -> wgpu::DepthStencilState {
     wgpu::DepthStencilState {
         format: SHADOW_MAP_FORMAT,
         depth_write_enabled: true,
@@ -3452,11 +3474,11 @@ fn depth_stencil_state_for_shadow_map_update() -> wgpu::DepthStencilState {
     }
 }
 
-fn depth_stencil_state_for_equal_stencil_testing() -> wgpu::DepthStencilState {
+pub fn depth_stencil_state_for_equal_stencil_testing() -> wgpu::DepthStencilState {
     depth_stencil_state_for_stencil_testing(wgpu::CompareFunction::Equal)
 }
 
-fn depth_stencil_state_for_stencil_testing(
+pub fn depth_stencil_state_for_stencil_testing(
     compare: wgpu::CompareFunction,
 ) -> wgpu::DepthStencilState {
     // When we are doing stencil testing, we make the depth test always pass and
@@ -3481,7 +3503,18 @@ fn depth_stencil_state_for_stencil_testing(
     }
 }
 
-fn begin_single_render_pass<'a>(
+pub fn additive_blend_state() -> wgpu::BlendState {
+    wgpu::BlendState {
+        color: wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::One,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        },
+        alpha: wgpu::BlendComponent::default(),
+    }
+}
+
+pub fn begin_single_render_pass<'a>(
     command_encoder: &'a mut wgpu::CommandEncoder,
     timestamp_recorder: &mut TimestampQueryRegistry<'_>,
     color_attachments: &[Option<wgpu::RenderPassColorAttachment<'_>>],

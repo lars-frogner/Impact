@@ -4,7 +4,10 @@ use crate::{
     gpu::{
         push_constant::{PushConstantGroup, PushConstantVariant},
         rendering::render_command::StencilValue,
-        shader::template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+        shader::{
+            template::{PostprocessingShaderTemplate, ShaderTemplate, SpecificShaderTemplate},
+            ShaderID,
+        },
         texture::attachment::{
             Blending, RenderAttachmentDescription, RenderAttachmentInputDescriptionSet,
             RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
@@ -75,6 +78,13 @@ impl SpecificShaderTemplate for PassthroughShaderTemplate {
                 ),
             )
             .expect("Shader template resolution failed")
+    }
+
+    fn shader_id(&self) -> ShaderID {
+        ShaderID::from_identifier(&format!(
+            "PassthroughShaderTemplate{{ input_render_attachment_quantity = {} }}",
+            self.input_render_attachment_quantity
+        ))
     }
 }
 

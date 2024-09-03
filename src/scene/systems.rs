@@ -15,7 +15,6 @@ use crate::{
         components::{SceneGraphNodeComp, SceneGraphParentNodeComp},
         CameraNodeID, GroupNodeID, ModelInstanceNodeID, SceneGraph,
     },
-    voxel::components::VoxelTreeNodeComp,
 };
 use impact_ecs::{query, world::World as ECSWorld};
 use nalgebra::{Similarity3, UnitVector3};
@@ -44,15 +43,6 @@ pub fn sync_scene_object_transforms(ecs_world: &ECSWorld, scene_graph: &mut Scen
         |node: &SceneGraphNodeComp<CameraNodeID>, frame: &ReferenceFrameComp| {
             scene_graph
                 .set_camera_to_parent_transform(node.id, frame.create_transform_to_parent_space());
-        }
-    );
-    query!(
-        ecs_world,
-        |voxel_tree_node: &VoxelTreeNodeComp, frame: &ReferenceFrameComp| {
-            scene_graph.set_group_to_parent_transform(
-                voxel_tree_node.group_node_id,
-                frame.create_transform_to_parent_space(),
-            );
         }
     );
 }
