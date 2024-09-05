@@ -153,6 +153,11 @@ impl<F: Float> Plane<F> {
         Self::from_normal_and_point(transformed_unit_normal, &transformed_point_in_plane)
     }
 
+    /// Deconstructs the plane into its unit normal and displacement.
+    pub fn into_normal_and_displacement(self) -> (UnitVector3<F>, F) {
+        (self.unit_normal, self.displacement)
+    }
+
     fn calculate_displacement(unit_normal: &UnitVector3<F>, point_in_plane: &Point3<F>) -> F {
         unit_normal.dot(&point_in_plane.coords)
     }
