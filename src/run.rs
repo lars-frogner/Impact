@@ -390,11 +390,8 @@ fn init_app(window: Window) -> Result<Application> {
 
     app.create_entity((
         // &VoxelSphereComp::new(32),
-        // &VoxelBoxComp::new(16, 16, 15),
-        // &VoxelBoxComp::new(16, 16, 16), // TODO!!!!!: Check why this gives no exposed chunks
         &VoxelGradientNoisePatternComp::new(250, 250, 250, 3.0, 0.3, 1),
         &VoxelTypeComp::new(VoxelType::Default, 0.25),
-        // &ReferenceFrameComp::unoriented(point![0.0, 0.0, 10.0]),
         &ReferenceFrameComp::unoriented(point![25.0, -25.0, 45.0]),
     ))?;
 
